@@ -647,15 +647,23 @@ def decide_jobs(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
-    # TODO(#3433): Remove once ASAN tests are passing on production runners.
-    # Use sandbox runners for schedule/workflow_dispatch to avoid impacting prod.
+    # TODO(#3433): Remove once ASAN tests pass on production runners.
     use_sandbox_runners = ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
-    test_rocm = TestRocmDecision(
-        action=JobAction.RUN,
-        test_type=test_type,
-        test_type_reason=test_type_reason,
-        use_sandbox_runners=use_sandbox_runners,
-    )
+    is_sandbox_variant = ci_inputs.build_variant == "asan"
+    if is_sandbox_variant and not use_sandbox_runners:
+        test_rocm = TestRocmDecision(
+            action=JobAction.SKIP,
+            test_type=test_type,
+            test_type_reason="sandbox variant on non-nightly trigger",
+            use_sandbox_runners=False,
+        )
+    else:
+        test_rocm = TestRocmDecision(
+            action=JobAction.RUN,
+            test_type=test_type,
+            test_type_reason=test_type_reason,
+            use_sandbox_runners=use_sandbox_runners,
+        )
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
@@ -883,24 +891,23 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
-        # For nightly/workflow_dispatch ASAN builds, use sandbox runner to avoid
-        # impacting production. PR ASAN builds skip tests entirely.
-        if build_variant == "asan":
+        # TODO(#3433): Remove once ASAN tests pass on production runners.
+        sandbox_test_variants = platform_info.get("test_variants_sandbox", [])
+        if build_variant in sandbox_test_variants:
             if use_sandbox_runners and "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
+                print(f"  {family_name}: using sandbox runner: {test_runs_on}")
             else:
                 test_runs_on = ""
                 if use_sandbox_runners:
                     print(
-                        f"  {family_name}: no ASAN sandbox runner available, "
+                        f"  {family_name}: no sandbox runner available, "
                         f"disabling tests"
                     )
                 else:
                     print(
-                        f"  {family_name}: ASAN tests only run on nightly/workflow_dispatch, "
-                        f"disabling tests"
+                        f"  {family_name}: {build_variant} tests only run on "
+                        f"nightly/workflow_dispatch, disabling tests"
                     )
 
         # If run-full-tests-only is set and test_type is "quick", disable testing

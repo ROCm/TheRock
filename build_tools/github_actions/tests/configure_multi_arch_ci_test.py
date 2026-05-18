@@ -462,6 +462,46 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertTrue(result.test_rocm.use_sandbox_runners)
 
+    def test_asan_pr_skips_tests(self):
+        """ASAN builds on PR should skip tests entirely."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.SKIP)
+
+    def test_asan_push_skips_tests(self):
+        """ASAN builds on push should skip tests entirely."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="push", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.SKIP)
+
+    def test_asan_schedule_runs_tests(self):
+        """ASAN builds on schedule should run tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="schedule", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_asan_workflow_dispatch_runs_tests(self):
+        """ASAN builds on workflow_dispatch should run tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="workflow_dispatch", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_release_pr_runs_tests(self):
+        """Release builds on PR should run tests (not skip)."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request", build_variant="release"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
 
 # ---------------------------------------------------------------------------
 # Step 4: Select Targets

@@ -129,7 +129,9 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
-- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
+- build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
+- test_variants_sandbox: (optional) list of build variants that require sandbox runners for testing
+    (e.g. ["asan"]). These only run on schedule/workflow_dispatch to avoid impacting production.
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
@@ -156,8 +158,9 @@ amdgpu_family_info_matrix_presubmit = {
                     "weight": 0.543,
                 },  # core42 (25/46)
             ],
-            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            # TODO(#3433): Remove once ASAN tests pass on production runners.
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+            "test_variants_sandbox": ["asan"],
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {
