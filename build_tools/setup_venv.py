@@ -58,10 +58,13 @@ ROCM_INDEX_URLS_MAP = {
 # Fallback mapping from CDN domains to direct S3 bucket URLs.
 # Used when DNS resolution fails for the CDN.
 CDN_TO_S3_FALLBACK_MAP = {
+    "rocm.devreleases.amd.com": "therock-dev-python.s3.amazonaws.com",
     "rocm.nightlies.amd.com": "therock-nightly-python.s3.amazonaws.com",
 }
 
-# ROCm packages for S3 fallback --find-links (S3 doesn't auto-serve index.html).
+# ROCm packages for S3 fallback. We use --find-links instead of --index-url because
+# S3 doesn't auto-serve index.html for directory requests (pip requests /pkg/, not
+# /pkg/index.html). Each package's index.html must be specified explicitly.
 ROCM_PACKAGE_NAMES = [
     "apex",
     "jax-rocm7-pjrt",
@@ -264,7 +267,9 @@ def install_packages_into_venv(
         index_url, using_s3_fallback = apply_url_fallback(index_url)
 
         if using_s3_fallback:
-            # S3 doesn't serve root index, use --find-links for each package.
+            # TODO(#5285): remove fallback once DNS issues on test machine are resolved
+            # Use --find-links with explicit index.html paths. S3 doesn't auto-serve
+            # index.html for directory URLs, so --index-url won't work
             pkg_names = list(ROCM_PACKAGE_NAMES)
             # Add arch-specific libraries package (e.g., rocm-sdk-libraries-gfx94x-dcgpu).
             if index_subdir:
