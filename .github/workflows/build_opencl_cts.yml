@@ -80,6 +80,15 @@ jobs:
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
+      - name: Checkout rocm-systems (HIP VERSION file only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/rocm-systems
+          ref: ccd356f07e7972dacd0fe5a6355ca4f9e53c833d
+          path: rocm-systems
+          sparse-checkout: projects/hip/VERSION
+          sparse-checkout-cone-mode: false
+
       - name: Checkout opencl-cts
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
