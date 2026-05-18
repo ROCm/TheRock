@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Build opencl-cts (ubi10)
+name: Build opencl-cts
 
 on:
   workflow_call:
@@ -31,7 +31,7 @@ permissions:
 
 jobs:
   build_opencl_cts_ubi10:
-    name: Build opencl-cts (ubi10)
+    name: Build opencl-cts
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 120
     permissions:
@@ -80,10 +80,26 @@ jobs:
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
-      - name: Fetch sources
-        timeout-minutes: 30
-        run: |
-          ./build_tools/fetch_sources.py --jobs 12 --source-sets opencl-cts
+      - name: Checkout opencl-cts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/OpenCL-CTS
+          ref: db69e92a03c91b1bcedb23d7142fe1c6e2ab1761
+          path: opencl/opencl-cts
+
+      - name: Checkout opencl-headers
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/OpenCL-Headers
+          ref: 8b61a0ef8fe061afa1b3b291cbb9781a96827e41
+          path: opencl/opencl-headers
+
+      - name: Checkout spirv-headers
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/SPIRV-Headers
+          ref: f88a2d766840fc825af1fc065977953ba1fa4a91
+          path: opencl/spirv-headers
 
       - name: Configure
         run: |
