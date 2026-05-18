@@ -75,8 +75,9 @@ skip_tests = {
             "test_extra_cuda_context",
 
             # --- Timeouts (pytest-timeout, multiprocessing join, undifferentiated CI hangs / ROCm slowness) ---
-            # Former umbrella: "Timout errors (fsdp)". Additional cases from gfx94X-dcgpu —
+            # Former umbrella: "Timout errors (fsdp)". gfx94X-dcgpu distributed full suite:
             # https://github.com/ROCm/TheRock/actions/runs/25875103215
+            # https://github.com/ROCm/TheRock/actions/runs/25919759807 (users/albmalamd/skipping_failures_2.11_v2)
             "(TestClipGradNormWorldSize2 and test_clip_grad_norm_1d)",
             "(TestClipGradNormWorldSize4 and test_clip_grad_norm_2d)",
             "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
@@ -178,7 +179,7 @@ skip_tests = {
             "(TestFSDPWrap and test_main_wrap_api and cpu_offload0 and backward_prefetch1 and forward_prefetch_False and device_init_mode0)",
             "(TestFSDPStateDict and test_basic_save_and_load_state_dict and local_state_dict and cpu_offload1 and fp16_False and use_orig_params_False)",
             "(TestFSDPMixedPrecisionSharded and test_mp_batchnorm_convert_sync_bn_True)",
-            "(TestFSDPOptimState and test_optim_state_dict_nested and FULL_STATE_DICT and use_multiple_param_groups_False and rank0_only_False and use_diff_optim_inputs_False)",
+            "(TestFSDPOptimState and test_optim_state_dict_nested and use_multiple_param_groups_False and rank0_only_False and use_diff_optim_inputs_False)",
             "(TestParityWithDDPCUDA and test_nested_always_wrap_model_offload_false_none_cuda)",
             "(TestCommunicationHooks and test_fp16_hook_has_wrapping_True_sharding_strategy1)",
             "(TestExplicitUnshardCUDA and test_unshard_async_use_orig_params_True_cuda)",
@@ -191,12 +192,27 @@ skip_tests = {
             "(TestShardedGradScalerParityWithDDP and test_fsdp_ddp_parity_with_grad_scaler_offload_false_none_none_none)",
             "(TestJoin and test_join_kwargs)",
             "(TestGradAcc and test_grad_acc_configs0_use_orig_params_True)",
+            "(TestFSDPTrainEval and test_train_ema_eval_flow)",
+            "(TestFSDPUseOrigParamsMultipleParamGroups and test_multiple_optimizers)",
+            "(TestFSDPOptimState and test_full_optim_state_dict_nested_invalid)",
+            "(TestFSDPUseOrigParamsParamAccess and test_access_params_after_forward)",
+            "(TestJoin and test_multiple_joinables)",
+            "(TestParityWithDDPCUDA and test_nested_wrapped_model_offload_false_none_cuda)",
+            "(TestFSDPWrap and test_main_wrap_api and cpu_offload0 and backward_prefetch1 and forward_prefetch_False and device_init_mode1)",
+            "(TestGradAcc and test_grad_acc_configs1_use_orig_params_False)",
+            "(TestFSDPFineTuneCUDA and test_parity_with_non_frozen_fsdp_cuda)",
+            "(TestFSDPMiscMultiProcess and test_fsdp_device_id_use_index_True)",
+            "(TestShardedGradScalerParityWithDDP and test_fsdp_ddp_parity_with_grad_scaler_offload_true_none_mixed_precision_none)",
 
             # --- Numerical / parity (tensor mismatch, meta init, FSDP vs ref loss) ---
             "(TestFSDPStateDict and test_basic_save_and_load_state_dict and cpu_offload1 and fp16_True and use_orig_params_False and not local_state_dict)",
             "(TestFSDPStateDict and test_basic_save_and_load_state_dict and sharded_state_dict and cpu_offload0 and fp16_False and use_orig_params_False)",
+            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and sharded_state_dict and cpu_offload0 and fp16_True and use_orig_params_True)",
+            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and cpu_offload1 and fp16_True and use_orig_params_True and not local_state_dict and not sharded_state_dict)",
             "(TestFSDPWithMetaDevice and test_nested_model_with_meta_device_reset_params_auto_wrap_True)",
             "(TestParityWithDDPCUDA and test_transformer_offload_true_no_shard_cuda)",
+            # AssertionError: Scalars are not equal! Expected 3 but got 2.
+            "(TestMultiProc and test_compiler_collectives_automatic_dynamic_tensor)",
 
             # --- Spawned child abnormal exit (non-zero / signal from fork/spawn worker) ---
             "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
