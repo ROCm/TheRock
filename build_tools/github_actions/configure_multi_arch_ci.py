@@ -892,23 +892,16 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass on production runners.
+        # Sandbox variants require use_sandbox_runners=True and a sandbox runner.
         sandbox_test_variants = platform_info.get("test_variants_sandbox", [])
         if build_variant in sandbox_test_variants:
-            if use_sandbox_runners and "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
+            sandbox_runner = platform_info.get("test-runs-on-sandbox", "")
+            if use_sandbox_runners and sandbox_runner:
+                test_runs_on = sandbox_runner
                 print(f"  {family_name}: using sandbox runner: {test_runs_on}")
             else:
                 test_runs_on = ""
-                if use_sandbox_runners:
-                    print(
-                        f"  {family_name}: no sandbox runner available, "
-                        f"disabling tests"
-                    )
-                else:
-                    print(
-                        f"  {family_name}: {build_variant} tests only run on "
-                        f"nightly/workflow_dispatch, disabling tests"
-                    )
+                print(f"  {family_name}: sandbox variant, disabling tests")
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
         if platform_info.get("run-full-tests-only", False) and test_type == "quick":
