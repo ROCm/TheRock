@@ -98,9 +98,9 @@ jobs:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
-      OUTPUT_DIR: output
-      ARTIFACTS_DIR: output/artifacts
-      PACKAGE_DIST_DIR: output/packages
+      OUTPUT_DIR: ${{ github.workspace }}/output
+      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
       RELEASE_TYPE: ${{ inputs.release_type || '' }}
       S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
     steps:
@@ -173,4 +173,5 @@ jobs:
             --s3-bucket "${{ env.S3_BUCKET_NATIVE }}" \
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-            --job ${{ inputs.release_type }}
+            --job ${{ inputs.release_type }} \
+            --package-dir "${{ env.PACKAGE_DIST_DIR }}"
