@@ -45,6 +45,12 @@ therock_declare_flag(
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
+therock_declare_flag(
+  NAME HSA_WINDOWS_SHARED_RUNTIME
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Link Windows CLR against the separately built shared HSA runtime"
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
