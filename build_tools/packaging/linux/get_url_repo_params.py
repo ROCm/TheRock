@@ -14,6 +14,7 @@ Subcommands (get operations):
   get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
   get-repo-url         Get full repo URL from components(release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder). Prints repo_url=<value>.
   extract-gfx-arch     Extract and normalize GPU architecture from artifact group. Prints gfx_arch=<value>.
+  get-container-image  Get container image for a given OS profile. Prints container_image=<value>.
 
 Usage:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url <url>
@@ -21,6 +22,7 @@ Usage:
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix <prefix>
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url ...
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group <group>
+  python build_tools/packaging/linux/get_url_repo_params.py get-container-image --os-profile <profile>
 
 Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
@@ -28,12 +30,18 @@ Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group gfx94X-dcgpu
+  python build_tools/packaging/linux/get_url_repo_params.py get-container-image --os-profile ubuntu2404
 """
 
 import argparse
+import os
 import re
 import sys
+from pathlib import Path
 from urllib.parse import urlparse
+
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
+from github_actions.github_actions_api import gha_set_output
 
 
 # --- base_url ---
@@ -53,7 +61,7 @@ def cmd_base_url(args: argparse.Namespace) -> int:
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    print(f"repo_base_url={base_url}")
+    gha_set_output({"repo_base_url": base_url})
     return 0
 
 
@@ -92,14 +100,14 @@ def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
 
 def cmd_gpg_key_url(args: argparse.Namespace) -> int:
     if not gpg_key_url_needed_for_release_type(args.release_type):
-        print("gpg_key_url=")
+        gha_set_output({"gpg_key_url": ""})
         return 0
     try:
         gpg_url = get_gpg_key_url(args.from_url)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    print(f"gpg_key_url={gpg_url}")
+    gha_set_output({"gpg_key_url": gpg_url})
     return 0
 
 
@@ -121,7 +129,7 @@ def get_repo_sub_folder(s3_prefix: str) -> str:
 
 def cmd_repo_sub_folder(args: argparse.Namespace) -> int:
     repo_sub_folder = get_repo_sub_folder(args.from_s3_prefix)
-    print(f"repo_sub_folder={repo_sub_folder}")
+    gha_set_output({"repo_sub_folder": repo_sub_folder})
     return 0
 
 
@@ -164,7 +172,7 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
     except (ValueError, TypeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    print(f"repo_url={url}")
+    gha_set_output({"repo_url": url})
     return 0
 
 
@@ -208,7 +216,38 @@ def cmd_extract_gfx_arch(args: argparse.Namespace) -> int:
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    print(f"gfx_arch={gfx_arch}")
+    gha_set_output({"gfx_arch": gfx_arch})
+    return 0
+
+
+# --- get-container-image ---
+
+# Maps OS profile prefixes to container images (checked in order).
+_OS_PROFILE_TO_IMAGE: list[tuple[tuple[str, ...], str]] = [
+    (("sles",), "registry.suse.com/bci/bci-base:16.0"),
+    (("ubuntu", "debian"), "ubuntu:24.04"),
+    ((), "registry.access.redhat.com/ubi10/ubi:10.1"),  # default (e.g. rhel*)
+]
+
+
+def get_container_image(os_profile: str) -> str:
+    """Return the container image for a given OS profile.
+
+    Examples:
+        ubuntu2404  -> ubuntu:24.04
+        debian12    -> ubuntu:24.04
+        sles16      -> registry.suse.com/bci/bci-base:16.0
+        rhel10      -> registry.access.redhat.com/ubi10/ubi:10.1
+    """
+    for prefixes, image in _OS_PROFILE_TO_IMAGE:
+        if not prefixes or any(os_profile.startswith(p) for p in prefixes):
+            return image
+    return _OS_PROFILE_TO_IMAGE[-1][1]  # unreachable but satisfies type checker
+
+
+def cmd_container_image(args: argparse.Namespace) -> int:
+    image = get_container_image(args.os_profile)
+    gha_set_output({"container_image": image})
     return 0
 
 
@@ -320,6 +359,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Artifact group to extract gfx_arch from (e.g. gfx94X-dcgpu, gfx1100-consumer)",
     )
     p_gfx.set_defaults(func=cmd_extract_gfx_arch)
+
+    # get-container-image: get container image for an OS profile
+    p_img = subparsers.add_parser(
+        "get-container-image",
+        help="Get container image for a given OS profile (e.g. ubuntu2404 -> ubuntu:24.04).",
+    )
+    p_img.add_argument(
+        "--os-profile",
+        type=str,
+        required=True,
+        help="OS profile (e.g. ubuntu2404, sles16, rhel10)",
+    )
+    p_img.set_defaults(func=cmd_container_image)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -1,0 +1,8 @@
+# rocjitsu
+[components.lib."emulation/rocjitsu/stage"]
+[components.dbg."emulation/rocjitsu/stage"]
+[components.dev."emulation/rocjitsu/stage"]
+[components.run."emulation/rocjitsu/stage"]
+include = [
+  "share/rocjitsu/**",
+]

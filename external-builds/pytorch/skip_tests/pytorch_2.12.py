@@ -6,15 +6,8 @@ skip_tests = {
         "cuda": [
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
-            # RuntimeError: Error building extension 'dummy_allocator_v3'
-            "test_tensor_delete_after_allocator_delete",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_deleted_mempool_not_used_on_oom",
             # AssertionError: Scalars are not equal!
             "test_mempool_ctx_multithread",
-            # Same hipblas.h compilation error as test_mempool_with_allocator.
-            # See https://github.com/pytorch/pytorch/pull/173330
-            "test_mempool_expandable",
             # torch.AcceleratorError: HIP error: operation not permitted when
             # stream is capturing
             "test_cuda_graph_tensor_item_not_allowed",
@@ -218,10 +211,6 @@ skip_tests = {
         "linalg": [
             # TestLinalgCUDA - tunableop_rocm addmm relu
             "test_addmm_relu_tunableop_rocm_cuda_float32",
-        ],
-        "scaled_matmul": [
-            # TestFP8MatmulCUDA - deepseek error messages
-            "test_scaled_mm_deepseek_error_messages_bfloat16_lhs_block_128_rhs_block_1_M_256_N_256_K_256_cuda",
         ],
         "modules": [
             # TestModuleCUDA - CTCLoss cpu/gpu parity scalar mismatch
