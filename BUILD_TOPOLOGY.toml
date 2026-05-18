@@ -153,8 +153,13 @@ artifact_groups = [
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
-    "rocrtst"
+    "rocrtst",
+    "rocjitsu"
 ]
+
+[build_stages.wsl-rocdxg]
+description = "WSL-only ROCDXG bridge library"
+artifact_groups = ["wsl-rocdxg"]
 
 [build_stages.math-libs]
 description = "Math and ML libraries per architecture"
@@ -222,6 +227,12 @@ source_sets = ["base", "rocm-systems"]
 description = "Core runtime (ROCR-Runtime, rocminfo)"
 type = "generic"
 artifact_group_deps = ["base", "third-party-sysdeps"]
+source_sets = ["rocm-systems"]
+
+[artifact_groups.wsl-rocdxg]
+description = "WSL-only ROCDXG bridge library"
+type = "generic"
+artifact_group_deps = ["base"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.core-amdsmi]
@@ -326,6 +337,13 @@ description = "Media Libraries"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
 source_sets = ["amd-mesa", "rocm-systems"]
+
+[artifact_groups.rocjitsu]
+description = "ROCm emulation, virtualization, and instrumentation tools"
+type = "generic"
+artifact_group_deps = []
+source_sets = ["rocm-systems"]
+disable_platforms = ["windows"]
 
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
@@ -499,6 +517,13 @@ artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
+
+[artifacts.wsl-rocdxg]
+artifact_group = "wsl-rocdxg"
+type = "target-neutral"
+artifact_deps = ["core-hip"]
+feature_name = "WSL_ROCDXG"
+feature_group = "WSL"
 
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"
@@ -776,4 +801,13 @@ artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+# --- ROCm Emulation Tools ---
+
+[artifacts.rocjitsu]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "EMULATION"
 disable_platforms = ["windows"]

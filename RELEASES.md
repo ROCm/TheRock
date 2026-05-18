@@ -127,6 +127,14 @@ In multi-arch releases, GPU-specific device code is split into separate
 
 Install ROCm with device support for your GPU using the unified index:
 
+> [!WARNING]
+> A `device-*` extra (or a single-family per-architecture index) being
+> installable does **not** mean the runtime is functional on that target.
+> Targets without ✅ in **Sanity Tested** in
+> [SUPPORTED_GPUS.md](SUPPORTED_GPUS.md) are unverified. `pip install` will
+> succeed, but device enumeration, kernel launch, or library loads may fail at
+> runtime. Please file an issue if you hit one.
+
 ```bash
 # Replace device-gfx942 with your GPU, see the section below for details
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ "rocm[libraries,device-gfx942]"
@@ -786,6 +794,7 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 >
 >   | jax version | jaxlib version   |
 >   | ----------- | ---------------- |
+>   | 0.9.2       | 0.9.2 (upstream) |
 >   | 0.9.1       | 0.9.1 (upstream) |
 >   | 0.8.2       | 0.8.2            |
 >   | 0.8.0       | 0.8.0            |
