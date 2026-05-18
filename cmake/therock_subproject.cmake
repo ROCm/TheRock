@@ -341,7 +341,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;TEST_SUBPROJECTS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -513,6 +513,8 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
+    # Optional override for test dependencies (subproject names to test when this changes).
+    THEROCK_TEST_SUBPROJECTS "${ARG_TEST_SUBPROJECTS}"
     # Include dirs that this project compiles with.
     THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
     # Include dirs that are advertised to dependents.
@@ -818,6 +820,14 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_PKG_CONFIG_DIRS \"@_private_pkg_config_dirs@\")\n")
 
   string(APPEND _init_contents "${_compiler_toolchain_init_contents}")
+
+  # Enable reproducible builds on Windows. /Brepro makes the linker (both
+  # MSVC link.exe and lld-link) zero out timestamps in PE headers, producing
+  # deterministic output.
+  if(WIN32)
+    string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
+  endif()
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
@@ -1551,13 +1561,24 @@ function(_therock_cmake_subproject_absolutize list_var relative_to)
   set("${list_var}" "${_abs_dirs}" PARENT_SCOPE)
 endfunction()
 
+# Filters a list of AMDGPU targets against the project's EXCLUDE_TARGET_PROJECTS
+# entries from therock_add_amdgpu_target. Silent — callable before the subproject
+# target exists (e.g. to decide whether to declare it at all). For the warning
+# variant used during subproject activation, see _therock_filter_project_gpu_targets.
+function(therock_filter_amdgpu_targets out_var project_name)
+  set(_filtered ${ARGN})
+  get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name}")
+  list(REMOVE_ITEM _filtered ${_excludes})
+  set("${out_var}" "${_filtered}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
   get_target_property(_gpu_targets "${target_name}" THEROCK_AMDGPU_TARGETS)
   set(_filtered ${_gpu_targets})
   if(_excludes)
-    foreach(exclude in ${_excludes})
+    foreach(exclude IN LISTS _excludes)
       if("${exclude}" IN_LIST _filtered)
         message(WARNING
           "Excluding support for ${exclude} in ${target_name} because it was "

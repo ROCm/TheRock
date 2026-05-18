@@ -83,12 +83,27 @@ ctest --test-dir build
 
 **Faster rebuilds with ccache:**
 
+On Linux:
+
 ```bash
+# Any shell used to build must eval setup_ccache.py to set environment variables.
+eval "$(./build_tools/setup_ccache.py)"
 cmake -B build -GNinja \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1100 .
 ```
+
+On Windows (Command Prompt):
+
+```bat
+for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx1100 ^
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .
+```
+
+See [README.md](README.md#ccache-usage-on-windows) for full ccache setup details.
 
 **Debug build for specific component:**
 
