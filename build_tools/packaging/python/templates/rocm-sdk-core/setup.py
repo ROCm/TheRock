@@ -92,6 +92,7 @@ setup(
             if platform.system() != "Windows"
             else [
                 "hipInfo=rocm_sdk_core._cli:hipInfo",
+                "rocminfo=rocm_sdk_core._cli:rocm_info",
             ]
         ),
     },
