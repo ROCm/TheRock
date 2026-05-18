@@ -225,14 +225,21 @@ jobs:
               --activate-in-future-github-actions-steps
           fi
 
+      - name: Resolve ROCm package version
+        id: rocm_package
+        run: |
+          ROCM_PACKAGE_VERSION="$(python -c 'import importlib.metadata; print(importlib.metadata.version("rocm"))')"
+          echo "rocm_package_version=${ROCM_PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved ROCm package version: ${ROCM_PACKAGE_VERSION}"
+
       - name: Install ROCm devel packages
         timeout-minutes: 15
         run: |
           if [ "${{ inputs.multi_arch }}" = "true" ]; then
-            pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
+            python -m pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]==${{ steps.rocm_package.outputs.rocm_package_version }}" \
               --index-url=${{ inputs.package_index_url }}
           else
-            pip install "rocm[devel]" \
+            python -m pip install "rocm[devel]==${{ steps.rocm_package.outputs.rocm_package_version }}" \
               --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
           fi
 
