@@ -70,7 +70,7 @@ def execute_tests(env):
     cmd = [
         "cmake",
         "-GNinja",
-        "-DTHEROCK_TEST_ENABLE_EXTENDED=ON",
+        "-DENABLE_EXTENDED_TESTS=ON",
         ROCDECODE_TEST_PATH,
     ]
     logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
