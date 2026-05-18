@@ -25,6 +25,11 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+  pull_request:
+    types:
+      - labeled
+      - opened
+      - synchronize
 
 permissions:
   contents: read
@@ -86,6 +91,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --workflow-name="${{ github.workflow }}" \
-            --run-id="${{ github.run_id }}" \
-            --run-attempt="${{ github.run_attempt }}"
+            --needs-json '${{ toJSON(needs) }}'

@@ -521,6 +521,54 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertIn("C", stage2_inbound)
         self.assertIn("D", stage2_inbound)
 
+    def test_group_dependencies_include_transitive_artifact_dependencies(self):
+        """Test group deps include the artifact deps of artifacts they pull in."""
+        self.write_topology(
+            """
+            [build_stages.producer]
+            description = "Producer"
+            artifact_groups = ["base"]
+
+            [build_stages.consumer]
+            description = "Consumer"
+            artifact_groups = ["leaf"]
+
+            [artifact_groups.base]
+            description = "Base"
+            type = "generic"
+
+            [artifact_groups.leaf]
+            description = "Leaf"
+            type = "generic"
+            artifact_group_deps = ["base"]
+
+            [artifacts.toolchain-runtime]
+            artifact_group = "base"
+            type = "target-neutral"
+            artifact_deps = ["toolchain-frontend"]
+
+            [artifacts.toolchain-frontend]
+            artifact_group = "base"
+            type = "target-neutral"
+            artifact_deps = ["toolchain-base"]
+
+            [artifacts.toolchain-base]
+            artifact_group = "base"
+            type = "target-neutral"
+
+            [artifacts.leaf-artifact]
+            artifact_group = "leaf"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        consumer_inbound = topology.get_inbound_artifacts("consumer")
+        self.assertIn("toolchain-runtime", consumer_inbound)
+        self.assertIn("toolchain-frontend", consumer_inbound)
+        self.assertIn("toolchain-base", consumer_inbound)
+
     def test_complex_dependency_chain(self):
         """Test complex dependency chain resolution."""
         self.write_topology(
