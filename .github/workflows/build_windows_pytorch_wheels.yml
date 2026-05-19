@@ -274,6 +274,10 @@ jobs:
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
 
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }} (cache: ${{ inputs.cache_type }})"
+          set "TRITON_BUILD_ARGS="
+          if "${{ inputs.pytorch_git_ref }}"=="nightly" (
+            set "TRITON_BUILD_ARGS=--triton-dir ${{ env.CHECKOUT_ROOT }}/triton --build-triton"
+          )
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
@@ -281,8 +285,7 @@ jobs:
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
-            --triton-dir ${{ env.CHECKOUT_ROOT }}/triton ^
-            --build-triton ^
+            %TRITON_BUILD_ARGS% ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^

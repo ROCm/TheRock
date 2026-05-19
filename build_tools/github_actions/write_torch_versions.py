@@ -83,6 +83,8 @@ def get_all_wheel_versions(
 
     if triton_version:
         all_versions = all_versions | {"triton_version": triton_version}
+    elif os.lower() == "windows":
+        _log("Did not find triton_windows (expected when pytorch_git_ref is not nightly)")
     else:
         raise FileNotFoundError("Did not find triton wheel")
 
