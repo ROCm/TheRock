@@ -46,11 +46,6 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
-      rocm_version:
-        description: "ROCm version for versioned metapackage names (e.g. 7.13.0 or 7.13.0~dev20250519). Maps to NATIVE_LINUX_INSTALL_ROCM_VERSION."
-        type: string
-        required: false
-        default: ""
   workflow_dispatch:
     inputs:
       package_install_url:
@@ -97,10 +92,6 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
-      rocm_version:
-        description: "ROCm version for versioned metapackage names (e.g. 7.13.0). Omit for unversioned amdrocm packages."
-        type: string
-        default: ""
 
 permissions:
   id-token: write
@@ -121,7 +112,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Derive package type, GPU architecture, and container image
         id: derive
@@ -155,7 +146,6 @@ jobs:
       GFX_ARCH: ${{ needs.prepare_install_context.outputs.gfx_arch }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
-      NATIVE_LINUX_INSTALL_ROCM_VERSION: ${{ inputs.rocm_version }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -205,7 +195,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Setup Python and install runtime
         run: |

@@ -92,7 +92,6 @@ jobs:
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
-      ref: ${{ needs.setup.outputs.ref }}
     permissions:
       contents: read
       id-token: write
