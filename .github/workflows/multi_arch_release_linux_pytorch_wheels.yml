@@ -54,6 +54,13 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "none"
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated AMD GPU families to run quick tests for each
+          successful build cell. Use 'auto' to test built families, or 'none'
+          to skip quick tests.
+        type: string
+        default: "auto"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -91,6 +98,13 @@ on:
           - sccache
           - ccache
         default: none
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated AMD GPU families to run quick tests for each
+          successful build cell. Use 'auto' to test built families, or 'none'
+          to skip quick tests.
+        type: string
+        default: "auto"
 
 run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -162,6 +176,7 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
       cache_type: ${{ inputs.cache_type }}
+      test_amdgpu_families: ${{ inputs.test_amdgpu_families }}
     permissions:
       contents: read
       id-token: write

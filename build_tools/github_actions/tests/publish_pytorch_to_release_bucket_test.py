@@ -10,7 +10,7 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
-from github_actions.publish_pytorch_to_release_bucket import main
+from github_actions import publish_pytorch_to_release_bucket as m
 
 
 class TestPublishPytorchToReleaseBucket(unittest.TestCase):
@@ -28,15 +28,16 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
     def test_dev_uploads_to_v4_whl_in_dev_python(self, mock_upload):
         mock_upload.return_value = 3
-        main(
-            [
-                "--source-dir",
-                os.fspath(self.source_dir),
-                "--release-type",
-                "dev",
-                "--dry-run",
-            ]
-        )
+        with mock.patch.object(m, "gha_set_output") as gha_set_output:
+            m.main(
+                [
+                    "--source-dir",
+                    os.fspath(self.source_dir),
+                    "--release-type",
+                    "dev",
+                    "--dry-run",
+                ]
+            )
 
         self.assertEqual(mock_upload.call_count, 1)
         call_args = mock_upload.call_args
@@ -45,45 +46,61 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         self.assertEqual(dest.bucket, "therock-dev-python")
         self.assertEqual(dest.relative_path, "v4/whl")
         self.assertEqual(call_args.kwargs.get("include"), ["*.whl"])
+        gha_set_output.assert_called_once_with(
+            {
+                "package_index_url": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+                "package_s3_uri": "s3://therock-dev-python/v4/whl",
+            }
+        )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
     def test_nightly_selects_nightly_bucket(self, mock_upload):
         mock_upload.return_value = 2
-        main(
-            [
-                "--source-dir",
-                os.fspath(self.source_dir),
-                "--release-type",
-                "nightly",
-                "--dry-run",
-            ]
-        )
+        with mock.patch.object(m, "gha_set_output") as gha_set_output:
+            m.main(
+                [
+                    "--source-dir",
+                    os.fspath(self.source_dir),
+                    "--release-type",
+                    "nightly",
+                    "--dry-run",
+                ]
+            )
 
         _source, dest = mock_upload.call_args.args
         self.assertEqual(dest.bucket, "therock-nightly-python")
         self.assertEqual(dest.relative_path, "v4/whl")
+        self.assertEqual(
+            gha_set_output.call_args.args[0]["package_index_url"],
+            "https://rocm.nightlies.amd.com/whl-multi-arch/",
+        )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
     def test_prerelease_selects_prerelease_bucket(self, mock_upload):
         mock_upload.return_value = 2
-        main(
-            [
-                "--source-dir",
-                os.fspath(self.source_dir),
-                "--release-type",
-                "prerelease",
-                "--dry-run",
-            ]
-        )
+        with mock.patch.object(m, "gha_set_output") as gha_set_output:
+            m.main(
+                [
+                    "--source-dir",
+                    os.fspath(self.source_dir),
+                    "--release-type",
+                    "prerelease",
+                    "--dry-run",
+                ]
+            )
 
         _source, dest = mock_upload.call_args.args
         self.assertEqual(dest.bucket, "therock-prerelease-python")
+        self.assertEqual(
+            gha_set_output.call_args.args[0]["package_index_url"],
+            "https://rocm.prereleases.amd.com/whl-multi-arch/",
+        )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
     def test_raises_when_no_wheels_uploaded(self, mock_upload):
         mock_upload.return_value = 0
         with self.assertRaises(FileNotFoundError):
-            main(
+            m.main(
                 [
                     "--source-dir",
                     os.fspath(self.source_dir),
@@ -96,7 +113,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
     def test_raises_when_source_dir_missing(self):
         missing = self.source_dir / "does-not-exist"
         with self.assertRaises(FileNotFoundError):
-            main(
+            m.main(
                 [
                     "--source-dir",
                     os.fspath(missing),
@@ -108,7 +125,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
 
     def test_invalid_release_type_rejected(self):
         with self.assertRaises(SystemExit):
-            main(
+            m.main(
                 [
                     "--source-dir",
                     os.fspath(self.source_dir),
