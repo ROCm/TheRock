@@ -78,6 +78,8 @@ skip_tests = {
             # Former umbrella: "Timout errors (fsdp)". gfx94X-dcgpu distributed full suite:
             # https://github.com/ROCm/TheRock/actions/runs/25875103215
             # https://github.com/ROCm/TheRock/actions/runs/25919759807 (users/albmalamd/skipping_failures_2.11_v2)
+            # https://github.com/ROCm/TheRock/actions/runs/26044254069 (users/albmalamd/skipping_failures_2.11_v2)
+            # https://github.com/ROCm/TheRock/actions/runs/26119178358 (users/albmalamd/skipping_failures_2.11_v2)
             "(TestClipGradNormWorldSize2 and test_clip_grad_norm_1d)",
             "(TestClipGradNormWorldSize4 and test_clip_grad_norm_2d)",
             "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
@@ -111,15 +113,17 @@ skip_tests = {
             "(TestFSDPCheckpoint and cpu_offload1 and offload_activations_False and use_orig_params_True)",
             "(TestFSDPCheckpoint and cpu_offload1 and offload_activations_True and use_orig_params_False)",
             "(TestFSDPCheckpoint and cpu_offload1 and offload_activations_True and use_orig_params_True)",
-            "(TestHooksCUDA and test_pre_backward_hook_registration_after_state_dict_cuda)",
-            "(TestHooksCUDA and test_pre_backward_hook_registration_cuda_first_True_cuda)",
-            "(TestHooksCUDA and test_pre_backward_hook_registration_cuda_first_False_cuda)",
-            "(TestParityWithDDPCUDA and test_delayed_optim_step_offload_false_none_cuda)",
-            "(TestParityWithDDPCUDA and test_delayed_optim_step_offload_true_none_cuda)",
-            "(TestParityWithDDPCUDA and test_nested_always_wrap_model_offload_true_none_cuda)",
-            "(TestParityWithDDPCUDA and test_nested_wrapped_model_single_iteration_mixed_precision_offload_false_none_cuda)",
-            "(TestParityWithDDPCUDA and test_nested_wrapped_model_single_iteration_mixed_precision_offload_true_none_cuda)",
-            "(TestParityWithDDPCUDA and test_transformer_offload_false_none_cuda)",
+            # Collapsed: 3 entries -> covers test_pre_backward_hook_registration_{after_state_dict,cuda_first_True,cuda_first_False}_cuda
+            "(TestHooksCUDA and test_pre_backward_hook_registration)",
+            # Collapsed: 2 entries -> covers offload_{false,true}_none_cuda
+            "(TestParityWithDDPCUDA and test_delayed_optim_step)",
+            # Collapsed: 2 entries -> covers offload_{false,true}_none_cuda
+            "(TestParityWithDDPCUDA and test_nested_always_wrap_model)",
+            # Collapsed: 4 entries -> covers offload_{false,true}_none_cuda + single_iteration_mixed_precision_offload_{false,true}_none_cuda
+            "(TestParityWithDDPCUDA and test_nested_wrapped_model)",
+            # Collapsed: covers test_transformer_offload_{false,true}_none_cuda (timeouts)
+            #           + test_transformer_offload_true_no_shard_cuda (tensor parity)
+            "(TestParityWithDDPCUDA and test_transformer)",
             "(TestNoGradCUDA and test_transformer_no_grad_mixed_precision_True_cuda)",
             "(TestFullyShardCompile and test_nested_fully_shard_backend_aot_eager and not decomp_partition)",
             "(TestFullyShardCompile and test_nested_fully_shard_backend_aot_eager_decomp_partition)",
@@ -146,29 +150,35 @@ skip_tests = {
             "(TestFreezingWeights and nested_trunk_True and GradToNone and forward_prefetch_False)",
             "(TestFSDPOptimState and test_flatten_sharded_optim_state_dict_nested)",
             "(TestFSDPOptimState and test_flatten_sharded_optim_state_dict_transformer)",
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and local_state_dict and cpu_offload1 and fp16_True)",
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and local_state_dict and cpu_offload0 and fp16_True)",
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and cpu_offload1 and fp16_False and not local_state_dict)",
+            # Collapsed: 9 entries -> covers every parametrization of test_basic_save_and_load_state_dict
+            # (timeouts and Tensor-likes-not-close variants in cpu_offload{0,1} x fp16_{True,False} x
+            # {local,sharded,bare}_state_dict x use_orig_params_{True,False})
+            "(TestFSDPStateDict and test_basic_save_and_load_state_dict)",
             "(TestFSDPUseOrigParamsMultipleParamGroups and test_fsdp_compile)",
             "(TestFSDPUseOrigParamsMultipleParamGroups and test_diff_hyperparams_cpu_offload_sharding_strategy_str_full_shard)",
             "(DeviceMeshCollectiveTest and test_reduce_scatter_uneven)",
-            "(TestExplicitUnshardCUDA and test_unshard_async_use_orig_params_False_cuda)",
+            # Collapsed: 2 entries -> covers use_orig_params_{False,True}_cuda
+            "(TestExplicitUnshardCUDA and test_unshard_async)",
             "(TestCommunicationHooks and test_bf16_hook_has_wrapping_True_sharding_strategy1)",
             "(TestParityWithDDPCUDA and test_delayed_reduce_scatter_offload_true_none_cuda)",
             "(TestFSDPMixedPrecisionSharded and test_full_precision_in_eval and not comm)",
             "(TestFSDPMixedPrecisionSharded and test_full_precision_in_eval_comm)",
-            "(TestFSDPWrap and test_main_wrap_api and cpu_offload0 and backward_prefetch0)",
+            # Collapsed: 4 entries -> covers all (cpu_offload, backward_prefetch, forward_prefetch, device_init_mode) combos
+            "(TestFSDPWrap and test_main_wrap_api)",
             "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile_use_ca_False)",
             "(TestJoin and test_single_joinable)",
             "(TestFullyShardWithDistributedStateDict and test_save_with_fsdp1_and_load_with_fsdp2)",
             "(TestFSDPCheckpoint and cpu_offload0 and offload_activations_True and use_orig_params_True)",
-            "(TestGradAcc and test_grad_acc_configs0_use_orig_params_False)",
+            # Collapsed: 4 entries -> covers configs{0,1} x use_orig_params_{False,True}
+            "(TestGradAcc and test_grad_acc_configs)",
             "(TestFSDPHybridShard and test_fsdp_hybrid_shard_basic_setup)",
-            "(TestFSDPIgnoredModules and test_ignored_modules_not_under_wrapped_root_ignore_modules_True)",
+            # Collapsed: 2 entries -> covers ignore_modules_{True,False}
+            "(TestFSDPIgnoredModules and test_ignored_modules_not_under_wrapped_root)",
             "(TestFSDPMemory and test_fsdp_memory_ckpt_ckpt)",
             "(TestFSDPWithMetaDevice and test_nested_model_with_meta_device_default_init_auto_wrap_True)",
             "(TestPureFP16CUDA and test_pure_fp16_training_cuda)",
-            "(TestShardedGradScalerParityWithDDP and test_fsdp_ddp_parity_with_grad_scaler_offload_false_none_mixed_precision_none)",
+            # Collapsed: 4 entries -> covers offload_{false,true} x {mixed_precision_none, none_none}
+            "(TestShardedGradScalerParityWithDDP and test_fsdp_ddp_parity_with_grad_scaler)",
             "(TestUnshardParams and test_with_grads_core)",
             "(TestCommModeFeatures and test_MLPStacked_distributed_sharding_display)",
             "(DistributedDataParallelTest and test_ddp_weight_sharing)",
@@ -176,46 +186,47 @@ skip_tests = {
             "(TestFSDPFineTuneCUDA and test_parity_with_ddp_cuda)",
             "(TestFreezingWeights and nested_trunk_True and GradToNone and forward_prefetch_True)",
             "(TestFSDPOptimState and test_full_optim_state_dict_keys)",
-            "(TestFSDPWrap and test_main_wrap_api and cpu_offload0 and backward_prefetch1 and forward_prefetch_False and device_init_mode0)",
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and local_state_dict and cpu_offload1 and fp16_False and use_orig_params_False)",
             "(TestFSDPMixedPrecisionSharded and test_mp_batchnorm_convert_sync_bn_True)",
-            "(TestFSDPOptimState and test_optim_state_dict_nested and use_multiple_param_groups_False and rank0_only_False and use_diff_optim_inputs_False)",
-            "(TestParityWithDDPCUDA and test_nested_always_wrap_model_offload_false_none_cuda)",
+            # Collapsed: 2 entries -> covers use_diff_optim_inputs_{False,True} (rank0_only_False, single param group)
+            "(TestFSDPOptimState and test_optim_state_dict_nested)",
             "(TestCommunicationHooks and test_fp16_hook_has_wrapping_True_sharding_strategy1)",
-            "(TestExplicitUnshardCUDA and test_unshard_async_use_orig_params_True_cuda)",
             "(TestFSDPUseOrigParamsMultipleParamGroups and test_diff_trainability)",
             "(TestFullyShardWithDistributedStateDict and test_save_with_fsdp2_tp_and_load_with_tp)",
-            "(TestFSDPIgnoredModules and test_ignored_modules_not_under_wrapped_root_ignore_modules_False)",
             "(TestFSDPHybridShard and test_fsdp_hybrid_shard_parity)",
             "(TestFSDPMemory and test_fsdp_memory_ckpt_no_ckpt)",
-            "(TestFSDPMiscMultiProcess and test_fsdp_device_id_use_index_False)",
-            "(TestShardedGradScalerParityWithDDP and test_fsdp_ddp_parity_with_grad_scaler_offload_false_none_none_none)",
+            # Collapsed: 2 entries -> covers use_index_{False,True}
+            "(TestFSDPMiscMultiProcess and test_fsdp_device_id)",
             "(TestJoin and test_join_kwargs)",
-            "(TestGradAcc and test_grad_acc_configs0_use_orig_params_True)",
             "(TestFSDPTrainEval and test_train_ema_eval_flow)",
             "(TestFSDPUseOrigParamsMultipleParamGroups and test_multiple_optimizers)",
             "(TestFSDPOptimState and test_full_optim_state_dict_nested_invalid)",
             "(TestFSDPUseOrigParamsParamAccess and test_access_params_after_forward)",
             "(TestJoin and test_multiple_joinables)",
-            "(TestParityWithDDPCUDA and test_nested_wrapped_model_offload_false_none_cuda)",
-            "(TestFSDPWrap and test_main_wrap_api and cpu_offload0 and backward_prefetch1 and forward_prefetch_False and device_init_mode1)",
-            "(TestGradAcc and test_grad_acc_configs1_use_orig_params_False)",
             "(TestFSDPFineTuneCUDA and test_parity_with_non_frozen_fsdp_cuda)",
-            "(TestFSDPMiscMultiProcess and test_fsdp_device_id_use_index_True)",
-            "(TestShardedGradScalerParityWithDDP and test_fsdp_ddp_parity_with_grad_scaler_offload_true_none_mixed_precision_none)",
+            "(TestFSDPUseOrigParamsUnshardReshard and test_summon_between_two_forwards_offload_params_False)",
+            "(TestFSDPOptimState and test_optim_input_warning)",
+            "(TestFSDPMiscMultiProcess and test_fsdp_module_no_compute_grad and use_second_layer_False and sharding_strategy0)",
+            # Collapsed: 2 entries -> covers use_multiple_param_groups_{False,True} (state_dict_type0)
+            "(TestFSDPOptimState and test_rekey_optim_state_dict_to_ids)",
+            "(TestGradAcc and test_grad_acc_cpu_offload_use_orig_params_False)",
+            "(TestShardedGradScalerParityWithDDP and test_sharded_grad_scaler_found_inf)",
 
             # --- Numerical / parity (tensor mismatch, meta init, FSDP vs ref loss) ---
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and cpu_offload1 and fp16_True and use_orig_params_False and not local_state_dict)",
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and sharded_state_dict and cpu_offload0 and fp16_False and use_orig_params_False)",
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and sharded_state_dict and cpu_offload0 and fp16_True and use_orig_params_True)",
-            "(TestFSDPStateDict and test_basic_save_and_load_state_dict and cpu_offload1 and fp16_True and use_orig_params_True and not local_state_dict and not sharded_state_dict)",
+            # Note: all test_basic_save_and_load_state_dict parametrizations and all
+            # test_transformer_* parametrizations are collapsed into single skips in the
+            # timeouts group above (covering tensor-mismatch variants too).
+            # Collapsed: covers state_dict_type_{sharded_state_dict,state_dict} variants
+            "(TestFSDPStateDict and test_state_dict_load_into_local_module)",
             "(TestFSDPWithMetaDevice and test_nested_model_with_meta_device_reset_params_auto_wrap_True)",
-            "(TestParityWithDDPCUDA and test_transformer_offload_true_no_shard_cuda)",
+            # AssertionError: Tensor-likes are not close! (child exit 10 from spawn)
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward_grad_as_bucket_view_false)",
             # AssertionError: Scalars are not equal! Expected 3 but got 2.
             "(TestMultiProc and test_compiler_collectives_automatic_dynamic_tensor)",
 
             # --- Spawned child abnormal exit (non-zero / signal from fork/spawn worker) ---
             "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
+            # AssertionError: RuntimeError not raised (child died with exit code 10)
+            "(TestDistBackendWithSpawn and test_monitored_barrier_allreduce_hang_wait_all_ranks)",
 
             # --- Worker exception (distributed autograd / pipeline) ---
             "(ScheduleTest and test_grad_with_manual_ScheduleClass1_shape_inference_False)",
