@@ -27,6 +27,7 @@ if not os.path.isdir(ROCDECODE_TEST_PATH):
     sys.exit(1)
 else:
     logging.info(f"++ INFO: rocdecode tests found in {ROCDECODE_TEST_PATH}")
+ROCDECODE_TEST_DIR = Path(THEROCK_TEST_DIR) / "rocdecode-test"
 env = os.environ.copy()
 
 
@@ -52,16 +53,50 @@ def setup_env(env):
     # only mechanism that reaches those sub-projects (cmake cache vars do not).
     # librocdecode.so is built with -shared-libsan; amdclang matches that automatically
     # when -fsanitize=address is present in the compiler flags at link time.
-    if "ASAN_OPTIONS" in env:
+    asan_enabled = "ASAN_OPTIONS" in env
+    if asan_enabled:
         asan_flags = "-fsanitize=address -fno-omit-frame-pointer"
         env["CFLAGS"] = f"{env.get('CFLAGS', '')} {asan_flags}".strip()
         env["CXXFLAGS"] = f"{env.get('CXXFLAGS', '')} {asan_flags}".strip()
         logging.info(f"++ rocdecode ASAN detected: setting CFLAGS/CXXFLAGS={asan_flags}")
 
+    _setup_gpu_targets(env, asan_enabled)
+
+
+def _setup_gpu_targets(env, asan_enabled):
+    # The per-test cmake calls are spawned by `ctest --build-and-test` from the
+    # installed rocdecode CTestTestfile, with no `--build-options`, so we can't
+    # pass `-DGPU_TARGETS=...` to them. Under ASAN amdgpu-arch also fails (the
+    # tool isn't linked against the asan runtime), so the nested cmake falls
+    # back to gfx906/gfx942 defaults and produces a binary that's incompatible
+    # with librocdecode.so. CMAKE_TOOLCHAIN_FILE is the env-driven mechanism
+    # CMake honors (>=3.21) on every cmake invocation, including the nested
+    # ones, so we point it at a tiny cache-priming file.
+    raw = env.get("AMDGPU_TARGETS") or env.get("GPU_TARGETS")
+    if not raw:
+        return
+    targets = [t.strip() for t in re.split(r"[,;]", raw) if t.strip()]
+    if asan_enabled:
+        # Mirror cmake/therock_sanitizers.cmake: device-side ASAN requires
+        # xnack+ on gfx942/gfx950 (HSA_XNACK=1 is set by test_component.yml).
+        targets = [
+            f"{t}:xnack+" if t in ("gfx942", "gfx950") else t for t in targets
+        ]
+    gpu_targets_value = ";".join(targets)
+
+    ROCDECODE_TEST_DIR.mkdir(parents=True, exist_ok=True)
+    toolchain = ROCDECODE_TEST_DIR / "rocdecode-test-toolchain.cmake"
+    toolchain.write_text(
+        f'set(GPU_TARGETS "{gpu_targets_value}" CACHE STRING "" FORCE)\n'
+        f'set(AMDGPU_TARGETS "{gpu_targets_value}" CACHE STRING "" FORCE)\n'
+    )
+    env["CMAKE_TOOLCHAIN_FILE"] = str(toolchain)
+    logging.info(
+        f"++ rocdecode setting GPU_TARGETS={gpu_targets_value} via {toolchain}"
+    )
+
 
 def execute_tests(env):
-    ROCDECODE_TEST_DIR = Path(THEROCK_TEST_DIR) / "rocdecode-test"
-
     ROCDECODE_TEST_DIR.mkdir(parents=True, exist_ok=True)
 
     # rocdecode tests are shipped as CMake source and must be built on the target
