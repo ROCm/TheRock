@@ -255,7 +255,9 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
         logging.warning("No tests to run in this shard")
         return 0
 
-    cmd = ["pytest", str(test_dir)]
+    # When passing specific test IDs, don't include test_dir as positional argument
+    # The test IDs already contain paths relative to pytest's rootdir
+    cmd = ["pytest"]
 
     # Add specific test IDs
     cmd.extend(test_ids)
@@ -275,7 +277,7 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
     )
     logging.info(f"Marker expression used for collection: {marker_expr or '(none)'}")
     logging.info(
-        f"Command: {' '.join(cmd[:3])} <{len(test_ids)} test IDs> {' '.join(cmd[3+len(test_ids):])}"
+        f"Command: {' '.join(cmd[:2])} <{len(test_ids)} test IDs> {' '.join(cmd[2+len(test_ids):])}"
     )
 
     result = subprocess.run(cmd, env=env_vars, check=False)
