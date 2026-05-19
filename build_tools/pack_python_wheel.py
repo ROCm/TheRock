@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Pack a pre-built Python package directory into a wheel.
+
+This script creates a PEP 427 wheel from an already-installed package
+directory (containing an extension module, __init__.py, etc.).  It reads
+name and version from a pyproject.toml and infers the platform tag from
+the extension module filename.
+
+Usage:
+    python pack_python_wheel.py \
+        --pkg-dir  /path/to/stage/hipdnn_frontend \
+        --pyproject-toml /path/to/pyproject.toml \
+        --wheel-dir /path/to/output
+"""
+
+import argparse
+import hashlib
+import base64
+import csv
+import glob
+import io
+import os
+import re
+import sys
+import zipfile
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+
+def _read_pyproject(path):
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+    project = data["project"]
+    name = project["name"]
+    version = project["version"]
+    return name, version
+
+
+def _infer_platform_tag(pkg_dir):
+    patterns = ["*.so", "*.pyd"]
+    for pat in patterns:
+        for path in glob.glob(os.path.join(pkg_dir, pat)):
+            fname = os.path.basename(path)
+            m = re.search(r"\.([^.]+)-([^.]+)-([^.]+)\.(so|pyd)$", fname)
+            if m:
+                return m.group(1), m.group(2), m.group(3)
+    return "py3", "none", "any"
+
+
+def _record_hash(filepath):
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    digest = base64.urlsafe_b64encode(h.digest()).rstrip(b"=").decode()
+    size = os.path.getsize(filepath)
+    return f"sha256={digest}", str(size)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--pkg-dir", required=True, help="Directory containing the built package files"
+    )
+    parser.add_argument(
+        "--pyproject-toml",
+        required=True,
+        help="Path to pyproject.toml for name/version",
+    )
+    parser.add_argument(
+        "--wheel-dir", required=True, help="Output directory for the .whl file"
+    )
+    args = parser.parse_args()
+
+    name, version = _read_pyproject(args.pyproject_toml)
+    norm_name = re.sub(r"[-_.]+", "_", name)
+    pkg_name = os.path.basename(args.pkg_dir)
+
+    py_tag, abi_tag, plat_tag = _infer_platform_tag(args.pkg_dir)
+    tag = f"{py_tag}-{abi_tag}-{plat_tag}"
+    wheel_name = f"{norm_name}-{version}-{tag}.whl"
+
+    os.makedirs(args.wheel_dir, exist_ok=True)
+    wheel_path = os.path.join(args.wheel_dir, wheel_name)
+
+    dist_info = f"{norm_name}-{version}.dist-info"
+    records = []
+
+    with zipfile.ZipFile(wheel_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _dirs, files in os.walk(args.pkg_dir):
+            for fname in sorted(files):
+                fpath = os.path.join(root, fname)
+                arcname = os.path.join(pkg_name, os.path.relpath(fpath, args.pkg_dir))
+                zf.write(fpath, arcname)
+                digest, size = _record_hash(fpath)
+                records.append((arcname, digest, size))
+
+        metadata = f"Metadata-Version: 2.1\n" f"Name: {name}\n" f"Version: {version}\n"
+        meta_path = f"{dist_info}/METADATA"
+        zf.writestr(meta_path, metadata)
+        records.append((meta_path, *_record_hash_bytes(metadata.encode())))
+
+        wheel_meta = (
+            f"Wheel-Version: 1.0\n"
+            f"Generator: pack_python_wheel\n"
+            f"Root-Is-Purelib: false\n"
+            f"Tag: {tag}\n"
+        )
+        wheel_meta_path = f"{dist_info}/WHEEL"
+        zf.writestr(wheel_meta_path, wheel_meta)
+        records.append((wheel_meta_path, *_record_hash_bytes(wheel_meta.encode())))
+
+        record_path = f"{dist_info}/RECORD"
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        for row in records:
+            writer.writerow(row)
+        writer.writerow((record_path, "", ""))
+        zf.writestr(record_path, buf.getvalue())
+
+    print(f"Created {wheel_path}")
+    return 0
+
+
+def _record_hash_bytes(data):
+    h = hashlib.sha256(data)
+    digest = base64.urlsafe_b64encode(h.digest()).rstrip(b"=").decode()
+    return f"sha256={digest}", str(len(data))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

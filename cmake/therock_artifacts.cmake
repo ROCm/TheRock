@@ -29,7 +29,7 @@ function(therock_provide_artifact slice_name)
   cmake_parse_arguments(PARSE_ARGV 1 ARG
     "TARGET_NEUTRAL"
     "DESCRIPTOR;DISTRIBUTION"
-    "COMPONENTS;SUBPROJECT_DEPS"
+    "COMPONENTS;SUBPROJECT_DEPS;PRE_ARTIFACT_COMMANDS"
   )
 
   if(NOT ${slice_name} MATCHES "^[A-Za-z][A-Za-z0-9-]*$")
@@ -206,6 +206,7 @@ function(therock_provide_artifact slice_name)
   add_custom_command(
     OUTPUT ${_manifest_files}
     COMMENT "Populate artifact ${slice_name}"
+    ${ARG_PRE_ARTIFACT_COMMANDS}
     ${_artifact_command}
     ${_flatten_command_list}
     DEPENDS

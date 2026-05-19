@@ -165,6 +165,7 @@ if(THEROCK_ENABLE_HIPDNN)
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DHIP_DNN_BUILD_PLUGINS=OFF
       -DHIP_DNN_GENERATE_SDK_HEADERS=OFF
+      -DHIPDNN_BUILD_PYTHON_BINDINGS=ON
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
@@ -206,6 +207,12 @@ if(THEROCK_ENABLE_HIPDNN)
       test
     SUBPROJECT_DEPS
       hipDNN
+    PRE_ARTIFACT_COMMANDS
+      COMMAND "${Python3_EXECUTABLE}"
+        "${THEROCK_SOURCE_DIR}/build_tools/pack_python_wheel.py"
+        --pkg-dir "${THEROCK_BINARY_DIR}/ml-libs/hipDNN/stage/share/hipdnn/python/hipdnn_frontend"
+        --pyproject-toml "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/python/pyproject.toml"
+        --wheel-dir "${THEROCK_BINARY_DIR}/ml-libs/hipDNN/stage/share/hipdnn/wheels"
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
