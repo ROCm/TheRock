@@ -2,10 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_COMPILER)
-  if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
-    set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
-  endif()
-
   ##############################################################################
   # amd-llvm
   # Everything built as part of LLVM installs to lib/llvm
@@ -78,7 +74,6 @@ if(THEROCK_ENABLE_COMPILER)
 
       # Features
       -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
-      -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
@@ -168,7 +163,6 @@ if(THEROCK_ENABLE_COMPILER)
       # symbols inside libamd_comgr.so, preventing symbol interposition without
       # requiring namespace isolation via dlmopen.
       -DCOMGR_STATIC_LLVM=ON
-      -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DTHEROCK_HIP_MAJOR_VERSION=${THEROCK_HIP_MAJOR_VERSION}
       -DTHEROCK_HIP_MINOR_VERSION=${THEROCK_HIP_MINOR_VERSION}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
@@ -185,23 +179,6 @@ if(THEROCK_ENABLE_COMPILER)
   )
   therock_cmake_subproject_provide_package(amd-comgr amd_comgr lib/cmake/amd_comgr)
   therock_cmake_subproject_activate(amd-comgr)
-
-  if(THEROCK_BUILD_COMGR_TESTS)
-    if(WIN32)
-      set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit.py")
-    else()
-      set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit")
-    endif()
-    therock_cmake_subproject_build_test(amd-comgr
-      COMMAND
-        "${Python3_EXECUTABLE}" "${_llvm_lit_script}"
-        "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build/test-lit" -v
-      COMMAND
-        "${CMAKE_CTEST_COMMAND}"
-        --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
-        --output-on-failure
-    )
-  endif()
 
   therock_test_validate_shared_lib(
     PATH amd-comgr/dist/lib

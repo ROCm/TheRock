@@ -716,9 +716,14 @@ def main():
         required=False,
         help="Override S3 prefix (legacy, used when --run-id is not provided)",
     )
+    parser.add_argument(
+        "--package-dir",
+        required=True,
+        help="Path to the directory containing built packages.",
+    )
 
     args = parser.parse_args()
-    package_dir = find_package_dir()
+    package_dir = Path(args.package_dir).resolve()
 
     bucket, prefix, install_url, dedupe, job_type = _resolve_upload_target(
         args, args.pkg_type
@@ -739,13 +744,13 @@ def main():
         s3_client, bucket, prefix, args.pkg_type, uploaded_packages, job_type
     )
 
-    # Skip index.html generation for CI builds (handled by Lambda function)
-    if job_type != "ci":
+    # Skip index.html generation for run_id is not passed. (handled by Lambda function)
+    if not args.run_id:
         generate_index_from_s3(s3_client, bucket, prefix)
         top_prefix = prefix.split("/")[0]
         generate_top_index_from_s3(s3_client, bucket, top_prefix)
     else:
-        print("Skipping index.html generation for CI build")
+        print("Skipping index.html generation for cases Lamda fn is set")
 
     print(f"Package repository URL: {install_url}")
     _emit_github_output("package_repository_url", install_url)

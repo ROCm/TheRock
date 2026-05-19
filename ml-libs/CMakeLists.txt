@@ -174,6 +174,7 @@ if(THEROCK_ENABLE_HIPDNN)
     BUILD_DEPS
       therock-googletest
       therock-fmt
+      therock-nanobind
       therock-spdlog
     RUNTIME_DEPS
       hip-clr

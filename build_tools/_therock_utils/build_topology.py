@@ -280,7 +280,11 @@ class BuildTopology:
             # Get all artifacts from dependent groups (transitively)
             for dep_group_name in group.artifact_group_deps:
                 dep_artifacts = self.get_artifacts_in_group(dep_group_name)
-                inbound_artifacts.update(a.name for a in dep_artifacts)
+                for artifact in dep_artifacts:
+                    inbound_artifacts.add(artifact.name)
+                    self._collect_transitive_artifact_deps(
+                        artifact.name, inbound_artifacts
+                    )
 
         # Also collect direct artifact dependencies from artifacts in this stage
         # This includes transitive artifact dependencies
