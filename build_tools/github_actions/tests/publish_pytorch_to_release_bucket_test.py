@@ -13,7 +13,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 from github_actions.publish_pytorch_to_release_bucket import main
 
 
-class TestPublishPytorchToStaging(unittest.TestCase):
+class TestPublishPytorchToReleaseBucket(unittest.TestCase):
     """Tests for the main() CLI entry point."""
 
     def setUp(self):
