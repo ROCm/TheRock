@@ -7,7 +7,6 @@ See docs/development/s3_buckets.md.
 """
 
 from dataclasses import dataclass, field
-import json
 import os
 import sys
 
@@ -77,9 +76,7 @@ _BUCKET_CONFIGS_BY_NAME = {c.name: c for c in s3_bucket_configs}
 
 _ALLOWED_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
 
-# Repositories allowed to use release_type. Only these repositories are trusted
-# to assume release IAM roles that grant write access to release buckets.
-_ALLOWED_RELEASE_REPOS = {"ROCm/TheRock", "ROCm/rockrel"}
+_ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
 
 
 def get_artifacts_bucket_config(
@@ -93,6 +90,9 @@ def get_artifacts_bucket_config(
         release_type: "" for CI builds, or "dev", "nightly", "prerelease".
         repository: GitHub repository (e.g. "ROCm/TheRock").
         is_pr_from_fork: Whether this is a PR from a fork.
+
+    Raises:
+        ValueError: If release_type is invalid.
     """
     if release_type:
         if release_type not in _ALLOWED_RELEASE_TYPES:
@@ -100,18 +100,42 @@ def get_artifacts_bucket_config(
                 f"release_type={release_type!r} is invalid, "
                 f"expected empty string or one of {_ALLOWED_RELEASE_TYPES}"
             )
-        if repository not in _ALLOWED_RELEASE_REPOS:
-            raise ValueError(
-                f"release_type={release_type!r} is set but "
-                f"repository {repository!r} is not one of "
-                f"{_ALLOWED_RELEASE_REPOS}"
-            )
         bucket_name = f"therock-{release_type}-artifacts"
     else:
         if is_pr_from_fork or repository != "ROCm/TheRock":
             bucket_name = "therock-ci-artifacts-external"
         else:
             bucket_name = "therock-ci-artifacts"
+    return _BUCKET_CONFIGS_BY_NAME[bucket_name]
+
+
+def get_release_bucket_config(
+    release_type: str,
+    bucket_type: str,
+) -> S3BucketConfig:
+    """Look up the release bucket config for a given release type and bucket type.
+
+    Args:
+        release_type: "dev", "nightly", or "prerelease".
+        bucket_type: "tarball", "python", or "packages".
+
+    Returns:
+        S3BucketConfig for the bucket ``therock-{release_type}-{bucket_type}``.
+
+    Raises:
+        ValueError: If release_type or bucket_type is invalid.
+    """
+    if release_type not in _ALLOWED_RELEASE_TYPES:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_TYPES}"
+        )
+    if bucket_type not in _ALLOWED_RELEASE_BUCKET_TYPES:
+        raise ValueError(
+            f"bucket_type={bucket_type!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_BUCKET_TYPES}"
+        )
+    bucket_name = f"therock-{release_type}-{bucket_type}"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
@@ -129,12 +153,14 @@ def _is_current_run_pr_from_fork() -> bool:
     if event_name != "pull_request":
         return False
 
-    event_path = os.environ.get("GITHUB_EVENT_PATH")
-    if not event_path:
+    if not os.environ.get("GITHUB_EVENT_PATH"):
         return False
 
-    with open(event_path) as f:
-        event = json.load(f)
+    # Deferred import: github_actions is optional in some environments; only
+    # needed when resolving fork state from the on-disk event payload.
+    from github_actions.github_actions_api import gha_load_github_event
+
+    event = gha_load_github_event()
 
     return bool(
         event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)

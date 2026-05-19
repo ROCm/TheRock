@@ -1,0 +1,11 @@
+# hipkernelprovider
+[components.dbg."ml-libs/hipkernelprovider/stage"]
+[components.lib."ml-libs/hipkernelprovider/stage"]
+exclude = [
+  "lib/*.a",
+]
+[components.test."ml-libs/hipkernelprovider/stage"]
+include = [
+  "bin/hip_kernel_provider*_test*",
+  "bin/hip_kernel_provider/CTestTestfile.cmake",
+]

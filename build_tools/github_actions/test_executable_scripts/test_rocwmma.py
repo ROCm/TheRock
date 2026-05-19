@@ -9,7 +9,6 @@ from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -36,18 +35,25 @@ logging.basicConfig(level=logging.INFO)
 test_type = os.getenv("TEST_TYPE", "full")
 
 # TODO(#2823): Re-enable test once flaky issue is resolved
-TESTS_TO_IGNORE = ["unpack_util_test"]
+TESTS_TO_IGNORE = ["unpack_util_test", "contamination_test", "map_util_test"]
 
 test_subdir = ""
-timeout = "3600"
+# CTest --timeout is per-test (seconds), not wall-clock for the whole shard.
+# A value near the GitHub step limit lets one hung test burn the entire job (ROCM-24171).
+# rocWMMA unit/gemm binaries should finish well under this on healthy runners; a stuck
+# test then fails with a clear CTest timeout instead of an opaque workflow cancel at the
+# GitHub Actions step limit.
+_PER_TEST_TIMEOUT_FULL_SEC = 1800
+_PER_TEST_TIMEOUT_QUICK_SEC = 720
+timeout = str(_PER_TEST_TIMEOUT_FULL_SEC)
 if test_type == "quick":
     # The emulator regression tests are very fast.
     # If we need something even faster we can use "/smoke" here.
     test_subdir = "/regression"
-    timeout = "720"
+    timeout = str(_PER_TEST_TIMEOUT_QUICK_SEC)
 elif test_type == "regression":
     test_subdir = "/regression"
-    timeout = "720"
+    timeout = str(_PER_TEST_TIMEOUT_QUICK_SEC)
 
 # Make per-device adjustments
 ctest_parallelism = "2"

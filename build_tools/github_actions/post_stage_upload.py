@@ -136,7 +136,7 @@ def upload_stage_logs(
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
-    dest = output_root.stage_log_dir(stage_name, amdgpu_family)
+    dest = output_root.log_stage_dir(stage_name, amdgpu_family)
     # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.zst.
     backend.upload_directory(log_dir, dest, exclude=["ccache/**/*"])
 
@@ -148,7 +148,7 @@ def run(args: argparse.Namespace):
 
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,
-        platform=platform.system().lower(),
+        platform=args.platform,
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
@@ -168,6 +168,12 @@ def main(argv: list[str] | None = None):
         type=str,
         default=os.environ.get("GITHUB_RUN_ID"),
         help="GitHub Actions run ID (default: $GITHUB_RUN_ID)",
+    )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform.system().lower(),
+        help=f"Platform for workflow output paths (default: {platform.system().lower()})",
     )
     parser.add_argument(
         "--stage",

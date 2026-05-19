@@ -1,10 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 from urllib.error import HTTPError, URLError
@@ -13,6 +15,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
+    gha_load_github_event,
     gha_query_last_successful_workflow_run,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
@@ -30,6 +33,47 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
         is_authenticated_github_api_available(),
         "No authenticated GitHub API auth available (need GITHUB_TOKEN or authenticated gh CLI)",
     )(test_func)
+
+
+class GhaLoadGitHubEventTest(unittest.TestCase):
+    """Tests for gha_load_github_event."""
+
+    def test_loads_utf8_curly_quotes_from_github_event_path(self):
+        """UTF-8 bytes must decode correctly (GitHub writes UTF-8 event files)."""
+        payload = {"body": "“smart quotes” in PR description"}
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".json") as f:
+            f.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+            path = f.name
+        saved = os.environ.get("GITHUB_EVENT_PATH")
+        os.environ["GITHUB_EVENT_PATH"] = path
+        try:
+            loaded = gha_load_github_event()
+            self.assertEqual(loaded["body"], "“smart quotes” in PR description")
+        finally:
+            os.unlink(path)
+            if saved is None:
+                del os.environ["GITHUB_EVENT_PATH"]
+            else:
+                os.environ["GITHUB_EVENT_PATH"] = saved
+
+    def test_loads_from_github_event_path_env(self):
+        """GITHUB_EVENT_PATH must be read as UTF-8."""
+        payload = {"action": "opened", "number": 42}
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".json") as f:
+            f.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+            path = f.name
+        saved = os.environ.get("GITHUB_EVENT_PATH")
+        os.environ["GITHUB_EVENT_PATH"] = path
+        try:
+            loaded = gha_load_github_event()
+            self.assertEqual(loaded["action"], "opened")
+            self.assertEqual(loaded["number"], 42)
+        finally:
+            os.unlink(path)
+            if saved is None:
+                del os.environ["GITHUB_EVENT_PATH"]
+            else:
+                os.environ["GITHUB_EVENT_PATH"] = saved
 
 
 class GitHubAPITest(unittest.TestCase):

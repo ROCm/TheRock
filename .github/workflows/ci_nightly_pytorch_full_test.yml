@@ -105,6 +105,7 @@ jobs:
           # TODO: When adding Windows support, pass --platform win_amd64 for
           # Windows targets or derive the platform from amdgpu_family/runner.
           TORCH_VERSION=$(pip index versions torch \
+            --pre \
             --index-url "${INDEX_URL}" \
             --python-version "${PYTHON_VERSION}" \
             --platform linux_x86_64 2>/dev/null \

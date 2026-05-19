@@ -6,37 +6,28 @@
 """Computes a ROCm package version with an appropriate suffix for a given release type.
 
 For usage from other Python scripts, call the `compute_version()` function
-directly. When used from GitHub Actions, this writes to GITHUB_OUTPUT:
-  - 'rocm_package_version' for wheel packages (default)
+directly. When used from GitHub Actions, this writes all three version outputs
+to GITHUB_OUTPUT:
+  - 'rocm_package_version' for wheel packages
   - 'rocm_deb_package_version' for deb packages
   - 'rocm_rpm_package_version' for rpm packages
 
-Sample usage for wheel packages (Python):
+Sample usage:
 
   python compute_rocm_package_version.py --release-type=dev
-  # 7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
+  # rocm_package_version=7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
+  # rocm_deb_package_version=7.10.0~dev20251203
+  # rocm_rpm_package_version=7.10.0~20251203gf689a8e
 
   python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2
-  # 7.10.0rc2
+  # rocm_package_version=7.10.0rc2
+  # rocm_deb_package_version=7.10.0~pre2
+  # rocm_rpm_package_version=7.10.0~rc2
 
   python compute_rocm_package_version.py --release-type=nightly
-  # 7.10.0a20251021
-
-Sample usage for native packages (deb/rpm):
-
-  python compute_rocm_package_version.py --release-type=dev --package-type=deb
-  # 8.1.0~dev20251203
-
-  python compute_rocm_package_version.py --release-type=dev --package-type=rpm
-  # 8.1.0~20251203gf689a8e
-
-  python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2 --package-type=deb
-  # 8.1.0~pre2
-
-  python compute_rocm_package_version.py --release-type=release --package-type=rpm
-  # 8.1.0
-
-Sample usage with custom release versions:
+  # rocm_package_version=7.10.0a20251021
+  # rocm_deb_package_version=7.10.0~20251021
+  # rocm_rpm_package_version=7.10.0~20251021
 
   python compute_rocm_package_version.py --custom-version-suffix=.dev0
   # 7.10.0.dev0
@@ -73,21 +64,34 @@ def load_rocm_version() -> str:
         return loaded_file["rocm-version"]
 
 
-def get_git_sha(short: bool = False):
-    """Gets the current git SHA, either from GITHUB_SHA or running git commands."""
+def get_git_sha(short: bool = False, override_git_sha: str | None = None):
+    """Gets the git SHA to embed in version strings.
 
-    # Default GitHub environment variable, info:
-    # https://docs.github.com/en/actions/reference/workflows-and-actions/variables
-    github_sha = os.getenv("GITHUB_SHA")
+    Resolution order:
+      1. ``override_git_sha`` (explicit caller override)
+      2. ``GITHUB_SHA`` environment variable
+      3. ``git rev-parse HEAD`` in the repo checkout
 
-    if github_sha:
-        git_sha = github_sha
+    When the workflow is triggered cross-repo (e.g. rockrel calling TheRock),
+    GITHUB_SHA refers to the *caller's* commit.  Pass ``override_git_sha``
+    from the checkout step to get the correct TheRock SHA.
+    """
+
+    if override_git_sha:
+        git_sha = override_git_sha
     else:
-        git_sha = subprocess.check_output(
-            ["git", "rev-parse", "--verify", "HEAD"],
-            cwd=THEROCK_DIR,
-            text=True,
-        ).strip()
+        # Default GitHub environment variable, info:
+        # https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+        github_sha = os.getenv("GITHUB_SHA")
+
+        if github_sha:
+            git_sha = github_sha
+        else:
+            git_sha = subprocess.check_output(
+                ["git", "rev-parse", "--verify", "HEAD"],
+                cwd=THEROCK_DIR,
+                text=True,
+            ).strip()
 
     # Shorten the sha to 8 characters if requested
     if short:
@@ -107,6 +111,7 @@ def compute_version(
     custom_version_suffix: str | None = None,
     prerelease_version: str | None = None,
     override_base_version: str | None = None,
+    override_git_sha: str | None = None,
 ) -> str:
     """Compute package version based on package type and release type.
 
@@ -116,6 +121,8 @@ def compute_version(
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
         override_base_version: Override the base version from version.json
+        override_git_sha: Explicit git SHA override, forwarded to get_git_sha().
+            See get_git_sha() for details on when this is needed.
 
     Returns:
         Computed version string appropriate for the package type
@@ -136,7 +143,7 @@ def compute_version(
         elif release_type == "dev":
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
-            git_sha = get_git_sha()
+            git_sha = get_git_sha(override_git_sha=override_git_sha)
             version_suffix = f".dev0+{git_sha}"
         elif release_type == "nightly":
             # Construct a nightly (a / "alpha") version:
@@ -175,7 +182,7 @@ def compute_version(
             if package_type == "deb":
                 version_suffix_str = f"~dev{current_date}"
             else:  # rpm
-                git_sha = get_git_sha(short=True)
+                git_sha = get_git_sha(short=True, override_git_sha=override_git_sha)
                 version_suffix_str = f"~{current_date}g{git_sha}"
         elif release_type == "nightly":
             # Construct a nightly version with date
@@ -205,14 +212,6 @@ def compute_version(
 def main(argv):
     parser = argparse.ArgumentParser(prog="compute_rocm_package_version")
 
-    parser.add_argument(
-        "--package-type",
-        type=str,
-        choices=["wheel", "deb", "rpm"],
-        default="wheel",
-        help="The type of package (default: wheel)",
-    )
-
     release_type_group = parser.add_mutually_exclusive_group()
     release_type_group.add_argument(
         "--release-type",
@@ -238,10 +237,16 @@ def main(argv):
         help="Override the base version from version.json with this value",
     )
 
+    parser.add_argument(
+        "--override-git-sha",
+        type=str,
+        help="Explicit git SHA to embed in the version instead of auto-detecting",
+    )
+
     args = parser.parse_args(argv)
 
     # Validation
-    if args.release_type == "release" and args.package_type == "wheel":
+    if args.release_type == "release":
         parser.error("'release' type is only valid for deb/rpm packages, not wheel")
 
     if args.release_type != "prerelease" and args.prerelease_version:
@@ -251,21 +256,24 @@ def main(argv):
             "--prerelease-version is required when release type is 'prerelease'"
         )
 
-    rocm_package_version = compute_version(
-        args.package_type,
-        args.release_type,
-        args.custom_version_suffix,
-        args.prerelease_version,
-        args.override_base_version,
-    )
-
-    # Set appropriate output variable based on package type
-    if args.package_type == "wheel":
-        gha_set_output({"rocm_package_version": rocm_package_version})
-    else:  # deb or rpm
-        gha_set_output(
-            {f"rocm_{args.package_type}_package_version": rocm_package_version}
+    # Compute versions for all three package types: wheel, deb, and rpm
+    outputs = {}
+    for pkg_type in ["wheel", "deb", "rpm"]:
+        version = compute_version(
+            pkg_type,
+            args.release_type,
+            args.custom_version_suffix,
+            args.prerelease_version,
+            args.override_base_version,
         )
+
+        # Set appropriate output variable based on package type
+        if pkg_type == "wheel":
+            outputs["rocm_package_version"] = version
+        else:  # deb or rpm
+            outputs[f"rocm_{pkg_type}_package_version"] = version
+
+    gha_set_output(outputs)
 
 
 if __name__ == "__main__":

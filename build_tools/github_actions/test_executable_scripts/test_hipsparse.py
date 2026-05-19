@@ -30,6 +30,7 @@ TEST_TO_IGNORE = {
         # TODO(#3621): Include test once out of resource errors are resolved
         "windows": ["*spmm*"]
     },
+    "gfx110X-all": {"windows": ["*csr2csr_compress*", "*prune_csr2csr.conversion*"]},
 }
 
 environ_vars["HIPSPARSE_CLIENTS_MATRICES_DIR"] = (

@@ -48,6 +48,7 @@ case "$DISTRO" in
         apt-get install -y --no-install-recommends \
             ca-certificates \
             curl \
+            gpg \
             build-essential \
             libelf1 \
             libnuma1 \

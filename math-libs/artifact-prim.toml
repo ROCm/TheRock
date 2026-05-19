@@ -6,6 +6,7 @@
 include = [
   "bin/test_*",
   "bin/rocprim/CTestTestfile.cmake",
+  "bin/rocprim/generate_resource_spec*",
   "lib/libtest_linking_*.*",
 ]
 
@@ -28,6 +29,7 @@ include = [
 [components.test."math-libs/rocThrust/stage"]
 include = [
   "bin/test_*",
+  "bin/benchmark_thrust_*",
   "bin/*.hip",
   "bin/*.hip.exe", # Windows
   "bin/rocthrust/CTestTestfile.cmake",

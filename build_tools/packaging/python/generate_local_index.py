@@ -101,6 +101,39 @@ def generate_simple_index(
     )
 
 
+def generate_flat_index(dist_dir: Path, patterns: list[str] | None = None) -> None:
+    """Generate a single flat index.html for kpack-split builds.
+
+    In kpack-split mode all packages (core, libraries, device-per-target, devel,
+    meta) are placed directly in dist/ at the top level — there are no family
+    subdirectories. This function generates a single index.html covering all
+    top-level files so that pip --find-links can discover all wheels.
+
+    Only top-level files are scanned; subdirectories are ignored.
+
+    Args:
+        dist_dir: dist/ directory containing packages at the top level
+        patterns: File patterns to include (default: ["*.whl", "*.tar.gz"])
+    """
+    if patterns is None:
+        patterns = ["*.whl", "*.tar.gz"]
+
+    local_files = []
+    for pattern in patterns:
+        local_files.extend([f for f in dist_dir.glob(pattern) if f.is_file()])
+
+    print(
+        f"Generating flat index for kpack-split build: {len(local_files)} files in {dist_dir}"
+    )
+
+    generate_simple_index(
+        output_path=dist_dir / "index.html",
+        local_files=local_files,
+        parent_files=None,
+        title="ROCm Python Packages",
+    )
+
+
 def generate_multiarch_indexes(
     dist_dir: Path, patterns: list[str] | None = None
 ) -> None:
