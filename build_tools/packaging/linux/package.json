@@ -1907,6 +1907,19 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "elfio",
+        "Artifact_Subdir": [
+          {
+            "Name": "elfio",
+            "Components": [
+              "dev",
+              "doc",
+              "lib"
+            ]
+          }
+        ]
       }
 
     ],
@@ -2975,42 +2988,7 @@
     ],
     "Gfxarch": "False"
   },
-  {
-    "Package": "amdrocm-third-party",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-    ],
-    "RPMRequires": [
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "third party",
-    "Description_Long": "third party",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "elfio",
-    "Homepage": "elfio",
-    "Artifactory": [
-      {
-        "Artifact": "elfio",
-        "Artifact_Subdir": [
-          {
-            "Name": "elfio",
-            "Components": [
-              "dev",
-              "doc",
-              "lib"
-            ]
-          }
-        ]
-      }
-    ],
-    "Gfxarch": "False"
-  },
-
+  
   {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
