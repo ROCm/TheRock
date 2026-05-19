@@ -502,13 +502,22 @@ python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
     --manifest-dir manifests/ \
     --pytorch-git-refs "release/2.10 release/2.11 nightly"
 
-# Windows (uses triton-windows, excludes apex):
+# Windows (excludes triton and apex by default):
 python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
     --rocm-version 7.13.0a20260501 \
     --version-suffix "+rocm7.13.0a20260501" \
     --platform windows \
     --output manifest.json \
     --pytorch-git-refs "release/2.10"
+
+# Opt in to Windows triton only for validated version combinations:
+python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
+    --rocm-version 7.13.0a20260501 \
+    --version-suffix "+rocm7.13.0a20260501" \
+    --platform windows \
+    --output manifest.json \
+    --pytorch-git-refs "release/2.10" \
+    --projects "pytorch pytorch_audio pytorch_vision triton"
 
 # Only pytorch (skip audio/vision/triton/apex):
 python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
@@ -518,6 +527,10 @@ python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
     --pytorch-git-refs "release/2.10" \
     --projects pytorch
 ```
+
+When Windows triton support is validated for a known PyTorch release range, the
+default project selection can enable it for those release refs while keeping
+arbitrary commit refs explicit through `--projects`.
 
 #### Downloading manifests from CI/CD runs
 

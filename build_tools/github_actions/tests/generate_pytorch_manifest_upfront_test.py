@@ -30,6 +30,50 @@ class GeneratePyTorchManifestUpfrontTest(unittest.TestCase):
             gha_fetch_file_contents=mock.Mock(side_effect=fake_fetch),
         )
 
+    def _stable_windows_github_data(
+        self, *, include_triton_version: bool = False, include_triton_pin: bool = False
+    ) -> tuple[dict[str, str], dict, dict]:
+        shas = {
+            "pytorch": "1" * 40,
+            "audio": "2" * 40,
+            "vision": "3" * 40,
+            "triton": "4" * 40,
+        }
+        related_commits = "\n".join(
+            [
+                "centos|src|torchaudio|release/2.10|"
+                f"{shas['audio']}|https://github.com/pytorch/audio",
+                "centos|src|torchvision|release/2.10|"
+                f"{shas['vision']}|https://github.com/pytorch/vision",
+            ]
+        )
+        resolves = {
+            ("ROCm/pytorch", "release/2.10"): shas["pytorch"],
+        }
+        files = {
+            ("ROCm/pytorch", "related_commits", shas["pytorch"]): related_commits,
+            ("ROCm/pytorch", "version.txt", shas["pytorch"]): "2.10.0\n",
+            ("pytorch/audio", "version.txt", shas["audio"]): "2.10.0\n",
+            ("pytorch/vision", "version.txt", shas["vision"]): "0.25.0\n",
+        }
+        if include_triton_version or include_triton_pin:
+            files[
+                (
+                    "ROCm/pytorch",
+                    ".ci/docker/triton_version.txt",
+                    shas["pytorch"],
+                )
+            ] = "3.6.0\n"
+        if include_triton_pin:
+            files[
+                (
+                    "ROCm/pytorch",
+                    ".ci/docker/ci_commit_pins/triton-windows.txt",
+                    shas["pytorch"],
+                )
+            ] = shas["triton"]
+        return shas, resolves, files
+
     def test_default_refs_match_release_matrix(self) -> None:
         self.assertEqual(
             m.DEFAULT_PYTORCH_GIT_REFS,
@@ -50,8 +94,29 @@ class GeneratePyTorchManifestUpfrontTest(unittest.TestCase):
         )
         self.assertEqual(
             m.default_projects_for_platform("windows"),
-            ["pytorch", "pytorch_audio", "pytorch_vision", "triton"],
+            ["pytorch", "pytorch_audio", "pytorch_vision"],
         )
+
+    def test_windows_triton_default_is_ref_gated(self) -> None:
+        windows_projects = ["pytorch", "pytorch_audio", "pytorch_vision"]
+        self.assertEqual(
+            m.default_projects_for_pytorch_ref("windows", "release/2.13"),
+            windows_projects,
+        )
+
+        with mock.patch.object(m, "WINDOWS_TRITON_MIN_RELEASE", (2, 13)):
+            self.assertEqual(
+                m.default_projects_for_pytorch_ref("windows", "release/2.12"),
+                windows_projects,
+            )
+            self.assertEqual(
+                m.default_projects_for_pytorch_ref("windows", "release/2.13"),
+                windows_projects + ["triton"],
+            )
+            self.assertEqual(
+                m.default_projects_for_pytorch_ref("windows", "123456abcdef"),
+                windows_projects,
+            )
 
     def test_stable_linux_manifest_resolves_related_commits_and_versions(self) -> None:
         shas = {
@@ -186,40 +251,8 @@ class GeneratePyTorchManifestUpfrontTest(unittest.TestCase):
             manifest["pytorch"]["version"], "2.11.0a0+devrocm7.13.0.dev0-abc"
         )
 
-    def test_windows_manifest_uses_triton_windows_and_excludes_apex(self) -> None:
-        shas = {
-            "pytorch": "1" * 40,
-            "audio": "2" * 40,
-            "vision": "3" * 40,
-            "triton": "4" * 40,
-        }
-        related_commits = "\n".join(
-            [
-                "centos|src|torchaudio|release/2.10|"
-                f"{shas['audio']}|https://github.com/pytorch/audio",
-                "centos|src|torchvision|release/2.10|"
-                f"{shas['vision']}|https://github.com/pytorch/vision",
-            ]
-        )
-        resolves = {
-            ("ROCm/pytorch", "release/2.10"): shas["pytorch"],
-        }
-        files = {
-            ("ROCm/pytorch", "related_commits", shas["pytorch"]): related_commits,
-            (
-                "ROCm/pytorch",
-                ".ci/docker/triton_version.txt",
-                shas["pytorch"],
-            ): "3.6.0\n",
-            (
-                "ROCm/pytorch",
-                ".ci/docker/ci_commit_pins/triton-windows.txt",
-                shas["pytorch"],
-            ): shas["triton"],
-            ("ROCm/pytorch", "version.txt", shas["pytorch"]): "2.10.0\n",
-            ("pytorch/audio", "version.txt", shas["audio"]): "2.10.0\n",
-            ("pytorch/vision", "version.txt", shas["vision"]): "0.25.0\n",
-        }
+    def test_windows_manifest_excludes_triton_and_apex_by_default(self) -> None:
+        _shas, resolves, files = self._stable_windows_github_data()
 
         with self._patch_github_api(resolves=resolves, files=files):
             manifest = m.generate_manifest(
@@ -234,10 +267,73 @@ class GeneratePyTorchManifestUpfrontTest(unittest.TestCase):
             )
 
         self.assertNotIn("apex", manifest)
+        self.assertNotIn("triton", manifest)
+
+    def test_windows_manifest_can_include_triton_when_requested(self) -> None:
+        shas, resolves, files = self._stable_windows_github_data(
+            include_triton_pin=True
+        )
+
+        with self._patch_github_api(resolves=resolves, files=files):
+            manifest = m.generate_manifest(
+                pytorch_git_ref="release/2.10",
+                rocm_version="7.13.0a20260501",
+                version_suffix="+rocm7.13.0a20260501",
+                platform="windows",
+                projects=[
+                    "pytorch",
+                    "pytorch_audio",
+                    "pytorch_vision",
+                    "triton",
+                ],
+                therock_commit="a" * 40,
+                therock_repo="https://github.com/ROCm/TheRock",
+                therock_branch="main",
+            )
+
+        self.assertNotIn("apex", manifest)
         self.assertEqual(manifest["triton"]["commit"], shas["triton"])
         self.assertEqual(
             manifest["triton"]["repo"], "https://github.com/triton-lang/triton-windows"
         )
+
+    def test_windows_manifest_triton_opt_in_requires_pin(self) -> None:
+        shas, resolves, files = self._stable_windows_github_data(
+            include_triton_version=True
+        )
+        missing_pin = (
+            "ROCm/pytorch",
+            ".ci/docker/ci_commit_pins/triton-windows.txt",
+            shas["pytorch"],
+        )
+
+        def fake_resolve(repo: str, ref: str) -> str:
+            return resolves[(repo, ref)]
+
+        def fake_fetch(repo: str, path: str, ref: str) -> str:
+            if (repo, path, ref) == missing_pin:
+                raise RuntimeError("missing triton pin")
+            return files[(repo, path, ref)]
+
+        with mock.patch.object(
+            m, "gha_resolve_git_ref", side_effect=fake_resolve
+        ), mock.patch.object(m, "gha_fetch_file_contents", side_effect=fake_fetch):
+            with self.assertRaisesRegex(RuntimeError, "missing triton pin"):
+                m.generate_manifest(
+                    pytorch_git_ref="release/2.10",
+                    rocm_version="7.13.0a20260501",
+                    version_suffix="+rocm7.13.0a20260501",
+                    platform="windows",
+                    projects=[
+                        "pytorch",
+                        "pytorch_audio",
+                        "pytorch_vision",
+                        "triton",
+                    ],
+                    therock_commit="a" * 40,
+                    therock_repo="https://github.com/ROCm/TheRock",
+                    therock_branch="main",
+                )
 
     def test_main_writes_single_output_manifest_with_project_filter(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

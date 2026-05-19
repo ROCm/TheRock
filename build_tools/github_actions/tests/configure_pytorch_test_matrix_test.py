@@ -65,6 +65,14 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             },
         )
 
+    def test_known_family_without_runner_is_skipped(self) -> None:
+        matrix = m.build_test_matrix(
+            amdgpu_families=["gfx900"],
+            platform="linux",
+            package_index_url="https://example.com/whl/",
+        )
+        self.assertEqual(matrix, {"include": []})
+
     def test_unknown_family_errors(self) -> None:
         with self.assertRaisesRegex(ValueError, "not-a-family"):
             m.build_test_matrix(

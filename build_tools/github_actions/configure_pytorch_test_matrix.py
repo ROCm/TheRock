@@ -44,7 +44,7 @@ def find_amdgpu_family(
 ) -> tuple[str, dict[str, object]]:
     """Return canonical family and platform info for a requested family/target."""
     requested_lower = requested_family.lower()
-    matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit"])
+    matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
     for key, info_for_key in matrix.items():
         platform_info = info_for_key.get(platform)
         if not platform_info:

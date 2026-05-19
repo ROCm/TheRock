@@ -47,6 +47,11 @@ DEFAULT_PYTORCH_GIT_REFS = [
     "nightly",
 ]
 
+# TODO: Set this once Windows Triton is validated for a known PyTorch release
+# range. Arbitrary commit refs should continue to require explicit --projects
+# because this script cannot infer whether triton-windows is supported there.
+WINDOWS_TRITON_MIN_RELEASE: tuple[int, int] | None = None
+
 
 @dataclass(frozen=True)
 class RepoConfig:
@@ -88,6 +93,9 @@ REPOS: dict[str, RepoConfig] = {
     "triton": RepoConfig(
         stable_repo="ROCm/triton",
         nightly_repo="ROCm/triton",
+        # Windows Triton enablement is still explicit so unsupported version
+        # combinations do not read pins or check out triton by default.
+        exclude_platforms=("windows",),
     ),
     "apex": RepoConfig(
         stable_repo="ROCm/apex",
@@ -147,12 +155,10 @@ def _resolve_triton(
     if is_windows:
         triton_repo = "triton-lang/triton-windows"
         pin_file = ".ci/docker/ci_commit_pins/triton-windows.txt"
-        fallback_branch = "main-windows"
     else:
         config = REPOS["triton"]
         triton_repo = config.nightly_repo if nightly else config.stable_repo
         pin_file = ".ci/docker/ci_commit_pins/triton.txt"
-        fallback_branch = None
 
     # Base version is always in pytorch's triton_version.txt.
     base_version = gha_fetch_file_contents(
@@ -173,25 +179,13 @@ def _resolve_triton(
         )
 
     # Stable (both platforms) or Windows nightly: use ci_commit_pins.
-    try:
-        pin = gha_fetch_file_contents(pytorch_repo, pin_file, pytorch_sha).strip()
-        log(f"  triton pin: {pin[:12]}")
-        return GitSourceInfo(
-            commit=pin,
-            repo=f"https://github.com/{triton_repo}",
-            version=version,
-        )
-    except Exception:
-        if fallback_branch:
-            log(f"  triton: no pin file, falling back to {fallback_branch}")
-            sha = _resolve_ref(triton_repo, fallback_branch)
-            return GitSourceInfo(
-                commit=sha,
-                repo=f"https://github.com/{triton_repo}",
-                branch=fallback_branch,
-                version=version,
-            )
-        raise
+    pin = gha_fetch_file_contents(pytorch_repo, pin_file, pytorch_sha).strip()
+    log(f"  triton pin: {pin[:12]}")
+    return GitSourceInfo(
+        commit=pin,
+        repo=f"https://github.com/{triton_repo}",
+        version=version,
+    )
 
 
 def default_projects_for_platform(platform: str) -> list[str]:
@@ -201,6 +195,35 @@ def default_projects_for_platform(platform: str) -> list[str]:
         for name, config in REPOS.items()
         if platform not in config.exclude_platforms
     ]
+
+
+def _parse_pytorch_release_ref(pytorch_ref: str) -> tuple[int, int] | None:
+    """Return (major, minor) for refs like release/2.13, else None."""
+    if not pytorch_ref.startswith("release/"):
+        return None
+    version = pytorch_ref.removeprefix("release/")
+    parts = version.split(".")
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+
+
+def default_projects_for_pytorch_ref(platform: str, pytorch_ref: str) -> list[str]:
+    """Return default projects for a platform and PyTorch ref."""
+    projects = default_projects_for_platform(platform)
+    release = _parse_pytorch_release_ref(pytorch_ref)
+    if (
+        platform == "windows"
+        and WINDOWS_TRITON_MIN_RELEASE is not None
+        and release is not None
+        and release >= WINDOWS_TRITON_MIN_RELEASE
+        and "triton" not in projects
+    ):
+        projects.append("triton")
+    return projects
 
 
 def resolve_sources(
@@ -384,11 +407,7 @@ def main(argv: list[str]) -> None:
 
     if args.output and len(refs) != 1:
         parser.error("--output requires exactly one --pytorch-git-refs entry")
-    projects = (
-        args.projects.split()
-        if args.projects
-        else default_projects_for_platform(args.platform)
-    )
+    explicit_projects = args.projects.split() if args.projects else None
 
     # Detect TheRock source info from the local repo, then apply CLI overrides.
     therock_root = Path(__file__).resolve().parents[2]
@@ -398,12 +417,19 @@ def main(argv: list[str]) -> None:
     therock_branch = args.therock_branch or therock_info.branch
 
     log(f"ROCm version: {args.rocm_version}, suffix: {args.version_suffix}")
-    log(f"Platform: {args.platform}, projects: {projects}")
+    log(
+        f"Platform: {args.platform}, projects: "
+        f"{explicit_projects or 'default per PyTorch ref'}"
+    )
     log(f"TheRock: {therock_commit[:12]} ({therock_branch})")
     log(f"PyTorch refs: {refs}")
     log("")
 
     for ref in refs:
+        projects = explicit_projects or default_projects_for_pytorch_ref(
+            args.platform, ref
+        )
+        log(f"Projects for {ref}: {projects}")
         manifest = generate_manifest(
             pytorch_git_ref=ref,
             rocm_version=args.rocm_version,

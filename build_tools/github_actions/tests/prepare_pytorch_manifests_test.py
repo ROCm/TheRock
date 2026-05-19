@@ -82,6 +82,48 @@ class PreparePyTorchManifestsTest(unittest.TestCase):
             },
         )
 
+    def test_generate_manifest_files_uses_ref_specific_defaults(self) -> None:
+        def fake_generate_manifest(**kwargs):
+            return {
+                "pytorch": {
+                    "repo": "https://github.com/ROCm/pytorch",
+                    "commit": "1" * 40,
+                    "branch": kwargs["pytorch_git_ref"],
+                }
+            }
+
+        def fake_default_projects(platform: str, pytorch_ref: str) -> list[str]:
+            return ["pytorch", pytorch_ref]
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            m, "generate_manifest", side_effect=fake_generate_manifest
+        ) as generate_manifest, mock.patch.object(
+            m,
+            "default_projects_for_pytorch_ref",
+            side_effect=fake_default_projects,
+        ):
+            m.generate_manifest_files(
+                manifest_dir=Path(tmp),
+                pytorch_git_refs=["release/2.12", "release/2.13"],
+                rocm_version="7.13.0",
+                version_suffix="+rocm7.13.0",
+                platform="windows",
+                projects=None,
+                therock_info=m.GitSourceInfo(
+                    repo="https://github.com/ROCm/TheRock",
+                    commit="a" * 40,
+                    branch="main",
+                ),
+            )
+
+        self.assertEqual(
+            [call.kwargs["projects"] for call in generate_manifest.call_args_list],
+            [
+                ["pytorch", "release/2.12"],
+                ["pytorch", "release/2.13"],
+            ],
+        )
+
     def test_uploads_directory_to_correct_path_and_outputs_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             manifest_dir = Path(tmp)

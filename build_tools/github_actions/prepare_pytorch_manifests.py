@@ -26,7 +26,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.determine_version import derive_version_suffix
 from github_actions.generate_pytorch_manifest_upfront import (
     DEFAULT_PYTORCH_GIT_REFS,
-    default_projects_for_platform,
+    default_projects_for_pytorch_ref,
     generate_manifest,
 )
 from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
@@ -103,18 +103,21 @@ def generate_manifest_files(
     rocm_version: str,
     version_suffix: str,
     platform: str,
-    projects: list[str],
+    projects: list[str] | None,
     therock_info: GitSourceInfo,
 ) -> dict[str, Path]:
     """Generate manifest files and return pytorch_git_ref -> path."""
     outputs: dict[str, Path] = {}
     for pytorch_git_ref in pytorch_git_refs:
+        manifest_projects = projects or default_projects_for_pytorch_ref(
+            platform, pytorch_git_ref
+        )
         manifest = generate_manifest(
             pytorch_git_ref=pytorch_git_ref,
             rocm_version=rocm_version,
             version_suffix=version_suffix,
             platform=platform,
-            projects=projects,
+            projects=manifest_projects,
             therock_commit=therock_info.commit,
             therock_repo=therock_info.repo,
             therock_branch=therock_info.branch or "",
@@ -311,7 +314,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--projects",
         default="",
-        help="Space-separated manifest projects. Defaults to all projects for the platform.",
+        help=(
+            "Space-separated manifest projects. Defaults to projects selected "
+            "for each platform and PyTorch ref."
+        ),
     )
     parser.add_argument(
         "--pytorch-git-refs",
@@ -385,9 +391,7 @@ def main(argv: list[str]) -> None:
         raise ValueError("--python-versions is required for matrix mode")
 
     version_suffix = args.version_suffix or derive_version_suffix(args.rocm_version)
-    projects = split_words(args.projects) or default_projects_for_platform(
-        args.platform
-    )
+    projects = split_words(args.projects) or None
     therock_info = resolve_therock_source_info(
         therock_root=Path(__file__).resolve().parents[2],
         therock_commit=args.therock_commit,
