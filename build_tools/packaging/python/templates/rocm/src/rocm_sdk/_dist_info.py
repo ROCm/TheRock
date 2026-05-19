@@ -252,7 +252,7 @@ LibraryEntry(
     "hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll", deps=["amd_comgr", "amdhip64"]
 )
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
-LibraryEntry("rocprofiler-sdk", "core", "librocprofiler-sdk.so*", "")
+LibraryEntry("rocprofiler-sdk", "core", "librocprofiler-sdk.so*", "", deps=["amd_comgr"])
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
 LibraryEntry(
@@ -277,8 +277,8 @@ LibraryEntry(
     deps=["rocm_sysdeps_liblzma"],
 )
 LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
-LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
-LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
+LibraryEntry("rocdecode", "core", "librocdecode.so*", "", deps=["amdhip64"])
+LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "", deps=["amdhip64"])
 LibraryEntry(
     "hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll", deps=["amdhip64"]
 )  # missing rocsolver, rocblas
@@ -298,7 +298,7 @@ LibraryEntry(
 LibraryEntry(
     "hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll", deps=["amdhip64"]
 )  # missing rocsparse
-LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "", deps=["roctx64"])
+LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "", deps=["roctx64", "amdhip64"])
 LibraryEntry(
     "hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll", deps=["amdhip64"]
 )  # missing rocsolver, rocsparse, rocblas)
@@ -315,7 +315,7 @@ LibraryEntry(
     "libMIOpen.so*",
     "MIOpen*.dll",
     deps=[
-        "rocm_systems_liblzma",
+        "rocm_sysdeps_liblzma",
         "hiprtc",
         "roctx64",
         "hipblaslt",
@@ -323,7 +323,7 @@ LibraryEntry(
         "amdhip64",
     ],
 )  # missing rocblas
-LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
+LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll", deps=["amdhip64"])
 
 # Others we may want:
 # hiprtc-builtins
