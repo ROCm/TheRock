@@ -45,6 +45,7 @@ jobs:
       Test ${{ fromJSON(inputs.component).job_name }}
       (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
       (${{ inputs.amdgpu_families }})
+      ${{ fromJSON(inputs.component).emulator == 'rocjitsu' && '(rocjitsu)' || '' }}
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
@@ -61,16 +62,9 @@ jobs:
       # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
       # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
       # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
-      options: --ipc host
-        --group-add video
-        --device /dev/kfd
-        --device /dev/dri
-        --group-add 993
-        --group-add 992
-        --group-add 110
-        --ulimit memlock=-1:-1
-        --security-opt seccomp=unconfined
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
+      options: >-
+        --ipc host
+        ${{ fromJSON(inputs.component).emulator != 'rocjitsu' && '--group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --ulimit memlock=-1:-1 --security-opt seccomp=unconfined --env-file /etc/podinfo/gha-gpu-isolation-settings' || '' }}
         --user 0:0
         ${{ fromJSON(inputs.component).container_options }}
     strategy:
@@ -143,6 +137,7 @@ jobs:
           python ./build_tools/health_status.py
 
       - name: Driver / GPU sanity check
+        if: ${{ fromJSON(inputs.component).emulator != 'rocjitsu' }}
         timeout-minutes: 3
         run: |
           python ./build_tools/print_driver_gpu_info.py
@@ -170,6 +165,10 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
+          ROCM_TESTS_RUN_ON_EMULATOR: ${{ fromJSON(inputs.component).emulator }}
+          LD_PRELOAD: ${{ fromJSON(inputs.component).emulator == 'rocjitsu' && format('{0}/lib/librocjitsu_kmd.so', env.OUTPUT_ARTIFACTS_DIR) || '' }}
+          RJ_CONFIG: ${{ fromJSON(inputs.component).emulator == 'rocjitsu' && format('{0}/{1}', env.OUTPUT_ARTIFACTS_DIR, fromJSON(inputs.component).rocjitsu_config) || '' }}
+          RJ_SCHEMA: ${{ fromJSON(inputs.component).emulator == 'rocjitsu' && format('{0}/{1}', env.OUTPUT_ARTIFACTS_DIR, fromJSON(inputs.component).rocjitsu_schema) || '' }}
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
@@ -181,6 +180,7 @@ jobs:
             Test ${{ fromJSON(inputs.component).job_name }}
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
             (${{ inputs.amdgpu_families }})
+            ${{ fromJSON(inputs.component).emulator == 'rocjitsu' && '(rocjitsu)' || '' }}
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
           ${{ fromJSON(inputs.component).test_script }}

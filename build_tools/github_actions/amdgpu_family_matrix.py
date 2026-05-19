@@ -125,6 +125,8 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
+- test-runs-on-emulator: (optional) CPU runner label for rocJITsu emulator tests for this architecture
+- rocjitsu-config: (optional) rocJITsu config file under share/rocjitsu/configs for emulator tests
 - benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
@@ -169,6 +171,8 @@ amdgpu_family_info_matrix_presubmit = {
                     "weight": 0.21,
                 },  # core42 (3/14)
             ],
+            "test-runs-on-emulator": "azure-linux-scale-rocm",
+            "rocjitsu-config": "amdgpu_cdna3_kmd.json",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
@@ -244,6 +248,8 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
+            "test-runs-on-emulator": "azure-linux-scale-rocm",
+            "rocjitsu-config": "amdgpu_cdna4_kmd.json",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],

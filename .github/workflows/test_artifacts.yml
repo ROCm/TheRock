@@ -185,11 +185,14 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
-      #   1. Benchmark components use the dedicated benchmark runner
-      #   2. Multi-GPU components use the multi-GPU runner
-      #   3. Everything else uses the standard test runner
+      #   1. Emulator components use CPU runners
+      #   2. Benchmark components use the dedicated benchmark runner
+      #   3. Multi-GPU components use the multi-GPU runner
+      #   4. Everything else uses the standard test runner
       test_runs_on: >-
         ${{
+          (matrix.components.emulator_runs_on != '' &&
+            matrix.components.emulator_runs_on) ||
           (matrix.components.is_benchmark == true &&
             inputs.benchmark_runs_on != '' &&
             inputs.benchmark_runs_on) ||
