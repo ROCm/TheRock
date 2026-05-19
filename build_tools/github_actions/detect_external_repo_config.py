@@ -381,11 +381,14 @@ def main(argv=None):
             external_repo = json.loads(args.external_repo_json)
             source_repository = external_repo.get("repository", "")
             source_ref = external_repo.get("ref", "")
-            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries")
+            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries").
+            # Lowercase to match REPO_CONFIGS keys, since GitHub preserves the
+            # canonical casing of the repo (e.g. "ROCm/ROCgdb").
             if "/" in source_repository:
                 repo_name = source_repository.split("/")[-1]
             else:
                 repo_name = source_repository
+            repo_name = repo_name.lower()
             args.repository = repo_name
             print(
                 f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
