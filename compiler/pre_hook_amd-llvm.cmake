@@ -4,6 +4,11 @@
 # Get access to LLVM_VERSION_MAJOR
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
+# If its not defined, we enable it
+if(NOT DEFINED THEROCK_ENABLE_FLANG)
+  set(THEROCK_ENABLE_FLANG ON)
+endif()
+
 # Build LLVM and the comgr dependency.
 # Note that in LLVM "BUILD_SHARED_LIBS" enables an unsupported development mode.
 # The flag you want for a shared library build is LLVM_BUILD_LLVM_DYLIB.
@@ -32,9 +37,7 @@ else()
   set(LLVM_ENABLE_RUNTIMES "${_llvm_enable_runtimes}" CACHE STRING "Enabled runtimes" FORCE)
   if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
     set(OPENMP_ENABLE_LIBOMPTARGET ON)
-    if(THEROCK_ENABLE_FLANG)
-      set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-    endif()
+    set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
     set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
