@@ -29,6 +29,7 @@ import argparse
 import json
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -90,15 +91,54 @@ def checkout_project(
     subprocess.check_call(cmd)
 
 
+def download_manifest(*, manifest_url: str, output_path: Path) -> Path:
+    """Download a manifest URL to output_path."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    log(f"Downloading manifest: {manifest_url} -> {output_path}")
+    urllib.request.urlretrieve(manifest_url, output_path)
+    if not output_path.is_file() or output_path.stat().st_size == 0:
+        raise RuntimeError(f"Failed to download manifest: {manifest_url}")
+    return output_path
+
+
+def validate_manifest(
+    manifest: dict[str, object], *, expected_pytorch_git_ref: str
+) -> None:
+    """Validate manifest contents against workflow expectations."""
+    if not expected_pytorch_git_ref:
+        return
+    pytorch = manifest.get("pytorch")
+    if not isinstance(pytorch, dict):
+        raise ValueError("Manifest is missing pytorch entry")
+    actual_ref = pytorch.get("branch")
+    if actual_ref != expected_pytorch_git_ref:
+        raise ValueError(
+            f"Manifest PyTorch ref {actual_ref!r} does not match "
+            f"{expected_pytorch_git_ref!r}"
+        )
+
+
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description="Check out pytorch repos from a manifest file"
     )
-    parser.add_argument(
+    manifest_input = parser.add_mutually_exclusive_group(required=True)
+    manifest_input.add_argument(
         "--manifest",
         type=Path,
-        required=True,
         help="Path to manifest JSON file",
+    )
+    manifest_input.add_argument(
+        "--manifest-url",
+        help="URL to a manifest JSON file to download before checkout",
+    )
+    parser.add_argument(
+        "--manifest-output",
+        type=Path,
+        help=(
+            "Local path to write --manifest-url downloads to "
+            "(default: <checkout-root>/pytorch_manifest.json)"
+        ),
     )
     parser.add_argument(
         "--checkout-root",
@@ -115,6 +155,11 @@ def main(argv: list[str]) -> None:
         ),
     )
     parser.add_argument(
+        "--expected-pytorch-git-ref",
+        default="",
+        help="Validate manifest pytorch.branch against this ref before checkout",
+    )
+    parser.add_argument(
         "--no-hipify",
         action="store_true",
         default=False,
@@ -122,7 +167,15 @@ def main(argv: list[str]) -> None:
     )
     args = parser.parse_args(argv)
 
-    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    manifest_path = args.manifest
+    if args.manifest_url:
+        manifest_path = args.manifest_output or (
+            args.checkout_root / "pytorch_manifest.json"
+        )
+        download_manifest(manifest_url=args.manifest_url, output_path=manifest_path)
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validate_manifest(manifest, expected_pytorch_git_ref=args.expected_pytorch_git_ref)
 
     # Determine which projects to check out.
     available = [name for name in CHECKOUT_SCRIPTS if name in manifest]
@@ -136,7 +189,7 @@ def main(argv: list[str]) -> None:
     else:
         projects = available
 
-    log(f"Manifest: {args.manifest}")
+    log(f"Manifest: {manifest_path}")
     log(f"Checkout root: {args.checkout_root}")
     log(f"Projects: {projects}")
     log("")

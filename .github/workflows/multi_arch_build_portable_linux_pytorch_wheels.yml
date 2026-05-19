@@ -128,8 +128,55 @@ permissions:
   contents: read
 
 jobs:
+  prepare_pytorch_manifest:
+    name: Prepare Manifest | torch ${{ inputs.pytorch_git_ref }}
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      manifest_url: ${{ steps.prepare.outputs.manifest_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Python requirements
+        run: |
+          pip install packaging boto3
+
+      - name: Configure AWS Credentials for artifacts
+        if: ${{ inputs.manifest_url == '' }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Prepare PyTorch manifest
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build_tools/github_actions/prepare_pytorch_manifests.py \
+            --manifest-url "${{ inputs.manifest_url }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
+            --run-id "${{ github.run_id }}" \
+            --release-type "${{ inputs.release_type }}" \
+            --platform linux \
+            --manifest-dir "${{ github.workspace }}/output/manifests" \
+            --pytorch-git-refs "${{ inputs.pytorch_git_ref }}" \
+            --therock-repo "https://github.com/${{ inputs.repository || github.repository }}" \
+            --therock-branch "${{ inputs.ref || github.ref_name }}"
+
   build_pytorch_wheels:
     name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
+    needs: [prepare_pytorch_manifest]
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     permissions:
       id-token: write
@@ -169,13 +216,6 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - name: Record TheRock checkout
-        id: therock
-        run: |
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "repo=https://github.com/${{ inputs.repository || github.repository }}" >> "$GITHUB_OUTPUT"
-          echo "branch=${{ inputs.ref || github.ref_name }}" >> "$GITHUB_OUTPUT"
-
       - name: Select Python version
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
@@ -204,77 +244,21 @@ jobs:
       - name: Set manifest path
         run: |
           mkdir -p "${MANIFEST_DIR}"
-          ref_name="${{ inputs.pytorch_git_ref }}"
-          safe_ref="${ref_name//\//-}"
-          echo "MANIFEST_FILE=${MANIFEST_DIR}/therock-manifest_torch_linux_${safe_ref}.json" >> "$GITHUB_ENV"
-
-      - name: Generate PyTorch manifest
-        if: ${{ inputs.manifest_url == '' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python build_tools/github_actions/generate_pytorch_manifest_upfront.py \
-            --rocm-version "${{ inputs.rocm_version }}" \
-            --version-suffix "${version_suffix}" \
-            --platform linux \
-            --output "${MANIFEST_FILE}" \
-            --pytorch-git-refs "${{ inputs.pytorch_git_ref }}" \
-            --therock-commit "${{ steps.therock.outputs.commit }}" \
-            --therock-repo "${{ steps.therock.outputs.repo }}" \
-            --therock-branch "${{ steps.therock.outputs.branch }}"
-
-      - name: Download PyTorch manifest
-        if: ${{ inputs.manifest_url != '' }}
-        env:
-          MANIFEST_URL: ${{ inputs.manifest_url }}
-        run: |
-          python - <<'PY'
-          import os
-          import urllib.request
-
-          urllib.request.urlretrieve(os.environ["MANIFEST_URL"], os.environ["MANIFEST_FILE"])
-          PY
-
-      - name: Write PyTorch package version outputs
-        id: manifest-versions
-        env:
-          PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-
-          with open(os.environ["MANIFEST_FILE"], encoding="utf-8") as f:
-              manifest = json.load(f)
-          actual = manifest["pytorch"].get("branch")
-          expected = os.environ["PYTORCH_GIT_REF"]
-          if actual != expected:
-              raise SystemExit(
-                  f"Manifest PyTorch ref {actual!r} does not match {expected!r}"
-              )
-          PY
-
-          python build_tools/github_actions/write_pytorch_manifest_versions.py \
-            --manifest "${MANIFEST_FILE}"
-
-      - name: Configure AWS Credentials for artifacts
-        if: ${{ inputs.manifest_url == '' }}
-        uses: ./.github/actions/configure_aws_artifacts_credentials
-        with:
-          release_type: ${{ inputs.release_type }}
-
-      - name: Upload PyTorch manifest to S3 artifacts
-        if: ${{ inputs.manifest_url == '' }}
-        run: |
-          python build_tools/github_actions/upload_pytorch_manifests.py \
-            --manifest-dir "${MANIFEST_DIR}" \
-            --run-id "${{ github.run_id }}"
+          echo "MANIFEST_FILE=${MANIFEST_DIR}/pytorch_manifest.json" >> "$GITHUB_ENV"
 
       - name: Checkout PyTorch source repos from manifest
         run: |
           python ./external-builds/pytorch/checkout_from_manifest.py \
-            --manifest "${MANIFEST_FILE}" \
-            --checkout-root ./external-builds/pytorch
+            --manifest-url "${{ needs.prepare_pytorch_manifest.outputs.manifest_url }}" \
+            --manifest-output "${MANIFEST_FILE}" \
+            --checkout-root ./external-builds/pytorch \
+            --expected-pytorch-git-ref "${{ inputs.pytorch_git_ref }}"
+
+      - name: Write PyTorch package version outputs
+        id: manifest-versions
+        run: |
+          python build_tools/github_actions/write_pytorch_manifest_versions.py \
+            --manifest "${MANIFEST_FILE}"
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
