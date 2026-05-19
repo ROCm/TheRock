@@ -83,6 +83,41 @@ class TestMain(unittest.TestCase):
             )
             self.assertTrue((dest_dir / "manifest.json").is_file())
 
+    def test_writes_manifest_directory_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            manifest_dir = Path(tmp)
+
+            (manifest_dir / "manifest.json").write_text("{}")
+
+            with mock.patch.object(
+                upload_pytorch_manifests, "gha_set_output"
+            ) as gha_set_output:
+                upload_pytorch_manifests.main(
+                    [
+                        "--manifest-dir",
+                        str(manifest_dir),
+                        "--run-id",
+                        "99999",
+                        "--output-dir",
+                        str(staging),
+                        "--bucket",
+                        "test",
+                    ]
+                )
+
+        gha_set_output.assert_called_once_with(
+            {
+                "manifest_dir_url": (
+                    f"https://test.s3.amazonaws.com/99999-"
+                    f"{upload_pytorch_manifests.PLATFORM}/manifests/pytorch"
+                ),
+                "manifest_dir_s3_uri": (
+                    f"s3://test/99999-{upload_pytorch_manifests.PLATFORM}"
+                    "/manifests/pytorch"
+                ),
+            }
+        )
+
     def test_empty_directory_raises(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             with self.assertRaises(FileNotFoundError):
