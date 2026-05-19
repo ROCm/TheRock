@@ -1310,51 +1310,6 @@
     "Gfxarch": "True"
   },
   {
-    "Package": "amdrocm-profiler-base-test",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "libc6"
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "rocprofiler-sdk test",
-    "Description_Long": "Contains rocprofiler-sdk test",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Artifactory": [
-      {
-        "Artifact": "rocprofiler-sdk",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocprofiler-sdk",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "aqlprofile",
-        "Artifact_Subdir": [
-          {
-            "Name": "aqlprofile",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      }
-    ],
-
-    "Disable_DWZ": "True",
-    "Gfxarch": "False"
-  },
-  {
     "Package": "amdrocm-profiler-base",
     "Version": "",
     "Architecture": "amd64",
@@ -1476,6 +1431,28 @@
         "Artifact_Subdir": [
           {
             "Name": "rocprofiler-systems",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "rocprofiler-sdk",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocprofiler-sdk",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "aqlprofile",
+        "Artifact_Subdir": [
+          {
+            "Name": "aqlprofile",
             "Components": [
               "test"
             ]
