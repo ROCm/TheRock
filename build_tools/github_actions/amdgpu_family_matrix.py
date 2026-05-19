@@ -353,7 +353,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1150"],
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },

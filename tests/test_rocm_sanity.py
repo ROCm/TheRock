@@ -11,6 +11,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -29,19 +30,23 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None):
+def run_command(command: list[str], cwd=None, capture=True):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command,
+        capture_output=capture,
+        cwd=cwd,
+        shell=is_windows(),
+        text=True,
     )
     if process.returncode != 0:
-        logger.error(f"Command failed!")
-        logger.error("command stdout:")
-        for line in process.stdout.splitlines():
-            logger.error(line)
-        logger.error("command stderr:")
-        for line in process.stderr.splitlines():
-            logger.error(line)
+        if capture:
+            logger.error("command stdout:")
+            for line in process.stdout.splitlines():
+                logger.error(line)
+            logger.error("command stderr:")
+            for line in process.stderr.splitlines():
+                logger.error(line)
         raise Exception(f"Command failed: `{shlex.join(command)}`, see output above")
     return process
 
@@ -81,6 +86,116 @@ class TestROCmSanity:
             re.search(to_search, rocm_info_output),
             f"Failed to search for {to_search} in rocminfo output",
         )
+
+    # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
+    @pytest.mark.skipif(
+        is_asan(), reason="hipcc test fails with ASAN build, see TheRock#3313"
+    )
+    def test_hip_simple(self):
+        """Minimal kernel without printf to isolate gfx1150 hang (TheRock#3199)."""
+        platform_executable_suffix = ".exe" if is_windows() else ""
+        offload_arch_path = (
+            THEROCK_BIN_DIR
+            / ".."
+            / "lib"
+            / "llvm"
+            / "bin"
+            / f"offload-arch{platform_executable_suffix}"
+        ).resolve()
+        process = run_command([str(offload_arch_path)])
+        offload_arch = None
+        for line in process.stdout.splitlines():
+            if "gfx" in line:
+                offload_arch = line
+                break
+        assert (
+            offload_arch is not None
+        ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
+
+        executable = f"hip_simple_check{platform_executable_suffix}"
+        run_command(
+            [
+                f"{THEROCK_BIN_DIR}/hipcc",
+                str(THIS_DIR / "hip_simple_check.cpp"),
+                "-Xlinker",
+                f"-rpath={THEROCK_BIN_DIR}/../lib/",
+                f"--offload-arch={offload_arch}",
+                "-o",
+                executable,
+            ],
+            cwd=str(THEROCK_BIN_DIR),
+        )
+
+        # Dump kernel log to capture GPU firmware errors that may cause
+        # all subsequent kernel launches to stall. Try /dev/kmsg first
+        # (bypasses dmesg_restrict), then fall back to dmesg.
+        def dump_kmsg(label, last_n=50):
+            # Try /dev/kmsg (non-blocking read of kernel ring buffer)
+            try:
+                with open("/dev/kmsg", "r", errors="replace") as f:
+                    import fcntl
+
+                    # Set non-blocking so we don't hang
+                    fd = f.fileno()
+                    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                    lines = []
+                    try:
+                        while True:
+                            line = f.readline()
+                            if not line:
+                                break
+                            lines.append(line.rstrip())
+                    except (BlockingIOError, OSError):
+                        pass
+                    if lines:
+                        logger.info(f"=== {label} (last {last_n} from /dev/kmsg) ===")
+                        for line in lines[-last_n:]:
+                            logger.info(line)
+                        return
+            except (PermissionError, OSError):
+                pass
+
+            # Fallback: dmesg command
+            try:
+                result = subprocess.run(
+                    ["dmesg", "-T"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.stdout.strip():
+                    logger.info(f"=== {label} (last {last_n} from dmesg) ===")
+                    for line in result.stdout.splitlines()[-last_n:]:
+                        logger.info(line)
+                else:
+                    logger.warning(f"{label}: dmesg returned empty output")
+            except Exception as e:
+                logger.warning(f"{label}: dmesg failed: {e}")
+
+        dump_kmsg("kernel log before hip_simple_check", last_n=50)
+
+        # The C++ binary has a built-in SIGALRM watchdog at 20s that
+        # dumps backtrace + /proc/self/maps + /proc/self/stack to stderr
+        # and exits with code 2. No need for external gdb/strace.
+        platform_executable_prefix = "./" if not is_windows() else ""
+        exe = f"{platform_executable_prefix}{executable}"
+        logger.info(f"++ Run [{THEROCK_BIN_DIR}]$ {exe}")
+        proc = subprocess.Popen(
+            [exe],
+            cwd=str(THEROCK_BIN_DIR),
+        )
+
+        hang_timeout = 30
+        try:
+            proc.wait(timeout=hang_timeout)
+        except subprocess.TimeoutExpired:
+            logger.error(f"hip_simple_check hung for {hang_timeout}s, killing")
+            dump_kmsg("kernel log after hang", last_n=100)
+            proc.kill()
+            proc.wait()
+
+        check.equal(proc.returncode, 0)
 
     # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
     @pytest.mark.skipif(
@@ -139,10 +254,14 @@ class TestROCmSanity:
             cwd=str(THEROCK_BIN_DIR),
         )
 
-        # Running and checking the executable
+        # Running and checking the executable.
+        # capture=False so HIP debug output streams directly to the log
+        # if the process hangs (see TheRock#3199).
         platform_executable_prefix = "./" if not is_windows() else ""
         hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
-        process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
+        process = run_command(
+            [hipcc_check_executable], cwd=str(THEROCK_BIN_DIR), capture=False
+        )
         check.equal(process.returncode, 0)
         check.greater(
             os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable_file)), 0
