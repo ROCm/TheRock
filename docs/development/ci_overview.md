@@ -38,6 +38,11 @@ Each stage runs as a separate job, uploads its artifacts and logs to S3, then do
   - [`.github/workflows/multi_arch_ci_windows.yml`](/.github/workflows/multi_arch_ci_windows.yml) - build rocm, test rocm, build rocm python, build pytorch for Windows
   - [`.github/workflows/multi_arch_build_windows.yml`](/.github/workflows/multi_arch_build_windows.yml) - Windows stages for "build rocm"
 
+The WSL ROCDXG stage is a special case in the portable Linux multi-arch flow:
+the job starts on a Windows runner, then runs artifact fetch, configure, build,
+and upload steps inside a WSL Ubuntu shell. See
+[WSL ROCDXG CI Stage](wsl_rocdxg.md) for details.
+
 ## Build Phase
 
 TheRock builds ROCm components from source and produces **artifacts** - archive slices of key components.

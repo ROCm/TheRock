@@ -138,7 +138,7 @@ class FetchPackageTargetsTest(unittest.TestCase):
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        # Mock random.random() to return 0.1 (< 0.369 first weight)
         with patch("random.random", return_value=0.1):
             targets = fetch_package_targets.determine_package_targets(args)
 
@@ -152,8 +152,8 @@ class FetchPackageTargetsTest(unittest.TestCase):
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.65 (>= 0.59, < 0.73)
-        with patch("random.random", return_value=0.65):
+        # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
+        with patch("random.random", return_value=0.4):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
@@ -166,8 +166,8 @@ class FetchPackageTargetsTest(unittest.TestCase):
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.8 (>= 0.73)
-        with patch("random.random", return_value=0.8):
+        # Mock random.random() to return 0.5 (>= 0.455)
+        with patch("random.random", return_value=0.5):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
