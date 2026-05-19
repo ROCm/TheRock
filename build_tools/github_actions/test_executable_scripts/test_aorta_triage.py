@@ -4,59 +4,34 @@
 
 """
 ===============================================================================
-AORTA Triage Smoke Test (Manual Execution Only)
+AORTA triage smoke test (manual execution only)
 
 This script is NOT part of automated CI runs.
 
-Exercises ``aorta triage run`` end-to-end against the ``recom_repro`` smoke
-recipe from ``aorta-internal`` (``recipes/recom_repro_smoke.yaml``). Milestone
-1 pass criteria per ROCm/aorta-internal#26:
-
-* dispatcher exit code 0
-* ``matrix.md`` produced under ``--output-dir``
-* no matrix cells in the ``error`` state (cell-level failure)
+Runs ``aorta triage run`` against a recipe file and checks milestone-style
+plumbing: dispatcher exit code 0, a single ``matrix.md`` under ``--output-dir``,
+and no cell-level ``error`` rows in ``matrix.json``.
 
 Pre-requisites
 --------------
 
-1. **Dual editable install** (``aorta-internal/docs/triage_matrix_quickstart.md``
-   section 1)::
+1. ``aorta`` on ``PATH`` (``pip install`` of the public ``aorta`` package, or an
+   editable install from a local checkout).
 
-       pip install -e <path>/aorta -e <path>/aorta-internal
+2. **``AORTA_RECIPE_PATH``** — absolute path to a triage recipe YAML.
 
-   Per ``aorta-internal/CLAUDE.md`` rule #5: do **not** submodule public
-   ``aorta`` into ``aorta-internal``. Use a sibling clone (or a pinned
-   ``rocm-aorta`` PyPI package once published on internal PyPI).
+3. **``AORTA_MITIGATIONS_FILE``** (optional) — path to a mitigations/environments
+   sidecar JSON passed through to ``--mitigations-file`` when set.
 
-2. **``AORTA_INTERNAL_DIR``** must point at the ``aorta-internal`` checkout
-   so this test can resolve ``recipes/recom_repro_smoke.yaml``.
+4. **GPU + ROCm host** with docker if the recipe uses docker-backed environments.
+   Registry credentials for non-public images are out of band; TheRock CI does not
+   provide them today.
 
-3. **GPU + ROCm host** with docker available. The smoke recipe runs the
-   ``recom_repro`` workload inside docker (``nan-repro`` environment).
+Usage (remove ``pytestmark`` skip locally only; do not commit)::
 
-4. **Private image auth.** Step A uses a known-good image already wired into
-   the recipe (``rocm/pytorch-private:nan-repro``). These are private AMD
-   images; TheRock CI will not pull them without explicit registry credentials.
-
-5. **Digest pinning (follow-up).** ``CLAUDE.md`` rule #7 requires digest-pinned
-   gate images. This milestone does not assert on image digests; that lands in
-   the follow-up ticket after milestone 1.
-
-Expected runtime: ~3-5 minutes on MI350X once ``nan-repro`` is pulled; first
-pull adds ~5-10 minutes.
-
-Manual validation (document in your PR / run notes, not in CI)
----------------------------------------------------------------
-
-* **Step A** -- run against the recipe's known-good ``rocm/pytorch-private:nan-repro``.
-* **Step B** -- re-run against the latest ROCm image available in TheRock at run
-  time. A Step B failure where Step A passed is reportable data; do not "fix"
-  it inside this script.
-
-Usage (after temporarily removing ``pytestmark`` skip, or passing
-``--runxfail`` is insufficient -- un-skip locally only, do not commit)::
-
-    export AORTA_INTERNAL_DIR=/path/to/aorta-internal
+    export AORTA_RECIPE_PATH=/path/to/smoke-recipe.yaml
+    export AORTA_MITIGATIONS_FILE=/path/to/sidecar.json   # if required by recipe
+    export HIP_VISIBLE_DEVICES=0
     pytest build_tools/github_actions/test_executable_scripts/test_aorta_triage.py \\
         -k test_aorta_triage_smoke -s
 
@@ -76,8 +51,7 @@ from pathlib import Path
 import pytest
 
 pytestmark = pytest.mark.skip(
-    "Manual execution only - requires GPU, ROCm, private docker image auth, "
-    "AORTA_INTERNAL_DIR sibling install"
+    "Manual execution only — requires GPU, ROCm, and AORTA_RECIPE_PATH"
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -85,19 +59,25 @@ logging.basicConfig(level=logging.INFO)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-RECIPE_REL = Path("recipes") / "recom_repro_smoke.yaml"
-# nan-repro / fixed docker envs are defined in this sidecar until B3 entry-points land.
-SIDECAR_REL = Path("recipes") / "SHAMPOO-NAN-2026-042-sidecar.json"
 
-
-def _resolve_recipe() -> Path:
-    aorta_internal = os.getenv("AORTA_INTERNAL_DIR")
-    if not aorta_internal:
-        pytest.skip("AORTA_INTERNAL_DIR is not set (path to aorta-internal checkout)")
-    recipe = Path(aorta_internal) / RECIPE_REL
+def _recipe_path() -> Path:
+    raw = os.getenv("AORTA_RECIPE_PATH")
+    if not raw:
+        pytest.skip("AORTA_RECIPE_PATH is not set (path to triage recipe YAML)")
+    recipe = Path(raw)
     if not recipe.is_file():
-        pytest.fail(f"Smoke recipe not found: {recipe}")
+        pytest.fail(f"Recipe not found: {recipe}")
     return recipe
+
+
+def _mitigations_file() -> Path | None:
+    raw = os.getenv("AORTA_MITIGATIONS_FILE")
+    if not raw:
+        return None
+    sidecar = Path(raw)
+    if not sidecar.is_file():
+        pytest.fail(f"AORTA_MITIGATIONS_FILE not found: {sidecar}")
+    return sidecar
 
 
 def _assert_no_error_cells(run_dir: Path) -> None:
@@ -117,37 +97,24 @@ def _assert_no_error_cells(run_dir: Path) -> None:
     if error_cells:
         pytest.fail("Matrix cells in error state:\n" + "\n".join(error_cells))
 
-    for trial_path in sorted(run_dir.rglob("trial_*.json")):
-        trial = json.loads(trial_path.read_text(encoding="utf-8"))
-        exit_status = trial.get("exit_status")
-        if exit_status in (None, "ok"):
-            continue
-        # Trial-level failures are acceptable for smoke (bug may not fire at
-        # 50 steps); only cell-level "could not start" counts as milestone error.
-        pass
-
 
 def test_aorta_triage_smoke(tmp_path: Path) -> None:
     if shutil.which("aorta") is None:
-        pytest.skip("aorta CLI not on PATH (pip install -e aorta -e aorta-internal)")
+        pytest.skip("aorta CLI not on PATH")
 
-    aorta_internal = Path(os.environ["AORTA_INTERNAL_DIR"])
-    recipe = _resolve_recipe()
-    sidecar = aorta_internal / SIDECAR_REL
-    if not sidecar.is_file():
-        pytest.fail(f"Mitigations sidecar not found: {sidecar}")
-
+    recipe = _recipe_path()
     cmd = [
         "aorta",
         "triage",
         "run",
         "--recipe",
         str(recipe),
-        "--mitigations-file",
-        str(sidecar),
         "--output-dir",
         str(tmp_path),
     ]
+    sidecar = _mitigations_file()
+    if sidecar is not None:
+        cmd.extend(["--mitigations-file", str(sidecar)])
 
     logging.info("++ Exec [%s]$ %s", THEROCK_DIR, shlex.join(cmd))
     proc = subprocess.run(
