@@ -20,7 +20,7 @@ on:
         description: >-
           Base Python package index URL to test.
           Per-family: nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir).
-          Multi-arch: unified index URL (e.g. "https://rocm.nightlies.amd.com/whl-staging-multi-arch/").
+          Multi-arch: unified index URL (e.g. "https://rocm.nightlies.amd.com/whl-multi-arch/").
         required: true
         type: string
         default: "https://rocm.nightlies.amd.com/v2"

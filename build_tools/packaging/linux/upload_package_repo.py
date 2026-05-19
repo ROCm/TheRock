@@ -52,14 +52,6 @@ from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
-# Import index generation helpers generate_package_indexes.py
-
-from generate_package_indexes import (
-    generate_index_from_s3,
-    generate_top_index_from_s3,
-)
-
-
 def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
     """Regenerate RPM repository metadata using merge approach.
 
@@ -531,8 +523,6 @@ Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
 """
         )
 
-    # Index generation now happens from S3 state after upload
-
 
 def create_rpm_repo(package_dir):
     """Create RPM repository structure.
@@ -553,8 +543,6 @@ def create_rpm_repo(package_dir):
     # This will be regenerated from S3 state after upload
     run_command("createrepo_c --no-database --simple-md-filenames .", cwd=arch_dir)
 
-    # Index generation now happens from S3 state after upload
-
 
 def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     s3 = boto3.client("s3")
@@ -567,7 +555,7 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
 
     for root, _, files in os.walk(source_dir):
         for fname in files:
-            # Skip index.html files - we'll generate them from S3 state
+            # Always skip local index.html files, those are generated server-side.
             if fname == "index.html":
                 continue
 
@@ -743,14 +731,6 @@ def main():
     regenerate_repo_metadata_from_s3(
         s3_client, bucket, prefix, args.pkg_type, uploaded_packages, job_type
     )
-
-    # Skip index.html generation for run_id is not passed. (handled by Lambda function)
-    if not args.run_id:
-        generate_index_from_s3(s3_client, bucket, prefix)
-        top_prefix = prefix.split("/")[0]
-        generate_top_index_from_s3(s3_client, bucket, top_prefix)
-    else:
-        print("Skipping index.html generation for cases Lamda fn is set")
 
     print(f"Package repository URL: {install_url}")
     _emit_github_output("package_repository_url", install_url)
