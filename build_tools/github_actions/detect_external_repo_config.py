@@ -52,10 +52,14 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "submodule_path": "rocm-systems",
         "skip_submodules": ["rocm-systems"],
     },
+    "rocgdb": {
+        "cmake_source_var": "THEROCK_ROCGDB_SOURCE_DIR",
+        "submodule_path": "debug-tools/rocgdb/source",
+        "skip_submodules": ["rocgdb"],
+    },
     # Future repos can be added here:
     # "llvm-project": {...},
     # "hipify": {...},
-    # "rocgdb": {...},
     # "libhipcxx": {...},
 }
 
