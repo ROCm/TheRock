@@ -771,8 +771,13 @@ def build_triton_windows(
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
-    wheel_version = built_wheel.stem.split("-")[1]
-    return f"triton_windows=={wheel_version}"
+    print("+++ Installing built triton_windows:")
+    run_command(
+        [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
+    )
+
+    installed_triton_version = get_installed_package_version("triton_windows")
+    return f"triton_windows=={installed_triton_version}"
 
 
 def build_triton_linux(
