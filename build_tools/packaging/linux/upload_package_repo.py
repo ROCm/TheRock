@@ -716,9 +716,14 @@ def main():
         required=False,
         help="Override S3 prefix (legacy, used when --run-id is not provided)",
     )
+    parser.add_argument(
+        "--package-dir",
+        required=True,
+        help="Path to the directory containing built packages.",
+    )
 
     args = parser.parse_args()
-    package_dir = find_package_dir()
+    package_dir = Path(args.package_dir).resolve()
 
     bucket, prefix, install_url, dedupe, job_type = _resolve_upload_target(
         args, args.pkg_type
