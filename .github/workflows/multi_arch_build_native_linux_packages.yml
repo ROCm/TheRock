@@ -151,4 +151,5 @@ jobs:
         run: |
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type "${{ inputs.native_package_type }}" \
-            --run-id "${{ env.ARTIFACT_RUN_ID }}"
+            --run-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --package-dir "${{ env.PACKAGE_DIST_DIR }}"
