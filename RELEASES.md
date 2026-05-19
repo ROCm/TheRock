@@ -207,8 +207,6 @@ for a full list of supported AMD GPUs.
 | AMD Radeon Pro V520                                  | gfx1011    | `device-gfx1011` |
 | AMD Radeon Pro W5500                                 | gfx1012    | `device-gfx1012` |
 
-<!-- TODO: add repo.amd.com URL to the list of package indexes once we publish a stable release? -->
-
 ### Installing multi-arch PyTorch Python packages
 
 Install PyTorch with ROCm support using the unified multi-arch index.
