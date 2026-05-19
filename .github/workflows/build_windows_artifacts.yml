@@ -142,6 +142,12 @@ jobs:
         run: |
           cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
+      - name: Installing WIX and dependencies
+        run: |
+          dotnet tool install --version 6.0.0 --global wix
+          wix extension add -g WixToolset.UI.wixext/6.0.0
+          wix extension add -g WixToolset.Dependency.wixext/6.0.0
+
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
