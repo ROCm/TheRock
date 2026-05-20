@@ -381,6 +381,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "kfdtest",
+        "Artifact_Subdir": [
+          {
+            "Name": "kfdtest",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "False",

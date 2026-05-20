@@ -154,6 +154,7 @@ artifact_groups = [
     "opencl-runtime",
     "profiler-core",
     "rocrtst",
+    "kfdtest",
     "rocjitsu"
 ]
 
@@ -270,6 +271,12 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 description = "Core runtime tests (ROCR-Runtime, rocminfo)"
 type = "generic"
 artifact_group_deps = ["opencl-runtime", "core-runtime"]
+source_sets = ["rocm-systems"]
+
+[artifact_groups.kfdtest]
+description = "KFD kernel driver tests"
+type = "generic"
+artifact_group_deps = ["core-runtime"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.math-libs]
@@ -566,6 +573,14 @@ artifact_group = "rocrtst"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.kfdtest]
+artifact_group = "kfdtest"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "amd-llvm"]
+feature_name = "CORE_KFDTESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
