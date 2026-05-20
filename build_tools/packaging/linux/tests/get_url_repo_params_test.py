@@ -7,7 +7,8 @@
 #   get_gpg_key_url_from_release_type, derive_gpg_key_url_for_repo_outputs,
 #   gpg_key_url_needed_for_release_type,
 #   get_repo_sub_folder,
-#   get_repo_url, get_native_package_type_from_os_profile, extract_gfx_arch,
+#   get_repo_url, get_repo_url_per_family, get_repo_url_multi_arch, normalize_layout,
+#   get_native_package_type_from_os_profile, extract_gfx_arch,
 #   ContractLegacyAndDerivedTest (explicit vs derived/minimal parity),
 #   and main() subcommands.
 
@@ -147,6 +148,14 @@ class GetGpgKeyUrlTest(unittest.TestCase):
             "https://rocm.nightlies.amd.com/packages/gpg/rocm.gpg",
         )
 
+    def test_handles_multi_arch_repo_url(self):
+        self.assertEqual(
+            get_url_repo_params.get_gpg_key_url(
+                "https://rocm.nightlies.amd.com/packages-multi-arch/deb/20260204-12345/"
+            ),
+            "https://rocm.nightlies.amd.com/packages-multi-arch/gpg/rocm.gpg",
+        )
+
     def test_repo_amd_com_without_packages_segment(self):
         self.assertEqual(
             get_url_repo_params.get_gpg_key_url("https://repo.amd.com/"),
@@ -199,6 +208,20 @@ class GetGpgKeyUrlFromReleaseTypeTest(unittest.TestCase):
             "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
         )
 
+    def test_multi_arch_layout_hosts(self):
+        self.assertEqual(
+            get_url_repo_params.get_gpg_key_url_from_release_type(
+                "prerelease", layout="multi_arch"
+            ),
+            "https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg",
+        )
+        self.assertEqual(
+            get_url_repo_params.get_gpg_key_url_from_release_type(
+                "stable", layout="multiarch"
+            ),
+            "https://repo.amd.com/packages-multi-arch/gpg/rocm.gpg",
+        )
+
     def test_unknown_raises(self):
         with self.assertRaises(ValueError):
             get_url_repo_params.get_gpg_key_url_from_release_type("ci")
@@ -237,6 +260,42 @@ class GetRepoSubFolderTest(unittest.TestCase):
         self.assertEqual(get_url_repo_params.get_repo_sub_folder(""), "")
         self.assertEqual(get_url_repo_params.get_repo_sub_folder("/"), "")
 
+    def test_finds_release_id_in_multi_arch_s3_prefix(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_sub_folder(
+                "12345678-linux/packages/deb/20260204-12345"
+            ),
+            "20260204-12345",
+        )
+
+
+class NormalizeLayoutTest(unittest.TestCase):
+    """Tests for normalize_layout()."""
+
+    def test_defaults_to_per_family(self):
+        self.assertEqual(
+            get_url_repo_params.normalize_layout(None),
+            get_url_repo_params.LAYOUT_PER_FAMILY,
+        )
+        self.assertEqual(
+            get_url_repo_params.normalize_layout(""),
+            get_url_repo_params.LAYOUT_PER_FAMILY,
+        )
+
+    def test_aliases(self):
+        self.assertEqual(
+            get_url_repo_params.normalize_layout("legacy"),
+            get_url_repo_params.LAYOUT_PER_FAMILY,
+        )
+        self.assertEqual(
+            get_url_repo_params.normalize_layout("multiarch"),
+            get_url_repo_params.LAYOUT_MULTI_ARCH,
+        )
+
+    def test_unknown_raises(self):
+        with self.assertRaises(ValueError):
+            get_url_repo_params.normalize_layout("unknown")
+
 
 class GetNativePackageTypeFromOsProfileTest(unittest.TestCase):
     """Tests for get_native_package_type_from_os_profile()."""
@@ -267,7 +326,7 @@ class GetNativePackageTypeFromOsProfileTest(unittest.TestCase):
 
 
 class GetRepoUrlTest(unittest.TestCase):
-    """Tests for get_repo_url()."""
+    """Tests for get_repo_url() default (per_family) layout."""
 
     def test_prereleases_alias_matches_prerelease(self):
         self.assertEqual(
@@ -391,6 +450,87 @@ class GetRepoUrlTest(unittest.TestCase):
                 repo_sub_folder="",
             ),
             "https://x.com/packages/ubuntu2404",
+        )
+
+    def test_explicit_per_family_layout_matches_default(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="nightly",
+                native_package_type="deb",
+                repo_base_url="https://x.com",
+                os_profile="ubuntu2404",
+                repo_sub_folder="20260204-12345",
+                layout="per_family",
+            ),
+            get_url_repo_params.get_repo_url(
+                release_type="nightly",
+                native_package_type="deb",
+                repo_base_url="https://x.com",
+                os_profile="ubuntu2404",
+                repo_sub_folder="20260204-12345",
+            ),
+        )
+
+
+class GetRepoUrlMultiArchTest(unittest.TestCase):
+    """Tests for get_repo_url(..., layout=multi_arch)."""
+
+    def test_nightly_deb_matches_releases_doc(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="nightly",
+                native_package_type="deb",
+                repo_base_url="https://rocm.nightlies.amd.com",
+                os_profile="ubuntu2404",
+                repo_sub_folder="20260501-25200531110",
+                layout="multi_arch",
+            ),
+            "https://rocm.nightlies.amd.com/packages-multi-arch/deb/20260501-25200531110",
+        )
+
+    def test_nightly_rpm_matches_releases_doc(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="nightly",
+                native_package_type="rpm",
+                repo_base_url="https://rocm.nightlies.amd.com",
+                os_profile="rhel10",
+                repo_sub_folder="20260501-25200531110",
+                layout="multi_arch",
+            ),
+            "https://rocm.nightlies.amd.com/packages-multi-arch/rpm/20260501-25200531110/x86_64",
+        )
+
+    def test_os_profile_ignored_for_multi_arch(self):
+        deb_url = get_url_repo_params.get_repo_url_multi_arch(
+            repo_base_url="https://x.com",
+            native_package_type="deb",
+            repo_sub_folder="20260204-1",
+        )
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="nightly",
+                native_package_type="deb",
+                repo_base_url="https://x.com",
+                os_profile="rhel10",
+                repo_sub_folder="20260204-1",
+                layout="multi_arch",
+            ),
+            deb_url,
+        )
+
+    def test_empty_release_id_index_urls(self):
+        self.assertEqual(
+            get_url_repo_params.get_repo_url_multi_arch(
+                "https://x.com", "deb", ""
+            ),
+            "https://x.com/packages-multi-arch/deb",
+        )
+        self.assertEqual(
+            get_url_repo_params.get_repo_url_multi_arch(
+                "https://x.com/", "rpm", ""
+            ),
+            "https://x.com/packages-multi-arch/rpm/x86_64",
         )
 
 
@@ -716,6 +856,52 @@ class MainSubcommandsTest(unittest.TestCase):
         self.assertIn("gpg_key_url=", output)
         self.assertNotIn("rocm.gpg", output)
 
+    def test_get_repo_url_multi_arch_layout_cli(self):
+        code, output = _run_main_with_output(
+            [
+                "get-repo-url",
+                "--layout",
+                "multi_arch",
+                "--release-type",
+                "nightly",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-sub-folder",
+                "20260501-25200531110",
+            ]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn(
+            "repo_url=https://rocm.nightlies.amd.com/packages-multi-arch/deb/20260501-25200531110",
+            output,
+        )
+        self.assertIn("gpg_key_url=", output)
+        self.assertNotIn("rocm.gpg", output)
+
+    def test_get_repo_url_multi_arch_prerelease_signed_gpg(self):
+        code, output = _run_main_with_output(
+            [
+                "get-repo-url",
+                "--layout",
+                "multi_arch",
+                "--release-type",
+                "prerelease",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-sub-folder",
+                "20260204-12345",
+            ]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn(
+            "repo_url=https://rocm.prereleases.amd.com/packages-multi-arch/deb/20260204-12345",
+            output,
+        )
+        self.assertIn(
+            "gpg_key_url=https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg",
+            output,
+        )
+
 
 class ContractLegacyAndDerivedTest(unittest.TestCase):
     """Explicit-input ('legacy') paths vs derived defaults must agree where intended."""
@@ -745,7 +931,7 @@ class ContractLegacyAndDerivedTest(unittest.TestCase):
         )
 
     def test_get_repo_url_derived_components_equals_explicit_prerelease_ubuntu(self):
-        explicit = get_url_repo_params.get_repo_url(
+        explicit = get_url_repo_params.get_repo_url_per_family(
             release_type="prerelease",
             native_package_type="deb",
             repo_base_url="https://rocm.prereleases.amd.com",
