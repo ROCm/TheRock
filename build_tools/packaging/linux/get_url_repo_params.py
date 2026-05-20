@@ -11,7 +11,7 @@ Subcommands (get operations):
 
   get-base-url         Get base URL (scheme + netloc) from --from-url or from --release-type. Prints repo_base_url=<value>.
   get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
-  get-repo-url         Native install repo URL and gpg_key_url (see docs/packaging/native_packaging.md). Required: --release-type, --os-profile. Optional: --repo-sub-folder, --repo-base-url, --native-package-type, --from-url (optional override for GPG derivation on signed repos). Prints repo_url=<value> and gpg_key_url=<value>.
+  get-repo-url         Native install repo URL and gpg_key_url. Required: --release-type, --os-profile. Optional: --layout per_family|multi_arch (default per_family), --repo-sub-folder, --repo-base-url, --native-package-type, --from-url. Prints repo_url=<value> and gpg_key_url=<value>.
   extract-gfx-arch     Extract and normalize GPU architecture from artifact group. Prints gfx_arch=<value>.
   get-container-image  Get container image for a given OS profile. Prints container_image=<value>.
 
@@ -27,6 +27,7 @@ Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --release-type prerelease
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --os-profile ubuntu2404
+  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --layout multi_arch --release-type nightly --os-profile ubuntu2404 --repo-sub-folder 20260501-25200531110
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group gfx94X-dcgpu
   python build_tools/packaging/linux/get_url_repo_params.py get-container-image --os-profile ubuntu2404
@@ -41,6 +42,25 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 from github_actions.github_actions_api import gha_set_output
+
+# Repo URL layout selectors (get-repo-url --layout).
+LAYOUT_PER_FAMILY = "per_family"
+LAYOUT_MULTI_ARCH = "multi_arch"
+_PACKAGES_MULTI_ARCH = "packages-multi-arch"
+_VALID_LAYOUTS = (LAYOUT_PER_FAMILY, LAYOUT_MULTI_ARCH, "legacy", "gfx", "multiarch")
+
+
+def normalize_layout(layout: str | None) -> str:
+    """Normalize --layout values to LAYOUT_PER_FAMILY or LAYOUT_MULTI_ARCH."""
+    if not (layout or "").strip():
+        return LAYOUT_PER_FAMILY
+    key = layout.strip().lower().replace("-", "_")
+    if key in (LAYOUT_PER_FAMILY, "legacy", "gfx"):
+        return LAYOUT_PER_FAMILY
+    if key in (LAYOUT_MULTI_ARCH, "multiarch"):
+        return LAYOUT_MULTI_ARCH
+    supported = ", ".join(_VALID_LAYOUTS)
+    raise ValueError(f"Unknown layout {layout!r}; use one of: {supported}")
 
 
 # --- base_url ---
@@ -103,12 +123,15 @@ def get_gpg_key_url(package_url: str) -> str:
     """
     Get GPG key URL from package repository URL.
 
-    ROCm hosts publish the key under .../packages/gpg/rocm.gpg (same tree as the repo),
-    not at the origin root. See dockerfiles/install_rocm_packages.sh get_gpg_key_url.
+    ROCm hosts publish the key next to the package tree (…/gpg/rocm.gpg), not at the
+    origin root. Supports per-family (…/packages/…) and multi-arch
+    (…/packages-multi-arch/…) paths. See dockerfiles/install_rocm_packages.sh.
 
     Examples:
         https://rocm.prereleases.amd.com/packages/ubuntu2404
             -> https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+        https://rocm.nightlies.amd.com/packages-multi-arch/deb/20260501-123
+            -> https://rocm.nightlies.amd.com/packages-multi-arch/gpg/rocm.gpg
         https://repo.amd.com/rocm/packages/rhel10/x86_64/
             -> https://repo.amd.com/rocm/packages/gpg/rocm.gpg
     """
@@ -116,15 +139,17 @@ def get_gpg_key_url(package_url: str) -> str:
     if not parsed.scheme or not parsed.netloc:
         raise ValueError(f"Invalid URL: {package_url!r}")
     segments = [p for p in parsed.path.split("/") if p]
-    try:
-        idx = segments.index("packages")
-    except ValueError:
-        # No .../packages/... segment (e.g. bare base URL): match AMD defaults.
-        if parsed.netloc.lower() == "repo.amd.com":
-            return f"{parsed.scheme}://{parsed.netloc}/rocm/packages/gpg/rocm.gpg"
-        return f"{parsed.scheme}://{parsed.netloc}/packages/gpg/rocm.gpg"
-    prefix = "/" + "/".join(segments[: idx + 1])
-    return f"{parsed.scheme}://{parsed.netloc}{prefix}/gpg/rocm.gpg"
+    for segment_name in (_PACKAGES_MULTI_ARCH, "packages"):
+        try:
+            idx = segments.index(segment_name)
+        except ValueError:
+            continue
+        prefix = "/" + "/".join(segments[: idx + 1])
+        return f"{parsed.scheme}://{parsed.netloc}{prefix}/gpg/rocm.gpg"
+    # No known package-tree segment (e.g. bare base URL): match AMD defaults.
+    if parsed.netloc.lower() == "repo.amd.com":
+        return f"{parsed.scheme}://{parsed.netloc}/rocm/packages/gpg/rocm.gpg"
+    return f"{parsed.scheme}://{parsed.netloc}/packages/gpg/rocm.gpg"
 
 
 # Minimal package-repo URLs (path through …/packages/) so get_gpg_key_url() resolves the
@@ -139,28 +164,51 @@ _RELEASE_TYPE_TO_MINIMAL_PACKAGE_URL_FOR_GPG: dict[str, str] = {
     "dev": "https://rocm.devreleases.amd.com/packages/",
 }
 
+_RELEASE_TYPE_TO_MINIMAL_MULTI_ARCH_URL_FOR_GPG: dict[str, str] = {
+    "prerelease": "https://rocm.prereleases.amd.com/packages-multi-arch/",
+    "prereleases": "https://rocm.prereleases.amd.com/packages-multi-arch/",
+    "release": "https://repo.amd.com/packages-multi-arch/",
+    "stable": "https://repo.amd.com/packages-multi-arch/",
+    "nightly": "https://rocm.nightlies.amd.com/packages-multi-arch/",
+    "nightlies": "https://rocm.nightlies.amd.com/packages-multi-arch/",
+    "dev": "https://rocm.devreleases.amd.com/packages-multi-arch/",
+    "ci": "https://rocm.nightlies.amd.com/packages-multi-arch/",
+}
 
-def get_gpg_key_url_from_release_type(release_type: str) -> str:
+
+def get_gpg_key_url_from_release_type(
+    release_type: str, layout: str = LAYOUT_PER_FAMILY
+) -> str:
     """Return GPG key URL using only release line (no user-supplied package URL)."""
     if not (release_type or "").strip():
         raise ValueError("release_type cannot be empty")
     rt = release_type.strip().lower()
-    minimal = _RELEASE_TYPE_TO_MINIMAL_PACKAGE_URL_FOR_GPG.get(rt)
+    normalized_layout = normalize_layout(layout)
+    url_map = (
+        _RELEASE_TYPE_TO_MINIMAL_MULTI_ARCH_URL_FOR_GPG
+        if normalized_layout == LAYOUT_MULTI_ARCH
+        else _RELEASE_TYPE_TO_MINIMAL_PACKAGE_URL_FOR_GPG
+    )
+    minimal = url_map.get(rt)
     if minimal is None:
-        supported = ", ".join(sorted(set(_RELEASE_TYPE_TO_MINIMAL_PACKAGE_URL_FOR_GPG)))
+        supported = ", ".join(sorted(set(url_map)))
         raise ValueError(
             f"Unknown release_type {release_type!r}; use one of: {supported}"
         )
     return get_gpg_key_url(minimal)
 
 
-def derive_gpg_key_url_for_repo_outputs(release_type: str, from_url: str | None) -> str:
+def derive_gpg_key_url_for_repo_outputs(
+    release_type: str,
+    from_url: str | None,
+    layout: str = LAYOUT_PER_FAMILY,
+) -> str:
     """Return gpg_key_url string for get-repo-url (empty when unsigned release lines)."""
     if not gpg_key_url_needed_for_release_type(release_type):
         return ""
     if from_url is not None:
         return get_gpg_key_url(from_url)
-    return get_gpg_key_url_from_release_type(release_type)
+    return get_gpg_key_url_from_release_type(release_type, layout=layout)
 
 
 def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
@@ -186,13 +234,15 @@ DATE_ARTIFACT_PATTERN = re.compile(r"^\d{8}-\d+$")
 
 
 def get_repo_sub_folder(s3_prefix: str) -> str:
-    """Return last path segment if it matches YYYYMMDD-<id>, else empty."""
+    """Return YYYYMMDD-<id> release folder from an S3 prefix, if present.
+
+    Scans all path segments (newest last) so multi-arch prefixes such as
+    ``{run_id}-linux/packages/deb/20260204-12345`` are handled.
+    """
     segments = [p for p in s3_prefix.strip("/").split("/") if p]
-    if not segments:
-        return ""
-    last = segments[-1]
-    if DATE_ARTIFACT_PATTERN.fullmatch(last):
-        return last
+    for seg in reversed(segments):
+        if DATE_ARTIFACT_PATTERN.fullmatch(seg):
+            return seg
     return ""
 
 
@@ -223,7 +273,7 @@ def get_native_package_type_from_os_profile(os_profile: str) -> str:
     return "rpm"
 
 
-def get_repo_url(
+def get_repo_url_per_family(
     release_type: str,
     native_package_type: str,
     repo_base_url: str,
@@ -231,12 +281,12 @@ def get_repo_url(
     repo_sub_folder: str,
 ) -> str:
     """
-    Return the full native-package install repo URL.
+    Per-family native-package install repo URL (legacy layout).
 
-    Layout matches docs/packaging/native_packaging.md (DEB/RPM install URL columns):
+    Matches docs/packaging/native_packaging.md (DEB/RPM install URL columns):
     - prerelease: .../packages/{os_profile} (deb) or .../packages/{os_profile}/x86_64/ (rpm)
     - release, stable: .../rocm/packages/{os_profile} (deb) or .../rocm/packages/{os_profile}/x86_64/ (rpm)
-    - dev, nightly, ci, etc.: .../deb/{YYYYMMDD-id}/ or .../rpm/{id}/x86_64/ (empty id omits duplicate slashes)
+    - dev, nightly, ci, etc.: .../deb/{YYYYMMDD-id}/ or .../rpm/{id}/x86_64/
     """
     base = repo_base_url.rstrip("/")
     rt = _normalized_release_type_for_repo_url(release_type)
@@ -258,6 +308,54 @@ def get_repo_url(
     return f"{base}/rpm/x86_64/"
 
 
+def get_repo_url_multi_arch(
+    repo_base_url: str,
+    native_package_type: str,
+    repo_sub_folder: str,
+) -> str:
+    """
+    Multi-arch native-package install repo URL.
+
+    Matches RELEASES.md — Installing multi-arch native Linux packages:
+    - deb: {base}/packages-multi-arch/deb/{RELEASE_ID}
+    - rpm: {base}/packages-multi-arch/rpm/{RELEASE_ID}/x86_64
+    """
+    base = repo_base_url.rstrip("/")
+    sub = (repo_sub_folder or "").strip().strip("/")
+    if native_package_type == "deb":
+        if sub:
+            return f"{base}/{_PACKAGES_MULTI_ARCH}/deb/{sub}"
+        return f"{base}/{_PACKAGES_MULTI_ARCH}/deb"
+    if sub:
+        return f"{base}/{_PACKAGES_MULTI_ARCH}/rpm/{sub}/x86_64"
+    return f"{base}/{_PACKAGES_MULTI_ARCH}/rpm/x86_64"
+
+
+def get_repo_url(
+    release_type: str,
+    native_package_type: str,
+    repo_base_url: str,
+    os_profile: str,
+    repo_sub_folder: str,
+    layout: str = LAYOUT_PER_FAMILY,
+) -> str:
+    """Return the full native-package install repo URL for the requested layout."""
+    normalized_layout = normalize_layout(layout)
+    if normalized_layout == LAYOUT_MULTI_ARCH:
+        return get_repo_url_multi_arch(
+            repo_base_url=repo_base_url,
+            native_package_type=native_package_type,
+            repo_sub_folder=repo_sub_folder,
+        )
+    return get_repo_url_per_family(
+        release_type=release_type,
+        native_package_type=native_package_type,
+        repo_base_url=repo_base_url,
+        os_profile=os_profile,
+        repo_sub_folder=repo_sub_folder,
+    )
+
+
 def cmd_repo_url(args: argparse.Namespace) -> int:
     try:
         native = args.native_package_type
@@ -266,15 +364,19 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
         repo_base = args.repo_base_url
         if repo_base is None:
             repo_base = get_base_url_from_release_type(args.release_type)
+        layout = normalize_layout(getattr(args, "layout", None))
         url = get_repo_url(
             release_type=args.release_type,
             native_package_type=native,
             repo_base_url=repo_base,
             os_profile=args.os_profile,
             repo_sub_folder=args.repo_sub_folder or "",
+            layout=layout,
         )
         gpg_url = derive_gpg_key_url_for_repo_outputs(
-            args.release_type, getattr(args, "from_url", None)
+            args.release_type,
+            getattr(args, "from_url", None),
+            layout=layout,
         )
     except (ValueError, TypeError) as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -408,7 +510,14 @@ def main(argv: list[str] | None = None) -> int:
     # get-repo-url: full repo URL from components (replaces inline logic in workflows)
     p_url = subparsers.add_parser(
         "get-repo-url",
-        help="Native repo URL and gpg_key_url (docs/packaging/native_packaging.md). Requires --release-type and --os-profile; optional --repo-sub-folder, --repo-base-url, --native-package-type, --from-url (GPG override).",
+        help="Native repo URL and gpg_key_url. Requires --release-type and --os-profile; optional --layout, --repo-sub-folder, --repo-base-url, --native-package-type, --from-url.",
+    )
+    p_url.add_argument(
+        "--layout",
+        type=str,
+        default=LAYOUT_PER_FAMILY,
+        choices=list(_VALID_LAYOUTS),
+        help="Repo URL layout: per_family (default, native_packaging.md) or multi_arch (RELEASES.md packages-multi-arch/…).",
     )
     p_url.add_argument(
         "--release-type", type=str, required=True, help="e.g. prerelease, dev, nightly"
@@ -444,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         "--repo-sub-folder",
         type=str,
         default="",
-        help="YYYYMMDD-<id> for dev/nightly/ci deb|rpm layout; ignored for prerelease/release/stable (URL uses /packages/ or /rocm/packages/ + os-profile)",
+        help="YYYYMMDD-<run-id> (RELEASE_ID): per_family dev/nightly path, or multi_arch packages-multi-arch/{deb|rpm}/… segment.",
     )
     p_url.set_defaults(func=cmd_repo_url)
 
