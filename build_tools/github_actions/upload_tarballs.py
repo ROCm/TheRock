@@ -114,7 +114,7 @@ def main(argv: list[str]) -> int:
                 len(f"therock-dist-{args.platform}-") : -len(".tar.gz")
             ]
 
-            # Future-proof shared tarball naming:
+            # Future-proof shared tarball naming discussed in #4438:
             # therock-dist-linux-<version>.tar.gz
             if "-" not in family_and_version:
                 tarball_urls["multiarch"] = url
