@@ -82,7 +82,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      actions: read  # for --find-last-run
     container:
       image: ubuntu:24.04
       options: -v /runner/config:/home/awsconfig/
