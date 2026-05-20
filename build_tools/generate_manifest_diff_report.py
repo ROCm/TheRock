@@ -7,28 +7,28 @@ Arguments:
   --start                Start commit SHA or workflow run ID (required unless using
                          --find-last-run or --pr-base-ref).
   --end                  End commit SHA or workflow run ID (required).
-  --find-last-run        Workflow file to find the most recent prior run on the
-                         branch whose status is in --accepted-statuses
-                         (e.g., 'ci_nightly.yml').
-  --accepted-statuses    Comma-separated workflow run conclusions accepted by
-                         --find-last-run (default: 'success'). Other examples:
-                         'success,failure'.
+  --find-last-run        Workflow filename (e.g., 'multi_arch_ci.yml'). When set,
+                         --start is resolved as the head SHA of that workflow's
+                         most recent run on --branch that concluded with
+                         'success' or 'failure' (cancelled / skipped /
+                         in-progress runs are ignored).
   --pr-base-ref          PR base branch name. When set, --start is resolved as
                          the merge-base between --end and the named branch via
                          the GitHub Compare API. Rebase-safe.
   --workflow-mode        Treat --start and --end as workflow run IDs instead of
                          commit SHAs.
   --branch               Branch to scope --find-last-run lookups against
-                         (default: 'main').
-  --output-dir           Directory to write the HTML report into (default: the
-                         TheRock root directory).
+                         (default: 'main'). Only consulted when --find-last-run
+                         is set.
+  --output-dir           Directory to write the HTML report into. If unset,
+                         falls back to the TheRock root directory.
 
 If no usable start ref can be derived, the script logs the reason and
 exits 0 without writing a report.
 
 Example usage:
   python build_tools/generate_manifest_diff_report.py --start abc123 --end def456
-  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-run ci_nightly.yml
+  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-run multi_arch_ci.yml
   python build_tools/generate_manifest_diff_report.py --end def456 --pr-base-ref main
   python build_tools/generate_manifest_diff_report.py --start 12345 --end 67890 --workflow-mode
 """
@@ -201,17 +201,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--find-last-run",
         help=(
-            "Workflow name to find the most recent prior run on the branch "
-            "whose status is in --accepted-statuses (e.g., 'ci_nightly.yml')."
-        ),
-    )
-    parser.add_argument(
-        "--accepted-statuses",
-        default="success",
-        help=(
-            "Comma-separated workflow run conclusions accepted by "
-            "--find-last-run (default: 'success'). Examples: 'success', "
-            "'success,failure'."
+            "Workflow filename (e.g. 'multi_arch_ci.yml'). When set, --start "
+            "is resolved as the head SHA of that workflow's most recent run "
+            "on --branch that concluded with 'success' or 'failure' "
+            "(cancelled / skipped / in-progress runs are ignored)."
         ),
     )
     parser.add_argument(
@@ -230,7 +223,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--branch",
         default="main",
-        help="Branch to search for last workflow run (default: main)",
+        help=(
+            "Branch to scope --find-last-run lookups against (default: main). "
+            "Only consulted when --find-last-run is set; ignored otherwise."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -291,11 +287,11 @@ def resolve_commits(
         compare = gha_send_request(compare_url)
         start_sha = compare.get("merge_base_commit", {}).get("sha")
     elif find_last is not None:
-        accepted = {
-            tok.strip().lower()
-            for tok in (args.accepted_statuses or "").split(",")
-            if tok.strip()
-        } or {"success"}
+        # Hardcoded to terminal-status: any run that ran to completion (success
+        # or failure) is acceptable — devs comparing to "the last run that
+        # actually ran" don't care whether it was green or red, only that it
+        # wasn't cancelled / skipped / in-progress.
+        accepted = {"success", "failure"}
         last_run = gha_query_last_workflow_run(
             therock,
             find_last,

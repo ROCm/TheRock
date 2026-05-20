@@ -244,18 +244,9 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(end_sha, "def456")
         mock_query.assert_called_once()
 
-    def test_find_last_run_passes_accepted_statuses(self):
-        """--accepted-statuses is parsed and forwarded to gha_query_last_workflow_run."""
-        args = parse_args(
-            [
-                "--end",
-                "def456",
-                "--find-last-run",
-                "ci.yml",
-                "--accepted-statuses",
-                "success,failure",
-            ]
-        )
+    def test_find_last_run_uses_terminal_statuses(self):
+        """--find-last-run hardcodes accepted statuses to {success, failure}."""
+        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_workflow_run"
