@@ -29,7 +29,7 @@ flowchart TD
 | `pull_request` | `pr_base_ref` (the PR's base branch). The script calls the GitHub Compare API to get the merge-base, which is rebase-safe and works on rewritten PRs. | `pull_request.head.sha` — the tip of the PR's source branch. |
 | `push`         | `github.event.before` — the branch tip before the push.                                                                                               | `github.sha` — the new tip the branch was just moved to.     |
 
-`workflow_dispatch` of `multi_arch_ci.yml` produces no useful report — that workflow's dispatch surface intentionally does not expose manifest-diff inputs. To run the report manually with explicit refs, dispatch [`manifest-diff.yml`](../../.github/workflows/manifest-diff.yml) directly (see [Running it manually](#running-it-manually)).
+To run the report manually with explicit refs, dispatch [`manifest-diff.yml`](../../.github/workflows/manifest-diff.yml) directly — see [Running it manually](#running-it-manually). `multi_arch_ci.yml`'s own `workflow_dispatch` surface intentionally does not expose manifest-diff inputs, so dispatching `multi_arch_ci.yml` is not a supported way to produce a report; the auto-fired `manifest_diff` job will fail (yellow via `continue-on-error`, never red).
 
 The `manifest_diff` job in `multi_arch_ci.yml` is **purely informational** — it runs in parallel with the build/test jobs, never gates them, and is marked `continue-on-error: true` inside `manifest-diff.yml` itself so an API hiccup is reported as a non-blocking warning on the run summary instead of turning the whole CI run red.
 

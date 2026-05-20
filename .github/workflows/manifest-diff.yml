@@ -82,16 +82,17 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      actions: read  # for --find-last-run
     container:
       image: ubuntu:24.04
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
-      - name: Install git for checkout
+      - name: Install bootstrap packages
         run: |
           apt-get update
-          apt-get install -y git
+          apt-get install -y git ca-certificates curl unzip
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -105,9 +106,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install System requirements
+      - name: Install AWS CLI
         run: |
-          apt-get install -y ca-certificates curl unzip
           ./dockerfiles/install_awscli.sh
 
       - name: Adjust git config

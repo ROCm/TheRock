@@ -282,6 +282,37 @@ class ResolveCommitsTest(unittest.TestCase):
         ):
             self.assertEqual(resolve_commits(args), (None, None))
 
+    def test_pr_base_ref_takes_precedence_over_find_last_run(self):
+        """When both --pr-base-ref and --find-last-run are set, Compare wins.
+
+        This pins the precedence ladder documented in resolve_commits():
+        pr_base_ref > find_last_run > workflow_mode/start_ref. If a future
+        refactor reorders the branches, this test catches it.
+        """
+        args = parse_args(
+            [
+                "--end",
+                "deadbeef",
+                "--pr-base-ref",
+                "main",
+                "--find-last-run",
+                "ci.yml",
+            ]
+        )
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_send_request"
+        ) as mock_compare, mock.patch(
+            "generate_manifest_diff_report.gha_query_last_workflow_run"
+        ) as mock_last_run:
+            mock_compare.return_value = {"merge_base_commit": {"sha": "merge_base"}}
+            start_sha, end_sha = resolve_commits(args)
+
+        self.assertEqual(start_sha, "merge_base")
+        self.assertEqual(end_sha, "deadbeef")
+        mock_compare.assert_called_once()
+        mock_last_run.assert_not_called()
+
     def test_direct_commit_shas_no_api_calls(self):
         """Direct commit SHAs don't require API calls."""
         args = parse_args(["--start", "abc123", "--end", "def456"])
