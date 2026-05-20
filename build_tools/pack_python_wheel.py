@@ -5,14 +5,14 @@
 """Pack a pre-built Python package directory into a wheel.
 
 This script creates a PEP 427 wheel from an already-installed package
-directory (containing an extension module, __init__.py, etc.).  It reads
-name and version from a pyproject.toml and infers the platform tag from
-the extension module filename.
+directory (containing an extension module, __init__.py, etc.) and infers
+the platform tag from the extension module filename.
 
 Usage:
     python pack_python_wheel.py \
         --pkg-dir  /path/to/stage/hipdnn_frontend \
-        --pyproject-toml /path/to/pyproject.toml \
+        --name hipdnn-frontend \
+        --version 1.0.0 \
         --wheel-dir /path/to/output
 """
 
@@ -26,20 +26,6 @@ import os
 import re
 import sys
 import zipfile
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
-
-
-def _read_pyproject(path):
-    with open(path, "rb") as f:
-        data = tomllib.load(f)
-    project = data["project"]
-    name = project["name"]
-    version = project["version"]
-    return name, version
 
 
 def _infer_platform_tag(pkg_dir):
@@ -68,31 +54,14 @@ def main():
     parser.add_argument(
         "--pkg-dir", required=True, help="Directory containing the built package files"
     )
-    parser.add_argument(
-        "--pyproject-toml",
-        help="Path to pyproject.toml for name/version",
-    )
-    parser.add_argument(
-        "--name",
-        help="Package name (alternative to --pyproject-toml)",
-    )
-    parser.add_argument(
-        "--version",
-        help="Package version (alternative to --pyproject-toml)",
-    )
+    parser.add_argument("--name", required=True, help="Package name")
+    parser.add_argument("--version", required=True, help="Package version")
     parser.add_argument(
         "--wheel-dir", required=True, help="Output directory for the .whl file"
     )
     args = parser.parse_args()
 
-    if args.pyproject_toml:
-        name, version = _read_pyproject(args.pyproject_toml)
-    elif args.name and args.version:
-        name, version = args.name, args.version
-    else:
-        parser.error(
-            "either --pyproject-toml or both --name and --version are required"
-        )
+    name, version = args.name, args.version
     norm_name = re.sub(r"[-_.]+", "_", name)
     pkg_name = os.path.basename(args.pkg_dir)
 
