@@ -48,8 +48,9 @@ DEFAULT_PYTORCH_GIT_REFS = [
 ]
 
 # TODO: Set this once Windows Triton is validated for a known PyTorch release
-# range. Arbitrary commit refs should continue to require explicit --projects
-# because this script cannot infer whether triton-windows is supported there.
+# range and this script has an explicit triton-windows pin source. Arbitrary
+# commit refs should continue to require explicit --projects because this
+# script cannot infer whether triton-windows is supported there.
 WINDOWS_TRITON_MIN_RELEASE: tuple[int, int] | None = None
 
 
@@ -140,25 +141,28 @@ def _resolve_triton(
     pytorch_repo: str,
     pytorch_sha: str,
     *,
-    nightly: bool,
     version_suffix: str,
     platform: str,
 ) -> GitSourceInfo:
     """Resolve triton commit and version from pytorch's pin files.
 
     The triton base version lives in pytorch's ``.ci/docker/triton_version.txt``.
-    On Linux the commit comes from ``ci_commit_pins/triton.txt``; on Windows
-    from ``ci_commit_pins/triton-windows.txt`` using a different repo.
+    On Linux the commit comes from ``ci_commit_pins/triton.txt``.
     """
     is_windows = platform == "windows"
 
     if is_windows:
-        triton_repo = "triton-lang/triton-windows"
-        pin_file = ".ci/docker/ci_commit_pins/triton-windows.txt"
-    else:
-        config = REPOS["triton"]
-        triton_repo = config.nightly_repo if nightly else config.stable_repo
-        pin_file = ".ci/docker/ci_commit_pins/triton.txt"
+        # TODO: Wire Windows Triton once its pinning policy is settled.
+        # PyTorch repos do not currently publish a triton-windows pin.
+        # external-builds/pytorch/pytorch_triton_repo.py instead reads
+        # external-builds/pytorch/ci_commit_pins/triton-windows.txt.
+        raise NotImplementedError(
+            "Windows Triton manifest generation is not enabled yet"
+        )
+
+    config = REPOS["triton"]
+    triton_repo = config.stable_repo
+    pin_file = ".ci/docker/ci_commit_pins/triton.txt"
 
     # Base version is always in pytorch's triton_version.txt.
     base_version = gha_fetch_file_contents(
@@ -167,18 +171,8 @@ def _resolve_triton(
     version = f"{base_version}{version_suffix}"
     log(f"  triton: {base_version} -> {version}")
 
-    if not is_windows and nightly:
-        major, minor, *_ = base_version.split(".")
-        branch = f"release/{major}.{minor}.x"
-        sha = _resolve_ref(triton_repo, branch)
-        return GitSourceInfo(
-            commit=sha,
-            repo=f"https://github.com/{triton_repo}",
-            branch=branch,
-            version=version,
-        )
-
-    # Stable (both platforms) or Windows nightly: use ci_commit_pins.
+    # Use PyTorch's explicit Triton pin. triton_version.txt only provides the
+    # package version; the matching release branch can move independently.
     pin = gha_fetch_file_contents(pytorch_repo, pin_file, pytorch_sha).strip()
     log(f"  triton pin: {pin[:12]}")
     return GitSourceInfo(
@@ -270,7 +264,6 @@ def resolve_sources(
             sources[name] = _resolve_triton(
                 pytorch_repo,
                 pytorch_sha,
-                nightly=nightly,
                 version_suffix=version_suffix,
                 platform=platform,
             )
