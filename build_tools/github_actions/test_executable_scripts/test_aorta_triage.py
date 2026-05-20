@@ -4,36 +4,54 @@
 
 """
 ===============================================================================
-AORTA triage smoke test (manual execution only)
-
-This script is NOT part of automated CI runs.
+AORTA triage smoke test
 
 Runs ``aorta triage run`` against a recipe file and checks milestone-style
 plumbing: dispatcher exit code 0, a single ``matrix.md`` under ``--output-dir``,
 and no cell-level ``error`` rows in ``matrix.json``.
 
+The test is **skipped by default**. It opts in only when the operator (or a
+scheduled CI job) sets ``AORTA_RECIPE_PATH``. That keeps the regular pytest
+collection on PRs and nightly runs a no-op while letting the dedicated
+``ci_aorta_triage_smoke.yml`` workflow exercise the full pipeline on a GPU
+host on a weekly cadence.
+
 Pre-requisites
 --------------
 
-1. ``aorta`` on ``PATH`` (``pip install`` of the public ``aorta`` package, or an
-   editable install from a local checkout).
+1. ``aorta`` on ``PATH``. Install the public ROCm/aorta package
+   (https://github.com/ROCm/aorta) either from a tagged release archive or
+   from source, e.g.::
+
+       pip install "git+https://github.com/ROCm/aorta.git@main"
+
+   The PyPI project named ``aorta`` is unrelated; do not install it.
 
 2. **``AORTA_RECIPE_PATH``** — absolute path to a triage recipe YAML.
+   This env var both enables the test and tells the dispatcher what to run.
 
-3. **``AORTA_MITIGATIONS_FILE``** (optional) — path to a mitigations/environments
-   sidecar JSON passed through to ``--mitigations-file`` when set.
+3. **``AORTA_MITIGATIONS_FILE``** (optional) — path to a mitigations /
+   environments sidecar JSON. Passed through to ``aorta triage run
+   --mitigations-file`` when set.
 
-4. **GPU + ROCm host** with docker if the recipe uses docker-backed environments.
-   Registry credentials for non-public images are out of band; TheRock CI does not
-   provide them today.
+4. **GPU + ROCm host** with docker available if the recipe uses
+   docker-backed environments. Private registry credentials must be
+   supplied out of band (e.g. via ``docker login`` in the calling CI job).
 
-Usage (remove ``pytestmark`` skip locally only; do not commit)::
+Manual usage::
 
     export AORTA_RECIPE_PATH=/path/to/smoke-recipe.yaml
-    export AORTA_MITIGATIONS_FILE=/path/to/sidecar.json   # if required by recipe
+    export AORTA_MITIGATIONS_FILE=/path/to/sidecar.json   # optional
     export HIP_VISIBLE_DEVICES=0
     pytest build_tools/github_actions/test_executable_scripts/test_aorta_triage.py \\
         -k test_aorta_triage_smoke -s
+
+CI usage:
+    See ``.github/workflows/ci_aorta_triage_smoke.yml`` for the scheduled
+    weekly invocation. The workflow installs ``aorta`` (and any private
+    workload plugin packages required by the recipe), configures docker
+    auth from secrets, exports ``AORTA_RECIPE_PATH`` /
+    ``AORTA_MITIGATIONS_FILE``, then invokes pytest on this file.
 
 ===============================================================================
 """
@@ -50,8 +68,12 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skip(
-    "Manual execution only — requires GPU, ROCm, and AORTA_RECIPE_PATH"
+pytestmark = pytest.mark.skipif(
+    not os.getenv("AORTA_RECIPE_PATH"),
+    reason=(
+        "AORTA_RECIPE_PATH not set; smoke test only runs when an operator or "
+        "the scheduled ci_aorta_triage_smoke workflow points at a recipe."
+    ),
 )
 
 logging.basicConfig(level=logging.INFO)
