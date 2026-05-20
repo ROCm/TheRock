@@ -344,7 +344,9 @@ def _load_github_event() -> dict[str, Any]:
             f"GITHUB_EVENT_PATH '{event_path}' contains invalid JSON: {exc}"
         ) from exc
     except OSError as exc:
-        raise RuntimeError(f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}") from exc
+        raise RuntimeError(
+            f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}"
+        ) from exc
     if not isinstance(data, dict):
         raise ValueError(
             f"GITHUB_EVENT_PATH '{event_path}' must contain a JSON object, "
@@ -385,7 +387,9 @@ def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) 
         before = event.get("before") or ""
         after = event.get("after") or ""
         if not before or not after:
-            log.warning("Push event missing before/after SHA; falling back to full history")
+            log.warning(
+                "Push event missing before/after SHA; falling back to full history"
+            )
             return ""
         # GitHub uses a 0-only SHA for "no previous commit" (new ref);
         # there's nothing to diff against so we scan everything.
@@ -394,7 +398,9 @@ def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) 
             return ""
         return f"--no-merges {before}..{after}"
 
-    log.info("Event '%s' has no diff range; scanning HEAD only", event_name or "<unset>")
+    log.info(
+        "Event '%s' has no diff range; scanning HEAD only", event_name or "<unset>"
+    )
     return "-1 HEAD"
 
 
@@ -501,11 +507,13 @@ def _run_gitleaks(
     base_args: list[str] = [
         str(binary),
         "detect",
-        "--source", str(source_dir),
+        "--source",
+        str(source_dir),
         "--redact",
         "--verbose",
         "--no-banner",
-        "--exit-code", str(_LEAK_EXIT_CODE),
+        "--exit-code",
+        str(_LEAK_EXIT_CODE),
     ]
     if config_path:
         base_args.extend(["--config", config_path])

@@ -1,9 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 #
-# Post-merge gitleaks scan: runs after every push to main 
+# Post-merge gitleaks scan: runs after every push to main
 # and pushes SARIF findings to the repository's code-scanning
-# Security tab. TBD if we use post merge or schedule. 
+# Security tab. TBD if we use post merge or schedule.
 name: Gitleaks_main
 
 on:
