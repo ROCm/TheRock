@@ -51,7 +51,10 @@ CI usage:
     weekly invocation. The workflow installs ``aorta`` (and any private
     workload plugin packages required by the recipe), configures docker
     auth from secrets, exports ``AORTA_RECIPE_PATH`` /
-    ``AORTA_MITIGATIONS_FILE``, then invokes pytest on this file.
+    ``AORTA_MITIGATIONS_FILE``, then invokes pytest on this file. Access
+    to private workload-plugin repositories is brokered by an org-managed
+    GitHub App (``actions/create-github-app-token``), not a personal PAT,
+    so the same App pattern as ``bump_submodules.yml`` applies.
 
 ===============================================================================
 """

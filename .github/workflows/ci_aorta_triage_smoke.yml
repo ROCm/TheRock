@@ -11,18 +11,32 @@
 #
 # Required repository secrets
 # ---------------------------
-#  * AORTA_INTERNAL_TOKEN   PAT with read access to ROCm/aorta-internal so the
-#                           runner can clone the recipe + workload plugin
-#                           package. If unset, the job logs a warning and skips
-#                           the pytest step (the test's own ``skipif`` then
-#                           reports SKIPPED rather than FAILED).
-#  * DOCKERHUB_USERNAME     (optional) Docker Hub user for pulling private
-#                           recipe images (e.g. rocm/pytorch-private:*).
-#  * DOCKERHUB_TOKEN        (optional) Docker Hub token paired with the above.
-#                           When either secret is unset the docker login step
-#                           is skipped; recipes that need private images will
-#                           then fail with a pull error and surface as an
-#                           error cell, which is the desired signal.
+#  * AORTA_INTERNAL_APP_ID          GitHub App ID for an org-managed App that
+#                                   has at minimum ``Contents: Read``
+#                                   permission on ``ROCm/aorta-internal`` and
+#                                   is installed on both ``ROCm/TheRock`` and
+#                                   ``ROCm/aorta-internal``.
+#  * AORTA_INTERNAL_APP_PRIVATE_KEY PEM-encoded private key for the same App.
+#                                   The workflow mints a short-lived
+#                                   installation token via
+#                                   ``actions/create-github-app-token`` -
+#                                   same pattern as ``bump_submodules.yml``
+#                                   so no personal PAT is involved.
+#                                   When either of these is unset the job
+#                                   logs a warning and skips the
+#                                   aorta-internal clone + pytest steps
+#                                   (the test's own ``skipif`` then reports
+#                                   SKIPPED rather than FAILED).
+#  * DOCKERHUB_USERNAME             (optional) Docker Hub user for pulling
+#                                   private recipe images (e.g.
+#                                   rocm/pytorch-private:*).
+#  * DOCKERHUB_TOKEN                (optional) Docker Hub token paired with
+#                                   the above. When either secret is unset
+#                                   the docker login step is skipped;
+#                                   recipes that need private images will
+#                                   then fail with a pull error and surface
+#                                   as an error cell, which is the desired
+#                                   signal.
 #
 # See ``test_aorta_triage.py`` for the env-var contract and pre-reqs.
 
@@ -131,14 +145,31 @@ jobs:
           echo "AORTA_SRC_DIR=${aorta_src}" >> "${GITHUB_ENV}"
           echo "AORTA_INTERNAL_SRC_DIR=${aorta_internal_src}" >> "${GITHUB_ENV}"
 
+      - name: Detect aorta-internal App credentials availability
+        id: app_creds
+        env:
+          APP_ID: ${{ secrets.AORTA_INTERNAL_APP_ID }}
+          APP_KEY: ${{ secrets.AORTA_INTERNAL_APP_PRIVATE_KEY }}
+        # Mirror the secret presence into a step output so the
+        # ``create-github-app-token`` action and the clone step can gate on
+        # it (the ``secrets`` context is not available in step ``if:``
+        # conditions). Both secrets must be set; either missing means we
+        # cannot mint an installation token, so we degrade to the
+        # graceful-skip path.
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_ID:-}" ] && [ -n "${APP_KEY:-}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::AORTA_INTERNAL_APP_ID/AORTA_INTERNAL_APP_PRIVATE_KEY secrets are not configured; skipping aorta-internal clone and pytest steps."
+          fi
+
       - name: Detect Docker Hub auth availability
         id: dh_auth
         env:
           DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
           DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        # Mirror the secret presence into a step output so other steps can
-        # gate on it without referencing the ``secrets`` context (which is
-        # not available in step ``if:`` conditions).
         run: |
           set -euo pipefail
           if [ -n "${DH_USER:-}" ] && [ -n "${DH_TOKEN:-}" ]; then
@@ -170,17 +201,25 @@ jobs:
             "git+https://github.com/${AORTA_REPO}.git@${AORTA_REF}#egg=aorta"
           aorta --version || aorta --help | head -1
 
+      - name: Generate aorta-internal App installation token
+        id: aorta_internal_token
+        if: steps.app_creds.outputs.available == 'true'
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.AORTA_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.AORTA_INTERNAL_APP_PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "aorta-internal"
+
       - name: Clone aorta-internal (private)
         id: clone_internal
+        if: steps.app_creds.outputs.available == 'true'
         env:
-          AORTA_INTERNAL_TOKEN: ${{ secrets.AORTA_INTERNAL_TOKEN }}
+          # Short-lived installation token (~1h TTL) minted above; not a
+          # personal PAT.
+          AORTA_INTERNAL_TOKEN: ${{ steps.aorta_internal_token.outputs.token }}
         run: |
           set -euo pipefail
-          if [ -z "${AORTA_INTERNAL_TOKEN:-}" ]; then
-            echo "::warning::AORTA_INTERNAL_TOKEN secret is not configured; skipping aorta-internal clone"
-            echo "internal_available=false" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
           rm -rf "${AORTA_INTERNAL_SRC_DIR}"
           git clone --depth 1 --branch "${AORTA_INTERNAL_REF}" \
             "https://x-access-token:${AORTA_INTERNAL_TOKEN}@github.com/${AORTA_INTERNAL_REPO}.git" \
