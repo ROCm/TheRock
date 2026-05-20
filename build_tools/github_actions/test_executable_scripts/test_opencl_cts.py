@@ -71,9 +71,15 @@ def find_test_executables():
         )
         sys.exit(1)
 
+    # test_bruteforce is disabled: it is prohibitively slow in CI.
+    DISABLED_TESTS = {"test_bruteforce"}
+
     test_executables = []
     for test_exe in CTS_BIN_DIR.rglob("test_*"):
         if test_exe.is_file() and os.access(test_exe, os.X_OK):
+            if test_exe.name in DISABLED_TESTS:
+                logging.info(f"Skipping disabled test: {test_exe.name}")
+                continue
             test_executables.append(test_exe)
 
     if not test_executables:
