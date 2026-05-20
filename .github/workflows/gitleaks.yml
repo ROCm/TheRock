@@ -1,0 +1,159 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+name: Gitleaks
+
+on:
+  workflow_call:
+    inputs:
+      scan_mode:
+        description: >-
+          'changed' (default) scans only commits introduced by the calling
+          event (PR commits or push range). 'all' scans the full repository
+          history.
+        required: false
+        type: string
+        default: changed
+      report_formats:
+        description: >-
+          Comma-separated list of gitleaks report formats to produce. Allowed
+          values: 'sarif' (default), 'json', 'csv', 'junit'. SARIF outputs are
+          uploaded to GitHub code scanning via github/codeql-action/upload-sarif;
+          all other formats are uploaded as build artifacts via
+          actions/upload-artifact. Example: 'sarif,json'.
+        required: false
+        type: string
+        default: sarif
+      config_path:
+        description: >-
+          Path (relative to the repository root) to the gitleaks config TOML.
+          Defaults to 'gitleaks.toml' at the repository root, in which case a
+          missing file gracefully falls back to gitleaks's built-in default
+          rules so the workflow works in repos without a custom config. When
+          set to any non-default value the file MUST exist or the scan job
+          fails (so a typo can't silently disable custom rules).
+        required: false
+        type: string
+        default: gitleaks.toml
+      scan_path:
+        description: >-
+          Path (relative to the repository root) to scan. Defaults to '.' so
+          the entire checkout is scanned; set to a subdirectory (e.g.
+          'src/' or 'services/api/') to restrict the scan to that subtree.
+          The path MUST exist after checkout or the scan job fails.
+        required: false
+        type: string
+        default: "."
+      gitleaks_version:
+        description: Gitleaks release version to download.
+        required: false
+        type: string
+        default: 8.30.1
+      generate_config_template:
+        description: >-
+          When true, write a starter 'gitleaks.toml.template' alongside the
+          scan and upload it as the 'gitleaks-config-template' artifact for
+          review. The template extends gitleaks's built-in rules and seeds
+          common allowlist patterns; download it, customize it, then commit
+          the result as 'gitleaks.toml' at the repository root. The workflow
+          refuses to overwrite an existing 'gitleaks.toml.template' in the
+          checkout.
+        required: false
+        type: boolean
+        default: false
+
+# Reusable workflows declare the *minimum* permissions every caller
+# must grant. We intentionally do NOT request `security-events: write`
+# here even though the SARIF upload step needs it: declaring it at the
+# workflow level would force every PR caller (which typically only
+# asks for CSV/JSON artifacts) to grant it too, otherwise GitHub
+# rejects the call with `requesting 'security-events: write', but is
+# only allowed 'security-events: none'`. Instead, callers that
+# actually upload SARIF (e.g. `gitleaks_main.yml`) grant
+# `security-events: write` on their own `uses:` job, and the
+# upload-sarif step uses it transparently. PR callers that don't need
+# SARIF stay on the repo's restrictive default.
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Gitleaks scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Run gitleaks
+        id: scan
+        env:
+          GITLEAKS_SCAN_MODE: ${{ inputs.scan_mode }}
+          GITLEAKS_REPORT_FORMATS: ${{ inputs.report_formats }}
+          GITLEAKS_CONFIG_PATH: ${{ inputs.config_path }}
+          GITLEAKS_SOURCE_DIR: ${{ inputs.scan_path }}
+          GITLEAKS_VERSION: ${{ inputs.gitleaks_version }}
+          GITLEAKS_GENERATE_CONFIG_TEMPLATE: ${{ inputs.generate_config_template }}
+        run: python scan_tools/github_actions/gitleaks.py
+
+      # Surface non-SARIF reports inline in the workflow run so PR
+      # reviewers can read findings without downloading the
+      # `gitleaks-report` artifact, unzipping it, and opening the file
+      # locally. The step is gated on `non_sarif_paths` (set by the
+      # Python runner) so it skips automatically when only SARIF was
+      # requested -- which is the post-merge `gitleaks_main.yml` case,
+      # where findings flow into the Security -> Code scanning tab
+      # and printing the raw SARIF JSON into the job log would just
+      # add noise. Output goes to two places: an `::group::` block
+      # so the live job log stays scannable, and `$GITHUB_STEP_SUMMARY`
+      # so the report is one click away from the run page.
+      - name: Print gitleaks report to the job log
+        if: always() && steps.scan.outputs.non_sarif_paths != ''
+        env:
+          NON_SARIF_PATHS: ${{ steps.scan.outputs.non_sarif_paths }}
+        run: |
+          set -eu
+          while IFS= read -r report_path; do
+            if [ -z "$report_path" ]; then
+              continue
+            fi
+            echo "::group::Gitleaks report: ${report_path}"
+            cat -- "$report_path"
+            echo "::endgroup::"
+            {
+              echo "### Gitleaks report: \`${report_path}\`"
+              echo
+              echo '```'
+              cat -- "$report_path"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$NON_SARIF_PATHS"
+
+      - name: Upload SARIF report to code scanning
+        if: always() && steps.scan.outputs.sarif_path != ''
+        uses: github/codeql-action/upload-sarif@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif_path }}
+          category: gitleaks
+
+      - name: Upload non-SARIF reports
+        if: always() && steps.scan.outputs.non_sarif_paths != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-report
+          path: ${{ steps.scan.outputs.non_sarif_paths }}
+          if-no-files-found: ignore
+
+      - name: Upload gitleaks config template
+        if: always() && steps.scan.outputs.config_template_path != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-config-template
+          path: ${{ steps.scan.outputs.config_template_path }}
+          if-no-files-found: error
