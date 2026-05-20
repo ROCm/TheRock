@@ -649,6 +649,18 @@ def decide_jobs(
         test_type_reason=test_type_reason,
     )
 
+    # TODO(#3433): Remove sandbox logic once ASAN tests are passing and ASAN test loads run on production machines
+    # During ASAN testing, machines would crash resulting in impact for production CI jobs.
+    # As we get ASAN tests to green, we use a separate conductor pool for ASAN testing
+    if ci_inputs.build_variant == "asan":
+        # Only run ASAN tests on scheduled or workfow dispatch runs, to avoid impact on submodule bumps
+        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            test_rocm = TestRocmDecision(
+                action=JobAction.SKIP,
+                test_type=test_type,
+                test_type_reason="ASAN tests skipped due to non-nightly trigger",
+            )
+
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
