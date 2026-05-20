@@ -271,6 +271,18 @@ def parse_arguments() -> argparse.Namespace:
         default=100,
         help="Timeout value in seconds for individual tests (max: 600). Default is 100.",
     )
+    parser.add_argument(
+        "--check-type",
+        type=str,
+        choices=["check", "check-read1", "check-readmore"],
+        default="check",
+        help="Which GDB testsuite target to invoke. 'check' is the normal run."
+        "'check-read1' runs under an LD_PRELOAD shim that forces read(2) to"
+        "return 1 byte at a time (stress-tests GDB's incremental I/O parsing)."
+        "'check-readmore' forces large reads (the opposite extreme). These"
+        "are upstream GDB testsuite modes and can surface real GDB bugs that"
+        "'check' alone misses. Default: 'check'.",
+    )
 
     args = parser.parse_args()
 
@@ -877,14 +889,25 @@ def check_executables(executables: List[str]) -> None:
         _log_error_and_exit(f"Missing {len(missing)} executables required for testing.")
 
 
-def set_core_file_limit() -> bool:
+def setup_core_file_info() -> bool:
     """
-    Set system core file size limit to unlimited.
+    Set system core file size limit to unlimited and display core file pattern.
 
     Returns:
         True if successfully set to unlimited, False otherwise.
     """
-    print_section("Core file size")
+    print_section("Core file information")
+
+    # Display current core file pattern.
+    core_pattern_file = Path("/proc/sys/kernel/core_pattern")
+    try:
+        if core_pattern_file.exists():
+            core_pattern = core_pattern_file.read_text().strip()
+            logger.info(f"System core file pattern: {core_pattern}")
+        else:
+            logger.info("System core file pattern: N/A (file not found)")
+    except (PermissionError, IOError) as e:
+        logger.info(f"System core file pattern: N/A (unable to read: {e})")
 
     try:
         resource.setrlimit(
@@ -1228,7 +1251,7 @@ def run_tests(
 
         cmd = [
             "make",
-            "check",
+            args.check_type,
             f"RUNTESTFLAGS={runtestflags_str}",
             f"TESTS={current_tests}",
         ]
@@ -1339,8 +1362,8 @@ def main() -> None:
     )
 
     if platform.system() == "Linux":
-        # Set core dump file limit.
-        set_core_file_limit()
+        # Set core dump file limit and display info.
+        setup_core_file_info()
 
     # Prepare environment for tests.
     env_vars = setup_environment(artifacts_dir)
@@ -1529,6 +1552,7 @@ def print_configuration(
     logger.info(f"  Testsuite Directory:  {testsuite_dir}")
     logger.info(f"  Configure Script:     {configure_script}")
     logger.info(f"  Tests:                {' '.join(args.tests)}")
+    logger.info(f"  Check Type:           {args.check_type}")
     logger.info(f"  Parallel Execution:   {'Enabled' if args.parallel else 'Disabled'}")
     logger.info(f"  Use FAIL ignore list: {'Not using' if args.no_xfail else 'Using'}")
     logger.info(

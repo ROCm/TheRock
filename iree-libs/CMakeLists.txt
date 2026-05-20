@@ -111,7 +111,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
       therock-nlohmann-json
     RUNTIME_DEPS
       hip-clr
-      hipDNN
+      hipdnn_integration_tests
       iree-compiler  # Provides libIREECompiler.so for CAPI compilation
       rocminfo  # Provides rocm_agent_enumerator
   )

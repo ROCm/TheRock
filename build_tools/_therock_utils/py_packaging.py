@@ -189,17 +189,14 @@ class PopulatedDistPackage:
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
             )
 
-        # Device packages need to know the libraries package name so their
-        # setup.py can declare the correct install_requires and overlay dir.
+        # Device packages need to know the libraries package's Python package
+        # name so their setup.py can set up the correct overlay directory.
+        # The dist name ("rocm-sdk-libraries") is static and hardcoded in setup.py.
         if logical_name == "device":
             libraries_entry = self.params.dist_info.ALL_PACKAGES["libraries"]
-            libraries_dist_name = libraries_entry.get_dist_package_name(
-                target_family=None
-            )
             libraries_py_package_name = libraries_entry.get_py_package_name(
                 target_family=None
             )
-            dist_info_contents += f"LIBRARIES_DIST_NAME = {repr(libraries_dist_name)}\n"
             dist_info_contents += (
                 f"LIBRARIES_PY_PACKAGE_NAME = {repr(libraries_py_package_name)}\n"
             )
@@ -494,6 +491,27 @@ class PopulatedDistPackage:
         # any emitted runtime artifacts plus additional requested.
         devel_artifact_names = set(self.params.runtime_artifact_names)
         devel_artifact_names.update(addl_artifact_names)
+        # Exclude profiler-owned artifacts from the devel package.
+        #
+        # The profiler runtime (rocprofiler-compute and rocprofiler-systems)
+        # is now packaged in the separate `rocm-profiler` wheel. However,
+        # devel packaging automatically includes all runtime artifacts via
+        # `runtime_artifact_names`, which would otherwise pull these profiler
+        # artifacts back into the devel package.
+        #
+        # This leads to CI failures where devel tests attempt to load profiler
+        # shared libraries without their full dependency closure (e.g. missing
+        # rocprofiler-sdk or libomp resolution).
+        #
+        # Explicitly removing them here ensures correct package ownership:
+        #   - rocm-profiler → owns profiler runtime
+        #   - rocm-sdk-devel → does NOT include profiler runtime
+        devel_artifact_names.difference_update(
+            {
+                "rocprofiler-compute",
+                "rocprofiler-systems",
+            }
+        )
         excluded = set(exclude_components)
         log(f":: Devel artifact inclusions: {devel_artifact_names}")
 

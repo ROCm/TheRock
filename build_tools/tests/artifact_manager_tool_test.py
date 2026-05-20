@@ -1175,9 +1175,7 @@ class ParseTargetFamiliesTest(unittest.TestCase):
 
     def test_family_with_expansion_multi_target(self):
         fake_map = {"gfx110X-all": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"]}
-        with mock.patch.object(
-            self.am, "_get_family_to_targets", return_value=fake_map
-        ):
+        with mock.patch.object(self.am, "amdgpu_family_map", return_value=fake_map):
             args = self._make_args(
                 amdgpu_families="gfx110X-all", expand_family_to_targets=True
             )
@@ -1191,9 +1189,7 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         # A single-target family: the target should appear once even though
         # it also matches its own self-family name.
         fake_map = {"gfx942": ["gfx942"], "gfx94X-dcgpu": ["gfx942"]}
-        with mock.patch.object(
-            self.am, "_get_family_to_targets", return_value=fake_map
-        ):
+        with mock.patch.object(self.am, "amdgpu_family_map", return_value=fake_map):
             args = self._make_args(
                 amdgpu_families="gfx94X-dcgpu", expand_family_to_targets=True
             )
@@ -1204,9 +1200,7 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         # A family not in the cmake file should not crash; just the family name
         # stays in the list.
         fake_map = {}
-        with mock.patch.object(
-            self.am, "_get_family_to_targets", return_value=fake_map
-        ):
+        with mock.patch.object(self.am, "amdgpu_family_map", return_value=fake_map):
             args = self._make_args(
                 amdgpu_families="custom-family", expand_family_to_targets=True
             )

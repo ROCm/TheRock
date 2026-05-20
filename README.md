@@ -1,6 +1,6 @@
 # TheRock
 
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain) [![CI Nightly](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml?query=branch%3Amain) [![Multi-arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml?query=branch%3Amain)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain) [![CI Nightly](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml?query=branch%3Amain) [![Multi-arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml?query=branch%3Amain) [![Multi-arch CI ASan](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml?query=branch%3Amain)
 
 TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. It is designed for ROCm contributors as well as developers, researchers, and advanced users who need access to the latest ROCm capabilities without the complexity of traditional package-based installations. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info and the [FAQ](docs/faq.md) for frequently asked questions.
 
@@ -28,7 +28,16 @@ See the unified project HUD at https://therock-hud-dev.amd.com/
 
 ### Nightly release status
 
-Packages and Python wheels:
+Multi-arch releases (all GPU architectures):
+
+| Job description                         | Status                                                                                                                                                                                                                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build ROCm artifacts/tarballs/packages  | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
+| Test ROCm artifacts                     | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
+| Build and test Linux PyTorch packages   | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
+| Build and test Windows PyTorch packages | [![Multi-Arch Release Windows PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
+
+Per-family releases (one GPU family per package):
 
 | Platform |                                                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages | Native Packages                                                                                                                                                                                                                                  |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -165,6 +174,8 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                   |
 | `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools           |
 | `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries         |
+| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts       |
+| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools              |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
@@ -179,6 +190,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools       |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components                  |
 | `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components               |
+| `-DTHEROCK_ENABLE_WSL_ROCDXG=ON`       | Enables the WSL ROCDXG bridge library               |
 | `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)                  |
 | `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                                   |
 | `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                         |
@@ -202,6 +214,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
+| `-DTHEROCK_ENABLE_ROCJITSU=ON`         | Enables ROCm emulation tools (Linux only)           |
 
 hipDNN provider plugins:
 
@@ -293,8 +306,33 @@ cmake --build build
 
 #### CCache usage on Windows
 
-We are still investigating the exact proper options for ccache on Windows and
-do not currently recommend that end users enable it.
+- You must have a recent ccache (>= 4.13.3 at the time of writing) that contains
+  bug fixes for MSVC and supports proper caching with the `--offload-compress`
+  option used for compressing AMDGPU device code.
+- `export CCACHE_SLOPPINESS=include_file_ctime,pch_defines,time_macros` to
+  support hard-linking and precompiled headers (amd-llvm is built with PCH).
+- Proper setup of the `compiler_check` directive to do safe caching in the
+  presence of compiler bootstrapping.
+- Set the C/CXX compiler launcher options to cmake appropriately.
+
+Since these options are very fiddly and prone to change over time, we recommend
+using the `./build_tools/setup_ccache.py` script to create a `.ccache` directory
+in the repository root with hard coded configuration suitable for the project.
+
+Example (In Command Prompt):
+
+```bat
+# Any command prompt used to build must eval setup_ccache.py to set environment
+# variables.
+for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
+
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ^
+  .
+
+cmake --build build
+```
 
 ### Running tests
 
@@ -322,4 +360,4 @@ separately.
 - [Dockerfiles for TheRock](dockerfiles/README.md): Information about containers used for building, testing, and distributing ROCm using TheRock.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
-- [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
+- [Supported GPUs](SUPPORTED_GPUS.md): Current support status and prioritized roadmap for each AMD GPU architecture.

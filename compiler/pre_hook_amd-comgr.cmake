@@ -15,35 +15,42 @@ endif()
 
 set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
 
-# See Comgr::LoadLib in clr comgrctx.cpp: On windows, this expects the cmgr
-# library to have a versioned output name, but there does not seem to be a
-# public patch to llvm-project/amd/comgr which sets it properly. Therefore,
-# we align it with what LoadLib expects:
-#   amd_comgrMMNN.dll
-# where MM is the left zero padded HIP_MAJOR_VERSION and NN is the left zero
-# padded HIP_MINOR_VERSION. There is no natural connection between these
-# projects in the codebase, so this is just an action at a distance / must
-# line up thing. We require the version explicitly from the caller and complain
-# loudly if not present.
-function(therock_patch_comgr_win_output_name)
-  if(NOT DEFINED THEROCK_HIP_MAJOR_VERSION OR NOT DEFINED THEROCK_HIP_MINOR_VERSION)
-    message(FATAL_ERROR "Super-project must set THEROCK_HIP_MAJOR_VERSION and THEROCK_HIP_MINOR_VERSION")
+# Windows Comgr DLL naming.
+#
+# CLR's Comgr::LoadLib loads the Comgr DLL by an exact filename. The current
+# CLR code computes a HIP-versioned name at runtime (amd_comgr0702.dll), so
+# Comgr must produce a DLL with that name.
+#
+# After llvm-project#1278 (merged), Comgr reads COMGR_DLL_NAME as a cache
+# variable. After rocm-systems#4211 (pending), CLR will also read
+# COMGR_DLL_NAME at build time. Once both submodules include those changes,
+# COMGR_DLL_NAME can be removed here (both default to amd_comgr.dll).
+if(WIN32 AND DEFINED THEROCK_HIP_MAJOR_VERSION AND DEFINED THEROCK_HIP_MINOR_VERSION)
+  set(_comgr_major "${THEROCK_HIP_MAJOR_VERSION}")
+  set(_comgr_minor "${THEROCK_HIP_MINOR_VERSION}")
+  if(_comgr_major LESS_EQUAL 9)
+    set(_comgr_major "0${_comgr_major}")
   endif()
-  if(THEROCK_HIP_MAJOR_VERSION LESS_EQUAL 9)
-    set(THEROCK_HIP_MAJOR_VERSION "0${THEROCK_HIP_MAJOR_VERSION}")
-  endif()
-  if(THEROCK_HIP_MINOR_VERSION LESS_EQUAL 9)
-    set(THEROCK_HIP_MINOR_VERSION "0${THEROCK_HIP_MINOR_VERSION}")
+  if(_comgr_minor LESS_EQUAL 9)
+    set(_comgr_minor "0${_comgr_minor}")
   endif()
 
-  set(suffix_version "${THEROCK_HIP_MAJOR_VERSION}${THEROCK_HIP_MINOR_VERSION}")
-  message(STATUS "Versioned comgr suffix: ${suffix_version}")
+  set(_comgr_dll_name "amd_comgr${_comgr_major}${_comgr_minor}.dll")
 
-  if(WIN32)
-    set(output_name "amd_comgr${suffix_version}")
-    message(STATUS "Override comgr output_name (windows): ${output_name}")
-    set_target_properties(amd_comgr PROPERTIES OUTPUT_NAME "${output_name}")
-  endif()
-endfunction()
+  # For new Comgr (post llvm-project#1278): sets the DLL name via cache var.
+  set(COMGR_DLL_NAME "${_comgr_dll_name}" CACHE STRING
+    "Windows Comgr DLL output name" FORCE)
 
-cmake_language(DEFER CALL therock_patch_comgr_win_output_name)
+  # For old Comgr (pre llvm-project#1278): override OUTPUT_NAME after the
+  # subproject's CMakeLists.txt runs. Old Comgr ignores the cache var and
+  # unconditionally sets OUTPUT_NAME to amd_comgr_${VERSION_MAJOR}.
+  # TODO: Remove this deferred call once llvm-project submodule includes #1278.
+  function(_therock_comgr_output_name_fallback)
+    # Read _comgr_dll_name (not COMGR_DLL_NAME) because old Comgr's
+    # non-cache set(COMGR_DLL_NAME ...) shadows our cache variable.
+    string(REGEX REPLACE "\\.dll$" "" _name "${_comgr_dll_name}")
+    message(STATUS "Override comgr OUTPUT_NAME (windows): ${_name}")
+    set_target_properties(amd_comgr PROPERTIES OUTPUT_NAME "${_name}")
+  endfunction()
+  cmake_language(DEFER CALL _therock_comgr_output_name_fallback)
+endif()

@@ -29,6 +29,7 @@ Usage:
 """
 
 import argparse
+import logging
 import platform as platform_module
 import sys
 from pathlib import Path
@@ -39,13 +40,10 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
-
-def log(*args):
-    print(*args)
-    sys.stdout.flush()
+logger = logging.getLogger(__name__)
 
 
-def main():
+def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Upload tarballs to S3")
     parser.add_argument(
         "--input-tarballs-dir",
@@ -53,11 +51,12 @@ def main():
         required=True,
         help="Directory containing .tar.gz tarballs to upload",
     )
+    parser.add_argument("--run-id", required=True, help="Workflow run ID")
     parser.add_argument(
-        "--run-id",
-        type=str,
-        required=True,
-        help="Workflow run ID",
+        "--platform",
+        default=platform_module.system().lower(),
+        choices=["linux", "windows"],
+        help="Platform (default: current system)",
     )
     parser.add_argument(
         "--release-type",
@@ -68,21 +67,12 @@ def main():
         "--output-dir",
         type=Path,
         default=None,
-        help="Output to local directory instead of S3",
+        help="Output to local directory instead of S3 (for testing)",
     )
     parser.add_argument(
-        "--platform",
-        type=str,
-        default=platform_module.system().lower(),
-        choices=["linux", "windows"],
-        help="Platform for the upload path (default: current system)",
+        "--dry-run", action="store_true", help="Print plan without uploading"
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print what would happen without uploading",
-    )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     tarballs_dir = args.input_tarballs_dir.resolve()
     if not tarballs_dir.is_dir():
@@ -92,27 +82,26 @@ def main():
     if not tarball_files:
         raise FileNotFoundError(f"No .tar.gz files found in {tarballs_dir}")
 
-    log(f"[INFO] Tarballs directory: {tarballs_dir}")
-    log(f"[INFO] Run ID: {args.run_id}")
-    log(f"[INFO] Platform: {args.platform}")
-    log(f"[INFO] Found {len(tarball_files)} tarballs:")
+    logger.info("Found %d tarballs in %s:", len(tarball_files), tarballs_dir)
     for f in tarball_files:
         size_mb = f.stat().st_size / (1024 * 1024)
-        log(f"  {f.name} ({size_mb:.1f} MB)")
+        logger.info("  %s (%.1f MB)", f.name, size_mb)
 
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,
         platform=args.platform,
         release_type=args.release_type or None,
     )
-    tarballs_loc = output_root.tarballs()
-    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    dest = output_root.tarballs()
+    logger.info("Destination: %s", dest.s3_uri)
 
-    log(f"\n[INFO] Uploading to {tarballs_loc.s3_uri}")
-    count = backend.upload_directory(tarballs_dir, tarballs_loc, include=["*.tar.gz"])
-    log(f"[INFO] Uploaded {count} files")
-    log("[INFO] Done!")
+    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    count = backend.upload_directory(tarballs_dir, dest, include=["*.tar.gz"])
+
+    logger.info("Uploaded %d files", count)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO)
+    sys.exit(main(sys.argv[1:]))
