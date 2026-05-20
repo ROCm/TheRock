@@ -24,7 +24,11 @@ function(therock_sanitizer_configure
 
   # Enabled.
   if(NOT compiler_toolchain)
-    message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support sanitizer ${_sanitizer}")
+    # Even without a compiler toolchain, add -gdwarf-4 for dwz compatibility.
+    # Full sanitizer support requires a toolchain, but DWARF4 is needed for packaging.
+    set(_stanza "add_compile_options(-gdwarf-4)\n")
+    set("${out_sanitizer_stanza}" "${_stanza}" PARENT_SCOPE)
+    message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support full sanitizer ${_sanitizer}, but -gdwarf-4 will be added")
     return()
   endif()
 
