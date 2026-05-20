@@ -236,7 +236,7 @@ def add_gpu_skip_markers(marker_expr, gpu_arch):
     return combined_expr
 
 
-def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_vars):
+def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_vars, component_path):
     """
     Execute pytest with the specified test IDs and configuration.
 
@@ -247,6 +247,7 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
         timeout: Per-test timeout in seconds
         num_workers: Number of parallel xdist workers
         env_vars: Environment variables dictionary
+        component_path: Component root directory (used as pytest rootdir)
 
     Returns:
         Exit code from pytest
@@ -255,9 +256,9 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
         logging.warning("No tests to run in this shard")
         return 0
 
-    # When passing specific test IDs, don't include test_dir as positional argument
-    # The test IDs already contain paths relative to pytest's rootdir
-    cmd = ["pytest"]
+    # When passing specific test IDs, explicitly set rootdir to match collection
+    # Test IDs are relative to rootdir (where pytest.ini is located)
+    cmd = ["pytest", f"--rootdir={component_path}"]
 
     # Add specific test IDs
     cmd.extend(test_ids)
@@ -277,7 +278,7 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
     )
     logging.info(f"Marker expression used for collection: {marker_expr or '(none)'}")
     logging.info(
-        f"Command: {' '.join(cmd[:2])} <{len(test_ids)} test IDs> {' '.join(cmd[2+len(test_ids):])}"
+        f"Command: {' '.join(cmd[:3])} <{len(test_ids)} test IDs> {' '.join(cmd[3+len(test_ids):])}"
     )
 
     result = subprocess.run(cmd, env=env_vars, check=False)
@@ -420,7 +421,7 @@ if __name__ == "__main__":
 
     # Run pytest
     exit_code = run_pytest_tests(
-        test_dir, sharded_test_ids, marker_expr, timeout, num_workers, env_vars
+        test_dir, sharded_test_ids, marker_expr, timeout, num_workers, env_vars, component_path
     )
 
     sys.exit(exit_code)
