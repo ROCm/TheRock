@@ -147,6 +147,17 @@ Select your GPU using the `[device-*]` extras from the
 > succeed, but device enumeration, kernel launch, or library loads may fail at
 > runtime. Please file an issue if you hit one.
 
+> [!WARNING]
+> Known issue ([#5347](https://github.com/ROCm/TheRock/issues/5347)): some
+> `rocm` meta-package device extras may be missing from the published `rocm`
+> package metadata. If a `rocm[device-*]` extra does not install the expected
+> device package, install the device package directly, for example:
+>
+> ```bash
+> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+>     rocm-sdk-device-gfx942 rocm-sdk-device-gfx950
+> ```
+
 ```bash
 # Single device (replace device-gfx942 with your GPU):
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
