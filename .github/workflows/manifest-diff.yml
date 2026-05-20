@@ -45,8 +45,9 @@ on:
         required: false
         type: string
       end_ref:
-        required: true
+        required: false
         type: string
+        default: ''
       workflow_mode:
         required: false
         type: boolean
@@ -118,10 +119,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            --end "${{ inputs.end_ref }}" \
-            --start "${{ inputs.start_ref }}" \
+            --end "${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}" \
+            --start "${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}" \
             --find-last-run "${{ inputs.find_last_run }}" \
-            --pr-base-ref "${{ inputs.pr_base_ref }}" \
+            --pr-base-ref "${{ inputs.pr_base_ref || (github.event_name == 'pull_request' && github.event.pull_request.base.ref) || '' }}" \
             --branch "${{ inputs.branch }}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports

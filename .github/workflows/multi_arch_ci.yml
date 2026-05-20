@@ -121,13 +121,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    with:
-      end_ref: >-
-        ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-      start_ref: >-
-        ${{ github.event_name == 'push' && github.event.before || '' }}
-      pr_base_ref: >-
-        ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
 
   ci_summary:
     name: CI Summary
