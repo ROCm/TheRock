@@ -106,11 +106,20 @@ jobs:
             build_jaxlib: false
           - jax_ref: "rocm-jaxlib-v0.9.2"
             build_jaxlib: false
+
     permissions:
       contents: read
       id-token: write
+
+    outputs:
+      jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
+      jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
+
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
+
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -165,6 +174,7 @@ jobs:
             dist_wheels
 
       - name: Extract JAX versions from built wheels
+        id: write_jax_versions
         run: |
           python3 ./build_tools/github_actions/write_jax_versions.py \
             --dist-dir "${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse"
