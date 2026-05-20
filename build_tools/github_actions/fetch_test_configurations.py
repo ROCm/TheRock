@@ -101,12 +101,8 @@ def _make_rocjitsu_component(
     )
     emulator_component["emulator"] = ROCJITSU_EMULATOR
     emulator_component["emulator_runs_on"] = emulator_runs_on
-    emulator_component["rocjitsu_config"] = (
-        f"share/rocjitsu/configs/{rocjitsu_config}"
-    )
-    emulator_component["rocjitsu_schema"] = (
-        f"share/rocjitsu/schemas/{ROCJITSU_SCHEMA}"
-    )
+    emulator_component["rocjitsu_config"] = f"share/rocjitsu/configs/{rocjitsu_config}"
+    emulator_component["rocjitsu_schema"] = f"share/rocjitsu/schemas/{ROCJITSU_SCHEMA}"
     emulator_component.pop("multi_gpu_runner", None)
     return emulator_component
 
