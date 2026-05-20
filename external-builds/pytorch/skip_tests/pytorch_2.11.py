@@ -80,6 +80,7 @@ skip_tests = {
             # https://github.com/ROCm/TheRock/actions/runs/25919759807 (users/albmalamd/skipping_failures_2.11_v2)
             # https://github.com/ROCm/TheRock/actions/runs/26044254069 (users/albmalamd/skipping_failures_2.11_v2)
             # https://github.com/ROCm/TheRock/actions/runs/26119178358 (users/albmalamd/skipping_failures_2.11_v2)
+            # https://github.com/ROCm/TheRock/actions/runs/26158117282 (users/albmalamd/skipping_failures_2.11_v2)
             "(TestClipGradNormWorldSize2 and test_clip_grad_norm_1d)",
             "(TestClipGradNormWorldSize4 and test_clip_grad_norm_2d)",
             "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
@@ -124,7 +125,8 @@ skip_tests = {
             # Collapsed: covers test_transformer_offload_{false,true}_none_cuda (timeouts)
             #           + test_transformer_offload_true_no_shard_cuda (tensor parity)
             "(TestParityWithDDPCUDA and test_transformer)",
-            "(TestNoGradCUDA and test_transformer_no_grad_mixed_precision_True_cuda)",
+            # Collapsed: covers mixed_precision_{True,False}_cuda
+            "(TestNoGradCUDA and test_transformer_no_grad)",
             "(TestFullyShardCompile and test_nested_fully_shard_backend_aot_eager and not decomp_partition)",
             "(TestFullyShardCompile and test_nested_fully_shard_backend_aot_eager_decomp_partition)",
             "(TestFullyShardCompile and test_nested_fully_shard_backend_inductor_fullgraph_True and not graph_partition)",
@@ -165,7 +167,8 @@ skip_tests = {
             "(TestFSDPMixedPrecisionSharded and test_full_precision_in_eval_comm)",
             # Collapsed: 4 entries -> covers all (cpu_offload, backward_prefetch, forward_prefetch, device_init_mode) combos
             "(TestFSDPWrap and test_main_wrap_api)",
-            "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile_use_ca_False)",
+            # Collapsed: covers use_ca_{False,True}
+            "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile)",
             "(TestJoin and test_single_joinable)",
             "(TestFullyShardWithDistributedStateDict and test_save_with_fsdp1_and_load_with_fsdp2)",
             "(TestFSDPCheckpoint and cpu_offload0 and offload_activations_True and use_orig_params_True)",
@@ -206,9 +209,11 @@ skip_tests = {
             "(TestFSDPUseOrigParamsUnshardReshard and test_summon_between_two_forwards_offload_params_False)",
             "(TestFSDPOptimState and test_optim_input_warning)",
             "(TestFSDPMiscMultiProcess and test_fsdp_module_no_compute_grad and use_second_layer_False and sharding_strategy0)",
-            # Collapsed: 2 entries -> covers use_multiple_param_groups_{False,True} (state_dict_type0)
-            "(TestFSDPOptimState and test_rekey_optim_state_dict_to_ids)",
-            "(TestGradAcc and test_grad_acc_cpu_offload_use_orig_params_False)",
+            # Collapsed: covers test_rekey_optim_state_dict_to_{ids,names} x use_multiple_param_groups_{False,True}
+            "(TestFSDPOptimState and test_rekey_optim_state_dict)",
+            "(TestFSDPOptimState and test_scatter_full_optim_state_dict_nested_halve_world_size)",
+            # Collapsed: covers use_orig_params_{False,True}
+            "(TestGradAcc and test_grad_acc_cpu_offload)",
             "(TestShardedGradScalerParityWithDDP and test_sharded_grad_scaler_found_inf)",
 
             # --- Numerical / parity (tensor mismatch, meta init, FSDP vs ref loss) ---
@@ -226,7 +231,8 @@ skip_tests = {
             # --- Spawned child abnormal exit (non-zero / signal from fork/spawn worker) ---
             "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
             # AssertionError: RuntimeError not raised (child died with exit code 10)
-            "(TestDistBackendWithSpawn and test_monitored_barrier_allreduce_hang_wait_all_ranks)",
+            # Collapsed: covers test_monitored_barrier_allreduce_hang{,_wait_all_ranks}
+            "(TestDistBackendWithSpawn and test_monitored_barrier_allreduce_hang)",
 
             # --- Worker exception (distributed autograd / pipeline) ---
             "(ScheduleTest and test_grad_with_manual_ScheduleClass1_shape_inference_False)",
