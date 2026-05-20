@@ -24,7 +24,11 @@ function(therock_sanitizer_configure
 
   # Enabled.
   if(NOT compiler_toolchain)
-    message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support sanitizer ${_sanitizer}")
+    # Even without a compiler toolchain, add -gdwarf-4 for dwz compatibility.
+    # Full sanitizer support requires a toolchain, but DWARF4 is needed for packaging.
+    set(_stanza "add_compile_options(-gdwarf-4)\n")
+    set("${out_sanitizer_stanza}" "${_stanza}" PARENT_SCOPE)
+    message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support full sanitizer ${_sanitizer}, but -gdwarf-4 will be added")
     return()
   endif()
 
@@ -44,8 +48,8 @@ function(therock_sanitizer_configure
 
     # TODO: Support ASAN_STATIC/TSAN_STATIC to use static sanitizer linkage. Shared is almost always the right thing,
     # so make the sanitizer imply shared linkage.
-    string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g -gdwarf-4\")\n")
-    string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g -gdwarf-4\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
 
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
