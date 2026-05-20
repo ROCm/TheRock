@@ -64,7 +64,6 @@ jobs:
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix }}
       # Use relative paths to avoid host/container path mismatch
-      # (github.workspace resolves to host path, but container mounts at /__w/)
       OUTPUT_DIR: output
       ARTIFACTS_DIR: output/artifacts
       PACKAGE_DIST_DIR: output/packages
@@ -104,17 +103,14 @@ jobs:
           # artifacts bucket. Release builds (dev/nightly/prerelease) use
           # the matching therock-{type} role for the packages bucket.
           # ================================================================
-
           RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
-
-          if [[ -z "${RELEASE_TYPE}" ]]; then
+          if [ -z "${RELEASE_TYPE}" ]; then
             IAM_ROLE="arn:aws:iam::692859939525:role/therock-ci"
             echo "✓ Using CI role: ${IAM_ROLE}"
           else
             IAM_ROLE="arn:aws:iam::692859939525:role/therock-${RELEASE_TYPE}"
             echo "✓ Using release-type role: ${IAM_ROLE}"
           fi
-
           echo "iam_role=${IAM_ROLE}" >> $GITHUB_OUTPUT
 
       - name: Fetch Artifacts for all GPU families
@@ -157,4 +153,5 @@ jobs:
         run: |
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type "${{ inputs.native_package_type }}" \
-            --run-id "${{ env.ARTIFACT_RUN_ID }}"
+            --run-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --package-dir "${{ env.PACKAGE_DIST_DIR }}"

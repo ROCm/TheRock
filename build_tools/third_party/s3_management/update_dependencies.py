@@ -111,7 +111,7 @@ def is_wheel_allowed(pkg: str) -> bool:
        This rejects win32, win_arm64, macOS, musllinux, ARM, RISC-V, iOS, etc.
     2. Python tag is in _ALLOWED_CPYTHON_TAGS, or is exactly "py3"
        (pure-Python wheels). This rejects PyPy (pp*), cp39, cp313t,
-       cp314, cp314t, py2, py2.py3, etc.
+       cp314t, py2, py2.py3, etc.
 
     Per PEP 427, the wheel stem is:
         {name}-{version}[-{build}]-{python}-{abi}-{platform}
