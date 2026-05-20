@@ -139,6 +139,14 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
 
+      - name: Simulated install Test
+        id: test-packages
+        run: |
+          python ./build_tools/packaging/linux/native_linux_package_install_test.py \
+            --test-type simulate \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --pkg-type ${{ inputs.native_package_type }}
+
       - name: Configure AWS Credentials
         # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
         # Allowing both CI builds (TheRock) and release builds (rockrel) to upload packages.
