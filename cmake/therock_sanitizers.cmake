@@ -24,11 +24,7 @@ function(therock_sanitizer_configure
 
   # Enabled.
   if(NOT compiler_toolchain)
-    # Even without a compiler toolchain, add -gdwarf-4 for dwz compatibility.
-    # Full sanitizer support requires a toolchain, but DWARF4 is needed for packaging.
-    set(_stanza "add_compile_options(-gdwarf-4)\n")
-    set("${out_sanitizer_stanza}" "${_stanza}" PARENT_SCOPE)
-    message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support full sanitizer ${_sanitizer}, but -gdwarf-4 will be added")
+    message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support sanitizer ${_sanitizer}")
     return()
   endif()
 
@@ -42,10 +38,6 @@ function(therock_sanitizer_configure
     # so make "ASAN" imply shared linkage.
     string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
     string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
-    # Use add_compile_options for -gdwarf-4 so it comes after CMake's default -g flag.
-    # This ensures DWARF4 is used (required for dwz < 0.15 compatibility).
-    string(APPEND _stanza "add_compile_options(-gdwarf-4)\n")
-
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
@@ -74,9 +66,6 @@ function(therock_sanitizer_configure
     # so make "TSAN" imply shared linkage.
     string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=thread -fno-omit-frame-pointer -g\")\n")
     string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=thread -fno-omit-frame-pointer -g\")\n")
-    # Use add_compile_options for -gdwarf-4 so it comes after CMake's default -g flag.
-    # This ensures DWARF4 is used (required for dwz < 0.15 compatibility).
-    string(APPEND _stanza "add_compile_options(-gdwarf-4)\n")
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
