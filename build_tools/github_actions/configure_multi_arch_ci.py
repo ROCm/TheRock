@@ -379,6 +379,10 @@ class TestRocmDecision(JobGroupDecision):
 
     test_type: str = "quick"
     test_type_reason: str = "default"
+    # TODO(#3433): Remove once ASAN tests are passing on production runners.
+    # When True, use sandbox runners (test-runs-on-sandbox) instead of
+    # production runners for test jobs that support them.
+    use_sandbox_runners: bool = False
     # TODO: Consolidate test_type, test labels, and run_functional_tests
     # (from the single-arch pipeline) into a per-platform test config object
     # (e.g. linux_test_config JSON) instead of separate top-level outputs.
@@ -643,11 +647,6 @@ def decide_jobs(
         ci_inputs=ci_inputs,
         git_context=git_context,
     )
-    test_rocm = TestRocmDecision(
-        action=JobAction.RUN,
-        test_type=test_type,
-        test_type_reason=test_type_reason,
-    )
 
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and ASAN test loads run on production machines
     # During ASAN testing, machines would crash resulting in impact for production CI jobs.
@@ -885,7 +884,7 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: no {test_runner_kernel} kernel "
                     f"runner available, disabling tests"
                 )
-
+                
         # TODO(#3433): Remove sandbox logic once ASAN tests are passing
         # For ASAN builds, use sandbox runner to avoid impacting production
         if build_variant == "asan":
@@ -962,6 +961,7 @@ def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
     test_type: str,
+    use_sandbox_runners: bool = False,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -996,6 +996,7 @@ def expand_build_configs(
             all_families=all_families,
             variant_config=variant_config,
             test_type=test_type,
+            use_sandbox_runners=use_sandbox_runners,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
@@ -1083,6 +1084,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         targets=targets,
         ci_inputs=ci_inputs,
         test_type=jobs.test_rocm.test_type,
+        use_sandbox_runners=jobs.test_rocm.use_sandbox_runners,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )

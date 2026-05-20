@@ -509,7 +509,8 @@ class ConfigureCITest(unittest.TestCase):
             self.assertFalse(configure_ci.determine_long_lived_branch(branch))
 
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
-    def test_sandbox_test_runner_with_asan(self):
+    def test_sandbox_test_runner_with_asan_non_schedule(self):
+        """ASAN tests should be disabled for non-schedule runs."""
         base_args = {"build_variant": "asan"}
         build_families = {"amdgpu_families": "gfx94X"}
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
@@ -523,6 +524,46 @@ class ConfigureCITest(unittest.TestCase):
         )
         entry = linux_target_output[0]
         self.assertEqual(entry["test-runs-on"], "")
+
+    def test_sandbox_test_runner_with_asan_schedule(self):
+        """ASAN tests should use sandbox runner for schedule runs."""
+        base_args = {"build_variant": "asan"}
+        build_families = {"amdgpu_families": "gfx94X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=True,
+            base_args=base_args,
+            families=build_families,
+            platform="linux",
+        )
+        # Find the gfx94X entry (schedule runs include multiple families)
+        gfx94x_entry = next(
+            (e for e in linux_target_output if e["family"] == "gfx94X-dcgpu"), None
+        )
+        self.assertIsNotNone(gfx94x_entry, "gfx94X-dcgpu entry not found")
+        self.assertEqual(
+            gfx94x_entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox"
+        )
+
+    def test_sandbox_test_runner_with_asan_workflow_dispatch(self):
+        """ASAN tests should use sandbox runner for workflow_dispatch runs."""
+        base_args = {"build_variant": "asan"}
+        build_families = {"amdgpu_families": "gfx94X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=True,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families=build_families,
+            platform="linux",
+        )
+        # workflow_dispatch respects amdgpu_families filter, so should have one entry
+        self.assertEqual(len(linux_target_output), 1)
+        entry = linux_target_output[0]
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
     ###########################################################################
     # Tests for multi-label runner selection

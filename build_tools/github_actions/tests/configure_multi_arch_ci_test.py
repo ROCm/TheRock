@@ -434,6 +434,74 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
 
+    def test_use_sandbox_runners_false_for_pull_request(self):
+        """PR events should not use sandbox runners."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request"), git_context=cm.GitContext()
+        )
+        self.assertFalse(result.test_rocm.use_sandbox_runners)
+
+    def test_use_sandbox_runners_false_for_push(self):
+        """Push events should not use sandbox runners."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="push"), git_context=cm.GitContext()
+        )
+        self.assertFalse(result.test_rocm.use_sandbox_runners)
+
+    def test_use_sandbox_runners_true_for_schedule(self):
+        """Schedule events should use sandbox runners."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="schedule"), git_context=cm.GitContext()
+        )
+        self.assertTrue(result.test_rocm.use_sandbox_runners)
+
+    def test_use_sandbox_runners_true_for_workflow_dispatch(self):
+        """workflow_dispatch events should use sandbox runners."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="workflow_dispatch"), git_context=cm.GitContext()
+        )
+        self.assertTrue(result.test_rocm.use_sandbox_runners)
+
+    def test_asan_pr_skips_tests(self):
+        """ASAN builds on PR should skip tests entirely."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.SKIP)
+
+    def test_asan_push_skips_tests(self):
+        """ASAN builds on push should skip tests entirely."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="push", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.SKIP)
+
+    def test_asan_schedule_runs_tests(self):
+        """ASAN builds on schedule should run tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="schedule", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_asan_workflow_dispatch_runs_tests(self):
+        """ASAN builds on workflow_dispatch should run tests."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="workflow_dispatch", build_variant="asan"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_release_pr_runs_tests(self):
+        """Release builds on PR should run tests (not skip)."""
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request", build_variant="release"),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
 
 # ---------------------------------------------------------------------------
 # Step 4: Select Targets
@@ -898,6 +966,68 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Default runner, not the oem one
         self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
+
+    # TODO(#3433): Remove sandbox tests once ASAN tests are passing
+    def test_asan_non_schedule_disables_tests(self):
+        """ASAN builds on non-schedule runs should disable tests."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        # PR event (not schedule)
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
+            test_type="quick",
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Tests should be disabled for non-schedule ASAN
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_asan_schedule_uses_sandbox_runner(self):
+        """ASAN builds on schedule runs should use the sandbox runner."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        # Schedule event (nightly) - use_sandbox_runners is set by decide_jobs()
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
+            test_type="quick",
+            use_sandbox_runners=True,  # Set by decide_jobs() for schedule/dispatch
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Tests should use sandbox runner for schedule ASAN
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
+
+    def test_asan_workflow_dispatch_uses_sandbox_runner(self):
+        """ASAN builds on workflow_dispatch should use the sandbox runner."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        # workflow_dispatch event - use_sandbox_runners is set by decide_jobs()
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch", build_variant="asan"
+            ),
+            test_type="quick",
+            use_sandbox_runners=True,  # Set by decide_jobs() for schedule/dispatch
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Tests should use sandbox runner for workflow_dispatch ASAN
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
+
+    def test_release_schedule_uses_normal_runner(self):
+        """Release builds on schedule runs should use normal test runner."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        # Schedule event with release variant
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="schedule", build_variant="release"),
+            test_type="quick",
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        # Release tests should use normal runner, not sandbox
+        self.assertNotEqual(entry["test-runs-on"], "")
+        self.assertNotEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
 
 # ---------------------------------------------------------------------------
