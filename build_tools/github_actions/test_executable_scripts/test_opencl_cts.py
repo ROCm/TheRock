@@ -19,6 +19,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 ROCM_PATH = THEROCK_BIN_DIR.parent
 
+SHARD_INDEX = int(os.getenv("SHARD_INDEX", "1"))  # 1-based
+TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", "1"))
+
 CTS_BIN_DIR = ROCM_PATH / "share" / "opencl" / "opencl-cts" / "Release"
 OPENCL_ICD_FILENAMES = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
 
@@ -87,6 +90,7 @@ def find_test_executables():
         sys.exit(1)
 
     test_executables.sort()
+    test_executables = test_executables[SHARD_INDEX - 1 :: TOTAL_SHARDS]
     return test_executables
 
 
@@ -128,7 +132,7 @@ def run_test(test_exe, env):
 
 def run_tests():
     """Run all OpenCL CTS test executables"""
-    logging.info("++ Running OpenCL-CTS tests")
+    logging.info(f"++ Running OpenCL-CTS tests (shard {SHARD_INDEX}/{TOTAL_SHARDS})")
 
     env = os.environ.copy()
     env["OCL_ICD_FILENAMES"] = str(OPENCL_ICD_FILENAMES)

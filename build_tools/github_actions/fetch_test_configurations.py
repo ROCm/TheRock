@@ -180,7 +180,9 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_opencl_cts.py')}",
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 4,
+        },
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26",
     },
     # BLAS tests
