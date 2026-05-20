@@ -75,6 +75,8 @@ class Parameters:
         version_suffix: str,
         artifacts: ArtifactCatalog,
         kpack_split: bool = False,
+        linux_target_families: list[str] | None = None,
+        windows_target_families: list[str] | None = None,
     ):
         self.dest_dir = dest_dir
         self.version = version
@@ -82,10 +84,42 @@ class Parameters:
         self.artifacts = artifacts
         self.kpack_split = kpack_split
         self.all_target_families = artifacts.all_target_families
-        _sorted_families = sorted(self.all_target_families)
-        self.default_target_family: str | None = (
-            _sorted_families[0] if _sorted_families else None
+
+        # Cross-platform family view (#5347). When the multi-arch release
+        # pipeline passes per-platform family lists, the rocm sdist must
+        # advertise the union of both platforms' families and pick a
+        # DEFAULT_TARGET_FAMILY that resolves on either OS so a user
+        # without ROCM_SDK_TARGET_FAMILY / offload-arch lands on a family
+        # that has wheels for their platform — prefer the intersection.
+        # Without these kwargs the on-disk artifact view is used as
+        # before, preserving today's behavior for single-platform builds.
+        self.linux_target_families: list[str] = sorted(set(linux_target_families or []))
+        self.windows_target_families: list[str] = sorted(
+            set(windows_target_families or [])
         )
+        cross_platform_inputs = (
+            linux_target_families is not None or windows_target_families is not None
+        )
+        if cross_platform_inputs:
+            linux_set = set(self.linux_target_families)
+            windows_set = set(self.windows_target_families)
+            self.available_target_families: list[str] = sorted(linux_set | windows_set)
+            intersection = sorted(linux_set & windows_set)
+            if intersection:
+                self.default_target_family: str | None = intersection[0]
+            elif self.available_target_families:
+                self.default_target_family = self.available_target_families[0]
+            else:
+                self.default_target_family = None
+        else:
+            # Snapshot of the set; preserves prior set-iteration order so
+            # the generated _dist_info.py is byte-identical to before for
+            # single-platform builds.
+            self.available_target_families = list(self.all_target_families)
+            _sorted_families = sorted(self.all_target_families)
+            self.default_target_family = (
+                _sorted_families[0] if _sorted_families else None
+            )
         self.populated_packages: list["PopulatedDistPackage"] = []
         self.runtime_artifact_names: set[str] = set()
 
@@ -116,10 +150,14 @@ class Parameters:
             dist_info_contents += (
                 f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
             )
-        for target_family in self.all_target_families:
+        for target_family in self.available_target_families:
             dist_info_contents += (
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
             )
+        for target_family in self.linux_target_families:
+            dist_info_contents += f"LINUX_TARGET_FAMILIES.append('{target_family}')\n"
+        for target_family in self.windows_target_families:
+            dist_info_contents += f"WINDOWS_TARGET_FAMILIES.append('{target_family}')\n"
         self.dist_info_contents = dist_info_contents
 
         # And dynamically load it so that we have access to the same config during

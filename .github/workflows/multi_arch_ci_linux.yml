@@ -219,6 +219,8 @@ jobs:
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      linux_amdgpu_families: ${{ fromJSON(inputs.build_config).linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ fromJSON(inputs.build_config).windows_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
