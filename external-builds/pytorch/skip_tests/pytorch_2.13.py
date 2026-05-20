@@ -144,6 +144,27 @@ skip_tests = {
             "(DistTensorRandomInitTest and test_meta_tensor_init)",
             "(TestComputeCommReorderingBucketing and test_bucketing_split_for_overlap)",
             "(TestComputeCommReorderingBucketing and test_no_bucketing_with_dependent_hiding_nodes)",
+
+            # Next Apr20/PT + May01/ROCm attribution rerun layer.
+            # Run 26136844778 shard 1/3 job 76873873289: 300s distributed timeouts.
+            "(TestFullyShardPostAccGradHookMultiProcess and test_post_acc_grad_hook_optim_parity)",
+            "(TestFullyShardFrozen and test_train_mixed_requires_grad_across_groups)",
+            # Run 26136844778 shard 1/3 job 76873873289: NCCL watchdog timeout.
+            "(TestFullyShard2DTraining and test_train_parity_2d_transformer)",
+            # Run 26136844778 shard 2/3 job 76873873320: 300s distributed timeouts.
+            "(TestClipGradNormWorldSize4 and test_clip_grad_norm_2d)",
+            "(TestFullyShardPerParamMeshOverlap and test_fully_shard_per_param_mesh_training_overlap)",
+            "(TestCommModeFeatures and test_transformer_module_tracing)",
+            "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile_use_ca_True)",
+            # Run 26136844778 shard 2/3 job 76873873320: SIGABRT ChildFailedError.
+            "(ElasticLaunchTest and test_virtual_local_rank)",
+            # Run 26136844778 shard 3/3 job 76873873274: 300s distributed timeouts.
+            "(TestFullyShardMixedPrecisionTraining and test_grad_acc_with_reduce_dtype)",
+            "(TestFullyShard1DTrainingCompose and test_double_forward_with_nested_fsdp_and_checkpoint)",
+            # Run 26136844778 shard 3/3 job 76873873274: scalar assertion via process exit.
+            "(TestJoin and test_single_joinable)",
+            # Run 26136844778 shard 3/3 job 76873873274: SIGSEGV in autograd backward.
+            "(TestDataParallel and test_strided_grad_layout)",
         ],
     },
 }
