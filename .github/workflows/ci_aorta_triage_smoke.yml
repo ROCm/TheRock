@@ -32,6 +32,17 @@ on:
   schedule:
     # Sunday 03:00 UTC. Pairs with the existing weekly slot in ci_weekly.yml.
     - cron: "0 3 * * 0"
+  # TEMPORARY (pre-merge testing only): trigger the workflow on every push to
+  # the development branch so we can validate end-to-end on a real GPU runner
+  # before this PR merges. Remove this `push:` block (and this comment)
+  # before final review / merge -- the merged version should rely on
+  # `schedule` + `workflow_dispatch` only.
+  push:
+    branches:
+      - aorta-triage-smoke-test
+    paths:
+      - .github/workflows/ci_aorta_triage_smoke.yml
+      - build_tools/github_actions/test_executable_scripts/test_aorta_triage.py
   workflow_dispatch:
     inputs:
       runner_label:
