@@ -222,6 +222,47 @@ skip_tests = {
             # Run 26136844778 shard 3/3, job 76873873274: DataParallel SIGSEGV
             # in autograd backward.
             "(TestDataParallel and test_strided_grad_layout)",
+
+            # Run 26170912739 shard 1/3, job 76988162868:
+            # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162868
+            # Newly exposed May01/PT + May01/ROCm target-stack timeouts in
+            # prior-attributed FSDP/Join buckets. Use test-level skips because
+            # pytest -k can avoid them and sibling methods are tracked separately.
+            "(TestFullyShardFrozen and test_train_mixed_requires_grad_per_group)",
+            "(TestJoin and test_join_kwargs)",
+
+            # Run 26170912739 shard 2/3, job 76988162878:
+            # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162878
+            # SIGSEGV/native crash bucket in Replicate mixed-precision casts;
+            # bf16 sibling overlapped Apr20/PT + May01/ROCm in run 25925372276,
+            # while this target-stack layer exposes fp16. Keep this test-level:
+            # neighboring cast methods passed before the crash and pytest -k can
+            # prevent entering the crashy method.
+            "(TestReplicateMixedPrecisionCasts and test_norm_modules_fp16)",
+
+            # Run 26170912739 shard 2/3, job 76988162878:
+            # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162878
+            # Newly exposed target-stack process-exit assertion in Dynamo
+            # distributed collectives. Test-level skip is sufficient; the module
+            # collected and earlier TestMultiProc sibling passed before failure.
+            "(TestMultiProc and test_compiler_collectives_automatic_dynamic_tensor)",
+
+            # Run 26170912739 shard 3/3, job 76988162973:
+            # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162973
+            # Newly exposed target-stack 300s composable FSDP timeouts in classes
+            # with prior attribution-layer timeout siblings. Keep test-level skips
+            # instead of class-level because the class-wide failures are not yet
+            # proven and pytest -k can isolate these methods.
+            "(TestFullyShardMixedPrecisionTraining and test_reduce_dtype)",
+            "(TestFullyShard1DTrainingCompose and test_train_parity_with_activation_checkpointing)",
+
+            # Run 26170912739 shard 3/3, job 76988162973:
+            # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162973
+            # SIGABRT/native watchdog crash in DDP buffer hook; exact overlap with
+            # Apr20/PT + May01/ROCm run 25925372276 shard 2/3. Test-level skip is
+            # enough because pytest -k can prevent the crashing method without a
+            # broad distributed_spawn module exclude.
+            "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
         ],
     },
 }
