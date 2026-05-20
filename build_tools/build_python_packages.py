@@ -157,8 +157,7 @@ def run(args: argparse.Namespace):
     else:
         _run_legacy(args, params, core)
 
-    if args.build_packages:
-        _pack_standalone_wheels(args)
+    _pack_standalone_wheels(args)
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
