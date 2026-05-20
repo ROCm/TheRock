@@ -157,7 +157,7 @@ def run(args: argparse.Namespace):
     else:
         _run_legacy(args, params, core)
 
-    _pack_hipdnn_wheel(args)
+    _pack_hipdnn_wheel(args, params)
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
@@ -420,22 +420,18 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
 PACK_WHEEL_SCRIPT = Path(__file__).resolve().parent / "pack_python_wheel.py"
 
 
-def _pack_hipdnn_wheel(args: argparse.Namespace):
+def _pack_hipdnn_wheel(args: argparse.Namespace, params: Parameters):
     """Pack the hipDNN Python wheel from the hipdnn lib artifact."""
-    artifact_dir = args.artifact_dir / "hipdnn_lib_generic"
-    if not artifact_dir.is_dir():
-        print("::: Skipping hipdnn wheel (no hipdnn_lib_generic artifact)")
-        return
-
-    manifest = artifact_dir / "artifact_manifest.txt"
-    if not manifest.exists():
+    hipdnn_artifacts = params.filter_artifacts(
+        lambda an: an.name == "hipdnn" and an.component == "lib"
+    )
+    if not hipdnn_artifacts.artifact_basedirs:
+        print("::: Skipping hipdnn wheel (no hipdnn lib artifact)")
         return
 
     pkg_dir = None
-    for basedir in manifest.read_text().splitlines():
-        if not basedir:
-            continue
-        candidate = artifact_dir / basedir / "share/hipdnn/python/hipdnn_frontend"
+    for _, basedir in hipdnn_artifacts.artifact_basedirs:
+        candidate = basedir / "share/hipdnn/python/hipdnn_frontend"
         if candidate.is_dir():
             pkg_dir = candidate
             break
