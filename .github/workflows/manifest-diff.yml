@@ -102,7 +102,7 @@ jobs:
       - name: Install System requirements
         run: |
           apt-get update
-          apt-get install -y ca-certificates
+          apt-get install -y ca-certificates git
 
       - name: Generate manifest diff report
         env:
