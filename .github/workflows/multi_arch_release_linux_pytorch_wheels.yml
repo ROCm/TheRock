@@ -42,6 +42,18 @@ on:
         description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
         type: string
         required: true
+      python_versions:
+        description: >-
+          Space-separated Python versions to build. Blank uses the default
+          linux-release matrix.
+        type: string
+        default: ""
+      pytorch_git_refs:
+        description: >-
+          Space-separated PyTorch refs to build. Blank uses the default
+          linux-release matrix.
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -82,6 +94,18 @@ on:
         description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
         type: string
         required: true
+      python_versions:
+        description: >-
+          Space-separated Python versions to build. Blank uses the default
+          linux-release matrix.
+        type: string
+        default: ""
+      pytorch_git_refs:
+        description: >-
+          Space-separated PyTorch refs to build. Blank uses the default
+          linux-release matrix.
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -153,6 +177,8 @@ jobs:
             --run-id "${{ github.run_id }}" \
             --release-type "${{ inputs.release_type }}" \
             --platform linux \
+            --python-versions "${{ inputs.python_versions }}" \
+            --pytorch-git-refs "${{ inputs.pytorch_git_refs }}" \
             --manifest-dir "${{ github.workspace }}/output/manifests" \
             --therock-repo "https://github.com/${{ inputs.repository || github.repository }}" \
             --therock-branch "${{ inputs.ref || github.ref_name }}"
