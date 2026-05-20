@@ -271,14 +271,20 @@ PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload `torch`, `torchvision`, `torchaudio`, `triton`, and `apex` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/ for non-multi-arch packages.
-Multi-arch wheels are uploded to the "v4/whl-staging" directory with a public URL at https://rocm.nightlies.amd.com/whl-staging-multi-arch/.
+**Per-family releases** (non-multi-arch): Passing builds upload wheels to the
+"v2-staging" directory at https://rocm.nightlies.amd.com/v2-staging/. Only
+after passing torch tests are wheels promoted to "v2" at
+https://rocm.nightlies.amd.com/v2/. If no runner is available, promotion is
+blocked by default. Set `bypass_tests_for_releases=true` for exceptional
+cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py).
 
-Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
-
-<!-- TODO: Add a reference to https://rocm.nightlies.amd.com/whl-multi-arch/ as soon as we promote tested wheels. -->
-
-If no runner is available: Promotion is blocked by default. Set `bypass_tests_for_releases=true` for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
+**Multi-arch releases**: Wheels are published directly to
+https://rocm.nightlies.amd.com/whl-multi-arch/ without a staging step.
+Tests run post-publish as a signal (visible on
+https://therock-hud-dev.amd.com/), not as a gate. This avoids
+pip resolution issues that would arise if shared host `torch` wheel and
+per-target device wheels were promoted independently. See the discussion on
+[#3332](https://github.com/ROCm/TheRock/issues/3332) for details.
 
 ## Advanced build instructions
 
