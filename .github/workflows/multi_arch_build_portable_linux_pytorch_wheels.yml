@@ -335,7 +335,7 @@ jobs:
       - name: Sanity check wheel
         run: |
           python external-builds/pytorch/sanity_check_wheel.py \
-            ${{ env.PACKAGE_DIST_DIR }}/
+            "${PACKAGE_DIST_DIR}/"
 
       # The kpack wheel splitter takes the fat torch wheel and produces a
       # smaller host wheel plus one device wheel per gfx target. Source-install
