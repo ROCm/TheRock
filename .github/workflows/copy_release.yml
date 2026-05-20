@@ -99,11 +99,3 @@ jobs:
             s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
             s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*"  --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
-
-      - name: (Re-)Generate Python package release index
-        env:
-          S3_BUCKET_PY: "therock-${{ inputs.destbucket }}-python"
-          CUSTOM_PREFIX: "${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${CUSTOM_PREFIX}
