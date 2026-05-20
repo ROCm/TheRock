@@ -26,9 +26,12 @@ on:
   workflow_call:
     inputs:
       amdgpu_families:
-        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        description: >-
+          Informational only. JAX builds currently consume the shared
+          multiarch TheRock tarball and do not build per-family variants.
         type: string
-        required: true
+        required: false
+        default: "multiarch"
       release_type:
         description: 'Release type: "dev", "nightly", or "prerelease".'
         type: string
@@ -52,9 +55,12 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_families:
-        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        description: >-
+          Informational only. JAX builds currently consume the shared
+          multiarch TheRock tarball and do not build per-family variants.
         type: string
-        default: "gfx94X-dcgpu"
+        default: "multiarch"
+        required: false
       release_type:
         description: 'Release type. All developer-triggered jobs should use "dev"!'
         type: choice
