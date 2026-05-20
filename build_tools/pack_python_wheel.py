@@ -39,14 +39,11 @@ def _infer_platform_tag(pkg_dir):
     return "py3", "none", "any"
 
 
-def _record_hash(filepath):
-    h = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    digest = base64.urlsafe_b64encode(h.digest()).rstrip(b"=").decode()
-    size = os.path.getsize(filepath)
-    return f"sha256={digest}", str(size)
+def _sha256_record(data: bytes):
+    digest = (
+        base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
+    )
+    return f"sha256={digest}", str(len(data))
 
 
 def main():
@@ -80,14 +77,14 @@ def main():
             for fname in sorted(files):
                 fpath = os.path.join(root, fname)
                 arcname = os.path.join(pkg_name, os.path.relpath(fpath, args.pkg_dir))
-                zf.write(fpath, arcname)
-                digest, size = _record_hash(fpath)
-                records.append((arcname, digest, size))
+                data = open(fpath, "rb").read()
+                zf.writestr(arcname, data)
+                records.append((arcname, *_sha256_record(data)))
 
         metadata = f"Metadata-Version: 2.1\n" f"Name: {name}\n" f"Version: {version}\n"
         meta_path = f"{dist_info}/METADATA"
         zf.writestr(meta_path, metadata)
-        records.append((meta_path, *_record_hash_bytes(metadata.encode())))
+        records.append((meta_path, *_sha256_record(metadata.encode())))
 
         wheel_meta = (
             f"Wheel-Version: 1.0\n"
@@ -97,7 +94,7 @@ def main():
         )
         wheel_meta_path = f"{dist_info}/WHEEL"
         zf.writestr(wheel_meta_path, wheel_meta)
-        records.append((wheel_meta_path, *_record_hash_bytes(wheel_meta.encode())))
+        records.append((wheel_meta_path, *_sha256_record(wheel_meta.encode())))
 
         record_path = f"{dist_info}/RECORD"
         buf = io.StringIO()
@@ -109,12 +106,6 @@ def main():
 
     print(f"Created {wheel_path}")
     return 0
-
-
-def _record_hash_bytes(data):
-    h = hashlib.sha256(data)
-    digest = base64.urlsafe_b64encode(h.digest()).rstrip(b"=").decode()
-    return f"sha256={digest}", str(len(data))
 
 
 if __name__ == "__main__":
