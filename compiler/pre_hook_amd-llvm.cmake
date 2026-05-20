@@ -111,11 +111,8 @@ endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-    set(LLVM_TARGETS_TO_BUILD "AMDGPU;PowerPC" CACHE STRING "Enable LLVM Targets" FORCE)
-else()
-    set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
-endif()
+# TheRock does not support cross-compilation yet. Build machine is same arch as target.
+set(LLVM_TARGETS_TO_BUILD "AMDGPU;Native" CACHE STRING "Enable LLVM Targets" FORCE)
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
