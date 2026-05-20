@@ -65,10 +65,15 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
       THEROCK_HOST_BUILD_DIR: ${{ github.workspace }}\build-wsl-rocdxg
-      WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p
+      WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
+      # Enable git longpaths before checkout (needed for external repos with long paths)
+      - name: Enable git longpaths
+        if: ${{ inputs.external_repo_config != '' }}
+        run: git config --system core.longpaths true
+
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -190,6 +195,7 @@ jobs:
           mkdir -p "${THEROCK_HOST_BUILD_DIR}"
           "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/artifact_manager.py" fetch \
             --run-id="${{ github.run_id }}" \
+            --run-github-repo="${{ github.repository }}" \
             --platform=linux \
             --stage="${stage_name}" \
             --output-dir="${THEROCK_HOST_BUILD_DIR}" \
@@ -233,11 +239,12 @@ jobs:
       - name: Push stage artifacts
         shell: wsl-bash {0}
         env:
-          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
+          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           stage_name="${{ inputs.stage_name }}"
           wsl_venv_dir="/tmp/therock-wsl-rocdxg/.venv"
           "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/artifact_manager.py" push --run-id ${{ github.run_id }} \
+            --run-github-repo="${{ github.repository }}" \
             --platform linux \
             --stage="${stage_name}" \
             --build-dir="${THEROCK_HOST_BUILD_DIR}"
