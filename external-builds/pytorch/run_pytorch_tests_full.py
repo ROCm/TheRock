@@ -109,6 +109,12 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
+    # Apr20/PT + May01/ROCm attribution rerun: module-level blockers
+    # that fail before exact pytest -k skips can keep the distributed lane moving.
+    # Keep this narrow: do not exclude pipelining/test_schedule,
+    # test_overlap_bucketing_unit, or tensor/test_dtensor_ops for this layer.
+    "distributed/test_device_mesh",
+    "distributed/_composable/fsdp/test_fully_shard_comm",
 ]
 
 

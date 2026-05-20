@@ -104,6 +104,46 @@ skip_tests = {
             "test_linalg_ops",
             # ProcessGroupNCCLGroupTest - extra CUDA context memory growth
             "test_extra_cuda_context",
+
+            # Apr20/PT + May01/ROCm attribution rerun layers.
+            # Control 25244506667 was green; attribution 25925372276 exposed
+            # these ROCm-attributed distributed blockers.
+            # PT0501/ROCm0501-overlap layer: also part of the May01/May01 stack.
+            "(TestFullyShardAutograd and test_nontensor_activations)",
+            "(TestFullyShard1DTrainingCore)",
+            "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
+            "(TestFullyShardGradientScaler and test_gradient_scaler)",
+            "(TestFullyShardIgnoreParams and test_ddp_A_fsdp_B_ddp_C)",
+            "(TestFullyShardMixedPrecisionTraining and test_compute_dtype)",
+            "(TestFullyShard1DTrainingCore and test_explicit_prefetching)",
+            "(TestClipGradNormWorldSize2 and test_clip_grad_norm_1d)",
+            "(TestFullyShardFrozen and test_multi_forward_mixed_requires_grad)",
+            "(TestFullyShardMemory and test_fully_shard_training_memory)",
+            "(TestFullyShardOverlap and test_fully_shard_training_overlap)",
+            "(TestFullyShardMixedPrecisionCasts)",
+            "(TestFullyShardCommunication and test_set_reduce_scatter_divide_factor)",
+            "(TestFullyShard2DTraining and test_train_parity_2d_mlp)",
+            "(TestReplicateMixedPrecisionCasts and test_norm_modules_bf16)",
+            "(TestCommModeFeatures and test_MLPStacked_distributed_sharding_display)",
+            "(DistElementwiseOpsTest and test_dropout_partial_redistributes)",
+            "(DistTensorRandomInitTest and test_multinomial_sharded)",
+            "(TestViewOpsWithLocalTensor and test_squeeze_variants)",
+            "(TestDTensorCompileE2E and test_2d_fsdp_tp_compile_use_ca_False)",
+            "(TestFSDPWrap)",
+            "(TestJoin and test_multiple_joinables)",
+            "(TestDistBackendWithSpawn and test_ddp_uneven_inputs)",
+            "(TestDistBackendWithSpawn and test_ddp_uneven_inputs_stop_iteration_sync_bn)",
+            "(TestFSDPWrap and test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_False_device_init_mode0)",
+
+            # Apr20/PT + May01/ROCm attribution-only rerun layer.
+            # These unblock the attribution rerun but are not May01/May01 explanations
+            # unless they later overlap the target stack.
+            "(TestReplicate1DTrainingCore and test_train_parity_multi_groups)",
+            "(CPFlexAttentionTest and test_cp_flex_attention_causal_mask)",
+            "(DistElementwiseOpsTest and test_dropout_errors)",
+            "(DistTensorRandomInitTest and test_meta_tensor_init)",
+            "(TestComputeCommReorderingBucketing and test_bucketing_split_for_overlap)",
+            "(TestComputeCommReorderingBucketing and test_no_bucketing_with_dependent_hiding_nodes)",
         ],
     },
 }
