@@ -521,15 +521,11 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
 
     def test_empty_release_id_index_urls(self):
         self.assertEqual(
-            get_url_repo_params.get_repo_url_multi_arch(
-                "https://x.com", "deb", ""
-            ),
+            get_url_repo_params.get_repo_url_multi_arch("https://x.com", "deb", ""),
             "https://x.com/packages-multi-arch/deb",
         )
         self.assertEqual(
-            get_url_repo_params.get_repo_url_multi_arch(
-                "https://x.com/", "rpm", ""
-            ),
+            get_url_repo_params.get_repo_url_multi_arch("https://x.com/", "rpm", ""),
             "https://x.com/packages-multi-arch/rpm/x86_64",
         )
 
