@@ -87,6 +87,14 @@ jobs:
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
+      - name: Install container prerequisites
+        run: |
+          # Bare ubuntu:24.04 has no git on PATH; actions/checkout falls back to a REST
+          # tarball with no .git/, and generate_therock_manifest.py needs git for
+          # `git config --blob` against historical commits.
+          apt-get update
+          apt-get install -y ca-certificates git curl unzip
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -99,10 +107,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install System requirements
-        run: |
-          apt-get update
-          apt-get install -y ca-certificates git
+      - name: Install the AWS tool
+        run: ./dockerfiles/install_awscli.sh
 
       - name: Generate manifest diff report
         env:

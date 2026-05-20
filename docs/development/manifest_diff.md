@@ -53,16 +53,7 @@ Trigger `TheRock Manifest Diff Report` on the [Actions page](https://github.com/
 
 ### Local CLI
 
-```bash
-python3 build_tools/generate_manifest_diff_report.py \
-    --start <sha> \
-    --end <sha> \
-    --output-dir reports
-```
-
-Run `python3 build_tools/generate_manifest_diff_report.py --help` for the full flag list, or read [`parse_args()`](../../build_tools/generate_manifest_diff_report.py#L191) directly.
-
-All API calls (per-submodule commit walks, the `--pr-base-ref` Compare API call, and the `--find-last-run` / `--workflow-mode` workflow-run lookups) go through `gha_send_request`, which authenticates via `GITHUB_TOKEN` if set, falls back to `gh auth`, then to unauthenticated. Set `GITHUB_TOKEN` (any token with `public_repo` read scope) for non-trivial commit ranges; unauthenticated runs are subject to GitHub's 60 req/hr rate limit.
+See [`generate_manifest_diff_report.py`](../../build_tools/generate_manifest_diff_report.py) and run with `--help` for usage. Set `GITHUB_TOKEN` (any token with `public_repo` read scope) before running to avoid GitHub's 60 req/hr unauthenticated rate limit.
 
 ## Scope
 
