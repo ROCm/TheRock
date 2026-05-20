@@ -3,14 +3,7 @@
 
 skip_tests = {
     "common": {
-        "autograd": [
-            # TypeError: 'CustomDecompTable' object is not a mapping
-            "test_logging",
-        ],
         "cuda": [
-            # passes on single run, crashes if run in a group
-            # TypeError: 'CustomDecompTable' object is not a mapping
-            "test_memory_compile_regions",
             # AssertionError: False is not true
             "test_memory_plots",
             # AssertionError: Booleans mismatch: False is not True
