@@ -24,6 +24,7 @@ import argparse
 import functools
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
@@ -155,6 +156,9 @@ def run(args: argparse.Namespace):
         _run_kpack_split(args, params, core)
     else:
         _run_legacy(args, params, core)
+
+    if args.build_packages:
+        _pack_standalone_wheels(args)
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
@@ -412,6 +416,70 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
         and an.component == "lib"
         and an.target_family == target
     )
+
+
+STANDALONE_WHEEL_PACKAGES = [
+    {
+        "artifact": "hipdnn",
+        "pkg_subdir": "share/hipdnn/python/hipdnn_frontend",
+        "name": "hipdnn-frontend",
+    },
+]
+
+PACK_WHEEL_SCRIPT = Path(__file__).resolve().parent / "pack_python_wheel.py"
+
+
+def _pack_standalone_wheels(args: argparse.Namespace):
+    """Pack standalone Python wheels from pre-built packages in artifacts.
+
+    Scans artifact directories for pre-built Python extension modules and
+    invokes pack_python_wheel.py to create wheels in the output dist dir.
+    """
+    dist_dir = args.dest_dir / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+
+    for spec in STANDALONE_WHEEL_PACKAGES:
+        artifact_dir = args.artifact_dir / f"{spec['artifact']}_lib_generic"
+        if not artifact_dir.is_dir():
+            print(
+                f"::: Skipping {spec['name']} wheel (no {artifact_dir.name} artifact)"
+            )
+            continue
+
+        manifest = artifact_dir / "artifact_manifest.txt"
+        if not manifest.exists():
+            continue
+
+        pkg_dir = None
+        for basedir in manifest.read_text().splitlines():
+            if not basedir:
+                continue
+            candidate = artifact_dir / basedir / spec["pkg_subdir"]
+            if candidate.is_dir():
+                pkg_dir = candidate
+                break
+
+        if pkg_dir is None:
+            print(
+                f"::: Skipping {spec['name']} wheel (package dir not found in artifact)"
+            )
+            continue
+
+        print(f"::: Packing standalone wheel: {spec['name']}")
+        subprocess.check_call(
+            [
+                sys.executable,
+                str(PACK_WHEEL_SCRIPT),
+                "--pkg-dir",
+                str(pkg_dir),
+                "--name",
+                spec["name"],
+                "--version",
+                args.version,
+                "--wheel-dir",
+                str(dist_dir),
+            ]
+        )
 
 
 def main(argv: list[str]):

@@ -207,12 +207,6 @@ if(THEROCK_ENABLE_HIPDNN)
       test
     SUBPROJECT_DEPS
       hipDNN
-    PRE_ARTIFACT_COMMANDS
-      COMMAND "${Python3_EXECUTABLE}"
-        "${THEROCK_SOURCE_DIR}/build_tools/pack_python_wheel.py"
-        --pkg-dir "${THEROCK_BINARY_DIR}/ml-libs/hipDNN/stage/share/hipdnn/python/hipdnn_frontend"
-        --pyproject-toml "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/python/pyproject.toml"
-        --wheel-dir "${THEROCK_BINARY_DIR}/ml-libs/hipDNN/stage/share/hipdnn/wheels"
   )
 endif(THEROCK_ENABLE_HIPDNN)
 

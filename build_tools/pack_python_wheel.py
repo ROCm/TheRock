@@ -70,15 +70,29 @@ def main():
     )
     parser.add_argument(
         "--pyproject-toml",
-        required=True,
         help="Path to pyproject.toml for name/version",
+    )
+    parser.add_argument(
+        "--name",
+        help="Package name (alternative to --pyproject-toml)",
+    )
+    parser.add_argument(
+        "--version",
+        help="Package version (alternative to --pyproject-toml)",
     )
     parser.add_argument(
         "--wheel-dir", required=True, help="Output directory for the .whl file"
     )
     args = parser.parse_args()
 
-    name, version = _read_pyproject(args.pyproject_toml)
+    if args.pyproject_toml:
+        name, version = _read_pyproject(args.pyproject_toml)
+    elif args.name and args.version:
+        name, version = args.name, args.version
+    else:
+        parser.error(
+            "either --pyproject-toml or both --name and --version are required"
+        )
     norm_name = re.sub(r"[-_.]+", "_", name)
     pkg_name = os.path.basename(args.pkg_dir)
 
