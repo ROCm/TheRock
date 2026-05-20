@@ -157,7 +157,7 @@ def run(args: argparse.Namespace):
     else:
         _run_legacy(args, params, core)
 
-    _pack_standalone_wheels(args)
+    _pack_hipdnn_wheel(args)
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
@@ -417,68 +417,51 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
     )
 
 
-STANDALONE_WHEEL_PACKAGES = [
-    {
-        "artifact": "hipdnn",
-        "pkg_subdir": "share/hipdnn/python/hipdnn_frontend",
-        "name": "hipdnn-frontend",
-    },
-]
-
 PACK_WHEEL_SCRIPT = Path(__file__).resolve().parent / "pack_python_wheel.py"
 
 
-def _pack_standalone_wheels(args: argparse.Namespace):
-    """Pack standalone Python wheels from pre-built packages in artifacts.
+def _pack_hipdnn_wheel(args: argparse.Namespace):
+    """Pack the hipDNN Python wheel from the hipdnn lib artifact."""
+    artifact_dir = args.artifact_dir / "hipdnn_lib_generic"
+    if not artifact_dir.is_dir():
+        print("::: Skipping hipdnn wheel (no hipdnn_lib_generic artifact)")
+        return
 
-    Scans artifact directories for pre-built Python extension modules and
-    invokes pack_python_wheel.py to create wheels in the output dist dir.
-    """
+    manifest = artifact_dir / "artifact_manifest.txt"
+    if not manifest.exists():
+        return
+
+    pkg_dir = None
+    for basedir in manifest.read_text().splitlines():
+        if not basedir:
+            continue
+        candidate = artifact_dir / basedir / "share/hipdnn/python/hipdnn_frontend"
+        if candidate.is_dir():
+            pkg_dir = candidate
+            break
+
+    if pkg_dir is None:
+        print("::: Skipping hipdnn wheel (package dir not found in artifact)")
+        return
+
     dist_dir = args.dest_dir / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
 
-    for spec in STANDALONE_WHEEL_PACKAGES:
-        artifact_dir = args.artifact_dir / f"{spec['artifact']}_lib_generic"
-        if not artifact_dir.is_dir():
-            print(
-                f"::: Skipping {spec['name']} wheel (no {artifact_dir.name} artifact)"
-            )
-            continue
-
-        manifest = artifact_dir / "artifact_manifest.txt"
-        if not manifest.exists():
-            continue
-
-        pkg_dir = None
-        for basedir in manifest.read_text().splitlines():
-            if not basedir:
-                continue
-            candidate = artifact_dir / basedir / spec["pkg_subdir"]
-            if candidate.is_dir():
-                pkg_dir = candidate
-                break
-
-        if pkg_dir is None:
-            print(
-                f"::: Skipping {spec['name']} wheel (package dir not found in artifact)"
-            )
-            continue
-
-        print(f"::: Packing standalone wheel: {spec['name']}")
-        subprocess.check_call(
-            [
-                sys.executable,
-                str(PACK_WHEEL_SCRIPT),
-                "--pkg-dir",
-                str(pkg_dir),
-                "--name",
-                spec["name"],
-                "--version",
-                args.version,
-                "--wheel-dir",
-                str(dist_dir),
-            ]
-        )
+    print("::: Packing hipdnn-frontend wheel")
+    subprocess.check_call(
+        [
+            sys.executable,
+            str(PACK_WHEEL_SCRIPT),
+            "--pkg-dir",
+            str(pkg_dir),
+            "--name",
+            "hipdnn-frontend",
+            "--version",
+            args.version,
+            "--wheel-dir",
+            str(dist_dir),
+        ]
+    )
 
 
 def main(argv: list[str]):
