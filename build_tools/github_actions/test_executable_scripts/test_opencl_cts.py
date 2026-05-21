@@ -23,7 +23,7 @@ SHARD_INDEX = int(os.getenv("SHARD_INDEX", "1"))  # 1-based
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", "1"))
 
 CTS_BIN_DIR = ROCM_PATH / "share" / "opencl" / "opencl-cts" / "Release"
-OPENCL_ICD_FILENAMES = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
+AMDOCL_PATH = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
 
 logging.info(f"THEROCK_BIN_DIR: {THEROCK_BIN_DIR}")
 logging.info(f"ROCM_PATH: {ROCM_PATH}")
@@ -122,9 +122,6 @@ def run_test(test_exe, env):
             logging.error(f"✗ FAILED: {test_name} (exit code: {returncode})")
             return False
 
-    except subprocess.TimeoutExpired:
-        logging.error(f"✗ TIMEOUT: {test_name} (exceeded 300 seconds)")
-        return False
     except Exception as e:
         logging.error(f"✗ ERROR: {test_name} - {e}")
         return False
@@ -135,7 +132,7 @@ def run_tests():
     logging.info(f"++ Running OpenCL-CTS tests (shard {SHARD_INDEX}/{TOTAL_SHARDS})")
 
     env = os.environ.copy()
-    env["OCL_ICD_FILENAMES"] = str(OPENCL_ICD_FILENAMES)
+    env["OCL_ICD_VENDORS"] = str(AMDOCL_PATH)
 
     lib_dir = ROCM_PATH / "lib"
     if lib_dir.exists():
@@ -149,23 +146,27 @@ def run_tests():
     logging.info(f"Found {len(test_executables)} test executables")
 
     passed = 0
-    failed = 0
+    failed_tests = []
     for test_exe in test_executables:
         if run_test(test_exe, env):
             passed += 1
         else:
-            failed += 1
+            failed_tests.append(test_exe.name)
 
-    total = passed + failed
+    total = passed + len(failed_tests)
     logging.info("=" * 70)
     logging.info("OpenCL-CTS Test Summary:")
     logging.info(f"  Total:  {total}")
     logging.info(f"  Passed: {passed}")
-    logging.info(f"  Failed: {failed}")
+    logging.info(f"  Failed: {len(failed_tests)}")
+    if failed_tests:
+        logging.error("Failed tests:")
+        for name in failed_tests:
+            logging.error(f"  - {name}")
     logging.info("=" * 70)
 
-    if failed > 0:
-        logging.error(f"{failed} test(s) failed")
+    if failed_tests:
+        logging.error(f"{len(failed_tests)} test(s) failed")
         sys.exit(1)
 
 
