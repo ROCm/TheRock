@@ -195,7 +195,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocgdb.py')}",
         "platform": ["linux"],
         "total_shards": 1,
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:939b8e35887144d1ca4eca928dc2869991339cab869168790e495fc0a5907bbb",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
         "container_options": "--cap-add=SYS_PTRACE",
     },
     "rocr-debug-agent": {
@@ -454,7 +454,8 @@ test_matrix = {
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
-        "timeout_minutes": 60,
+        # Headroom above typical shard runtime; per-test CTest timeouts fail fast on hangs (ROCM-24171).
+        "timeout_minutes": 90,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
