@@ -154,7 +154,7 @@ test_matrix = {
             "windows": 4,
         },
     },
-    # hip-tests
+    # OpenCL Conformance tests
     "opencl-cts": {
         "job_name": "opencl-cts",
         "fetch_artifact_args": "--tests",
