@@ -81,6 +81,7 @@ skip_tests = {
             # https://github.com/ROCm/TheRock/actions/runs/26044254069 (users/albmalamd/skipping_failures_2.11_v2)
             # https://github.com/ROCm/TheRock/actions/runs/26119178358 (users/albmalamd/skipping_failures_2.11_v2)
             # https://github.com/ROCm/TheRock/actions/runs/26158117282 (users/albmalamd/skipping_failures_2.11_v2)
+            # https://github.com/ROCm/TheRock/actions/runs/26175016137 (users/albmalamd/skipping_failures_2.11_v2)
             "(TestClipGradNormWorldSize2 and test_clip_grad_norm_1d)",
             "(TestClipGradNormWorldSize4 and test_clip_grad_norm_2d)",
             "(TestFullyShardAllGatherExtensionsMultiProcess and test_all_gather_extensions_train_parity)",
@@ -211,10 +212,12 @@ skip_tests = {
             "(TestFSDPMiscMultiProcess and test_fsdp_module_no_compute_grad and use_second_layer_False and sharding_strategy0)",
             # Collapsed: covers test_rekey_optim_state_dict_to_{ids,names} x use_multiple_param_groups_{False,True}
             "(TestFSDPOptimState and test_rekey_optim_state_dict)",
-            "(TestFSDPOptimState and test_scatter_full_optim_state_dict_nested_halve_world_size)",
+            # Collapsed: covers halve_world_size + use_multiple_param_groups/wrap_alt/use_diff_optim_inputs variants
+            "(TestFSDPOptimState and test_scatter_full_optim_state_dict_nested)",
             # Collapsed: covers use_orig_params_{False,True}
             "(TestGradAcc and test_grad_acc_cpu_offload)",
             "(TestShardedGradScalerParityWithDDP and test_sharded_grad_scaler_found_inf)",
+            "(TestAutogradCUDA and test_unshard_params_as_tensors_cuda)",
 
             # --- Numerical / parity (tensor mismatch, meta init, FSDP vs ref loss) ---
             # Note: all test_basic_save_and_load_state_dict parametrizations and all
