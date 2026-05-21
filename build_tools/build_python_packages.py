@@ -84,16 +84,16 @@ def run(args: argparse.Namespace):
     if kpack_split:
         print("::: Detected KPACK_SPLIT_ARTIFACTS — producing host + device wheels")
 
-    # Cross-platform target view for the rocm sdist (#5347). Expand each
-    # platform's family list to the union of its gfx targets so the
+    # Cross-platform target view for the rocm sdist. Expand each platform's
+    # family list to the union of its gfx targets so the
     # AVAILABLE_TARGET_FAMILIES baked into the meta sdist matches what's
     # actually published as rocm-sdk-device-<target> wheels across both
     # platforms' builds.
-    # TODO(#5347): kwarg name `linux_target_families` in Parameters and
-    # the LINUX/WINDOWS_TARGET_FAMILIES constants in _dist_info.py predate
-    # the kpack-split semantics where the values are GPU targets. Rename
-    # to *_amdgpu_targets once the wider `target_family` terminology
-    # cleanup is in scope.
+    # TODO: kwarg name `linux_target_families` in Parameters and the
+    # LINUX/WINDOWS_TARGET_FAMILIES constants in _dist_info.py predate the
+    # kpack-split semantics where the values are GPU targets. Rename to
+    # *_amdgpu_targets once the wider `target_family` terminology cleanup
+    # is in scope.
     family_map = None
     linux_targets: list[str] | None = None
     windows_targets: list[str] | None = None
@@ -504,8 +504,8 @@ def main(argv: list[str]):
             "side of a multi-arch release (e.g. 'gfx94X-dcgpu,gfx110X-all'). "
             "Expanded to GPU targets via cmake/therock_amdgpu_targets.cmake "
             "and recorded in the rocm sdist so its device-gfx* extras "
-            "advertise the cross-platform union (#5347). Absent on "
-            "single-platform builds."
+            "advertise the cross-platform union. Absent on single-platform "
+            "builds."
         ),
     )
     p.add_argument(

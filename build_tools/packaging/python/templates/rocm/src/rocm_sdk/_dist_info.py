@@ -333,7 +333,7 @@ def build_per_target_extras() -> "dict[str, list[str]]":
     Returns a dict mapping each per-target extra name to its list of
     Requires-Dist strings. For platform-exclusive targets, attaches a
     PEP 508 sys_platform marker so `pip install rocm[device-all]` only
-    pulls device wheels published for the user's OS (#5347).
+    pulls device wheels published for the user's OS.
 
     Returns an empty dict when no target-specific package exists or the
     distribution covers a single target (legacy single-arch behavior;

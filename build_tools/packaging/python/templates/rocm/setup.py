@@ -65,7 +65,7 @@ EXTRAS_REQUIRE = {
 # rocm[device-gfx942] plus a device-all aggregate. Cross-platform multi-arch
 # builds attach PEP 508 sys_platform markers to platform-exclusive targets
 # so `pip install rocm[device-all]` only pulls device wheels published for
-# the user's OS (#5347).
+# the user's OS.
 EXTRAS_REQUIRE.update(dist_info.build_per_target_extras())
 
 # Drop the generic 'device' extra when target resolution would silently fall

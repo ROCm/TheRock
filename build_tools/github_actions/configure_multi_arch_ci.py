@@ -997,7 +997,7 @@ def expand_build_configs(
 
     # Stamp the cross-platform pair into both configs so each platform's
     # build_python_packages step can produce a rocm sdist whose device
-    # extras advertise the union (and are byte-identical across platforms).
+    # extras advertise the union.
     linux_families = linux_config.dist_amdgpu_families if linux_config else ""
     windows_families = windows_config.dist_amdgpu_families if windows_config else ""
     if linux_config is not None:

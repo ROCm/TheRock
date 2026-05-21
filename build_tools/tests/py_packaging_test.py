@@ -740,22 +740,21 @@ class RestrictFamiliesTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests for cross-platform family awareness in the rocm sdist (#5347)
+# Tests for cross-platform family awareness in the rocm sdist
 # ---------------------------------------------------------------------------
 
 
 class CrossPlatformFamiliesTest(TmpDirTestCase):
     """Tests for linux_target_families / windows_target_families kwargs.
 
-    Covers the fix for ROCm/TheRock#5347: when a multi-arch release pipeline
-    knows the full union of GPU targets across both Linux and Windows
-    builds, the rocm sdist must (a) advertise that union in
-    AVAILABLE_TARGET_FAMILIES, (b) record each platform's contribution
-    separately so setup.py can attach sys_platform markers, (c) pick a
-    DEFAULT_TARGET_FAMILY that resolves on either OS, and (d) be
-    byte-identical across the two platforms' invocations so the
-    last-writer-wins S3 upload of `v4/whl/rocm-X.Y.Z.tar.gz` becomes
-    harmless.
+    When a multi-arch release pipeline knows the full union of GPU targets
+    across both Linux and Windows builds, the rocm sdist must (a) advertise
+    that union in AVAILABLE_TARGET_FAMILIES, (b) record each platform's
+    contribution separately so setup.py can attach sys_platform markers,
+    (c) pick a DEFAULT_TARGET_FAMILY that resolves on either OS, and
+    (d) produce identical dist_info_contents on both platforms so the
+    metadata that drives the published device extras matches regardless
+    of which platform's job uploaded the sdist last.
 
     Note on naming: the kwargs and the AVAILABLE_TARGET_FAMILIES constant
     use the historical "target_family" label, but in kpack-split mode
@@ -901,8 +900,8 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
         practice; the test puts gfx942 in the Windows list purely to
         construct a disagreement between sort-order and intersection.
         """
-        # Union sorted = [gfx900, gfx942] — alpha-first is gfx900 (Linux-only).
-        # Intersection = [gfx942] — DEFAULT must be gfx942.
+        # Union sorted = [gfx900, gfx942] - alpha-first is gfx900 (Linux-only).
+        # Intersection = [gfx942] - DEFAULT must be gfx942.
         params = self._make_params(
             linux_target_families=["gfx900", "gfx942"],
             windows_target_families=["gfx942"],
@@ -966,11 +965,11 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
         )
 
     def test_dist_info_identical_across_disjoint_artifact_sets(self):
-        """Core invariant of #5347: same cross-platform inputs produce
-        identical dist_info_contents on both Linux and Windows machines,
-        even when their on-disk artifact catalogs are disjoint. Without
-        this, the last-writer-wins upload of rocm-X.Y.Z.tar.gz silently
-        drops one platform's targets from the published device extras.
+        """Core invariant: same cross-platform inputs produce identical
+        dist_info_contents on both Linux and Windows machines, even when
+        their on-disk artifact catalogs are disjoint. Without this, the
+        last-writer-wins upload of rocm-X.Y.Z.tar.gz silently drops one
+        platform's targets from the published device extras.
         """
         # Linux machine has the full Linux target set on disk.
         linux_params = self._make_params(
@@ -991,7 +990,7 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests for platform marker helper (#5347)
+# Tests for platform marker helper
 # ---------------------------------------------------------------------------
 
 
@@ -1028,8 +1027,8 @@ class PlatformMarkerTest(TmpDirTestCase):
     def test_markers_in_mixed_platform_config(self):
         """In a realistic multi-arch config with Linux-only, cross-platform,
         and Windows-only targets, each category gets the right marker.
-        Mirrors the production case behind ROCm/TheRock#5347 where Linux
-        and Windows ship overlapping but unequal target sets.
+        Mirrors the production case where Linux and Windows ship
+        overlapping but unequal target sets.
         """
         dist_info = self._make_dist_info(
             linux_target_families=["gfx942", "gfx1100"],
@@ -1081,7 +1080,7 @@ class PlatformMarkerTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests for per-target device extras builder (#5347)
+# Tests for per-target device extras builder
 # ---------------------------------------------------------------------------
 
 
@@ -1095,10 +1094,10 @@ class PerTargetExtrasTest(TmpDirTestCase):
     only to wheels actually published for the user's OS.
 
     All tests run with kpack_split=True to mirror the multi-arch release
-    pipeline (the only mode that exhibits #5347). In legacy mode the
-    libraries package is also target-specific and the helper would
-    additionally emit libraries-{target} extras; that path is not
-    exercised here.
+    pipeline (the only mode that exhibits the cross-platform divergence).
+    In legacy mode the libraries package is also target-specific and the
+    helper would additionally emit libraries-{target} extras; that path
+    is not exercised here.
     """
 
     def _make_dist_info(

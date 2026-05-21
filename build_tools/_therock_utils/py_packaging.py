@@ -86,12 +86,12 @@ class Parameters:
         self.kpack_split = kpack_split
         self.all_target_families = artifacts.all_target_families
 
-        # Cross-platform family view (#5347). When the multi-arch release
-        # pipeline passes per-platform family lists, the rocm sdist must
-        # advertise the union of both platforms' families and pick a
+        # Cross-platform family view. When the multi-arch release pipeline
+        # passes per-platform family lists, the rocm sdist must advertise
+        # the union of both platforms' families and pick a
         # DEFAULT_TARGET_FAMILY that resolves on either OS so a user
         # without ROCM_SDK_TARGET_FAMILY / offload-arch lands on a family
-        # that has wheels for their platform — prefer the intersection.
+        # that has wheels for their platform - prefer the intersection.
         # Without these kwargs the on-disk artifact view is used as
         # before, preserving today's behavior for single-platform builds.
         self.linux_target_families: list[str] = sorted(set(linux_target_families or []))
@@ -801,7 +801,9 @@ def build_packages(
         if child_name == "rocm":
             # setuptools writes PKG-INFO / setup.cfg / egg-info in platform
             # text mode, which yields CRLF on Windows. Normalize so the
-            # rocm sdist is byte-identical across Linux and Windows builds.
+            # rocm sdist's text members are content-identical across Linux
+            # and Windows builds (tar metadata such as mtime may still
+            # differ).
             sdists = list(effective_dist_dir.glob(f"{child_name}-*.tar.gz"))
             if not sdists:
                 raise RuntimeError(
