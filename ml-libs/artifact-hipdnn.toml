@@ -16,4 +16,5 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
+  "share/hipdnn/python/**",
 ]

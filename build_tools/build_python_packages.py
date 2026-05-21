@@ -24,7 +24,6 @@ import argparse
 import functools
 import json
 from pathlib import Path
-import subprocess
 import sys
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
@@ -156,8 +155,6 @@ def run(args: argparse.Namespace):
         _run_kpack_split(args, params, core)
     else:
         _run_legacy(args, params, core)
-
-    _pack_hipdnn_wheel(args, params)
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
@@ -414,49 +411,6 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
         ]
         and an.component == "lib"
         and an.target_family == target
-    )
-
-
-PACK_WHEEL_SCRIPT = Path(__file__).resolve().parent / "pack_python_wheel.py"
-
-
-def _pack_hipdnn_wheel(args: argparse.Namespace, params: Parameters):
-    """Pack the hipDNN Python wheel from the hipdnn lib artifact."""
-    hipdnn_artifacts = params.filter_artifacts(
-        lambda an: an.name == "hipdnn" and an.component == "lib"
-    )
-    if not hipdnn_artifacts.artifact_basedirs:
-        print("::: Skipping hipdnn wheel (no hipdnn lib artifact)")
-        return
-
-    pkg_dir = None
-    for _, basedir in hipdnn_artifacts.artifact_basedirs:
-        candidate = basedir / "share/hipdnn/python/hipdnn_frontend"
-        if candidate.is_dir():
-            pkg_dir = candidate
-            break
-
-    if pkg_dir is None:
-        print("::: Skipping hipdnn wheel (package dir not found in artifact)")
-        return
-
-    dist_dir = args.dest_dir / "dist"
-    dist_dir.mkdir(parents=True, exist_ok=True)
-
-    print("::: Packing hipdnn-frontend wheel")
-    subprocess.check_call(
-        [
-            sys.executable,
-            str(PACK_WHEEL_SCRIPT),
-            "--pkg-dir",
-            str(pkg_dir),
-            "--name",
-            "hipdnn-frontend",
-            "--version",
-            args.version,
-            "--wheel-dir",
-            str(dist_dir),
-        ]
     )
 
 
