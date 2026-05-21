@@ -68,6 +68,54 @@ to the dev bucket. You might also need to upload dependent packages or
 [re]generate release index pages, for which you can see the documentation at
 [`build_tools/third_party/s3_management/README.md`](/build_tools/third_party/s3_management/README.md).
 
+### Testing multi-arch PyTorch release workflows
+
+Multi-arch PyTorch wheels use the shared
+https://rocm.devreleases.amd.com/whl-multi-arch/ dev index instead of
+per-family `v2` index subdirectories. The build produces one fat wheel set,
+splits device wheels with kpack, publishes them to the multi-arch index, then
+optionally runs quick tests against the uploaded packages.
+
+For a narrow dev validation run, trigger
+[`multi_arch_release_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_release_linux_pytorch_wheels.yml)
+from the default branch:
+
+| Input                         | Example                                                                           | Notes                                                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `release_type`                | `dev`                                                                             | Keep developer-triggered runs on `dev`.                                                                   |
+| `rocm_version`                | `7.14.0.dev0+<commit>`                                                            | Must match the ROCm packages being installed.                                                             |
+| `rocm_package_find_links_url` | `https://therock-dev-artifacts.s3.amazonaws.com/<run-id>-linux/python/index.html` | URL passed to `pip --find-links` for ROCm packages.                                                       |
+| `amdgpu_families`             | `gfx950`                                                                          | Semicolon-separated; example multi-family value: `gfx94X-dcgpu;gfx950`.                                   |
+| `python_versions`             | `3.12`                                                                            | Blank means the full default release matrix. Multiple values use semicolons, e.g. `3.12;3.13`.            |
+| `pytorch_git_refs`            | `release/2.10`                                                                    | Blank means the full default release matrix. Multiple values use semicolons, e.g. `release/2.10;nightly`. |
+| `test_amdgpu_families`        | `auto`                                                                            | `auto` tests built families with configured runners; `none` skips quick tests.                            |
+
+The release workflow first generates and uploads PyTorch manifests once, then
+passes an explicit manifest URL to each build job. The manifest job summary
+links to the manifest index, individual manifest files, and the generated build
+matrix. Each successful build publishes packages to the multi-arch index and
+passes the resulting package index URL, torch version, and manifest URL to the
+quick test workflow.
+
+The reusable
+[`multi_arch_build_portable_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml)
+workflow can also be run directly for a single Python/PyTorch combination.
+Leave `manifest_url` blank to generate a one-off manifest, or provide a
+manifest URL from a previous release-orchestrator run to rebuild the same source
+revisions.
+
+When reading the results:
+
+- `Generate PyTorch Manifests` should link to the uploaded manifest directory
+  and show the requested matrix.
+- Each `Build` job should check out PyTorch sources from its manifest and write
+  package version outputs from that same manifest.
+- Each `Test PyTorch` job should link back to the build manifest in its
+  `PyTorch Test Report` summary.
+- Runner or package-index failures in quick tests do not imply that manifest
+  generation or wheel publishing failed; check the build job outcome and
+  uploaded package index separately.
+
 ## Connecting to Kubernetes runners for interactive debugging
 
 While we don't have anything as sophisticated as
