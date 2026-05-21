@@ -196,6 +196,16 @@ class WorkflowOutputRoot:
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
         )
 
+    def pytorch_manifest_dir(self, artifact_group: str = "") -> StorageLocation:
+        """Location for the pytorch manifests directory.
+
+        Args:
+            artifact_group: Build variant (e.g., 'gfx94X-dcgpu'). If empty,
+                manifests are stored directly under manifests/pytorch/.
+        """
+        suffix = f"/{artifact_group}" if artifact_group else ""
+        return StorageLocation(self.bucket, f"{self.prefix}/manifests/pytorch{suffix}")
+
     # -- Native packages --------------------------------------------------------
 
     def native_linux_packages(self, pkg_type: str) -> StorageLocation:
