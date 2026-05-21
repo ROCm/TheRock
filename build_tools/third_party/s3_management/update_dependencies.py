@@ -136,7 +136,7 @@ def resolve_target_prefixes(
         return detect_prefixes_from_bucket(bucket, starting_from)
 
     raise RuntimeError(
-        "Must provide either --prefix or --auto-detect-prefixes with " "--starting-from"
+        "Must provide either --prefix or --auto-detect-prefixes with --starting-from"
     )
 
 
