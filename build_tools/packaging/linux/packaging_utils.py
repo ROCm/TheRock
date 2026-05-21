@@ -19,6 +19,63 @@ GFX_HOST = "gfx_host"
 # Used for creating versioned meta package in kpack mode (depends on host + devices)
 GFX_META = "gfx_meta"
 
+# Splits comma-, semicolon-, or whitespace-separated arch tokens in one string.
+_GFX_ARCH_SPLIT_RE = re.compile(r"[,;\s]+")
+
+
+def normalize_gfx_arch_list(
+    value: str | list[str] | None,
+    *,
+    lowercase: bool = False,
+    dedupe: bool = False,
+) -> list[str]:
+    """Normalize GPU architecture tokens from CLI/env-style inputs.
+
+    Accepts a single string, list of strings, or None. Each token may use
+    comma, semicolon, or whitespace delimiters (including mixed, e.g.
+    ``gfx94x; gfx1100,gfx1200``).
+
+    Args:
+        value: Architecture spec(s). None or blank yields [].
+        lowercase: Lower-case each token (install-test package names).
+        dedupe: Drop duplicates while preserving first-seen order.
+
+    Returns:
+        Flat list of non-empty architecture strings.
+    """
+    if value is None:
+        tokens: list[str] = []
+    elif isinstance(value, str):
+        tokens = [value] if value.strip() else []
+    else:
+        tokens = [str(a) for a in value if a and str(a).strip()]
+
+    expanded: list[str] = []
+    for target in tokens:
+        for part in _GFX_ARCH_SPLIT_RE.split(target):
+            p = part.strip()
+            if p:
+                expanded.append(p)
+
+    if not lowercase and not dedupe:
+        return expanded
+
+    out: list[str] = []
+    seen: dict[str, None] = {}
+    for a in expanded:
+        k = a.lower() if lowercase else a
+        if dedupe:
+            if k in seen:
+                continue
+            seen[k] = None
+        out.append(k)
+    return out
+
+
+def normalize_target_list(targets: list[str]) -> list[str]:
+    """Normalize ``--target`` list for :mod:`build_package` (preserve casing)."""
+    return normalize_gfx_arch_list(targets)
+
 
 # User inputs required for packaging
 # dest_dir - For saving the rpm/deb packages

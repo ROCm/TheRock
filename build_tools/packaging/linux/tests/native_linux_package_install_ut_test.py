@@ -28,6 +28,12 @@ if _module_path is None:
     raise FileNotFoundError(
         f"native_linux_package_install_test.py not found in: {_checked}"
     )
+_packaging_utils_path = _module_path.parent / "packaging_utils.py"
+_pu_spec = importlib.util.spec_from_file_location(
+    "packaging_utils", _packaging_utils_path
+)
+packaging_utils = importlib.util.module_from_spec(_pu_spec)
+_pu_spec.loader.exec_module(packaging_utils)
 _spec = importlib.util.spec_from_file_location(
     "native_linux_package_install_test",
     _module_path,
@@ -319,6 +325,15 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(m("7.13"), "7.13")
         self.assertEqual(m("7.13.1"), "7.13")
         self.assertEqual(m("v7.13.2"), "7.13")
+        # Debian/RPM package version strings: major.minor only used in metapackage names.
+        for version in (
+            "7.14.0~20260520",
+            "7.14.0~20260520-123456",
+            "7.14.0~rc1",
+            "7.14.0~rc1-123456",
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(m(version), "7.14")
         with self.assertRaises(ValueError):
             m("not-a-version")
 
@@ -430,12 +445,41 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         )
 
 
+class NormalizeTargetListTest(unittest.TestCase):
+    """Tests for packaging_utils.normalize_target_list (build_package defaults)."""
+
+    def test_space_comma_and_semicolon_formats(self):
+        n = packaging_utils.normalize_target_list
+        self.assertEqual(
+            n(["gfx94X-dcgpu", "gfx120X-all"]),
+            ["gfx94X-dcgpu", "gfx120X-all"],
+        )
+        self.assertEqual(
+            n(["gfx94X-dcgpu,gfx120X-all,gfx1151"]),
+            ["gfx94X-dcgpu", "gfx120X-all", "gfx1151"],
+        )
+        self.assertEqual(
+            n(["gfx94X-dcgpu;gfx120X-all;gfx1151"]),
+            ["gfx94X-dcgpu", "gfx120X-all", "gfx1151"],
+        )
+        self.assertEqual(
+            n(["gfx94X-dcgpu;gfx120X-all", "gfx1151"]),
+            ["gfx94X-dcgpu", "gfx120X-all", "gfx1151"],
+        )
+
+    def test_preserves_casing_without_dedupe(self):
+        self.assertEqual(
+            packaging_utils.normalize_target_list(["gfx94X-dcgpu"]),
+            ["gfx94X-dcgpu"],
+        )
+
+
 class NormalizedGfxArchsFromInputTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest._normalized_gfx_archs_from_input()."""
+    """Tests for packaging_utils.normalize_gfx_arch_list (install-test options)."""
 
     def setUp(self):
-        self.n = (
-            native_linux_package_install_test.NativeLinuxPackageInstallTest._normalized_gfx_archs_from_input
+        self.n = lambda value: packaging_utils.normalize_gfx_arch_list(
+            value, lowercase=True, dedupe=True
         )
 
     def test_none_and_blank_yield_empty(self):
