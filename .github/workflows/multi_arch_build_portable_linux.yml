@@ -43,6 +43,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      skip_stages:
+        type: string
+        default: ""
+        description: "Comma-separated build stages to skip entirely (no build, no prebuilt fetch). Used by external repos that only need a subset of the topology."
       build_runs_on:
         type: string
         default: "azure-linux-scale-rocm"

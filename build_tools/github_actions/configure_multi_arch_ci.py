@@ -144,6 +144,13 @@ class CIInputs:
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
 
+    # External-repo overrides (passed in from setup_multi_arch.yml when an
+    # external repo like ROCgdb calls TheRock workflows). skip_stages narrows
+    # the build to just the stages the external repo needs; build_python_packages
+    # disables the python packaging / pytorch jobs entirely.
+    skip_stages: str = ""
+    build_python_packages: bool = True
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -226,6 +233,10 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            skip_stages=os.environ.get("SKIP_STAGES", ""),
+            build_python_packages=(
+                os.environ.get("BUILD_PYTHON_PACKAGES", "true").lower() != "false"
+            ),
         )
 
 
@@ -437,10 +448,16 @@ class BuildConfig:
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
+    # Stages to skip entirely (no build, no prebuilt fetch). Used by external
+    # repos that only need a subset of the build topology.
+    skip_stages: list[str] = field(default_factory=list)
+    # Whether to run python packaging + pytorch jobs.
+    build_python_packages: bool = True
 
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
 
@@ -812,6 +829,8 @@ def _expand_build_config_for_platform(
     test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
+    skip_stages: list[str] | None = None,
+    build_python_packages: bool = True,
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -941,11 +960,16 @@ def _expand_build_config_for_platform(
         expect_failure=expect_failure,
         build_native_linux=(not expect_failure and suffix != "asan"),
         build_pytorch=(
-            not expect_failure and not expect_pytorch_failure and suffix != "asan"
+            not expect_failure
+            and not expect_pytorch_failure
+            and suffix != "asan"
+            and build_python_packages
         ),
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
+        skip_stages=skip_stages or [],
+        build_python_packages=build_python_packages,
     )
 
 
@@ -955,6 +979,8 @@ def expand_build_configs(
     test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
+    skip_stages: list[str] | None = None,
+    build_python_packages: bool = True,
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
 
@@ -989,6 +1015,8 @@ def expand_build_configs(
             test_type=test_type,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
+            skip_stages=skip_stages,
+            build_python_packages=build_python_packages,
         )
         if platform == "linux":
             linux_config = config
@@ -1094,6 +1122,8 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        skip_stages=_parse_comma_list(ci_inputs.skip_stages),
+        build_python_packages=ci_inputs.build_python_packages,
     )
     builds.log()
 

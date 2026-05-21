@@ -13,7 +13,8 @@ on:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, expect_failure, build_pytorch,
-          build_native_linux, prebuilt_stages, baseline_run_id.
+          build_native_linux, prebuilt_stages, baseline_run_id,
+          skip_stages, build_python_packages.
       test_labels:
         type: string
       rocm_package_version:
@@ -96,6 +97,7 @@ jobs:
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       expect_failure: ${{ fromJSON(inputs.build_config).expect_failure }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -214,7 +216,7 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
@@ -231,7 +233,7 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python ${{ matrix.family_info.amdgpu_family }} | ${{ matrix.image.name }}
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && fromJSON(inputs.build_config).build_python_packages == true }}
     strategy:
       fail-fast: false
       matrix:
