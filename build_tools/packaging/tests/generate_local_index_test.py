@@ -19,7 +19,6 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "python"))
 
 from generate_local_index import (
-    generate_flat_index,
     generate_multiarch_indexes,
     generate_simple_index,
 )
