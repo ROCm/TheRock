@@ -120,6 +120,8 @@ jobs:
       contents: read
     env:
       CHECKOUT_ROOT: B:/src
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      TRITON_BUILD_ARGS: ${{ inputs.pytorch_git_ref == 'nightly' && '--triton-dir B:/src/triton --build-triton' || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
@@ -236,9 +238,6 @@ jobs:
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --require-related-commit
-          python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-              --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
-              --torch-dir ${{ env.CHECKOUT_ROOT }}/torch
 
       # Note: determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
@@ -281,8 +280,7 @@ jobs:
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
-            --triton-dir ${{ env.CHECKOUT_ROOT }}/triton ^
-            --build-triton ^
+            %TRITON_BUILD_ARGS% ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
@@ -318,7 +316,7 @@ jobs:
             --pytorch-dir "${CHECKOUT_ROOT}/torch" \
             --pytorch-audio-dir "${CHECKOUT_ROOT}/audio" \
             --pytorch-vision-dir "${CHECKOUT_ROOT}/vision" \
-            --triton-dir "${CHECKOUT_ROOT}/triton"
+            ${{ inputs.pytorch_git_ref == 'nightly' && format('--triton-dir {0}/triton', env.CHECKOUT_ROOT) || '' }}
 
       - name: Configure AWS Credentials
         if: always()
