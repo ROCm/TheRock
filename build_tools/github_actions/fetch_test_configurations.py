@@ -265,19 +265,19 @@ test_matrix = {
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
-        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.dwarf2",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
         "linux_cpu_runner": True,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.rocm",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
         "timeout_minutes": 10,
-        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
+        "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
