@@ -129,6 +129,13 @@ description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
 disable_platforms = ["windows"]
 
+<<<<<<< HEAD
+=======
+[source_sets.iree-libs]
+description = "IREE integration submodules"
+submodules = ["iree", "fusilli"]
+
+>>>>>>> 8f90a47f3 (Remove rebase and submodule artifacts)
 [source_sets.media-libs]
 description = "ROCm media libraries submodules"
 submodules = []
@@ -165,7 +172,7 @@ description = "Runtime tests (parallel to math-libs, not on critical path)"
 artifact_groups = ["runtime-tests"]
 
 [build_stages.math-libs]
-description = "Math and ML libraries per architecture"
+description = t "Math and ML libraries per architecture"
 artifact_groups = ["math-libs", "ml-libs"]
 type = "per-arch"
 
