@@ -361,6 +361,11 @@ class NativeLinuxPackageInstallTest:
         )
         self.gpg_key_url = gpg_key_url
 
+        # Metapackage install targets (four combinations of optional inputs):
+        #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
+        #   gfx_arch only           -> amdrocm / amdrocm-core-sdk (arch not in name)
+        #   rocm_version only       -> amdrocm{major.minor} / amdrocm-core-sdk{major.minor}
+        #   neither                 -> unversioned amdrocm / amdrocm-core-sdk
         ver = self.rocm_version_major_minor
         if self.gfx_arch_list and ver:
             self.package_names = []
@@ -784,6 +789,7 @@ gpgcheck=0
         print("=" * 80)
         print(f"\nOS Profile: {self.os_profile}")
         print(f"Package Type (derived): {self.package_type.upper()}")
+        # Log how GPU arch relates to package_names (same four cases as __init__).
         if self.gfx_arch_list and self.rocm_version_major_minor:
             print(f"GPU Architecture(s): {self.gfx_arch_list} (used in package names)")
         elif self.gfx_arch_list:
@@ -1209,6 +1215,7 @@ def run_tests(args: Namespace) -> int:
     print(f"Package Type (derived): {derived_package_type}")
     print(f"Release Type: {args.release_type}")
     print(f"Repository URL: {args.repo_url}")
+    # Preview package-name rules before NativeLinuxPackageInstallTest is constructed.
     _norm = normalize_gfx_arch_list(args.gfx_arch, lowercase=True, dedupe=True)
     if _norm:
         if args.rocm_version:
