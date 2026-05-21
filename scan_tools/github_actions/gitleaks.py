@@ -106,7 +106,7 @@ _DOWNLOAD_TIMEOUT_SECONDS = 60
 # leaked secret -- there is no useful "low-severity secret" case.
 # 8.5 lands squarely inside GitHub's High tier (7.0-8.9). Bump to 9.0+
 # if exposed secrets should appear under the *Critical* tier instead.
-_LEAK_SECURITY_SEVERITY = "8.5"
+_LEAK_SECURITY_SEVERITY_HIGH = "8.5"
 
 
 def _env_bool(name: str, default: bool = False) -> bool:

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 #
 # Pre-commit security gate: fast, PR-side security scanners that run on
-# every pull request. The security counterpart to `pre-commit.yml`
-# sibiling scans can be added as additional jobs in this file as they
+# every pull request. The security counterpart to `pre-commit.yml`.
+# Sibling scanners can be added as additional jobs in this file as they
 # come online, keeping all PR-side security gates discoverable in one
 # place.
 
