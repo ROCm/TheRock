@@ -86,6 +86,11 @@ class TestROCmSanity:
     @pytest.mark.skipif(
         is_asan(), reason="hipcc test fails with ASAN build, see TheRock#3313"
     )
+    # TODO(#4755): Re-enable test for windows once offload-arch.exe is fixed
+    @pytest.mark.skipif(
+        is_windows(),
+        reason="Windows offload-arch.exe is not retrieving correct data, ignoring test",
+    )
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
