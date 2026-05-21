@@ -122,6 +122,11 @@ def main(argv: list[str]) -> int:
                 family = family_and_version.rsplit("-", 1)[0]
                 tarball_urls[family] = url
 
+    if not tarball_urls.get("multiarch"):
+        raise ValueError(
+            "multiarch tarball URL was not produced; check tarball naming and upload logic"
+        )
+
     gha_set_output({"tarball_urls": json.dumps(tarball_urls)})
     return 0
 
