@@ -130,6 +130,12 @@ import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from packaging_utils import normalize_gfx_arch_list
+
 
 def _env(key: str, default: str) -> str:
     """Return os.environ[key] if set and non-empty, else default."""
@@ -277,48 +283,11 @@ class NativeLinuxPackageInstallTest:
             )
 
     @staticmethod
-    def _normalized_gfx_archs_from_input(
-        gfx_arch: str | list[str] | None,
-    ) -> list[str]:
-        """Normalize GPU arch list: split commas and semicolons, strip, lowercase, dedupe (order kept).
-
-        Does not supply a default architecture. ``None``, blank string, or only
-        empty entries yield an empty list (caller uses generic package names).
-
-        Args:
-        gfx_arch: Single arch string, list of arch strings, or None.
-
-        Returns:
-        List of unique architecture tokens (e.g. ['gfx94x', 'gfx110x']), possibly empty.
-        """
-        if gfx_arch is None:
-            tokens: list[str] = []
-        elif isinstance(gfx_arch, str):
-            tokens = [gfx_arch] if gfx_arch.strip() else []
-        else:
-            tokens = [str(a) for a in gfx_arch if a and str(a).strip()]
-        expanded: list[str] = []
-        for t in tokens:
-            # Commas and semicolons both delimit arches (semicolons match amdgpu-families CI style).
-            for part in t.replace(";", ",").split(","):
-                p = part.strip()
-                if p:
-                    expanded.append(p)
-        seen: dict[str, None] = {}
-        out: list[str] = []
-        for a in expanded:
-            k = a.lower()
-            if k in seen:
-                continue
-            seen[k] = None
-            out.append(k)
-        return out
-
-    @staticmethod
     def _major_minor_rocm_version_from_input(rocm_version: str | None) -> str | None:
         """Parse ROCm version for arch-specific package names: major.minor only.
 
-        Examples: ``7.13.1`` → ``7.13``, ``v7.13`` → ``7.13``. Used when forming
+        Examples: ``7.13.1`` → ``7.13``, ``v7.13`` → ``7.13``,
+        ``7.14.0~20260520`` / ``7.14.0~rc1-123456`` → ``7.14``. Used when forming
         names like ``amdrocm7.13-gfx1100``. Returns ``None`` if input is absent
         or blank.
 
@@ -380,7 +349,9 @@ class NativeLinuxPackageInstallTest:
         self.repo_url = repo_url.rstrip("/")
         self.release_type = release_type.lower()
         self.install_prefix = install_prefix
-        self.gfx_arch_list = self._normalized_gfx_archs_from_input(gfx_arch)
+        self.gfx_arch_list = normalize_gfx_arch_list(
+            gfx_arch, lowercase=True, dedupe=True
+        )
         self.rocm_version_major_minor = self._major_minor_rocm_version_from_input(
             rocm_version
         )
@@ -500,12 +471,12 @@ class NativeLinuxPackageInstallTest:
         sources_list = Path(APT_SOURCES_LIST)
 
         if self.gpg_key_url:
-            # Use GPG key verification
+            # Use GPG key verification (arch=amd64 matches ROCm Ubuntu install docs)
             apt_keyring = Path(APT_KEYRING_FILE)
-            repo_entry = f"deb [signed-by={apt_keyring}] {self.repo_url} stable main\n"
+            repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
-            # No GPG check (trusted=yes)
-            repo_entry = f"deb [trusted=yes] {self.repo_url} stable main\n"
+            # No GPG check (trusted=yes; arch=amd64 matches install_rocm_packages.sh)
+            repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
 
         try:
             sources_list.write_text(repo_entry, encoding="utf-8")
@@ -1238,9 +1209,7 @@ def run_tests(args: Namespace) -> int:
     print(f"Package Type (derived): {derived_package_type}")
     print(f"Release Type: {args.release_type}")
     print(f"Repository URL: {args.repo_url}")
-    _norm = NativeLinuxPackageInstallTest._normalized_gfx_archs_from_input(
-        args.gfx_arch
-    )
+    _norm = normalize_gfx_arch_list(args.gfx_arch, lowercase=True, dedupe=True)
     if _norm:
         if args.rocm_version:
             print(
