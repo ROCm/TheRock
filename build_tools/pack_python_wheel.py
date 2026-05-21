@@ -29,13 +29,18 @@ import zipfile
 
 
 def _infer_platform_tag(pkg_dir):
-    patterns = ["*.so", "*.pyd"]
-    for pat in patterns:
-        for path in glob.glob(os.path.join(pkg_dir, pat)):
-            fname = os.path.basename(path)
-            m = re.search(r"\.([^.]+)-([^.]+)-([^.]+)\.(so|pyd)$", fname)
-            if m:
-                return m.group(1), m.group(2), m.group(3)
+    for path in glob.glob(os.path.join(pkg_dir, "*.so")):
+        # Linux: module.cpython-312-x86_64-linux-gnu.so
+        m = re.search(r"\.cpython-(\d+)-(\w+)-linux-\w+\.so$", os.path.basename(path))
+        if m:
+            ver, arch = m.group(1), m.group(2)
+            return f"cp{ver}", f"cp{ver}", f"linux_{arch}"
+    for path in glob.glob(os.path.join(pkg_dir, "*.pyd")):
+        # Windows: module.cp312-win_amd64.pyd
+        m = re.search(r"\.cp(\d+)-(win_\w+)\.pyd$", os.path.basename(path))
+        if m:
+            ver, plat = m.group(1), m.group(2)
+            return f"cp{ver}", f"cp{ver}", plat
     return "py3", "none", "any"
 
 
