@@ -6,6 +6,8 @@
 Full installation and simulate-install test script for ROCm native packages.
 
 Test modes (--test-type):
+- install: Repo-based install only (step 1). No rocminfo or component checks.
+  Used by release workflows that dispatch install tests off the critical path.
 - sanity: Basic test. Repo-based install plus basic verification only
   (steps 1 and 2).
 - full: Full test. Repo-based install plus basic verification plus full
@@ -88,6 +90,12 @@ Example invocations:
  --os-profile ubuntu2404 \\
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type install: repo install only (no verification)
+ python3 native_linux_package_install_test.py --test-type install \\
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly
 
  # Simulate install (dry-run) from local .deb or .rpm directory
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -967,9 +975,9 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--test-type",
         type=str,
-        choices=["sanity", "full", "simulate"],
+        choices=["install", "sanity", "full", "simulate"],
         default="sanity",
-        help="Test type: 'sanity' = basic test only; 'full' = basic + full test; 'simulate' = simulated install only (requires --packages-dir).",
+        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir).",
     )
     parser.add_argument(
         "--packages-dir",
@@ -1001,11 +1009,17 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
                 parser.error(str(e))
         return
     if not args.os_profile:
-        parser.error("--os-profile is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--os-profile is required when --test-type is 'install', 'sanity', or 'full'"
+        )
     if not args.repo_url:
-        parser.error("--repo-url is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--repo-url is required when --test-type is 'install', 'sanity', or 'full'"
+        )
     if not args.gfx_arch:
-        parser.error("--gfx-arch is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--gfx-arch is required when --test-type is 'install', 'sanity', or 'full'"
+        )
 
 
 def parse_cli_arguments(
@@ -1087,6 +1101,12 @@ def run_tests(args: Namespace) -> int:
         if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             return 1
+        if args.test_type == "install":
+            print("\n" + "=" * 80)
+            print("[PASS] INSTALLATION TEST PASSED")
+            print("(install: repo setup and package install completed)")
+            print("=" * 80 + "\n")
+            return 0
         if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
             return 1

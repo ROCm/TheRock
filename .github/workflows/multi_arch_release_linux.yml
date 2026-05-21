@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   build_artifacts:
@@ -116,56 +117,53 @@ jobs:
       contents: read
       id-token: write
 
-  test_native_packages_ubuntu2404:
+  # Install tests are dispatched asynchronously (install-only) so publish
+  # is not blocked on GPU runner queues. See https://github.com/ROCm/TheRock/issues/5212
+  trigger_test_native_deb_install:
     needs: [build_native_deb_packages]
-    name: Test DEB Install - ubuntu2404
+    name: Trigger DEB Install Test - ubuntu2404
     if: ${{ !failure() && !cancelled() }}
-    uses: ./.github/workflows/test_native_linux_packages_install.yml
-    with:
-      package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
-      release_type: ${{ inputs.release_type }}
-      os_profile: ubuntu2404
-      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      test_type: sanity
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-    permissions:
-      contents: read
-      id-token: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Trigger test_native_linux_packages_install
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: test_native_linux_packages_install.yml
+          ref: ${{ inputs.ref }}
+          inputs: |
+            { "package_install_url": "${{ needs.build_native_deb_packages.outputs.package_repository_url }}",
+              "release_type": "${{ inputs.release_type }}",
+              "os_profile": "ubuntu2404",
+              "artifact_group": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
+              "test_type": "install",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref }}"
+            }
 
-  test_native_packages_rhel10:
+  trigger_test_native_rpm_install:
     needs: [build_native_rpm_packages]
-    name: Test RPM Install - rhel10
+    name: Trigger RPM Install Test - ${{ matrix.os_profile }}
     if: ${{ !failure() && !cancelled() }}
-    uses: ./.github/workflows/test_native_linux_packages_install.yml
-    with:
-      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
-      release_type: ${{ inputs.release_type }}
-      os_profile: rhel10
-      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      test_type: sanity
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-    permissions:
-      contents: read
-      id-token: write
-
-  test_native_packages_sles16:
-    needs: [build_native_rpm_packages]
-    name: Test RPM Install - sles16
-    if: ${{ !failure() && !cancelled() }}
-    uses: ./.github/workflows/test_native_linux_packages_install.yml
-    with:
-      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
-      release_type: ${{ inputs.release_type }}
-      os_profile: sles16
-      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      test_type: sanity
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-    permissions:
-      contents: read
-      id-token: write
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os_profile: [rhel10, sles16]
+    steps:
+      - name: Trigger test_native_linux_packages_install
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: test_native_linux_packages_install.yml
+          ref: ${{ inputs.ref }}
+          inputs: |
+            { "package_install_url": "${{ needs.build_native_rpm_packages.outputs.package_repository_url }}",
+              "release_type": "${{ inputs.release_type }}",
+              "os_profile": "${{ matrix.os_profile }}",
+              "artifact_group": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
+              "test_type": "install",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref }}"
+            }
 
   publish_to_release_buckets:
     needs:
@@ -173,9 +171,6 @@ jobs:
       - build_python_packages
       - build_native_deb_packages
       - build_native_rpm_packages
-      - test_native_packages_ubuntu2404
-      - test_native_packages_rhel10
-      - test_native_packages_sles16
     name: Publish to Release Buckets
     runs-on: ubuntu-24.04
     permissions:

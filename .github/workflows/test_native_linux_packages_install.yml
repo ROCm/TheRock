@@ -34,7 +34,7 @@ on:
         type: string
         default: "/opt/rocm/core"
       test_type:
-        description: "Test type: sanity (install + basic verification), full (install + basic + rdhc). If not set, script default is used."
+        description: "Test type: install, sanity, or full. If not set, script default is used."
         required: false
         type: string
         default: ""
@@ -83,7 +83,7 @@ on:
         default: "/opt/rocm/core"
         required: false
       test_type:
-        description: "Test type: sanity or full (optional; leave empty for script default)"
+        description: "Test type: install, sanity, or full (optional; leave empty for script default)"
         type: string
         default: ""
       repository:
