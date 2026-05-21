@@ -743,7 +743,7 @@ artifact_group = "comm-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
 disable_platforms = ["windows"]
-subprojects = ["rccl", "nccl"]
+subprojects = ["rccl", "rccl-tests"]
 
 [artifacts.rocshmem]
 # target-neutral: rocshmem embeds device code via .hip_fatbin ELF sections
