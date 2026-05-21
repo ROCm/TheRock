@@ -117,11 +117,14 @@ jobs:
       contents: read
       id-token: write
 
-    outputs:
-      jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
-      jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
-      jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
-      jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
+    # Intentionally no job-level `outputs:` here: build_jax_wheels is a
+    # matrix job, and matrix cells collide on shared job output keys.
+    # The Extract JAX versions step below is retained for per-cell logs
+    # and as a sanity check that required wheels were produced. When a
+    # downstream consumer is added (test/promote), follow the
+    # multi_arch_release_linux_pytorch_wheels.yml pattern and upload
+    # inside this same matrix job rather than passing values through
+    # job-level outputs.
 
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
