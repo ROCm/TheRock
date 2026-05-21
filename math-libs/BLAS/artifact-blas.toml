@@ -200,6 +200,7 @@ include = [
 ]
 exclude = [
   "share/hipsparse/test/**",
+  "bin/hipsparse/**",
 ]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
