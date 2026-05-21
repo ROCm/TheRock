@@ -82,8 +82,10 @@ def create_venv(venv_dir: Path) -> Path:
 
 def install_wheel(python: Path, wheel_path: Path):
     """Install the wheel and pytest into the virtual environment."""
-    subprocess.check_call([str(python), "-m", "pip", "install", str(wheel_path)])
-    subprocess.check_call([str(python), "-m", "pip", "install", "pytest"])
+    subprocess.check_call(
+        [str(python), "-m", "pip", "install", "--no-deps", str(wheel_path)]
+    )
+    subprocess.check_call([str(python), "-m", "pip", "install", "pytest>=7,<9"])
 
 
 def validate_import(python: Path):
@@ -93,14 +95,14 @@ def validate_import(python: Path):
     )
 
 
-def run_pytests(python: Path, artifacts_path: Path):
-    """Run the upstream hipDNN Python test suite."""
+def run_pytests(python: Path, artifacts_path: Path) -> bool:
+    """Run the upstream hipDNN Python test suite. Returns True if tests ran."""
     if not HIPDNN_PYTHON_TESTS_DIR.is_dir():
         logging.warning(
             f"Skipping pytests: {HIPDNN_PYTHON_TESTS_DIR} not found "
             "(rocm-libraries submodule may not be initialized)"
         )
-        return
+        return False
 
     env = os.environ.copy()
     is_windows = platform.system() == "Windows"
@@ -115,6 +117,7 @@ def run_pytests(python: Path, artifacts_path: Path):
         [str(python), "-m", "pytest", "-v", str(HIPDNN_PYTHON_TESTS_DIR)],
         env=env,
     )
+    return True
 
 
 if __name__ == "__main__":
@@ -155,6 +158,10 @@ if __name__ == "__main__":
         validate_import(python)
         logging.info("Import validation passed")
 
-        run_pytests(python, artifacts_path)
+        tests_ran = run_pytests(python, artifacts_path)
+
+    if not tests_ran:
+        logging.error("Python test suite was skipped — test directory not found")
+        sys.exit(2)
 
     logging.info("All hipDNN Python bindings tests passed!")

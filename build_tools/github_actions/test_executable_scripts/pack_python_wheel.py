@@ -20,27 +20,27 @@ import argparse
 import hashlib
 import base64
 import csv
-import glob
 import io
 import os
+from pathlib import Path
 import re
 import sys
 import zipfile
 
 
 def _infer_platform_tag(pkg_dir):
-    for path in glob.glob(os.path.join(pkg_dir, "*.so")):
-        # Linux: module.cpython-312-x86_64-linux-gnu.so
-        m = re.search(r"\.cpython-(\d+)-(\w+)-linux-\w+\.so$", os.path.basename(path))
-        if m:
-            ver, arch = m.group(1), m.group(2)
-            return f"cp{ver}", f"cp{ver}", f"linux_{arch}"
-    for path in glob.glob(os.path.join(pkg_dir, "*.pyd")):
-        # Windows: module.cp312-win_amd64.pyd
-        m = re.search(r"\.cp(\d+)-(win_\w+)\.pyd$", os.path.basename(path))
-        if m:
-            ver, plat = m.group(1), m.group(2)
-            return f"cp{ver}", f"cp{ver}", plat
+    for root, _dirs, files in os.walk(pkg_dir):
+        for fname in files:
+            if fname.endswith(".so"):
+                m = re.search(r"\.cpython-(\d+)-(\w+)-linux-\w+\.so$", fname)
+                if m:
+                    ver, arch = m.group(1), m.group(2)
+                    return f"cp{ver}", f"cp{ver}", f"linux_{arch}"
+            elif fname.endswith(".pyd"):
+                m = re.search(r"\.cp(\d+)-(win_\w+)\.pyd$", fname)
+                if m:
+                    ver, plat = m.group(1), m.group(2)
+                    return f"cp{ver}", f"cp{ver}", plat
     return "py3", "none", "any"
 
 
@@ -82,11 +82,16 @@ def main():
             for fname in sorted(files):
                 fpath = os.path.join(root, fname)
                 arcname = os.path.join(pkg_name, os.path.relpath(fpath, args.pkg_dir))
-                data = open(fpath, "rb").read()
+                data = Path(fpath).read_bytes()
                 zf.writestr(arcname, data)
                 records.append((arcname, *_sha256_record(data)))
 
-        metadata = f"Metadata-Version: 2.1\n" f"Name: {name}\n" f"Version: {version}\n"
+        metadata = (
+            f"Metadata-Version: 2.1\n"
+            f"Name: {name}\n"
+            f"Version: {version}\n"
+            f"Requires-Python: >=3.9\n"
+        )
         meta_path = f"{dist_info}/METADATA"
         zf.writestr(meta_path, metadata)
         records.append((meta_path, *_sha256_record(metadata.encode())))
