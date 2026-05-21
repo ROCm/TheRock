@@ -88,21 +88,21 @@ jobs:
       - name: Checkout opencl-cts
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: ROCm/OpenCL-CTS
+          repository: KhronosGroup/OpenCL-CTS
           ref: db69e92a03c91b1bcedb23d7142fe1c6e2ab1761
           path: opencl/opencl-cts
 
       - name: Checkout opencl-headers
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: ROCm/OpenCL-Headers
+          repository: KhronosGroup/OpenCL-Headers
           ref: 8b61a0ef8fe061afa1b3b291cbb9781a96827e41
           path: opencl/opencl-headers
 
       - name: Checkout spirv-headers
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: ROCm/SPIRV-Headers
+          repository: KhronosGroup/SPIRV-Headers
           ref: f88a2d766840fc825af1fc065977953ba1fa4a91
           path: opencl/spirv-headers
 
