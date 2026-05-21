@@ -167,6 +167,8 @@ if(THEROCK_ENABLE_PRIM)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+    TEST_SUBPROJECTS
+      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(hipCUB
     SUBDIRS
@@ -195,6 +197,8 @@ if(THEROCK_ENABLE_PRIM)
     RUNTIME_DEPS
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
+    TEST_SUBPROJECTS
+      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
     SUBDIRS

@@ -82,6 +82,8 @@ if(_enable_rocRoller)
       therock-host-blas
       hip-clr
       ${optional_profiler_deps}
+    TEST_SUBPROJECTS
+      hipBLASLt
   )
   therock_cmake_subproject_glob_c_sources(rocRoller
   SUBDIRS
@@ -311,7 +313,6 @@ if(THEROCK_ENABLE_SPARSE)
     RUNTIME_DEPS
       hip-clr
     TEST_SUBPROJECTS
-      hipSPARSE
   )
   therock_cmake_subproject_glob_c_sources(hipSPARSE
     SUBDIRS
@@ -362,7 +363,6 @@ if(THEROCK_ENABLE_SPARSE)
         ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
       TEST_SUBPROJECTS
-        hipSPARSELt
     )
     therock_cmake_subproject_glob_c_sources(hipSPARSELt
       SUBDIRS
@@ -407,6 +407,9 @@ if(THEROCK_ENABLE_SOLVER)
         hip-clr
         rocBLAS
         ${rocSOLVER_optional_deps}
+      TEST_SUBPROJECTS
+        hipSOLVER
+        hipBLAS
   )
   therock_cmake_subproject_glob_c_sources(rocSOLVER
       SUBDIRS
@@ -459,6 +462,7 @@ if(THEROCK_ENABLE_SOLVER)
         rocSOLVER
         rocSPARSE
         ${hipSOLVER_optional_deps}
+      TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipSOLVER
       SUBDIRS
