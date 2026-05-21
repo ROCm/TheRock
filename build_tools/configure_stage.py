@@ -107,19 +107,7 @@ def get_stage_features(
 def get_project_features(
     topology: BuildTopology, project_names: List[str], platform_name: str = ""
 ) -> Set[str]:
-    """Get the set of feature names for specific projects/subprojects.
-
-    This resolves project names (e.g., "rocblas", "miopen") to their artifact
-    names and then to their CMake feature names using BUILD_TOPOLOGY.toml.
-
-    Args:
-        topology: BuildTopology instance
-        project_names: List of project/subproject names (e.g., ["rocblas", "miopen"])
-        platform_name: Optional platform to filter disabled artifacts
-
-    Returns:
-        Set of feature names (e.g., {"BLAS", "MIOPEN"})
-    """
+    """Resolve project names to CMake feature names using BUILD_TOPOLOGY.toml."""
     return topology.resolve_projects_to_features(project_names, platform_name)
 
 
@@ -133,23 +121,7 @@ def generate_cmake_args(
     manylinux: bool = False,
     project_names: List[str] = None,
 ) -> List[str]:
-    """Generate CMake arguments for building a specific stage or projects.
-
-    Args:
-        stage_name: Name of the build stage (optional if project_names provided)
-        amdgpu_families: Comma-separated GPU families for shard-specific targets
-        dist_amdgpu_families: Semicolon-separated GPU families for dist targets
-        topology: BuildTopology instance
-        include_comments: Include comment lines explaining each flag
-        platform_name: Platform name for platform-specific args (e.g., "windows",
-            "linux"). Defaults to the current platform.
-        manylinux: Add manylinux Python executable cmake args (for use inside
-            the manylinux build container).
-        project_names: List of project/subproject names to enable (e.g., ["rocblas", "miopen"])
-
-    Returns:
-        List of CMake argument strings
-    """
+    """Generate CMake arguments for building a specific stage or projects."""
     args = []
 
     desc = stage_name if stage_name else f"projects: {', '.join(project_names or [])}"
@@ -293,25 +265,13 @@ def main(argv: List[str] = None):
             log(f"  {stage.name} ({stage.type}): {stage.description}")
         return
 
-    # List projects mode
     if args.list_projects:
-        alias_map = topology.get_alias_to_artifact_map()
-        # Group by artifact
-        artifact_to_aliases: dict[str, list[str]] = {}
-        for alias, artifact in alias_map.items():
-            if artifact not in artifact_to_aliases:
-                artifact_to_aliases[artifact] = []
-            if alias != artifact:  # Don't include artifact name in its own aliases
-                artifact_to_aliases[artifact].append(alias)
-
-        log("Available projects/subprojects (subproject -> artifact -> cmake flag):")
-        for artifact_name in sorted(artifact_to_aliases.keys()):
-            if artifact_name in topology.artifacts:
-                artifact = topology.artifacts[artifact_name]
-                feature = topology.get_artifact_feature_name(artifact)
-                aliases = sorted(artifact_to_aliases[artifact_name])
-                alias_str = f" ({', '.join(aliases)})" if aliases else ""
-                log(f"  {artifact_name}{alias_str} -> THEROCK_ENABLE_{feature}")
+        log("Available projects (artifact: subprojects -> cmake flag):")
+        for artifact in sorted(topology.artifacts.values(), key=lambda a: a.name):
+            feature = topology.get_artifact_feature_name(artifact)
+            subs = sorted(set(artifact.subprojects + artifact.split_databases))
+            subs_str = f" [{', '.join(subs)}]" if subs else ""
+            log(f"  {artifact.name}{subs_str} -> THEROCK_ENABLE_{feature}")
         return
 
     # Validate stage if provided
