@@ -8,11 +8,11 @@
 from typing import Dict, List
 from os import getenv
 
+import re
 import boto3  # type: ignore[import-untyped]
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
 
-import re
 
 # Whitelist of allowed wheel platform and Python tags.
 # Wheels not matching both criteria are skipped (not uploaded to S3).
