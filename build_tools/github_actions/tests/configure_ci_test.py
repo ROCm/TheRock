@@ -522,7 +522,7 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         entry = linux_target_output[0]
-        self.assertEqual(entry["test-runs-on"], "rocm-asan-mi325-sandbox")
+        self.assertEqual(entry["test-runs-on"], "")
 
     ###########################################################################
     # Tests for multi-label runner selection
@@ -532,7 +532,7 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        # Mock random.random() to return 0.1 (< 0.369 first weight)
         with patch("random.random", return_value=0.1):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
@@ -558,8 +558,8 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.65 (>= 0.59, < 0.59+0.14=0.73)
-        with patch("random.random", return_value=0.65):
+        # Mock random.random() to return 0.4 (>= 0.369, < 0.369+0.086=0.455)
+        with patch("random.random", return_value=0.4):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
                 is_workflow_dispatch=False,
@@ -584,8 +584,8 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.8 (>= 0.59+0.14=0.73)
-        with patch("random.random", return_value=0.8):
+        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
+        with patch("random.random", return_value=0.5):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
                 is_workflow_dispatch=False,
@@ -610,7 +610,7 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.3 (< 0.61 first weight)
+        # Mock random.random() to return 0.3 (< 0.78 first weight)
         with patch("random.random", return_value=0.3):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
@@ -638,8 +638,8 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.7 (>= 0.61)
-        with patch("random.random", return_value=0.7):
+        # Mock random.random() to return 0.85 (>= 0.78)
+        with patch("random.random", return_value=0.85):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
                 is_workflow_dispatch=False,

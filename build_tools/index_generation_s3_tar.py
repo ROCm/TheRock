@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: MIT
 
 """
-Script to generate an index.html listing .tar.gz files in an S3 bucket, performing the following:
- * Lists .tar.gz files in the specified S3 bucket.
- * Generates HTML page with sorting and filtering options
- * Saves the HTML locally as index.html
- * Uploads index.html back to the same S3 bucket
+Generate an index.html listing .tar.gz files in an S3 bucket.
+
+Usable as both a CLI tool (for local inspection) and an importable library
+(used by the tarball-index AWS Lambda handler in TheRock-Infra). The
+library entry point is `generate_index_s3()`.
 
 Requirements:
  * `boto3` Python package must be installed, e.g.: pip install boto3
@@ -23,14 +23,14 @@ Generate index.html for all tarballs in a bucket and upload:
  ./index_generation_s3_tar.py --bucket therock-dev-tarball --upload
 """
 
-import os
 import argparse
-import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
-import re
 import json
 import logging
-from github_actions.github_actions_api import gha_append_step_summary
+import os
+import re
+
+import boto3
+from botocore.exceptions import NoCredentialsError, ClientError
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +51,15 @@ def extract_gpu_details(files):
     return sorted(list(gpu_families))
 
 
-def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
+def generate_index_s3(s3_client, bucket_name, prefix: str, upload: bool = False) -> str:
+    """Generate index.html for direct-child .tar.gz files at s3://bucket_name/prefix.
+
+    With upload=True the index is PUT to s3://bucket_name/<prefix>/index.html
+    and the HTTPS URL is returned. Otherwise the index is written to
+    ./index.html and the local path is returned.
+
+    Raises FileNotFoundError when the prefix has no .tar.gz files.
+    """
     # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
     prefix = prefix.lstrip("/").rstrip("/")
     # List all objects and select .tar.gz keys
@@ -100,18 +108,16 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
 
     # Prepare filter options and files array for JS
     gpu_families = extract_gpu_details(files)
-    message = (
-        f"Detected GPU families ({len(gpu_families)}): "
-        f"{', '.join(gpu_families) if gpu_families else 'none'}"
+    log.info(
+        "Detected GPU families (%d): %s",
+        len(gpu_families),
+        ", ".join(gpu_families) if gpu_families else "none",
     )
-    gha_append_step_summary(message)
     gpu_families_options = "".join(
         [f'<option value="{family}">{family}</option>' for family in gpu_families]
     )
     files_js_array = json.dumps([{"name": f[0], "mtime": f[1]} for f in files])
-    gha_append_step_summary(
-        f"Found {len(files)} .tar.gz files in bucket '{bucket_name}'."
-    )
+    log.info("Found %d .tar.gz files in bucket '%s'.", len(files), bucket_name)
 
     # HTML content for displaying files
     html_content = f"""
@@ -183,37 +189,20 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     </html>
     """
 
-    # Write locally
-    local_path = "index.html"
-    with open(local_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
-
-    message = f"index.html generated successfully for bucket '{bucket_name}'. File saved as {local_path}"
-    gha_append_step_summary(message)
-    # Upload to bucket
     # Generate a prefix for the case that the index file should go to a subdirectory. Empty otherwise.
     upload_prefix = f"{prefix}/" if prefix else ""
+    upload_key = f"{upload_prefix}index.html"
+
     if upload:
+        # Upload directly from memory; avoids writing to a (potentially
+        # read-only) filesystem when called from AWS Lambda.
         try:
-            s3_client.upload_file(
-                local_path,
-                bucket_name,
-                f"{upload_prefix}index.html",
-                ExtraArgs={"ContentType": "text/html"},
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=upload_key,
+                Body=html_content.encode("utf-8"),
+                ContentType="text/html",
             )
-
-            # URL to the uploaded index.html
-            region = s3_client.meta.region_name or "us-east-2"
-            if region == "us-east-2":
-                bucket_url = (
-                    f"https://{bucket_name}.s3.amazonaws.com/{upload_prefix}index.html"
-                )
-            else:
-                bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_prefix}index.html"
-
-            message = f"index.html successfully uploaded. URL: {bucket_url}"
-            gha_append_step_summary(message)
-
         except ClientError as e:
             code = e.response.get("Error", {}).get("Code")
             if code in {"AccessDenied", "UnauthorizedOperation"}:
@@ -225,15 +214,30 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                     f"Bucket '{bucket_name}' not found during upload"
                 ) from e
             log.error("Failed to upload index.html to bucket '%s': %s", bucket_name, e)
-            gha_append_step_summary(
-                f"Failed to upload index.html to bucket '{bucket_name}': {e}"
-            )
             raise
 
+        region = s3_client.meta.region_name or "us-east-2"
+        if region == "us-east-2":
+            bucket_url = f"https://{bucket_name}.s3.amazonaws.com/{upload_key}"
+        else:
+            bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_key}"
+        log.info("index.html successfully uploaded. URL: %s", bucket_url)
+        return bucket_url
+
+    # Local-only mode: write next to the caller's working directory.
+    local_path = "index.html"
+    with open(local_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    log.info(
+        "index.html generated successfully for bucket '%s'. File saved as %s",
+        bucket_name,
+        local_path,
+    )
     return local_path
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(
         description="Generate index.html for S3 bucket .tar.gz files"
     )
