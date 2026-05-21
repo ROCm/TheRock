@@ -182,6 +182,20 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         # rocgdb has no cmake_source_var, so source_package is empty
         self.assertIn('"source_package": ""', output)
 
+    def test_external_repo_json_repository_name_is_lowercased(self):
+        """`ROCm/ROCgdb` (case-preserved by GitHub) must resolve to the lowercase
+        REPO_CONFIGS key `rocgdb`, not the literal `ROCgdb` which would miss."""
+        rc = detect_external_repo_config_main(
+            ["--external-repo-json", '{"repository": "ROCm/ROCgdb", "ref": "main"}']
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn('"checkout_path": "external-rocgdb"', output)
+        self.assertNotIn("external-ROCgdb", output)
+
 
 class TestGetExternalRepoPath(unittest.TestCase):
     """Tests for get_external_repo_path function"""

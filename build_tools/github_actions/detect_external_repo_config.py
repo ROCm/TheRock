@@ -146,7 +146,7 @@ def get_external_repo_path(repo_name: str) -> Path:
         if (
             repo_path.exists()
             and _is_valid_repo_path(repo_path)
-            and repo_path.name == repo_name
+            and repo_path.name.lower() == repo_name.lower()
         ):
             print(
                 f"Found external repo via EXTERNAL_SOURCE_PATH: {repo_path}",
@@ -402,12 +402,14 @@ def main(argv=None):
             external_repo = json.loads(args.external_repo_json)
             source_repository = external_repo.get("repository", "")
             source_ref = external_repo.get("ref", "")
-            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries")
+            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries").
+            # Normalize to lowercase so REPO_CONFIGS keys can stay all-lowercase regardless
+            # of the GitHub repository's display casing (e.g. "ROCm/ROCgdb" → "rocgdb").
             if "/" in source_repository:
                 repo_name = source_repository.split("/")[-1]
             else:
                 repo_name = source_repository
-            args.repository = repo_name
+            args.repository = repo_name.lower()
             print(
                 f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
                 file=sys.stderr,
