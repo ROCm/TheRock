@@ -122,25 +122,25 @@ def resolve_target_prefixes(
     bucket: ServiceResource,
     explicit_prefix: str | None = None,
     auto_detect_prefixes: bool = False,
-    starting_from: str | None = None,
+    base_prefix: str | None = None,
 ) -> List[str]:
     if explicit_prefix:
         return [explicit_prefix.rstrip("/")]
 
-    if starting_from and not auto_detect_prefixes:
+    if base_prefix and not auto_detect_prefixes:
         raise RuntimeError(
-            "--auto-detect-prefixes must be provided when using --starting-from"
+            "--auto-detect-prefixes must be provided when using --base-prefix"
         )
 
     if auto_detect_prefixes:
-        if not starting_from:
+        if not base_prefix:
             raise RuntimeError(
-                "--starting-from must be provided when using --auto-detect-prefixes"
+                "--base-prefix must be provided when using --auto-detect-prefixes"
             )
-        return detect_prefixes_from_bucket(bucket, starting_from)
+        return detect_prefixes_from_bucket(bucket, base_prefix)
 
     raise RuntimeError(
-        "Must provide either --prefix or --auto-detect-prefixes with --starting-from"
+        "Must provide either --prefix or --auto-detect-prefixes with --base-prefix"
     )
 
 
@@ -302,7 +302,7 @@ def run_update_dependencies(
     bucket_name: str | None = None,
     prefix: str | None = None,
     auto_detect_prefixes: bool = False,
-    starting_from: str | None = None,
+    base_prefix: str | None = None,
     dependency_names: frozenset[str] | None = None,
 ) -> None:
     print(f"Running update_dependencies for package={package}, dry_run={dry_run}")
@@ -336,7 +336,7 @@ def run_update_dependencies(
         bucket=bucket,
         explicit_prefix=prefix,
         auto_detect_prefixes=auto_detect_prefixes,
-        starting_from=starting_from,
+        base_prefix=base_prefix,
     )
 
     for full_path in target_prefixes:
@@ -377,7 +377,7 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--starting-from",
+        "--base-prefix",
         type=str,
         help=(
             "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/). "
@@ -405,7 +405,7 @@ def main() -> None:
         bucket_name=args.bucket,
         prefix=args.prefix,
         auto_detect_prefixes=args.auto_detect_prefixes,
-        starting_from=args.starting_from,
+        base_prefix=args.base_prefix,
         dependency_names=(
             frozenset(args.dependency_packages) if args.dependency_packages else None
         ),
