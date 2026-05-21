@@ -74,7 +74,11 @@ def get_project_paths() -> List[str]:
 
 
 def get_dependency_package_names(project: str) -> frozenset[str]:
-    """Return dependency package names for the given project."""
+    """
+    Return dependency package names for the given project.
+
+    Used by Lambda-side dependency trigger filtering.
+    """
     return frozenset(
         pkg_name
         for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
