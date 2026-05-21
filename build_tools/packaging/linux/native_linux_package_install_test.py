@@ -6,6 +6,10 @@
 Full installation and simulate-install test script for ROCm native packages.
 
 Test modes (--test-type):
+- install: Repo-based install only (step 1). No rocminfo or component checks.
+  Used by release workflows that dispatch install tests off the critical path.
+- uninstall: Repo-based install then remove the same packages (steps 1 and 2).
+  No rocminfo or component checks. Uninstall order is reverse of install.
 - sanity: Basic test. Repo-based install plus basic verification only
   (steps 1 and 2).
 - full: Full test. Repo-based install plus basic verification plus full
@@ -88,6 +92,13 @@ Example invocations:
  --os-profile ubuntu2404 \\
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type install: repo install only (no verification)
+ # --test-type uninstall: repo install then remove packages (reverse order)
+ python3 native_linux_package_install_test.py --test-type uninstall \\
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly
 
  # Simulate install (dry-run) from local .deb or .rpm directory
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -690,6 +701,94 @@ gpgcheck=0
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
+    def uninstall_deb_packages(self) -> bool:
+        """Remove ROCm DEB packages installed from the repository.
+
+        Returns:
+        True if removal successful, False otherwise
+        """
+        print("\n" + "=" * 80)
+        print("UNINSTALLING DEB PACKAGES")
+        print("=" * 80)
+
+        packages = list(reversed(self.package_names))
+        print(f"\nPackages to remove (reverse install order): {packages}")
+
+        cmd = ["apt", "remove", "-y"] + packages
+        print(f"\nRunning: {' '.join(cmd)}")
+        print("=" * 80)
+        print("Uninstall progress (streaming output):\n")
+
+        try:
+            return_code = _run_streaming(cmd, INSTALL_TIMEOUT_SEC)
+            if return_code == 0:
+                print("\n" + "=" * 80)
+                print("[PASS] DEB packages removed successfully")
+                return True
+            print("\n" + "=" * 80)
+            print(f"[FAIL] Failed to remove DEB packages (exit code: {return_code})")
+            return False
+        except subprocess.TimeoutExpired:
+            print("\n" + "=" * 80)
+            print(f"[FAIL] Uninstall timed out after {INSTALL_TIMEOUT_SEC} minutes")
+            return False
+        except OSError as e:
+            print(f"\n[FAIL] Error during uninstall: {e}")
+            return False
+
+    def uninstall_rpm_packages(self) -> bool:
+        """Remove ROCm RPM packages installed from the repository.
+
+        Returns:
+        True if removal successful, False otherwise
+        """
+        print("\n" + "=" * 80)
+        print("UNINSTALLING RPM PACKAGES")
+        print("=" * 80)
+
+        packages = list(reversed(self.package_names))
+        print(f"\nPackages to remove (reverse install order): {packages}")
+
+        if self._is_sles():
+            cmd = ["zypper", "--non-interactive", "remove", "-y"] + packages
+            print("[INFO] Using zypper for SLES package removal")
+        else:
+            cmd = ["dnf", "remove", "-y"] + packages
+        print(f"\nRunning: {' '.join(cmd)}")
+        print("=" * 80)
+        print("Uninstall progress (streaming output):\n")
+
+        try:
+            return_code = _run_streaming(cmd, INSTALL_TIMEOUT_SEC)
+            if return_code == 0:
+                print("\n" + "=" * 80)
+                print("[PASS] RPM packages removed successfully")
+                return True
+            print("\n" + "=" * 80)
+            print(f"[FAIL] Failed to remove RPM packages (exit code: {return_code})")
+            return False
+        except subprocess.TimeoutExpired:
+            print("\n" + "=" * 80)
+            print(f"[FAIL] Uninstall timed out after {INSTALL_TIMEOUT_SEC} minutes")
+            return False
+        except OSError as e:
+            print(f"\n[FAIL] Error during uninstall: {e}")
+            return False
+
+    def run_uninstall_packages(self) -> bool:
+        """Step 2 (uninstall test type): remove packages after a successful install.
+
+        Returns:
+        True if package removal succeeded.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 2: PACKAGE UNINSTALLATION")
+        print("=" * 80)
+
+        if self.package_type == "deb":
+            return self.uninstall_deb_packages()
+        return self.uninstall_rpm_packages()
+
     def run_repo_setup_and_install(self) -> bool:
         """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
 
@@ -967,9 +1066,9 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--test-type",
         type=str,
-        choices=["sanity", "full", "simulate"],
+        choices=["install", "uninstall", "sanity", "full", "simulate"],
         default="sanity",
-        help="Test type: 'sanity' = basic test only; 'full' = basic + full test; 'simulate' = simulated install only (requires --packages-dir).",
+        help="Test type: 'install' = repo install only; 'uninstall' = install then remove packages; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir).",
     )
     parser.add_argument(
         "--packages-dir",
@@ -1001,11 +1100,17 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
                 parser.error(str(e))
         return
     if not args.os_profile:
-        parser.error("--os-profile is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--os-profile is required when --test-type is 'install', 'uninstall', 'sanity', or 'full'"
+        )
     if not args.repo_url:
-        parser.error("--repo-url is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--repo-url is required when --test-type is 'install', 'uninstall', 'sanity', or 'full'"
+        )
     if not args.gfx_arch:
-        parser.error("--gfx-arch is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--gfx-arch is required when --test-type is 'install', 'uninstall', 'sanity', or 'full'"
+        )
 
 
 def parse_cli_arguments(
@@ -1087,6 +1192,21 @@ def run_tests(args: Namespace) -> int:
         if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             return 1
+        if args.test_type == "install":
+            print("\n" + "=" * 80)
+            print("[PASS] INSTALLATION TEST PASSED")
+            print("(install: repo setup and package install completed)")
+            print("=" * 80 + "\n")
+            return 0
+        if args.test_type == "uninstall":
+            if not test_runner.run_uninstall_packages():
+                print("\n[FAIL] Step 2 (package uninstall) failed.")
+                return 1
+            print("\n" + "=" * 80)
+            print("[PASS] INSTALLATION TEST PASSED")
+            print("(uninstall: repo install and package removal completed)")
+            print("=" * 80 + "\n")
+            return 0
         if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
             return 1
