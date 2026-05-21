@@ -2,11 +2,11 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate CMake configuration for building a specific stage.
+"""Generate CMake configuration for building a specific stage or projects.
 
 This script uses BUILD_TOPOLOGY.toml to determine which features/artifacts
-should be enabled for a specific build stage, and outputs the appropriate
-CMake arguments.
+should be enabled for a specific build stage or set of projects, and outputs
+the appropriate CMake arguments.
 
 Usage:
     # Generate CMake args for a stage
@@ -14,6 +14,13 @@ Usage:
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --output-cmake-args /tmp/stage_args.txt
+
+    # Generate CMake args for specific projects
+    python configure_stage.py --projects rocblas miopen --oneline
+    # Output: -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_MIOPEN=ON
+
+    # List available projects/subprojects
+    python configure_stage.py --list-projects
 
     # Then use the generated args with CMake
     cmake -B build -S . $(cat /tmp/stage_args.txt) -GNinja
@@ -97,6 +104,25 @@ def get_stage_features(
     return features
 
 
+def get_project_features(
+    topology: BuildTopology, project_names: List[str], platform_name: str = ""
+) -> Set[str]:
+    """Get the set of feature names for specific projects/subprojects.
+
+    This resolves project names (e.g., "rocblas", "miopen") to their artifact
+    names and then to their CMake feature names using BUILD_TOPOLOGY.toml.
+
+    Args:
+        topology: BuildTopology instance
+        project_names: List of project/subproject names (e.g., ["rocblas", "miopen"])
+        platform_name: Optional platform to filter disabled artifacts
+
+    Returns:
+        Set of feature names (e.g., {"BLAS", "MIOPEN"})
+    """
+    return topology.resolve_projects_to_features(project_names, platform_name)
+
+
 def generate_cmake_args(
     stage_name: str,
     amdgpu_families: str,
@@ -105,11 +131,12 @@ def generate_cmake_args(
     include_comments: bool = False,
     platform_name: str = platform_module.system().lower(),
     manylinux: bool = False,
+    project_names: List[str] = None,
 ) -> List[str]:
-    """Generate CMake arguments for building a specific stage.
+    """Generate CMake arguments for building a specific stage or projects.
 
     Args:
-        stage_name: Name of the build stage
+        stage_name: Name of the build stage (optional if project_names provided)
         amdgpu_families: Comma-separated GPU families for shard-specific targets
         dist_amdgpu_families: Semicolon-separated GPU families for dist targets
         topology: BuildTopology instance
@@ -118,14 +145,16 @@ def generate_cmake_args(
             "linux"). Defaults to the current platform.
         manylinux: Add manylinux Python executable cmake args (for use inside
             the manylinux build container).
+        project_names: List of project/subproject names to enable (e.g., ["rocblas", "miopen"])
 
     Returns:
         List of CMake argument strings
     """
     args = []
 
+    desc = stage_name if stage_name else f"projects: {', '.join(project_names or [])}"
     if include_comments:
-        args.append(f"# CMake arguments for stage: {stage_name}")
+        args.append(f"# CMake arguments for {desc}")
         args.append("")
 
     # GPU families for shard-specific targets
@@ -151,12 +180,17 @@ def generate_cmake_args(
         args.append("# Disable all features by default")
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
-    # Get features to enable for this stage
-    features = get_stage_features(topology, stage_name, platform_name=platform_name)
+    # Get features to enable - either from stage or from project names
+    if project_names:
+        features = get_project_features(topology, project_names, platform_name=platform_name)
+    elif stage_name:
+        features = get_stage_features(topology, stage_name, platform_name=platform_name)
+    else:
+        features = set()
 
     if include_comments:
         args.append("")
-        args.append(f"# Enable features for stage '{stage_name}'")
+        args.append(f"# Enable features for {desc}")
 
     for feature in sorted(features):
         args.append(f"-DTHEROCK_ENABLE_{feature}=ON")
@@ -231,11 +265,24 @@ def main(argv: List[str] = None):
         help="Add manylinux Python executable cmake args (for use inside "
         "the manylinux build container)",
     )
+    parser.add_argument(
+        "--projects",
+        type=str,
+        nargs="+",
+        metavar="PROJECT",
+        help="Project/subproject names to enable (e.g., rocblas miopen hipfft). "
+        "Use instead of --stage for project-level granularity.",
+    )
+    parser.add_argument(
+        "--list-projects",
+        action="store_true",
+        help="List available projects/subprojects and their artifacts",
+    )
 
     args = parser.parse_args(argv)
 
-    if not args.list_stages and args.stage is None:
-        parser.error("--stage is required unless --list-stages is specified")
+    if not args.list_stages and not args.list_projects and args.stage is None and args.projects is None:
+        parser.error("--stage or --projects is required unless --list-stages or --list-projects is specified")
 
     topology = get_topology()
 
@@ -246,10 +293,38 @@ def main(argv: List[str] = None):
             log(f"  {stage.name} ({stage.type}): {stage.description}")
         return
 
-    # Validate stage
-    if args.stage not in topology.build_stages:
+    # List projects mode
+    if args.list_projects:
+        alias_map = topology.get_alias_to_artifact_map()
+        # Group by artifact
+        artifact_to_aliases: dict[str, list[str]] = {}
+        for alias, artifact in alias_map.items():
+            if artifact not in artifact_to_aliases:
+                artifact_to_aliases[artifact] = []
+            if alias != artifact:  # Don't include artifact name in its own aliases
+                artifact_to_aliases[artifact].append(alias)
+
+        log("Available projects/subprojects (subproject -> artifact -> cmake flag):")
+        for artifact_name in sorted(artifact_to_aliases.keys()):
+            if artifact_name in topology.artifacts:
+                artifact = topology.artifacts[artifact_name]
+                feature = topology.get_artifact_feature_name(artifact)
+                aliases = sorted(artifact_to_aliases[artifact_name])
+                alias_str = f" ({', '.join(aliases)})" if aliases else ""
+                log(f"  {artifact_name}{alias_str} -> THEROCK_ENABLE_{feature}")
+        return
+
+    # Validate stage if provided
+    if args.stage and args.stage not in topology.build_stages:
         available = ", ".join(s.name for s in topology.get_build_stages())
         parser.error(f"Unknown stage '{args.stage}'. Available stages: {available}")
+
+    # Validate projects if provided
+    if args.projects:
+        alias_map = topology.get_alias_to_artifact_map()
+        unknown = [p for p in args.projects if p.lower() not in alias_map]
+        if unknown:
+            log(f"Warning: Unknown project(s): {', '.join(unknown)}")
 
     # Generate arguments
     cmake_args = generate_cmake_args(
@@ -260,6 +335,7 @@ def main(argv: List[str] = None):
         include_comments=args.comments and not args.oneline,
         platform_name=args.platform,
         manylinux=args.manylinux,
+        project_names=args.projects,
     )
 
     # Filter out comments if not requested
@@ -273,9 +349,12 @@ def main(argv: List[str] = None):
         output = "\n".join(cmake_args)
 
     if args.gha_output:
-        # Get python requirements for this stage
-        python_requires = topology.get_python_requires_for_stage(args.stage)
-        pip_install_cmd = " ".join(python_requires) if python_requires else ""
+        # Get python requirements for this stage (only applicable for stage mode)
+        if args.stage:
+            python_requires = topology.get_python_requires_for_stage(args.stage)
+            pip_install_cmd = " ".join(python_requires) if python_requires else ""
+        else:
+            pip_install_cmd = ""
         gha_set_output({"cmake_args": output, "pip_install_cmd": pip_install_cmd})
     elif args.output_cmake_args:
         args.output_cmake_args.write_text(output + "\n")

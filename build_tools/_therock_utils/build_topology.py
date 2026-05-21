@@ -119,6 +119,9 @@ class Artifact:
     split_databases: List[str] = field(
         default_factory=list
     )  # Database handlers to use when splitting artifacts (e.g., ["rocblas", "hipblaslt"])
+    subprojects: List[str] = field(
+        default_factory=list
+    )  # Alternative names for build selection (e.g., ["rocblas", "hipblas"])
 
 
 class BuildTopology:
@@ -216,6 +219,7 @@ class BuildTopology:
                 disable_platforms=artifact_data.get("disable_platforms", []),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
+                subprojects=artifact_data.get("subprojects", []),
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -865,3 +869,69 @@ class BuildTopology:
                         requires.append(req)
 
         return requires
+
+    def get_alias_to_artifact_map(self) -> Dict[str, str]:
+        """
+        Build a mapping from subprojects to artifact names.
+
+        This uses the 'subprojects' field from BUILD_TOPOLOGY.toml plus split_databases
+        to map common names like 'rocblas' to their artifact 'blas'.
+
+        Returns:
+            Dict mapping alias (lowercase) to artifact name
+        """
+        alias_map: Dict[str, str] = {}
+
+        for artifact in self.artifacts.values():
+            # The artifact name itself is always an alias
+            alias_map[artifact.name.lower()] = artifact.name
+
+            # Add explicit subprojects from BUILD_TOPOLOGY.toml
+            for alias in artifact.subprojects:
+                alias_map[alias.lower()] = artifact.name
+
+            # Add split_databases as subprojects (e.g., "rocblas" -> "blas")
+            for db_name in artifact.split_databases:
+                alias_map[db_name.lower()] = artifact.name
+
+        return alias_map
+
+    def resolve_project_to_artifact(self, project_name: str) -> Optional[str]:
+        """
+        Resolve a project name (e.g., 'rocblas') to its artifact name (e.g., 'blas').
+
+        Args:
+            project_name: Project name or alias
+
+        Returns:
+            Artifact name if found, None otherwise
+        """
+        alias_map = self.get_alias_to_artifact_map()
+        return alias_map.get(project_name.lower())
+
+    def resolve_projects_to_features(
+        self, project_names: List[str], platform_name: str = ""
+    ) -> Set[str]:
+        """
+        Resolve project names to their CMake feature names.
+
+        Args:
+            project_names: List of project names or subprojects (e.g., ["rocblas", "miopen"])
+            platform_name: Optional platform to filter disabled artifacts
+
+        Returns:
+            Set of feature names (e.g., {"BLAS", "MIOPEN"})
+        """
+        features: Set[str] = set()
+        alias_map = self.get_alias_to_artifact_map()
+
+        for project in project_names:
+            artifact_name = alias_map.get(project.lower())
+            if artifact_name and artifact_name in self.artifacts:
+                artifact = self.artifacts[artifact_name]
+                if platform_name and platform_name in artifact.disable_platforms:
+                    continue
+                feature_name = self.get_artifact_feature_name(artifact)
+                features.add(feature_name)
+
+        return features
