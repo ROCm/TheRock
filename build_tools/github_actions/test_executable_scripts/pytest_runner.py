@@ -247,7 +247,7 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
         timeout: Per-test timeout in seconds
         num_workers: Number of parallel xdist workers
         env_vars: Environment variables dictionary
-        component_path: Component root directory (used as pytest rootdir)
+        component_path: Component root directory (used as pytest CWD and rootdir)
 
     Returns:
         Exit code from pytest
@@ -256,9 +256,9 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
         logging.warning("No tests to run in this shard")
         return 0
 
-    # When passing specific test IDs, explicitly set rootdir to match collection
-    # Test IDs are relative to rootdir (where pytest.ini is located)
-    cmd = ["pytest", f"--rootdir={component_path}"]
+    # Test IDs from collection are relative to component_path (where pytest.ini is)
+    # Set CWD to component_path so pytest can resolve test IDs correctly
+    cmd = ["pytest"]
 
     # Add specific test IDs
     cmd.extend(test_ids)
@@ -277,11 +277,12 @@ def run_pytest_tests(test_dir, test_ids, marker_expr, timeout, num_workers, env_
         f"Running pytest with {len(test_ids)} tests, {num_workers} workers, {timeout}s timeout"
     )
     logging.info(f"Marker expression used for collection: {marker_expr or '(none)'}")
+    logging.info(f"Working directory: {component_path}")
     logging.info(
-        f"Command: {' '.join(cmd[:3])} <{len(test_ids)} test IDs> {' '.join(cmd[3+len(test_ids):])}"
+        f"Command: {' '.join(cmd[:2])} <{len(test_ids)} test IDs> {' '.join(cmd[2+len(test_ids):])}"
     )
 
-    result = subprocess.run(cmd, env=env_vars, check=False)
+    result = subprocess.run(cmd, cwd=component_path, env=env_vars, check=False)
     return result.returncode
 
 
