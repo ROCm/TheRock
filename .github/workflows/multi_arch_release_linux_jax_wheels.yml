@@ -62,11 +62,9 @@ on:
         default: "multiarch"
         required: false
       release_type:
-        description: 'Release type. All developer-triggered jobs should use "dev"!'
-        type: choice
-        options:
-          - dev
-        default: dev
+        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        type: string
+        required: true
       rocm_version:
         description: ROCm package version to build against.
         type: string
