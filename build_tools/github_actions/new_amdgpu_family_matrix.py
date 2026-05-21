@@ -22,6 +22,7 @@ amdgpu_family_info_matrix_all {
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
                   "test-multi-gpu":             #             string: multi-gpu test runner (optional)
+                  "emulator":                   #             string: emulator test runner (optional)
                   "benchmark":                  #             string: benchmark runner (optional)
               }
             }
@@ -114,10 +115,12 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "linux-mi325-1gpu-ossci-rocm-frac",
                         "test-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+                        "emulator": "azure-linux-scale-rocm",
                         # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                         "benchmark": "linux-mi325-8gpu-ossci-rocm",
                     },
                     "fetch-gfx-targets": ["gfx942"],
+                    "rocjitsu-config": "amdgpu_cdna3_kmd.json",
                 },
                 "release": {
                     "push_on_success": True,
@@ -330,8 +333,12 @@ amdgpu_family_info_matrix_all = {
                 },
                 "test": {
                     "run_tests": True,
-                    "runs_on": {"test": "linux-mi355-1gpu-ossci-rocm"},
+                    "runs_on": {
+                        "test": "linux-mi355-1gpu-ossci-rocm",
+                        "emulator": "azure-linux-scale-rocm",
+                    },
                     "fetch-gfx-targets": ["gfx950"],
+                    "rocjitsu-config": "amdgpu_cdna4_kmd.json",
                 },
                 "release": {
                     "push_on_success": False,

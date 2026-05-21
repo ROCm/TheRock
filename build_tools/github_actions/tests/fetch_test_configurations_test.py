@@ -158,6 +158,52 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocroller", names)
 
     # -----------------------
+    # rocJITsu emulator tests
+    # -----------------------
+
+    def test_emulator_job_emitted_for_opted_in_test_on_supported_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocwmma"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertEqual(names, {"rocwmma", "rocwmma (rocjitsu)"})
+
+        emulator = next(j for j in components if j["job_name"] == "rocwmma (rocjitsu)")
+        self.assertEqual(emulator["emulator"], "rocjitsu")
+        self.assertEqual(emulator["emulator_runs_on"], "azure-linux-scale-rocm")
+        self.assertIn("--rocjitsu", emulator["fetch_artifact_args"].split())
+        self.assertEqual(
+            emulator["rocjitsu_config"],
+            "share/rocjitsu/configs/amdgpu_cdna3_kmd.json",
+        )
+        self.assertEqual(
+            emulator["rocjitsu_schema"],
+            "share/rocjitsu/schemas/simulation_config.fbs",
+        )
+
+    def test_emulator_job_not_emitted_for_unsupported_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocwmma"
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertEqual(names, {"rocwmma"})
+
+    def test_emulator_job_not_emitted_on_windows(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocwmma"
+        os.environ["RUNNER_OS"] = "Windows"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertEqual(names, {"rocwmma"})
+
+    # -----------------------
     # Functional test merging via run_extended_tests
     # -----------------------
 

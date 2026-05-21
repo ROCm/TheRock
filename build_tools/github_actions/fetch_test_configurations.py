@@ -38,6 +38,9 @@ logging.basicConfig(level=logging.INFO)
 # Note: these paths are relative to the repository root. We could make that
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
+ROCJITSU_EMULATOR = "rocjitsu"
+ROCJITSU_FETCH_ARTIFACT_ARG = "--rocjitsu"
+ROCJITSU_SCHEMA = "simulation_config.fbs"
 
 
 def _get_script_path(script_name: str) -> str:
@@ -46,6 +49,62 @@ def _get_script_path(script_name: str) -> str:
     # 'bash' as the shell on Linux and Windows.
     posix_path = platform_path.as_posix()
     return str(posix_path)
+
+
+def _append_fetch_artifact_arg(fetch_artifact_args: str, arg: str) -> str:
+    args = fetch_artifact_args.split()
+    if arg not in args:
+        args.append(arg)
+    return " ".join(args)
+
+
+def _get_family_platform_info(
+    amdgpu_families_matrix: dict,
+    platform: str,
+    amdgpu_families: str | None,
+) -> tuple[str | None, dict | None]:
+    if not amdgpu_families:
+        return None, None
+
+    requested_family = amdgpu_families.lower()
+    for family_name, family_info in amdgpu_families_matrix.items():
+        platform_info = family_info.get(platform)
+        if not platform_info:
+            continue
+
+        candidate_names = {
+            family_name.lower(),
+            platform_info.get("family", "").lower(),
+        }
+        candidate_names.update(
+            target.lower() for target in platform_info.get("fetch-gfx-targets", [])
+        )
+        if requested_family in candidate_names:
+            return family_name, platform_info
+
+    return None, None
+
+
+def _make_rocjitsu_component(
+    job_config_data: dict,
+    platform_info: dict,
+) -> dict | None:
+    emulator_runs_on = platform_info.get("test-runs-on-emulator")
+    rocjitsu_config = platform_info.get("rocjitsu-config")
+    if not emulator_runs_on or not rocjitsu_config:
+        return None
+
+    emulator_component = deepcopy(job_config_data)
+    emulator_component["job_name"] = f'{job_config_data["job_name"]} (rocjitsu)'
+    emulator_component["fetch_artifact_args"] = _append_fetch_artifact_arg(
+        emulator_component.get("fetch_artifact_args", ""), ROCJITSU_FETCH_ARTIFACT_ARG
+    )
+    emulator_component["emulator"] = ROCJITSU_EMULATOR
+    emulator_component["emulator_runs_on"] = emulator_runs_on
+    emulator_component["rocjitsu_config"] = f"share/rocjitsu/configs/{rocjitsu_config}"
+    emulator_component["rocjitsu_schema"] = f"share/rocjitsu/schemas/{ROCJITSU_SCHEMA}"
+    emulator_component.pop("multi_gpu_runner", None)
+    return emulator_component
 
 
 test_matrix = {
@@ -454,6 +513,7 @@ test_matrix = {
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
+        "run_on_emulator": True,
         # Headroom above typical shard runtime; per-test CTest timeouts fail fast on hangs (ROCM-24171).
         "timeout_minutes": 90,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
@@ -563,9 +623,9 @@ test_matrix = {
 
 
 def run():
-    platform = os.getenv("RUNNER_OS").lower()
+    platform = os.environ["RUNNER_OS"].lower()
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
-    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
@@ -597,6 +657,13 @@ def run():
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
+
+    amdgpu_families_matrix = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+    _, amdgpu_family_platform_info = _get_family_platform_info(
+        amdgpu_families_matrix, platform, amdgpu_families
+    )
 
     all_components = []
     for key in selected_matrix:
@@ -667,7 +734,7 @@ def run():
                     all_components.append(rocr_entry)
                 continue
 
-            job_config_data = selected_matrix[key]
+            job_config_data = deepcopy(selected_matrix[key])
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
@@ -687,9 +754,6 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
-                amdgpu_families_matrix = get_all_families_for_trigger_types(
-                    ["presubmit", "postsubmit", "nightly"]
-                )
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
@@ -723,6 +787,19 @@ def run():
                     continue
 
             all_components.append(job_config_data)
+
+            if selected_matrix[key].get("run_on_emulator"):
+                emulator_component = None
+                if amdgpu_family_platform_info:
+                    emulator_component = _make_rocjitsu_component(
+                        job_config_data, amdgpu_family_platform_info
+                    )
+                if emulator_component:
+                    logging.info(
+                        f"Including job {emulator_component['job_name']} on "
+                        f"{emulator_component['emulator_runs_on']}"
+                    )
+                    all_components.append(emulator_component)
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
     sanity_component = next(
