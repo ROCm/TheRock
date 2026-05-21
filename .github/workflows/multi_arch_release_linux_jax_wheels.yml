@@ -186,4 +186,4 @@ jobs:
         id: write_jax_versions
         run: |
           python3 ./build_tools/github_actions/write_jax_versions.py \
-            --dist-dir "${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse"
+            --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
