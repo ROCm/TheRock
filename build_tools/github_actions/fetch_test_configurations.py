@@ -173,7 +173,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
-    # opencl-conformance-tests
+    # OpenCL Conformance tests
     "opencl-cts": {
         "job_name": "opencl-cts",
         "fetch_artifact_args": "--tests",
