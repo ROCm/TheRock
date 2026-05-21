@@ -23,6 +23,7 @@ The script can be tested locally with inputs like this:
       --pytorch-git-ref=release/2.10 \
       --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ \
       --device-extras=device-gfx942 \
+      --manifest-url=https://therock-nightly-artifacts.s3.amazonaws.com/.../manifest.json \
       --torch-version=2.10.0+rocm7.12.0a20260501
 """
 
@@ -48,9 +49,10 @@ def run(args: argparse.Namespace):
     pytorch_web_url = f"https://github.com/{pytorch_repo_org}/pytorch"
     pytorch_web_url_with_branch = f"{pytorch_web_url}/tree/{args.pytorch_git_ref}"
 
-    # Build index URL — append family subdir when provided.
+    # Build index URL. Per-family mode appends the family subdir; multi-arch
+    # mode uses the unified index and selects device packages with extras.
     index_url = args.index_url.rstrip("/")
-    if args.index_subdir:
+    if args.index_subdir and not args.device_extras:
         index_url += f"/{args.index_subdir.strip('/')}"
     index_url += "/"
 
@@ -76,6 +78,8 @@ def run(args: argparse.Namespace):
     summary += f"* GPU target: `{gpu_label}`\n"
     summary += f"* Package index: {index_url}\n"
     summary += f"* PyTorch source code: {pytorch_web_url_with_branch}\n"
+    if args.manifest_url:
+        summary += f"* Build manifest: {args.manifest_url}\n"
 
     # Link to detailed documentation.
     summary += "\n"
@@ -136,6 +140,12 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="Comma-separated device extras (e.g. 'device-gfx942'). Used for multi-arch installs.",
+    )
+    parser.add_argument(
+        "--manifest-url",
+        type=str,
+        default="",
+        help="Optional build manifest URL to link from the test summary.",
     )
     args = parser.parse_args()
 

@@ -37,6 +37,10 @@ on:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.9")
         type: string
         default: "nightly"
+      manifest_url:
+        description: Optional manifest URL to checkout test sources from.
+        type: string
+        default: ""
       pytorch_git_repo:
         description: "PyTorch git repo to checkout test sources from. (Options: rocm/pytorch, pytorch/pytorch)"
         type: string
@@ -80,6 +84,10 @@ on:
       pytorch_git_ref:
         type: string
         default: "nightly"
+      manifest_url:
+        description: Optional manifest URL to checkout test sources from.
+        type: string
+        default: ""
       pytorch_git_repo:
         type: string
         default: "pytorch/pytorch"
@@ -202,7 +210,18 @@ jobs:
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
+      - name: Checkout PyTorch Source from manifest
+        if: ${{ inputs.manifest_url != '' }}
+        run: |
+          python external-builds/pytorch/checkout_from_manifest.py \
+            --manifest-url "${{ inputs.manifest_url }}" \
+            --checkout-root ./external-builds/pytorch \
+            --projects pytorch \
+            --expected-pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
+            --no-hipify
+
       - name: Checkout PyTorch Source
+        if: ${{ inputs.manifest_url == '' }}
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \

@@ -4,9 +4,11 @@
 import io
 import os
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
@@ -97,6 +99,21 @@ class ExpandAmdgpuFamiliesMainTest(unittest.TestCase):
         out = self._run_and_capture("--amdgpu-families", "gfx94X-dcgpu")
         self.assertIn("gfx942", out.split(","))
         self.assertNotIn("device-", out)
+
+    def test_main_targets_output_mode_writes_github_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "github_output.txt"
+            with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": os.fspath(output_path)}):
+                out = self._run_and_capture(
+                    "--amdgpu-families",
+                    "gfx94X-dcgpu",
+                    "--output-mode",
+                    "targets-output",
+                )
+
+            first_line = out.split("\n")[0]
+            self.assertIn("gfx942", first_line.split(","))
+            self.assertIn(f"targets={first_line}", output_path.read_text())
 
 
 if __name__ == "__main__":

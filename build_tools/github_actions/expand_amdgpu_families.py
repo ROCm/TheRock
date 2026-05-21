@@ -19,6 +19,9 @@ Output modes:
       python expand_amdgpu_families.py --amdgpu-families "gfx94X-dcgpu;gfx120X-all"
       -> gfx942,gfx1200,gfx1201
 
+* ``targets-output`` - bare gfx targets, comma-separated, and also
+  written to ``$GITHUB_OUTPUT`` as ``targets=...``.
+
 * ``device-extras`` — pip device extras, comma-separated, and also
   written to ``$GITHUB_OUTPUT`` as ``device_extras=...``:
 
@@ -59,10 +62,11 @@ def main(argv: list[str]) -> int:
     )
     p.add_argument(
         "--output-mode",
-        choices=["targets", "device-extras"],
+        choices=["targets", "targets-output", "device-extras"],
         default="targets",
         help=(
             "'targets' prints bare gfx targets (default). "
+            "'targets-output' also writes them to GITHUB_OUTPUT as targets=... . "
             "'device-extras' prints pip device extras (device-gfxNNN) "
             "and writes them to GITHUB_OUTPUT as device_extras=..."
         ),
@@ -81,7 +85,10 @@ def main(argv: list[str]) -> int:
         print(result)
         gha_set_output({"device_extras": result})
     else:
-        print(",".join(targets))
+        result = ",".join(targets)
+        print(result)
+        if args.output_mode == "targets-output":
+            gha_set_output({"targets": result})
 
     return 0
 

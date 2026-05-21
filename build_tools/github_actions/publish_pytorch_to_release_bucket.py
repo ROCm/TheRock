@@ -32,8 +32,23 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 from _therock_utils.s3_buckets import get_release_bucket_config
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
+from github_actions.github_actions_api import gha_set_output
 
 logger = logging.getLogger(__name__)
+
+# TODO: Move index URL mapping into build_tools/_therock_utils/s3_buckets.py?
+PACKAGE_INDEX_URLS = {
+    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
+}
+
+
+def package_index_url_for_release_type(release_type: str) -> str:
+    try:
+        return PACKAGE_INDEX_URLS[release_type]
+    except KeyError as e:
+        raise ValueError(f"Unsupported release type: {release_type}") from e
 
 
 def main(argv: list[str]) -> None:
@@ -70,6 +85,13 @@ def main(argv: list[str]) -> None:
     logger.info("Uploaded %d wheel files", count)
     if count == 0:
         raise FileNotFoundError(f"No wheels found at {args.source_dir}")
+
+    gha_set_output(
+        {
+            "package_index_url": package_index_url_for_release_type(args.release_type),
+            "package_s3_uri": dest.s3_uri,
+        }
+    )
 
 
 if __name__ == "__main__":
