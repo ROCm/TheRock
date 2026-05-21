@@ -53,15 +53,20 @@ jobs:
   build_native_packages:
     name: Build ${{ inputs.native_package_type }} packages
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    container:
+      image: ubuntu:24.04
+      options: -v /runner/config:/home/awsconfig/
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
     env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix }}
-      OUTPUT_DIR: ${{ github.workspace }}/output
-      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
-      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
+      # Use relative paths to avoid host/container path mismatch
+      OUTPUT_DIR: output
+      ARTIFACTS_DIR: output/artifacts
+      PACKAGE_DIST_DIR: output/packages
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checking out repository
@@ -83,10 +88,10 @@ jobs:
         run: |
           # Install the needed tools for creating rpm / deb packages
           # Also install tools for creating repo files
-          sudo apt update
-          sudo apt install -y llvm-20
-          sudo apt install -y rpm debhelper-compat build-essential
-          sudo apt install -y dpkg-dev createrepo-c
+          apt-get update
+          apt-get install -y llvm-20
+          apt-get install -y rpm debhelper-compat build-essential
+          apt-get install -y dpkg-dev createrepo-c
 
       - name: Determine IAM role
         id: iam_role
@@ -98,17 +103,14 @@ jobs:
           # artifacts bucket. Release builds (dev/nightly/prerelease) use
           # the matching therock-{type} role for the packages bucket.
           # ================================================================
-
           RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
-
-          if [[ -z "${RELEASE_TYPE}" ]]; then
+          if [ -z "${RELEASE_TYPE}" ]; then
             IAM_ROLE="arn:aws:iam::692859939525:role/therock-ci"
             echo "✓ Using CI role: ${IAM_ROLE}"
           else
             IAM_ROLE="arn:aws:iam::692859939525:role/therock-${RELEASE_TYPE}"
             echo "✓ Using release-type role: ${IAM_ROLE}"
           fi
-
           echo "iam_role=${IAM_ROLE}" >> $GITHUB_OUTPUT
 
       - name: Fetch Artifacts for all GPU families
