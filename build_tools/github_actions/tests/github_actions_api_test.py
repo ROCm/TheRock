@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import base64
 import json
 import os
 from pathlib import Path
@@ -15,11 +16,13 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
+    gha_fetch_file_contents,
     gha_load_github_event,
     gha_query_last_successful_workflow_run,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
+    gha_resolve_git_ref,
     is_authenticated_github_api_available,
 )
 
@@ -467,6 +470,31 @@ class GitHubAPITest(unittest.TestCase):
 
 
 class GitHubActionsUtilsTest(unittest.TestCase):
+    def test_resolve_git_ref_returns_sha_from_commit_api(self):
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"sha": "1" * 40},
+        ) as gha_send_request:
+            sha = gha_resolve_git_ref("ROCm/pytorch", "release/2.12")
+
+        self.assertEqual(sha, "1" * 40)
+        gha_send_request.assert_called_once_with(
+            "https://api.github.com/repos/ROCm/pytorch/commits/release/2.12"
+        )
+
+    def test_fetch_file_contents_decodes_contents_api_response(self):
+        encoded = base64.b64encode(b"2.12.0\n").decode("ascii")
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"content": encoded},
+        ) as gha_send_request:
+            contents = gha_fetch_file_contents("ROCm/pytorch", "version.txt", "abc123")
+
+        self.assertEqual(contents, "2.12.0\n")
+        gha_send_request.assert_called_once_with(
+            "https://api.github.com/repos/ROCm/pytorch/contents/version.txt?ref=abc123"
+        )
+
     def setUp(self):
         # Save environment state
         self._saved_env = {}
