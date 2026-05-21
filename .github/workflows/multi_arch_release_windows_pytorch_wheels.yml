@@ -7,11 +7,11 @@
 #   - One fat build_prod_wheels.py invocation per (python_version,
 #     pytorch_git_ref) matrix cell, covering all gfx targets expanded
 #     from the inputs.amdgpu_families set. Builds torch, torchaudio,
-#     and torchvision in a single invocation. (No triton on Windows,
-#     matching the legacy release_windows_pytorch_wheels.yml shape.)
+#     and torchvision in a single invocation. For pytorch_git_ref nightly,
+#     also builds triton_windows (matching legacy release_windows_pytorch_wheels).
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
-#     torchaudio ships as-is (no split).
+#     torchaudio and triton_windows ship as-is (no split).
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl/
 #     (server-side indexing handles the index page) via
 #     publish_pytorch_to_release_bucket.py.
@@ -113,6 +113,7 @@ jobs:
       contents: read
     env:
       CHECKOUT_ROOT: B:/src
+      TRITON_BUILD_ARGS: ${{ matrix.pytorch_git_ref == 'nightly' && '--triton-dir B:/src/triton --build-triton' || '' }}
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       optional_build_prod_arguments: ""
@@ -182,6 +183,9 @@ jobs:
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
             --repo-hashtag nightly
+          python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ matrix.pytorch_git_ref != 'nightly' }}
@@ -247,6 +251,7 @@ jobs:
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            %TRITON_BUILD_ARGS% ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
@@ -317,7 +322,7 @@ jobs:
 
           # The splitter writes the host wheel under the same filename as the
           # input, so relocate each fat wheel out of PACKAGE_DIST_DIR before
-          # invoking the splitter. torchaudio ships as-is.
+          # invoking the splitter. torchaudio and triton_windows ship as-is.
           FAT_STAGE="$(cygpath -u "${RUNNER_TEMP}")/pytorch-fat"
           mkdir -p "${FAT_STAGE}"
 
