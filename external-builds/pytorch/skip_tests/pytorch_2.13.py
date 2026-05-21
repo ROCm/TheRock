@@ -223,6 +223,15 @@ skip_tests = {
             # in autograd backward.
             "(TestDataParallel and test_strided_grad_layout)",
 
+            # Run 26198202280 shard 3/3, job 77082259137:
+            # https://github.com/ROCm/TheRock/actions/runs/26198202280/job/77082259137
+            # Apr20/PT + May01/ROCm attribution layer hit a 300s timeout in
+            # test_layer_by_layer_shard_no_false_positive. The May01/PT +
+            # May01/ROCm target stack already skips TestFullyShardSharedParams
+            # at class scope after multiple same-class 300s hangs, so keep the
+            # attribution layer class-scoped to avoid exposing downstream timeouts.
+            "(TestFullyShardSharedParams)",
+
             # Run 26170912739 shard 1/3, job 76988162868:
             # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162868
             # Newly exposed May01/PT + May01/ROCm target-stack timeouts in
