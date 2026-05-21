@@ -550,6 +550,12 @@ class DevicePackagingTest(TmpDirTestCase):
         an_gfx942 = ArtifactName("blas", "lib", "gfx942")
         self.assertTrue(device_artifact_filter("gfx942", an_gfx942))
 
+        # rccl is built TARGET_NEUTRAL but BUILD_TOPOLOGY marks it
+        # target-specific so kpack splits produce per-arch rccl_lib_<arch>
+        # artifacts that must land in the device wheel.
+        an_rccl = ArtifactName("rccl", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_rccl))
+
         # Should NOT match generic.
         an_generic = ArtifactName("blas", "lib", "generic")
         self.assertFalse(device_artifact_filter("gfx942", an_generic))
