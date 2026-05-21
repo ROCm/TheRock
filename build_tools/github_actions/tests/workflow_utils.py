@@ -77,6 +77,39 @@ def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
     return required
 
 
+def get_transitive_workflow_uses(root_filenames: list[str]) -> set[str]:
+    """Returns all workflow filenames transitively referenced via reusable workflow calls.
+
+    Starting from the given root workflow filenames, follows all
+    ``uses: ./.github/workflows/<name>.yml`` references in job definitions
+    and returns the complete set of workflow filenames (including the roots).
+    """
+    visited: set[str] = set()
+    queue = list(root_filenames)
+    while queue:
+        filename = queue.pop()
+        if filename in visited:
+            continue
+        visited.add(filename)
+        workflow_path = WORKFLOWS_DIR / filename
+        if not workflow_path.exists():
+            continue
+        workflow = load_workflow(workflow_path)
+        if not isinstance(workflow, dict):
+            continue
+        jobs = workflow.get("jobs")
+        if not isinstance(jobs, dict):
+            continue
+        for job_def in jobs.values():
+            if not isinstance(job_def, dict):
+                continue
+            uses = job_def.get("uses")
+            if isinstance(uses, str) and uses.startswith("./.github/workflows/"):
+                ref_filename = uses.removeprefix("./.github/workflows/")
+                queue.append(ref_filename)
+    return visited
+
+
 def get_choice_options(workflow: dict, input_name: str) -> list | None:
     """Extracts the options list for a type: choice workflow_dispatch input.
 

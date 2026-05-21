@@ -31,18 +31,20 @@ cmake/therock_subproject.cmake   Injection via project_init.cmake
 
 ### Propagation Mechanism
 
-When a flag is enabled, its effects are injected into subprojects via the
-generated `project_init.cmake` files (the same mechanism used for
+Flag effects are injected into subprojects via the generated
+`project_init.cmake` files (the same mechanism used for
 `THEROCK_DEFAULT_CMAKE_VARS`):
 
+- **GLOBAL_PROPAGATE_FLAG**: Mirrors `THEROCK_FLAG_{NAME}` to **all**
+  subprojects, regardless of whether the flag is enabled or disabled.
 - **GLOBAL_CMAKE_VARS**: `VAR=VALUE` pairs set in the super-project and
-  propagated to **all** subprojects via `THEROCK_DEFAULT_CMAKE_VARS`.
+  propagated to **all** subprojects when the flag is enabled.
 - **GLOBAL_CPP_DEFINES**: Preprocessor defines added to **all** subprojects
-  via `add_compile_definitions()` in project_init.cmake.
+  when the flag is enabled via `add_compile_definitions()` in project_init.cmake.
 - **CMAKE_VARS**: `VAR=VALUE` pairs injected only into the listed
-  **SUB_PROJECTS** via `set(VAR VALUE CACHE STRING "" FORCE)`.
+  **SUB_PROJECTS** when the flag is enabled.
 - **CPP_DEFINES**: Preprocessor defines added only to the listed
-  **SUB_PROJECTS** via `add_compile_definitions()`.
+  **SUB_PROJECTS** when the flag is enabled via `add_compile_definitions()`.
 
 Structural concerns (conditional subproject inclusion, runtime dependency
 wiring) remain as explicit conditionals in the consuming CMakeLists.txt files.
@@ -67,17 +69,18 @@ therock_declare_flag(
 
 ### Parameters
 
-| Parameter            | Required | Description                                                                      |
-| -------------------- | -------- | -------------------------------------------------------------------------------- |
-| `NAME`               | Yes      | Unique identifier. Creates `THEROCK_FLAG_{NAME}` cache variable.                 |
-| `DEFAULT_VALUE`      | Yes      | `ON` or `OFF`.                                                                   |
-| `DESCRIPTION`        | Yes      | Short description shown in CMake cache UI.                                       |
-| `ISSUE`              | No       | Tracking issue URL.                                                              |
-| `GLOBAL_CMAKE_VARS`  | No       | `VAR=VALUE` pairs for all subprojects.                                           |
-| `GLOBAL_CPP_DEFINES` | No       | Preprocessor defines for all subprojects.                                        |
-| `CMAKE_VARS`         | No       | `VAR=VALUE` pairs for listed `SUB_PROJECTS` only.                                |
-| `CPP_DEFINES`        | No       | Preprocessor defines for listed `SUB_PROJECTS` only.                             |
-| `SUB_PROJECTS`       | No\*     | Target names for scoped `CMAKE_VARS`/`CPP_DEFINES`. \*Required if either is set. |
+| Parameter               | Required | Description                                                                      |
+| ----------------------- | -------- | -------------------------------------------------------------------------------- |
+| `NAME`                  | Yes      | Unique identifier. Creates `THEROCK_FLAG_{NAME}` cache variable.                 |
+| `DEFAULT_VALUE`         | Yes      | `ON` or `OFF`.                                                                   |
+| `DESCRIPTION`           | Yes      | Short description shown in CMake cache UI.                                       |
+| `ISSUE`                 | No       | Tracking issue URL.                                                              |
+| `GLOBAL_PROPAGATE_FLAG` | No       | Mirror `THEROCK_FLAG_{NAME}` to all subprojects whether enabled or disabled.     |
+| `GLOBAL_CMAKE_VARS`     | No       | `VAR=VALUE` pairs for all subprojects when enabled.                              |
+| `GLOBAL_CPP_DEFINES`    | No       | Preprocessor defines for all subprojects when enabled.                           |
+| `CMAKE_VARS`            | No       | `VAR=VALUE` pairs for listed `SUB_PROJECTS` only when enabled.                   |
+| `CPP_DEFINES`           | No       | Preprocessor defines for listed `SUB_PROJECTS` when enabled.                     |
+| `SUB_PROJECTS`          | No\*     | Target names for scoped `CMAKE_VARS`/`CPP_DEFINES`. \*Required if either is set. |
 
 ### Using a Flag in CMakeLists.txt
 
@@ -180,9 +183,10 @@ This is generated automatically: `therock_finalize_flags()` writes
 1. Add a `therock_declare_flag()` call in `FLAGS.cmake`.
 1. Use `THEROCK_FLAG_{NAME}` in the relevant CMakeLists.txt files for
    structural decisions (conditional subproject inclusion, dependency wiring).
-1. If the flag needs to set variables or defines in subprojects, use the
+1. If subprojects need the flag value itself, use `GLOBAL_PROPAGATE_FLAG`.
+   If the flag needs to set variables or defines only when enabled, use the
    `CMAKE_VARS`, `CPP_DEFINES`, `GLOBAL_CMAKE_VARS`, or `GLOBAL_CPP_DEFINES`
-   parameters to automate propagation.
+   parameters.
 1. Run cmake configure and verify the flag report output and, if applicable,
    inspect the generated `project_init.cmake` files.
 

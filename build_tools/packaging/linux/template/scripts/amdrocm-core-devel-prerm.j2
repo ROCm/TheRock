@@ -27,7 +27,7 @@ do_update_alternatives(){
     for i in "${binaries[@]}"
     do
         update-alternatives --remove "$i" \
-            "$PKG_INSTALL_PREFIX/bin/$i"
+            "$PKG_INSTALL_PREFIX/bin/$i" || true
     done
 }
 
