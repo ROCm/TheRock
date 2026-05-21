@@ -363,104 +363,96 @@ def matrix_generator(
             platform_info = platform_set.get(platform)
             assert isinstance(platform_info, dict)
 
-            # Further expand it based on build_variant.
-            build_variant_names = platform_info.get("build_variants")
-            assert isinstance(
-                build_variant_names, list
-            ), f"Expected 'build_variant' in platform: {platform_info}"
-            for build_variant_name in build_variant_names:
-                # We have custom build variants for specific CI flows.
-                # For CI, we use the release build variant (for PRs, pushes to main, nightlies)
-                # For CI ASAN/TSAN, we use the ASAN/TSAN build variant (for pushes to main)
-                # In the case that the build variant is not requested, we skip it
-                if build_variant_name != base_args.get("build_variant"):
-                    continue
+            # Look up the requested build variant and check the family
+            # allow-list. Variants without a "families" key apply to all
+            # families; variants with one only apply to listed families.
+            build_variant_name = base_args.get("build_variant")
+            build_variant_info = platform_build_variants.get(build_variant_name)
+            if not build_variant_info:
+                continue
+            allowed_families = build_variant_info.get("families")
+            if allowed_families is not None and target_name not in allowed_families:
+                continue
 
-                # Merge platform_info and build_variant_info into a matrix_row.
-                matrix_row = dict(platform_info)
+            # Merge platform_info and build_variant_info into a matrix_row.
+            matrix_row = dict(platform_info)
 
-                build_variant_info = platform_build_variants.get(build_variant_name)
-                assert isinstance(
-                    build_variant_info, dict
-                ), f"Expected {build_variant_name} in {platform_build_variants} for {platform_info}"
+            # If the build variant level notes expect_failure, set it on the overall row.
+            # But if not, honor what is already there.
+            if build_variant_info.get("expect_failure", False):
+                matrix_row["expect_failure"] = True
 
-                # If the build variant level notes expect_failure, set it on the overall row.
-                # But if not, honor what is already there.
-                if build_variant_info.get("expect_failure", False):
-                    matrix_row["expect_failure"] = True
+            # Enable pytorch builds for families without known build failures.
+            # TODO(#3291): Add finer-grained controls over when pytorch is built
+            expect_failure = matrix_row.get("expect_failure", False)
+            expect_pytorch_failure = matrix_row.get("expect_pytorch_failure", False)
+            matrix_row["build_pytorch"] = (
+                not expect_failure and not expect_pytorch_failure
+            )
 
-                # Enable pytorch builds for families without known build failures.
-                # TODO(#3291): Add finer-grained controls over when pytorch is built
-                expect_failure = matrix_row.get("expect_failure", False)
-                expect_pytorch_failure = matrix_row.get("expect_pytorch_failure", False)
-                matrix_row["build_pytorch"] = (
-                    not expect_failure and not expect_pytorch_failure
+            matrix_row.update(build_variant_info)
+
+            # Assign a computed "artifact_group" combining the family and variant.
+            artifact_group = platform_info["family"]
+            build_variant_suffix = build_variant_info["build_variant_suffix"]
+            if build_variant_suffix:
+                artifact_group += f"-{build_variant_suffix}"
+            matrix_row["artifact_group"] = artifact_group
+
+            # Handle multi-label configuration with weighted random selection.
+            # Some families (e.g. gfx94x) have multiple runner labels available.
+            if "test-runs-on-labels" in platform_info:
+                matrix_row["test-runs-on"] = select_weighted_label(
+                    platform_info["test-runs-on-labels"], target_name
+                )
+            if "test-runs-on-multi-gpu-labels" in platform_info:
+                matrix_row["test-runs-on-multi-gpu"] = select_weighted_label(
+                    platform_info["test-runs-on-multi-gpu-labels"],
+                    f"{target_name} (multi-gpu)",
                 )
 
-                del matrix_row["build_variants"]
-                matrix_row.update(build_variant_info)
+            # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
+            label_options = []
+            label_options.extend(get_pr_labels(base_args))
+            label_options.extend(
+                get_workflow_dispatch_additional_label_options(base_args)
+            )
+            for label in label_options:
+                # If a specific test kernel type was specified, we use that kernel-enabled test runners
+                # We disable the other machines that do not have the specified kernel type
+                # If a kernel test label was added, we set the test-runs-on accordingly to kernel-specific test machines
+                if "test_runner" in label:
+                    _, kernel_type = label.split(":")
+                    # If the architecture has a valid kernel machine, we set it here
+                    if (
+                        "test-runs-on-kernel" in platform_info
+                        and kernel_type in platform_info["test-runs-on-kernel"]
+                    ):
+                        matrix_row["test-runs-on"] = platform_info[
+                            "test-runs-on-kernel"
+                        ][kernel_type]
+                    # Otherwise, we disable the test runner for this architecture
+                    else:
+                        matrix_row["test-runs-on"] = ""
+                        if "test-runs-on-multi-gpu" in platform_info:
+                            matrix_row["test-runs-on-multi-gpu"] = ""
+                    break
 
-                # Assign a computed "artifact_group" combining the family and variant.
-                artifact_group = platform_info["family"]
-                build_variant_suffix = build_variant_info["build_variant_suffix"]
-                if build_variant_suffix:
-                    artifact_group += f"-{build_variant_suffix}"
-                matrix_row["artifact_group"] = artifact_group
+            # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
+            # To avoid impact on the production environment, we use the custom sandbox runners if this is an ASAN test run
+            if (
+                "asan" in base_args.get("build_variant")
+                and "test-runs-on-sandbox" in matrix_row
+            ):
+                matrix_row["test-runs-on"] = matrix_row["test-runs-on-sandbox"]
 
-                # Handle multi-label configuration with weighted random selection.
-                # Some families (e.g. gfx94x) have multiple runner labels available.
-                if "test-runs-on-labels" in platform_info:
-                    matrix_row["test-runs-on"] = select_weighted_label(
-                        platform_info["test-runs-on-labels"], target_name
-                    )
-                if "test-runs-on-multi-gpu-labels" in platform_info:
-                    matrix_row["test-runs-on-multi-gpu"] = select_weighted_label(
-                        platform_info["test-runs-on-multi-gpu-labels"],
-                        f"{target_name} (multi-gpu)",
-                    )
+            # Select build runner using weighted distribution (90% Azure, 10% AWS)
+            # Sanitizer builds use ramdisk variants
+            matrix_row["build-runs-on"] = select_build_runner(
+                platform, base_args.get("build_variant", "ci")
+            )
 
-                # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
-                label_options = []
-                label_options.extend(get_pr_labels(base_args))
-                label_options.extend(
-                    get_workflow_dispatch_additional_label_options(base_args)
-                )
-                for label in label_options:
-                    # If a specific test kernel type was specified, we use that kernel-enabled test runners
-                    # We disable the other machines that do not have the specified kernel type
-                    # If a kernel test label was added, we set the test-runs-on accordingly to kernel-specific test machines
-                    if "test_runner" in label:
-                        _, kernel_type = label.split(":")
-                        # If the architecture has a valid kernel machine, we set it here
-                        if (
-                            "test-runs-on-kernel" in platform_info
-                            and kernel_type in platform_info["test-runs-on-kernel"]
-                        ):
-                            matrix_row["test-runs-on"] = platform_info[
-                                "test-runs-on-kernel"
-                            ][kernel_type]
-                        # Otherwise, we disable the test runner for this architecture
-                        else:
-                            matrix_row["test-runs-on"] = ""
-                            if "test-runs-on-multi-gpu" in platform_info:
-                                matrix_row["test-runs-on-multi-gpu"] = ""
-                        break
-
-                # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
-                # To avoid impact on the production environment, we use the custom sandbox runners if this is an ASAN test run
-                if (
-                    "asan" in base_args.get("build_variant")
-                    and "test-runs-on-sandbox" in matrix_row
-                ):
-                    matrix_row["test-runs-on"] = matrix_row["test-runs-on-sandbox"]
-
-                # Select build runner using weighted distribution (90% Azure, 10% AWS)
-                # Sanitizer builds use ramdisk variants
-                matrix_row["build-runs-on"] = select_build_runner(
-                    platform, base_args.get("build_variant", "release")
-                )
-
-                matrix_output.append(matrix_row)
+            matrix_output.append(matrix_row)
 
     print(f"Generated build matrix: {str(matrix_output)}")
     print(f"Generated test list: {str(unique_test_names)}")
@@ -697,6 +689,6 @@ if __name__ == "__main__":
     base_args["workflow_dispatch_additional_label_options"] = os.getenv(
         "ADDITIONAL_LABEL_OPTIONS", ""
     )
-    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
+    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "ci")
 
     main(base_args, linux_families, windows_families)

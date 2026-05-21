@@ -88,26 +88,38 @@ def select_build_runner(platform: str, build_variant: str) -> str:
 
 all_build_variants = {
     "linux": {
+        "ci": {
+            "build_variant_label": "ci",
+            "build_variant_suffix": "",
+            # TODO: Enable linux-dev once capacity and rccl link
+            # issues are resolved. https://github.com/ROCm/TheRock/issues/1781
+            # "build_variant_cmake_preset": "linux-dev",
+            "build_variant_cmake_preset": "",
+        },
         "release": {
             "build_variant_label": "release",
             "build_variant_suffix": "",
-            # TODO: Enable linux-release-package once capacity and rccl link
-            # issues are resolved. https://github.com/ROCm/TheRock/issues/1781
-            # "build_variant_cmake_preset": "linux-release-package",
-            "build_variant_cmake_preset": "",
+            "build_variant_cmake_preset": "linux-release",
         },
-        "asan": {
+        "ci_asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
-            "build_variant_cmake_preset": "linux-release-asan",
+            "build_variant_cmake_preset": "linux-dev-asan",
+            "families": ["gfx94x", "gfx950"],
         },
-        "tsan": {
+        "ci_tsan": {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
-            "build_variant_cmake_preset": "linux-release-tsan",
+            "build_variant_cmake_preset": "linux-dev-tsan",
+            "families": ["gfx94x", "gfx950"],
         },
     },
     "windows": {
+        "ci": {
+            "build_variant_label": "ci",
+            "build_variant_suffix": "",
+            "build_variant_cmake_preset": "windows-dev",
+        },
         "release": {
             "build_variant_label": "release",
             "build_variant_suffix": "",
@@ -129,7 +141,6 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
-- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
@@ -175,7 +186,6 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "tsan"],
         }
     },
     "gfx110x": {
@@ -184,7 +194,6 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx110X-all",
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
@@ -192,7 +201,6 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
         },
     },
     "gfx1151": {
@@ -204,7 +212,6 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
@@ -213,7 +220,6 @@ amdgpu_family_info_matrix_presubmit = {
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
-            "build_variants": ["release"],
             # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
             "nightly_check_only_for_family": True,
         },
@@ -224,7 +230,6 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
@@ -232,7 +237,6 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
     },
@@ -246,7 +250,6 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "tsan"],
         }
     },
 }
@@ -260,13 +263,11 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx900",
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
-            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx900",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
     # gfx906/908/90a split into separate families - each has different instruction
@@ -278,14 +279,12 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx906",
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
-            "build_variants": ["release"],
         },
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx906",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
     "gfx908": {
@@ -295,13 +294,11 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx908",
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
-            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx908",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
     "gfx90a": {
@@ -309,14 +306,12 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-gfx90a-gpu-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx90a",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
     "gfx101x": {
@@ -324,13 +319,11 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
     "gfx103x": {
@@ -338,14 +331,12 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
     },
@@ -354,14 +345,12 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
     "gfx1152": {
@@ -369,13 +358,11 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx1152",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
     "gfx1153": {
@@ -383,14 +370,12 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
         },
     },
 }

@@ -50,7 +50,7 @@ jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
-      build_variant: "asan"
+      build_variant: "ci_asan"
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}

@@ -42,7 +42,7 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
 
     def test_required_fields_present(self):
         """Every platform entry must have the required fields."""
-        required = {"family", "fetch-gfx-targets", "test-runs-on", "build_variants"}
+        required = {"family", "fetch-gfx-targets", "test-runs-on"}
         for target_name, entry in ALL_FAMILIES.items():
             for platform in ("linux", "windows"):
                 if platform not in entry:
@@ -54,15 +54,22 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                         f"{target_name}/{platform} missing required fields: {missing}"
                     )
 
-    def test_build_variants_non_empty(self):
-        """Every platform entry must list at least one build variant."""
-        for target_name, entry in ALL_FAMILIES.items():
-            for platform in ("linux", "windows"):
-                if platform not in entry:
+    def test_variant_families_exist(self):
+        """Every family in a variant's allow-list must exist in the matrix."""
+        from amdgpu_family_matrix import all_build_variants
+
+        all_family_names = set(ALL_FAMILIES.keys())
+        for platform, variants in all_build_variants.items():
+            for variant_name, variant_config in variants.items():
+                allowed = variant_config.get("families")
+                if allowed is None:
                     continue
-                variants = entry[platform].get("build_variants", [])
-                if not variants:
-                    self.fail(f"{target_name}/{platform} has empty build_variants")
+                for family in allowed:
+                    if family not in all_family_names:
+                        self.fail(
+                            f"Variant {variant_name} on {platform} references "
+                            f"unknown family {family!r}"
+                        )
 
 
 if __name__ == "__main__":
