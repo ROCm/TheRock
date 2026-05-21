@@ -6,6 +6,7 @@
 from typing import Callable, Sequence
 
 import importlib.util
+import io
 import re
 import os
 from pathlib import Path
@@ -315,7 +316,7 @@ class PopulatedDistPackage:
         dist_info_path = package_dest_dir / dist_info_relpath
         log(f"  Writing dist info: {dist_info_path}")
         dist_info_path.parent.mkdir(parents=True, exist_ok=True)
-        dist_info_path.write_text(dist_info_contents)
+        dist_info_path.write_text(dist_info_contents, newline="\n")
 
         return package_dest_dir
 
@@ -796,3 +797,64 @@ def build_packages(
 
         log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
         subprocess.check_call(build_args, cwd=child_path, stderr=subprocess.STDOUT)
+
+        if child_name == "rocm":
+            # setuptools writes PKG-INFO / setup.cfg / egg-info in platform
+            # text mode, which yields CRLF on Windows. Normalize so the
+            # rocm sdist is byte-identical across Linux and Windows builds.
+            sdists = list(effective_dist_dir.glob(f"{child_name}-*.tar.gz"))
+            if not sdists:
+                raise RuntimeError(
+                    f"No {child_name} sdist produced in {effective_dist_dir}"
+                )
+            for sdist in sdists:
+                _normalize_sdist_line_endings(sdist)
+
+
+_TEXT_SUFFIXES = frozenset({".py", ".md", ".toml", ".cfg", ".txt", ".rst", ".in"})
+
+
+def _is_text_member(name: str) -> bool:
+    base = name.rsplit("/", 1)[-1]
+    if base == "PKG-INFO":
+        return True
+    suffix = ("." + base.rsplit(".", 1)[-1].lower()) if "." in base else ""
+    return suffix in _TEXT_SUFFIXES
+
+
+def _normalize_sdist_line_endings(sdist_path: Path) -> None:
+    """Rewrite `sdist_path` in place with LF line endings on text members.
+
+    Preserves the original tar member order and per-file metadata
+    (mtime, mode, uid/gid) so the only delta vs. setuptools' output is
+    the byte content of text files.
+    """
+    with tarfile.open(sdist_path, "r:gz") as src:
+        members = src.getmembers()
+        payloads: dict[str, bytes] = {}
+        for member in members:
+            if not member.isfile():
+                continue
+            fp = src.extractfile(member)
+            if fp is None:
+                raise RuntimeError(
+                    f"Could not extract regular file {member.name} from {sdist_path}"
+                )
+            data = fp.read()
+            if _is_text_member(member.name):
+                data = data.replace(b"\r\n", b"\n")
+            payloads[member.name] = data
+
+    tmp_path = sdist_path.with_suffix(sdist_path.suffix + ".tmp")
+    with tarfile.open(tmp_path, "w:gz") as dst:
+        for member in members:
+            if member.isfile() and member.name in payloads:
+                data = payloads[member.name]
+                member.size = len(data)
+                dst.addfile(member, fileobj=io.BytesIO(data))
+            else:
+                dst.addfile(member)
+    tmp_path.replace(sdist_path)
+
+    if not sdist_path.exists() or sdist_path.stat().st_size == 0:
+        raise RuntimeError(f"Normalized sdist missing or empty: {sdist_path}")
