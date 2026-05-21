@@ -256,6 +256,21 @@ skip_tests = {
             "(TestFullyShardMixedPrecisionTraining and test_reduce_dtype)",
             "(TestFullyShard1DTrainingCompose and test_train_parity_with_activation_checkpointing)",
 
+            # Run 26185604461 shard 3/3, job 77040210625:
+            # https://github.com/ROCm/TheRock/actions/runs/26185604461/job/77040210625
+            # Mixed-precision structured input/output scalar drift; rank 0 exits
+            # with error code 10 after assertion, not a native crash. Test-level
+            # skip is enough because pytest -k can isolate the method and sibling
+            # mixed-precision failures are tracked separately.
+            "(TestFullyShardMixedPrecisionTraining and test_structured_input_output)",
+
+            # Run 26185604461 shard 3/3, job 77040210625:
+            # https://github.com/ROCm/TheRock/actions/runs/26185604461/job/77040210625
+            # 300s composable FSDP shard-placement training timeout. Class-level
+            # skip is equivalent here because this class currently contains only
+            # this method; no same-class siblings passed in this shard.
+            "(TestFullyShardShardPlacementFnMultiProcess)",
+
             # Run 26170912739 shard 3/3, job 76988162973:
             # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162973
             # SIGABRT/native watchdog crash in DDP buffer hook; exact overlap with
