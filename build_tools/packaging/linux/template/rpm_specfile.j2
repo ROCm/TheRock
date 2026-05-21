@@ -9,6 +9,8 @@
 %global _buildshell /bin/bash
 %global _debugsource_template %{nil}
 %global debug_package %{nil}          # disables -debuginfo
+# Move build-id to debuginfo package
+%global _build_id_links alldebug
 %define __brp_mangle_shebangs %{nil}
 # Exclue libpython requirements. Used for amdrocm-debugger
 {%- if exclude_libpython_requires %}

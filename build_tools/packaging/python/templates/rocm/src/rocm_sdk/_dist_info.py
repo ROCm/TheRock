@@ -213,6 +213,13 @@ PackageEntry(
     required=False,
 )
 PackageEntry(
+    "device",
+    "rocm-sdk-device-{target_family}",
+    pure_py_package_name="rocm_sdk_device",
+    template_directory="rocm-sdk-device",
+    required=False,
+)
+PackageEntry(
     "devel",
     "rocm-sdk-devel",
     pure_py_package_name="rocm_sdk_devel",
@@ -220,10 +227,10 @@ PackageEntry(
     required=False,
 )
 PackageEntry(
-    "profilers",
-    "rocm-sdk-profilers",
-    pure_py_package_name="rocm_sdk_profilers",
-    template_directory="rocm-sdk-profilers",
+    "profiler",
+    "rocm-profiler",
+    pure_py_package_name="rocm_profiler",
+    template_directory="rocm-profiler",
     required=False,
 )
 
@@ -253,6 +260,7 @@ LibraryEntry(
     "lib/host-math/lib",
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
+LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
 LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")

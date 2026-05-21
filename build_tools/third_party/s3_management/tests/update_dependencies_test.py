@@ -1,7 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import os
+import sys
+from pathlib import Path
+
 import pytest
+
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from update_dependencies import is_wheel_allowed
 
@@ -18,6 +24,7 @@ from update_dependencies import is_wheel_allowed
         "numpy-2.0.0-cp311-cp311-linux_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-linux_x86_64.whl",
         "numpy-2.0.0-cp313-cp313-linux_x86_64.whl",
+        "numpy-2.0.0-cp314-cp314-linux_x86_64.whl",
         # manylinux variants
         "numpy-2.0.0-cp310-cp310-manylinux_2_17_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-manylinux2014_x86_64.whl",
@@ -82,7 +89,6 @@ def test_rejected_platform(pkg: str) -> None:
         "numpy-2.0.0-pp310-pypy310_pp73-manylinux_2_17_x86_64.whl",
         # Free-threaded and future versions
         "numpy-2.0.0-cp313t-cp313t-linux_x86_64.whl",
-        "numpy-2.0.0-cp314-cp314-linux_x86_64.whl",
         "numpy-2.0.0-cp314t-cp314t-linux_x86_64.whl",
         # Python 2 and py2.py3 universal tags
         "six-1.16.0-py2-none-any.whl",

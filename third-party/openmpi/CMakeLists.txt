@@ -65,7 +65,7 @@ add_custom_target(
   COMMAND
     ${CMAKE_COMMAND} -E chdir "${SOURCE_DIR}" perl autogen.pl --force
   COMMAND
-    "${SOURCE_DIR}/configure" --prefix=${CMAKE_INSTALL_PREFIX} --disable-silent-rules --enable-mpi-fortran=no
+    "${SOURCE_DIR}/configure" --prefix=${CMAKE_INSTALL_PREFIX} --libdir=${CMAKE_INSTALL_PREFIX}/lib --disable-silent-rules --enable-mpi-fortran=no
   COMMAND
     make -j ${PAR_JOBS}
   COMMAND

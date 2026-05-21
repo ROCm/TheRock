@@ -52,7 +52,7 @@ PACKAGES_PER_PROJECT = {
     "opt_einsum": {"versions": ["latest"], "project": "jax"},
     "tomli": {"versions": ["latest"], "project": "jax"},
     "sympy": {"versions": ["latest"], "project": "torch"},
-    "mpmath": {"versions": ["latest"], "project": "torch"},
+    "mpmath": {"versions": ["1.3.0"], "project": "torch"},
     "pillow": {"versions": ["latest"], "project": "torch"},
     # 3.4.2 for Python 3.10, latest for Python 3.11+
     "networkx": {"versions": ["3.4.2", "latest"], "project": "torch"},
@@ -62,7 +62,8 @@ PACKAGES_PER_PROJECT = {
     "filelock": {"versions": ["latest"], "project": "torch"},
     "fsspec": {"versions": ["latest"], "project": "torch"},
     "typing-extensions": {"versions": ["latest"], "project": "torch"},
-    "setuptools": {"versions": ["latest"], "project": "rocm"},
+    "rocm-bootstrap": {"versions": ["latest"], "project": "torch"},
+    "setuptools": {"versions": ["81.0.0"], "project": "rocm"},
 }
 
 
@@ -110,7 +111,7 @@ def is_wheel_allowed(pkg: str) -> bool:
        This rejects win32, win_arm64, macOS, musllinux, ARM, RISC-V, iOS, etc.
     2. Python tag is in _ALLOWED_CPYTHON_TAGS, or is exactly "py3"
        (pure-Python wheels). This rejects PyPy (pp*), cp39, cp313t,
-       cp314, cp314t, py2, py2.py3, etc.
+       cp314t, py2, py2.py3, etc.
 
     Per PEP 427, the wheel stem is:
         {name}-{version}[-{build}]-{python}-{abi}-{platform}
@@ -206,7 +207,7 @@ def main() -> None:
 
     SUBFOLDERS = [
         "gfx101X-dgpu",
-        "gfx103X-dgpu",
+        "gfx103X-all",
         "gfx110X-all",
         "gfx1150",
         "gfx1151",

@@ -29,7 +29,7 @@ test_type = os.getenv("TEST_TYPE", "full")
 test_filter = []
 if test_type == "quick":
     test_filter.append("--gtest_filter=*smoke*")
-elif test_type == "full":
+else:
     test_filter.append("--gtest_filter=*quick*")
 
 cmd = [f"{THEROCK_BIN_DIR}/hipsparselt-test"] + test_filter

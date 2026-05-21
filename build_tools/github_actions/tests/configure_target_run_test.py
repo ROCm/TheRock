@@ -32,7 +32,7 @@ class ConfigureTargetRunTest(unittest.TestCase):
     def test_windows_gfx120X_all(self):
         runner_label = configure_target_run.get_runner_label("gfx120X-all", "windows")
         # No runner label yet.
-        self.assertEqual(runner_label, "")
+        self.assertEqual(runner_label, "windows-gfx120X-gpu-rocm")
 
 
 if __name__ == "__main__":

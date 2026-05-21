@@ -26,10 +26,13 @@
 
 ### Infrastructure
 
+- [CI Overview](ci_overview.md) - **Start here** for an overview of how TheRock CI works
 - [CI Workflow Outputs Layout](workflow_outputs.md)
 - [S3 Buckets](s3_buckets.md)
 - [GitHub Actions Debugging](github_actions_debugging.md)
 - [CI Behavior Manipulation](ci_behavior_manipulation.md)
+- [CCache Troubleshooting](ccache_troubleshooting.md)
+- [WSL ROCDXG CI Stage](wsl_rocdxg.md)
 
 ### Other topics
 

@@ -42,7 +42,7 @@ repos:
   rev: v1.5.5
   hooks:
   - id: forbid-tabs
-    exclude: ".gitmodules|patches/.*|docs/development/git_chores.md|build_tools/packaging/linux/template/debian_rules.j2"
+    exclude: ".gitmodules|patches/.*|docs/development/git_chores.md|build_tools/packaging/linux/template/debian_rules.j2|third-party/sysdeps/linux/libdrm/patch_source.sh"
 
 - repo: https://github.com/rhysd/actionlint
   rev: v1.7.10

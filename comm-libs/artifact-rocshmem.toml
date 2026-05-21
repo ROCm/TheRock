@@ -1,16 +1,24 @@
 # rocshmem
 [components.lib."comm-libs/rocshmem/stage"]
 include = [
-  "share/rocshmem/**",
+  "lib/*.bc",
 ]
 [components.run."comm-libs/rocshmem/stage"]
 include = [
   "bin/rocshmem_info",
+  "bin/rocshmem_functional_tests",
+  "share/rocshmem/rocshmem_functional_driver.sh",
 ]
 [components.dbg."comm-libs/rocshmem/stage"]
 [components.dev."comm-libs/rocshmem/stage"]
+include = [
+  "include/**",
+  "lib/*.a",
+]
 [components.doc."comm-libs/rocshmem/stage"]
-
+include = [
+  "share/doc/**",
+]
 # Tests
 [components.test."comm-libs/rocshmem/stage"]
 optional = true

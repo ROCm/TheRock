@@ -28,6 +28,11 @@ cmd = ["./rocrtst64"]
 
 # TODO(#3851): Excluded tests (flaky or disabled in CI).
 TEST_TO_IGNORE = {
+    "gfx90a": {
+        "linux": [
+            "rocrtstFunc.Memory_Max_Mem",
+        ]
+    },
     "gfx94X-dcgpu": {
         "linux": [
             "rocrtstFunc.Memory_Max_Mem",
@@ -70,9 +75,10 @@ QUICK_TESTS = [
     "rocrtstFunc.Memory_Atomic_Xchg_Test",
 ]
 
+exclude_filter = "-"
 if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
     ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
-    exclude_filter = "-" + ":".join(ignored_tests)
+    exclude_filter += ":".join(ignored_tests)
 
 test_type = os.getenv("TEST_TYPE", "full")
 

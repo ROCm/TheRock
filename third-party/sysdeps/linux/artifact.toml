@@ -37,6 +37,14 @@ include = [
 [components.lib."third-party/sysdeps/linux/liblzma/build/stage"]
 [components.dev."third-party/sysdeps/linux/liblzma/build/stage"]
 
+# libmnl
+[components.lib."third-party/sysdeps/linux/libmnl/build/stage"]
+[components.dev."third-party/sysdeps/linux/libmnl/build/stage"]
+
+# libnl
+[components.lib."third-party/sysdeps/linux/libnl/build/stage"]
+[components.dev."third-party/sysdeps/linux/libnl/build/stage"]
+
 # numactl
 [components.lib."third-party/sysdeps/linux/numactl/build/stage"]
 [components.dev."third-party/sysdeps/linux/numactl/build/stage"]

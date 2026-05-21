@@ -43,6 +43,7 @@ Choose one of these options to specify where to install from:
 | `--rccl`        | Flag | Include RCCL artifacts                             |
 | `--rocdecode`   | Flag | Include rocDecode artifacts (Linux only)           |
 | `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
+| `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
@@ -246,7 +247,7 @@ For advanced use cases, you can manually download and flatten CI artifacts using
    # Example: https://github.com/ROCm/TheRock/actions/runs/15575624591
    export RUN_ID=15575624591
    export OPERATING_SYSTEM=linux # or 'windows'
-   aws s3 cp s3://therock-artifacts/${RUN_ID}-${OPERATING_SYSTEM}/ \
+   aws s3 cp s3://therock-ci-artifacts/${RUN_ID}-${OPERATING_SYSTEM}/ \
      ${LOCAL_ARTIFACTS_DIR} \
      --no-sign-request --recursive --exclude "*" --include "*.tar.xz"
    ```
