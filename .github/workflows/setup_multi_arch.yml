@@ -101,6 +101,13 @@ on:
       external_repo_config:
         description: "JSON config for external repo checkout (generated from external_repo_name)"
         value: ${{ jobs.setup.outputs.external_repo_config }}
+      projects_to_test:
+        description: >-
+          Comma-separated list of test project keys (matching fetch_test_configurations.py's
+          test_matrix keys) to run. Derived from the external repo's therock_matrix.py
+          project_to_test entries when an external repo is set. Defaults to "*" (all tests)
+          when no external repo is set or the external repo doesn't declare a test list.
+        value: ${{ jobs.setup.outputs.projects_to_test || '*' }}
 
 permissions:
   contents: read
@@ -120,6 +127,7 @@ jobs:
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
+      projects_to_test: ${{ steps.external_repo_config.outputs.projects_to_test }}
     steps:
       - name: Checking out repository
         id: checkout
