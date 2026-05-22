@@ -2988,7 +2988,7 @@
     ],
     "Gfxarch": "False"
   },
-  
+
   {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
