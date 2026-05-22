@@ -189,9 +189,40 @@ jobs:
             --prerelease-version=${{ inputs.prerelease_version }} \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 
+      # detect_external_repo_config.py loads the external repo's
+      # .github/scripts/therock_matrix.py to derive projects_to_test. The main
+      # checkout above is TheRock (per inputs.repository), so the external repo
+      # isn't on disk. Sparse-checkout its .github/ next to TheRock and point
+      # EXTERNAL_SOURCE_PATH at it; get_external_repo_path requires the
+      # directory's last component to equal the lowercase short repo name
+      # (e.g. "rocgdb").
+      - name: Compute external repo short name
+        id: external_repo_short_name
+        if: ${{ inputs.external_repo != '' }}
+        env:
+          EXTERNAL_REPO: ${{ inputs.external_repo }}
+        run: |
+          python - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json, os
+          repo = json.loads(os.environ["EXTERNAL_REPO"])["repository"]
+          print(f"name={repo.split('/')[-1].lower()}")
+          EOF
+
+      - name: Checkout external repo .github (for therock_matrix.py)
+        if: ${{ inputs.external_repo != '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ fromJSON(inputs.external_repo).repository }}
+          ref: ${{ fromJSON(inputs.external_repo).ref }}
+          path: external_repos/${{ steps.external_repo_short_name.outputs.name }}
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: true
+
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
+        env:
+          EXTERNAL_SOURCE_PATH: external_repos/${{ steps.external_repo_short_name.outputs.name }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json='${{ inputs.external_repo }}'
