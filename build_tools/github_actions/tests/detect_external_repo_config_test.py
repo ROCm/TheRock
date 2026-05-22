@@ -182,6 +182,30 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         # rocgdb has no cmake_source_var, so source_package is empty
         self.assertIn('"source_package": ""', output)
 
+    def test_projects_to_test_defaults_to_star_when_no_test_list(self):
+        """When the external repo has no therock_matrix.project_map, projects_to_test should be '*'."""
+        # rocm-libraries' therock_matrix isn't accessible from this test
+        # environment, so get_test_list returns []. We expect the default.
+        rc = detect_external_repo_config_main(["--repository", "rocm-libraries"])
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn("projects_to_test=*", output)
+
+    @patch("detect_external_repo_config.get_test_list")
+    def test_projects_to_test_joins_test_list(self, mock_get_test_list):
+        """When the external repo declares tests via project_to_test, they should be comma-joined."""
+        mock_get_test_list.return_value = ["rocgdb-cpu", "rocgdb-gpu"]
+        rc = detect_external_repo_config_main(["--repository", "rocgdb"])
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn("projects_to_test=rocgdb-cpu,rocgdb-gpu", output)
+
     def test_external_repo_json_repository_name_is_lowercased(self):
         """`ROCm/ROCgdb` (case-preserved by GitHub) must resolve to the lowercase
         REPO_CONFIGS key `rocgdb`, not the literal `ROCgdb` which would miss."""

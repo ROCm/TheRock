@@ -287,7 +287,14 @@ def get_test_list(repo_name: str) -> list[str]:
     Returns:
         list[str]: List of test names, or empty list if not found
     """
-    matrix_module = import_external_repo_module(repo_name, "therock_matrix")
+    try:
+        matrix_module = import_external_repo_module(repo_name, "therock_matrix")
+    except ValueError as e:
+        # External repo checkout isn't accessible (e.g. CI step running before
+        # the checkout, or unit-test environment). Fall back to "no test
+        # narrowing" rather than failing the whole config step.
+        _log_warning(f"Cannot load test list for {repo_name}: {e}")
+        return []
     if not matrix_module or not hasattr(matrix_module, "project_map"):
         return []
 
@@ -444,6 +451,17 @@ def main(argv=None):
                 f"Generated fetch_sources_args: {config['fetch_sources_args']}",
                 file=sys.stderr,
             )
+
+        # projects_to_test narrows downstream test jobs to just the tests the
+        # external repo declares via therock_matrix.py's `project_to_test`
+        # entries. Empty/missing falls back to "*" (run everything), preserving
+        # historical behavior for external repos that haven't opted in.
+        test_list = get_test_list(args.repository)
+        config["projects_to_test"] = ",".join(test_list) if test_list else "*"
+        print(
+            f"Projects to test: {config['projects_to_test']}",
+            file=sys.stderr,
+        )
 
         # Build config_json with all fields needed by workflows
         final_source_repo = source_repository or f"ROCm/{args.repository}"
