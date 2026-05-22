@@ -241,6 +241,19 @@ skip_tests = {
             # exposing downstream same-class timeouts.
             "(TestFullyShardGradientAccumulation)",
 
+            # CI run 26296106703 distributed shard 1/3:
+            # next failures exposed after prior May01 distributed skip layers
+            # on the rocm7.13.0a20260501 wheel.
+            "(test_replicate_with_compiler and test_compile_bf16)",
+            "(TestZeroRedundancyOptimizerDistributed and test_ddp_zero_overlap_use_gpu_True_use_interleaved_hook_False_gradient_as_bucket_view_False_static_graph_True_shard_buckets_True)",
+            "(CPFlexAttentionTest and test_cp_flex_attention_document_mask)",
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward)",
+
+            # CI run 26296106703 distributed shard 2/3:
+            # FSDP ND training timed out at 300s; class-level skip avoids
+            # immediately exposing the adjacent ND training cases.
+            "(TestFullyShardNDTraining)",
+
             # Run 26170912739 shard 1/3, job 76988162868:
             # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162868
             # Newly exposed May01/PT + May01/ROCm target-stack timeouts in
