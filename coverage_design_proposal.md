@@ -18,10 +18,10 @@ This document proposes a standardized, artifact-based code coverage design for T
 |---------|--------|------------|---------|-------------------|-------|
 | **hipblas** | ✅ Working | find_program | Single .so | Custom target env | Standard |
 | **hipblaslt** | ✅ Working | find_program | Single .so | Custom target env | Uses ignore-regex for Tensile |
-| **hipcub** | ⚠️ Incomplete | N/A | N/A | N/A | Flag defined, no target |
+| **hipcub** | ✅ Working | find_program | Multiple (GLOBAL) | set_tests_properties | Header-only like rocprim |
 | **hipdnn** | ✅ Working | Custom function | Multiple (GLOBAL) | Custom target env | Most complex |
 | **hipfft** | ✅ Working | find_program | Two .so files | Custom target env | Multiple libraries |
-| **hiprand** | ⚠️ Incomplete | N/A | N/A | N/A | Flag defined, no target |
+| **hiprand** | ✅ Working | find_program | Single .so | set_tests_properties | Like rocprim pattern |
 | **hipsolver** | ✅ Working | find_program | Single .so | Custom target env | Standard |
 | **hipsparse** | ❌ Non-standard | lcov/gcov | N/A | N/A | Uses gcov NOT llvm-cov |
 | **hipsparselt** | ✅ Working | find_program | Single .so | Custom target env | Best practices |
@@ -29,10 +29,10 @@ This document proposes a standardized, artifact-based code coverage design for T
 | **rocblas** | ✅ Working | find_program | Single .so | Python test driver | Python-driven |
 | **rocfft** | ✅ Working | find_program | Single .so | Custom target env | Standard |
 | **rocprim** | ✅ Working | find_program | Multiple (GLOBAL) | set_tests_properties | Header-only |
-| **rocrand** | ⚠️ Partial | N/A | N/A | N/A | Some flags, incomplete |
+| **rocrand** | ⚠️ Partial | N/A | N/A | N/A | Flags only, needs verification |
 | **rocsolver** | ✅ Working | find_program | Single .so | Custom target env | Standard |
 | **rocsparse** | ✅ Working | find_program | Single .so | Custom target env | Uses Python filter |
-| **rocthrust** | ⚠️ Incomplete | N/A | N/A | N/A | Only compile flags |
+| **rocthrust** | ⚠️ Partial | N/A | N/A | N/A | Flags only, needs verification |
 | **rocwmma** | ⚠️ Incomplete | N/A | N/A | N/A | Compile flags only |
 
 ### Key Findings
@@ -41,16 +41,16 @@ This document proposes a standardized, artifact-based code coverage design for T
 
 1. **Inconsistent LLVM tool discovery:** Most use `find_program(HINTS ${ROCM_PATH}/llvm/bin)`, hipblaslt uses `CMAKE_PREFIX_PATH`, hipdnn has custom function
 2. **hipsparse uses gcov/lcov:** Incompatible with LLVM coverage standard
-3. **Six projects incomplete:** hipcub, hiprand, hiptensor, rocrand, rocthrust, rocwmma define flags but lack coverage targets
+3. **Three projects incomplete:** hiptensor, rocwmma, and possibly rocrand/rocthrust (need verification) define flags but lack complete coverage targets
 4. **LLVM_PROFILE_FILE methods vary:**
    - Most: `${CMAKE_COMMAND} -E env` in custom target
-   - rocprim: `set_tests_properties(ENVIRONMENT)`
+   - hiprand, hipcub, rocprim: `set_tests_properties(ENVIRONMENT)` - proven working pattern
    - rocblas: Python test driver
    - All set at build/configure time, not runtime
 
 5. **Coverage objects determination:**
    - .so libraries (majority): Single `-object` parameter
-   - Header-only (rocprim): GLOBAL property accumulation
+   - Header-only (rocprim, hipcub): GLOBAL property accumulation
    - Hybrid (hipdnn): Custom list
    - Requires CMake metadata in ALL cases
 
@@ -239,14 +239,16 @@ def find_llvm_tools(artifact_dir, yaml_config):
 
 ### Issue #9: Incomplete Projects
 
-**Projects with flags but no targets:** hipcub, hiprand, hiptensor, rocrand, rocthrust, rocwmma
+**Projects with flags but no complete targets:** hiptensor, rocwmma, and possibly rocrand/rocthrust (verification needed)
 
-**Impact:** Cannot enable coverage even if requested.
+**Note:** hiprand and hipcub were incorrectly marked as incomplete in initial analysis - they have complete, working coverage implementations using the set_tests_properties pattern.
+
+**Impact:** Cannot enable coverage for incomplete projects even if requested.
 
 **Recommendation:**
-- Document as "not yet supported"
+- Document unsupported projects as "not yet implemented"
 - therock_configure_coverage.py filters these out (already does via COVERAGE_PROJECT_METADATA)
-- Add incrementally as projects implement coverage targets
+- Add incrementally as projects complete coverage target implementation
 
 ### Issue #10: Python Test Drivers
 
