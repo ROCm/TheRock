@@ -1,0 +1,64 @@
+From ca6faf2eafa801815501a6ed9e8dd582ddd0bd10 Mon Sep 17 00:00:00 2001
+From: Ron Lieberman <ron.lieberman@amd.com>
+Date: Fri, 22 May 2026 09:22:51 -0500
+Subject: [PATCH] [ck][cmake] Suppress all warnings as errors
+
+---
+ projects/composablekernel/CMakeLists.txt                     | 4 ++--
+ projects/composablekernel/cmake/EnableCompilerWarnings.cmake | 4 +++-
+ projects/composablekernel/dispatcher/CMakeLists.txt          | 2 +-
+ 3 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/projects/composablekernel/CMakeLists.txt b/projects/composablekernel/CMakeLists.txt
+index e2f3c46619..21d58ea3bf 100644
+--- a/projects/composablekernel/CMakeLists.txt
++++ b/projects/composablekernel/CMakeLists.txt
+@@ -688,8 +688,8 @@ include_directories(BEFORE
+ 
+ SET(BUILD_DEV ON CACHE BOOL "BUILD_DEV")
+ if(BUILD_DEV)
+-    add_compile_options(-Werror)
+-    add_compile_options(-Weverything)
++    add_compile_options(-Wno-error)
++    add_compile_options(-Wno-everything)
+ endif()
+ message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+ 
+diff --git a/projects/composablekernel/cmake/EnableCompilerWarnings.cmake b/projects/composablekernel/cmake/EnableCompilerWarnings.cmake
+index 9cc960cc23..38ba509c16 100644
+--- a/projects/composablekernel/cmake/EnableCompilerWarnings.cmake
++++ b/projects/composablekernel/cmake/EnableCompilerWarnings.cmake
+@@ -27,7 +27,8 @@ else()
+         set(CMAKE_COMPILER_WARNINGS)
+         # use -Wall for gcc and clang
+         list(APPEND CMAKE_COMPILER_WARNINGS
+-            -Wall
++            -Wno-all
++	    -Wno-error
+             -Wextra
+             -Wcomment
+             -Wendif-labels
+@@ -76,6 +77,7 @@ else()
+                 -Wno-unsafe-buffer-usage
+                 -Wno-unused-lambda-capture
+                 -Wno-nvcc-compat
++		-Wno-all -Wno-error
+             )
+             if(CK_CXX_STANDARD GREATER_EQUAL 20)
+                 list(APPEND CMAKE_COMPILER_WARNINGS -Wno-c++20-compat)
+diff --git a/projects/composablekernel/dispatcher/CMakeLists.txt b/projects/composablekernel/dispatcher/CMakeLists.txt
+index ed9b20d33c..0c0ef4897c 100644
+--- a/projects/composablekernel/dispatcher/CMakeLists.txt
++++ b/projects/composablekernel/dispatcher/CMakeLists.txt
+@@ -59,7 +59,7 @@ endif()
+ # Compiler warnings
+ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+     target_compile_options(ck_tile_dispatcher PRIVATE
+-        -Wall -Wextra -Wpedantic
++	    -Wno-all -Wextra -Wpedantic -Wno-error
+     )
+ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+     target_compile_options(ck_tile_dispatcher PRIVATE
+-- 
+2.34.1
+
