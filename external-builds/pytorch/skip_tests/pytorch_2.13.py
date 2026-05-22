@@ -232,6 +232,15 @@ skip_tests = {
             # attribution layer class-scoped to avoid exposing downstream timeouts.
             "(TestFullyShardSharedParams)",
 
+            # Run 26242043110 shard 2/3, job 77230805439:
+            # https://github.com/ROCm/TheRock/actions/runs/26242043110/job/77230805439
+            # Apr20/PT + May01/ROCm attribution layer hit a 300s timeout in
+            # test_gradient_accumulation. The May01/PT + May01/ROCm target
+            # stack already skips TestFullyShardGradientAccumulation at class
+            # scope, so keep this attribution layer class-scoped to avoid
+            # exposing downstream same-class timeouts.
+            "(TestFullyShardGradientAccumulation)",
+
             # Run 26170912739 shard 1/3, job 76988162868:
             # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162868
             # Newly exposed May01/PT + May01/ROCm target-stack timeouts in
