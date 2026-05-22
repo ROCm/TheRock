@@ -57,22 +57,10 @@ jobs:
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
         }}
-      # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
-      # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
-      # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
-      # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
-      options: --ipc host
-        --group-add video
-        --device /dev/kfd
-        --device /dev/dri
-        --group-add 993
-        --group-add 992
-        --group-add 110
-        --ulimit memlock=-1:-1
-        --security-opt seccomp=unconfined
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
-        --user 0:0
-        ${{ fromJSON(inputs.component).container_options }}
+      # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
+      # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
+      # and any job-specific options
+      options: ${{ fromJSON(inputs.component).container_options }}
     strategy:
       fail-fast: false
       matrix:

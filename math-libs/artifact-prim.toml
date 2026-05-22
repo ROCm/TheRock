@@ -6,7 +6,6 @@
 include = [
   "bin/test_*",
   "bin/rocprim/CTestTestfile.cmake",
-  "bin/rocprim/generate_resource_spec*",
   "lib/libtest_linking_*.*",
 ]
 
