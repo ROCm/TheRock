@@ -48,6 +48,80 @@ def _get_script_path(script_name: str) -> str:
     return str(posix_path)
 
 
+# Base container options applied to all Linux containers
+# --ipc host - Allows shared memory between host and container
+# --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
+# --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
+# --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
+_BASE_CONTAINER_OPTIONS = [
+    "--ipc host",
+    "--user 0:0",
+    "--ulimit memlock=-1:-1",
+    "--security-opt seccomp=unconfined",
+]
+
+# GPU-specific container options (only applied when linux_cpu_runner != True)
+# --group-add video - Grants access to GPU video group
+# --device /dev/kfd - AMD KFD device for GPU compute
+# --device /dev/dri - Direct Rendering Infrastructure devices
+# --group-add 993,992,110 - Additional GPU-related groups
+# --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+_GPU_CONTAINER_OPTIONS = [
+    "--group-add video",
+    "--device /dev/kfd",
+    "--device /dev/dri",
+    "--group-add 993",
+    "--group-add 992",
+    "--group-add 110",
+    "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+]
+
+
+def _build_container_options(job_config: dict, platform: str) -> dict:
+    """
+    Build the final container_options string by concatenating base, GPU, and job-specific options.
+
+    Args:
+        job_config: The job configuration dictionary
+        platform: The platform (e.g., "linux", "windows")
+
+    Returns:
+        The modified job_config with updated container_options
+    """
+    # Only apply container options for Linux platforms
+    if platform != "linux":
+        return job_config
+
+    # Start with base options (always applied on Linux)
+    options_parts = _BASE_CONTAINER_OPTIONS.copy()
+
+    # Add GPU-specific options unless this is a CPU-only runner
+    if not job_config.get("linux_cpu_runner", False):
+        options_parts.extend(_GPU_CONTAINER_OPTIONS)
+
+    # Add any job-specific container options
+    if "container_options" in job_config:
+        options_parts.extend(job_config["container_options"])
+
+    # Concatenate all parts with a space separator
+    job_config["container_options"] = " ".join(options_parts)
+
+    return job_config
+
+
+# Common settings applied to all jobs
+_common_settings = {}
+
+# Common settings for rocgdb jobs
+_rocgdb_common = {
+    "fetch_artifact_args": "--debug-tools --tests",
+    "timeout_minutes": 30,
+    "platform": ["linux"],
+    "total_shards": 1,
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
+    "container_options": ["--cap-add=SYS_PTRACE"],
+}
+
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
@@ -62,7 +136,7 @@ test_matrix = {
         },
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
-        "container_options": "--cap-add SYS_MODULE -v /lib/modules:/lib/modules",
+        "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
     },
     # hip-tests
     "hip-tests": {
@@ -188,15 +262,16 @@ test_matrix = {
             "windows": 1,
         },
     },
-    "rocgdb": {
-        "job_name": "rocgdb",
-        "fetch_artifact_args": "--debug-tools --tests",
-        "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_rocgdb.py')}",
-        "platform": ["linux"],
-        "total_shards": 1,
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
-        "container_options": "--cap-add=SYS_PTRACE",
+    "rocgdb-cpu": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-cpu",
+        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.dwarf2",
+        "linux_cpu_runner": True,
+    },
+    "rocgdb-gpu": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-gpu",
+        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.rocm",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -354,7 +429,7 @@ test_matrix = {
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
         "platform": ["linux"],
-        "container_options": "--cap-add=SYS_PTRACE",
+        "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
             "linux": 1,
         },
@@ -552,7 +627,7 @@ test_matrix = {
         "job_name": "rocrtst",
         "fetch_artifact_args": "--rocrtst --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocrtst.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -639,6 +714,7 @@ def run():
                 shard_arr = list(range(1, total_shards + 1))
 
                 pal_entry = {
+                    **_common_settings,
                     "job_name": "hip-tests (PAL)",
                     "fetch_artifact_args": base["fetch_artifact_args"],
                     "timeout_minutes": base["timeout_minutes"],
@@ -653,6 +729,7 @@ def run():
 
                 if windows_hip_rocr_tests:
                     rocr_entry = {
+                        **_common_settings,
                         "job_name": "hip-tests (ROCR)",
                         "fetch_artifact_args": base["fetch_artifact_args"],
                         "timeout_minutes": base["timeout_minutes"],
@@ -667,7 +744,7 @@ def run():
                     all_components.append(rocr_entry)
                 continue
 
-            job_config_data = selected_matrix[key]
+            job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
@@ -723,6 +800,9 @@ def run():
                     continue
 
             all_components.append(job_config_data)
+
+    # Build container options for all components (concatenates base, GPU, and job-specific options)
+    all_components = [_build_container_options(c, platform) for c in all_components]
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
     sanity_component = next(

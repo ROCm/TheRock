@@ -250,10 +250,9 @@ source_sets = ["compilers"]
 [artifact_groups.debug-tools]
 description = "ROCm debug tools"
 type = "generic"
-artifact_group_deps = ["compiler", "hip-runtime", "third-party-sysdeps"]
+artifact_group_deps = ["compiler", "third-party-sysdeps"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["debug-tools", "rocm-systems"]
-disable_platforms = ["windows"]
 
 [artifact_groups.hip-runtime]
 description = "HIP runtime"
@@ -780,7 +779,6 @@ artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
-disable_platforms = ["windows"]
 
 [artifacts.rocr-debug-agent]
 artifact_group = "debug-tools"
