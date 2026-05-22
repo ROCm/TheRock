@@ -253,6 +253,13 @@ skip_tests = {
             # FSDP ND training timed out at 300s; class-level skip avoids
             # immediately exposing the adjacent ND training cases.
             "(TestFullyShardNDTraining)",
+            # Run 26309934790 shard 2/3, job 77455930870:
+            # https://github.com/ROCm/TheRock/actions/runs/26309934790/job/77455930870
+            # Apr20/PT + May01/ROCm attribution: test_train_parity_hsdp hit a 300s
+            # timeout in backward/FSDP finalize. Target branch already skips
+            # TestFullyShardHSDPTraining at class scope.
+            "(TestFullyShardHSDPTraining)",
+
 
             # Run 26170912739 shard 1/3, job 76988162868:
             # https://github.com/ROCm/TheRock/actions/runs/26170912739/job/76988162868
