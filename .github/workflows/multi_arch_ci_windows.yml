@@ -118,8 +118,12 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    # If we are expecting a build failure, do not run tests to save machine capacity.
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    # Skip when:
+    # - the build is expected to fail (save machine capacity), or
+    # - the caller opted out via validate_artifacts=false (typically because
+    #   they're only building a subset of stages and the full-distribution
+    #   validation would flag the missing stages).
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && fromJSON(inputs.build_config).validate_artifacts == true }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}

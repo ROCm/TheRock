@@ -119,8 +119,12 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    # If we are expecting a build failure, do not run tests to save machine capacity.
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    # Skip when:
+    # - the build is expected to fail (save machine capacity), or
+    # - the caller opted out via validate_artifacts=false (typically because
+    #   they're only building a subset of stages and the full-distribution
+    #   validation would flag the missing stages).
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false && fromJSON(inputs.build_config).validate_artifacts == true }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -154,7 +158,7 @@ jobs:
   build_native_deb_packages:
     needs: [build_multi_arch_stages]
     name: Build DEB Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true && fromJSON(inputs.build_config).build_packages == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -167,7 +171,7 @@ jobs:
   build_native_rpm_packages:
     needs: [build_multi_arch_stages]
     name: Build RPM Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true && fromJSON(inputs.build_config).build_packages == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -180,7 +184,7 @@ jobs:
   test_native_packages_ubuntu2404:
     needs: [build_native_deb_packages]
     name: Test DEB Install - ubuntu2404
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true && fromJSON(inputs.build_config).build_packages == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
@@ -195,7 +199,7 @@ jobs:
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel10
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true && fromJSON(inputs.build_config).build_packages == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
@@ -210,7 +214,7 @@ jobs:
   test_native_packages_sles16:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - sles16
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true && fromJSON(inputs.build_config).build_packages == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}

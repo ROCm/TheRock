@@ -52,6 +52,14 @@ on:
         description: "Whether to build ROCm python packages and pytorch downstream jobs."
         type: boolean
         default: true
+      build_packages:
+        description: "Whether to build native Linux deb/rpm packages and run their install tests."
+        type: boolean
+        default: true
+      validate_artifacts:
+        description: "Whether to run the artifact-structure validation job. External repos that build only a subset of stages should disable this."
+        type: boolean
+        default: true
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -155,6 +163,8 @@ jobs:
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           SKIP_STAGES: ${{ inputs.skip_stages }}
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
+          BUILD_PACKAGES: ${{ inputs.build_packages }}
+          VALIDATE_ARTIFACTS: ${{ inputs.validate_artifacts }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py

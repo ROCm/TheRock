@@ -772,6 +772,28 @@ class TestExpandBuildConfigs(unittest.TestCase):
         none_serialized = json.dumps(None.to_dict()) if None else ""
         self.assertEqual(none_serialized, "")
 
+    def test_build_packages_and_validate_artifacts_threaded_to_buildconfig(self):
+        """build_packages / validate_artifacts on CIInputs land on BuildConfig.
+
+        These are pass-through booleans that external repos (e.g. rocgdb) flip
+        to false when they only build a subset of stages, so the native package
+        and full-distribution validation jobs don't fail on missing artifacts.
+        """
+        inputs = self._inputs(build_packages=False, validate_artifacts=False)
+        targets = cm.select_targets(inputs)
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=inputs,
+            test_type="quick",
+            build_packages=inputs.build_packages,
+            validate_artifacts=inputs.validate_artifacts,
+        )
+        for config in [result.linux, result.windows]:
+            if config is None:
+                continue
+            self.assertFalse(config.build_packages)
+            self.assertFalse(config.validate_artifacts)
+
     def test_release_produces_configs_for_both_platforms(self):
         """Release variant with families on both platforms produces both configs
         with correctly structured per-family info."""
@@ -1061,8 +1083,9 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
-        # build_native_linux is Linux-only, not used in Windows workflow
-        linux_only_fields = {"build_native_linux"}
+        # build_native_linux and build_packages gate native deb/rpm jobs which
+        # are Linux-only and have no Windows equivalent.
+        linux_only_fields = {"build_native_linux", "build_packages"}
         self.assertEqual(
             yaml_fields,
             python_fields - linux_only_fields,
