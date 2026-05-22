@@ -280,8 +280,10 @@ def get_package_list(artifact_dir):
     except FileNotFoundError:
         sys.exit(f"{artifact_dir}: Artifactory directory does not exist, exiting")
 
-    # Create a dictionary
+    # Create a prefix index for O(1) artifact lookup
     prefix_index = {}
+    # Component suffixes from artifact.toml [components.{suffix}.*] definitions
+    # See docs/development/artifacts.md for artifact naming conventions
     SUFFIX_MARKERS = ["_dbg_", "_dev_", "_doc_", "_lib_", "_run_", "_test_"]
 
     for dirname in artifact_dirs:
