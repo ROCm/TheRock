@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<?include common.wxi ?>
+<Package Name="amdrocm-ck" Version="1.0.0.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="38ACF547-BD3F-4ADD-8CED-BD25C6719011" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="INSTALLFOLDER" Name="AMD\$(var.ProductName)\$(var.ProductVersion)">
+    <?include amdrocm-ck-content.wxi ?>
+
+    </Directory>
+  </StandardDirectory>
+  <Feature Id="amdrocm_ck_files" Title="ROCm Composable Kernels Package" Level="1" Display="expand">
+  <?include amdrocm-ck-features.wxi ?>
+
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+  </Package>
+</Wix>
