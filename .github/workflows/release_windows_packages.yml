@@ -246,6 +246,9 @@ jobs:
       - name: Build therock-artifacts and therock-dist
         run: cmake --build "${{ env.BUILD_DIR }}" --target therock-artifacts therock-dist
 
+      - name: Build ROCm MSI Packages
+        run: cmd /c ./build_tools/packaging/windows/build-all.bat "${{ env.BUILD_DIR }}/dist/rocm"
+
       - name: Compress dist folder
         run: |
           cd ${{ env.BUILD_DIR }}/dist/rocm
