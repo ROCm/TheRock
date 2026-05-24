@@ -20,7 +20,8 @@ import subprocess
 import sys
 import tempfile
 
-LINUX_EXE_STUB_TEMPLATE = r"""#include <stdio.h>
+LINUX_EXE_STUB_TEMPLATE = r"""#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -31,7 +32,7 @@ int main(int argc, char** argv) {
     // Use /proc/self/exe instead of dladdr(main): dladdr() fails when argv[0]
     // has no '/' (e.g. MLIR's ROCDL target passes bare "ld.lld" as argv[0]),
     // causing dli_fname to have no path component and strrchr to return NULL.
-    char main_path[4096];
+    char main_path[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", main_path, sizeof(main_path));
     if (len == -1) {
         perror("could not readlink /proc/self/exe");
@@ -70,7 +71,7 @@ int main(int argc, char** argv) {
     int rc = execv(target, argv);
     if (rc == -1) {
         fprintf(stderr, "could not exec %s: ", target);
-        perror(0);
+        perror("");
         return 1;
     }
     return 0;
@@ -122,7 +123,7 @@ int main(int argc, char** argv) {
     int rc = execv(target, argv);
     if (rc == -1) {
         fprintf(stderr, "could not exec %s: ", target);
-        perror(0);
+        perror("");
         return 1;
     }
     return 0;
