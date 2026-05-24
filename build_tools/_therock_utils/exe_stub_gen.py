@@ -32,14 +32,14 @@ int main(int argc, char** argv) {
     // has no '/' (e.g. MLIR's ROCDL target passes bare "ld.lld" as argv[0]),
     // causing dli_fname to have no path component and strrchr to return NULL.
     char main_path[4096];
-    ssize_t len = readlink("/proc/self/exe", main_path, sizeof(main_path) - 1);
+    ssize_t len = readlink("/proc/self/exe", main_path, sizeof(main_path));
     if (len == -1) {
         perror("could not readlink /proc/self/exe");
         return 1;
     }
-    if (len == (ssize_t)(sizeof(main_path) - 1)) {
+    if (len == (ssize_t)sizeof(main_path)) {
         fprintf(stderr,
-                "path to main program may have been truncated reading "
+                "path to main program truncated reading "
                 "/proc/self/exe (buffer too small)\n");
         return 1;
     }
@@ -56,6 +56,10 @@ int main(int argc, char** argv) {
     // Compute the new target relative to the containing directory.
     char* target = malloc(
         strlen(main_path) + 1 /* slash */ + strlen(EXEC_RELPATH) + 1 /* nul */);
+    if (!target) {
+        fprintf(stderr, "out of memory\n");
+        return 1;
+    }
     strcpy(target, main_path);
     strcat(target, "/");
     strcat(target, EXEC_RELPATH);
@@ -104,6 +108,10 @@ int main(int argc, char** argv) {
     // Compute the new target relative to the containing directory.
     char* target = malloc(
         strlen(main_path) + 1 /* slash */ + strlen(EXEC_RELPATH) + 1 /* nul */);
+    if (!target) {
+        fprintf(stderr, "out of memory\n");
+        return 1;
+    }
     strcpy(target, main_path);
     strcat(target, "/");
     strcat(target, EXEC_RELPATH);
@@ -137,9 +145,10 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str):
         else:
             # Generic POSIX impl (macOS, BSD, etc.): use dladdr(main) to locate
             # the stub binary. Must link as PIE so that the main executable is
-            # dynamic (i.e. dladdr will work).
+            # dynamic (i.e. dladdr will work). dladdr is in the system library
+            # on macOS/BSD; no extra link flag needed.
             template = POSIX_EXE_STUB_TEMPLATE
-            link_args = ["-ldl"]
+            link_args: list[str] = []
         source_contents = template.replace("@EXEC_RELPATH@", relative_link_to)
         source_file.write_text(source_contents)
         cc = os.getenv("CC", "cc")
