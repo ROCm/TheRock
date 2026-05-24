@@ -141,20 +141,16 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str):
             # dladdr() is unreliable when argv[0] has no '/' (e.g. MLIR's ROCDL
             # target passes bare "ld.lld" as argv[0]).
             template = LINUX_EXE_STUB_TEMPLATE
-            link_args: list[str] = []
         else:
             # Generic POSIX impl (macOS, BSD, etc.): use dladdr(main) to locate
             # the stub binary. Must link as PIE so that the main executable is
             # dynamic (i.e. dladdr will work). dladdr is in the system library
             # on macOS/BSD; no extra link flag needed.
             template = POSIX_EXE_STUB_TEMPLATE
-            link_args: list[str] = []
         source_contents = template.replace("@EXEC_RELPATH@", relative_link_to)
         source_file.write_text(source_contents)
         cc = os.getenv("CC", "cc")
-        subprocess.check_call(
-            [cc, "-fPIE", "-o", str(output_file), str(source_file)] + link_args
-        )
+        subprocess.check_call([cc, "-fPIE", "-o", str(output_file), str(source_file)])
 
 
 if __name__ == "__main__":
