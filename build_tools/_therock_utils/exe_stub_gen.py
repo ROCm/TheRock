@@ -16,6 +16,7 @@ Example usage (creates a stub that invokes /bin/ls):
 from pathlib import Path
 import os
 import platform
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -166,8 +167,10 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str) -> None:
             template = POSIX_EXE_STUB_TEMPLATE
         source_contents = template.replace("@EXEC_RELPATH@", relative_link_to)
         source_file.write_text(source_contents)
-        cc = os.getenv("CC", "cc")
-        subprocess.check_call([cc, "-fPIE", "-o", str(output_file), str(source_file)])
+        cc_cmd = shlex.split(os.getenv("CC", "cc"))
+        subprocess.check_call(
+            [*cc_cmd, "-fPIE", "-o", str(output_file), str(source_file)]
+        )
 
 
 if __name__ == "__main__":
