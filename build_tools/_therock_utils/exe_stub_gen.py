@@ -89,8 +89,9 @@ POSIX_EXE_STUB_TEMPLATE = r"""#define _GNU_SOURCE
 static const char EXEC_RELPATH[] = "@EXEC_RELPATH@";
 
 int main(int argc, char** argv) {
-    // Use the Dl_info of the main program to get the path. This is only valid
-    // because we linked as a PIE executable and the cwd has not been changed.
+    // Use the Dl_info of the main program to get the path. -fPIE is required
+    // so the dynamic linker loads the binary as a position-independent
+    // executable, which allows dladdr() to resolve dli_fname.
     Dl_info info;
     if (!dladdr(main, &info)) {
         fprintf(stderr, "could not get dl info for main: %s\n", dlerror());
@@ -139,6 +140,17 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str) -> None:
     if platform.system() == "Windows":
         raise NotImplementedError("generate_exe_link_stub NYI for Windows")
 
+    # Reject characters that would produce invalid C or enable injection
+    # when relative_link_to is interpolated into a C string literal.
+    if not relative_link_to or any(
+        c in relative_link_to for c in ('"', "\\", "\n", "\r", "\0")
+    ):
+        raise ValueError(
+            f"relative_link_to must be a non-empty path containing no "
+            f'characters invalid in a C string literal (no `"`, `\\`, '
+            f"or control characters): {relative_link_to!r}"
+        )
+
     with tempfile.TemporaryDirectory() as td:
         source_file = Path(td) / "stub.c"
         if platform.system() == "Linux":
@@ -148,9 +160,9 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str) -> None:
             template = LINUX_EXE_STUB_TEMPLATE
         else:
             # Generic POSIX impl (macOS, BSD, etc.): use dladdr(main) to locate
-            # the stub binary. Must link as PIE so that the main executable is
-            # dynamic (i.e. dladdr will work). dladdr is in the system library
-            # on macOS/BSD; no extra link flag needed.
+            # the stub binary. -fPIE is passed so the dynamic linker loads the
+            # binary as a position-independent executable, which allows
+            # dladdr() to resolve dli_fname.
             template = POSIX_EXE_STUB_TEMPLATE
         source_contents = template.replace("@EXEC_RELPATH@", relative_link_to)
         source_file.write_text(source_contents)

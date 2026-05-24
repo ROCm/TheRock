@@ -61,6 +61,14 @@ class GenerateExeLinkStubTest(unittest.TestCase):
                 generate_exe_link_stub(Path("/tmp/stub"), "target")
 
     @unittest.skipIf(IS_WINDOWS, "POSIX only")
+    def test_invalid_relative_link_to_raises_value_error(self):
+        """Characters invalid in a C string literal are rejected before compilation."""
+        for bad in ('has"quote', "has\\backslash", "has\nnewline", "has\x00null", ""):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    generate_exe_link_stub(Path("/tmp/stub"), bad)
+
+    @unittest.skipIf(IS_WINDOWS, "POSIX only")
     def test_exec_relpath_placeholder_substituted(self):
         """@EXEC_RELPATH@ is replaced with the supplied relative path in the
         generated C source."""
