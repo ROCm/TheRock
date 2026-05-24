@@ -20,7 +20,8 @@ import subprocess
 import sys
 import tempfile
 
-LINUX_EXE_STUB_TEMPLATE = r"""#include <limits.h>
+LINUX_EXE_STUB_TEMPLATE = r"""#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,8 +71,7 @@ int main(int argc, char** argv) {
     // works.
     int rc = execv(target, argv);
     if (rc == -1) {
-        fprintf(stderr, "could not exec %s: ", target);
-        perror("");
+        fprintf(stderr, "could not exec %s: %s\n", target, strerror(errno));
         return 1;
     }
     return 0;
@@ -80,6 +80,7 @@ int main(int argc, char** argv) {
 
 POSIX_EXE_STUB_TEMPLATE = r"""#define _GNU_SOURCE
 #include <dlfcn.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,6 +99,10 @@ int main(int argc, char** argv) {
 
     // Get the path of the main program object.
     char* main_path = strdup(info.dli_fname);
+    if (!main_path) {
+        fprintf(stderr, "out of memory\n");
+        return 1;
+    }
     char* last_slash = strrchr(main_path, '/');
     if (!last_slash) {
         fprintf(stderr, "could not find path component of main program: '%s'\n",
@@ -122,8 +127,7 @@ int main(int argc, char** argv) {
     // works.
     int rc = execv(target, argv);
     if (rc == -1) {
-        fprintf(stderr, "could not exec %s: ", target);
-        perror("");
+        fprintf(stderr, "could not exec %s: %s\n", target, strerror(errno));
         return 1;
     }
     return 0;
@@ -131,7 +135,7 @@ int main(int argc, char** argv) {
 """
 
 
-def generate_exe_link_stub(output_file: Path, relative_link_to: str):
+def generate_exe_link_stub(output_file: Path, relative_link_to: str) -> None:
     if platform.system() == "Windows":
         raise NotImplementedError("generate_exe_link_stub NYI for Windows")
 
@@ -158,4 +162,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("ERROR: Expected {out_file} {relative_link_to}")
         sys.exit(1)
-    generate_exe_link_stub(sys.argv[1], sys.argv[2])
+    generate_exe_link_stub(Path(sys.argv[1]), sys.argv[2])
