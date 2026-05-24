@@ -21,9 +21,7 @@ import sys
 import tempfile
 
 
-POSIX_EXE_STUB_TEMPLATE = r"""#define _GNU_SOURCE
-#include <dlfcn.h>
-#include <stdio.h>
+POSIX_EXE_STUB_TEMPLATE = r"""#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -31,16 +29,17 @@ POSIX_EXE_STUB_TEMPLATE = r"""#define _GNU_SOURCE
 static const char EXEC_RELPATH[] = "@EXEC_RELPATH@";
 
 int main(int argc, char** argv) {
-    // Use the Dl_info of the main program to get the path. This is only valid
-    // because we linked as a PIE executable and the cwd has not been changed.
-    Dl_info info;
-    if (!dladdr(main, &info)) {
-        fprintf(stderr, "could not get dl info for main: %s\n", dlerror());
+    // Use /proc/self/exe instead of dladdr(main): dladdr() fails when argv[0]
+    // has no '/' (e.g. MLIR's ROCDL target passes bare "ld.lld" as argv[0]),
+    // causing dli_fname to have no path component and strrchr to return NULL.
+    char main_path[4096];
+    ssize_t len = readlink("/proc/self/exe", main_path, sizeof(main_path) - 1);
+    if (len == -1) {
+        perror("could not readlink /proc/self/exe");
         return 1;
     }
+    main_path[len] = '\0';
 
-    // Get the path of the main program object.
-    char* main_path = strdup(info.dli_fname);
     char* last_slash = strrchr(main_path, '/');
     if (!last_slash) {
         fprintf(stderr, "could not find path component of main program: '%s'\n",
@@ -82,10 +81,8 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str):
         )
         source_file.write_text(source_contents)
         cc = os.getenv("CC", "cc")
-        # Must link as PIE so that the main executable is dynamic (i.e. dladdr
-        # will work).
         subprocess.check_call(
-            [cc, "-fPIE", "-o", str(output_file), str(source_file), "-ldl"]
+            [cc, "-fPIE", "-o", str(output_file), str(source_file)]
         )
 
 
