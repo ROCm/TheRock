@@ -20,7 +20,6 @@ import subprocess
 import sys
 import tempfile
 
-
 POSIX_EXE_STUB_TEMPLATE = r"""#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,9 +80,7 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str):
         )
         source_file.write_text(source_contents)
         cc = os.getenv("CC", "cc")
-        subprocess.check_call(
-            [cc, "-fPIE", "-o", str(output_file), str(source_file)]
-        )
+        subprocess.check_call([cc, "-fPIE", "-o", str(output_file), str(source_file)])
 
 
 if __name__ == "__main__":
