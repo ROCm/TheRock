@@ -148,7 +148,7 @@ def generate_exe_link_stub(output_file: Path, relative_link_to: str) -> None:
         raise ValueError(
             f"relative_link_to must be a non-empty path containing no "
             f'characters invalid in a C string literal (no `"`, `\\`, '
-            f"or control characters): {relative_link_to!r}"
+            f"newlines, or null bytes): {relative_link_to!r}"
         )
 
     with tempfile.TemporaryDirectory() as td:

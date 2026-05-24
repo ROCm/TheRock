@@ -4,6 +4,7 @@
 """Tests for exe_stub_gen — platform-specific stub executable generation."""
 
 import contextlib
+import os
 import platform
 import shutil
 import subprocess
@@ -16,7 +17,7 @@ from _therock_utils.exe_stub_gen import generate_exe_link_stub
 
 IS_WINDOWS = platform.system() == "Windows"
 IS_LINUX = platform.system() == "Linux"
-_CC_AVAILABLE = shutil.which("cc") is not None
+_CC_AVAILABLE = shutil.which(os.getenv("CC", "cc")) is not None
 
 
 class GenerateExeLinkStubTest(unittest.TestCase):
