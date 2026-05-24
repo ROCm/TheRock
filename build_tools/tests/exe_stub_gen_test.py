@@ -71,6 +71,32 @@ class GenerateExeLinkStubTest(unittest.TestCase):
                     generate_exe_link_stub(Path("/tmp/stub"), bad)
 
     @unittest.skipIf(IS_WINDOWS, "POSIX only")
+    def test_multi_word_cc_is_split(self):
+        """A multi-word CC value (e.g. 'ccache cc') is tokenized so each word
+        is a separate argv element in the compiler invocation."""
+        captured_args: list[list[str]] = []
+
+        def _fake_check_call(args, **kwargs):
+            captured_args.append(list(args))
+
+        def _fake_getenv(key, default=None):
+            return "ccache cc" if key == "CC" else os.getenv(key, default)
+
+        with mock.patch(
+            "_therock_utils.exe_stub_gen.subprocess.check_call",
+            side_effect=_fake_check_call,
+        ), mock.patch(
+            "_therock_utils.exe_stub_gen.os.getenv",
+            side_effect=_fake_getenv,
+        ), tempfile.TemporaryDirectory() as tmp:
+            generate_exe_link_stub(Path(tmp) / "stub", "target")
+
+        self.assertGreater(
+            len(captured_args), 0, "subprocess.check_call was not invoked"
+        )
+        self.assertEqual(captured_args[0][:2], ["ccache", "cc"])
+
+    @unittest.skipIf(IS_WINDOWS, "POSIX only")
     def test_exec_relpath_placeholder_substituted(self):
         """@EXEC_RELPATH@ is replaced with the supplied relative path in the
         generated C source."""
