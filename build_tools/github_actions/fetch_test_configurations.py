@@ -88,8 +88,12 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     Returns:
         The modified job_config with updated container_options
     """
-    # Only apply container options for Linux platforms
+    # Containers are Linux-only (test_component.yml gates container.image on
+    # platform == 'linux'). On other platforms, collapse container_options to an
+    # empty string so `options: ${{ fromJSON(...).container_options }}` doesn't
+    # evaluate to a YAML sequence and fail template parsing.
     if platform != "linux":
+        job_config["container_options"] = ""
         return job_config
 
     # Start with base options (always applied on Linux)
