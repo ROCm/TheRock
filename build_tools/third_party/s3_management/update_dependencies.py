@@ -5,6 +5,33 @@
 # Forked from https://github.com/pytorch/test-infra/blob/1ffc7f7b3b421b57c380de469e11744f54399f09/s3_management/update_dependencies.py.
 # Changes incorporated from https://github.com/pytorch/test-infra/blob/a87d94b148bbd2c68e69e542350099a971f4c8d3/s3_management/update_dependencies.py.
 
+"""
+Operational notes
+-----------------
+
+Architecture prefixes are no longer hardcoded in this script.
+
+To preserve the previous "all architectures under a root" behavior,
+use automatic prefix discovery:
+
+    python update_dependencies.py \
+        --package torch \
+        --auto-detect-prefixes \
+        --base-prefix v2/
+
+This dynamically discovers child prefixes such as:
+
+    v2/gfx110X-all
+    v2/gfx120X-all
+    v2/gfx950-dcgpu
+
+For narrow reconciliation of a single prefix, use:
+
+    python update_dependencies.py \
+        --package torch \
+        --prefix v2/gfx110X-all
+"""
+
 from typing import Dict, List
 from os import getenv
 
