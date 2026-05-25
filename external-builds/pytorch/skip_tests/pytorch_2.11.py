@@ -69,7 +69,7 @@ skip_tests = {
         ],
         "distributed": [
             # Error while creating shared memory segment /dev/shm/nccl-VPyhzw (size 21823872), error: No space left on device (28)
-            "test_3d_mlp_with_nd_mesh",
+            # "test_3d_mlp_with_nd_mesh",
             # AssertionError: False is not true : cuda:0 used 2615148544.0 bytes after collective, 70% more than the status before (1495269376.0 bytes). Extra CUDA context may have been created.
             "test_extra_cuda_context",
         ],
