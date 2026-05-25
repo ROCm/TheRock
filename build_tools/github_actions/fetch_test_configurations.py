@@ -183,7 +183,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 4,
         },
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
     },
     # BLAS tests
     "rocblas": {
