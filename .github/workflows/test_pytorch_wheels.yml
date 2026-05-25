@@ -109,6 +109,12 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
+      - name: Enable Windows long paths
+        if: contains(inputs.test_runs_on, 'windows')
+        run: |
+          git config --system core.longpaths true || true
+          reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f || true
+
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
