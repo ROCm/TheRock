@@ -12,9 +12,9 @@
 # 6. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 7. dctools-core (generic) - RDC (parallel to math-libs)
 # 8. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 9. iree-compiler (generic) - IREE compiler (parallel to math-libs)
-# 10. fusilli-libs (generic) - Fusilli hipdnn provider (after math-libs + iree-compiler)
-# 11. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 9. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+#
+# NOTE: iree-compiler and fusilli-libs stages are disabled
 
 name: Multi-Arch Build (Linux)
 
@@ -274,59 +274,59 @@ jobs:
       id-token: write
 
   # ==========================================================================
-  # STAGE: iree-compiler (generic, parallel to math-libs)
+  # DISABLED: iree-compiler stage.
   # ==========================================================================
-  iree-compiler:
-    needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
-    with:
-      stage_name: iree-compiler
-      stage_display_name: "Stage - IREE Compiler"
-      timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
-      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
-      rocm_package_version: ${{ inputs.rocm_package_version }}
-      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
-      release_type: ${{ inputs.release_type }}
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      external_repo_config: ${{ inputs.external_repo_config }}
-    permissions:
-      contents: read
-      id-token: write
+  # iree-compiler:
+  #   needs: compiler-runtime
+  #   if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
+  #   uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+  #   secrets: inherit
+  #   with:
+  #     stage_name: iree-compiler
+  #     stage_display_name: "Stage - IREE Compiler"
+  #     timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
+  #     dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+  #     rocm_package_version: ${{ inputs.rocm_package_version }}
+  #     build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+  #     build_runs_on: ${{ inputs.build_runs_on }}
+  #     release_type: ${{ inputs.release_type }}
+  #     repository: ${{ inputs.repository }}
+  #     ref: ${{ inputs.ref }}
+  #     external_repo_config: ${{ inputs.external_repo_config }}
+  #   permissions:
+  #     contents: read
+  #     id-token: write
 
   # ==========================================================================
-  # STAGE: fusilli-libs (generic, after math-libs + iree-compiler)
+  # DISABLED: fusilli-libs stage.
   # ==========================================================================
   # TODO: re-enable for ASAN once fusilli-libs build is validated to work
-  fusilli-libs:
-    needs: [compiler-runtime, math-libs, iree-compiler]
-    if: >-
-      ${{
-        !cancelled() &&
-        !failure() &&
-        !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
-        inputs.build_variant_label != 'asan'
-      }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
-    with:
-      stage_name: fusilli-libs
-      stage_display_name: "Stage - Fusilli Libs"
-      timeout_minutes: 60  # 1 hour
-      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
-      rocm_package_version: ${{ inputs.rocm_package_version }}
-      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
-      release_type: ${{ inputs.release_type }}
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      external_repo_config: ${{ inputs.external_repo_config }}
-    permissions:
-      contents: read
-      id-token: write
+  # fusilli-libs:
+  #   needs: [compiler-runtime, math-libs, iree-compiler]
+  #   if: >-
+  #     ${{
+  #       !cancelled() &&
+  #       !failure() &&
+  #       !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
+  #       inputs.build_variant_label != 'asan'
+  #     }}
+  #   uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+  #   secrets: inherit
+  #   with:
+  #     stage_name: fusilli-libs
+  #     stage_display_name: "Stage - Fusilli Libs"
+  #     timeout_minutes: 60  # 1 hour
+  #     dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+  #     rocm_package_version: ${{ inputs.rocm_package_version }}
+  #     build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+  #     build_runs_on: ${{ inputs.build_runs_on }}
+  #     release_type: ${{ inputs.release_type }}
+  #     repository: ${{ inputs.repository }}
+  #     ref: ${{ inputs.ref }}
+  #     external_repo_config: ${{ inputs.external_repo_config }}
+  #   permissions:
+  #     contents: read
+  #     id-token: write
 
   # ==========================================================================
   # STAGE: media-libs (generic)
