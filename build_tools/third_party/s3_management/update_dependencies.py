@@ -366,7 +366,10 @@ def main() -> None:
     parser.add_argument(
         "--prefix",
         type=str,
-        help="Explicit prefix to update",
+        help=(
+            "Explicit prefix to update "
+            "(e.g. v2/gfx110X-all, v2-staging/gfx110X-all, v4/whl)"
+        ),
     )
     parser.add_argument(
         "--auto-detect-prefixes",
