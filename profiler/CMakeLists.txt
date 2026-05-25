@@ -8,11 +8,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   endif()
 
 
-  set(_rocprofiler_build_yaml_cpp ON)
-  if(THEROCK_BUNDLED_YAMLCPP)
-    set(_rocprofiler_build_yaml_cpp OFF)
-  endif()
-
   ##############################################################################
   # rocprof-trace-decoder
   # The trace decoder is responsible for decoding advanced thread traces from the
@@ -103,7 +98,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_BUILD_SAMPLES=OFF
       -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
-      -DROCPROFILER_BUILD_YAML_CPP=${_rocprofiler_build_yaml_cpp}
+      -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -119,7 +114,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       rocprof-trace-decoder
       rocprofiler-register
-      ${THEROCK_BUNDLED_YAMLCPP}
+      therock-yaml-cpp
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
