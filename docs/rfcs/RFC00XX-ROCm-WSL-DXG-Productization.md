@@ -70,30 +70,30 @@ relative to `/opt/rocm/core`; the resolved path on disk includes the `-X.Y` suff
 
 ### `librocdxg.so` Installation
 
-| Install method | Path                                |
-| :------------- | :---------------------------------- |
-| Tarball        | `<ROCM_PATH>/lib/librocdxg.so`      |
-| DEB / RPM      | `/opt/rocm/core/lib/librocdxg.so`   |
+| Install method | Path                              |
+| :------------- | :-------------------------------- |
+| Tarball        | `<ROCM_PATH>/lib/librocdxg.so`    |
+| DEB / RPM      | `/opt/rocm/core/lib/librocdxg.so` |
 
 The library must not be installed into `/usr/lib`, `/usr/lib64`, or `/lib*`. RPATH must remain
 `$ORIGIN`-based per [RFC0009](./RFC0009-OS-Packaging-Requirements.md).
 
 ### Detector Script Installation
 
-| Install method | Path                                            |
-| :------------- | :---------------------------------------------- |
-| Tarball        | `<ROCM_PATH>/libexec/rocm-detect-env`           |
-| DEB / RPM      | `/opt/rocm/core/libexec/rocm-detect-env`        |
+| Install method | Path                                     |
+| :------------- | :--------------------------------------- |
+| Tarball        | `<ROCM_PATH>/libexec/rocm-detect-env`    |
+| DEB / RPM      | `/opt/rocm/core/libexec/rocm-detect-env` |
 
 ### System Configuration
 
-| Path                    | Role                                                       |
-| :---------------------- | :--------------------------------------------------------- |
-| `/etc/rocm/rocm.conf`   | Canonical ROCm configuration file read by ROCr.            |
-| `/etc/default/rocm`     | Debian/Ubuntu fallback location (read if canonical absent).|
-| `/etc/sysconfig/rocm`   | RHEL/Fedora/SLES fallback location (read if canonical absent).|
+| Path                        | Role                                                                                                                                                                                                                                                    |
+| :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/etc/rocm/rocm.conf`       | Canonical ROCm configuration file read by ROCr.                                                                                                                                                                                                         |
+| `/etc/default/rocm`         | Debian/Ubuntu fallback location (read if canonical absent).                                                                                                                                                                                             |
+| `/etc/sysconfig/rocm`       | RHEL/Fedora/SLES fallback location (read if canonical absent).                                                                                                                                                                                          |
 | `/etc/tmpfiles.d/rocm.conf` | `systemd-tmpfiles` entry that creates `/run/rocm/` on boot for the parsed-config cache. Placed under `/etc` rather than `/usr/lib/tmpfiles.d/` to comply with [RFC0009](./RFC0009-OS-Packaging-Requirements.md)'s prohibition on writes to `/usr/lib*`. |
-| `/run/rocm/rocm.conf.cache` | Runtime cache of parsed configuration (`tmpfs`, volatile across reboots). |
+| `/run/rocm/rocm.conf.cache` | Runtime cache of parsed configuration (`tmpfs`, volatile across reboots).                                                                                                                                                                               |
 
 Configuration under `/etc` is treated as system configuration and is permitted outside the ROCm prefix,
 consistent with [RFC0009](./RFC0009-OS-Packaging-Requirements.md) which restricts library installation
@@ -104,13 +104,13 @@ paths but not system configuration.
 At initialization, ROCr determines whether to enable the DXG backend by consulting the following sources
 in order. The first source that yields a definite value wins.
 
-| Order | Source                              | Notes                                                       |
-| :---- | :---------------------------------- | :---------------------------------------------------------- |
-| 1     | `HSA_ENABLE_DXG_DETECTION` env var  | Manual override. Values `1`/`true`/`yes` enable, `0`/`false`/`no` disable. |
-| 2     | `/etc/rocm/rocm.conf`               | Canonical persistent configuration.                         |
-| 3     | `/etc/default/rocm`                 | Debian/Ubuntu fallback.                                     |
-| 4     | `/etc/sysconfig/rocm`               | RHEL/Fedora/SLES fallback.                                  |
-| 5     | Default                             | DXG disabled (native Linux behavior).                       |
+| Order | Source                             | Notes                                                                      |
+| :---- | :--------------------------------- | :------------------------------------------------------------------------- |
+| 1     | `HSA_ENABLE_DXG_DETECTION` env var | Manual override. Values `1`/`true`/`yes` enable, `0`/`false`/`no` disable. |
+| 2     | `/etc/rocm/rocm.conf`              | Canonical persistent configuration.                                        |
+| 3     | `/etc/default/rocm`                | Debian/Ubuntu fallback.                                                    |
+| 4     | `/etc/sysconfig/rocm`              | RHEL/Fedora/SLES fallback.                                                 |
+| 5     | Default                            | DXG disabled (native Linux behavior).                                      |
 
 The configuration file is parsed by ROCr in-process. No shell sourcing, environment-file plumbing, or
 consumer cooperation is required. A workload launched from an interactive shell, a desktop shortcut, a
@@ -146,47 +146,47 @@ env-var surface can read the file without a translation table.
 
 Lexical rules:
 
-| Rule | Detail |
-| :--- | :----- |
-| Section header | `[name]` on its own line. Names are lowercase ASCII, `[a-z][a-z0-9_-]*`. |
-| Key/value      | `KEY=value`, one per line. Keys are case-sensitive and match the env-var spelling (typically `UPPER_SNAKE_CASE`). |
-| Comments       | Lines beginning with `#` or `;` (after optional leading whitespace). Inline comments are **not** supported — a `#` inside a value is part of the value. |
-| Whitespace     | Leading/trailing whitespace on keys, values, and section headers is stripped. Blank lines are ignored. |
-| Quoting        | Values may optionally be wrapped in `"..."` or `'...'` to preserve leading/trailing whitespace. Quotes are stripped. |
-| Escapes        | None. The file is not shell-sourced; `$VAR`, backticks, and backslash escapes are literal. |
-| Booleans       | `1`/`true`/`yes`/`on` and `0`/`false`/`no`/`off` (case-insensitive). |
-| Duplicate keys | Last occurrence within a section wins. A warning is logged. |
-| Unknown sections/keys | Ignored with a debug-level log message. Forward compatibility: future components may introduce new sections without breaking older runtimes. |
-| Pre-section keys | Keys appearing **before** any `[section]` header are assigned to an implicit `[global]` section. `[global]` is reserved for cross-component settings; component-specific keys placed there are ignored with a warning. |
+| Rule                  | Detail                                                                                                                                                                                                                                                                                                                                         |
+| :-------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Section header        | `[name]` on its own line. Names are lowercase ASCII, `[a-z][a-z0-9_-]*`.                                                                                                                                                                                                                                                                       |
+| Key/value             | `KEY=value`, one per line. Keys are case-sensitive and match the env-var spelling (typically `UPPER_SNAKE_CASE`).                                                                                                                                                                                                                              |
+| Comments              | Lines beginning with `#` or `;` (after optional leading whitespace). Inline comments are **not** supported — a `#` inside a value is part of the value.                                                                                                                                                                                        |
+| Whitespace            | Leading/trailing whitespace on keys, values, and section headers is stripped. Blank lines are ignored.                                                                                                                                                                                                                                         |
+| Quoting               | Values may optionally be wrapped in `"..."` or `'...'` to preserve leading/trailing whitespace. Quotes are stripped.                                                                                                                                                                                                                           |
+| Escapes               | None. The file is not shell-sourced; `$VAR`, backticks, and backslash escapes are literal.                                                                                                                                                                                                                                                     |
+| Booleans              | `1`/`true`/`yes`/`on` and `0`/`false`/`no`/`off` (case-insensitive).                                                                                                                                                                                                                                                                           |
+| Duplicate keys        | Last occurrence within a section wins. A warning is logged.                                                                                                                                                                                                                                                                                    |
+| Unknown sections/keys | Ignored with a debug-level log message. Forward compatibility: future components may introduce new sections without breaking older runtimes.                                                                                                                                                                                                   |
+| Pre-section keys      | Keys appearing **before** any `[section]` header are assigned to an implicit `[global]` section. `[global]` is reserved for cross-component settings; component-specific keys placed there are ignored with a warning.                                                                                                                         |
 | Per-key documentation | Every key written by the package detector, by `rocm-detect-env`, or by any future Core SDK installer **must** be preceded by a one-to-two-sentence comment that describes the behavior the key controls, the accepted values, and the effective default when the key is absent. Hand-edited keys are encouraged to follow the same convention. |
 
 ### Sections
 
 Sections are namespaced one-per-library. The initial set of well-known sections is:
 
-| Section          | Component / library                          | Typical key prefixes (env-var equivalents) |
-| :--------------- | :------------------------------------------- | :----------------------------------------- |
-| `[global]`       | Cross-component settings                     | `ROCM_*`                                   |
-| `[rocr]`         | ROCr runtime (HSA, libhsakmt, DXG backend)   | `HSA_*`, `ROCR_*`, `HSAKMT_*`              |
-| `[hip]`          | HIP runtime and CLR                          | `HIP_*`, `AMD_*`, `GPU_*`                  |
-| `[rccl]`         | RCCL collective communication                | `NCCL_*`, `RCCL_*`                         |
-| `[rocblas]`      | rocBLAS                                      | `ROCBLAS_*`                                |
-| `[hipblas]`      | hipBLAS / hipBLASLt                          | `HIPBLAS_*`, `HIPBLASLT_*`                 |
-| `[rocsolver]`    | rocSOLVER / hipSOLVER                        | `ROCSOLVER_*`, `HIPSOLVER_*`               |
-| `[rocsparse]`    | rocSPARSE / hipSPARSE                        | `ROCSPARSE_*`, `HIPSPARSE_*`               |
-| `[rocfft]`       | rocFFT / hipFFT                              | `ROCFFT_*`, `HIPFFT_*`                     |
-| `[rocrand]`      | rocRAND / hipRAND                            | `ROCRAND_*`, `HIPRAND_*`                   |
-| `[miopen]`       | MIOpen                                       | `MIOPEN_*`                                 |
-| `[hipdnn]`       | hipDNN                                       | `HIPDNN_*`                                 |
-| `[rocprim]`      | rocPRIM / rocThrust / hipCUB                 | `ROCPRIM_*`, `HIPCUB_*`                    |
-| `[rocprofiler]`  | rocprofiler-sdk and tracer                   | `ROCPROFILER_*`, `ROCP_*`                  |
-| `[rocgdb]`       | rocGDB                                       | `ROCGDB_*`, `AMDGPU_GDB_*`                 |
-| `[amdsmi]`       | amd-smi                                      | `AMDSMI_*`                                 |
-| `[opencl]`       | OpenCL runtime                               | `CL_*`, `OCL_*`                            |
-| `[openmp]`       | OpenMP offload                               | `LIBOMPTARGET_*`, `OMP_TARGET_*`           |
-| `[rocdecode]`    | rocDecode                                    | `ROCDECODE_*`                              |
-| `[rocjpeg]`      | rocJPEG                                      | `ROCJPEG_*`                                |
-| `[rdc]`          | ROCm Data Center tool                        | `RDC_*`                                    |
+| Section         | Component / library                        | Typical key prefixes (env-var equivalents) |
+| :-------------- | :----------------------------------------- | :----------------------------------------- |
+| `[global]`      | Cross-component settings                   | `ROCM_*`                                   |
+| `[rocr]`        | ROCr runtime (HSA, libhsakmt, DXG backend) | `HSA_*`, `ROCR_*`, `HSAKMT_*`              |
+| `[hip]`         | HIP runtime and CLR                        | `HIP_*`, `AMD_*`, `GPU_*`                  |
+| `[rccl]`        | RCCL collective communication              | `NCCL_*`, `RCCL_*`                         |
+| `[rocblas]`     | rocBLAS                                    | `ROCBLAS_*`                                |
+| `[hipblas]`     | hipBLAS / hipBLASLt                        | `HIPBLAS_*`, `HIPBLASLT_*`                 |
+| `[rocsolver]`   | rocSOLVER / hipSOLVER                      | `ROCSOLVER_*`, `HIPSOLVER_*`               |
+| `[rocsparse]`   | rocSPARSE / hipSPARSE                      | `ROCSPARSE_*`, `HIPSPARSE_*`               |
+| `[rocfft]`      | rocFFT / hipFFT                            | `ROCFFT_*`, `HIPFFT_*`                     |
+| `[rocrand]`     | rocRAND / hipRAND                          | `ROCRAND_*`, `HIPRAND_*`                   |
+| `[miopen]`      | MIOpen                                     | `MIOPEN_*`                                 |
+| `[hipdnn]`      | hipDNN                                     | `HIPDNN_*`                                 |
+| `[rocprim]`     | rocPRIM / rocThrust / hipCUB               | `ROCPRIM_*`, `HIPCUB_*`                    |
+| `[rocprofiler]` | rocprofiler-sdk and tracer                 | `ROCPROFILER_*`, `ROCP_*`                  |
+| `[rocgdb]`      | rocGDB                                     | `ROCGDB_*`, `AMDGPU_GDB_*`                 |
+| `[amdsmi]`      | amd-smi                                    | `AMDSMI_*`                                 |
+| `[opencl]`      | OpenCL runtime                             | `CL_*`, `OCL_*`                            |
+| `[openmp]`      | OpenMP offload                             | `LIBOMPTARGET_*`, `OMP_TARGET_*`           |
+| `[rocdecode]`   | rocDecode                                  | `ROCDECODE_*`                              |
+| `[rocjpeg]`     | rocJPEG                                    | `ROCJPEG_*`                                |
+| `[rdc]`         | ROCm Data Center tool                      | `RDC_*`                                    |
 
 Each component reads only its own section (and `[global]` for shared keys). Components must document the
 keys they consume; the table above lists *prefixes* that are conventional but not enforced — a section
@@ -270,10 +270,10 @@ The parser is shipped as part of the ROCm Core SDK (initially inside ROCr) and m
 
 The file must be marked as a configuration file so that local admin edits survive package upgrades:
 
-| Format | Mechanism                                              |
-| :----- | :----------------------------------------------------- |
-| DEB    | List `/etc/rocm/rocm.conf` in `debian/conffiles`.      |
-| RPM    | Mark `/etc/rocm/rocm.conf` as `%config(noreplace)`.    |
+| Format | Mechanism                                           |
+| :----- | :-------------------------------------------------- |
+| DEB    | List `/etc/rocm/rocm.conf` in `debian/conffiles`.   |
+| RPM    | Mark `/etc/rocm/rocm.conf` as `%config(noreplace)`. |
 
 ### Detection Logic
 
@@ -342,12 +342,12 @@ fi
 
 ### When Detection Runs
 
-| Trigger                 | Behavior                                                       |
-| :---------------------- | :------------------------------------------------------------- |
-| DEB `postinst configure`| Invokes `rocm-detect-env` to populate `/etc/rocm/rocm.conf`.   |
-| RPM `%post`             | Invokes `rocm-detect-env` to populate `/etc/rocm/rocm.conf`.   |
-| Tarball install         | Detector shipped; user runs it manually if desired.            |
-| ROCr initialization     | Reads the file. Does **not** re-run detection.                 |
+| Trigger                  | Behavior                                                     |
+| :----------------------- | :----------------------------------------------------------- |
+| DEB `postinst configure` | Invokes `rocm-detect-env` to populate `/etc/rocm/rocm.conf`. |
+| RPM `%post`              | Invokes `rocm-detect-env` to populate `/etc/rocm/rocm.conf`. |
+| Tarball install          | Detector shipped; user runs it manually if desired.          |
+| ROCr initialization      | Reads the file. Does **not** re-run detection.               |
 
 The WSL2-vs-native property is fixed for the life of the installation, so detection runs at most once
 per install or upgrade.
@@ -425,14 +425,14 @@ or export the override variable manually:
 
 ## Compatibility
 
-| Concern                          | Resolution                                                                 |
-| :------------------------------- | :------------------------------------------------------------------------- |
-| Existing `HSA_ENABLE_DXG_DETECTION` users | Retained as highest-priority override; existing workflows unchanged.       |
-| Native Linux hosts               | File written with `HSA_ENABLE_DXG_DETECTION=0`; behavior unchanged.        |
-| Admin-edited config              | `conffiles` / `%config(noreplace)` preserve edits across upgrades; the `Generated by` header sentinel prevents the detector from clobbering hand-edited files. |
-| Tarball installs                 | No `/etc` writes at unpack time; detector and override both available.     |
-| Containers without `/etc/rocm/`  | Override variable remains the recommended path.                            |
-| WSL2 distros without `systemd`/`systemd-tmpfiles` | ROCr falls back to `mkdir -p /run/rocm` on first cache write, then to `/dev/shm/rocm.conf.cache` if `/run/rocm/` is unavailable. |
+| Concern                                           | Resolution                                                                                                                                                     |
+| :------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Existing `HSA_ENABLE_DXG_DETECTION` users         | Retained as highest-priority override; existing workflows unchanged.                                                                                           |
+| Native Linux hosts                                | File written with `HSA_ENABLE_DXG_DETECTION=0`; behavior unchanged.                                                                                            |
+| Admin-edited config                               | `conffiles` / `%config(noreplace)` preserve edits across upgrades; the `Generated by` header sentinel prevents the detector from clobbering hand-edited files. |
+| Tarball installs                                  | No `/etc` writes at unpack time; detector and override both available.                                                                                         |
+| Containers without `/etc/rocm/`                   | Override variable remains the recommended path.                                                                                                                |
+| WSL2 distros without `systemd`/`systemd-tmpfiles` | ROCr falls back to `mkdir -p /run/rocm` on first cache write, then to `/dev/shm/rocm.conf.cache` if `/run/rocm/` is unavailable.                               |
 
 ## References
 
