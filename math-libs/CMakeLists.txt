@@ -193,6 +193,7 @@ if(THEROCK_ENABLE_PRIM)
       rocRAND
       therock-googletest
     RUNTIME_DEPS
+      ${THEROCK_BUNDLED_SQLITE3}
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
   )
