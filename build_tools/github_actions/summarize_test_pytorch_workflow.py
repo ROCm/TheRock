@@ -21,7 +21,7 @@ The script can be tested locally with inputs like this:
     # Multi-arch mode:
     python ./build_tools/github_actions/summarize_test_pytorch_workflow.py \
       --pytorch-git-ref=release/2.10 \
-      --index-url=https://rocm.nightlies.amd.com/whl-staging-multi-arch/ \
+      --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ \
       --device-extras=device-gfx942 \
       --torch-version=2.10.0+rocm7.12.0a20260501
 """

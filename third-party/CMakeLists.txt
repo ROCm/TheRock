@@ -21,8 +21,12 @@ add_subdirectory(googletest)
 add_subdirectory(libdivide)
 add_subdirectory(msgpack-cxx)
 add_subdirectory(nlohmann-json)
+add_subdirectory(robin-map)
 add_subdirectory(simde)
 add_subdirectory(yaml-cpp)
+
+# nanobind depends on robin-map
+add_subdirectory(nanobind)
 
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)
