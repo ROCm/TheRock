@@ -67,18 +67,8 @@ _SUPPORTED_FORMATS: dict[str, str] = {
 }
 # Gitleaks release mirrored to the rocm-third-party-deps S3 bucket (see
 # docs/development/git_chores.md "Updating a third-party mirror") so the
-# CI runner doesn't depend on github.com/gitleaks/gitleaks being reachable
-# or untampered with at scan time. The expected SHA256 is verified after
-# every download (see `_ensure_gitleaks`).
-#
-# To bump the gitleaks version:
-#   1. Download gitleaks_<new>_linux_x64.tar.gz + gitleaks_<new>_checksums.txt
-#      from https://github.com/gitleaks/gitleaks/releases/tag/v<new>
-#   2. Verify sha256sum matches the checksums.txt line for linux_x64.
-#   3. Upload the tarball to https://us-east-2.console.aws.amazon.com/s3/buckets/rocm-third-party-deps
-#   4. Update all three constants below in the same commit.
+# CI runner doesn't depend on github.com/gitleaks/gitleaks being reachable.
 _GITLEAKS_VERSION = "8.30.1"
-# Originally mirrored from: https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
 _GITLEAKS_TARBALL_URL = (
     "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/"
     f"gitleaks_{_GITLEAKS_VERSION}_linux_x64.tar.gz"
@@ -238,8 +228,15 @@ def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) 
     if scan_mode == "all":
         return ""
 
-    if event_name in ("pull_request", "pull_request_target"):
-        # GitHub guarantees both base.sha and head.sha on pull_request*
+    if event_name == "pull_request_target":
+        raise ValueError(
+            "pull_request_target is not supported for scan_mode=changed. "
+            "Use pull_request for untrusted PRs, or set scan_mode='all' "
+            "for trusted post-merge/manual scans."
+        )
+
+    if event_name == "pull_request":
+        # GitHub guarantees both base.sha and head.sha on pull_request
         # events, so a KeyError here is a real payload-format problem
         # rather than something we should try to paper over.
         pr = event["pull_request"]
@@ -463,7 +460,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("changed", "all"),
         help=(
             "'changed' (default) scans only commits introduced by the calling "
-            "event; requires a pull_request*, pull_request_target, or push "
+            "event; requires a pull_request or push "
             "event payload at $GITHUB_EVENT_PATH and hard-fails otherwise. "
             "'all' scans the full repository history and is required for "
             "schedule, workflow_dispatch, release, and any other event."

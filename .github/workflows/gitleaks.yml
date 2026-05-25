@@ -9,7 +9,7 @@ on:
       scan_mode:
         description: >-
           'changed' (default) scans only commits introduced by the calling
-          event; requires a pull_request*, pull_request_target, or push
+          event; requires a pull_request or push
           event payload and hard-fails otherwise. 'all' scans the full
           repository history and is required for schedule,
           workflow_dispatch, release, and any other event type.
