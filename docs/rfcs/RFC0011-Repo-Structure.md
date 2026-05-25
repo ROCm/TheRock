@@ -13,16 +13,16 @@ repo.amd.com's open source software release publications need standardization. I
 
 ## Definitions
 
-* Repository Streams
-  * nightly - nightly builds from the develop branch
-  * prerelease - builds from the release candidate branches
-  * stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
-  * lts - Future long term stability (LTS) releases
-* Products
-  * Core SDK
-  * expansions - SDK built with dependencies on the ROCm Core SDK
-  * extras - standalone components part of ROCm
-* pyindex - folder name for a central repository for python packages
+- Repository Streams
+  - nightly - nightly builds from the develop branch
+  - prerelease - builds from the release candidate branches
+  - stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
+  - lts - Future long term stability (LTS) releases
+- Products
+  - Core SDK
+  - expansions - SDK built with dependencies on the ROCm Core SDK
+  - extras - standalone components part of ROCm
+- pyindex - folder name for a central repository for python packages
 
 ## Repository Structure
 
@@ -30,12 +30,13 @@ repo.amd.com's open source software release publications need standardization. I
 
 - **amdgpu** *(reserved for future use)*
 - **amdrepos**
-     - packages
-       - **Linux Distros [a–z]** 
+  - packages
+    - **Linux Distros [a–z]**
 - **archives** *(unmaintained releasees, for reference only)*
 - **rocm** (current rocm folder with non production releases, move to archives in 6 months)
 - **rocm-platform**
   - **standard**
+
     - **nightly** *(Retention policy: 30 dev, 120 nightly)*
       - **pyindex** *(central nightly wheel repository for all ROCm components)*
       - **core**
@@ -53,7 +54,7 @@ repo.amd.com's open source software release publications need standardization. I
         - packages
       - **extras-[ROCm-major]** #projects released independently for each ROCm major version
         - Structure options:
-          - Flat or per-project folders  
+          - Flat or per-project folders
           - Per-project allows S3 bucket permission granularity by group but complicates duplication on `repo.amd.com`
         - Flat structure:
           - All projects share structure
@@ -69,16 +70,19 @@ repo.amd.com's open source software release publications need standardization. I
       - **onnx-runtime**
 
   - **prerelease** *(Retention policy: 2 years)*
+
     - Mirrors nightly folder structure
     - Tested by QA
     - Must match structure of `repo.amd.com`
 
   - **stable**
+
     - Current ROCm Core release from TheRock
     - **standard** (includes default build packages, asan build packages, default-debug symbol packages, and asan-debug system packages)
     - **rpath** (includes rpath variant of standard packages)
 
   - **lts**
+
     - `YYYYMM`
       - Mirrors stable folder structure
 
@@ -97,8 +101,8 @@ the repo file will update the gpg key to the latest.
 
 Repository stream selection must be implemented per package manager.
 For rpm packages, install a package-manager variable file, for example
-   /etc/yum/vars/amdrocm_release_stream or /etc/dnf/vars/amdrocm_release_stream,
-   and use $amdrocm_release_stream in the repo baseurl.
+/etc/yum/vars/amdrocm_release_stream or /etc/dnf/vars/amdrocm_release_stream,
+and use $amdrocm_release_stream in the repo baseurl.
 For Debian-based systems, the repository package must not rely on shell-style
 or yum-style variable expansion in APT source files. It should install explicit
 deb822 .sources stanzas, or separate .sources files, for each supported stream,
@@ -111,6 +115,7 @@ This the repo packages are published in the amd-repos folder in the repo.amd.com
 The repo packages adds the amd-repos repository as well.
 
 It is designed to work with the following commands
+
 ```
 wget https://repo.amd.com/amd-repos/$OS/rocm-repo.rpm
 rpm -ivh rocm-repo.rpm
