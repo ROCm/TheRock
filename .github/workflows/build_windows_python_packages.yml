@@ -21,6 +21,14 @@ on:
         description: "amdgpu_families for multi-arch builds as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (those only use artifact_group)"
         type: string
         default: ""
+      linux_amdgpu_families:
+        description: "Linux side of the cross-platform family pair for multi-arch builds; used to advertise the union of device extras in the rocm sdist. Leave empty for single-platform builds."
+        type: string
+        default: ""
+      windows_amdgpu_families:
+        description: "Windows side of the cross-platform family pair. See linux_amdgpu_families."
+        type: string
+        default: ""
       multiarch_index:
         description: "Enable multi-arch indexing (generates per-family indexes)"
         type: boolean
@@ -50,6 +58,12 @@ on:
       artifact_group:
         type: string
       amdgpu_families:
+        type: string
+        default: ""
+      linux_amdgpu_families:
+        type: string
+        default: ""
+      windows_amdgpu_families:
         type: string
         default: ""
       multiarch_index:
@@ -142,7 +156,9 @@ jobs:
           python ./build_tools/build_python_packages.py \
             --artifact-dir="${{ env.ARTIFACTS_DIR }}" \
             --dest-dir="${{ env.PACKAGES_DIR }}" \
-            --version="${{ inputs.package_version }}"
+            --version="${{ inputs.package_version }}" \
+            --linux-amdgpu-families="${{ inputs.linux_amdgpu_families }}" \
+            --windows-amdgpu-families="${{ inputs.windows_amdgpu_families }}"
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
