@@ -118,11 +118,33 @@ access (e.g., `--device=/dev/kfd --device=/dev/dri`).
 See the header comments in [`rocm_runtime.Dockerfile`](rocm_runtime.Dockerfile)
 for supported base images, build arguments, and build/run examples.
 
+The installation method is selected via the `INSTALL_METHOD` build argument:
+
+- `tarball` (default): Downloads and extracts a prebuilt ROCm tarball.
+- `packages`: Configures the AMD package repository and installs ROCm via
+  apt/dnf/tdnf/zypper.
+
 Supporting scripts:
 
 - [`install_rocm_deps.sh`](install_rocm_deps.sh): Auto-detects the distribution
   and installs ROCm runtime dependencies using the appropriate package manager
   (apt, dnf, tdnf, or zypper).
+
+- [`install_rocm_packages.sh`](install_rocm_packages.sh): Configures the AMD
+  deb/rpm package repository (nightlies, prereleases, or stable) and installs
+  ROCm via the system package manager. Auto-detects the distribution to select
+  the correct repository URL and package manager. Can also be used standalone
+  on a Linux host:
+
+  ```bash
+  # One-liner installation via packages
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
+
+  # Example: Install ROCm 7.13.0a20260322 for gfx110x (nightly)
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- 7.13.0a20260322 gfx110x nightlies
+  ```
 
 - [`install_rocm_tarball.sh`](install_rocm_tarball.sh): Downloads ROCm tarball
   from `rocm.{nightlies|prereleases|devreleases}.amd.com` or `repo.amd.com` (for

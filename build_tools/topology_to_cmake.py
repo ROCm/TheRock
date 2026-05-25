@@ -45,6 +45,7 @@ from typing import TextIO
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
+from _therock_utils.branch_config import BranchConfig, load_branch_config
 from _therock_utils.build_topology import BuildTopology, Artifact
 
 
@@ -52,6 +53,17 @@ def write_cmake_header(f: TextIO):
     """Write CMake file header."""
     f.write("# Auto-generated from BUILD_TOPOLOGY.toml\n")
     f.write("# DO NOT EDIT MANUALLY\n\n")
+
+
+def write_branch_config_cmake_header(f: TextIO):
+    """Write branch config CMake file header."""
+    f.write("# Auto-generated from BUILD_TOPOLOGY.toml and BRANCH_CONFIG.json\n")
+    f.write("# DO NOT EDIT MANUALLY\n\n")
+
+
+def cmake_quote(value: str) -> str:
+    """Quote a string for use as a CMake argument."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def generate_artifact_targets(topology: BuildTopology, f: TextIO):
@@ -273,6 +285,23 @@ def generate_validation_metadata(topology: BuildTopology, f: TextIO):
         f.write(")\n\n")
 
 
+def generate_branch_config_flags(config: BranchConfig, f: TextIO):
+    """Generate CMake helpers for branch-local flag defaults."""
+    f.write(
+        "# =============================================================================\n"
+    )
+    f.write("# Branch config flag defaults\n")
+    f.write(
+        "# =============================================================================\n\n"
+    )
+    f.write("macro(therock_apply_branch_config_flags)\n")
+    for flag_name, flag_value in config.flags.items():
+        f.write(
+            f"  therock_override_flag_default({flag_name} {cmake_quote(flag_value)})\n"
+        )
+    f.write("endmacro()\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate CMake includes from BUILD_TOPOLOGY.toml"
@@ -288,6 +317,18 @@ def main():
         type=str,
         default="cmake/therock_topology_generated.cmake",
         help="Output CMake file path",
+    )
+    parser.add_argument(
+        "--branch-config",
+        type=str,
+        default="BRANCH_CONFIG.json",
+        help="Path to optional BRANCH_CONFIG.json file",
+    )
+    parser.add_argument(
+        "--branch-config-output",
+        type=str,
+        default="cmake/therock_branch_config.cmake",
+        help="Output CMake file path for generated branch config helpers",
     )
     parser.add_argument(
         "--validate-only",
@@ -319,6 +360,17 @@ def main():
         print(f"Error loading topology: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Load and validate the optional branch config.
+    branch_config_path = Path(args.branch_config)
+    if not branch_config_path.is_absolute():
+        script_dir = Path(__file__).parent.parent
+        branch_config_path = script_dir / branch_config_path
+    try:
+        branch_config = load_branch_config(branch_config_path, topology)
+    except Exception as e:
+        print(f"Error loading branch config: {e}", file=sys.stderr)
+        sys.exit(1)
+
     # Validate
     errors = topology.validate_topology()
     if errors:
@@ -346,6 +398,11 @@ def main():
 
     # Create parent directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    branch_config_output_path = Path(args.branch_config_output)
+    if not branch_config_output_path.is_absolute():
+        script_dir = Path(__file__).parent.parent
+        branch_config_output_path = script_dir / branch_config_output_path
+    branch_config_output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w") as f:
         write_cmake_header(f)
@@ -357,7 +414,12 @@ def main():
         generate_dependency_variables(topology, f)
         generate_build_order(topology, f)
 
+    with open(branch_config_output_path, "w") as f:
+        write_branch_config_cmake_header(f)
+        generate_branch_config_flags(branch_config, f)
+
     print(f"Generated CMake includes at: {output_path}")
+    print(f"Generated branch config CMake include at: {branch_config_output_path}")
 
     # Print summary
     stages = topology.get_build_stages()
