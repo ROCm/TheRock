@@ -497,6 +497,14 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "composablekernel": {
+        "job_name": "composablekernel",
+        "fetch_artifact_args": "--composablekernel --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_composablekernel.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "fusilliprovider": {
         "job_name": "fusilliprovider",
         "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler  --hipdnn-integration-tests --tests",

@@ -69,6 +69,7 @@ if(_ck_enabled)
       dev
       doc
       lib
+      test
     SUBPROJECT_DEPS
       composable_kernel
   )

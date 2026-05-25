@@ -7,3 +7,7 @@ include = [
   "lib/cmake/composable_kernel/*",
 ]
 [components.doc."ml-libs/composable_kernel/stage"]
+[components.test."ml-libs/composable_kernel/stage"]
+include = [
+  "bin/test_*",
+]
