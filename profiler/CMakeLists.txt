@@ -7,7 +7,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
     set(_openmpi_optional_dep therock-openmpi)
   endif()
 
-
   ##############################################################################
   # rocprof-trace-decoder
   # The trace decoder is responsible for decoding advanced thread traces from the
