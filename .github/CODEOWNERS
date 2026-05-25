@@ -20,4 +20,4 @@
 /build_tools/github_actions/test_executable_scripts/test_rocr-debug-agent.py @ROCm/ROCm-DevTools-Debugger
 
 # RFCs
-/docs/rfcs              @rocm-product-managers
+/docs/rfcs              @ROCm/rocm-product-managers
