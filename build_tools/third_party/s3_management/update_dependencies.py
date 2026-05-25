@@ -40,7 +40,6 @@ import boto3  # type: ignore[import-untyped]
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
 
-
 # Whitelist of allowed wheel platform and Python tags.
 # Wheels not matching both criteria are skipped (not uploaded to S3).
 
@@ -347,6 +346,23 @@ def run_update_dependencies(
     )
 
     bucket = get_s3_bucket(bucket_name)
+    project_dependency_names = frozenset(
+        normalize_package_name(pkg_name)
+        for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
+        if pkg_info["project"] == package
+    )
+
+    if normalized_dependency_names is not None:
+        unmatched_dependency_names = (
+            normalized_dependency_names - project_dependency_names
+        )
+        if unmatched_dependency_names:
+            raise ValueError(
+                f"Unknown --dependency-package value(s) for project '{package}': "
+                f"{sorted(unmatched_dependency_names)}. "
+                f"Valid names: {sorted(project_dependency_names)}"
+            )
+
     selected_packages = {
         pkg_name: pkg_info
         for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
