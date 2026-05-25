@@ -1,15 +1,15 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 #
-# Post-merge gitleaks scan: runs after every push to main
-# and pushes SARIF findings to the repository's code-scanning
-# Security tab. TBD if we use post merge or schedule.
+# Weekly gitleaks scan: runs on a fixed cadence and pushes
+# SARIF findings to the repository's code-scanning Security tab.
 name: Gitleaks_main
 
 on:
-  push:
-    branches: [main]
-  # Allow re-running the post-merge scan on demand, e.g. after
+  # Run every Saturday at 10:00 UTC.
+  schedule:
+    - cron: "0 10 * * 6"
+  # Allow re-running the weekly scan on demand, e.g. after
   # tweaking `gitleaks.toml` or rotating the gitleaks version pin, so
   # the Security tab can be refreshed without an unrelated commit.
   workflow_dispatch:
