@@ -3,64 +3,38 @@
 # SPDX-License-Identifier: MIT
 """Run gitleaks against the current repository checkout.
 
-This script is the implementation behind ``.github/workflows/gitleaks.yml``
-and any other reusable callers. It performs every step the CI workflow
-needs in a single invocation:
-
-* Downloads + caches the gitleaks release binary at the requested version
-  under ``$RUNNER_TEMP`` and smoke-tests it with ``gitleaks version``
-  before any scan runs.
-* Validates the caller-supplied inputs (scan mode, report formats,
-  config path, scan path) and resolves the gitleaks config file:
-  the default path falls back gracefully to gitleaks's built-in rules
-  when missing, while an explicit non-default path that's missing is a
-  hard error so a typo can't silently disable custom rules.
-* Optionally writes a starter ``gitleaks.toml.template`` for review and
-  refuses to overwrite an existing one (``--generate-config-template``).
-* Derives a ``--log-opts`` git range from the current GitHub Actions
-  event context so that ``scan_mode=changed`` only inspects new commits,
-  while ``scan_mode=all`` scans the entire repository history. A *set*
-  but malformed ``GITHUB_EVENT_PATH`` is a hard error rather than a
-  silent fallback to "scan everything".
-* Runs ``gitleaks detect`` once per requested report format. NOTE:
-  gitleaks only emits a single report per invocation today, so we
-  re-run the scan per format. Revisit once the upstream multi-output PR
-  lands: https://github.com/gitleaks/gitleaks/pull/1232
-* Writes ``sarif_path``, ``non_sarif_paths``, and
-  ``config_template_path`` to ``$GITHUB_OUTPUT`` (each empty when not
-  applicable) so the calling workflow can upload SARIF to code scanning
-  and the rest as build artifacts.
-* Post-processes any SARIF output to backfill ``result.level`` (set to
-  ``error``) and ``result.properties.security-severity`` (set to
-  ``_LEAK_SECURITY_SEVERITY``). Gitleaks's native SARIF leaves both
-  fields unset, which would tier findings at *Medium* in the GitHub
-  Security tab; every gitleaks hit is a leaked secret, so we override
-  to *High* uniformly and make findings filterable in the Security
-  tab's severity dropdown the same way CodeQL alerts are.
-  ``tool.driver.name = "gitleaks"`` (set by gitleaks itself) plus the
-  ``category: gitleaks`` argument the reusable workflow passes to
-  ``upload-sarif`` keep the resulting alerts filterable by tool,
-  separately from any other scanner.
+* Download + cache the gitleaks binary from TheRock's third-party S3
+  mirror, verify its SHA-256, and smoke-test it before scanning.
+* Resolve the config at `_CONFIG_PATH`; fall back to gitleaks' built-in
+  rules if it is missing.
+* Derive `--log-opts` from the GitHub Actions event so `scan_mode=changed`
+  scans only new commits and `scan_mode=all` scans the full history. A
+  malformed `GITHUB_EVENT_PATH` is a hard error.
+* Run `gitleaks detect` once per requested report format (gitleaks emits
+  one report per invocation; see https://github.com/gitleaks/gitleaks/pull/1232).
+* Write `sarif_path` and `non_sarif_paths` to `$GITHUB_OUTPUT` and echo
+  each non-SARIF report into the job log and `$GITHUB_STEP_SUMMARY`.
+* Post-process SARIF: set `result.level = "error"` and
+  `result.properties.security-severity = _LEAK_SECURITY_SEVERITY_HIGH`
+  so findings land in the GitHub Security tab's High tier (gitleaks
+  leaves both fields unset, defaulting to Medium).
 
 Exit codes:
 
-* ``0`` — clean run, no leaks, no input issues.
-* ``1`` — gitleaks found one or more potential secrets, or
-  ``--report-formats`` was empty / contained an unknown format.
-* ``2`` — input/config error before or during the scan: scan path
-  doesn't exist, explicit config path is missing, ``GITHUB_EVENT_PATH``
-  is malformed, refused to overwrite an existing template, or gitleaks
-  itself errored unexpectedly.
+* `0` - no leaks, clean run.
+* `1` - gitleaks found leaks, or `--report-formats` was empty/unknown.
+* `2` - input error: scan path missing, `GITHUB_EVENT_PATH` malformed,
+  or gitleaks itself errored.
 
-Inputs are read from CLI flags (with ``GITLEAKS_*`` environment-variable
-defaults so they round-trip cleanly through the workflow's ``env:``
-block).
+Inputs come from CLI flags or matching `GITLEAKS_*` env vars set by the
+workflow.
 """
 
 import argparse
 import json
 import logging
 import os
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -70,6 +44,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
+
+# Reach the shared GitHub Actions helpers under `build_tools/`. Mirrors
+# the import pattern used by `build_tools/generate_manifest_diff_report.py`.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / "build_tools"))
+from github_actions.github_actions_api import (  # noqa: E402
+    gha_append_step_summary,
+    gha_load_github_event,
+)
 
 log = logging.getLogger(__name__)
 
@@ -82,156 +65,94 @@ _SUPPORTED_FORMATS: dict[str, str] = {
     "csv": "csv",
     "junit": "xml",
 }
-_DEFAULT_GITLEAKS_VERSION = "8.30.1"
-# Default config path is also the "graceful fallback" sentinel: when the
-# resolved value still equals this constant we silently fall back to the
-# gitleaks built-in rules if the file is missing (so the workflow works
-# in repos without a custom config). Any other value is treated as an
-# explicit override and a missing file becomes a hard error.
-_DEFAULT_CONFIG_PATH = "gitleaks.toml"
-# Path the config-template generator writes to. We use a `.template`
-# suffix so we never silently overwrite an in-tree gitleaks.toml; the
-# user is expected to review the artifact, copy/edit it, and commit the
-# result as the canonical config.
-_CONFIG_TEMPLATE_PATH = "gitleaks.toml.template"
+# Gitleaks release mirrored to the rocm-third-party-deps S3 bucket (see
+# docs/development/git_chores.md "Updating a third-party mirror") so the
+# CI runner doesn't depend on github.com/gitleaks/gitleaks being reachable
+# or untampered with at scan time. The expected SHA256 is verified after
+# every download (see `_ensure_gitleaks`).
+#
+# To bump the gitleaks version:
+#   1. Download gitleaks_<new>_linux_x64.tar.gz + gitleaks_<new>_checksums.txt
+#      from https://github.com/gitleaks/gitleaks/releases/tag/v<new>
+#   2. Verify sha256sum matches the checksums.txt line for linux_x64.
+#   3. Upload the tarball to https://us-east-2.console.aws.amazon.com/s3/buckets/rocm-third-party-deps
+#   4. Update all three constants below in the same commit.
+_GITLEAKS_VERSION = "8.30.1"
+# Originally mirrored from: https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+_GITLEAKS_TARBALL_URL = (
+    "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/"
+    f"gitleaks_{_GITLEAKS_VERSION}_linux_x64.tar.gz"
+)
+_GITLEAKS_TARBALL_SHA256 = (
+    "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+)
+# Repository-root config path. Hardcoded (no input override): every
+# caller of this script points at the same file, so exposing a path
+# input just invited drift between callers. A missing file gracefully
+# falls back to gitleaks's built-in default rules so the workflow keeps
+# working in fresh checkouts before a config has been committed.
+_CONFIG_PATH = "gitleaks.toml"
 # `gitleaks detect --exit-code N` makes the binary exit with N when it
 # finds leaks. We pin this to 1 so we can tell "clean run" (rc=0) apart
 # from "leaks found" (rc=1) and from "gitleaks itself errored" (rc>1).
 _LEAK_EXIT_CODE = 1
-_DOWNLOAD_TIMEOUT_SECONDS = 60
-# Numeric `security-severity` (CVSS-like 0.1-10.0) injected into every
-# SARIF result so the GitHub code-scanning Security tab tiers gitleaks
-# findings uniformly at *High*. Unlike a code-quality scanner (which
-# can have low/medium/high tiers per rule), every gitleaks hit is a
-# leaked secret -- there is no useful "low-severity secret" case.
-# 8.5 lands squarely inside GitHub's High tier (7.0-8.9). Bump to 9.0+
-# if exposed secrets should appear under the *Critical* tier instead.
 _LEAK_SECURITY_SEVERITY_HIGH = "8.5"
-
-
-def _env_bool(name: str, default: bool = False) -> bool:
-    """Parse a GitHub Actions-style boolean env var.
-
-    GitHub renders ``type: boolean`` workflow inputs as the literal
-    strings ``"true"`` / ``"false"`` in the job environment, so we accept
-    that pair plus the usual ``1``/``yes``/``on`` aliases for CLI use.
-    """
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in ("true", "1", "yes", "on")
-
-
-def _render_config_template(gitleaks_version: str) -> str:
-    """Return the contents of a starter ``gitleaks.toml`` for review.
-
-    The template extends gitleaks's built-in default ruleset and seeds
-    common allowlist patterns + a worked custom-rule example, all
-    commented out. The intent is to give the reviewer a working starting
-    point rather than a wall of opinionated defaults.
-    """
-    return f"""\
-# gitleaks configuration template
-#
-# Generated by scan_tools/github_actions/gitleaks.py for gitleaks
-# v{gitleaks_version}. To use it:
-#   1. Review the contents below and customize as needed.
-#   2. Rename to `gitleaks.toml` and commit at the repository root.
-#   3. The CI workflow picks it up automatically (no input change needed).
-#
-# References
-#   - Full default ruleset for v{gitleaks_version}:
-#     https://github.com/gitleaks/gitleaks/blob/v{gitleaks_version}/config/gitleaks.toml
-#   - Configuration schema:
-#     https://github.com/gitleaks/gitleaks#configuration
-
-# Inherit gitleaks's built-in default rules. Setting `useDefault = false`
-# disables them and forces you to define every rule from scratch (rarely
-# what you want).
-[extend]
-useDefault = true
-
-# Optional: pull in additional rule packs by URL or local path.
-# path = "shared-rules.toml"
-# url  = "https://example.com/rules/gitleaks.toml"
-
-# ---------------------------------------------------------------------------
-# Project-wide allowlist. Matches here are excluded from ALL rules.
-# Prefer narrow, targeted entries (paths, file globs, specific commits) over
-# broad regex allowlists that can mask real findings.
-# ---------------------------------------------------------------------------
-[allowlist]
-description = "Project allowlist"
-
-# Paths (regex match against full path, relative to the repo root).
-paths = [
-    # '''(?i)tests?/fixtures/.*''',
-    # '''(?i)docs?/.*\\.md$''',
-    # '''package-lock\\.json$''',
-    # '''yarn\\.lock$''',
-]
-
-# Specific finding fingerprints (commit:file:rule:start_line) to ignore.
-# stopwords = []
-
-# Whole commits to ignore (use sparingly -- prefer fixing leaked secrets).
-# commits = ['''<full-commit-sha>''']
-
-# ---------------------------------------------------------------------------
-# Custom rules. The default ruleset already covers most common secret types
-# (AWS keys, GitHub tokens, JWTs, private keys, etc.); add rules here only
-# for tokens specific to your organization.
-# ---------------------------------------------------------------------------
-# [[rules]]
-# id          = "internal-token"
-# description = "Internal service access token"
-# regex       = '''(?i)(internal[-_]?token)\\s*[:=]\\s*["']?([a-z0-9]{{32,}})["']?'''
-# tags        = ["secret", "token"]
-# # Per-rule allowlist, only applies to this rule:
-# [rules.allowlist]
-# regexes = ['''dummy[-_]?token''']
-"""
 
 
 @dataclass(frozen=True)
 class _ReportTarget:
-    """A single ``(format, on-disk path)`` pair the runner will produce."""
+    """A single `(format, on-disk path)` pair the runner will produce."""
 
     fmt: str
     path: Path
 
 
-def _gitleaks_release_url(version: str) -> str:
-    return (
-        f"https://github.com/gitleaks/gitleaks/releases/download/v{version}/"
-        f"gitleaks_{version}_linux_x64.tar.gz"
-    )
+def _sha256_of(path: Path) -> str:
+    """Return the SHA-256 of `path` as a lowercase hex string."""
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def _ensure_gitleaks(version: str) -> Path:
-    """Return the path to a gitleaks binary, downloading it if needed.
+def _ensure_gitleaks() -> Path:
+    """Return the path to a verified gitleaks binary, downloading it if needed.
 
-    The binary is cached under ``$RUNNER_TEMP`` (when running on a GitHub
-    Actions runner) or the system temp dir otherwise, keyed by version.
+    The binary is installed under `$RUNNER_TEMP` on a GitHub Actions
+    runner (the system temp dir otherwise). That directory is per-job
+    storage which GitHub wipes between runs, so each scan job
+    re-downloads; the in-job existence check just avoids redundant work
+    within a single `python gitleaks.py` invocation. The downloaded
+    tarball is checked against `_GITLEAKS_TARBALL_SHA256` before
+    extraction; a mismatch raises `RuntimeError` and the partial
+    download is discarded.
     """
-    cache_root = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
-    install_dir = cache_root / f"gitleaks-{version}"
+    install_root = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
+    install_dir = install_root / f"gitleaks-{_GITLEAKS_VERSION}"
     binary = install_dir / "gitleaks"
     if binary.is_file() and os.access(binary, os.X_OK):
-        log.info("Using cached gitleaks binary at %s", binary)
+        log.info("Found gitleaks binary at %s", binary)
         return binary
 
     install_dir.mkdir(parents=True, exist_ok=True)
-    url = _gitleaks_release_url(version)
-    log.info("Downloading gitleaks v%s from %s", version, url)
+    log.info(
+        "Downloading gitleaks v%s from %s",
+        _GITLEAKS_VERSION,
+        _GITLEAKS_TARBALL_URL,
+    )
     with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
         tarball_path = Path(tmp.name)
     try:
         with (
-            urlopen(Request(url), timeout=_DOWNLOAD_TIMEOUT_SECONDS) as resp,
+            urlopen(Request(_GITLEAKS_TARBALL_URL), timeout=60) as resp,
             open(tarball_path, "wb") as out,
         ):
             shutil.copyfileobj(resp, out)
+        actual_sha = _sha256_of(tarball_path)
+        if actual_sha != _GITLEAKS_TARBALL_SHA256:
+            raise RuntimeError(
+                f"gitleaks tarball SHA256 mismatch: expected "
+                f"{_GITLEAKS_TARBALL_SHA256}, got {actual_sha} "
+                f"(downloaded from {_GITLEAKS_TARBALL_URL})"
+            )
         with tarfile.open(tarball_path, mode="r:gz") as tar:
             # `filter='data'` rejects unsafe member metadata (absolute
             # paths, traversal, special files)
@@ -242,7 +163,8 @@ def _ensure_gitleaks(version: str) -> Path:
 
     if not binary.is_file():
         raise RuntimeError(
-            f"gitleaks tarball for v{version} did not contain a 'gitleaks' file at {binary}"
+            f"gitleaks tarball for v{_GITLEAKS_VERSION} did not contain "
+            f"a 'gitleaks' file at {binary}"
         )
     binary.chmod(0o755)
 
@@ -265,7 +187,7 @@ def _ensure_gitleaks(version: str) -> Path:
 
 
 def _parse_report_formats(raw: str) -> list[_ReportTarget]:
-    """Parse a comma-separated ``report_formats`` value into report targets.
+    """Parse a comma-separated `report_formats` value into report targets.
 
     Whitespace is trimmed, duplicates collapse to the first occurrence,
     and unknown formats raise :class:`ValueError`.
@@ -292,87 +214,37 @@ def _parse_report_formats(raw: str) -> list[_ReportTarget]:
     return targets
 
 
-def _resolve_config_path(raw: str, *, is_default: bool) -> str | None:
-    """Return the existing config path, or ``None`` to use gitleaks defaults.
-
-    When the caller did not override the default path, a missing file is
-    treated as graceful fallback (warn + use gitleaks built-in rules) so
-    the workflow keeps working in repos without a custom config. When
-    the caller *did* set a non-default path, a missing file is a hard
-    error (raises :class:`FileNotFoundError`) so a typo can't silently
-    disable custom rules.
-    """
-    if not raw:
-        log.warning("No config_path provided; using gitleaks built-in default rules")
-        return None
-    if Path(raw).is_file():
-        log.info("Using gitleaks config: %s", raw)
-        return raw
-    if is_default:
-        log.warning(
-            "No config found at default path '%s'; using gitleaks built-in default rules",
-            raw,
-        )
-        return None
-    raise FileNotFoundError(
-        f"config_path '{raw}' was explicitly set but no such file exists"
+def _resolve_config_path() -> str | None:
+    """Return `_CONFIG_PATH` if it exists, else `None` (gitleaks built-ins)."""
+    if Path(_CONFIG_PATH).is_file():
+        log.info("Using gitleaks config: %s", _CONFIG_PATH)
+        return _CONFIG_PATH
+    log.warning(
+        "No config found at '%s'; using gitleaks built-in default rules",
+        _CONFIG_PATH,
     )
-
-
-def _load_github_event() -> dict[str, Any]:
-    """Load the JSON event payload pointed to by ``$GITHUB_EVENT_PATH``.
-
-    An unset variable is a legitimate case (the script may be invoked
-    locally for development), so we silently return an empty dict. A
-    *set* variable that points at a missing or malformed file is a CI
-    misconfiguration and raises rather than silently degrading the scan
-    range to "full history".
-    """
-    raw = os.environ.get("GITHUB_EVENT_PATH", "")
-    if not raw:
-        return {}
-    event_path = Path(raw)
-    if not event_path.is_file():
-        raise FileNotFoundError(
-            f"GITHUB_EVENT_PATH is set to '{event_path}' but no such file exists"
-        )
-    try:
-        with open(event_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"GITHUB_EVENT_PATH '{event_path}' contains invalid JSON: {exc}"
-        ) from exc
-    except OSError as exc:
-        raise RuntimeError(
-            f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}"
-        ) from exc
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"GITHUB_EVENT_PATH '{event_path}' must contain a JSON object, "
-            f"got {type(data).__name__}"
-        )
-    return data
+    return None
 
 
 def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) -> str:
-    """Build the ``--log-opts`` value for ``gitleaks detect``.
+    """Build the `--log-opts` value for `gitleaks detect`.
 
     Returns an empty string to indicate "scan the entire history" (i.e.
-    don't pass ``--log-opts`` at all). Unknown event types fall back to
-    scanning ``HEAD`` only, which is the safest "changed-ish" range we
-    can construct without a real diff base.
+    don't pass `--log-opts` at all). Raises `ValueError` for event types
+    we don't know how to derive a diff range from (including local runs
+    without `$GITHUB_EVENT_NAME`); the caller should pass `--scan-mode all`
+    for those instead of silently scanning something unexpected.
     """
     if scan_mode == "all":
         return ""
 
     if event_name in ("pull_request", "pull_request_target"):
-        pr = event.get("pull_request") or {}
-        base_sha = ((pr.get("base") or {}).get("sha")) or ""
-        head_sha = ((pr.get("head") or {}).get("sha")) or ""
-        if not base_sha or not head_sha:
-            log.warning("PR event missing base/head SHA; falling back to full history")
-            return ""
+        # GitHub guarantees both base.sha and head.sha on pull_request*
+        # events, so a KeyError here is a real payload-format problem
+        # rather than something we should try to paper over.
+        pr = event["pull_request"]
+        base_sha = pr["base"]["sha"]
+        head_sha = pr["head"]["sha"]
         # Best-effort fetch of the base SHA so the range is reachable.
         # `actions/checkout` with `fetch-depth: 0` fetches HEAD's lineage,
         # but the PR base may live on a ref that wasn't explicitly fetched.
@@ -381,41 +253,44 @@ def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) 
             check=False,
             capture_output=True,
         )
-        return f"--no-merges {base_sha}..{head_sha}"
+        # Note: no `--no-merges`. A merge commit can introduce a secret
+        # (the merge resolution diff) that none of its parent commits
+        # contained individually, so dropping merges from the scan would
+        # leave that class of leak undetected on long-running branches.
+        return f"{base_sha}..{head_sha}"
 
     if event_name == "push":
-        before = event.get("before") or ""
-        after = event.get("after") or ""
-        if not before or not after:
-            log.warning(
-                "Push event missing before/after SHA; falling back to full history"
-            )
-            return ""
+        # GitHub guarantees `before` and `after` on push events.
+        before = event["before"]
+        after = event["after"]
         # GitHub uses a 0-only SHA for "no previous commit" (new ref);
         # there's nothing to diff against so we scan everything.
         if set(before) <= {"0"}:
             log.info("Push created a new ref; falling back to full history scan")
             return ""
-        return f"--no-merges {before}..{after}"
+        # See PR branch above for why `--no-merges` is intentionally absent.
+        return f"{before}..{after}"
 
-    log.info(
-        "Event '%s' has no diff range; scanning HEAD only", event_name or "<unset>"
+    raise ValueError(
+        f"Cannot derive a diff range for event "
+        f"'{event_name or '<unset>'}'. Pass --scan-mode all "
+        f"(or set scan_mode='all' in the workflow input) to scan the "
+        f"full repository history."
     )
-    return "-1 HEAD"
 
 
 def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     """Mark every gitleaks SARIF result as High severity for code scanning.
 
-    Gitleaks's native SARIF formatter leaves ``result.level`` unset
-    (defaults to SARIF's ``warning`` -> GitHub's Medium tier) and does
-    not emit ``properties.security-severity``. Every gitleaks hit is a
+    Gitleaks's native SARIF formatter leaves `result.level` unset
+    (defaults to SARIF's `warning` -> GitHub's Medium tier) and does
+    not emit `properties.security-severity`. Every gitleaks hit is a
     leaked secret -- there's no useful low/medium tier for that -- so
     we backfill both fields uniformly:
 
-    * ``level = "error"`` (so SARIF viewers that don't read
-      ``security-severity`` still treat the finding as high priority).
-    * ``properties.security-severity = _LEAK_SECURITY_SEVERITY``
+    * `level = "error"` (so SARIF viewers that don't read
+      `security-severity` still treat the finding as high priority).
+    * `properties.security-severity = _LEAK_SECURITY_SEVERITY_HIGH`
       (places the finding in GitHub code scanning's *High* tier and
       makes it filterable in the Security tab's severity dropdown the
       same way CodeQL alerts are).
@@ -423,54 +298,40 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     Pre-existing values for either field are preserved verbatim (so a
     future gitleaks version that emits them natively keeps control).
     Failures during enrichment are logged at WARNING and don't
-    propagate -- a missing ``security-severity`` is benign (the
+    propagate -- a missing `security-severity` is benign (the
     Security tab still ingests the SARIF), so we'd rather emit a
     slightly-less-rich SARIF than fail the scan job.
     """
+    levels_set_count = 0
+    levels_kept_count = 0
+    scores_set_count = 0
+    scores_kept_count = 0
     try:
         with open(sarif_path, encoding="utf-8") as f:
             data = json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
+        for run in data.get("runs") or []:
+            for result in run.get("results") or []:
+                if result.get("level") is None:
+                    result["level"] = "error"
+                    levels_set_count += 1
+                else:
+                    levels_kept_count += 1
+                props = result.setdefault("properties", {})
+                if props.get("security-severity") is None:
+                    props["security-severity"] = _LEAK_SECURITY_SEVERITY_HIGH
+                    scores_set_count += 1
+                else:
+                    scores_kept_count += 1
+    except (OSError, json.JSONDecodeError, AttributeError, KeyError, TypeError) as exc:
         log.warning("SARIF severity enrichment skipped (%s): %s", sarif_path, exc)
         return
-    if not isinstance(data, dict):
-        log.warning(
-            "SARIF severity enrichment skipped: %s is not a JSON object",
-            sarif_path,
-        )
-        return
 
-    enriched_level = 0
-    enriched_score = 0
-    preserved_level = 0
-    preserved_score = 0
-    for run in data.get("runs") or []:
-        if not isinstance(run, dict):
-            continue
-        for result in run.get("results") or []:
-            if not isinstance(result, dict):
-                continue
-            if result.get("level") is None:
-                result["level"] = "error"
-                enriched_level += 1
-            else:
-                preserved_level += 1
-            props = result.get("properties")
-            if not isinstance(props, dict):
-                props = {}
-                result["properties"] = props
-            if props.get("security-severity") is None:
-                props["security-severity"] = _LEAK_SECURITY_SEVERITY
-                enriched_score += 1
-            else:
-                preserved_score += 1
-
-    if enriched_level == 0 and enriched_score == 0:
+    if levels_set_count == 0 and scores_set_count == 0:
         log.debug(
             "SARIF severity enrichment: nothing to add (%d level preserved, "
             "%d score preserved) in %s",
-            preserved_level,
-            preserved_score,
+            levels_kept_count,
+            scores_kept_count,
             sarif_path,
         )
         return
@@ -485,9 +346,9 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     log.info(
         "SARIF severity enrichment: set level=error on %d result(s) and "
         "security-severity=%s on %d result(s) in %s",
-        enriched_level,
-        _LEAK_SECURITY_SEVERITY,
-        enriched_score,
+        levels_set_count,
+        _LEAK_SECURITY_SEVERITY_HIGH,
+        scores_set_count,
         sarif_path,
     )
 
@@ -500,7 +361,7 @@ def _run_gitleaks(
     log_opts: str,
     source_dir: Path,
 ) -> bool:
-    """Run gitleaks once per target. Return ``True`` if any leaks were found.
+    """Run gitleaks once per target. Return `True` if any leaks were found.
 
     Raises :class:`RuntimeError` for unexpected gitleaks exit codes.
     """
@@ -544,7 +405,7 @@ def _run_gitleaks(
 
 
 def _write_github_output(**values: str) -> None:
-    """Append step outputs to ``$GITHUB_OUTPUT`` using the heredoc form for multiline."""
+    """Append step outputs to `$GITHUB_OUTPUT` using the heredoc form for multiline."""
     out_path = os.environ.get("GITHUB_OUTPUT")
     if not out_path:
         log.debug("GITHUB_OUTPUT is unset; skipping step output emission")
@@ -558,6 +419,42 @@ def _write_github_output(**values: str) -> None:
                 f.write(f"{key}={value}\n")
 
 
+def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
+    """Surface each non-SARIF report in the workflow run.
+
+    Writes each report's content to two places so PR reviewers don't
+    have to download the `gitleaks-report` artifact, unzip it, and open
+    the file locally:
+
+    1. stdout, wrapped in `::group::`/`::endgroup::` workflow
+       commands so the live job log stays scannable.
+    2. `$GITHUB_STEP_SUMMARY` via `gha_append_step_summary` so the
+       report is one click away from the run page.
+
+    Missing files are skipped with a warning rather than failing the
+    job; they typically mean gitleaks exited before producing that
+    format.
+    """
+    summary_chunks: list[str] = []
+    for target in non_sarif:
+        path = target.path
+        if not path.is_file():
+            log.warning(
+                "non-SARIF report '%s' missing; skipping log + summary emission",
+                path,
+            )
+            continue
+        content = path.read_text(encoding="utf-8", errors="replace")
+        print(f"::group::Gitleaks report: {path}")
+        print(content)
+        print("::endgroup::")
+        summary_chunks.append(
+            f"### Gitleaks report: `{path}`\n\n```\n{content}\n```"
+        )
+    if summary_chunks:
+        gha_append_step_summary("\n\n".join(summary_chunks))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
@@ -566,8 +463,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("changed", "all"),
         help=(
             "'changed' (default) scans only commits introduced by the calling "
-            "event (PR commits or push range). 'all' scans the full repository "
-            "history."
+            "event; requires a pull_request*, pull_request_target, or push "
+            "event payload at $GITHUB_EVENT_PATH and hard-fails otherwise. "
+            "'all' scans the full repository history and is required for "
+            "schedule, workflow_dispatch, release, and any other event."
         ),
     )
     p.add_argument(
@@ -579,23 +478,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
-        "--config-path",
-        default=os.environ.get("GITLEAKS_CONFIG_PATH", _DEFAULT_CONFIG_PATH),
-        help=(
-            "Path to a gitleaks config TOML. Defaults to "
-            f"'{_DEFAULT_CONFIG_PATH}' at the repository root, in which case "
-            "a missing file gracefully falls back to gitleaks's built-in "
-            "default rules. When set to any non-default value the file "
-            "MUST exist or the script exits non-zero, so a typo can't "
-            "silently disable custom rules."
-        ),
-    )
-    p.add_argument(
-        "--gitleaks-version",
-        default=os.environ.get("GITLEAKS_VERSION", _DEFAULT_GITLEAKS_VERSION),
-        help="Gitleaks release version to download (default %(default)s).",
-    )
-    p.add_argument(
         "--source-dir",
         default=os.environ.get("GITLEAKS_SOURCE_DIR", "."),
         help=(
@@ -604,19 +486,6 @@ def build_parser() -> argparse.ArgumentParser:
             "--source flag combines naturally with --log-opts so the "
             "'changed' scan mode still works for partial-tree scans. The "
             "path must exist."
-        ),
-    )
-    p.add_argument(
-        "--generate-config-template",
-        default=_env_bool("GITLEAKS_GENERATE_CONFIG_TEMPLATE"),
-        action=argparse.BooleanOptionalAction,
-        help=(
-            "When set, write a starter gitleaks config to "
-            f"'{_CONFIG_TEMPLATE_PATH}' alongside the scan. The CI workflow "
-            "uploads it as the 'gitleaks-config-template' artifact for "
-            "review; the user is expected to copy/edit/rename it to "
-            f"'{_DEFAULT_CONFIG_PATH}' and commit the result. Refuses to "
-            "overwrite an existing file at the template path."
         ),
     )
     return p
@@ -641,43 +510,23 @@ def main(argv: list[str]) -> int:
         )
         return 2
 
+    config_path = _resolve_config_path()
     try:
-        config_path = _resolve_config_path(
-            args.config_path,
-            is_default=(args.config_path == _DEFAULT_CONFIG_PATH),
+        event = gha_load_github_event()
+        log_opts = _determine_log_opts(
+            scan_mode=args.scan_mode,
+            event_name=os.environ.get("GITHUB_EVENT_NAME", ""),
+            event=event,
         )
-        event = _load_github_event()
-    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+    except (FileNotFoundError, KeyError, ValueError, RuntimeError) as exc:
         log.error("%s", exc)
         return 2
-
-    log_opts = _determine_log_opts(
-        scan_mode=args.scan_mode,
-        event_name=os.environ.get("GITHUB_EVENT_NAME", ""),
-        event=event,
-    )
     log.info("Gitleaks scope: %s", log_opts or "<full repository history>")
     log.info("Gitleaks source: %s", source_dir)
     log.info(
         "Gitleaks formats: %s",
         ", ".join(f"{t.fmt}->{t.path}" for t in targets),
     )
-
-    config_template_output = ""
-    if args.generate_config_template:
-        template_path = Path(_CONFIG_TEMPLATE_PATH)
-        if template_path.exists():
-            log.error(
-                "refusing to overwrite existing '%s'; remove it first or "
-                "disable --generate-config-template",
-                template_path,
-            )
-            return 2
-        template_path.write_text(
-            _render_config_template(args.gitleaks_version), encoding="utf-8"
-        )
-        log.info("Wrote gitleaks config template to %s", template_path)
-        config_template_output = str(template_path)
 
     # Emit step outputs up-front so the workflow's upload steps know
     # which paths to look at even if gitleaks fails partway through.
@@ -686,11 +535,10 @@ def main(argv: list[str]) -> int:
     _write_github_output(
         sarif_path="" if sarif_target is None else str(sarif_target.path),
         non_sarif_paths="\n".join(str(t.path) for t in non_sarif),
-        config_template_path=config_template_output,
     )
 
     try:
-        binary = _ensure_gitleaks(args.gitleaks_version)
+        binary = _ensure_gitleaks()
         leaks_found = _run_gitleaks(
             binary,
             targets,
@@ -700,7 +548,10 @@ def main(argv: list[str]) -> int:
         )
     except RuntimeError as exc:
         log.error("%s", exc)
+        _emit_non_sarif_reports(non_sarif)
         return 2
+
+    _emit_non_sarif_reports(non_sarif)
 
     if leaks_found:
         log.error("gitleaks found one or more potential secrets; see report artifacts")

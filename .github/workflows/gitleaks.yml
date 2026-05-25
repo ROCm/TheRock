@@ -9,8 +9,10 @@ on:
       scan_mode:
         description: >-
           'changed' (default) scans only commits introduced by the calling
-          event (PR commits or push range). 'all' scans the full repository
-          history.
+          event; requires a pull_request*, pull_request_target, or push
+          event payload and hard-fails otherwise. 'all' scans the full
+          repository history and is required for schedule,
+          workflow_dispatch, release, and any other event type.
         required: false
         type: string
         default: changed
@@ -24,44 +26,20 @@ on:
         required: false
         type: string
         default: sarif
-      config_path:
-        description: >-
-          Path (relative to the repository root) to the gitleaks config TOML.
-          Defaults to 'gitleaks.toml' at the repository root, in which case a
-          missing file gracefully falls back to gitleaks's built-in default
-          rules so the workflow works in repos without a custom config. When
-          set to any non-default value the file MUST exist or the scan job
-          fails (so a typo can't silently disable custom rules).
-        required: false
-        type: string
-        default: gitleaks.toml
       scan_path:
         description: >-
           Path (relative to the repository root) to scan. Defaults to '.' so
-          the entire checkout is scanned; set to a subdirectory (e.g.
-          'src/' or 'services/api/') to restrict the scan to that subtree.
-          The path MUST exist after checkout or the scan job fails.
+          the entire superproject checkout is scanned; set to a subdirectory
+          (e.g. 'src/' or 'services/api/') to restrict the scan to that
+          subtree. The path MUST exist after checkout or the scan job fails.
+          Submodules are NOT scanned: the checkout step leaves them
+          uninitialized (its default), and each submodule is a separately
+          versioned ROCm or third-party repo with its own gitleaks coverage.
+          A PR that bumps a submodule SHA surfaces as a one-line change in
+          the superproject diff and is reviewable on its own.
         required: false
         type: string
         default: "."
-      gitleaks_version:
-        description: Gitleaks release version to download.
-        required: false
-        type: string
-        default: 8.30.1
-      generate_config_template:
-        description: >-
-          When true, write a starter 'gitleaks.toml.template' alongside the
-          scan and upload it as the 'gitleaks-config-template' artifact for
-          review. The template extends gitleaks's built-in rules and seeds
-          common allowlist patterns; download it, customize it, then commit
-          the result as 'gitleaks.toml' at the repository root. The workflow
-          refuses to overwrite an existing 'gitleaks.toml.template' in the
-          checkout.
-        required: false
-        type: boolean
-        default: false
-
 # Reusable workflows declare the *minimum* permissions every caller
 # must grant. We intentionally do NOT request `security-events: write`
 # here even though the SARIF upload step needs it: declaring it at the
@@ -96,44 +74,8 @@ jobs:
         env:
           GITLEAKS_SCAN_MODE: ${{ inputs.scan_mode }}
           GITLEAKS_REPORT_FORMATS: ${{ inputs.report_formats }}
-          GITLEAKS_CONFIG_PATH: ${{ inputs.config_path }}
           GITLEAKS_SOURCE_DIR: ${{ inputs.scan_path }}
-          GITLEAKS_VERSION: ${{ inputs.gitleaks_version }}
-          GITLEAKS_GENERATE_CONFIG_TEMPLATE: ${{ inputs.generate_config_template }}
         run: python scan_tools/github_actions/gitleaks.py
-
-      # Surface non-SARIF reports inline in the workflow run so PR
-      # reviewers can read findings without downloading the
-      # `gitleaks-report` artifact, unzipping it, and opening the file
-      # locally. The step is gated on `non_sarif_paths` (set by the
-      # Python runner) so it skips automatically when only SARIF was
-      # requested -- which is the post-merge `gitleaks_main.yml` case,
-      # where findings flow into the Security -> Code scanning tab
-      # and printing the raw SARIF JSON into the job log would just
-      # add noise. Output goes to two places: an `::group::` block
-      # so the live job log stays scannable, and `$GITHUB_STEP_SUMMARY`
-      # so the report is one click away from the run page.
-      - name: Print gitleaks report to the job log
-        if: always() && steps.scan.outputs.non_sarif_paths != ''
-        env:
-          NON_SARIF_PATHS: ${{ steps.scan.outputs.non_sarif_paths }}
-        run: |
-          set -eu
-          while IFS= read -r report_path; do
-            if [ -z "$report_path" ]; then
-              continue
-            fi
-            echo "::group::Gitleaks report: ${report_path}"
-            cat -- "$report_path"
-            echo "::endgroup::"
-            {
-              echo "### Gitleaks report: \`${report_path}\`"
-              echo
-              echo '```'
-              cat -- "$report_path"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          done <<< "$NON_SARIF_PATHS"
 
       - name: Upload SARIF report to code scanning
         if: always() && steps.scan.outputs.sarif_path != ''
@@ -149,11 +91,3 @@ jobs:
           name: gitleaks-report
           path: ${{ steps.scan.outputs.non_sarif_paths }}
           if-no-files-found: ignore
-
-      - name: Upload gitleaks config template
-        if: always() && steps.scan.outputs.config_template_path != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: gitleaks-config-template
-          path: ${{ steps.scan.outputs.config_template_path }}
-          if-no-files-found: error

@@ -20,7 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Mapping
+from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
 
@@ -377,6 +377,50 @@ def gha_append_step_summary(summary: str):
     with open(step_summary_file, "a") as f:
         # Use double newlines to split sections in markdown.
         f.write(summary + "\n\n")
+
+
+def gha_load_github_event() -> dict[str, Any]:
+    """Loads the JSON event payload pointed to by $GITHUB_EVENT_PATH.
+
+    Returns an empty dict when the env var is unset, which lets scripts
+    be invoked locally for development without faking a payload.
+
+    Raises:
+        FileNotFoundError: $GITHUB_EVENT_PATH is set but the file
+            doesn't exist (CI misconfiguration).
+        ValueError: the file contains invalid JSON, or the top-level
+            payload is not a JSON object.
+        RuntimeError: the file exists but couldn't be read (permissions,
+            disk error, etc.).
+
+    See: https://docs.github.com/en/actions/reference/variables-reference#default-environment-variables
+         https://docs.github.com/en/webhooks/webhook-events-and-payloads
+    """
+    raw = os.getenv("GITHUB_EVENT_PATH", "")
+    if not raw:
+        return {}
+    event_path = Path(raw)
+    if not event_path.is_file():
+        raise FileNotFoundError(
+            f"GITHUB_EVENT_PATH is set to '{event_path}' but no such file exists"
+        )
+    try:
+        with open(event_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' contains invalid JSON: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' must contain a JSON object, "
+            f"got {type(data).__name__}"
+        )
+    return data
 
 
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
