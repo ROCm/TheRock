@@ -5,7 +5,7 @@ modified: 2026-05-22
 status: draft
 ---
 
-# ROCm WSL Support via DXG
+# ROCm WSL2 Support via DXG
 
 ## Overview
 
