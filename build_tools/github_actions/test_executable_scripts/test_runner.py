@@ -110,6 +110,18 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # hip-tests installs Catch2 binaries + CTestTestfile.cmake under
+    # ROCM_PATH/share/hip/catch_tests (not ROCM_PATH/bin/<component>/).
+    # Tier/arch labels are baked into the test binaries via
+    # catch_discover_tests(ADD_TAGS_AS_LABELS DISCOVERY_MODE PRE_TEST), wired
+    # by rocm-systems#6315, so `ctest -L <tier>` works out of the box from
+    # the catch_tests directory. The tests dlopen HIP from ROCM_PATH/lib.
+    "hip-tests": {
+        "test_dir": ["share", "hip", "catch_tests"],
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [["lib"]],
+        },
+    },
 }
 
 
