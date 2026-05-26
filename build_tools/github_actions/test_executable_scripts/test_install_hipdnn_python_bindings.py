@@ -50,7 +50,7 @@ def find_pkg_dir(artifacts_path: Path) -> Path:
     return candidate
 
 
-def build_wheel(pkg_dir: Path, wheel_dir: Path, version: str) -> Path:
+def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
     """Build a wheel from the staged package directory."""
     subprocess.check_call(
         [
@@ -58,18 +58,8 @@ def build_wheel(pkg_dir: Path, wheel_dir: Path, version: str) -> Path:
             str(PACK_WHEEL_SCRIPT),
             "--pkg-dir",
             str(pkg_dir),
-            "--name",
-            "hipdnn-frontend",
-            "--version",
-            version,
             "--wheel-dir",
             str(wheel_dir),
-            "--summary",
-            "hipDNN Python bindings (test build)",
-            "--author",
-            "Advanced Micro Devices, Inc.",
-            "--license",
-            "MIT",
         ]
     )
     wheels = list(wheel_dir.glob("hipdnn_frontend-*.whl"))
@@ -130,12 +120,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Test hipDNN Python bindings wheel packaging and installation"
     )
-    parser.add_argument(
-        "--version",
-        default="0.0.1",
-        help="Version string for the wheel (default: 0.0.1)",
-    )
-    args = parser.parse_args()
+    parser.parse_args()
 
     if not OUTPUT_ARTIFACTS_DIR:
         raise RuntimeError("OUTPUT_ARTIFACTS_DIR environment variable not set")
@@ -152,7 +137,7 @@ if __name__ == "__main__":
         wheel_dir.mkdir()
         venv_dir = tmp_path / "venv"
 
-        wheel_path = build_wheel(pkg_dir, wheel_dir, args.version)
+        wheel_path = build_wheel(pkg_dir, wheel_dir)
         logging.info(f"Built wheel: {wheel_path.name}")
 
         python = create_venv(venv_dir)

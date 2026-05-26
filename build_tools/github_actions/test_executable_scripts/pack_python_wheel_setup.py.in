@@ -27,6 +27,6 @@ setup(
     distclass=BinaryDistribution,
     cmdclass={"bdist_wheel": PrebuiltWheel},
     packages=_packages,
-    package_data={p: ["*", "**/*"] for p in _packages},
+    package_data={p: ["**/*"] for p in _packages},
     include_package_data=False,
 )

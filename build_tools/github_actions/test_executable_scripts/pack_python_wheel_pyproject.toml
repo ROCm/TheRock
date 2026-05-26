@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hipdnn-frontend"
+version = "0.0.1"
+requires-python = ">=3.9"
+description = "hipDNN Python bindings"
+license = {text = "MIT"}
+
+[[project.authors]]
+name = "Advanced Micro Devices, Inc."
