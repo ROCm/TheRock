@@ -340,22 +340,29 @@ def gha_set_output(vars: Mapping[str, str | Path]):
     """Sets values in a step's output parameters.
 
     This appends to the file located at the $GITHUB_OUTPUT environment variable.
+    Multi-line values are written using the heredoc form required by GitHub
+    Actions (see "Multiline strings" in the workflow-commands reference).
 
     See
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-output-parameter
+      * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#multiline-strings
       * https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
     """
-    _log(f"Setting github output:\n{json.dumps(vars, indent=2)}")
+    _log(f"Setting github output:\n{json.dumps({k: str(v) for k, v in vars.items()}, indent=2)}")
 
     step_output_file = os.getenv("GITHUB_OUTPUT")
     if not step_output_file:
         _log("  Warning: GITHUB_OUTPUT env var not set, can't set github outputs")
         return
 
-    with open(step_output_file, "a") as f:
+    with open(step_output_file, "a", encoding="utf-8") as f:
         for k, v in vars.items():
-            print(f"OUTPUT {k}={str(v)}")
-            f.write(f"{k}={str(v)}\n")
+            value = "" if v is None else str(v)
+            if "\n" in value:
+                f.write(f"{k}<<EOF\n{value}\nEOF\n")
+            else:
+                print(f"OUTPUT {k}={value}")
+                f.write(f"{k}={value}\n")
 
 
 def gha_append_step_summary(summary: str):

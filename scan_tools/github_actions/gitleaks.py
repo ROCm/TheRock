@@ -52,6 +52,7 @@ sys.path.insert(0, str(_REPO_ROOT / "build_tools"))
 from github_actions.github_actions_api import (  # noqa: E402
     gha_append_step_summary,
     gha_load_github_event,
+    gha_set_output,
 )
 
 log = logging.getLogger(__name__)
@@ -401,21 +402,6 @@ def _run_gitleaks(
     return leaks_found
 
 
-def _write_github_output(**values: str) -> None:
-    """Append step outputs to `$GITHUB_OUTPUT` using the heredoc form for multiline."""
-    out_path = os.environ.get("GITHUB_OUTPUT")
-    if not out_path:
-        log.debug("GITHUB_OUTPUT is unset; skipping step output emission")
-        return
-    with open(out_path, "a", encoding="utf-8") as f:
-        for key, raw in values.items():
-            value = "" if raw is None else str(raw)
-            if "\n" in value:
-                f.write(f"{key}<<EOF\n{value}\nEOF\n")
-            else:
-                f.write(f"{key}={value}\n")
-
-
 def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
     """Surface each non-SARIF report in the workflow run.
 
@@ -529,9 +515,11 @@ def main(argv: list[str]) -> int:
     # which paths to look at even if gitleaks fails partway through.
     sarif_target = next((t for t in targets if t.fmt == "sarif"), None)
     non_sarif = [t for t in targets if t.fmt != "sarif"]
-    _write_github_output(
-        sarif_path="" if sarif_target is None else str(sarif_target.path),
-        non_sarif_paths="\n".join(str(t.path) for t in non_sarif),
+    gha_set_output(
+        {
+            "sarif_path": "" if sarif_target is None else str(sarif_target.path),
+            "non_sarif_paths": "\n".join(str(t.path) for t in non_sarif),
+        }
     )
 
     try:
