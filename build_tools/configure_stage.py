@@ -124,7 +124,12 @@ def generate_cmake_args(
     """Generate CMake arguments for building a specific stage or projects."""
     args = []
 
-    desc = stage_name if stage_name else f"projects: {', '.join(project_names or [])}"
+    if stage_name and project_names:
+        desc = f"stage {stage_name} + projects: {', '.join(project_names)}"
+    elif stage_name:
+        desc = stage_name
+    else:
+        desc = f"projects: {', '.join(project_names or [])}"
     if include_comments:
         args.append(f"# CMake arguments for {desc}")
         args.append("")
@@ -152,7 +157,8 @@ def generate_cmake_args(
         args.append("# Disable all features by default")
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
-    # Get features to enable - either from stage or from project names
+    # Get features to enable
+    # --projects narrows down features; --stage alone enables all stage features
     if project_names:
         features = get_project_features(topology, project_names, platform_name=platform_name)
     elif stage_name:
@@ -243,7 +249,7 @@ def main(argv: List[str] = None):
         nargs="+",
         metavar="PROJECT",
         help="Project/subproject names to enable (e.g., rocblas miopen hipfft). "
-        "Use instead of --stage for project-level granularity.",
+        "Must be used with --stage. Narrows build to specific projects.",
     )
     parser.add_argument(
         "--list-projects",
@@ -253,8 +259,11 @@ def main(argv: List[str] = None):
 
     args = parser.parse_args(argv)
 
-    if not args.list_stages and not args.list_projects and args.stage is None and args.projects is None:
-        parser.error("--stage or --projects is required unless --list-stages or --list-projects is specified")
+    if not args.list_stages and not args.list_projects and args.stage is None:
+        parser.error("--stage is required unless --list-stages or --list-projects is specified")
+
+    if args.projects and not args.stage:
+        parser.error("--projects requires --stage to be specified")
 
     topology = get_topology()
 
