@@ -1,37 +1,62 @@
-From e1efbffb30ecf8fd143ae9a1d90bf930055167fb Mon Sep 17 00:00:00 2001
+From 5db363b9bca04387f75509ea2567d2604c3eb4d3 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Sat, 16 May 2026 10:31:03 +0000
-Subject: [PATCH] Update kpack to support > 4KB pages
+Date: Fri, 22 May 2026 20:46:50 -0400
+Subject: [PATCH] [kpack] Add per-architecture page size and relocation type
+ support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
+Introduces ArchConfig (page_size, r_relative) looked up from the ELF
+e_machine field at surgery time, replacing the hardcoded PAGE_SIZE and
+R_X86_64_RELATIVE constants throughout the ELF surgery stack.
+
+x86_64: 4KB pages, R_X86_64_RELATIVE (8) — unchanged behaviour
+PPC64:  64KB pages, R_PPC64_RELATIVE (22)
+
+Adding support for a new architecture is a one-liner in _ARCH_CONFIGS.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
 ---
- .../kpack/python/rocm_kpack/elf/operations.py | 10 +++---
- .../python/rocm_kpack/elf/phdr_manager.py     | 33 ++++++++++++++++---
- shared/kpack/python/rocm_kpack/elf/types.py   | 20 +++++------
- shared/kpack/python/rocm_kpack/elf/verify.py  | 17 +++++++---
- .../kpack/python/rocm_kpack/elf/zero_page.py  | 21 ++++++++----
- 5 files changed, 71 insertions(+), 30 deletions(-)
+ .../python/rocm_kpack/elf/kpack_transform.py  |  5 +-
+ .../kpack/python/rocm_kpack/elf/operations.py |  8 ++-
+ .../python/rocm_kpack/elf/phdr_manager.py     | 11 +--
+ shared/kpack/python/rocm_kpack/elf/surgery.py | 12 ++++
+ shared/kpack/python/rocm_kpack/elf/types.py   | 67 ++++++++++++++-----
+ shared/kpack/python/rocm_kpack/elf/verify.py  |  5 +-
+ .../kpack/python/rocm_kpack/elf/zero_page.py  | 20 ++++--
+ 7 files changed, 91 insertions(+), 37 deletions(-)
 
+diff --git a/shared/kpack/python/rocm_kpack/elf/kpack_transform.py b/shared/kpack/python/rocm_kpack/elf/kpack_transform.py
+index 9c41c6fa1b..fc77155abb 100644
+--- a/shared/kpack/python/rocm_kpack/elf/kpack_transform.py
++++ b/shared/kpack/python/rocm_kpack/elf/kpack_transform.py
+@@ -204,11 +204,12 @@ def verify_no_fatbin_relocations(
+     problematic: list[ProblematicRelocation] = []
+ 
+     # Iterate all RELA sections
++    r_relative = surgery.arch_config.r_relative
+     for section in surgery.iter_rela_sections():
+         for _, rela in surgery.iter_relocations(section):
+-            in_range = rela.targets_range(fatbin_vaddr, fatbin_size)
++            in_range = rela.targets_range(fatbin_vaddr, fatbin_size, r_relative)
+             if in_range is True:
+-                target = rela.get_target_address()
++                target = rela.get_target_address(r_relative)
+                 assert target is not None  # targets_range returned True
+                 problematic.append(
+                     ProblematicRelocation(
 diff --git a/shared/kpack/python/rocm_kpack/elf/operations.py b/shared/kpack/python/rocm_kpack/elf/operations.py
-index bfdb32d44c..766dec8157 100644
+index bfdb32d44c..8f7e6acc93 100644
 --- a/shared/kpack/python/rocm_kpack/elf/operations.py
 +++ b/shared/kpack/python/rocm_kpack/elf/operations.py
-@@ -86,8 +86,9 @@ def map_section_to_load(
-             error=f"Section '{section_name}' already has SHF_ALLOC",
-         )
- 
--    # Initialize PHDR manager
-+    # Initialize PHDR manager (also detects the page size from existing segments)
-     manager = ProgramHeaderManager(surgery, spare_slots=spare_slots)
-+    page_size = manager._page_size
- 
-     # Allocate virtual address if not specified
-     if vaddr is None:
-@@ -95,13 +96,13 @@ def map_section_to_load(
+@@ -95,13 +95,14 @@ def map_section_to_load(
  
      # Check if we need to relocate section data for mmap alignment
      section_offset = section.header.sh_offset
 -    vaddr_mod = vaddr % PAGE_SIZE
 -    offset_mod = section_offset % PAGE_SIZE
++    page_size = surgery.page_size
 +    vaddr_mod = vaddr % page_size
 +    offset_mod = section_offset % page_size
  
@@ -52,63 +77,37 @@ index bfdb32d44c..766dec8157 100644
      manager.add_program_header(new_load)
  
 diff --git a/shared/kpack/python/rocm_kpack/elf/phdr_manager.py b/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
-index e127f182e1..5792a6f92f 100644
+index e127f182e1..c8b04f226a 100644
 --- a/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
 +++ b/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
-@@ -91,6 +91,25 @@ class ProgramHeaderManager:
-         # Track if we've made changes
-         self._modified = False
- 
-+        # Infer page size from existing PT_LOAD segments. Some platforms use
-+        # a page size larger than the 4KB default (e.g. 64KB). New segments
-+        # we create must use the same alignment as the existing ones or the
-+        # dynamic linker will refuse to load the library.
-+        self._page_size = self._detect_page_size()
-+
-+    def _detect_page_size(self) -> int:
-+        """Infer page size from existing PT_LOAD p_align values.
-+
-+        Some platforms require a page size larger than the 4KB default.
-+        Rather than hard-coding platform-specific values, we read the
-+        alignment from the existing segments, which the linker already set
-+        correctly for the target platform.
-+        """
-+        for phdr in self._phdrs:
-+            if phdr.p_type == PT_LOAD and phdr.p_align > PAGE_SIZE:
-+                return phdr.p_align
-+        return PAGE_SIZE
-+
-     @property
-     def program_headers(self) -> list[ProgramHeader]:
-         """Current program headers."""
-@@ -135,7 +154,7 @@ class ProgramHeaderManager:
+@@ -135,7 +135,7 @@ class ProgramHeaderManager:
          Returns:
              Virtual address at page boundary after existing segments
          """
 -        return round_up_to_page(self.get_max_vaddr())
-+        return round_up_to_page(self.get_max_vaddr(), self._page_size)
++        return round_up_to_page(self.get_max_vaddr(), self._surgery.page_size)
  
      def _get_available_space(self) -> int:
          """Get available space for program headers at current location."""
-@@ -207,7 +226,7 @@ class ProgramHeaderManager:
+@@ -207,7 +207,7 @@ class ProgramHeaderManager:
  
          # Calculate file offset with proper alignment
          current_end = len(self._surgery.data)
 -        new_phoff = page_align_offset(current_end, phdr_vaddr)
-+        new_phoff = page_align_offset(current_end, phdr_vaddr, self._page_size)
++        new_phoff = page_align_offset(current_end, phdr_vaddr, self._surgery.page_size)
  
          # Add padding to reach aligned offset
          padding = new_phoff - current_end
-@@ -249,7 +268,7 @@ class ProgramHeaderManager:
+@@ -249,7 +249,7 @@ class ProgramHeaderManager:
              p_paddr=phdr_vaddr,
              p_filesz=allocated_size,
              p_memsz=allocated_size,
 -            p_align=PAGE_SIZE,
-+            p_align=self._page_size,
++            p_align=self._surgery.page_size,
          )
          self._phdrs.append(phdr_load)
  
-@@ -285,6 +304,7 @@ def create_load_segment(
+@@ -285,6 +285,7 @@ def create_load_segment(
      file_offset: int,
      size: int,
      flags: int = PF_R,
@@ -116,15 +115,7 @@ index e127f182e1..5792a6f92f 100644
  ) -> ProgramHeader:
      """Create a PT_LOAD segment.
  
-@@ -293,12 +313,15 @@ def create_load_segment(
-         file_offset: File offset (must be page-aligned with vaddr)
-         size: Size of segment
-         flags: Segment flags (default: read-only)
-+        page_size: Page size for alignment; defaults to 4KB but should match
-+            the target platform's page size for platforms that require larger
-+            alignment
- 
-     Returns:
+@@ -298,7 +299,7 @@ def create_load_segment(
          New ProgramHeader
      """
      # Verify alignment constraint
@@ -133,22 +124,141 @@ index e127f182e1..5792a6f92f 100644
          raise ValueError(
              f"File offset 0x{file_offset:x} not page-aligned with vaddr 0x{vaddr:x}"
          )
-@@ -311,5 +334,5 @@ def create_load_segment(
+@@ -311,5 +312,5 @@ def create_load_segment(
          p_paddr=vaddr,
          p_filesz=size,
          p_memsz=size,
 -        p_align=PAGE_SIZE,
 +        p_align=page_size,
      )
+diff --git a/shared/kpack/python/rocm_kpack/elf/surgery.py b/shared/kpack/python/rocm_kpack/elf/surgery.py
+index cfbe41ecc7..de9b462bc7 100644
+--- a/shared/kpack/python/rocm_kpack/elf/surgery.py
++++ b/shared/kpack/python/rocm_kpack/elf/surgery.py
+@@ -33,6 +33,8 @@ from .types import (
+     SHT_REL,
+     SHF_ALLOC,
+     R_X86_64_RELATIVE,
++    ArchConfig,
++    get_arch_config,
+     get_section_name,
+ )
+ 
+@@ -246,6 +248,16 @@ class ElfSurgery:
+         """List of modifications made."""
+         return self._modifications
+ 
++    @property
++    def arch_config(self) -> ArchConfig:
++        """Architecture-specific constants (page size, relocation types)."""
++        return get_arch_config(self._ehdr.e_machine)
++
++    @property
++    def page_size(self) -> int:
++        """OS page size for this binary's target architecture."""
++        return self.arch_config.page_size
++
+     @property
+     def is_pie_or_shared(self) -> bool:
+         """Check if binary is PIE or shared library."""
 diff --git a/shared/kpack/python/rocm_kpack/elf/types.py b/shared/kpack/python/rocm_kpack/elf/types.py
-index 2d6c6c7347..f820fc908c 100644
+index 2d6c6c7347..c268415240 100644
 --- a/shared/kpack/python/rocm_kpack/elf/types.py
 +++ b/shared/kpack/python/rocm_kpack/elf/types.py
-@@ -561,34 +561,34 @@ class RelEntry:
+@@ -16,9 +16,13 @@ from typing import ClassVar
+ # Constants
+ # =============================================================================
+ 
+-PAGE_SIZE = 0x1000  # 4KB pages
++PAGE_SIZE = 0x1000  # 4KB pages (x86_64 default)
+ ELF_MAGIC = b"\x7fELF"
+ 
++# ELF machine types (e_machine)
++EM_X86_64 = 62
++EM_PPC64 = 21
++
+ # ELF header offsets (for direct byte access)
+ E_IDENT_OFFSET = 0
+ E_IDENT_SIZE = 16
+@@ -100,6 +104,9 @@ R_X86_64_GLOB_DAT = 6
+ R_X86_64_JUMP_SLOT = 7
+ R_X86_64_RELATIVE = 8  # Used for PIE/shared library pointer adjustments
+ 
++# Relocation types (PPC64)
++R_PPC64_RELATIVE = 22  # Used for PIE/shared library pointer adjustments
++
+ # Dynamic section tags (d_tag)
+ DT_NULL = 0
+ DT_NEEDED = 1
+@@ -483,32 +490,35 @@ class RelaEntry:
+         """Create r_info value from symbol index and type."""
+         return (sym << 32) | (type_ & 0xFFFFFFFF)
+ 
+-    def get_target_address(self) -> int | None:
++    def get_target_address(self, r_relative: int = R_X86_64_RELATIVE) -> int | None:
+         """Get the target address this relocation points to.
+ 
++        Args:
++            r_relative: The RELATIVE relocation type for this binary's architecture.
++
+         Returns:
+             Target address for known relocation types, None for unknown types.
+-
+-        Currently supports:
+-            - R_X86_64_RELATIVE: target is r_addend
+         """
+-        if self.r_type == R_X86_64_RELATIVE:
++        if self.r_type == r_relative:
+             return self.r_addend
+         return None
+ 
+-    def targets_range(self, range_start: int, range_size: int) -> bool | None:
++    def targets_range(
++        self, range_start: int, range_size: int, r_relative: int = R_X86_64_RELATIVE
++    ) -> bool | None:
+         """Check if this relocation targets an address within a range.
+ 
+         Args:
+             range_start: Start address of the range
+             range_size: Size of the range in bytes
++            r_relative: The RELATIVE relocation type for this binary's architecture.
+ 
+         Returns:
+             True: relocation target is within range
+             False: relocation target is known to be outside range
+             None: relocation type not understood (caller decides how to handle)
+         """
+-        target = self.get_target_address()
++        target = self.get_target_address(r_relative)
+         if target is None:
+             return None
+         range_end = range_start + range_size
+@@ -561,34 +571,55 @@ class RelEntry:
  # =============================================================================
  
  
 -def round_up_to_page(addr: int) -> int:
++@dataclass
++class ArchConfig:
++    """Architecture-specific ELF constants."""
++
++    page_size: int  # OS page size in bytes
++    r_relative: int  # Relocation type for RELATIVE (PIE pointer fixups)
++
++
++_ARCH_CONFIGS: dict[int, ArchConfig] = {
++    EM_X86_64: ArchConfig(page_size=0x1000, r_relative=R_X86_64_RELATIVE),
++    EM_PPC64: ArchConfig(page_size=0x10000, r_relative=R_PPC64_RELATIVE),
++}
++
++_DEFAULT_ARCH_CONFIG = ArchConfig(page_size=0x1000, r_relative=R_X86_64_RELATIVE)
++
++
++def get_arch_config(e_machine: int) -> ArchConfig:
++    """Return architecture-specific constants for the given ELF machine type."""
++    return _ARCH_CONFIGS.get(e_machine, _DEFAULT_ARCH_CONFIG)
++
++
 +def round_up_to_page(addr: int, page_size: int = PAGE_SIZE) -> int:
      """Round address up to next page boundary."""
 -    return (addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1)
@@ -190,43 +300,24 @@ index 2d6c6c7347..f820fc908c 100644
  
  def get_section_name(
 diff --git a/shared/kpack/python/rocm_kpack/elf/verify.py b/shared/kpack/python/rocm_kpack/elf/verify.py
-index 9a40ff6c88..46f543e33f 100644
+index 9a40ff6c88..0c8f09178a 100644
 --- a/shared/kpack/python/rocm_kpack/elf/verify.py
 +++ b/shared/kpack/python/rocm_kpack/elf/verify.py
-@@ -137,19 +137,26 @@ class ElfVerifier(BinaryVerifier):
-     def check_phdr_alignment(self) -> VerificationResult:
-         """Check PT_LOAD segments satisfy mmap alignment requirements.
- 
--        For mmap to work: (p_offset % PAGE_SIZE) == (p_vaddr % PAGE_SIZE)
-+        For mmap to work: (p_offset % p_align) == (p_vaddr % p_align).
-+        We use the segment's own p_align rather than a hardcoded page size
-+        so that platforms with page sizes larger than 4KB are handled correctly.
+@@ -141,9 +141,10 @@ class ElfVerifier(BinaryVerifier):
          """
          result = VerificationResult()
  
++        page_size = self._surgery.page_size
          for idx, phdr in self._surgery.iter_load_segments():
 -            offset_mod = phdr.p_offset % PAGE_SIZE
 -            vaddr_mod = phdr.p_vaddr % PAGE_SIZE
-+            align = phdr.p_align
-+            if align <= 1:
-+                # No alignment required for this segment
-+                continue
-+
-+            offset_mod = phdr.p_offset % align
-+            vaddr_mod = phdr.p_vaddr % align
++            offset_mod = phdr.p_offset % page_size
++            vaddr_mod = phdr.p_vaddr % page_size
  
              if offset_mod != vaddr_mod:
                  result.add_error(
-                     f"PT_LOAD segment {idx} has misaligned offset/vaddr: "
--                    f"offset=0x{phdr.p_offset:x} ({offset_mod:#x} mod PAGE_SIZE), "
--                    f"vaddr=0x{phdr.p_vaddr:x} ({vaddr_mod:#x} mod PAGE_SIZE)"
-+                    f"offset=0x{phdr.p_offset:x} ({offset_mod:#x} mod 0x{align:x}), "
-+                    f"vaddr=0x{phdr.p_vaddr:x} ({vaddr_mod:#x} mod 0x{align:x})"
-                 )
- 
-         return result
 diff --git a/shared/kpack/python/rocm_kpack/elf/zero_page.py b/shared/kpack/python/rocm_kpack/elf/zero_page.py
-index 4f33db60ee..5306f01950 100644
+index 4f33db60ee..4b34afc391 100644
 --- a/shared/kpack/python/rocm_kpack/elf/zero_page.py
 +++ b/shared/kpack/python/rocm_kpack/elf/zero_page.py
 @@ -45,12 +45,15 @@ class ZeroPageResult:
@@ -242,7 +333,7 @@ index 4f33db60ee..5306f01950 100644
      Args:
          vaddr: Section virtual address
          size: Section size
-+        page_size: System page size (may be larger than 4KB on some platforms)
++        page_size: OS page size
  
      Returns:
          Tuple of (aligned_vaddr, aligned_size) - the range of full pages
@@ -259,14 +350,15 @@ index 4f33db60ee..5306f01950 100644
  
      if aligned_start >= aligned_end:
          # No full pages to zero
-@@ -229,8 +232,14 @@ def conservative_zero_page(
+@@ -225,12 +228,15 @@ def conservative_zero_page(
+             error=f"Section '{section_name}' is already NOBITS (already zero-paged)",
+         )
+ 
++    page_size = surgery.page_size
+     section_vaddr = section.header.sh_addr
      section_size = section.header.sh_size
      section_offset = section.header.sh_offset
  
-+    # Detect page size from existing PT_LOAD segments (may exceed 4KB on some platforms)
-+    manager = ProgramHeaderManager(surgery, spare_slots=spare_slots)
-+    page_size = manager._page_size
-+
      # Calculate aligned range
 -    aligned_vaddr, aligned_size = calculate_aligned_range(section_vaddr, section_size)
 +    aligned_vaddr, aligned_size = calculate_aligned_range(
@@ -275,16 +367,19 @@ index 4f33db60ee..5306f01950 100644
  
      if aligned_size == 0:
          # Section is too small or misaligned - no optimization possible
-@@ -251,7 +260,7 @@ def conservative_zero_page(
+@@ -249,9 +255,9 @@ def conservative_zero_page(
+     # higher. Cost: one fewer page of savings (4KB), but the ELF structure
+     # is completely standard with no synthetic offsets.
      section_end = section_vaddr + section_size
-     suffix = section_end - round_down_to_page(section_end)
+-    suffix = section_end - round_down_to_page(section_end)
++    suffix = section_end - round_down_to_page(section_end, page_size)
      if suffix == 0:
 -        aligned_size -= PAGE_SIZE
 +        aligned_size -= page_size
          if aligned_size == 0:
              return ZeroPageResult(
                  success=True,
-@@ -262,7 +271,7 @@ def conservative_zero_page(
+@@ -262,7 +268,7 @@ def conservative_zero_page(
              )
  
      aligned_offset = section_offset + (aligned_vaddr - section_vaddr)
@@ -294,5 +389,5 @@ index 4f33db60ee..5306f01950 100644
      # Find the PT_LOAD containing the section
      target_result = surgery.find_phdr_containing_vaddr(section_vaddr)
 -- 
-2.47.3
+2.43.0
 
