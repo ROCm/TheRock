@@ -104,7 +104,8 @@ class TestROCmSanity:
             / offload_arch_executable_file
         ).resolve()
         process = run_command([str(offload_arch_path)])
-        run_command([str(offload_arch_path), "--verbose"])
+        pppp = run_command([str(offload_arch_path), "--verbose"])
+        print(pppp.stdout)
 
         # Extract the arch from the command output, working around
         # https://github.com/ROCm/TheRock/issues/1118. We only expect the output
