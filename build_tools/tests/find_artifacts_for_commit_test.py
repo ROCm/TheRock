@@ -56,6 +56,12 @@ TEST_THEROCK_MAIN_RUN_ID = "20083647898"
 TEST_THEROCK_FORK_COMMIT = "62bc1eaa02e6ad1b49a718eed111cf4c9f03593a"
 TEST_THEROCK_FORK_RUN_ID = "20384488184"
 
+# Known commit with multi_arch_ci.yml workflow run in ROCm/TheRock:
+#   https://github.com/ROCm/TheRock/commit/903ee444eb935adf456bf5df724e1b6f5c2ce962
+#   multi_arch_ci run: https://github.com/ROCm/TheRock/actions/runs/25267756727
+TEST_THEROCK_MULTI_ARCH_COMMIT = "903ee444eb935adf456bf5df724e1b6f5c2ce962"
+TEST_THEROCK_MULTI_ARCH_RUN_ID = "25267756727"
+
 # Known commit with CI workflow run in ROCm/rocm-libraries:
 #   https://github.com/ROCm/rocm-libraries/commit/ab692342ac4d00268ac8a5a4efbc144c194cb45a
 #   CI run: https://github.com/ROCm/rocm-libraries/actions/runs/21365647639
@@ -74,6 +80,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -99,6 +106,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
             commit=TEST_THEROCK_FORK_COMMIT,
             artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -118,6 +126,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -132,6 +141,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="windows",
         )
 
@@ -166,6 +176,48 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
         mock_check.assert_called()
 
+    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    def test_multi_arch_ci_commit(self, mock_check):
+        """multi_arch_ci.yml commit returns ArtifactRunInfo with correct metadata."""
+        results = find_artifacts_for_commit(
+            commit=TEST_THEROCK_MULTI_ARCH_COMMIT,
+            artifact_groups=["gfx110X-all"],
+            github_repository_name="ROCm/TheRock",
+            workflow_file_name="multi_arch_ci.yml",
+            platform="linux",
+        )
+
+        self.assertEqual(len(results), 1)
+        info = results[0]
+        self.assertIsInstance(info, ArtifactRunInfo)
+        self.assertEqual(info.git_commit_sha, TEST_THEROCK_MULTI_ARCH_COMMIT)
+        self.assertEqual(info.github_repository_name, "ROCm/TheRock")
+        self.assertEqual(info.workflow_file_name, "multi_arch_ci.yml")
+        self.assertEqual(info.workflow_run_id, TEST_THEROCK_MULTI_ARCH_RUN_ID)
+        self.assertEqual(info.s3_bucket, "therock-ci-artifacts")
+        self.assertEqual(info.external_repo, "")
+        self.assertEqual(info.platform, "linux")
+        self.assertEqual(info.artifact_group, "gfx110X-all")
+
+        mock_check.assert_called()
+
+    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    def test_multi_arch_ci_default_workflow(self, mock_check):
+        """multi_arch_ci.yml is the default workflow_file_name."""
+        results = find_artifacts_for_commit(
+            commit=TEST_THEROCK_MULTI_ARCH_COMMIT,
+            artifact_groups=["gfx110X-all"],
+            github_repository_name="ROCm/TheRock",
+            platform="linux",
+        )
+
+        self.assertEqual(len(results), 1)
+        info = results[0]
+        self.assertEqual(info.workflow_file_name, "multi_arch_ci.yml")
+        self.assertEqual(info.workflow_run_id, TEST_THEROCK_MULTI_ARCH_RUN_ID)
+
     def test_rate_limit_error_raises_exception(self):
         """Rate limit errors raise GitHubAPIError (not silently return None)."""
         rate_limit_error = GitHubAPIError(
@@ -198,6 +250,7 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all", "gfx120X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -221,6 +274,7 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx110X-all", "gfx120X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 
@@ -235,6 +289,7 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
             commit=TEST_THEROCK_MAIN_COMMIT,
             artifact_groups=["gfx120X-all", "gfx110X-all"],
             github_repository_name="ROCm/TheRock",
+            workflow_file_name="ci.yml",
             platform="linux",
         )
 

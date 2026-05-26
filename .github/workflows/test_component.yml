@@ -57,22 +57,10 @@ jobs:
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
         }}
-      # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
-      # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
-      # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
-      # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
-      options: --ipc host
-        --group-add video
-        --device /dev/kfd
-        --device /dev/dri
-        --group-add 993
-        --group-add 992
-        --group-add 110
-        --ulimit memlock=-1:-1
-        --security-opt seccomp=unconfined
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
-        --user 0:0
-        ${{ fromJSON(inputs.component).container_options }}
+      # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
+      # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
+      # and any job-specific options
+      options: ${{ fromJSON(inputs.component).container_options }}
     strategy:
       fail-fast: false
       matrix:
@@ -110,7 +98,7 @@ jobs:
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
-      - name: Checkout Repository
+      - name: Checking repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
@@ -183,8 +171,7 @@ jobs:
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
-          python ./build_tools/memory_monitor.py --phase "Test ${{ fromJSON(inputs.component).job_name }}" -- \
-            bash -c '${{ fromJSON(inputs.component).test_script }}'
+          ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
