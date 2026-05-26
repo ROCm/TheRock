@@ -5,6 +5,8 @@ from pathlib import Path
 import os
 import sys
 import unittest
+from unittest import mock
+
 from packaging.version import Version
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -48,6 +50,20 @@ class DetermineVersionTest(unittest.TestCase):
         self.assertGreater(version_final, version_prerelease)
         self.assertGreater(version_prerelease, version_alpha)
         self.assertGreater(version_alpha, version_dev)
+
+    def test_write_env_file_sets_build_arguments_and_suffix(self):
+        rocm_version = "7.0.0"
+        with mock.patch.object(determine_version, "gha_set_env") as gha_set_env:
+            determine_version.main(["--rocm-version", rocm_version, "--write-env-file"])
+
+        gha_set_env.assert_called_once_with(
+            {
+                "optional_build_prod_arguments": (
+                    "--rocm-sdk-version ==7.0.0 --version-suffix +rocm7.0.0"
+                ),
+                "version_suffix": "+rocm7.0.0",
+            }
+        )
 
 
 if __name__ == "__main__":
