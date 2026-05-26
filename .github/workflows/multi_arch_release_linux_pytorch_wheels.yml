@@ -414,5 +414,7 @@ jobs:
               "pytorch_git_repo": "${{ matrix.pytorch_git_repo }}",
               "test_configs": "default distributed inductor",
               "tests_to_include": "",
-              "multi_arch": true
+              "multi_arch": true,
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref }}"
             }
