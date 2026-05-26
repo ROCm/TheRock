@@ -24,9 +24,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO)
-
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 PYPROJECT_FILE = SCRIPT_DIR / "pack_python_wheel_pyproject.toml"
 SETUP_FILE = SCRIPT_DIR / "pack_python_wheel_setup.py"
@@ -35,6 +32,7 @@ NATIVE_EXT_SUFFIXES = (".so", ".pyd")
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--pkg-dir",

@@ -27,7 +27,9 @@ setup(
     distclass=BinaryDistribution,
     packages=_packages,
     package_data={p: ["**/*"] for p in _packages},
-    exclude_package_data={p: ["__pycache__/*", "*.pyc", "*.pyo"] for p in _packages},
+    exclude_package_data={
+        p: ["**/__pycache__/*", "**/*.pyc", "**/*.pyo"] for p in _packages
+    },
     include_package_data=False,
     zip_safe=False,
     options={

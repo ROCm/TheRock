@@ -76,7 +76,11 @@ def create_venv(venv_dir: Path) -> Path:
 
 
 def install_wheel(python: Path, wheel_path: Path) -> None:
-    """Install the wheel and pytest into the virtual environment."""
+    """Install the wheel and pytest into the virtual environment.
+
+    Two calls: `--no-deps` is per-invocation, not per-requirement, so the
+    wheel install must be isolated from pytest's dependency resolution.
+    """
     subprocess.check_call(
         [str(python), "-m", "pip", "install", "--no-deps", str(wheel_path)]
     )
@@ -107,9 +111,9 @@ def run_pytests(python: Path, artifacts_path: Path) -> bool:
     env = os.environ.copy()
     is_windows = platform.system() == "Windows"
     if is_windows:
-        # Windows DLLs are installed to the root (bin/), not lib/, so
-        # PATH must point at artifacts_path itself, not artifacts_path/lib.
-        rocm_lib = str(artifacts_path)
+        # Windows ROCm DLLs live in bin/ (Linux uses lib/), so PATH must
+        # include artifacts_path / "bin" for the loader to find them.
+        rocm_lib = str(artifacts_path / "bin")
         env["PATH"] = f"{rocm_lib};{env.get('PATH', '')}"
     else:
         rocm_lib = str(artifacts_path / "lib")
