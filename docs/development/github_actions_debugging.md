@@ -68,6 +68,76 @@ to the dev bucket. You might also need to upload dependent packages or
 [re]generate release index pages, for which you can see the documentation at
 [`build_tools/third_party/s3_management/README.md`](/build_tools/third_party/s3_management/README.md).
 
+### Testing Windows PyTorch release workflows
+
+The Windows counterpart is
+[`.github/workflows/build_windows_pytorch_wheels.yml`](/.github/workflows/build_windows_pytorch_wheels.yml).
+It follows the same staging → test → promote pattern as the Linux workflow:
+
+1. Installs ROCm packages that have already been built
+2. Checks out PyTorch sources (`nightly` from upstream, or `release/*` from
+   [ROCm/pytorch](https://github.com/ROCm/pytorch))
+3. Builds `torch`, `torchaudio`, and `torchvision`; for **`pytorch_git_ref: nightly`**
+   also builds **`triton_windows`** via [triton-windows](https://github.com/triton-lang/triton-windows)
+4. Uploads wheels to a staging directory in the release index
+5. Runs [`test_pytorch_wheels.yml`](/.github/workflows/test_pytorch_wheels.yml)
+6. Copies the tested wheels from staging to the final per-family index
+
+This should be performed using a **"dev"** release with the
+`therock-dev-python` bucket and https://rocm.devreleases.amd.com/ index, same as
+the [Linux PyTorch workflow](#testing-pytorch-release-workflows) above.
+
+Follow these steps:
+
+1. Identify the ROCm package version to build against. You can find recent versions in a nightly release index
+   such as https://rocm.nightlies.amd.com/v2/gfx1151/rocm/ (match
+   `amdgpu_family` to the family you will build for).
+
+2. Copy that version from the nightly bucket to the dev bucket by triggering
+   [copy_release.yml](https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml)
+   twice: once with `destsubdir` `v2` and again with `v2-staging`.
+
+3. Trigger
+   [build_windows_pytorch_wheels.yml](https://github.com/ROCm/TheRock/actions/workflows/build_windows_pytorch_wheels.yml)
+   from the branch you want. Keep the default **dev** release type, enter your
+   ROCm version and `amdgpu_family`, and set `pytorch_git_ref` to `nightly` if
+   you need a `triton_windows` wheel (stable `release/*` refs do not build
+   Triton in this workflow today).
+
+#### Windows workflow details (Triton)
+
+When `pytorch_git_ref` is `nightly`, the build job also:
+
+1. Runs `pytorch_triton_repo.py checkout` into `CHECKOUT_ROOT/triton`.
+1. Passes `--triton-dir … --build-triton` to `build_prod_wheels.py` (via
+   `TRITON_BUILD_ARGS`).
+
+After the wheel build, these steps must see a `triton_windows-*.whl` in the dist
+directory:
+
+| Step | Script / action | Triton-related expectation |
+| ---- | ----------------- | -------------------------- |
+| Record versions | [`write_torch_versions.py`](/build_tools/github_actions/write_torch_versions.py) | Finds `triton_windows-*.whl` and sets `triton_version` (required for Windows when `PYTORCH_GIT_REF=nightly`) |
+| Manifest | [`generate_pytorch_manifest.py`](/build_tools/github_actions/generate_pytorch_manifest.py) | Pass `--triton-dir ${CHECKOUT_ROOT}/triton` so `sources.triton` is recorded |
+| Staging upload | `aws s3 cp … --include "*.whl"` | Uploads all built wheels including `triton_windows` |
+| Promote to release index | Copy step in same workflow | Copies `triton_windows-${TRITON_VERSION}-…whl` with `torch` / `torchaudio` / `torchvision` |
+
+Browse staged or released wheels under paths like
+`https://rocm.nightlies.amd.com/v2/gfx1151/triton_windows/` (per-family) or
+`https://rocm.nightlies.amd.com/v4/whl/triton_windows/` (multi-arch).
+
+> [!NOTE]
+> [`build_windows_pytorch_wheels_ci.yml`](/.github/workflows/build_windows_pytorch_wheels_ci.yml)
+> (per-commit CI) still builds `torch` only, not `triton_windows`. See
+> [Issue #3291](https://github.com/ROCm/TheRock/issues/3291).
+>
+> [`test_pytorch_wheels.yml`](/.github/workflows/test_pytorch_wheels.yml) runs
+> general PyTorch tests, not a dedicated Triton test suite.
+
+Multi-arch Windows PyTorch releases use
+[`.github/workflows/multi_arch_release_windows_pytorch_wheels.yml`](/.github/workflows/multi_arch_release_windows_pytorch_wheels.yml)
+and publish to `v4/whl/` (including `triton_windows` for nightly refs).
+
 ## Connecting to Kubernetes runners for interactive debugging
 
 While we don't have anything as sophisticated as
@@ -176,6 +246,12 @@ cmake --build "B:\build" --target MIOpen+dist
 
 - https://github.com/ROCm/TheRock/issues/840: Builds hitting 6 hour timeouts
 - https://github.com/ROCm/TheRock/issues/1407: Flaky compiler crashes during builds
+- https://github.com/ROCm/TheRock/issues/827: Windows PyTorch wheel builds use
+  MSVC (`ilammy/msvc-dev-cmd`) during the build step; the Triton build must run
+  under `cmd`, not `bash`. The workflow enables Windows long paths before tests.
+- Windows wheel install failures with `WinError 206` (path too long): enable long
+  paths on the runner; see
+  [Windows support — long paths](./windows_support.md#important-tool-settings).
 
 ## Working effectively from forks
 
