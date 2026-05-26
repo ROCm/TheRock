@@ -35,7 +35,7 @@ Output Layout:
     *.whl, *.tar.gz
 
 Installation:
-  pip install rocm[libraries,devel] --pre \\
+  pip install --no-build-isolation rocm[libraries,devel] --pre \\
     --find-links=https://{bucket}.s3.amazonaws.com/{path}/index.html
 """
 
@@ -181,7 +181,7 @@ def write_gha_upload_summary(
             f"- [{family}]({base_url}/{family}/index.html)" for family in families
         )
         family_installs = "\n\n".join(
-            f"```bash\npip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}\n"
+            f"```bash\npip install --no-build-isolation rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}\n"
             f"    --find-links={base_url}/{family}/index.html\n```"
             for family in families
         )
@@ -198,7 +198,7 @@ Per-family indexes:
         install_instructions_markdown = f"""[ROCm Python packages (kpack-split)]({index_url})
 Replace `<YOUR_TARGET>` with your GPU target (e.g. `gfx942`, `gfx1201`):
 ```bash
-pip install rocm[libraries,devel,device-<YOUR_TARGET>] --pre {LINE_CONTINUATION_CHAR}
+pip install --no-build-isolation rocm[libraries,devel,device-<YOUR_TARGET>] --pre {LINE_CONTINUATION_CHAR}
     --find-links={index_url}
 ```
 """
@@ -207,7 +207,7 @@ pip install rocm[libraries,devel,device-<YOUR_TARGET>] --pre {LINE_CONTINUATION_
         index_url = f"{packages_loc.https_url}/index.html"
         install_instructions_markdown = f"""[ROCm Python packages]({index_url})
 ```bash
-pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
+pip install --no-build-isolation rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
     --find-links={index_url}
 ```
 """

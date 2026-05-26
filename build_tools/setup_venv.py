@@ -28,7 +28,7 @@ There are a few modes this can be used in:
     python -m venv .venv
     source .venv/bin/activate
     python -m pip install --upgrade pip
-    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
+    python -m pip install rocm[libraries,devel] --no-build-isolation --index-url=https://.../gfx110X-all
     deactivate
     ```
 """
@@ -112,7 +112,18 @@ def update_venv(venv_dir: Path, use_uv: bool = False):
     # pip logs warnings about wanting to update, so we'll do that for it.
     log("")
     python_exe = find_venv_python_exe(venv_dir)
-    run_command([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
+    run_command(
+        [
+            str(python_exe),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "pip",
+            "setuptools",
+            "wheel",
+        ]
+    )
 
 
 def activate_venv_in_gha(venv_dir: Path):
@@ -194,6 +205,9 @@ def install_packages_into_venv(
             index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
 
         pip_install_cmd.append(f"--index-url={index_url}")
+
+    if any(pkg.startswith("rocm") for pkg in packages):
+        pip_install_cmd.append("--no-build-isolation")
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
