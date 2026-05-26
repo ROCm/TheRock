@@ -64,6 +64,12 @@ def build_wheel(pkg_dir: Path, wheel_dir: Path, version: str) -> Path:
             version,
             "--wheel-dir",
             str(wheel_dir),
+            "--summary",
+            "hipDNN Python bindings (test build)",
+            "--author",
+            "Advanced Micro Devices, Inc.",
+            "--license",
+            "MIT",
         ]
     )
     wheels = list(wheel_dir.glob("hipdnn_frontend-*.whl"))
@@ -80,7 +86,7 @@ def create_venv(venv_dir: Path) -> Path:
     return venv_dir / "bin" / "python"
 
 
-def install_wheel(python: Path, wheel_path: Path):
+def install_wheel(python: Path, wheel_path: Path) -> None:
     """Install the wheel and pytest into the virtual environment."""
     subprocess.check_call(
         [str(python), "-m", "pip", "install", "--no-deps", str(wheel_path)]
@@ -88,7 +94,7 @@ def install_wheel(python: Path, wheel_path: Path):
     subprocess.check_call([str(python), "-m", "pip", "install", "pytest>=7,<9"])
 
 
-def validate_import(python: Path):
+def validate_import(python: Path) -> None:
     """Verify the installed package can be imported."""
     subprocess.check_call(
         [str(python), "-c", "import hipdnn_frontend; print(hipdnn_frontend.__file__)"]
