@@ -355,6 +355,28 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "full")
 
+    def test_nightly_release_is_comprehensive(self):
+        """Nightly release → comprehensive tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="nightly"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_prerelease_is_full(self):
+        """Prerelease → full tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="prerelease"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_dev_release_falls_through_to_default(self):
+        """Dev release without other signals → quick (falls through)."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(self._inputs(release_type="dev"), git_context=git)
+        self.assertEqual(result.test_rocm.test_type, "quick")
+
     def test_test_filter_label_overrides(self):
         """test_filter: PR label overrides the computed test_type."""
         # Even though schedule would set comprehensive, test_filter overrides.
@@ -710,6 +732,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="",
             expect_failure=False,
             build_pytorch=True,
+            build_native_linux=True,
         )
         d = config.to_dict()
         # to_dict keys should match dataclass fields.
@@ -737,6 +760,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="release",
             expect_failure=False,
             build_pytorch=True,
+            build_native_linux=True,
         )
         # Present config → valid JSON
         serialized = json.dumps(config.to_dict())
@@ -1037,12 +1061,14 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
+        # build_native_linux is Linux-only, not used in Windows workflow
+        linux_only_fields = {"build_native_linux"}
         self.assertEqual(
             yaml_fields,
-            python_fields,
+            python_fields - linux_only_fields,
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
-            f"  In Python but not YAML: {python_fields - yaml_fields}",
+            f"  In Python but not YAML: {python_fields - yaml_fields - linux_only_fields}",
         )
 
 
@@ -1224,16 +1250,16 @@ class TestBuildRunnerSelection(unittest.TestCase):
     """Test weighted random selection of build runners (Azure vs AWS)."""
 
     def test_select_build_runner_weighted_selection(self):
-        """Test weighted selection: Azure (90%) vs AWS (10%) for default builds."""
+        """Test weighted selection: Azure (80%) vs AWS (20%) for default builds."""
         from amdgpu_family_matrix import select_build_runner
 
-        # Random < 0.9 should select Azure
+        # Random < 0.8 should select Azure
         with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "release"), "azure-linux-scale-rocm"
             )
 
-        # Random >= 0.9 should select Azure
+        # Random >= 0.8 should select AWS
         with patch("random.random", return_value=0.95):
             self.assertEqual(
                 select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
