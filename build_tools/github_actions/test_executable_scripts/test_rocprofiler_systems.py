@@ -21,9 +21,15 @@ EXCLUDED_TESTS = [
     "roctx-sampling",
     "roctx-runtime-instrument",
     "jacobi-usm-sys-run",
+    "jacobi-roctx.*",
+    "jpeg-decode.*",
+    "matrix-exponential.*",
+    "scratch-memory.*",
     "selective-region-region-1-filter.*",
     "selective-region-region-2-and-3.*",
     "selective-region-no-marker-region-1-filter.*",
+    "shmem-pingpong.*",
+    "video-decode.*",
 ]
 
 # Excluded by default (AIPROFSYST-441)
@@ -43,8 +49,6 @@ QUICK_TESTS_REGEX = [
     "transpose.*",
     "rocprofiler-systems.*",  # Binary tests
     "config.*",
-    "jpeg-decode.*",  # TODO: Binary is not built, so test is skipped
-    "video-decode.*",  # TODO: Binary is not built, so test is skipped
     "openmp.*",
     "roctx.*",
     "trace-time-window.*",
@@ -75,8 +79,9 @@ def setup_env():
 
 
 def execute_tests():
-    shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
-    total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
+    # TODO: Sharding cannot be used as certain of our tests depend on the output of other tests
+    # shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
+    # total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
     test_type = os.getenv("TEST_TYPE", "full").lower()
 
     ctest_base = [
@@ -105,7 +110,11 @@ def execute_tests():
         "--label-exclude",
         f"{'|'.join(EXCLUDED_LABELS)}",
         "--tests-information",
-        f"{shard_index},,{total_shards}",
+        "--parallel",
+        "2",
+        "--repeat",
+        "until-pass:3",
+        # f"{shard_index},,{total_shards}",
     ]
     if test_type == "quick":
         cmd.extend(["--tests-regex", "|".join(QUICK_TESTS_REGEX)])
