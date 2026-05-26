@@ -745,5 +745,491 @@ class RestrictFamiliesTest(TmpDirTestCase):
         self.assertNotIn("gfx94X-dcgpu", content)
 
 
+# ---------------------------------------------------------------------------
+# Tests for cross-platform family awareness in the rocm sdist
+# ---------------------------------------------------------------------------
+
+
+class CrossPlatformFamiliesTest(TmpDirTestCase):
+    """Tests for linux_target_families / windows_target_families kwargs.
+
+    When a multi-arch release pipeline knows the full union of GPU targets
+    across both Linux and Windows builds, the rocm sdist must (a) advertise
+    that union in AVAILABLE_TARGET_FAMILIES, (b) record each platform's
+    contribution separately so setup.py can attach sys_platform markers,
+    (c) pick a DEFAULT_TARGET_FAMILY that resolves on either OS, and
+    (d) produce identical dist_info_contents on both platforms so the
+    metadata that drives the published device extras matches regardless
+    of which platform's job uploaded the sdist last.
+
+    Note on naming: the kwargs and the AVAILABLE_TARGET_FAMILIES constant
+    use the historical "target_family" label, but in kpack-split mode
+    (the only mode that exhibits this bug) the values are GPU **targets**
+    like gfx942 / gfx1100, matching the device wheel suffixes the
+    artifact catalog produces and the `rocm-sdk-device-*` package names
+    published to the index. Tests use realistic target names accordingly.
+
+    The on-disk artifact catalog is irrelevant under these kwargs; tests
+    use an empty artifact tree except where the on-disk view is itself
+    under test (backward compat + identity-across-disjoint-artifacts).
+    """
+
+    def _add_minimal_artifact(self, artifact_dir: Path, target_family: str):
+        subdir = artifact_dir / f"base_lib_{target_family}"
+        (subdir / "stage").mkdir(parents=True, exist_ok=True)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(
+        self,
+        *,
+        on_disk_families: list[str] | None = None,
+        linux_target_families: list[str] | None = None,
+        windows_target_families: list[str] | None = None,
+    ) -> Parameters:
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir(exist_ok=True)
+        for tf in on_disk_families or []:
+            self._add_minimal_artifact(artifact_dir, tf)
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            linux_target_families=linux_target_families,
+            windows_target_families=windows_target_families,
+        )
+
+    def _exec_dist_info(self, params: Parameters) -> dict:
+        ns: dict = {}
+        exec(params.dist_info_contents, ns)
+        return ns
+
+    # ----- Backward compat: no kwargs => on-disk artifact view ------------
+
+    def test_no_kwargs_uses_on_disk_artifact_view(self):
+        """Without the new kwargs, available_target_families reflects the
+        artifact catalog. Single-platform builds keep their existing
+        behavior unchanged.
+        """
+        params = self._make_params(on_disk_families=["gfx942", "gfx1100"])
+        self.assertEqual(
+            sorted(params.available_target_families),
+            ["gfx1100", "gfx942"],
+        )
+        self.assertEqual(params.linux_target_families, [])
+        self.assertEqual(params.windows_target_families, [])
+
+    def test_dist_info_omits_per_platform_appends_when_kwargs_omitted(self):
+        """No LINUX/WINDOWS_TARGET_FAMILIES.append() lines emitted when
+        neither kwarg is passed, so the generated _dist_info.py for
+        single-platform builds is byte-equivalent to today's.
+        """
+        params = self._make_params(on_disk_families=["gfx942"])
+        ns = self._exec_dist_info(params)
+        # Predeclared constants must load as empty lists.
+        self.assertEqual(ns["LINUX_TARGET_FAMILIES"], [])
+        self.assertEqual(ns["WINDOWS_TARGET_FAMILIES"], [])
+        self.assertNotIn("LINUX_TARGET_FAMILIES.append", params.dist_info_contents)
+        self.assertNotIn("WINDOWS_TARGET_FAMILIES.append", params.dist_info_contents)
+
+    # ----- Union semantics ------------------------------------------------
+
+    def test_available_target_families_is_sorted_union(self):
+        """available_target_families is the sorted union of linux + windows."""
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx950", "gfx1100"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        self.assertEqual(
+            params.available_target_families,
+            ["gfx1100", "gfx1102", "gfx942", "gfx950"],
+        )
+
+    def test_kwargs_override_on_disk_view(self):
+        """When kwargs are passed, available_target_families ignores the
+        on-disk artifact list. The kwargs are the source of truth.
+        """
+        params = self._make_params(
+            on_disk_families=["gfx942"],
+            linux_target_families=["gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(params.available_target_families, ["gfx1100"])
+
+    def test_per_platform_lists_sorted_and_deduped(self):
+        """Each platform's list is sorted and deduped on Parameters."""
+        params = self._make_params(
+            linux_target_families=["gfx950", "gfx942", "gfx942"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(params.linux_target_families, ["gfx942", "gfx950"])
+        self.assertEqual(params.windows_target_families, ["gfx1100"])
+
+    def test_only_linux_provided_union_equals_linux(self):
+        """When only linux is provided, union equals linux and windows is empty."""
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx950"],
+        )
+        self.assertEqual(params.available_target_families, ["gfx942", "gfx950"])
+        self.assertEqual(params.linux_target_families, ["gfx942", "gfx950"])
+        self.assertEqual(params.windows_target_families, [])
+
+    # ----- default_target_family must be cross-platform-safe --------------
+    # determine_target_family() in _dist_info.py falls back to
+    # DEFAULT_TARGET_FAMILY when neither ROCM_SDK_TARGET_FAMILY nor
+    # offload-arch resolves. setup.py then plugs that target into every
+    # target-specific extras Requires-Dist. If DEFAULT is Linux-only, a
+    # Windows user without env var or offload-arch fails to resolve
+    # `rocm-sdk-libraries-{DEFAULT}` because no win_amd64 wheel exists
+    # for that target. Hence: prefer the intersection.
+
+    def test_default_target_family_prefers_intersection(self):
+        """DEFAULT must come from the linux ∩ windows intersection when
+        non-empty, so a user without env var / offload-arch gets a target
+        that has wheels for their OS.
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx1100", "gfx950"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        # Intersection = {gfx1100}; that must be the DEFAULT.
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    def test_default_target_family_avoids_linux_only_alpha_first(self):
+        """Discriminating case: alphabetical-first of the union is a
+        Linux-only target but the intersection points elsewhere. The
+        intersection must win, not the alphabetical-first.
+
+        Configuration is artificial: gfx900 / gfx942 are Linux-only in
+        practice; the test puts gfx942 in the Windows list purely to
+        construct a disagreement between sort-order and intersection.
+        """
+        # Union sorted = [gfx900, gfx942] - alpha-first is gfx900 (Linux-only).
+        # Intersection = [gfx942] - DEFAULT must be gfx942.
+        params = self._make_params(
+            linux_target_families=["gfx900", "gfx942"],
+            windows_target_families=["gfx942"],
+        )
+        self.assertEqual(params.default_target_family, "gfx942")
+
+    def test_default_target_family_intersection_is_sorted(self):
+        """When the intersection has multiple targets, DEFAULT is the
+        sorted-first of the intersection (deterministic).
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx1100", "gfx1200"],
+            windows_target_families=["gfx1200", "gfx1100"],
+        )
+        # Intersection sorted = [gfx1100, gfx1200] => gfx1100.
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    def test_default_target_family_falls_back_to_union_when_disjoint(self):
+        """When linux and windows lists are disjoint (no cross-platform
+        target possible), DEFAULT falls back to sorted-first-of-union as
+        a best-effort. Users on the "wrong" OS for that DEFAULT will need
+        ROCM_SDK_TARGET_FAMILY or offload-arch.
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942"],
+            windows_target_families=["gfx1100"],
+        )
+        # No intersection => sorted-union[0] = gfx1100.
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    def test_default_target_family_from_only_linux(self):
+        """Only linux provided: DEFAULT is first of sorted linux list."""
+        params = self._make_params(
+            linux_target_families=["gfx950", "gfx942"],
+        )
+        self.assertEqual(params.default_target_family, "gfx942")
+
+    def test_default_target_family_from_only_windows(self):
+        """Only windows provided: DEFAULT is first of sorted windows list."""
+        params = self._make_params(
+            windows_target_families=["gfx1200", "gfx1100"],
+        )
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    # ----- Generated _dist_info.py shape ----------------------------------
+
+    def test_dist_info_exposes_per_platform_constants(self):
+        """LINUX_TARGET_FAMILIES / WINDOWS_TARGET_FAMILIES baked into
+        _dist_info.py so setup.py can inspect them at install time.
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx950"],
+            windows_target_families=["gfx1100"],
+        )
+        ns = self._exec_dist_info(params)
+        self.assertEqual(sorted(ns["LINUX_TARGET_FAMILIES"]), ["gfx942", "gfx950"])
+        self.assertEqual(ns["WINDOWS_TARGET_FAMILIES"], ["gfx1100"])
+        self.assertEqual(
+            sorted(ns["AVAILABLE_TARGET_FAMILIES"]),
+            ["gfx1100", "gfx942", "gfx950"],
+        )
+
+    def test_dist_info_identical_across_disjoint_artifact_sets(self):
+        """Core invariant: same cross-platform inputs produce identical
+        dist_info_contents on both Linux and Windows machines, even when
+        their on-disk artifact catalogs are disjoint. Without this, the
+        last-writer-wins upload of rocm-X.Y.Z.tar.gz silently drops one
+        platform's targets from the published device extras.
+        """
+        # Linux machine has the full Linux target set on disk.
+        linux_params = self._make_params(
+            on_disk_families=["gfx942", "gfx950", "gfx1100"],
+            linux_target_families=["gfx942", "gfx950", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        # Windows machine only has Windows-supported targets on disk.
+        windows_params = self._make_params(
+            on_disk_families=["gfx1100"],
+            linux_target_families=["gfx942", "gfx950", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(
+            linux_params.dist_info_contents,
+            windows_params.dist_info_contents,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests for platform marker helper
+# ---------------------------------------------------------------------------
+
+
+class PlatformMarkerTest(TmpDirTestCase):
+    """Tests for get_target_family_platform_marker() in _dist_info.py.
+
+    Called by the rocm setup.py at install time to decide whether a
+    device-gfx* Requires-Dist needs a PEP 508 sys_platform marker.
+    Returns the marker string for platform-exclusive families, "" for
+    cross-platform families or when the per-platform breakdown is
+    unknown (single-platform builds).
+    """
+
+    def _make_dist_info(
+        self,
+        *,
+        linux_target_families: list[str] | None,
+        windows_target_families: list[str] | None,
+    ):
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir(exist_ok=True)
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            linux_target_families=linux_target_families,
+            windows_target_families=windows_target_families,
+        )
+        return params.dist_info
+
+    def test_markers_in_mixed_platform_config(self):
+        """In a realistic multi-arch config with Linux-only, cross-platform,
+        and Windows-only targets, each category gets the right marker.
+        Mirrors the production case where Linux and Windows ship
+        overlapping but unequal target sets.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        # Linux-only target gets a linux marker.
+        self.assertEqual(
+            dist_info.get_target_family_platform_marker("gfx942"),
+            'sys_platform == "linux"',
+        )
+        # Windows-only target gets a win32 marker.
+        self.assertEqual(
+            dist_info.get_target_family_platform_marker("gfx1102"),
+            'sys_platform == "win32"',
+        )
+        # Cross-platform target has no marker.
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+
+    def test_no_marker_when_per_platform_lists_unknown(self):
+        """Single-platform builds don't pass the new kwargs; no markers
+        are added, so existing (non-multi-arch) sdists are unchanged.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=None, windows_target_families=None
+        )
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx942"), "")
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+
+    def test_no_marker_when_only_one_platform_participates(self):
+        """When only one platform's families are declared (the other side
+        is skipped in a multi-arch run, or a Linux-only build flows through
+        the cross-platform kwargs), markers are not attached: there is no
+        cross-platform variant to disambiguate from.
+        """
+        # Linux declared, Windows not.
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=None,
+        )
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx942"), "")
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+        # Windows declared, Linux not.
+        dist_info = self._make_dist_info(
+            linux_target_families=None,
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1102"), "")
+
+
+# ---------------------------------------------------------------------------
+# Tests for per-target device extras builder
+# ---------------------------------------------------------------------------
+
+
+class PerTargetExtrasTest(TmpDirTestCase):
+    """Tests for build_per_target_extras() in _dist_info.py.
+
+    The helper produces the device-gfx* and device-all entries for the
+    rocm meta sdist's EXTRAS_REQUIRE. Cross-platform-aware: targets
+    listed only in LINUX_TARGET_FAMILIES or only in WINDOWS_TARGET_FAMILIES
+    get a sys_platform marker so `pip install rocm[device-all]` resolves
+    only to wheels actually published for the user's OS.
+
+    All tests run with kpack_split=True to mirror the multi-arch release
+    pipeline (the only mode that exhibits the cross-platform divergence).
+    In legacy mode the libraries package is also target-specific and the
+    helper would additionally emit libraries-{target} extras; that path
+    is not exercised here.
+    """
+
+    def _make_dist_info(
+        self,
+        *,
+        linux_target_families: list[str] | None,
+        windows_target_families: list[str] | None,
+    ):
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir(exist_ok=True)
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=True,
+            linux_target_families=linux_target_families,
+            windows_target_families=windows_target_families,
+        )
+        return params.dist_info
+
+    def test_empty_when_single_target(self):
+        """No per-target extras for distributions with one target (legacy)."""
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942"],
+            windows_target_families=["gfx942"],
+        )
+        self.assertEqual(dist_info.build_per_target_extras(), {})
+
+    def test_extras_emitted_for_mixed_platform_config(self):
+        """In a realistic multi-arch config, the helper emits one
+        device-{target} entry per available target, plus a device-all
+        aggregating them. Linux-only and Windows-only targets carry
+        sys_platform markers; cross-platform targets do not.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        extras = dist_info.build_per_target_extras()
+
+        # One entry per target plus the aggregate.
+        self.assertEqual(
+            sorted(extras.keys()),
+            sorted(
+                [
+                    "device-gfx1100",
+                    "device-gfx1102",
+                    "device-gfx942",
+                    "device-all",
+                ]
+            ),
+        )
+
+        # Linux-only target carries the linux marker.
+        self.assertTrue(
+            extras["device-gfx942"][0].endswith('; sys_platform == "linux"'),
+            f"Expected linux marker on Linux-only target, got: "
+            f"{extras['device-gfx942'][0]}",
+        )
+        # Windows-only target carries the win32 marker.
+        self.assertTrue(
+            extras["device-gfx1102"][0].endswith('; sys_platform == "win32"'),
+            f"Expected win32 marker on Windows-only target, got: "
+            f"{extras['device-gfx1102'][0]}",
+        )
+        # Cross-platform target has no marker.
+        self.assertNotIn(";", extras["device-gfx1100"][0])
+        self.assertNotIn("sys_platform", extras["device-gfx1100"][0])
+
+        # device-all aggregates every per-target requirement verbatim.
+        self.assertEqual(
+            sorted(extras["device-all"]),
+            sorted(
+                extras["device-gfx942"]
+                + extras["device-gfx1100"]
+                + extras["device-gfx1102"]
+            ),
+        )
+
+    def test_no_markers_when_per_platform_lists_unknown(self):
+        """Without per-platform kwargs (single-platform builds), no markers
+        attach so existing single-platform sdists stay unchanged.
+        """
+        # Populate two targets via the artifact catalog so the helper
+        # actually emits per-target extras.
+        artifact_dir = self.temp_dir / "artifacts"
+        for t in ("gfx942", "gfx1100"):
+            subdir = artifact_dir / f"base_lib_{t}"
+            (subdir / "stage").mkdir(parents=True, exist_ok=True)
+            (subdir / "artifact_manifest.txt").write_text("stage\n")
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=True,
+        )
+        extras = params.dist_info.build_per_target_extras()
+        for extra_name, requires in extras.items():
+            for req in requires:
+                self.assertNotIn(
+                    "sys_platform",
+                    req,
+                    f"Single-platform build leaked a marker into {extra_name}: {req}",
+                )
+
+    def test_requires_dist_pins_version_and_uses_target_in_name(self):
+        """Requires-Dist strings start with 'rocm-sdk-device-{target}==<ver>',
+        matching the canonical PackageEntry.get_dist_package_require() shape.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        extras = dist_info.build_per_target_extras()
+        req = extras["device-gfx942"][0]
+        self.assertTrue(
+            req.startswith("rocm-sdk-device-gfx942==0.0.1.test"),
+            f"Unexpected Requires-Dist shape: {req}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -48,7 +48,7 @@ import enum
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
 # Add parent directory to path for _therock_utils imports
@@ -434,6 +434,9 @@ class BuildConfig:
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    # Cross-platform pair, populated identically in linux and windows configs.
+    linux_amdgpu_families: str = ""  # Semicolon-separated
+    windows_amdgpu_families: str = ""  # Semicolon-separated
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -991,6 +994,24 @@ def expand_build_configs(
             linux_config = config
         else:
             windows_config = config
+
+    # Stamp the cross-platform pair into both configs so each platform's
+    # build_python_packages step can produce a rocm sdist whose device
+    # extras advertise the union.
+    linux_families = linux_config.dist_amdgpu_families if linux_config else ""
+    windows_families = windows_config.dist_amdgpu_families if windows_config else ""
+    if linux_config is not None:
+        linux_config = replace(
+            linux_config,
+            linux_amdgpu_families=linux_families,
+            windows_amdgpu_families=windows_families,
+        )
+    if windows_config is not None:
+        windows_config = replace(
+            windows_config,
+            linux_amdgpu_families=linux_families,
+            windows_amdgpu_families=windows_families,
+        )
 
     return BuildConfigs(
         linux=linux_config,
