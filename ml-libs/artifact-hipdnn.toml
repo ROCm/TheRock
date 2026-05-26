@@ -18,4 +18,5 @@ include = [
   "lib/test_plugins/**",
   "share/hipdnn/python/**/*.py",
   "share/hipdnn/python/**/*.so",
+  "share/hipdnn/python/**/*.pyd",
 ]

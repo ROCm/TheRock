@@ -17,11 +17,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -93,7 +96,11 @@ def main() -> int:
             ]
         )
 
-    print(f"Wheel(s) written to {wheel_dir}")
+    wheels = list(wheel_dir.glob("hipdnn_frontend-*.whl"))
+    if not wheels:
+        raise SystemExit(f"pip wheel produced no hipdnn_frontend wheel in {wheel_dir}")
+
+    logging.info(f"Wheel(s) written to {wheel_dir}: {[w.name for w in wheels]}")
     return 0
 
 

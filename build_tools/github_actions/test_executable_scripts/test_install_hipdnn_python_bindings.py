@@ -83,10 +83,15 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
     subprocess.check_call([str(python), "-m", "pip", "install", "pytest>=7,<9"])
 
 
-def validate_import(python: Path) -> None:
-    """Verify the installed package can be imported."""
+def validate_import(python: Path, cwd: Path) -> None:
+    """Verify the installed package can be imported.
+
+    Runs from `cwd` (a neutral directory) so that `import hipdnn_frontend`
+    cannot accidentally resolve to a sibling staged package directory.
+    """
     subprocess.check_call(
-        [str(python), "-c", "import hipdnn_frontend; print(hipdnn_frontend.__file__)"]
+        [str(python), "-c", "import hipdnn_frontend; print(hipdnn_frontend.__file__)"],
+        cwd=str(cwd),
     )
 
 
@@ -102,6 +107,8 @@ def run_pytests(python: Path, artifacts_path: Path) -> bool:
     env = os.environ.copy()
     is_windows = platform.system() == "Windows"
     if is_windows:
+        # Windows DLLs are installed to the root (bin/), not lib/, so
+        # PATH must point at artifacts_path itself, not artifacts_path/lib.
         rocm_lib = str(artifacts_path)
         env["PATH"] = f"{rocm_lib};{env.get('PATH', '')}"
     else:
@@ -140,7 +147,7 @@ if __name__ == "__main__":
         install_wheel(python, wheel_path)
         logging.info("Wheel installed successfully")
 
-        validate_import(python)
+        validate_import(python, tmp_path)
         logging.info("Import validation passed")
 
         tests_ran = run_pytests(python, artifacts_path)
