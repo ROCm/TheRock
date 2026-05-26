@@ -36,6 +36,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rccl | --no-rccl]
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
+    [--rocjitsu | --no-rocjitsu]
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
@@ -361,6 +362,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rccl,
             args.rocdecode,
             args.rocjpeg,
+            args.rocjitsu,
             args.rocprofiler_compute,
             args.rocprofiler_sdk,
             args.rocprofiler_systems,
@@ -396,6 +398,13 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.hipdnn_integration_tests:
             extra_artifacts.append("hipdnn-integration-tests")
+            # The main test binary `hipdnn_integration_tests` is in the artifact's
+            # _run component (per ml-libs/artifact-hipdnn-integration-tests.toml).
+            # Provider cross-provider integration suites (e.g. miopenprovider's
+            # external-integration-check) invoke it with --test-article and
+            # --test-engine; without _run, ctest finds the entry but errors with
+            # "Unable to find executable: ../hipdnn_integration_tests".
+            argv.append("hipdnn-integration-tests_run")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
@@ -432,6 +441,9 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocjpeg_test")
             argv.append("base_dev")
             argv.append("amd-llvm_dev")
+        if args.rocjitsu:
+            extra_artifacts.append("rocjitsu")
+            argv.append("rocjitsu_run")
         if args.hipblasltprovider:
             extra_artifacts.append("hipblasltprovider")
         if args.prim:
@@ -751,6 +763,13 @@ def main(argv):
         "--rocjpeg",
         default=False,
         help="Include 'rocjpeg' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocjitsu",
+        default=False,
+        help="Include 'rocjitsu' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

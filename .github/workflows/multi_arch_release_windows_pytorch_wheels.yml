@@ -12,15 +12,13 @@
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
 #     torchaudio ships as-is (no split).
-#   - Upload the result to s3://therock-{release_type}-python/v4/whl-staging/
+#   - Upload the result to s3://therock-{release_type}-python/v4/whl/
 #     (server-side indexing handles the index page) via
-#     publish_pytorch_to_staging.py.
+#     publish_pytorch_to_release_bucket.py.
 #
-# Triggered exclusively via workflow_dispatch from
-# multi_arch_release_windows.yml's dispatch_pytorch_wheels job.
-#
-# Build phase only: testing and promotion are deferred follow-ups.
-# See https://github.com/ROCm/TheRock/issues/3291 for convergence plans.
+# For convergence with CI and testing plans see:
+# * https://github.com/ROCm/TheRock/issues/3332
+# * https://github.com/ROCm/TheRock/issues/3291
 
 name: Multi-Arch Release Windows PyTorch Wheels
 
@@ -356,8 +354,8 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
-      - name: Upload PyTorch wheels to release-bucket staging
+      - name: Upload PyTorch wheels to release bucket
         run: |
-          python build_tools/github_actions/publish_pytorch_to_staging.py \
+          python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
