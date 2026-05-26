@@ -36,14 +36,21 @@ class ProjectResolutionTest(unittest.TestCase):
         self.assertIn("-DTHEROCK_ENABLE_HIP_RUNTIME=ON", self._get_flags(["clr"]))
 
     def test_rocr_runtime(self):
-        self.assertIn("-DTHEROCK_ENABLE_CORE_RUNTIME=ON", self._get_flags(["rocr-runtime"]))
+        self.assertIn(
+            "-DTHEROCK_ENABLE_CORE_RUNTIME=ON", self._get_flags(["rocr-runtime"])
+        )
 
     # rocm-systems: profiler projects
     def test_rocprofiler_sdk(self):
-        self.assertIn("-DTHEROCK_ENABLE_ROCPROFV3=ON", self._get_flags(["rocprofiler-sdk"]))
+        self.assertIn(
+            "-DTHEROCK_ENABLE_ROCPROFV3=ON", self._get_flags(["rocprofiler-sdk"])
+        )
 
     def test_rocprofiler_compute(self):
-        self.assertIn("-DTHEROCK_ENABLE_ROCPROFILER_COMPUTE=ON", self._get_flags(["rocprofiler-compute"]))
+        self.assertIn(
+            "-DTHEROCK_ENABLE_ROCPROFILER_COMPUTE=ON",
+            self._get_flags(["rocprofiler-compute"]),
+        )
 
     # rocm-systems: debug/dc tools
     def test_rocdbgapi(self):
@@ -70,14 +77,21 @@ class ProjectResolutionTest(unittest.TestCase):
         self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", self._get_flags(["miopen"]))
 
     def test_composablekernel(self):
-        self.assertIn("-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON", self._get_flags(["composablekernel"]))
+        self.assertIn(
+            "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
+            self._get_flags(["composablekernel"]),
+        )
 
     # rocm-libraries: dnn-providers
     def test_miopen_provider(self):
-        self.assertIn("-DTHEROCK_ENABLE_MIOPENPROVIDER=ON", self._get_flags(["miopen-provider"]))
+        self.assertIn(
+            "-DTHEROCK_ENABLE_MIOPENPROVIDER=ON", self._get_flags(["miopen-provider"])
+        )
 
     def test_fusilli_provider(self):
-        self.assertIn("-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON", self._get_flags(["fusilli-provider"]))
+        self.assertIn(
+            "-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON", self._get_flags(["fusilli-provider"])
+        )
 
     # multiple projects
     def test_multiple_projects(self):

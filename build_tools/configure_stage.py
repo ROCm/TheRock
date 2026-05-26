@@ -160,7 +160,9 @@ def generate_cmake_args(
     # Get features to enable
     # --projects narrows down features; --stage alone enables all stage features
     if project_names:
-        features = get_project_features(topology, project_names, platform_name=platform_name)
+        features = get_project_features(
+            topology, project_names, platform_name=platform_name
+        )
     elif stage_name:
         features = get_stage_features(topology, stage_name, platform_name=platform_name)
     else:
@@ -260,7 +262,9 @@ def main(argv: List[str] = None):
     args = parser.parse_args(argv)
 
     if not args.list_stages and not args.list_projects and args.stage is None:
-        parser.error("--stage is required unless --list-stages or --list-projects is specified")
+        parser.error(
+            "--stage is required unless --list-stages or --list-projects is specified"
+        )
 
     if args.projects and not args.stage:
         parser.error("--projects requires --stage to be specified")
