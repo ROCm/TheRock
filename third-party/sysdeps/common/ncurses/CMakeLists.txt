@@ -138,6 +138,7 @@ add_custom_target(
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --with-shared
       --without-ada
       --enable-widec
@@ -149,6 +150,9 @@ add_custom_target(
       # by pkgconfig (which is typically the system root, which is not what
       # we want).
       --with-pkg-config-libdir="${CMAKE_INSTALL_PREFIX}/lib/pkgconfig"
+      # Direct terminfo database installation into the stage tree so
+      # make install does not attempt to write to /usr/share/terminfo.
+      --with-default-terminfo-dir="${CMAKE_INSTALL_PREFIX}/share/terminfo"
       # Prevent build-time LDFLAGS (rpath, version-script) from leaking into
       # the .pc files' Libs: line.
       --disable-pkg-ldflags

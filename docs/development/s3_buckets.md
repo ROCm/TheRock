@@ -4,20 +4,34 @@ TheRock uses Amazon S3 buckets to store CI build outputs (artifacts, logs,
 python packages, etc.) and release artifacts. This page lists all buckets
 and explains the authentication needed to upload to them.
 
+## Table of contents
+
+- [Authentication](#authentication)
+- [Bucket inventory](#bucket-inventory)
+  - [CI buckets](#ci-buckets): `therock-ci-artifacts`, `therock-ci-artifacts-external`
+  - [Release buckets](#release-buckets): `therock-{dev,nightly,prerelease,release}-{artifacts,packages,python,tarball}`
+  - [Build system buckets](#build-system-buckets): `rocm-third-party-deps`
+  - [Cache buckets](#cache-buckets): `therock-*-pytorch-sccache`
+  - [Legacy buckets](#legacy-buckets): `therock-artifacts`, `therock-artifacts-external`
+
 ## Authentication
 
-Most buckets require assuming an IAM role via
+Most buckets have public _read_ access for use by developers as well as CI/CD
+systems.
+
+To _write_ to most buckets, assuming an IAM role via
 [`aws-actions/configure-aws-credentials`](https://github.com/aws-actions/configure-aws-credentials)
-using OIDC. This requires `id-token: write` in the job's `permissions` block.
+using OIDC is needed. This requires `id-token: write` in the job's `permissions` block.
 The full ARN pattern is
 `arn:aws:iam::692859939525:role/therock-{ci,dev,nightly,prerelease}`.
 
-```yaml
-# This covers the common case for "CI" workflows that run on PRs from
-# ROCm repositories and PRs from forks. Other workflows, such as release
-# workflows also used by https://github.com/ROCm/rockrel, may use different
-# roles and slightly different usage patterns.
+Use the
+[`configure_aws_artifacts_credentials`](/.github/actions/configure_aws_artifacts_credentials/action.yml)
+composite action to set up credentials. It determines the correct IAM role and
+bucket from the repository, event type, and optional `release_type` input
+by using [`build_tools/_therock_utils/s3_buckets.py`](/build_tools/_therock_utils/s3_buckets.py):
 
+```yaml
 jobs:
   build:
     runs-on: azure-linux-scale-rocm
@@ -31,17 +45,8 @@ jobs:
       # ... build steps ...
 
       # Credentials are short-lived — assume the role close to when it's needed.
-
-      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
-      # fall back to runner base credentials (therock-ci-artifacts-external).
       - name: Configure AWS Credentials
-        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
-          # Windows only — retry until secret key has no special characters:
-          special-characters-workaround: true
+        uses: ./.github/actions/configure_aws_artifacts_credentials
 
       # ... upload steps that use the credentials ...
 ```
@@ -55,7 +60,9 @@ jobs:
 - **Windows** jobs must pass `special-characters-workaround: true` to
   `aws-actions/configure-aws-credentials`. This retries credential fetching
   until the secret access key contains no special characters, which some
-  Windows environments cannot tolerate.
+  Windows environments cannot tolerate. (The
+  `configure_aws_artifacts_credentials` composite action mentioned above
+  handles this automatically)
 
 ## Bucket inventory
 
@@ -103,6 +110,14 @@ prefer the CDN URLs for reading (e.g. `pip install --index-url`).
 | `therock-release-python`                                                                 | Python packages | —                    | [`repo.amd.com/rocm/whl/`](https://repo.amd.com/rocm/whl/)                                                                  |
 | `therock-release-tarball`                                                                | ROCm tarballs   | —                    | [`repo.amd.com/rocm/tarball/`](https://repo.amd.com/rocm/tarball/)                                                          |
 
+### Build system buckets
+
+We mirror third-party dependency files into S3 for use by the build system.
+
+| Bucket                  | Contents                                                | Details                                                                                                                    |
+| ----------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `rocm-third-party-deps` | Mirrors for [`third_party/`](/third-party/) subprojects | See ["Updating a third-party mirror"](./git_chores.md#updating-a-third-party-mirror) in [`git_chores.md`](./git_chores.md) |
+
 ### Cache buckets
 
 | Bucket                               | Contents                   | IAM role             |
@@ -114,7 +129,7 @@ prefer the CDN URLs for reading (e.g. `pip install --index-url`).
 
 ### Legacy buckets
 
-CI runs before 2025-11-11 ([TheRock #2046](https://github.com/ROCm/TheRock/issues/2046))
+CI runs before 2025-11-11 (see [TheRock#2046](https://github.com/ROCm/TheRock/issues/2046))
 used different bucket names. These are no longer written to but still contain
 historical data. We may remove these once we implement a retention policy for
 artifacts.

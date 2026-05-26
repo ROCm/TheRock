@@ -27,6 +27,12 @@
 # post-install RPATH patching can take place.
 #
 #
+# ROCGDB_SOURCE_DIR
+#
+# Specifies the location of the ROCgdb sources. Used by TheRock to build
+# ROCgdb from an alternative source location.
+#
+#
 # ROCM_VERSION
 #
 # Specifies the ROCM version we are building for. If empty or non-existent
@@ -192,15 +198,32 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
   # If we have a valid libpython_dir, adjust the LDFLAGS for this build
   # variant and add an extra RPATH entry for post-install patching.
+  #
+  # Skip this for system library directories (under /usr, excluding /usr/local).
+  # The linker already searches these by default, and explicitly adding them
+  # via -L pulls in unrelated system static archives (e.g. libiberty.a from
+  # libiberty-dev) that conflict with GDB's bundled copies. GDB's configure
+  # finds system libpython on its own via --with-python without needing -L.
+  # Non-system libpython (custom builds, /opt, /usr/local, etc.) still needs
+  # the explicit flags since those paths are not in the default search order.
+  # See https://github.com/ROCm/TheRock/issues/4223
   set(ALL_LDFLAGS ${LDFLAGS})
   set(LIBPYTHON_RPATH "")
   if(NOT "${libpython_dir}" STREQUAL "")
-    set(LIBPYTHON_LDFLAGS "-L${libpython_dir} -Wl,-rpath,${libpython_dir}")
-    string(APPEND ALL_LDFLAGS " ${LIBPYTHON_LDFLAGS}")
-    set(LIBPYTHON_RPATH ":${libpython_dir}")
+    set(_usr_prefix "/usr")
+    set(_usr_local_prefix "/usr/local")
+    cmake_path(IS_PREFIX _usr_prefix "${libpython_dir}" NORMALIZE _is_under_usr)
+    cmake_path(IS_PREFIX _usr_local_prefix "${libpython_dir}" NORMALIZE _is_under_usr_local)
+    if(_is_under_usr AND NOT _is_under_usr_local)
+      message(STATUS "-> Skipping extra LDFLAGS for system libpython dir: ${libpython_dir}")
+    else()
+      set(LIBPYTHON_LDFLAGS "-L${libpython_dir} -Wl,-rpath,${libpython_dir}")
+      string(APPEND ALL_LDFLAGS " ${LIBPYTHON_LDFLAGS}")
+      set(LIBPYTHON_RPATH ":${libpython_dir}")
 
-    message(STATUS "-> Extra LDFLAGS: ${LIBPYTHON_LDFLAGS}")
-    message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
+      message(STATUS "-> Extra LDFLAGS: ${LIBPYTHON_LDFLAGS}")
+      message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
+    endif()
   endif()
 
   # These directories are adjusted here so we don't have to escape
@@ -229,7 +252,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
         "LDFLAGS=${ALL_LDFLAGS}"
       --
       # The actual configure command.
-      ${CMAKE_CURRENT_SOURCE_DIR}/source/configure
+      ${ROCGDB_SOURCE_DIR}/configure
         "--prefix=${ROCGDB_INTERMEDIATE_INSTALL_DIR}"
         --program-prefix=roc
         "--program-transform-name=${ROCGDB_PROGRAM_TRANSFORM_STR}"
@@ -290,7 +313,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     COMMAND
       ${CMAKE_COMMAND} -E make_directory ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc
     COMMAND
-      ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/source/gdb/NOTICES.txt ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc/
+      ${CMAKE_COMMAND} -E copy ${ROCGDB_SOURCE_DIR}/gdb/NOTICES.txt ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc/
     # Rename rocgcore to rocgcore-py<python version>.
     COMMAND
       ${CMAKE_COMMAND} -E rename ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore-py${minor_version}
@@ -604,7 +627,7 @@ if(BUILD_TESTING)
     # Get the directory part of the file.
     get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
 
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_file}
+    install(FILES ${ROCGDB_SOURCE_DIR}/${rocgdb_file}
       DESTINATION tests/rocgdb/${file_dir}
       COMPONENT tests)
   endforeach()
@@ -613,7 +636,7 @@ if(BUILD_TESTING)
     # Get the directory part of the file.
     get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
 
-    install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_file}
+    install(PROGRAMS ${ROCGDB_SOURCE_DIR}/${rocgdb_file}
       DESTINATION tests/rocgdb/${file_dir}
       COMPONENT tests)
   endforeach()
@@ -626,7 +649,7 @@ if(BUILD_TESTING)
   )
 
   foreach(rocgdb_testsuite_dir ${ROCGDB_TESTSUITE_DIRS})
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_testsuite_dir}
+    install(DIRECTORY ${ROCGDB_SOURCE_DIR}/${rocgdb_testsuite_dir}
       DESTINATION tests/rocgdb/gdb
       COMPONENT tests
       USE_SOURCE_PERMISSIONS)

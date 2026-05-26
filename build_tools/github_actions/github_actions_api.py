@@ -421,6 +421,18 @@ def gha_load_github_event() -> dict[str, Any]:
             f"got {type(data).__name__}"
         )
     return data
+    """Load the GitHub Actions workflow event JSON from disk.
+
+    Reads the path from :envvar:`GITHUB_EVENT_PATH`. GitHub writes that file
+    as UTF-8. On Windows the process default encoding is often not UTF-8, so
+    the file must be opened with ``encoding="utf-8"``.
+
+    Returns:
+        Parsed JSON object (GitHub webhook payloads are JSON objects).
+    """
+    path = os.environ["GITHUB_EVENT_PATH"]
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
@@ -481,7 +493,7 @@ def gha_query_workflow_runs_for_commit(
 
     Args:
         github_repository: Repository in "owner/repo" format (e.g., "ROCm/TheRock")
-        workflow_file_name: Workflow filename (e.g., "ci.yml")
+        workflow_file_name: Workflow filename (e.g., "multi_arch_ci.yml")
         git_commit_sha: Full git commit SHA
 
     Returns:
@@ -505,7 +517,7 @@ def gha_query_workflow_runs_for_commit(
 
 def gha_query_last_successful_workflow_run(
     github_repository: str = "ROCm/TheRock",
-    workflow_name: str = "ci.yml",
+    workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
 ) -> dict | None:
     """Find the last successful run of a specific workflow on the specified branch.

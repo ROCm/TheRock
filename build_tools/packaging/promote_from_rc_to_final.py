@@ -104,6 +104,30 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     return parser.parse_args(argv)
 
 
+def update_metadata_rocm_requires_dist(
+    new_dir_path: pathlib.Path,
+    package_name_no_version: str,
+    old_version: str,
+    old_rocm_version: str,
+    new_rocm_version: str,
+) -> None:
+    """Update Requires-Dist lines in METADATA that reference rocm, leaving others unchanged."""
+    metadata_path = (
+        new_dir_path / f"{package_name_no_version}-{old_version}.dist-info" / "METADATA"
+    )
+    print(f"      {metadata_path}")
+    with fileinput.input(
+        files=(metadata_path),
+        encoding="utf-8",
+        inplace=True,
+    ) as f:
+        for line in f:
+            if "Requires-Dist" in line and "rocm" in line:
+                print(line.replace(old_rocm_version, new_rocm_version), end="")
+            else:
+                print(line, end="")
+
+
 def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_version):
     # extract "rocm_sdk_core" from /tmp/tmp3swrl25j/wheel/rocm_sdk_core-7.10.0
     package_name_no_version = new_dir_path.name.split(str(new_version))[0][:-1]
@@ -143,34 +167,39 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
             new_dir_path / package_name_no_version / "version.py",
         ]
 
-        # special handling
-        # we only want to change required-dist matching "rocm"
-        metadata_path = (
-            new_dir_path
-            / f"{package_name_no_version}-{old_version}.dist-info"
-            / "METADATA"
+        # special handling: we only want to change Requires-Dist matching "rocm"
+        update_metadata_rocm_requires_dist(
+            new_dir_path,
+            package_name_no_version,
+            old_version,
+            old_rocm_version,
+            new_rocm_version,
         )
-        print(f"      {metadata_path}")
-        with fileinput.input(
-            files=(metadata_path),
-            encoding="utf-8",
-            inplace=True,
-        ) as f:
-            for line in f:
-                if "Requires-Dist" in line:
-                    if "rocm" in line:
-                        print(line.replace(old_rocm_version, new_rocm_version), end="")
-                        continue
-                print(line, end="")
-    # torchaudio, torchvision
-    elif not "triton" in package_name_no_version:
+    elif "apex" in package_name_no_version:
         files_to_change = [
-            new_dir_path / package_name_no_version / "version.py",
+            new_dir_path / package_name_no_version / "git_version_info_installed.py",
         ]
-    # triton
-    else:
-        # no additional (rocm-specific) files needed to be changed that contain the version
+    elif "jax_rocm7_plugin" in package_name_no_version:
+        # special handling: we only want to change Requires-Dist matching "rocm"
+        update_metadata_rocm_requires_dist(
+            new_dir_path,
+            package_name_no_version,
+            old_version,
+            old_rocm_version,
+            new_rocm_version,
+        )
         return
+    else:
+        # we have multiple packages that have a version.py that needs updating
+        need_change_version_py = ["torchaudio", "torchvision", "jaxlib"]
+        if any(pkg in package_name_no_version for pkg in need_change_version_py):
+            files_to_change = [
+                new_dir_path / package_name_no_version / "version.py",
+            ]
+        else:
+            # no additional (rocm-specific) files needed to be changed that contain the version
+            # currently applying to: triton, jax_rocm7_pjrt
+            return
 
     for f in files_to_change:
         print(f"      {f}")

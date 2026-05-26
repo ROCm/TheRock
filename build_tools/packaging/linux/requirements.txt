@@ -1,3 +1,4 @@
 pyelftools
 boto3
 jinja2
+pyzstd

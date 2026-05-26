@@ -5,6 +5,7 @@
 """Unit tests for artifact_backend.py."""
 
 import os
+import socket
 import sys
 import tempfile
 import unittest
@@ -39,6 +40,16 @@ def _make_s3_root(
         run_id=run_id,
         platform=platform,
     )
+
+
+def _is_public_s3_available():
+    try:
+        with socket.create_connection(
+            ("therock-ci-artifacts.s3.amazonaws.com", 443), timeout=5
+        ):
+            return True
+    except OSError:
+        return False
 
 
 class TestLocalDirectoryBackend(unittest.TestCase):
@@ -545,6 +556,10 @@ class TestS3BackendCredentials(unittest.TestCase):
         )
         return S3Backend(output_root=output_root)
 
+    @unittest.skipUnless(
+        _is_public_s3_available(),
+        "Public S3 endpoint is not reachable (sandbox with no network access?)",
+    )
     def test_list_objects_unsigned(self):
         """Listing objects in a public bucket must succeed without credentials."""
         # Point config/credentials files at nonexistent paths so that
@@ -676,6 +691,29 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertIsInstance(backend, S3Backend)
             self.assertEqual(backend.bucket, "test-bucket")
             self.assertIn("s3-run-id", backend.s3_prefix)
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_s3_backend_with_github_repository_override(self, mock_retrieve):
+        """Test that explicit github_repository overrides GITHUB_REPOSITORY env var.
+
+        When running on a fork (GITHUB_REPOSITORY=SomeUser/TheRock), passing
+        github_repository="ROCm/TheRock" should use the main repo's bucket.
+        """
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        with mock.patch.dict(
+            os.environ,
+            {
+                "THEROCK_RUN_ID": "s3-run-id",
+                "GITHUB_REPOSITORY": "SomeUser/TheRock",
+            },
+            clear=True,
+        ):
+            backend = create_backend_from_env(github_repository="ROCm/TheRock")
+
+            self.assertIsInstance(backend, S3Backend)
+            self.assertEqual(backend.bucket, "therock-ci-artifacts")
+            # ROCm/TheRock has no external_repo prefix
+            self.assertNotIn("SomeUser", backend.s3_prefix)
 
 
 if __name__ == "__main__":

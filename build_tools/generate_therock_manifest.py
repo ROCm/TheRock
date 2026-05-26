@@ -175,6 +175,7 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
 def build_manifest_schema(
     repo_root: Path,
     the_rock_commit: str,
+    github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
 ) -> dict:
@@ -199,6 +200,9 @@ def build_manifest_schema(
         "the_rock_commit": the_rock_commit,
     }
 
+    if github_job:
+        manifest["github_job"] = github_job
+
     if github_run_id:
         manifest["github_run_id"] = github_run_id
 
@@ -211,6 +215,7 @@ def build_manifest_schema(
 
 def build_partial_manifest_schema(
     repo_root: Path,
+    github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
 ) -> dict:
@@ -234,6 +239,9 @@ def build_partial_manifest_schema(
     manifest = {
         "the_rock_commit": None,
     }
+
+    if github_job:
+        manifest["github_job"] = github_job
 
     if github_run_id:
         manifest["github_run_id"] = github_run_id
@@ -278,6 +286,7 @@ def main():
     args = ap.parse_args()
 
     repo_root = source_root()
+    github_job = os.getenv("GITHUB_JOB")
     github_run_id = os.getenv("GITHUB_RUN_ID")
     git_available = has_git_metadata(repo_root)
 
@@ -286,12 +295,14 @@ def main():
         manifest = build_manifest_schema(
             repo_root,
             the_rock_commit,
+            github_job,
             github_run_id,
             args.rocm_package_version,
         )
     else:
         manifest = build_partial_manifest_schema(
             repo_root,
+            github_job,
             github_run_id,
             args.rocm_package_version,
         )

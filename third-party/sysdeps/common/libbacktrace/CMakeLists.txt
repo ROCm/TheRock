@@ -83,6 +83,7 @@ add_custom_target(
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --enable-host-shared
   COMMAND
     make -j "${PAR_JOBS}" V=1

@@ -84,10 +84,22 @@ class ROCmDevelTest(unittest.TestCase):
             .strip()
         )
         rocmpath = Path(rocmpath_output)
-        self.assertEqual(
-            root_path,
-            rocmpath,
-            msg=f"Expected `hipconfig --rocmpath` to return {root_path}, not {rocmpath}",
+        self.assertTrue(
+            root_path.is_dir(), msg=f"Expected root path {root_path} to exist"
+        )
+        self.assertTrue(
+            rocmpath.is_dir(),
+            msg=f"Expected `hipconfig --rocmpath` directory {rocmpath} to exist",
+        )
+        # On Linux, RHEL-like venvs often have lib64 -> lib; root_path may spell
+        # lib64 while rocmpath realpaths to lib. Use samefile for this reason.
+        self.assertTrue(
+            os.path.samefile(root_path, rocmpath),
+            msg=(
+                "Expected `hipconfig --rocmpath` and `rocm_sdk path --root` to refer to the "
+                f"same directory; got {root_path} vs {rocmpath} "
+                f"(resolved: {root_path.resolve()} vs {rocmpath.resolve()})"
+            ),
         )
 
     @unittest.skipIf(

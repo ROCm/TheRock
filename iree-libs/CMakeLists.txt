@@ -14,6 +14,8 @@ if(THEROCK_ENABLE_IREE_COMPILER)
     NO_MERGE_COMPILE_COMMANDS
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
+    COMPILER_TOOLCHAIN
+      amd-llvm
     CMAKE_ARGS
       # Build the compiler
       -DIREE_BUILD_COMPILER=ON
@@ -109,7 +111,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
       therock-nlohmann-json
     RUNTIME_DEPS
       hip-clr
-      hipDNN
+      hipdnn_integration_tests
       iree-compiler  # Provides libIREECompiler.so for CAPI compilation
       rocminfo  # Provides rocm_agent_enumerator
   )

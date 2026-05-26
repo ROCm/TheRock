@@ -134,8 +134,6 @@ cmd = [
     f"{ctest_parallel_count}",
     "--resource-spec-file",
     resource_spec_file,
-    "--timeout",
-    "300",
 ]
 
 # If quick tests are enabled, we run quick tests only.
