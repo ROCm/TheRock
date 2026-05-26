@@ -4,7 +4,7 @@
 
 """Pack a pre-built hipdnn_frontend package directory into a wheel.
 
-Stages the package next to the pyproject.toml + setup.py.in adjacent to
+Stages the package next to the pyproject.toml + setup.py adjacent to
 this script, then delegates to `pip wheel` so wheel naming, METADATA,
 RECORD, and tag selection follow standard packaging tooling.
 
@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import string
 import subprocess
 import sys
 import tempfile
@@ -27,7 +26,8 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PYPROJECT_FILE = SCRIPT_DIR / "pack_python_wheel_pyproject.toml"
-SETUP_TEMPLATE = SCRIPT_DIR / "pack_python_wheel_setup.py.in"
+SETUP_FILE = SCRIPT_DIR / "pack_python_wheel_setup.py"
+EXPECTED_PKG_NAME = "hipdnn_frontend"
 NATIVE_EXT_SUFFIXES = (".so", ".pyd")
 
 
@@ -37,7 +37,7 @@ def main() -> int:
         "--pkg-dir",
         required=True,
         type=Path,
-        help="Directory containing the built package files",
+        help=f"Directory containing the built {EXPECTED_PKG_NAME} package",
     )
     parser.add_argument(
         "--wheel-dir",
@@ -53,10 +53,9 @@ def main() -> int:
     if not pkg_dir.is_dir():
         raise SystemExit(f"--pkg-dir is not a directory: {pkg_dir}")
 
-    pkg_name = pkg_dir.name
-    if not pkg_name.isidentifier():
+    if pkg_dir.name != EXPECTED_PKG_NAME:
         raise SystemExit(
-            f"--pkg-dir basename is not a valid Python package name: {pkg_name!r}"
+            f"--pkg-dir basename must be {EXPECTED_PKG_NAME!r}; got {pkg_dir.name!r}"
         )
 
     has_native = any(
@@ -70,14 +69,11 @@ def main() -> int:
 
     wheel_dir.mkdir(parents=True, exist_ok=True)
 
-    setup_tmpl = string.Template(SETUP_TEMPLATE.read_text())
-    setup_text = setup_tmpl.substitute(pkg_name=pkg_name)
-
     with tempfile.TemporaryDirectory() as td:
         build_dir = Path(td)
-        shutil.copytree(pkg_dir, build_dir / pkg_name)
+        shutil.copytree(pkg_dir, build_dir / EXPECTED_PKG_NAME)
         shutil.copy(PYPROJECT_FILE, build_dir / "pyproject.toml")
-        (build_dir / "setup.py").write_text(setup_text)
+        shutil.copy(SETUP_FILE, build_dir / "setup.py")
 
         subprocess.check_call(
             [

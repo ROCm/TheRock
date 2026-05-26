@@ -20,7 +20,7 @@ class PrebuiltWheel(bdist_wheel):
         return impl, impl, plat
 
 
-_pkg = "${pkg_name}"
+_pkg = "hipdnn_frontend"
 _packages = find_packages(where=".", include=[_pkg, f"{_pkg}.*"]) or [_pkg]
 
 setup(
