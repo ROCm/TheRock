@@ -1913,6 +1913,19 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "elfio",
+        "Artifact_Subdir": [
+          {
+            "Name": "elfio",
+            "Components": [
+              "dev",
+              "doc",
+              "lib"
+            ]
+          }
+        ]
       }
 
     ],
@@ -1983,7 +1996,8 @@
             "Components": [
               "lib",
               "run",
-              "doc"
+              "doc",
+              "dev"
             ]
           }
         ]
@@ -1996,7 +2010,8 @@
             "Components": [
               "lib",
               "run",
-              "doc"
+              "doc",
+              "dev"
             ]
           }
         ]
