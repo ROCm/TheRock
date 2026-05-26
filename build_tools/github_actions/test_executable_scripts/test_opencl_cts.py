@@ -94,7 +94,7 @@ def find_test_executables():
     return test_executables
 
 
-def run_test(test_exe, env):
+def run_test(test_exe):
     """Run a single test executable and return True if it passes"""
     test_name = test_exe.name
     logging.info(f"++ Running test: {test_name}")
@@ -109,7 +109,6 @@ def run_test(test_exe, env):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            env=env,
         ) as proc:
             for line in proc.stdout:
                 print(line, end="", flush=True)
@@ -131,8 +130,11 @@ def run_tests():
     """Run all OpenCL CTS test executables"""
     logging.info(f"++ Running OpenCL-CTS tests (shard {SHARD_INDEX}/{TOTAL_SHARDS})")
 
-    env = os.environ.copy()
-    env["OCL_ICD_VENDORS"] = str(AMDOCL_PATH)
+    icd_dir = Path("/etc/OpenCL/vendors")
+    icd_dir.mkdir(parents=True, exist_ok=True)
+    icd_file = icd_dir / "amdocl64.icd"
+    icd_file.write_text(str(AMDOCL_PATH) + "\n")
+    logging.info(f"Registered AMD OpenCL ICD: {icd_file} -> {AMDOCL_PATH}")
 
     test_executables = find_test_executables()
     logging.info(f"Found {len(test_executables)} test executables")
@@ -140,7 +142,7 @@ def run_tests():
     passed = 0
     failed_tests = []
     for test_exe in test_executables:
-        if run_test(test_exe, env):
+        if run_test(test_exe):
             passed += 1
         else:
             failed_tests.append(test_exe.name)
