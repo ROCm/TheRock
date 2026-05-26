@@ -95,7 +95,7 @@ def validate_import(python: Path, cwd: Path) -> None:
     """
     subprocess.check_call(
         [str(python), "-c", "import hipdnn_frontend; print(hipdnn_frontend.__file__)"],
-        cwd=str(cwd),
+        cwd=cwd,
     )
 
 
@@ -157,7 +157,12 @@ if __name__ == "__main__":
         tests_ran = run_pytests(python, artifacts_path)
 
     if not tests_ran:
-        logging.error("Python test suite was skipped — test directory not found")
+        logging.error(
+            "Test infrastructure missing: hipDNN upstream pytest directory not found "
+            "under external-sources/rocm-libraries/. Initialize the submodule "
+            "(this is expected to be present in CI; exit 2 indicates infra error, "
+            "not test failure)."
+        )
         sys.exit(2)
 
     logging.info("All hipDNN Python bindings tests passed!")

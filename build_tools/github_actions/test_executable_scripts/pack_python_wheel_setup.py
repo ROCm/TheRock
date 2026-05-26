@@ -20,6 +20,8 @@ class BinaryDistribution(Distribution):
         return True
 
 
+# Must match EXPECTED_PKG_NAME in pack_python_wheel.py; the driver stages
+# the source tree under this name into the build dir.
 _pkg = "hipdnn_frontend"
 _packages = find_packages(where=".", include=[_pkg, f"{_pkg}.*"]) or [_pkg]
 

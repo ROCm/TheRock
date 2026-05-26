@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hipdnn-frontend"
+# TODO: derive from hipDNN release version before publishing anywhere
+# beyond the internal CI install-test loop. 0.0.1 will collide.
 version = "0.0.1"
 requires-python = ">=3.9"
 description = "hipDNN Python bindings"

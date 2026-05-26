@@ -30,6 +30,8 @@ SETUP_FILE = SCRIPT_DIR / "pack_python_wheel_setup.py"
 EXPECTED_PKG_NAME = "hipdnn_frontend"
 NATIVE_EXT_SUFFIXES = (".so", ".pyd")
 
+logger = logging.getLogger(__name__)
+
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO)
@@ -98,7 +100,7 @@ def main() -> int:
     if not wheels:
         raise SystemExit(f"pip wheel produced no hipdnn_frontend wheel in {wheel_dir}")
 
-    logging.info(f"Wheel(s) written to {wheel_dir}: {[w.name for w in wheels]}")
+    logger.info(f"Wheel(s) written to {wheel_dir}: {[w.name for w in wheels]}")
     return 0
 
 
