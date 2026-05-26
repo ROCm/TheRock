@@ -519,7 +519,7 @@ artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
-subprojects = ["rocr", "rocr-runtime"]
+subprojects = ["rocr-runtime"]
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -654,7 +654,7 @@ subprojects = ["rocsupport"]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
-subprojects = ["composable_kernel", "composablekernel", "ck"]
+subprojects = ["composablekernel"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
@@ -673,19 +673,19 @@ subprojects = ["hipdnn"]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
-subprojects = ["hipdnn_integration_tests", "integration-tests"]
+subprojects = ["integration-tests"]
 
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "hipdnn-integration-tests"]
-subprojects = ["miopenprovider", "miopen-provider"]
+subprojects = ["miopen-provider"]
 
 [artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "hipdnn-integration-tests"]
-subprojects = ["hipblasltprovider", "hipblaslt-provider"]
+subprojects = ["hipblaslt-provider"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
@@ -698,7 +698,7 @@ subprojects = ["hipdnn_samples"]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
-subprojects = ["hipkernelprovider", "hip-kernel-provider"]
+subprojects = ["hip-kernel-provider"]
 
 # --- IREE Integration ---
 
@@ -716,7 +716,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler", "hipdnn-integration-tests"]
 disable_platforms = ["windows"]
 feature_group = "IREE_LIBS"
-subprojects = ["fusilliprovider", "fusilli-provider"]
+subprojects = ["fusilli-provider"]
 
 # --- Media Integration ---
 
