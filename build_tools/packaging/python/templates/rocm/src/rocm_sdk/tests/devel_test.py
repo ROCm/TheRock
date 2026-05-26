@@ -192,9 +192,14 @@ class ROCmDevelTest(unittest.TestCase):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
-                command = (
-                    extra_setup
-                    + "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'hipdnn'); import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                command = extra_setup + "; ".join(
+                    [
+                        "import rocm_sdk",
+                        "rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'hipdnn')",
+                        "import ctypes",
+                        "import sys",
+                        "ctypes.CDLL(sys.argv[1])",
+                    ]
                 )
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])

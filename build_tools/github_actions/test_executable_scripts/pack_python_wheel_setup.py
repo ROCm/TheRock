@@ -1,5 +1,18 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Pre-built hipdnn_frontend wheel setup.
+
+Mirrors the rocm-sdk-* template setups: plain `setup()` with
+`Distribution.has_ext_modules() -> True` so bdist_wheel emits a
+`cp{X}{Y}-cp{X}{Y}-<plat>` tag for the CPython-ABI-bound
+`hipdnn_frontend_python.so`.
+"""
+
+import os
+import sysconfig
+
 from setuptools import setup, find_packages, Distribution
-from wheel.bdist_wheel import bdist_wheel
 
 
 class BinaryDistribution(Distribution):
@@ -7,26 +20,21 @@ class BinaryDistribution(Distribution):
         return True
 
 
-class PrebuiltWheel(bdist_wheel):
-    def finalize_options(self):
-        super().finalize_options()
-        self.root_is_pure = False
-
-    def get_tag(self):
-        import sys, sysconfig
-
-        impl = f"cp{sys.version_info.major}{sys.version_info.minor}"
-        plat = sysconfig.get_platform().replace("-", "_").replace(".", "_")
-        return impl, impl, plat
-
-
 _pkg = "hipdnn_frontend"
 _packages = find_packages(where=".", include=[_pkg, f"{_pkg}.*"]) or [_pkg]
 
 setup(
     distclass=BinaryDistribution,
-    cmdclass={"bdist_wheel": PrebuiltWheel},
     packages=_packages,
     package_data={p: ["**/*"] for p in _packages},
+    exclude_package_data={p: ["__pycache__/*", "*.pyc", "*.pyo"] for p in _packages},
     include_package_data=False,
+    zip_safe=False,
+    options={
+        "bdist_wheel": {
+            "plat_name": os.getenv(
+                "ROCM_SDK_WHEEL_PLATFORM_TAG", sysconfig.get_platform()
+            ),
+        },
+    },
 )

@@ -13,7 +13,6 @@ This test validates the hipDNN Python wheel packaging pipeline:
 Requires a GPU and OUTPUT_ARTIFACTS_DIR pointing at the merged artifact tree.
 """
 
-import argparse
 import logging
 import os
 import platform
@@ -117,11 +116,6 @@ def run_pytests(python: Path, artifacts_path: Path) -> bool:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Test hipDNN Python bindings wheel packaging and installation"
-    )
-    parser.parse_args()
-
     if not OUTPUT_ARTIFACTS_DIR:
         raise RuntimeError("OUTPUT_ARTIFACTS_DIR environment variable not set")
 
