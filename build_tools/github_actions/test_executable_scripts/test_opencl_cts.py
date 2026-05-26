@@ -134,15 +134,6 @@ def run_tests():
     env = os.environ.copy()
     env["OCL_ICD_VENDORS"] = str(AMDOCL_PATH)
 
-    lib_dir = ROCM_PATH / "lib"
-    if lib_dir.exists():
-        # Append rather than prepend so the system libOpenCL.so.1 (from ocl-icd)
-        # takes precedence over our artifact's copy; AMD implementation deps are
-        # still found via the appended path.
-        existing = env.get("LD_LIBRARY_PATH", "")
-        env["LD_LIBRARY_PATH"] = f"{existing}:{lib_dir}" if existing else str(lib_dir)
-        logging.info(f"Set LD_LIBRARY_PATH to include: {lib_dir}")
-
     test_executables = find_test_executables()
     logging.info(f"Found {len(test_executables)} test executables")
 
