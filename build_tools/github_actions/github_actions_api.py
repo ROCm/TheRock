@@ -11,6 +11,8 @@ This module provides:
 See also https://pypi.org/project/github-action-utils/.
 """
 
+import base64
+import binascii
 from enum import Enum, auto
 import json
 import logging
@@ -22,6 +24,7 @@ import subprocess
 import sys
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import urlopen, Request
 
 
@@ -549,17 +552,18 @@ def gha_resolve_git_ref(github_repository: str, ref: str) -> str:
 
     See: https://docs.github.com/en/rest/commits/commits#get-a-commit
     """
-    url = f"https://api.github.com/repos/{github_repository}/commits/{ref}"
+    encoded_ref = quote(ref, safe="")
+    url = f"https://api.github.com/repos/{github_repository}/commits/{encoded_ref}"
     response = gha_send_request(url)
     return response["sha"]
 
 
-def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> str:
+def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> bytes:
     """Fetch a file's contents from a GitHub repo at a specific ref.
 
-    Uses the Contents API to retrieve and decode a single file. The file
-    must be small enough for the Contents API (< 1 MB); for larger files
-    use the Blobs API instead.
+    Uses the Contents API to retrieve and decode a single file. The file must
+    be small enough for the Contents API to return base64 content; for larger
+    files use the Blobs API instead.
 
     Args:
         github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
@@ -567,18 +571,39 @@ def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> str:
         ref: Git ref (branch, tag, or commit SHA).
 
     Returns:
-        The decoded file contents as a UTF-8 string.
+        The decoded file contents.
 
     Raises:
         GitHubAPIError: If the file cannot be fetched (not found, API error, etc.).
 
     See: https://docs.github.com/en/rest/repos/contents#get-repository-content
     """
-    import base64
-
-    url = f"https://api.github.com/repos/{github_repository}/contents/{path}?ref={ref}"
+    encoded_path = quote(path, safe="/")
+    encoded_ref = quote(ref, safe="")
+    url = (
+        f"https://api.github.com/repos/{github_repository}/contents/"
+        f"{encoded_path}?ref={encoded_ref}"
+    )
     response = gha_send_request(url)
-    return base64.b64decode(response["content"]).decode("utf-8")
+    if not isinstance(response, dict) or response.get("type") != "file":
+        response_type = (
+            response.get("type") if isinstance(response, dict) else type(response)
+        )
+        raise GitHubAPIError(
+            f"Expected GitHub contents response for a file at {path!r}, "
+            f"got {response_type!r}"
+        )
+    if response.get("encoding") != "base64" or not isinstance(
+        response.get("content"), str
+    ):
+        raise GitHubAPIError(
+            f"Expected base64 GitHub contents response for {path!r}; "
+            "use the Git blobs API for larger files"
+        )
+    try:
+        return base64.b64decode(response["content"])
+    except binascii.Error as e:
+        raise GitHubAPIError(f"Failed to decode GitHub contents for {path!r}") from e
 
 
 # TODO: Consider moving str2bool to a general-purpose utils module. It's useful
