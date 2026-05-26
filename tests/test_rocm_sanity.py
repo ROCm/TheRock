@@ -1,4 +1,4 @@
-# Copyright Advanced Micro Devices, Inc.
+ # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
 from pathlib import Path
@@ -104,6 +104,7 @@ class TestROCmSanity:
             / offload_arch_executable_file
         ).resolve()
         process = run_command([str(offload_arch_path)])
+        run_command([str(offload_arch_path), "-v"])
 
         # Extract the arch from the command output, working around
         # https://github.com/ROCm/TheRock/issues/1118. We only expect the output
