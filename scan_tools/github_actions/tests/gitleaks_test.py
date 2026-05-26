@@ -76,12 +76,11 @@ class DetermineLogOptsTest(unittest.TestCase):
         self.assertEqual(log_opts, "aaa..bbb")
         self.assertNotIn("--no-merges", log_opts)
 
-    def test_pull_request_target_handled_same_as_pull_request(self):
+    def test_pull_request_target_is_explicitly_rejected(self):
         event = {"pull_request": {"base": {"sha": "aaa"}, "head": {"sha": "bbb"}}}
-        self.assertEqual(
-            _determine_log_opts("changed", "pull_request_target", event),
-            "aaa..bbb",
-        )
+        with self.assertRaises(ValueError) as ctx:
+            _determine_log_opts("changed", "pull_request_target", event)
+        self.assertIn("pull_request_target is not supported", str(ctx.exception))
 
     def test_push_returns_sha_range_without_no_merges(self):
         log_opts = _determine_log_opts(
