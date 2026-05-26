@@ -15,6 +15,7 @@ include = [
   "bin/rocfft-test*",
   "bin/rocfft-bench*",
   "bin/dyna-rocfft-bench*",
+  "bin/rocfft/**",
 ]
 
 # hipFFT
