@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "${name}"
+version = "${version}"
+requires-python = "${requires_python}"
+${optional_metadata}

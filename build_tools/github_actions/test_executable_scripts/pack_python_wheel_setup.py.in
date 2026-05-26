@@ -1,0 +1,32 @@
+from setuptools import setup, find_packages, Distribution
+from wheel.bdist_wheel import bdist_wheel
+
+
+class BinaryDistribution(Distribution):
+    def has_ext_modules(self):
+        return True
+
+
+class PrebuiltWheel(bdist_wheel):
+    def finalize_options(self):
+        super().finalize_options()
+        self.root_is_pure = False
+
+    def get_tag(self):
+        import sys, sysconfig
+
+        impl = f"cp{sys.version_info.major}{sys.version_info.minor}"
+        plat = sysconfig.get_platform().replace("-", "_").replace(".", "_")
+        return impl, impl, plat
+
+
+_pkg = "${pkg_name}"
+_packages = find_packages(where=".", include=[_pkg, f"{_pkg}.*"]) or [_pkg]
+
+setup(
+    distclass=BinaryDistribution,
+    cmdclass={"bdist_wheel": PrebuiltWheel},
+    packages=_packages,
+    package_data={p: ["*", "**/*"] for p in _packages},
+    include_package_data=False,
+)
