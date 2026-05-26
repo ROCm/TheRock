@@ -109,8 +109,6 @@ def execute_tests():
         f"{'|'.join(excluded_tests)}",
         "--label-exclude",
         f"{'|'.join(EXCLUDED_LABELS)}",
-        "--parallel",
-        "2",
         "--repeat",
         "until-pass:3",
         # "--tests-information",
