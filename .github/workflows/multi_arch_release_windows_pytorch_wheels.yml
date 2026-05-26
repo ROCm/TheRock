@@ -89,7 +89,7 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    name: Release | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
     strategy:
       fail-fast: false
       matrix:
