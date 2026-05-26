@@ -126,15 +126,18 @@ def run_test(test_exe):
         return False
 
 
-def run_tests():
-    """Run all OpenCL CTS test executables"""
-    logging.info(f"++ Running OpenCL-CTS tests (shard {SHARD_INDEX}/{TOTAL_SHARDS})")
-
+def register_icd():
+    """Register the AMD OpenCL ICD so all tools (clinfo, CTS) can find it."""
     icd_dir = Path("/etc/OpenCL/vendors")
     icd_dir.mkdir(parents=True, exist_ok=True)
     icd_file = icd_dir / "amdocl64.icd"
     icd_file.write_text(str(AMDOCL_PATH) + "\n")
     logging.info(f"Registered AMD OpenCL ICD: {icd_file} -> {AMDOCL_PATH}")
+
+
+def run_tests():
+    """Run all OpenCL CTS test executables"""
+    logging.info(f"++ Running OpenCL-CTS tests (shard {SHARD_INDEX}/{TOTAL_SHARDS})")
 
     test_executables = find_test_executables()
     logging.info(f"Found {len(test_executables)} test executables")
@@ -166,6 +169,7 @@ def run_tests():
 
 if __name__ == "__main__":
     try:
+        register_icd()
         verify_opencl_runtime()
         run_tests()
         logging.info("++ OpenCL-CTS tests completed successfully")
