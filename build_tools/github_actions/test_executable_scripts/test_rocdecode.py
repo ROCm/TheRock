@@ -51,11 +51,13 @@ def setup_env(env):
     # CFLAGS/CXXFLAGS are inherited by all cmake child processes, including each
     # isolated cmake invocation spawned by `ctest --build-and-test`, which is the
     # only mechanism that reaches those sub-projects (cmake cache vars do not).
-    # librocdecode.so is built with -shared-libsan; amdclang matches that automatically
-    # when -fsanitize=address is present in the compiler flags at link time.
+    # librocdecode.so is built with -shared-libsan, so the test executables must
+    # link against the same shared ASan runtime: `-shared-libasan` selects it,
+    # otherwise clang links the static runtime and the loader reports
+    # "incompatible ASan runtimes" at startup.
     asan_enabled = "ASAN_OPTIONS" in env
     if asan_enabled:
-        asan_flags = "-fsanitize=address -fno-omit-frame-pointer"
+        asan_flags = "-fsanitize=address -shared-libasan -fno-omit-frame-pointer"
         env["CFLAGS"] = f"{env.get('CFLAGS', '')} {asan_flags}".strip()
         env["CXXFLAGS"] = f"{env.get('CXXFLAGS', '')} {asan_flags}".strip()
         logging.info(f"++ rocdecode ASAN detected: setting CFLAGS/CXXFLAGS={asan_flags}")
