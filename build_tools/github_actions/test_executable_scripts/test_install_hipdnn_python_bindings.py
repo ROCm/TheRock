@@ -25,16 +25,28 @@ OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 PACK_WHEEL_SCRIPT = SCRIPT_DIR / "pack_python_wheel.py"
-HIPDNN_PYTHON_TESTS_DIR = (
-    THEROCK_DIR
-    / "external-sources"
-    / "rocm-libraries"
-    / "projects"
-    / "hipdnn"
-    / "python"
-    / "hipdnn_frontend"
-    / "test"
-)
+
+_HIPDNN_TESTS_RELPATH = Path("projects/hipdnn/python/hipdnn_frontend/test")
+
+
+def _resolve_hipdnn_tests_dir() -> Path:
+    """Locate the upstream hipDNN pytest directory.
+
+    Honors HIPDNN_PYTHON_TESTS_DIR for explicit overrides, then ROCM_LIBRARIES_DIR
+    for callers that point at a rocm-libraries checkout. Falls back to a
+    sibling rocm-libraries directory next to the TheRock checkout, which matches
+    the layout used by the rocm-libraries CI workflows.
+    """
+    override = os.getenv("HIPDNN_PYTHON_TESTS_DIR")
+    if override:
+        return Path(override).resolve()
+    rocm_libraries_dir = os.getenv("ROCM_LIBRARIES_DIR")
+    if rocm_libraries_dir:
+        return (Path(rocm_libraries_dir) / _HIPDNN_TESTS_RELPATH).resolve()
+    return (THEROCK_DIR / "rocm-libraries" / _HIPDNN_TESTS_RELPATH).resolve()
+
+
+HIPDNN_PYTHON_TESTS_DIR = _resolve_hipdnn_tests_dir()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -141,12 +153,13 @@ if __name__ == "__main__":
     artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
     logging.info(f"Using OUTPUT_ARTIFACTS_DIR: {artifacts_path}")
 
-    # Fail upfront on missing test infra so a missing submodule cannot mask
+    # Fail upfront on missing test infra so a missing checkout cannot mask
     # itself as a green run.
     if not HIPDNN_PYTHON_TESTS_DIR.is_dir():
         raise FileNotFoundError(
             f"hipDNN upstream pytest directory not found: {HIPDNN_PYTHON_TESTS_DIR}. "
-            "Initialize the rocm-libraries submodule."
+            "Set HIPDNN_PYTHON_TESTS_DIR or ROCM_LIBRARIES_DIR to point at the "
+            "rocm-libraries checkout."
         )
 
     pkg_dir = find_pkg_dir(artifacts_path)
