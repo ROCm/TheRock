@@ -51,6 +51,9 @@ jobs:
     name: Copy Prebuilt Stages
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     runs-on: azure-linux-scale-rocm
+    container:
+      image: ubuntu:24.04
+      options: -v /runner/config:/home/awsconfig/
     permissions:
       contents: read
       id-token: write
