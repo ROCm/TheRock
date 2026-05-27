@@ -59,10 +59,9 @@ on:
       release_type:
         description: >-
           Release type used to pick the AWS role for S3 uploads
-          (forwarded to configure_aws_artifacts_credentials). Empty for
-          CI runs that should skip the upload.
+          (forwarded to configure_aws_artifacts_credentials)
         type: string
-        default: ""
+        default: ci
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -92,6 +91,13 @@ on:
           - sccache
           - ccache
         default: none
+      release_type:
+        description: 'Release type: "ci" or "dev"'
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
 
 run-name: Build portable Linux PyTorch Wheels CI (${{ inputs.artifact_group }}, py${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -108,6 +114,7 @@ jobs:
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
+      RELEASE_TYPE: ${{ inputs.release_type }}
       optional_build_prod_arguments: ""
       SCCACHE_BUCKET: therock-ci-pytorch-sccache
       SCCACHE_REGION: us-east-2

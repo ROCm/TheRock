@@ -26,10 +26,10 @@ on:
         type: string
         default: ""
       release_type:
-        description: "The type of release to build ('dev', 'nightly', or 'release'). Empty string for CI builds."
+        description: "Release type: 'ci', 'dev', 'nightly', or 'prerelease'"
         required: false
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`"
         type: string

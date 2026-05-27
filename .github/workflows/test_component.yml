@@ -24,7 +24,7 @@ on:
         type: string
       release_type:
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string

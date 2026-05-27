@@ -11,11 +11,10 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "" for CI builds, or "dev", "nightly", "prerelease"
-          for release builds. Controls artifact bucket selection, IAM role,
-          and package versioning.
+          Release type: "ci", "dev", "nightly", or "prerelease"; controls
+          artifact bucket selection, IAM role, and package versioning.
         type: string
-        default: ""
+        default: ci
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
@@ -144,12 +143,12 @@ jobs:
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
       # Here we set to a "dev" package version even for CI builds:
       #
-      # type of build                         | package version | version example
-      # ------------------------------------- | --------------- | ------------------
-      # ci ("" empty string for release_type) | dev             | 7.10.0.dev0+f689a8
-      # dev                                   | dev             | 7.10.0.dev0+f689a8
-      # nightly                               | nightly         | 7.10.0a20251021
-      # prerelease                            | prerelease      | 7.10.0rc2
+      # release_type | package version | version example
+      # ------------ | --------------- | ------------------
+      # ci           | dev             | 7.10.0.dev0+f689a8
+      # dev          | dev             | 7.10.0.dev0+f689a8
+      # nightly      | nightly         | 7.10.0a20251021
+      # prerelease   | prerelease      | 7.10.0rc2
       #
       # Other scripts upload "ci" and "dev release" packages to different
       # buckets, use different ccache namespaces, etc.
@@ -157,7 +156,7 @@ jobs:
         id: rocm_package_version
         run: |
           python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ inputs.release_type || 'dev' }} \
+            --release-type=${{ inputs.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 

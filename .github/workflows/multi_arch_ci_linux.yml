@@ -27,9 +27,9 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
         type: string
-        default: ""
+        default: ci
       external_repo_config:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
