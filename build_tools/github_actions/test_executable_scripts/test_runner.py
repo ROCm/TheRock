@@ -61,8 +61,17 @@ if not test_component_job_name:
     )
     sys.exit(1)
 
+# A job_name like "hip-tests (PAL)" is a CI matrix variant of the underlying
+# "hip-tests" component (see fetch_test_configurations.py). Strip the trailing
+# parenthesised variant suffix before COMPONENT_DIR_MAPPING / COMPONENT_OVERRIDES
+# lookups so a single override entry covers the base job and all its variants.
+component_lookup_key = (
+    re.sub(r"\s*\([^)]*\)\s*$", "", test_component_job_name).strip()
+    or test_component_job_name
+)
+
 TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
-    test_component_job_name, test_component_job_name
+    component_lookup_key, component_lookup_key
 )
 
 # GTest sharding
@@ -154,7 +163,7 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR = apply_component_overrides(
-    test_component_job_name, ROCM_PATH, TEST_DIR, environ_vars
+    component_lookup_key, ROCM_PATH, TEST_DIR, environ_vars
 )
 
 logging.basicConfig(level=logging.INFO)
