@@ -244,17 +244,6 @@ jobs:
             --python-version "${{ inputs.python_version }}" \
             --jax-git-ref "${{ inputs.jax_ref }}"
 
-      - name: (Re-)Generate Python package release index
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variables to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          python3 -m venv .venv
-          source .venv/bin/activate
-          pip3 install boto3 packaging
-          python3 ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
-
   generate_target_to_run:
     name: Generate target_to_run
     runs-on: ubuntu-24.04
@@ -352,12 +341,3 @@ jobs:
             ${JAXLIB_INCLUDE:+${JAXLIB_INCLUDE}} \
             --include "jax_rocm7_plugin-${JAX_PLUGIN_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
             --include "jax_rocm7_pjrt-${JAX_PJRT_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
-
-      - name: (Re-)Generate Python package release index
-        if: ${{ env.upload == 'true' }}
-        env:
-          # Environment variables to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
