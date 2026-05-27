@@ -61,7 +61,9 @@ def get_all_wheel_versions(
     torch_version = get_wheel_version(package_dist_dir, "torch")
     torchaudio_version = get_wheel_version(package_dist_dir, "torchaudio")
     torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
-    triton_wheel_name = "triton_windows" if platform_os.lower() == "windows" else "triton"
+    triton_wheel_name = (
+        "triton_windows" if platform_os.lower() == "windows" else "triton"
+    )
     triton_version = get_wheel_version(package_dist_dir, triton_wheel_name)
     apex_version = get_wheel_version(package_dist_dir, "apex")
     _log("")
@@ -83,7 +85,10 @@ def get_all_wheel_versions(
 
     if triton_version:
         all_versions = all_versions | {"triton_version": triton_version}
-    elif platform_os.lower() != "windows" or os.environ.get("PYTORCH_GIT_REF") == "nightly":
+    elif (
+        platform_os.lower() != "windows"
+        or os.environ.get("PYTORCH_GIT_REF") == "nightly"
+    ):
         raise FileNotFoundError("Did not find triton wheel")
 
     if apex_version:
