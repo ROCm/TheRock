@@ -88,8 +88,12 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     Returns:
         The modified job_config with updated container_options
     """
-    # Only apply container options for Linux platforms
+    # Containers are Linux-only (test_component.yml gates container.image on
+    # platform == 'linux'). On other platforms, collapse container_options to an
+    # empty string so `options: ${{ fromJSON(...).container_options }}` doesn't
+    # evaluate to a YAML sequence and fail template parsing.
     if platform != "linux":
+        job_config["container_options"] = ""
         return job_config
 
     # Start with base options (always applied on Linux)
@@ -553,13 +557,15 @@ test_matrix = {
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+        "timeout_minutes": 60,
+        "additional_requirements_files": [
+            "share/rocprofiler-systems/tests/requirements.txt",
+        ],
         "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 1,
         },
     },
     # libhipcxx hipcc tests
