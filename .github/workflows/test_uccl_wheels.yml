@@ -54,6 +54,12 @@ on:
         description: UCCL ref to checkout test sources from (e.g. "main")
         type: string
         default: "main"
+      pytorch_rocm_arch:
+        description: >
+          Explicit PYTORCH_ROCM_ARCH for the UCCL build (e.g. "gfx942").
+          Leave empty to let build_prod_wheels.py derive it from amdgpu_family.
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
@@ -79,6 +85,9 @@ on:
       uccl_git_ref:
         type: string
         default: "main"
+      pytorch_rocm_arch:
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -101,6 +110,7 @@ jobs:
       package_index_url: ${{ inputs.package_index_url || 'https://rocm.prereleases.amd.com/whl' }}
       python_version: ${{ inputs.python_version || '3.12' }}
       uccl_git_ref: ${{ inputs.uccl_git_ref || 'main' }}
+      pytorch_rocm_arch: ${{ inputs.pytorch_rocm_arch || '' }}
       artifact_name: uccl-wheel-${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}-py${{ inputs.python_version || '3.12' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}

@@ -30,6 +30,12 @@ on:
       uccl_git_ref:
         type: string
         default: "main"
+      pytorch_rocm_arch:
+        description: >
+          Explicit PYTORCH_ROCM_ARCH (e.g. "gfx942" or "gfx942,gfx950").
+          Leave empty to let build_prod_wheels.py derive it from amdgpu_family.
+        type: string
+        default: ""
       artifact_name:
         description: Name of the GHA artifact to upload the wheel under.
         type: string
@@ -70,6 +76,12 @@ on:
         description: UCCL ref to checkout (e.g. "main")
         type: string
         default: "main"
+      pytorch_rocm_arch:
+        description: >
+          Explicit PYTORCH_ROCM_ARCH (e.g. "gfx942" or "gfx942,gfx950").
+          Leave empty to let build_prod_wheels.py derive it from amdgpu_family.
+        type: string
+        default: ""
       artifact_name:
         description: Name of the GHA artifact to upload the wheel under.
         type: string
@@ -92,6 +104,7 @@ jobs:
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       UCCL_GIT_REF: ${{ inputs.uccl_git_ref }}
+      PYTORCH_ROCM_ARCH: ${{ inputs.pytorch_rocm_arch }}
     outputs:
       artifact_name: ${{ inputs.artifact_name }}
 
