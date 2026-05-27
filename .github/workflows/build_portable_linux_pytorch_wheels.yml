@@ -101,7 +101,7 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
-        default: "release/2.8"
+        default: "release/2.10"
       cache_type:
         description: "Compiler cache type"
         type: choice
