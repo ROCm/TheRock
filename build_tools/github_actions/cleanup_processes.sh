@@ -2,10 +2,16 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 #
-# Cleans up GPU processes to prevent "VRAM not clean" errors.
-# Supports two modes:
-#   1. Container-local cleanup (default): cleans processes from current container
-#   2. Machine-wide orphan cleanup: cleans orphaned GPU processes from dead containers
+# Cleans up GPU processes to prevent resource contention and ensure clean test environments.
+#
+# This script handles:
+#   - Container-local cleanup: kills GPU processes from the current container's build directory
+#   - Machine-wide orphan cleanup: kills orphaned GPU processes from dead/crashed containers
+#
+# Orphan detection criteria (any match triggers cleanup):
+#   - Process running longer than MAX_PROCESS_AGE_MINUTES (default: 360 min)
+#   - Process container's cgroup no longer exists
+#   - Process parent is PID 1 (adopted by init) and was in a container
 
 set -o pipefail
 
