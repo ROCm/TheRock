@@ -115,6 +115,7 @@ PACKAGE CATEGORIES:
 """
 
 import argparse
+import fnmatch
 import re
 import sys
 from pathlib import Path
@@ -197,6 +198,46 @@ DEPENDENCY_PACKAGES = {
     # ROCM
     "setuptools",
 }
+
+
+def filter_package_entries(
+    packages: List[Tuple[str, int]],
+    include_package_globs: List[str] | None = None,
+    exclude_package_globs: List[str] | None = None,
+) -> List[Tuple[str, int]]:
+    """Filter package entries by filename glob patterns.
+
+    Args:
+        packages: List of tuples (s3_key, size).
+        include_package_globs: Optional glob patterns. If set, only matching filenames are kept.
+        exclude_package_globs: Optional glob patterns. Matching filenames are removed.
+
+    Returns:
+        Filtered list of package entries.
+    """
+    include_package_globs = include_package_globs or []
+    exclude_package_globs = exclude_package_globs or []
+
+    filtered = []
+
+    for key, size in packages:
+        filename = key.split("/")[-1]
+
+        if include_package_globs and not any(
+            fnmatch.fnmatch(filename, pattern) for pattern in include_package_globs
+        ):
+            print(f"  FILTERED OUT by include filters: {filename}")
+            continue
+
+        if exclude_package_globs and any(
+            fnmatch.fnmatch(filename, pattern) for pattern in exclude_package_globs
+        ):
+            print(f"  FILTERED OUT by exclude filters: {filename}")
+            continue
+
+        filtered.append((key, size))
+
+    return filtered
 
 
 def is_allowed_multi_arch_package(
@@ -595,6 +636,8 @@ def handle_multi_arch_downloads(
     tarball_bucket_name,
     tarball_bucket_prefix,
     list_multi_arch_packages,
+    include_package_globs=None,
+    exclude_package_globs=None,
 ):
     """Handle multi-arch package listing and downloads."""
 
@@ -612,6 +655,16 @@ def handle_multi_arch_downloads(
         version,
         architectures,
     )
+
+    packages_to_promote = filter_package_entries(
+        packages_to_promote,
+        include_package_globs=include_package_globs,
+        exclude_package_globs=exclude_package_globs,
+    )
+
+    if not packages_to_promote:
+        print("[ERROR]: No packages left after applying package filters")
+        sys.exit(1)
 
     if list_multi_arch_packages:
         print("\nPackages")
@@ -717,6 +770,8 @@ def download_packages(
     version: str,
     output_dir: Path,
     include_dependencies: bool = False,
+    include_package_globs: List[str] | None = None,
+    exclude_package_globs: List[str] | None = None,
 ) -> Tuple[int, int]:
     """Download packages for an architecture. By default, only packages to promote are downloaded.
        Unknown packages are always skipped.
@@ -765,9 +820,15 @@ def download_packages(
             f"  Downloading {len(all_packages)} python packages to promote for {arch} with version {version}..."
         )
 
+    all_packages = filter_package_entries(
+        all_packages,
+        include_package_globs=include_package_globs,
+        exclude_package_globs=exclude_package_globs,
+    )
+
     if not all_packages:
         print(
-            f"  [ERROR]: No packages found for {arch} with version {version}. Skipping!"
+            f"  [ERROR]: No packages left for {arch} with version {version} after applying package filters. Skipping!"
         )
         return 0, 0
 
@@ -889,6 +950,12 @@ Examples:
 
   # List multi-arch packages
   python download_python_packages.py --version=7.13.0rc1 --multi-arch --list-multi-arch-packages --bucket-prefix=v4/whl/
+
+  # List multi-arch packages while excluding PyTorch 2.8 packages
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --list-multi-arch-packages --bucket-prefix=v4/whl/ --exclude-package-glob "torch-2.8.*"
+
+  # Download packages while excluding specific package variants
+  python download_python_packages.py --version=7.13.0rc1 --output-dir=./downloads --exclude-package-glob "torch-2.8.*" --exclude-package-glob "torchaudio-2.8.*" --exclude-package-glob "torchvision-0.23.*"
         """,
     )
 
@@ -926,6 +993,26 @@ Examples:
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Include dependency packages in download (default: only packages to promote)",
+    )
+
+    parser.add_argument(
+        "--include-package-glob",
+        action="append",
+        default=[],
+        help=(
+            "Only include package filenames matching this glob pattern. "
+            "Can be specified multiple times. Example: --include-package-glob 'torch-2.10.*'"
+        ),
+    )
+
+    parser.add_argument(
+        "--exclude-package-glob",
+        action="append",
+        default=[],
+        help=(
+            "Exclude package filenames matching this glob pattern. "
+            "Can be specified multiple times. Example: --exclude-package-glob 'torch-2.8.*'"
+        ),
     )
 
     parser.add_argument(
@@ -1015,6 +1102,8 @@ def print_packages_per_arch(
     include_tarballs: bool = False,
     tarball_bucket_name: str = None,
     tarball_bucket_prefix: str = None,
+    include_package_globs: List[str] | None = None,
+    exclude_package_globs: List[str] | None = None,
 ) -> Dict[str, Dict[str, List[str]]]:
     print(
         "\n--list-packages-per-arch specified, listing packages and their sizes without download"
@@ -1032,6 +1121,19 @@ def print_packages_per_arch(
         packages_to_promote, dependencies, unknown = list_packages_for_arch(
             s3_client, bucket_name, bucket_prefix, arch, version
         )
+
+        packages_to_promote = filter_package_entries(
+            packages_to_promote,
+            include_package_globs=include_package_globs,
+            exclude_package_globs=exclude_package_globs,
+        )
+
+        if include_package_globs or exclude_package_globs:
+            dependencies = filter_package_entries(
+                dependencies,
+                include_package_globs=include_package_globs,
+                exclude_package_globs=exclude_package_globs,
+            )
 
         all_packages[arch] = {
             "packages_to_promote": packages_to_promote,
@@ -1130,6 +1232,8 @@ def download_prerelease_packages(
     tarball_output_dir: Path = None,
     list_archs: bool = False,
     list_packages_per_arch: bool = False,
+    include_package_globs: List[str] | None = None,
+    exclude_package_globs: List[str] | None = None,
 ) -> Union[List[str], Dict[str, Dict[str, List[str]]], Tuple[int, int, List[str]]]:
     """Download prerelease packages from S3 bucket for promotion to release.
 
@@ -1193,6 +1297,8 @@ def download_prerelease_packages(
             tarball_bucket_name=tarball_bucket_name,
             tarball_bucket_prefix=tarball_bucket_prefix,
             list_multi_arch_packages=list_multi_arch_packages,
+            include_package_globs=include_package_globs,
+            exclude_package_globs=exclude_package_globs,
         )
 
     # List architectures
@@ -1229,6 +1335,8 @@ def download_prerelease_packages(
             include_tarballs=include_tarballs,
             tarball_bucket_name=tarball_bucket_name,
             tarball_bucket_prefix=tarball_bucket_prefix,
+            include_package_globs=include_package_globs,
+            exclude_package_globs=exclude_package_globs,
         )
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1253,6 +1361,8 @@ def download_prerelease_packages(
             version,
             output_dir,
             include_dependencies,
+            include_package_globs,
+            exclude_package_globs,
         )
         success_count += success
         fail_count += fail
@@ -1319,4 +1429,6 @@ if __name__ == "__main__":
         tarball_output_dir=args.tarball_output_dir,
         list_archs=args.list_archs,
         list_packages_per_arch=args.list_packages_per_arch,
+        include_package_globs=args.include_package_glob,
+        exclude_package_globs=args.exclude_package_glob,
     )
