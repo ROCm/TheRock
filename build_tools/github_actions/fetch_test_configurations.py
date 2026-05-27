@@ -497,14 +497,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-    "fusilliprovider": {
-        "job_name": "fusilliprovider",
-        "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler  --hipdnn-integration-tests --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {"linux": 1},
-    },
     # hipBLASLt provider tests
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
