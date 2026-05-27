@@ -557,13 +557,15 @@ test_matrix = {
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+        "timeout_minutes": 60,
+        "additional_requirements_files": [
+            "share/rocprofiler-systems/tests/requirements.txt",
+        ],
         "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 1,
         },
     },
     # libhipcxx hipcc tests
