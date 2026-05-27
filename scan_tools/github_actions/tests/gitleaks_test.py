@@ -12,7 +12,6 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from gitleaks import (
     _CONFIG_PATH,
     _LEAK_SECURITY_SEVERITY_HIGH,
-    _ReportTarget,
     _determine_log_opts,
     _enrich_sarif_with_security_severity,
     _parse_report_formats,
@@ -137,9 +136,7 @@ class EnrichSarifTest(unittest.TestCase):
         )
 
     def test_preserves_existing_level(self):
-        path = self._write_sarif(
-            {"runs": [{"results": [{"level": "warning"}]}]}
-        )
+        path = self._write_sarif({"runs": [{"results": [{"level": "warning"}]}]})
         _enrich_sarif_with_security_severity(path)
         data = json.loads(path.read_text())
         self.assertEqual(data["runs"][0]["results"][0]["level"], "warning")

@@ -348,7 +348,9 @@ def gha_set_output(vars: Mapping[str, str | Path]):
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#multiline-strings
       * https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
     """
-    _log(f"Setting github output:\n{json.dumps({k: str(v) for k, v in vars.items()}, indent=2)}")
+    _log(
+        f"Setting github output:\n{json.dumps({k: str(v) for k, v in vars.items()}, indent=2)}"
+    )
 
     step_output_file = os.getenv("GITHUB_OUTPUT")
     if not step_output_file:

@@ -304,13 +304,18 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
 
     Pre-existing values for either field are preserved verbatim (so a
     future gitleaks version that emits them natively keeps control).
+
+    The caller is responsible for ensuring 'sarif_path' exists before
+    invoking this helper; we deliberately do NOT guard against a missing
+    file so a stray call site can't silently turn a scanner failure into
+    a quiet no-op. A missing file raises 'FileNotFoundError'; a
+    malformed or empty SARIF raises 'ValueError'.
+    """
     try:
         with open(sarif_path, encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"SARIF file '{sarif_path}' is not valid JSON: {exc}"
-        ) from exc
+        raise ValueError(f"SARIF file '{sarif_path}' is not valid JSON: {exc}") from exc
 
     if not isinstance(data, dict):
         raise ValueError(
@@ -482,9 +487,7 @@ def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
         print(f"::group::Gitleaks report: {path}")
         print(content)
         print("::endgroup::")
-        summary_chunks.append(
-            f"### Gitleaks report: `{path}`\n\n```\n{content}\n```"
-        )
+        summary_chunks.append(f"### Gitleaks report: `{path}`\n\n'`\n{content}\n'`")
     if summary_chunks:
         gha_append_step_summary("\n\n".join(summary_chunks))
 
