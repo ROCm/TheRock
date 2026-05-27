@@ -467,9 +467,10 @@ test_matrix = {
         "fetch_artifact_args": "--hipdnn --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_install_hipdnn_python_bindings.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
     },
     # hipDNN integration tests (unit tests for the integration test harness)
