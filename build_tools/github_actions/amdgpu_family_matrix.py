@@ -145,11 +145,11 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.8,
+                    "weight": 0.81,
                 },  # vultr (17/21)
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.2,
+                    "weight": 0.19,
                 },  # cirrascale (4/21)
                 # Temporarily removed due to cluster issues
                 {
