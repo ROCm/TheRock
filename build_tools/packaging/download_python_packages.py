@@ -158,7 +158,6 @@ PACKAGES_TO_PROMOTE_MULTI_ARCH = {
     "amd_torchvision_device",
     "apex",
     "rocm",
-    "rocm_bootstrap",
     "rocm_profiler",
     "rocm_sdk_core",
     "rocm_sdk_devel",
