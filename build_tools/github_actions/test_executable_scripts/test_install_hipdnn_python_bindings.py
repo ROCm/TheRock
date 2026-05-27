@@ -49,6 +49,27 @@ def find_pkg_dir(artifacts_path: Path) -> Path:
     return candidate
 
 
+def build_runtime_env(artifacts_path: Path) -> dict:
+    """Construct env exposing the ROCm loader path for the native extension.
+
+    The `hipdnn_frontend_python` extension links against `libhipdnn_backend`
+    (and transitively HIP/ROCm libs). Without LD_LIBRARY_PATH (Linux) or PATH
+    (Windows) pointing at the artifact tree, `import hipdnn_frontend` fails in
+    a clean venv. Shared by `validate_import` and `run_pytests` so both run
+    against the same loader configuration.
+    """
+    env = os.environ.copy()
+    if platform.system() == "Windows":
+        # Windows ROCm DLLs live in bin/ (Linux uses lib/), so PATH must
+        # include artifacts_path / "bin" for the loader to find them.
+        rocm_lib = str(artifacts_path / "bin")
+        env["PATH"] = f"{rocm_lib};{env.get('PATH', '')}"
+    else:
+        rocm_lib = str(artifacts_path / "lib")
+        env["LD_LIBRARY_PATH"] = f"{rocm_lib}:{env.get('LD_LIBRARY_PATH', '')}"
+    return env
+
+
 def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
     """Build a wheel from the staged package directory."""
     subprocess.check_call(
@@ -87,31 +108,23 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
     subprocess.check_call([str(python), "-m", "pip", "install", "pytest>=7,<9"])
 
 
-def validate_import(python: Path, cwd: Path) -> None:
+def validate_import(python: Path, cwd: Path, env: dict) -> None:
     """Verify the installed package can be imported.
 
     Runs from `cwd` (a neutral directory) so that `import hipdnn_frontend`
-    cannot accidentally resolve to a sibling staged package directory.
+    cannot accidentally resolve to a sibling staged package directory. Uses
+    the same loader env as `run_pytests` so the native extension can resolve
+    `libhipdnn_backend` and its transitive ROCm deps.
     """
     subprocess.check_call(
         [str(python), "-c", "import hipdnn_frontend; print(hipdnn_frontend.__file__)"],
         cwd=cwd,
+        env=env,
     )
 
 
-def run_pytests(python: Path, artifacts_path: Path) -> None:
+def run_pytests(python: Path, env: dict) -> None:
     """Run the upstream hipDNN Python test suite."""
-    env = os.environ.copy()
-    is_windows = platform.system() == "Windows"
-    if is_windows:
-        # Windows ROCm DLLs live in bin/ (Linux uses lib/), so PATH must
-        # include artifacts_path / "bin" for the loader to find them.
-        rocm_lib = str(artifacts_path / "bin")
-        env["PATH"] = f"{rocm_lib};{env.get('PATH', '')}"
-    else:
-        rocm_lib = str(artifacts_path / "lib")
-        env["LD_LIBRARY_PATH"] = f"{rocm_lib}:{env.get('LD_LIBRARY_PATH', '')}"
-
     # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
     subprocess.check_call(
         [str(python), "-m", "pytest", "-v", str(HIPDNN_PYTHON_TESTS_DIR)],
@@ -138,6 +151,8 @@ if __name__ == "__main__":
     pkg_dir = find_pkg_dir(artifacts_path)
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
+    env = build_runtime_env(artifacts_path)
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         wheel_dir = tmp_path / "wheels"
@@ -153,9 +168,9 @@ if __name__ == "__main__":
         install_wheel(python, wheel_path)
         logging.info("Wheel installed successfully")
 
-        validate_import(python, tmp_path)
+        validate_import(python, tmp_path, env)
         logging.info("Import validation passed")
 
-        run_pytests(python, artifacts_path)
+        run_pytests(python, env)
 
     logging.info("All hipDNN Python bindings tests passed!")
