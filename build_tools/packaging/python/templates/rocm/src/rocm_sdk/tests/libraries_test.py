@@ -90,14 +90,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # in '_rocm_sdk_core/bin'
                 # TODO(#996): track deps in libraries then have the preloader
                 #   recursively get deps instead of hardcoding like this
-                # hipdnn is optional: not all rocm-sdk builds include it
-                # (THEROCK_ENABLE_HIPDNN may be OFF). Preload best-effort.
-                preload_command = (
-                    "import rocm_sdk; "
-                    "rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc'); "
-                    "\ntry: rocm_sdk.preload_libraries('hipdnn')"
-                    "\nexcept (ModuleNotFoundError, FileNotFoundError): pass\n"
-                )
+                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc');"
 
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
@@ -105,7 +98,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                 command = (
                     extra_setup
                     + preload_command
-                    + "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                    + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
                 )
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])
