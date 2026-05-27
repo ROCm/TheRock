@@ -5,6 +5,7 @@
 """Unit tests for artifact_backend.py."""
 
 import os
+import socket
 import sys
 import tempfile
 import unittest
@@ -39,6 +40,16 @@ def _make_s3_root(
         run_id=run_id,
         platform=platform,
     )
+
+
+def _is_public_s3_available():
+    try:
+        with socket.create_connection(
+            ("therock-ci-artifacts.s3.amazonaws.com", 443), timeout=5
+        ):
+            return True
+    except OSError:
+        return False
 
 
 class TestLocalDirectoryBackend(unittest.TestCase):
@@ -545,6 +556,10 @@ class TestS3BackendCredentials(unittest.TestCase):
         )
         return S3Backend(output_root=output_root)
 
+    @unittest.skipUnless(
+        _is_public_s3_available(),
+        "Public S3 endpoint is not reachable (sandbox with no network access?)",
+    )
     def test_list_objects_unsigned(self):
         """Listing objects in a public bucket must succeed without credentials."""
         # Point config/credentials files at nonexistent paths so that

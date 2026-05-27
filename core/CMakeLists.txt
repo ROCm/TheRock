@@ -175,18 +175,65 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   therock_cmake_subproject_glob_c_sources(rocminfo SUBDIRS .)
   therock_cmake_subproject_activate(rocminfo)
 
+  set(_core_runtime_subproject_deps
+    ROCR-Runtime
+    rocminfo
+  )
+  set(_core_runtime_artifact_components
+    dbg
+    dev
+    doc
+    lib
+    run
+  )
+
+  if(THEROCK_FLAG_INCLUDE_HRX)
+    ############################################################################
+    # HRX
+    ############################################################################
+
+    therock_cmake_subproject_declare(hrx
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/optional-sources/hrx"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrx"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      CMAKE_ARGS
+        "-DBUILD_SHARED_LIBS=ON"
+        "-DHRX_BUILD_CTS=ON"
+        "-DIREE_BUILD_TESTS=OFF"
+      BUILD_DEPS
+        amd-llvm
+        therock-catch2
+      RUNTIME_DEPS
+        ROCR-Runtime
+      INSTALL_DESTINATION
+        "lib/hrx"
+      INTERFACE_PROGRAM_DIRS
+        "lib/hrx/bin"
+      INTERFACE_LINK_DIRS
+        "lib/hrx/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib/hrx/lib"
+      INSTALL_RPATH_EXECUTABLE_DIR
+        "lib/hrx/bin"
+      INSTALL_RPATH_LIBRARY_DIR
+        "lib/hrx/lib"
+    )
+    therock_cmake_subproject_provide_package(hrx hrx lib/hrx/lib/cmake/hrx)
+    therock_cmake_subproject_activate(hrx)
+    list(APPEND _core_runtime_subproject_deps hrx)
+    list(APPEND _core_runtime_artifact_components test)
+  endif()
+
   therock_provide_artifact(core-runtime
     TARGET_NEUTRAL
     DESCRIPTOR artifact-core-runtime.toml
     COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
+      ${_core_runtime_artifact_components}
     SUBPROJECT_DEPS
-      ROCR-Runtime
-      rocminfo
+      ${_core_runtime_subproject_deps}
   )
 
 endif(THEROCK_ENABLE_CORE_RUNTIME)
@@ -319,7 +366,56 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-  if(THEROCK_BUILD_TESTING)
+endif(THEROCK_ENABLE_HIP_RUNTIME)
+
+if(THEROCK_ENABLE_WSL_ROCDXG)
+  if(NOT THEROCK_WSL_WIN_SDK)
+    message(FATAL_ERROR "THEROCK_WSL_WIN_SDK must be set when THEROCK_ENABLE_WSL_ROCDXG=ON")
+  endif()
+
+  # FPRINT_SOURCE_DIR tracks upstream libhsakmt; the small file glob tracks this
+  # wrapper, whose source dir is otherwise outside that upstream fingerprint.
+  # The upstream WSL rocdxg path expects the mounted Windows SDK shared include
+  # directory to be provided explicitly, so forward THEROCK_WSL_WIN_SDK into
+  # the nested subproject configure.
+  therock_cmake_subproject_declare(therock-wsl-rocdxg
+    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/wsl-rocdxg"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/wsl-rocdxg"
+    USE_DIST_AMDGPU_TARGETS
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-hip
+    CMAKE_ARGS
+      "-DTHEROCK_WSL_WIN_SDK=${THEROCK_WSL_WIN_SDK}"
+    FPRINT_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt"
+    FPRINT_FILE_GLOBS
+      "${CMAKE_CURRENT_SOURCE_DIR}/wsl-rocdxg/*"
+    INTERFACE_INCLUDE_DIRS
+      include
+    INTERFACE_LINK_DIRS
+      lib
+    INTERFACE_PKG_CONFIG_DIRS
+      lib/pkgconfig
+    INTERFACE_INSTALL_RPATH_DIRS
+      lib
+  )
+  therock_cmake_subproject_provide_package(therock-wsl-rocdxg rocdxg lib/cmake/rocdxg)
+  therock_cmake_subproject_activate(therock-wsl-rocdxg)
+
+  therock_provide_artifact(wsl-rocdxg
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-wsl-rocdxg.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-wsl-rocdxg
+  )
+endif()
+
+if(THEROCK_BUILD_TESTING)
+  if(THEROCK_ENABLE_CORE_HIPTESTS)
     set(HIP_TESTS_CMAKE_ARGS)
     set(_hip_tests_subproject_names)
     therock_cmake_subproject_declare(hip-tests
@@ -358,8 +454,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         hip-tests
     )
     list(APPEND _hip_tests_subproject_names hip-tests)
-  endif(THEROCK_BUILD_TESTING)
-endif(THEROCK_ENABLE_HIP_RUNTIME)
+  endif(THEROCK_ENABLE_CORE_HIPTESTS)
+endif(THEROCK_BUILD_TESTING)
 
 ################################################################################
 # ocl-icd
