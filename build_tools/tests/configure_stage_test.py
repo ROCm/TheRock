@@ -5,6 +5,7 @@
 """Unit tests for configure_stage project resolution."""
 
 import os
+import platform
 import sys
 import unittest
 from pathlib import Path
@@ -13,6 +14,8 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.build_topology import get_topology
 from configure_stage import generate_cmake_args
+
+IS_WINDOWS = platform.system().lower() == "windows"
 
 
 class ProjectResolutionTest(unittest.TestCase):
@@ -35,17 +38,20 @@ class ProjectResolutionTest(unittest.TestCase):
     def test_clr(self):
         self.assertIn("-DTHEROCK_ENABLE_HIP_RUNTIME=ON", self._get_flags(["clr"]))
 
+    @unittest.skipIf(IS_WINDOWS, "core-runtime disabled on Windows")
     def test_rocr_runtime(self):
         self.assertIn(
             "-DTHEROCK_ENABLE_CORE_RUNTIME=ON", self._get_flags(["rocr-runtime"])
         )
 
     # rocm-systems: profiler projects
+    @unittest.skipIf(IS_WINDOWS, "rocprofiler-sdk disabled on Windows")
     def test_rocprofiler_sdk(self):
         self.assertIn(
             "-DTHEROCK_ENABLE_ROCPROFV3=ON", self._get_flags(["rocprofiler-sdk"])
         )
 
+    @unittest.skipIf(IS_WINDOWS, "rocprofiler-compute disabled on Windows")
     def test_rocprofiler_compute(self):
         self.assertIn(
             "-DTHEROCK_ENABLE_ROCPROFILER_COMPUTE=ON",
@@ -56,6 +62,7 @@ class ProjectResolutionTest(unittest.TestCase):
     def test_rocdbgapi(self):
         self.assertIn("-DTHEROCK_ENABLE_AMD_DBGAPI=ON", self._get_flags(["rocdbgapi"]))
 
+    @unittest.skipIf(IS_WINDOWS, "rdc disabled on Windows")
     def test_rdc(self):
         self.assertIn("-DTHEROCK_ENABLE_RDC=ON", self._get_flags(["rdc"]))
 
@@ -88,6 +95,7 @@ class ProjectResolutionTest(unittest.TestCase):
             "-DTHEROCK_ENABLE_MIOPENPROVIDER=ON", self._get_flags(["miopen-provider"])
         )
 
+    @unittest.skipIf(IS_WINDOWS, "fusilliprovider disabled on Windows")
     def test_fusilli_provider(self):
         self.assertIn(
             "-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON", self._get_flags(["fusilli-provider"])
