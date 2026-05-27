@@ -2,7 +2,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 #
-# Cleans up GPU processes from the current container to prevent "VRAM not clean" errors.
+# Cleans up GPU processes to prevent "VRAM not clean" errors.
+# Supports two modes:
+#   1. Container-local cleanup (default): cleans processes from current container
+#   2. Machine-wide orphan cleanup: cleans orphaned GPU processes from dead containers
 
 set -o pipefail
 
@@ -10,6 +13,8 @@ echo "[*] ==== Starting cleanup_processes.sh ===="
 
 WORKSPACE="${GITHUB_WORKSPACE:-$(pwd)}"
 CLEANUP_GPU_RESET="${CLEANUP_GPU_RESET:-false}"
+CLEANUP_ORPHANS="${CLEANUP_ORPHANS:-true}"
+MAX_PROCESS_AGE_MINUTES="${MAX_PROCESS_AGE_MINUTES:-360}"
 BUILD_DIR="${WORKSPACE}/build"
 EXIT_CODE=0
 
@@ -101,6 +106,136 @@ is_uninterruptible() {
     local state
     state=$(awk '{print $3}' "/proc/${pid}/stat" 2>/dev/null) || return 1
     [[ "$state" == "D" ]]
+}
+
+get_container_id_for_pid() {
+    local pid="$1"
+    local cgroup_file="/proc/${pid}/cgroup"
+    local container_id=""
+
+    if [[ -f "$cgroup_file" ]]; then
+        container_id=$(grep -oP '(?<=/docker/)[a-f0-9]{12,64}' "$cgroup_file" 2>/dev/null | head -1)
+        if [[ -z "$container_id" ]]; then
+            container_id=$(grep -oP '(?<=/libpod-)[a-f0-9]{12,64}' "$cgroup_file" 2>/dev/null | head -1)
+        fi
+        if [[ -z "$container_id" ]]; then
+            container_id=$(grep -oP '(?<=:cpuset:/docker/)[a-f0-9]{12,64}' "$cgroup_file" 2>/dev/null | head -1)
+        fi
+        if [[ -z "$container_id" ]]; then
+            container_id=$(grep -oP '(?<=:cpuset:/libpod-)[a-f0-9]{12,64}' "$cgroup_file" 2>/dev/null | head -1)
+        fi
+    fi
+
+    echo "$container_id"
+}
+
+is_process_too_old() {
+    local pid="$1"
+    local max_age_seconds=$((MAX_PROCESS_AGE_MINUTES * 60))
+    local start_time
+    start_time=$(stat -c %Y "/proc/${pid}" 2>/dev/null) || return 1
+    local current_time
+    current_time=$(date +%s)
+    local age=$((current_time - start_time))
+
+    [[ $age -gt $max_age_seconds ]]
+}
+
+is_cgroup_orphaned() {
+    local pid="$1"
+    local container_id
+    container_id=$(get_container_id_for_pid "$pid")
+
+    [[ -z "$container_id" ]] && return 1
+
+    # Check if container's cgroup still exists (cgroup v2)
+    if [[ -d "/sys/fs/cgroup/system.slice/docker-${container_id}.scope" ]] || \
+       [[ -d "/sys/fs/cgroup/machine.slice/libpod-${container_id}.scope" ]]; then
+        return 1
+    fi
+
+    # Check cgroup v1 paths
+    if [[ -d "/sys/fs/cgroup/cpu/docker/${container_id}" ]] || \
+       [[ -d "/sys/fs/cgroup/cpu/libpod-${container_id}" ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+is_parent_dead() {
+    local pid="$1"
+    local ppid
+    ppid=$(awk '{print $4}' "/proc/${pid}/stat" 2>/dev/null) || return 1
+
+    # If parent is PID 1 and process was in a container, it's likely orphaned
+    if [[ "$ppid" == "1" ]]; then
+        local container_id
+        container_id=$(get_container_id_for_pid "$pid")
+        [[ -n "$container_id" ]]
+    else
+        return 1
+    fi
+}
+
+is_orphaned_process() {
+    local pid="$1"
+
+    if is_process_too_old "$pid"; then
+        echo "too_old"
+        return 0
+    fi
+
+    if is_cgroup_orphaned "$pid"; then
+        echo "cgroup_orphaned"
+        return 0
+    fi
+
+    if is_parent_dead "$pid"; then
+        echo "parent_dead"
+        return 0
+    fi
+
+    return 1
+}
+
+find_orphaned_gpu_processes() {
+    local pids=()
+
+    if [[ ! -d /proc ]]; then
+        echo ""
+        return
+    fi
+
+    for pid_dir in /proc/[0-9]*; do
+        local pid="${pid_dir##*/}"
+        [[ ! -d "${pid_dir}/fd" ]] && continue
+
+        # Check if process has GPU device file descriptors open
+        local has_gpu_fd=false
+        for fd in "${pid_dir}"/fd/*; do
+            local target
+            target=$(readlink "$fd" 2>/dev/null) || continue
+            if [[ "$target" == /dev/kfd || "$target" == /dev/dri/* ]]; then
+                has_gpu_fd=true
+                break
+            fi
+        done
+
+        if [[ "$has_gpu_fd" == "true" ]]; then
+            # Skip processes in our own container
+            if [[ -n "$CONTAINER_ID" ]] && is_same_container "$pid" "$CONTAINER_ID"; then
+                continue
+            fi
+
+            # Check if process is orphaned
+            if is_orphaned_process "$pid" >/dev/null; then
+                pids+=("$pid")
+            fi
+        fi
+    done
+
+    echo "${pids[@]}"
 }
 
 wait_for_termination() {
@@ -227,12 +362,74 @@ for pid in "${GPU_PIDS[@]}"; do
 done
 
 if [[ ${#REMAINING_PIDS[@]} -eq 0 ]]; then
-    echo "[+] ==== Cleanup completed successfully ===="
+    echo "[+] ==== Container cleanup completed successfully ===="
 else
-    echo "[-] ==== Cleanup completed with ${#REMAINING_PIDS[@]} process(es) still running ===="
+    echo "[-] ==== Container cleanup completed with ${#REMAINING_PIDS[@]} process(es) still running ===="
     for pid in "${REMAINING_PIDS[@]}"; do
         echo "    > $(get_process_info "$pid")"
     done
+fi
+
+# Machine-wide orphan cleanup (optional)
+if [[ "$CLEANUP_ORPHANS" == "true" ]]; then
+    echo ""
+    echo "[*] ==== Starting machine-wide orphan cleanup ===="
+    echo "[*] Max process age: ${MAX_PROCESS_AGE_MINUTES} minutes"
+
+    read -ra ORPHAN_PIDS <<< "$(find_orphaned_gpu_processes)"
+
+    if [[ ${#ORPHAN_PIDS[@]} -eq 0 ]]; then
+        echo "[+] No orphaned GPU processes found"
+    else
+        echo "[*] Found ${#ORPHAN_PIDS[@]} orphaned GPU process(es):"
+        for pid in "${ORPHAN_PIDS[@]}"; do
+            reason=$(is_orphaned_process "$pid")
+            echo "    > $(get_process_info "$pid") [reason: ${reason}]"
+        done
+
+        ORPHAN_KILLABLE=()
+        ORPHAN_STUCK=()
+        for pid in "${ORPHAN_PIDS[@]}"; do
+            if is_uninterruptible "$pid"; then
+                ORPHAN_STUCK+=("$pid")
+            else
+                ORPHAN_KILLABLE+=("$pid")
+            fi
+        done
+
+        if [[ ${#ORPHAN_STUCK[@]} -gt 0 ]]; then
+            echo "[!] WARNING: ${#ORPHAN_STUCK[@]} orphaned process(es) in D state"
+            EXIT_CODE=1
+        fi
+
+        if [[ ${#ORPHAN_KILLABLE[@]} -gt 0 ]]; then
+            echo "[*] Sending SIGTERM to ${#ORPHAN_KILLABLE[@]} orphaned process(es)..."
+            for pid in "${ORPHAN_KILLABLE[@]}"; do
+                echo "    > Terminating $(get_process_info "$pid")"
+                kill -TERM "$pid" 2>/dev/null || true
+            done
+
+            if ! wait_for_termination "${ORPHAN_KILLABLE[@]}"; then
+                echo "[*] Some orphans did not terminate, sending SIGKILL..."
+                for pid in "${ORPHAN_KILLABLE[@]}"; do
+                    if [[ -d "/proc/${pid}" ]]; then
+                        echo "    > Force killing $(get_process_info "$pid")"
+                        kill -KILL "$pid" 2>/dev/null || true
+                    fi
+                done
+
+                sleep 2
+                for pid in "${ORPHAN_KILLABLE[@]}"; do
+                    if [[ -d "/proc/${pid}" ]]; then
+                        echo "[-] Failed to kill orphan: $(get_process_info "$pid")"
+                        EXIT_CODE=1
+                    fi
+                done
+            fi
+        fi
+
+        echo "[+] ==== Orphan cleanup completed ===="
+    fi
 fi
 
 exit $EXIT_CODE
