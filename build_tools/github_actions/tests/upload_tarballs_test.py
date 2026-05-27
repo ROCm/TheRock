@@ -17,18 +17,22 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-# Add build_tools to path so github_actions and _therock_utils are importable.
+# Add build_tools to path so _therock_utils is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
+# Add github_actions to path so upload_tarballs and github_actions_api are importable.
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-import github_actions.upload_tarballs as mod
+import upload_tarballs as mod
 
 
 class TestUploadTarballsMain(unittest.TestCase):
-    @patch("github_actions.upload_tarballs.gha_set_output")
-    @patch("github_actions.upload_tarballs.create_storage_backend")
-    @patch("github_actions.upload_tarballs.WorkflowOutputRoot")
+    @patch("upload_tarballs.gha_set_output")
+    @patch("upload_tarballs.create_storage_backend")
+    @patch("upload_tarballs.WorkflowOutputRoot")
+    @patch("upload_tarballs.logger")
     def test_main_exports_multiarch_url(
         self,
+        mock_logger,
         mock_workflow_output_root,
         mock_create_storage_backend,
         mock_gha_set_output,
@@ -76,11 +80,13 @@ class TestUploadTarballsMain(unittest.TestCase):
                 "25834210506-linux/tarballs/therock-dist-linux-multiarch-7.13.0.tar.gz",
             )
 
-    @patch("github_actions.upload_tarballs.gha_set_output")
-    @patch("github_actions.upload_tarballs.create_storage_backend")
-    @patch("github_actions.upload_tarballs.WorkflowOutputRoot")
+    @patch("upload_tarballs.gha_set_output")
+    @patch("upload_tarballs.create_storage_backend")
+    @patch("upload_tarballs.WorkflowOutputRoot")
+    @patch("upload_tarballs.logger")
     def test_main_treats_tarball_without_family_as_multiarch(
         self,
+        mock_logger,
         mock_workflow_output_root,
         mock_create_storage_backend,
         mock_gha_set_output,
