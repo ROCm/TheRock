@@ -20,8 +20,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "300",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 

@@ -38,6 +38,12 @@ on:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
         type: string
         default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
   workflow_call:
     inputs:
       artifact_group:
@@ -71,12 +77,20 @@ on:
       release_type:
         type: string
         default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
   push:
     branches:
       - ADHOCBUILD
 
 permissions:
   contents: read
+
+run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type || 'ci' }}, ${{ inputs.test_type }}, ${{ inputs.test_runs_on }})
 
 jobs:
   configure_test_matrix:
@@ -94,6 +108,8 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
           sparse-checkout: build_tools
           path: "prejob"
 
@@ -104,8 +120,11 @@ jobs:
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
-      - name: "Checking out repository"
+      - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Setting up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -136,6 +155,8 @@ jobs:
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -148,13 +169,14 @@ jobs:
       ${{
         !failure() &&
         !cancelled() &&
+        needs.configure_test_matrix.outputs.components != '' &&
         needs.configure_test_matrix.outputs.components != '[]' &&
         !inputs.sanity_check_only_for_family
       }}
     strategy:
       fail-fast: false
       matrix:
-        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
+        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit
     with:
@@ -165,7 +187,8 @@ jobs:
       # Route to the appropriate runner:
       #   1. Benchmark components use the dedicated benchmark runner
       #   2. Multi-GPU components use the multi-GPU runner
-      #   3. Everything else uses the standard test runner
+      #   3. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
+      #   4. Everything else uses the standard test runner (GPU runners)
       test_runs_on: >-
         ${{
           (matrix.components.is_benchmark == true &&
@@ -173,8 +196,12 @@ jobs:
             inputs.benchmark_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
+          (matrix.components.linux_cpu_runner == true &&
+            'azure-linux-scale-rocm') ||
           inputs.test_runs_on
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}

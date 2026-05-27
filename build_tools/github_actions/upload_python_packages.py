@@ -52,7 +52,7 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from generate_local_index import generate_flat_index, generate_multiarch_indexes
+from generate_local_index import generate_multiarch_indexes
 from github_actions_api import (
     gha_append_step_summary,
     gha_set_output,

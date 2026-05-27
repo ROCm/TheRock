@@ -13,7 +13,7 @@ on:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, expect_failure, build_pytorch,
-          prebuilt_stages, baseline_run_id.
+          build_native_linux, prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
       rocm_package_version:
@@ -22,6 +22,18 @@ on:
         type: string
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        type: string
+        default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
 
@@ -83,8 +95,12 @@ jobs:
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       expect_failure: ${{ fromJSON(inputs.build_config).expect_failure }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -120,6 +136,8 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   build_python_packages:
     needs: [build_multi_arch_stages]
@@ -129,6 +147,8 @@ jobs:
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      linux_amdgpu_families: ${{ fromJSON(inputs.build_config).linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ fromJSON(inputs.build_config).windows_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -160,7 +180,6 @@ jobs:
         }}
       python_version: "3.12"
       rocm_version: ${{ inputs.rocm_package_version }}
-      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       # Windows runs natively without a container image.
       container_image_name: native

@@ -247,6 +247,50 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         rccl = next(j for j in components if j["job_name"] == "rccl")
         self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
 
+    def test_multi_gpu_job_uses_weighted_labels_when_available(self):
+        """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu-default",
+                        "test-runs-on-multi-gpu-labels": [
+                            {"label": "linux-mi300-mgpu-a", "weight": 0.5},
+                            {"label": "linux-mi300-mgpu-b", "weight": 0.5},
+                        ],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        # Mock select_weighted_label to verify it's called and return a known label
+        original_select_weighted_label = fetch_test_configurations.select_weighted_label
+        selected_labels = []
+
+        def fake_select_weighted_label(labels_config, context_name):
+            selected_labels.append((labels_config, context_name))
+            return "linux-mi300-mgpu-a"
+
+        fetch_test_configurations.select_weighted_label = fake_select_weighted_label
+
+        try:
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+            rccl = next(j for j in components if j["job_name"] == "rccl")
+            self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
+            # Verify select_weighted_label was called
+            self.assertEqual(len(selected_labels), 1)
+            self.assertEqual(selected_labels[0][1], "gfx94x-multi-gpu")
+        finally:
+            fetch_test_configurations.select_weighted_label = (
+                original_select_weighted_label
+            )
+
     def test_multi_gpu_job_excluded_when_not_supported(self):
         os.environ["AMDGPU_FAMILIES"] = "gfx90a"
 
@@ -326,6 +370,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_platform_is_emitted(self):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
+
+    def test_container_options_on_windows_is_string_not_list(self):
+        # Regression: a list value here caused
+        # `options: ${{ fromJSON(...).container_options }}` in test_component.yml
+        # to evaluate to a YAML sequence, failing template parsing.
+        job = {
+            "container_options": [
+                "--cap-add SYS_MODULE",
+                "-v /lib/modules:/lib/modules",
+            ]
+        }
+        out = fetch_test_configurations._build_container_options(job, "windows")
+        self.assertIsInstance(out["container_options"], str)
+
+    def test_container_options_on_linux_is_joined_string(self):
+        job = {"container_options": ["--cap-add=SYS_PTRACE"]}
+        out = fetch_test_configurations._build_container_options(job, "linux")
+        self.assertIsInstance(out["container_options"], str)
+        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
 
 if __name__ == "__main__":

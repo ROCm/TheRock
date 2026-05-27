@@ -18,6 +18,8 @@ if(THEROCK_ENABLE_RDC)
   therock_cmake_subproject_declare(rdc
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rdc"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rdc"
+    COMPILER_TOOLCHAIN
+      amd-llvm
     BACKGROUND_BUILD
     USE_DIST_AMDGPU_TARGETS
 

@@ -11,6 +11,8 @@ This module provides:
 See also https://pypi.org/project/github-action-utils/.
 """
 
+import base64
+import binascii
 from enum import Enum, auto
 import json
 import logging
@@ -20,8 +22,9 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Mapping
+from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import urlopen, Request
 
 
@@ -379,6 +382,21 @@ def gha_append_step_summary(summary: str):
         f.write(summary + "\n\n")
 
 
+def gha_load_github_event() -> dict[str, Any]:
+    """Load the GitHub Actions workflow event JSON from disk.
+
+    Reads the path from :envvar:`GITHUB_EVENT_PATH`. GitHub writes that file
+    as UTF-8. On Windows the process default encoding is often not UTF-8, so
+    the file must be opened with ``encoding="utf-8"``.
+
+    Returns:
+        Parsed JSON object (GitHub webhook payloads are JSON objects).
+    """
+    path = os.environ["GITHUB_EVENT_PATH"]
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
     """Sends a request to the given GitHub REST API URL and returns the response.
 
@@ -420,6 +438,9 @@ def gha_query_workflow_run_by_id(github_repository: str, workflow_run_id: str) -
     return gha_send_request(url)
 
 
+# TODO: Consider accepting a git ref (branch/tag) here and resolving it
+# to a SHA via gha_resolve_git_ref, so callers don't need to do that
+# themselves. Same for other functions that take a commit SHA.
 def gha_query_workflow_runs_for_commit(
     github_repository: str,
     workflow_file_name: str,
@@ -437,7 +458,7 @@ def gha_query_workflow_runs_for_commit(
 
     Args:
         github_repository: Repository in "owner/repo" format (e.g., "ROCm/TheRock")
-        workflow_file_name: Workflow filename (e.g., "ci.yml")
+        workflow_file_name: Workflow filename (e.g., "multi_arch_ci.yml")
         git_commit_sha: Full git commit SHA
 
     Returns:
@@ -461,7 +482,7 @@ def gha_query_workflow_runs_for_commit(
 
 def gha_query_last_successful_workflow_run(
     github_repository: str = "ROCm/TheRock",
-    workflow_name: str = "ci.yml",
+    workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
 ) -> dict | None:
     """Find the last successful run of a specific workflow on the specified branch.
@@ -514,6 +535,75 @@ def gha_query_recent_branch_commits(
     response = gha_send_request(url)
 
     return [commit["sha"] for commit in response]
+
+
+def gha_resolve_git_ref(github_repository: str, ref: str) -> str:
+    """Resolve a git ref (branch, tag, or SHA) to a full commit SHA.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        ref: Git ref to resolve (branch name, tag, or commit SHA).
+
+    Returns:
+        The full 40-character commit SHA.
+
+    Raises:
+        GitHubAPIError: If the ref cannot be resolved.
+
+    See: https://docs.github.com/en/rest/commits/commits#get-a-commit
+    """
+    encoded_ref = quote(ref, safe="")
+    url = f"https://api.github.com/repos/{github_repository}/commits/{encoded_ref}"
+    response = gha_send_request(url)
+    return response["sha"]
+
+
+def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> bytes:
+    """Fetch a file's contents from a GitHub repo at a specific ref.
+
+    Uses the Contents API to retrieve and decode a single file. The file must
+    be small enough for the Contents API to return base64 content; for larger
+    files use the Blobs API instead.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        path: File path within the repo (e.g. "version.txt").
+        ref: Git ref (branch, tag, or commit SHA).
+
+    Returns:
+        The decoded file contents.
+
+    Raises:
+        GitHubAPIError: If the file cannot be fetched (not found, API error, etc.).
+
+    See: https://docs.github.com/en/rest/repos/contents#get-repository-content
+    """
+    encoded_path = quote(path, safe="/")
+    encoded_ref = quote(ref, safe="")
+    url = (
+        f"https://api.github.com/repos/{github_repository}/contents/"
+        f"{encoded_path}?ref={encoded_ref}"
+    )
+    response = gha_send_request(url)
+    if not isinstance(response, dict) or response.get("type") != "file":
+        response_type = (
+            response.get("type") if isinstance(response, dict) else type(response)
+        )
+        raise GitHubAPIError(
+            f"Expected GitHub contents response for a file at {path!r}, "
+            f"got {response_type!r}"
+        )
+    if response.get("encoding") != "base64" or not isinstance(
+        response.get("content"), str
+    ):
+        raise GitHubAPIError(
+            f"Expected base64 GitHub contents response for {path!r}; "
+            "use the Git blobs API for larger files"
+        )
+    try:
+        return base64.b64decode(response["content"])
+    except binascii.Error as e:
+        raise GitHubAPIError(f"Failed to decode GitHub contents for {path!r}") from e
 
 
 # TODO: Consider moving str2bool to a general-purpose utils module. It's useful

@@ -1,10 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import base64
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 from urllib.error import HTTPError, URLError
@@ -13,10 +16,13 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
+    gha_fetch_file_contents,
+    gha_load_github_event,
     gha_query_last_successful_workflow_run,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
+    gha_resolve_git_ref,
     is_authenticated_github_api_available,
 )
 
@@ -30,6 +36,47 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
         is_authenticated_github_api_available(),
         "No authenticated GitHub API auth available (need GITHUB_TOKEN or authenticated gh CLI)",
     )(test_func)
+
+
+class GhaLoadGitHubEventTest(unittest.TestCase):
+    """Tests for gha_load_github_event."""
+
+    def test_loads_utf8_curly_quotes_from_github_event_path(self):
+        """UTF-8 bytes must decode correctly (GitHub writes UTF-8 event files)."""
+        payload = {"body": "“smart quotes” in PR description"}
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".json") as f:
+            f.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+            path = f.name
+        saved = os.environ.get("GITHUB_EVENT_PATH")
+        os.environ["GITHUB_EVENT_PATH"] = path
+        try:
+            loaded = gha_load_github_event()
+            self.assertEqual(loaded["body"], "“smart quotes” in PR description")
+        finally:
+            os.unlink(path)
+            if saved is None:
+                del os.environ["GITHUB_EVENT_PATH"]
+            else:
+                os.environ["GITHUB_EVENT_PATH"] = saved
+
+    def test_loads_from_github_event_path_env(self):
+        """GITHUB_EVENT_PATH must be read as UTF-8."""
+        payload = {"action": "opened", "number": 42}
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".json") as f:
+            f.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+            path = f.name
+        saved = os.environ.get("GITHUB_EVENT_PATH")
+        os.environ["GITHUB_EVENT_PATH"] = path
+        try:
+            loaded = gha_load_github_event()
+            self.assertEqual(loaded["action"], "opened")
+            self.assertEqual(loaded["number"], 42)
+        finally:
+            os.unlink(path)
+            if saved is None:
+                del os.environ["GITHUB_EVENT_PATH"]
+            else:
+                os.environ["GITHUB_EVENT_PATH"] = saved
 
 
 class GitHubAPITest(unittest.TestCase):
@@ -423,6 +470,47 @@ class GitHubAPITest(unittest.TestCase):
 
 
 class GitHubActionsUtilsTest(unittest.TestCase):
+    def test_resolve_git_ref_returns_sha_from_commit_api(self):
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"sha": "1" * 40},
+        ) as gha_send_request:
+            sha = gha_resolve_git_ref("ROCm/pytorch", "release/2.12")
+
+        self.assertEqual(sha, "1" * 40)
+        gha_send_request.assert_called_once_with(
+            "https://api.github.com/repos/ROCm/pytorch/commits/release%2F2.12"
+        )
+
+    def test_fetch_file_contents_decodes_contents_api_response(self):
+        content = b"\x89PNG\r\n\x1a\n"
+        encoded = base64.b64encode(content).decode("ascii")
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"type": "file", "encoding": "base64", "content": encoded},
+        ) as gha_send_request:
+            contents = gha_fetch_file_contents(
+                "ROCm/pytorch", "some path/version.txt", "release/2.12"
+            )
+
+        self.assertEqual(contents, content)
+        gha_send_request.assert_called_once_with(
+            "https://api.github.com/repos/ROCm/pytorch/contents/some%20path/version.txt?ref=release%2F2.12"
+        )
+
+    def test_fetch_file_contents_rejects_non_file_response(self):
+        with mock.patch("github_actions_api.gha_send_request", return_value=[]):
+            with self.assertRaisesRegex(GitHubAPIError, "Expected GitHub contents"):
+                gha_fetch_file_contents("ROCm/pytorch", "ci", "abc123")
+
+    def test_fetch_file_contents_rejects_non_base64_response(self):
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"type": "file", "encoding": "none", "content": ""},
+        ):
+            with self.assertRaisesRegex(GitHubAPIError, "Expected base64"):
+                gha_fetch_file_contents("ROCm/pytorch", "large.bin", "abc123")
+
     def setUp(self):
         # Save environment state
         self._saved_env = {}

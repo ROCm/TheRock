@@ -23,27 +23,6 @@ include = [
 ]
 optional = true
 
-# origami
-[components.dbg."math-libs/BLAS/origami/stage"]
-[components.dev."math-libs/BLAS/origami/stage"]
-[components.lib."math-libs/BLAS/origami/stage"]
-exclude = [
-  # Python extension modules are cpython-version-specific ABI binaries (e.g.
-  # origami.cpython-312-x86_64-linux-gnu.so). They must not be included in
-  # the python-version-agnostic rocm-sdk lib package, where
-  # testSharedLibrariesLoad would try to ctypes.CDLL() them from a different
-  # Python version and fail. They are distributed via the test component only.
-  "lib/python*/**",
-]
-[components.test."math-libs/BLAS/origami/stage"]
-include = [
-  "bin/origami-tests*",
-  "bin/origami/**",
-  # Python extension is fetched here so the test script can set PYTHONPATH
-  # to lib/pythonX.Y/site-packages/ for ctest Python tests.
-  "lib/python*/site-packages/**",
-]
-
 # hipBLAS
 [components.lib."math-libs/BLAS/hipBLAS/stage"]
 exclude = [

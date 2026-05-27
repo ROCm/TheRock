@@ -12,19 +12,50 @@
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
 #     torchaudio ships as-is (no split).
-#   - Upload the result to s3://therock-{release_type}-python/v4/whl-staging/
+#   - Upload the result to s3://therock-{release_type}-python/v4/whl/
 #     (server-side indexing handles the index page) via
-#     publish_pytorch_to_staging.py.
+#     publish_pytorch_to_release_bucket.py.
 #
-# Triggered exclusively via workflow_dispatch from
-# multi_arch_release_windows.yml's dispatch_pytorch_wheels job.
-#
-# Build phase only: testing and promotion are deferred follow-ups.
-# See https://github.com/ROCm/TheRock/issues/3291 for convergence plans.
+# For convergence with CI and testing plans see:
+# * https://github.com/ROCm/TheRock/issues/3332
+# * https://github.com/ROCm/TheRock/issues/3291
 
 name: Multi-Arch Release Windows PyTorch Wheels
 
 on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        description: >-
+          Semicolon-separated list of AMD GPU families to build PyTorch for
+          (e.g. 'gfx110X-all;gfx120X-all'). Expanded to gfx targets at
+          build time via cmake/therock_amdgpu_targets.cmake.
+        type: string
+        required: true
+      rocm_version:
+        description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
+        type: string
+        required: true
+      rocm_package_find_links_url:
+        description: URL for pip --find-links to install ROCm packages
+        type: string
+        required: true
+      release_type:
+        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        type: string
+        required: true
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      cache_type:
+        description: "Compiler cache type ('none', 'sccache', or 'ccache')"
+        type: string
+        default: "none"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -63,7 +94,7 @@ on:
           - ccache
         default: none
 
-run-name: Multi-Arch Release Windows PyTorch Wheels (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
+run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
 permissions:
   contents: read
@@ -75,7 +106,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        pytorch_git_ref: ["release/2.9", "release/2.10", "release/2.11", "nightly"]
+        pytorch_git_ref: ["release/2.9", "release/2.10", "release/2.11", "release/2.12", "nightly"]
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     permissions:
       id-token: write
@@ -178,7 +209,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -257,7 +288,7 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
-      - name: Split PyTorch fat wheels (torch + torchvision)
+      - name: Split fat wheels (torch + torchvision)
         run: |
           DIST_DIR="$(cygpath -u "${{ env.PACKAGE_DIST_DIR }}")"
 
@@ -323,8 +354,8 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
-      - name: Upload PyTorch wheels to release-bucket staging
+      - name: Upload PyTorch wheels to release bucket
         run: |
-          python build_tools/github_actions/publish_pytorch_to_staging.py \
+          python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
