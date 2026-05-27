@@ -56,8 +56,6 @@ def _make_fetch_args(**kwargs) -> types.SimpleNamespace:
         "ml_framework_projects": [],
         "include_media_libs": False,
         "media_libs_projects": [],
-        "include_iree_libs": False,
-        "iree_libs_projects": [],
         "include_math_libraries": False,
         "math_library_projects": [],
     }
