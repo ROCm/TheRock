@@ -53,8 +53,7 @@ on:
       uccl_git_ref:
         description: UCCL ref to checkout test sources from (e.g. "main")
         type: string
-        # TODO: revert to "main" before merging to TheRock main.
-        default: "ep-therock"
+        default: "main"
 
   workflow_call:
     inputs:
@@ -79,8 +78,7 @@ on:
         default: ""
       uccl_git_ref:
         type: string
-        # TODO: revert to "main" before merging to TheRock main.
-        default: "ep-therock"
+        default: "main"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -91,7 +89,7 @@ on:
 permissions:
   contents: read
 
-run-name: Test UCCL (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}, ${{ inputs.uccl_git_ref || 'ep-therock' }}, ${{ inputs.test_runs_on || 'linux-gfx942-8gpu-ossci-rocm' }})
+run-name: Test UCCL (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}, ${{ inputs.uccl_git_ref || 'main' }}, ${{ inputs.test_runs_on || 'linux-gfx942-8gpu-ossci-rocm' }})
 
 jobs:
   build_wheel:
@@ -102,7 +100,7 @@ jobs:
       build_runs_on: ${{ inputs.build_runs_on || (github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04') }}
       package_index_url: ${{ inputs.package_index_url || 'https://rocm.prereleases.amd.com/whl' }}
       python_version: ${{ inputs.python_version || '3.12' }}
-      uccl_git_ref: ${{ inputs.uccl_git_ref || 'ep-therock' }}  # TODO: revert to 'main' before merging
+      uccl_git_ref: ${{ inputs.uccl_git_ref || 'main' }}
       artifact_name: uccl-wheel-${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}-py${{ inputs.python_version || '3.12' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
@@ -129,7 +127,7 @@ jobs:
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.prereleases.amd.com/whl' }}
       PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
-      UCCL_GIT_REF: ${{ inputs.uccl_git_ref || 'ep-therock' }}  # TODO: revert to 'main' before merging
+      UCCL_GIT_REF: ${{ inputs.uccl_git_ref || 'main' }}
 
     steps:
       - name: Checkout TheRock
@@ -160,12 +158,8 @@ jobs:
             libibverbs1 libnl-3-200 libnl-route-3-200 libnuma1
 
       - name: Checkout UCCL source (for test scripts)
-        # TODO: drop --gitrepo-origin (revert to upstream default) before
-        # merging to TheRock main. Currently pinned to a personal fork that
-        # carries the EP-on-therock build fixes.
         run: |
           python external-builds/uccl/uccl_repo.py checkout \
-            --gitrepo-origin https://github.com/adityakankariya/uccl.git \
             --repo-hashtag ${UCCL_GIT_REF}
 
       - name: Download UCCL wheel artifact
