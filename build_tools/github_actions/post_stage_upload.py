@@ -14,7 +14,7 @@ to S3, organized by stage name and (optionally) GPU family:
 This is the multi-arch counterpart to post_build_upload.py, which handles
 single-stage (monolithic) CI builds. Key differences:
 
-- Uploads the stage manifest alongside logs
+- Uploads the stage manifest alongside logs when present
 - No artifact upload (artifact_manager.py push handles that)
 - No index generation (server-side Lambda handles that, see #3331)
 - Logs are scoped to one stage, not the entire build
@@ -147,12 +147,28 @@ def upload_manifest(
     output_root: WorkflowOutputRoot,
     backend: StorageBackend,
 ):
-    """Upload therock_manifest.json."""
-    manifest_path = (
-        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
+    """Upload therock_manifest.json when present."""
+
+    manifest_paths = [
+        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json",
+        build_dir
+        / "base"
+        / "aux-overlay"
+        / "stage"
+        / "share"
+        / "therock"
+        / "therock_manifest.json",
+        build_dir / "dist" / "rocm" / "share" / "therock" / "therock_manifest.json",
+    ]
+
+    manifest_path = next(
+        (path for path in manifest_paths if path.is_file()),
+        None,
     )
-    if not manifest_path.is_file():
-        raise FileNotFoundError(f"therock_manifest.json not found at {manifest_path}")
+
+    if manifest_path is None:
+        log("[INFO] No therock_manifest.json found. Skipping upload.")
+        return
 
     log(f"[INFO] Uploading manifest {manifest_path}")
     backend.upload_file(manifest_path, output_root.manifest(artifact_group))
