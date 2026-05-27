@@ -186,19 +186,19 @@ See [S3 Buckets](s3_buckets.md) for the full list of buckets and authentication
 details.
 
 ```
-RELEASE_TYPE=dev/nightly/prerelease? --> therock-{RELEASE_TYPE}-artifacts
-       |
-       No (RELEASE_TYPE=ci, or unset)
-       |
-ROCm/TheRock (not fork)? -------------> therock-ci-artifacts
-       |
+RELEASE_TYPE=dev/nightly/prerelease? ──Yes──> therock-{RELEASE_TYPE}-artifacts
+       │
+       No (RELEASE_TYPE=ci)
+       │
+ROCm/TheRock (not fork)? ─────────────Yes──> therock-ci-artifacts
+       │
        No
-       |
-       `--------------------------------> therock-ci-artifacts-external
+       │
+       └──────────────────────────────────> therock-ci-artifacts-external
 ```
 
 Valid artifact `RELEASE_TYPE` values are `ci`, `dev`, `nightly`, and
-`prerelease`. When unset, artifact helpers default to `ci`.
+`prerelease`.
 
 ## Python API
 
