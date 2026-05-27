@@ -632,7 +632,8 @@ test_matrix = {
     "rocrtst": {
         "job_name": "rocrtst",
         "fetch_artifact_args": "--rocrtst --tests",
-        "timeout_minutes": 15,
+        # rocrtst HSA stress + queue scenarios on single-GPU runners exceed 15
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
