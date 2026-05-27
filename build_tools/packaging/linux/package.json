@@ -2053,7 +2053,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-ck-devel",
