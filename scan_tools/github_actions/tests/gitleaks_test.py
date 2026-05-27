@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from gitleaks import (
@@ -68,7 +69,14 @@ class DetermineLogOptsTest(unittest.TestCase):
 
     def test_pull_request_returns_sha_range_without_no_merges(self):
         event = {"pull_request": {"base": {"sha": "aaa"}, "head": {"sha": "bbb"}}}
-        log_opts = _determine_log_opts("changed", "pull_request", event)
+        with mock.patch("gitleaks.subprocess.run") as run:
+            # `_determine_log_opts` does a best-effort fetch and then
+            # verifies the base commit is reachable with `rev-parse`.
+            run.side_effect = [
+                mock.Mock(returncode=0, stderr=""),
+                mock.Mock(returncode=0, stderr=""),
+            ]
+            log_opts = _determine_log_opts("changed", "pull_request", event)
         self.assertEqual(log_opts, "aaa..bbb")
         self.assertNotIn("--no-merges", log_opts)
 
