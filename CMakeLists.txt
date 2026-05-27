@@ -111,8 +111,6 @@ set(THEROCK_PACKAGE_VERSION "git" CACHE STRING "Sets the package version string"
 # Disable compatibility symlinks created in default ROCM cmake project wide
 set(ROCM_SYMLINK_LIBS OFF)
 
-set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
-
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
 # TODO: Set default to true for Linux branch after necessary changes land
@@ -248,7 +246,6 @@ option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABL
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
-option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" OFF)
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
@@ -508,7 +505,6 @@ add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(iree-libs)
 add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)

@@ -193,7 +193,8 @@ jobs:
       #     if the workflow failed or was cancelled before the build even started though.
       - name: Push stage artifacts
         run: |
-          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
 

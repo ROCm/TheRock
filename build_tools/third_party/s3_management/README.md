@@ -89,14 +89,21 @@ those changes to the dev bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-dev-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm --dry-run
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/ \
+      --dry-run
     ```
 
 1. Update dependencies in the dev bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-dev-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/
     ```
 
 1. Regenerate the index pages for the dev bucket:
@@ -115,7 +122,10 @@ Finally, repeat those steps for the nightly bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-nightly-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/
     ```
 
 1. Regenerate the index pages for the nightly bucket:
