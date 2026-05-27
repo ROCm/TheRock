@@ -1,7 +1,6 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,14 +11,12 @@ import unittest
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from gitleaks import (
     _CONFIG_PATH,
-    _GITLEAKS_TARBALL_SHA256,
     _LEAK_SECURITY_SEVERITY_HIGH,
     _ReportTarget,
     _determine_log_opts,
     _enrich_sarif_with_security_severity,
     _parse_report_formats,
     _resolve_config_path,
-    _sha256_of,
 )
 
 
@@ -158,25 +155,55 @@ class EnrichSarifTest(unittest.TestCase):
             "3.5",
         )
 
-    def test_empty_runs_is_a_noop(self):
+    def test_empty_runs_raises(self):
         path = self._write_sarif({"runs": []})
         original = path.read_text()
-        _enrich_sarif_with_security_severity(path)
+        with self.assertRaises(ValueError) as ctx:
+            _enrich_sarif_with_security_severity(path)
+        self.assertIn("empty 'runs' array", str(ctx.exception))
+        # File is left untouched when we bail out.
         self.assertEqual(path.read_text(), original)
 
-    def test_malformed_top_level_is_skipped(self):
+    def test_clean_scan_with_empty_results_is_valid(self):
+        # Gitleaks emits {"runs": [{"results": [], ...}]} on a clean scan;
+        # that's a valid SARIF and must NOT raise (this is the normal,
+        # no-leaks-found path).
+        path = self._write_sarif({"runs": [{"results": []}]})
+        _enrich_sarif_with_security_severity(path)
+        data = json.loads(path.read_text())
+        self.assertEqual(data["runs"][0]["results"], [])
+
+    def test_malformed_top_level_raises(self):
         path = self._write_sarif(["not", "a", "dict"])
         original = path.read_text()
-        _enrich_sarif_with_security_severity(path)
+        with self.assertRaises(ValueError) as ctx:
+            _enrich_sarif_with_security_severity(path)
+        self.assertIn("top-level must be a JSON object", str(ctx.exception))
         # File should be left unchanged when payload is unexpectedly shaped.
         self.assertEqual(path.read_text(), original)
 
-    def test_missing_file_is_skipped(self):
+    def test_invalid_json_raises(self):
+        fd, name = tempfile.mkstemp(suffix=".sarif")
+        os.close(fd)
+        path = Path(name)
+        self.addCleanup(path.unlink, missing_ok=True)
+        path.write_text("{not valid json", encoding="utf-8")
+        with self.assertRaises(ValueError) as ctx:
+            _enrich_sarif_with_security_severity(path)
+        self.assertIn("not valid JSON", str(ctx.exception))
+
+    def test_runs_must_be_a_list(self):
+        path = self._write_sarif({"runs": "oops"})
+        with self.assertRaises(ValueError) as ctx:
+            _enrich_sarif_with_security_severity(path)
+        self.assertIn("'runs' must be a list", str(ctx.exception))
+
+    def test_missing_file_raises(self):
         path = Path(tempfile.gettempdir()) / "does-not-exist.sarif"
         if path.exists():
             path.unlink()
-        # Should not raise; just warn-and-skip.
-        _enrich_sarif_with_security_severity(path)
+        with self.assertRaises(FileNotFoundError):
+            _enrich_sarif_with_security_severity(path)
 
 
 class ResolveConfigPathTest(unittest.TestCase):
@@ -197,25 +224,10 @@ class ResolveConfigPathTest(unittest.TestCase):
         Path(_CONFIG_PATH).write_text("# stub config", encoding="utf-8")
         self.assertEqual(_resolve_config_path(), _CONFIG_PATH)
 
-    def test_returns_none_when_missing(self):
-        self.assertIsNone(_resolve_config_path())
-
-
-class Sha256OfTest(unittest.TestCase):
-    """Tests for `_sha256_of` and the pinned `_GITLEAKS_TARBALL_SHA256`."""
-
-    def test_matches_hashlib_for_known_content(self):
-        payload = b"the rock"
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write(payload)
-            path = Path(f.name)
-        self.addCleanup(path.unlink, missing_ok=True)
-        self.assertEqual(_sha256_of(path), hashlib.sha256(payload).hexdigest())
-
-    def test_pinned_constant_is_a_valid_sha256_hex_string(self):
-        # Guards against typos / accidental truncation in the constant.
-        self.assertEqual(len(_GITLEAKS_TARBALL_SHA256), 64)
-        int(_GITLEAKS_TARBALL_SHA256, 16)  # raises ValueError on non-hex
+    def test_raises_when_missing(self):
+        with self.assertRaises(FileNotFoundError) as ctx:
+            _resolve_config_path()
+        self.assertIn(_CONFIG_PATH, str(ctx.exception))
 
 
 if __name__ == "__main__":

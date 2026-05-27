@@ -7,7 +7,7 @@
 # come online, keeping all PR-side security gates discoverable in one
 # place.
 
-name: pre-commit-security
+name: Pre commit security
 
 on:
   pull_request:

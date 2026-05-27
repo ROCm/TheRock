@@ -5,8 +5,7 @@
 
 * Download + cache the gitleaks binary from TheRock's third-party S3
   mirror, verify its SHA-256, and smoke-test it before scanning.
-* Resolve the config at `_CONFIG_PATH`; fall back to gitleaks' built-in
-  rules if it is missing.
+* Resolve the config at `_CONFIG_PATH`; hard-fail if it is missing.
 * Derive `--log-opts` from the GitHub Actions event so `scan_mode=changed`
   scans only new commits and `scan_mode=all` scans the full history. A
   malformed `GITHUB_EVENT_PATH` is a hard error.
@@ -23,18 +22,18 @@ Exit codes:
 
 * `0` - no leaks, clean run.
 * `1` - gitleaks found leaks, or `--report-formats` was empty/unknown.
-* `2` - input error: scan path missing, `GITHUB_EVENT_PATH` malformed,
-  or gitleaks itself errored.
+* `2` - input error: scan path missing, `gitleaks.toml` missing,
+  `GITHUB_EVENT_PATH` malformed, or gitleaks itself errored.
 
 Inputs come from CLI flags or matching `GITLEAKS_*` env vars set by the
 workflow.
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
-import hashlib
 import shutil
 import subprocess
 import sys
@@ -45,10 +44,10 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-# Reach the shared GitHub Actions helpers under `build_tools/`. Mirrors
-# the import pattern used by `build_tools/generate_manifest_diff_report.py`.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_REPO_ROOT / "build_tools"))
+THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Add build_tools to path for github_actions imports.
+sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
 from github_actions.github_actions_api import (  # noqa: E402
     gha_append_step_summary,
     gha_load_github_event,
@@ -88,6 +87,12 @@ _CONFIG_PATH = "gitleaks.toml"
 # from "leaks found" (rc=1) and from "gitleaks itself errored" (rc>1).
 _LEAK_EXIT_CODE = 1
 _LEAK_SECURITY_SEVERITY_HIGH = "8.5"
+
+# Canonical "null" SHA-1 used by GitHub (and git itself) to signal "no
+# previous commit" in push payloads for newly created refs. Forty zeros.
+# Cf. pre-commit's `Z40`:
+# https://github.com/pre-commit/pre-commit/blob/main/pre_commit/commands/hook_impl.py
+Z40 = "0" * 40
 
 
 @dataclass(frozen=True)
@@ -159,9 +164,6 @@ def _ensure_gitleaks() -> Path:
         )
     binary.chmod(0o755)
 
-    # Smoke-test the freshly installed binary so we fail fast if the
-    # download is corrupt or the platform is unsupported, rather than
-    # surfacing a confusing failure inside the actual scan loop.
     try:
         result = subprocess.run(
             [str(binary), "version"],
@@ -205,16 +207,15 @@ def _parse_report_formats(raw: str) -> list[_ReportTarget]:
     return targets
 
 
-def _resolve_config_path() -> str | None:
-    """Return `_CONFIG_PATH` if it exists, else `None` (gitleaks built-ins)."""
-    if Path(_CONFIG_PATH).is_file():
-        log.info("Using gitleaks config: %s", _CONFIG_PATH)
-        return _CONFIG_PATH
-    log.warning(
-        "No config found at '%s'; using gitleaks built-in default rules",
-        _CONFIG_PATH,
-    )
-    return None
+def _resolve_config_path() -> str:
+    """Return `_CONFIG_PATH` if it exists, else hard-fail."""
+    if not Path(_CONFIG_PATH).is_file():
+        raise FileNotFoundError(
+            f"gitleaks config not found at '{_CONFIG_PATH}'. "
+            "Run from the repo root so the config is resolvable."
+        )
+    log.info("Using gitleaks config: %s", _CONFIG_PATH)
+    return _CONFIG_PATH
 
 
 def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) -> str:
@@ -237,36 +238,44 @@ def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) 
         )
 
     if event_name == "pull_request":
-        # GitHub guarantees both base.sha and head.sha on pull_request
-        # events, so a KeyError here is a real payload-format problem
-        # rather than something we should try to paper over.
         pr = event["pull_request"]
         base_sha = pr["base"]["sha"]
         head_sha = pr["head"]["sha"]
-        # Best-effort fetch of the base SHA so the range is reachable.
-        # `actions/checkout` with `fetch-depth: 0` fetches HEAD's lineage,
-        # but the PR base may live on a ref that wasn't explicitly fetched.
-        subprocess.run(
+        fetch_result = subprocess.run(
             ["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha],
             check=False,
             capture_output=True,
+            text=True,
         )
-        # Note: no `--no-merges`. A merge commit can introduce a secret
-        # (the merge resolution diff) that none of its parent commits
-        # contained individually, so dropping merges from the scan would
-        # leave that class of leak undetected on long-running branches.
+        if fetch_result.returncode != 0:
+            log.warning(
+                "git fetch of PR base %s exited %d: %s",
+                base_sha,
+                fetch_result.returncode,
+                (fetch_result.stderr or "").strip() or "(no stderr)",
+            )
+        rev_parse = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{base_sha}^{{commit}}"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if rev_parse.returncode != 0:
+            raise RuntimeError(
+                f"PR base commit {base_sha} is not reachable in the local "
+                "checkout (fetch failed and the commit isn't in the pack). "
+                "Increase the checkout `fetch-depth` or ensure the base ref "
+                "is fetchable."
+            )
         return f"{base_sha}..{head_sha}"
 
     if event_name == "push":
         # GitHub guarantees `before` and `after` on push events.
         before = event["before"]
         after = event["after"]
-        # GitHub uses a 0-only SHA for "no previous commit" (new ref);
-        # there's nothing to diff against so we scan everything.
-        if set(before) <= {"0"}:
+        if before == Z40:
             log.info("Push created a new ref; falling back to full history scan")
             return ""
-        # See PR branch above for why `--no-merges` is intentionally absent.
         return f"{before}..{after}"
 
     raise ValueError(
@@ -295,34 +304,72 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
 
     Pre-existing values for either field are preserved verbatim (so a
     future gitleaks version that emits them natively keeps control).
-    Failures during enrichment are logged at WARNING and don't
-    propagate -- a missing `security-severity` is benign (the
-    Security tab still ingests the SARIF), so we'd rather emit a
-    slightly-less-rich SARIF than fail the scan job.
-    """
+    try:
+        with open(sarif_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"SARIF file '{sarif_path}' is not valid JSON: {exc}"
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"SARIF file '{sarif_path}' top-level must be a JSON object, "
+            f"got {type(data).__name__}"
+        )
+    runs = data.get("runs", [])
+    if not isinstance(runs, list):
+        raise ValueError(
+            f"SARIF file '{sarif_path}' field 'runs' must be a list, "
+            f"got {type(runs).__name__}"
+        )
+    if not runs:
+        raise ValueError(
+            f"SARIF file '{sarif_path}' has an empty 'runs' array; "
+            "gitleaks should always emit at least one run. This usually "
+            "indicates the scanner aborted before writing a real report."
+        )
+
     levels_set_count = 0
     levels_kept_count = 0
     scores_set_count = 0
     scores_kept_count = 0
-    try:
-        with open(sarif_path, encoding="utf-8") as f:
-            data = json.load(f)
-        for run in data.get("runs") or []:
-            for result in run.get("results") or []:
-                if result.get("level") is None:
-                    result["level"] = "error"
-                    levels_set_count += 1
-                else:
-                    levels_kept_count += 1
-                props = result.setdefault("properties", {})
-                if props.get("security-severity") is None:
-                    props["security-severity"] = _LEAK_SECURITY_SEVERITY_HIGH
-                    scores_set_count += 1
-                else:
-                    scores_kept_count += 1
-    except (OSError, json.JSONDecodeError, AttributeError, KeyError, TypeError) as exc:
-        log.warning("SARIF severity enrichment skipped (%s): %s", sarif_path, exc)
-        return
+    for run_idx, run in enumerate(runs):
+        if not isinstance(run, dict):
+            raise ValueError(
+                f"SARIF file '{sarif_path}' runs[{run_idx}] must be an "
+                f"object, got {type(run).__name__}"
+            )
+        results = run.get("results", [])
+        if not isinstance(results, list):
+            raise ValueError(
+                f"SARIF file '{sarif_path}' runs[{run_idx}].results must "
+                f"be a list, got {type(results).__name__}"
+            )
+        for res_idx, result in enumerate(results):
+            if not isinstance(result, dict):
+                raise ValueError(
+                    f"SARIF file '{sarif_path}' "
+                    f"runs[{run_idx}].results[{res_idx}] must be an "
+                    f"object, got {type(result).__name__}"
+                )
+            if result.get("level") is None:
+                result["level"] = "error"
+                levels_set_count += 1
+            else:
+                levels_kept_count += 1
+            props = result.setdefault("properties", {})
+            if not isinstance(props, dict):
+                raise ValueError(
+                    f"SARIF file '{sarif_path}' "
+                    f"runs[{run_idx}].results[{res_idx}].properties must "
+                    f"be an object, got {type(props).__name__}"
+                )
+            if props.get("security-severity") is None:
+                props["security-severity"] = _LEAK_SECURITY_SEVERITY_HIGH
+                scores_set_count += 1
+            else:
+                scores_kept_count += 1
 
     if levels_set_count == 0 and scores_set_count == 0:
         log.debug(
@@ -355,7 +402,7 @@ def _run_gitleaks(
     binary: Path,
     targets: list[_ReportTarget],
     *,
-    config_path: str | None,
+    config_path: str,
     log_opts: str,
     source_dir: Path,
 ) -> bool:
@@ -374,8 +421,7 @@ def _run_gitleaks(
         "--exit-code",
         str(_LEAK_EXIT_CODE),
     ]
-    if config_path:
-        base_args.extend(["--config", config_path])
+    base_args.extend(["--config", config_path])
     if log_opts:
         base_args.append(f"--log-opts={log_opts}")
 
@@ -393,7 +439,12 @@ def _run_gitleaks(
             # Post-process SARIF reports to align with the GitHub
             # Security tab's severity tiers (gitleaks leaves both
             # `level` and `security-severity` unset by default).
-            if tgt.fmt == "sarif" and tgt.path.is_file():
+            if tgt.fmt == "sarif":
+                if not tgt.path.is_file():
+                    raise RuntimeError(
+                        f"gitleaks exited {rc} but did not write the "
+                        f"expected SARIF report at '{tgt.path}'."
+                    )
                 _enrich_sarif_with_security_severity(tgt.path)
             continue
         raise RuntimeError(
@@ -493,8 +544,8 @@ def main(argv: list[str]) -> int:
         )
         return 2
 
-    config_path = _resolve_config_path()
     try:
+        config_path = _resolve_config_path()
         event = gha_load_github_event()
         log_opts = _determine_log_opts(
             scan_mode=args.scan_mode,
