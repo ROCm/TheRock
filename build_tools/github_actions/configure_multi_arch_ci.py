@@ -649,11 +649,10 @@ def decide_jobs(
         test_type_reason=test_type_reason,
     )
 
-    # TODO(#3433): Remove sandbox logic once ASAN tests are passing and ASAN test loads run on production machines
-    # During ASAN testing, machines would crash resulting in impact for production CI jobs.
-    # As we get ASAN tests to green, we use a separate conductor pool for ASAN testing
+    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
+    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
     if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workfow dispatch runs, to avoid impact on submodule bumps
+        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
         if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
             test_rocm = TestRocmDecision(
                 action=JobAction.SKIP,
@@ -886,10 +885,16 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
-        # For ASAN builds, use sandbox runner to avoid impacting production
+        # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant == "asan":
-            if "test-runs-on-sandbox" in platform_info:
+            # Only run ASAN tests on scheduled or workflow_dispatch runs
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:

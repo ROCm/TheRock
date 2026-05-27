@@ -949,18 +949,29 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotIn("oem", entry["test-runs-on"])
 
     # TODO(#3433): Remove sandbox tests once ASAN tests are passing
-    def test_asan_uses_sandbox_runner(self):
-        """ASAN builds should use the sandbox runner from the matrix."""
+    def test_asan_schedule_uses_sandbox_runner(self):
+        """ASAN builds on schedule should use the sandbox runner."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
             targets=targets,
-            ci_inputs=self._inputs(build_variant="asan"),
+            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
             test_type="quick",
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
-        # ASAN builds always use the sandbox runner from the matrix
         self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
+
+    def test_asan_pr_disables_tests(self):
+        """ASAN builds on PR should disable tests (empty runner)."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
+            test_type="quick",
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "")
 
     def test_release_schedule_uses_normal_runner(self):
         """Release builds on schedule runs should use normal test runner."""
