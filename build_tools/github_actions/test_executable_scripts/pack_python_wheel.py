@@ -61,15 +61,10 @@ def main() -> int:
             f"--pkg-dir basename must be {EXPECTED_PKG_NAME!r}; got {pkg_dir.name!r}"
         )
 
-    has_native = next(
-        (
-            p
-            for p in pkg_dir.rglob("*")
-            if p.is_file() and p.suffix in NATIVE_EXT_SUFFIXES
-        ),
-        None,
+    has_native = any(
+        p.is_file() and p.suffix in NATIVE_EXT_SUFFIXES for p in pkg_dir.rglob("*")
     )
-    if has_native is None:
+    if not has_native:
         raise SystemExit(
             f"No native extension ({'/'.join(NATIVE_EXT_SUFFIXES)}) found under "
             f"{pkg_dir}; refusing to build a platform wheel from pure-Python sources"

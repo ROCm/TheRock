@@ -99,15 +99,8 @@ def validate_import(python: Path, cwd: Path) -> None:
     )
 
 
-def run_pytests(python: Path, artifacts_path: Path) -> bool:
-    """Run the upstream hipDNN Python test suite. Returns True if tests ran."""
-    if not HIPDNN_PYTHON_TESTS_DIR.is_dir():
-        logging.warning(
-            f"Skipping pytests: {HIPDNN_PYTHON_TESTS_DIR} not found "
-            "(rocm-libraries submodule may not be initialized)"
-        )
-        return False
-
+def run_pytests(python: Path, artifacts_path: Path) -> None:
+    """Run the upstream hipDNN Python test suite."""
     env = os.environ.copy()
     is_windows = platform.system() == "Windows"
     if is_windows:
@@ -119,11 +112,12 @@ def run_pytests(python: Path, artifacts_path: Path) -> bool:
         rocm_lib = str(artifacts_path / "lib")
         env["LD_LIBRARY_PATH"] = f"{rocm_lib}:{env.get('LD_LIBRARY_PATH', '')}"
 
+    # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
     subprocess.check_call(
         [str(python), "-m", "pytest", "-v", str(HIPDNN_PYTHON_TESTS_DIR)],
         env=env,
+        cwd=str(HIPDNN_PYTHON_TESTS_DIR),
     )
-    return True
 
 
 if __name__ == "__main__":
@@ -132,6 +126,14 @@ if __name__ == "__main__":
 
     artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
     logging.info(f"Using OUTPUT_ARTIFACTS_DIR: {artifacts_path}")
+
+    # Fail upfront on missing test infra so a missing submodule cannot mask
+    # itself as a green run.
+    if not HIPDNN_PYTHON_TESTS_DIR.is_dir():
+        raise FileNotFoundError(
+            f"hipDNN upstream pytest directory not found: {HIPDNN_PYTHON_TESTS_DIR}. "
+            "Initialize the rocm-libraries submodule."
+        )
 
     pkg_dir = find_pkg_dir(artifacts_path)
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
@@ -154,15 +156,6 @@ if __name__ == "__main__":
         validate_import(python, tmp_path)
         logging.info("Import validation passed")
 
-        tests_ran = run_pytests(python, artifacts_path)
-
-    if not tests_ran:
-        logging.error(
-            "Test infrastructure missing: hipDNN upstream pytest directory not found "
-            "under external-sources/rocm-libraries/. Initialize the submodule "
-            "(this is expected to be present in CI; exit 2 indicates infra error, "
-            "not test failure)."
-        )
-        sys.exit(2)
+        run_pytests(python, artifacts_path)
 
     logging.info("All hipDNN Python bindings tests passed!")

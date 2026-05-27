@@ -192,14 +192,16 @@ class ROCmDevelTest(unittest.TestCase):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
-                command = extra_setup + "; ".join(
-                    [
-                        "import rocm_sdk",
-                        "rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'hipdnn')",
-                        "import ctypes",
-                        "import sys",
-                        "ctypes.CDLL(sys.argv[1])",
-                    ]
+                # hipdnn is optional: not all rocm-sdk builds include it
+                # (THEROCK_ENABLE_HIPDNN may be OFF). Preload best-effort.
+                command = extra_setup + (
+                    "import rocm_sdk\n"
+                    "rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc')\n"
+                    "try: rocm_sdk.preload_libraries('hipdnn')\n"
+                    "except (ModuleNotFoundError, FileNotFoundError): pass\n"
+                    "import ctypes\n"
+                    "import sys\n"
+                    "ctypes.CDLL(sys.argv[1])\n"
                 )
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])
