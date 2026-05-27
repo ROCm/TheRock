@@ -464,7 +464,7 @@ test_matrix = {
     # hipDNN Python bindings wheel build + install + pytest
     "hipdnn_python_bindings": {
         "job_name": "hipdnn_python_bindings",
-        "fetch_artifact_args": "--hipdnn --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_install_hipdnn_python_bindings.py')}",
         "platform": ["linux", "windows"],

@@ -32,7 +32,8 @@ HIPDNN_PYTHON_TESTS_DIR = (
     / "projects"
     / "hipdnn"
     / "python"
-    / "tests"
+    / "hipdnn_frontend"
+    / "test"
 )
 
 logging.basicConfig(level=logging.INFO)
