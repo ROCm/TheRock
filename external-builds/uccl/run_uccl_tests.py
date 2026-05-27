@@ -63,20 +63,64 @@ def detect_gpu_count() -> int:
         sys.exit(1)
 
 
-def uccl_ep_available() -> bool:
-    """Return True if the `uccl.ep` module is importable.
+def uccl_ep_available() -> tuple[bool, str]:
+    """Return (available, diagnostic_output) for the `uccl.ep` module.
 
-    UCCL's upstream build.sh currently skips the EP build for the "therock"
-    target. When uccl.ep is not present, the intranode test cannot run and
-    we exit 0 with a skip message so CI stays green.
+    When uccl.ep is not present the intranode test cannot run and we exit 0
+    with a skip message so CI stays green. The diagnostic includes the full
+    import traceback plus the on-disk contents of the installed uccl/
+    package, so a missing ep.abi3.so vs an unloadable ep.abi3.so (missing
+    DT_NEEDED .so at runtime) can be distinguished without re-running.
     """
-    check_script = "import uccl.ep"
+    # uccl.ep is a torch.cpp_extension. Its DT_NEEDED libs (libtorch.so,
+    # libtorch_python.so, libc10.so, libtorch_hip.so) are only on the
+    # dynamic loader's search path once `import torch` has run, so we must
+    # import torch first or the cold `import uccl.ep` will fail with
+    # "libtorch_python.so: cannot open shared object file" and we'll wrongly
+    # conclude EP was not built.
+    check_script = (
+        "import importlib, sys, traceback;\n"
+        "try:\n"
+        "    import torch  # noqa: F401\n"
+        "    importlib.import_module('uccl.ep')\n"
+        "    print('OK')\n"
+        "except BaseException:\n"
+        "    traceback.print_exc()\n"
+        "    sys.exit(1)\n"
+    )
     result = subprocess.run(
         [sys.executable, "-c", check_script],
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode == 0:
+        return True, ""
+
+    diag_lines = [
+        "--- `import uccl.ep` failed. Diagnostic info: ---",
+        result.stderr.strip() or "(no traceback)",
+    ]
+    # Inventory what actually got installed under uccl/.
+    listing_script = (
+        "import os, uccl;\n"
+        "root = os.path.dirname(uccl.__file__);\n"
+        "print('uccl pkg root:', root);\n"
+        "[print(' ', e) for e in sorted(os.listdir(root))]\n"
+    )
+    listing = subprocess.run(
+        [sys.executable, "-c", listing_script],
+        capture_output=True,
+        text=True,
+    )
+    if listing.returncode == 0:
+        diag_lines.append(listing.stdout.strip())
+    else:
+        diag_lines.append(
+            "(could not list uccl/ package: "
+            + (listing.stderr.strip() or "unknown error")
+            + ")"
+        )
+    return False, "\n".join(diag_lines)
 
 
 def cmd_arguments(argv: list[str]) -> argparse.Namespace:
@@ -160,11 +204,13 @@ def build_torchrun_cmd(args: argparse.Namespace, nproc: int) -> list[str]:
 def main(argv: list[str]) -> int:
     args = cmd_arguments(argv)
 
-    if not uccl_ep_available():
+    available, diag = uccl_ep_available()
+    if not available:
+        print(diag, file=sys.stderr)
         print(
             "[SKIP] uccl.ep is not available in the installed UCCL wheel. "
-            "Upstream UCCL currently skips the EP (Expert Parallelism) build "
-            "for the 'therock' target. Skipping intranode EP tests.",
+            "Skipping intranode EP tests. See diagnostic above for the "
+            "underlying ImportError.",
             file=sys.stderr,
         )
         return 0
