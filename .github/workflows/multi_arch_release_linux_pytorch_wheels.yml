@@ -354,7 +354,7 @@ jobs:
             torch_package: "torch"
             dispatch_on: sunday
     env:
-      PACKAGE_INDEX_URL: "https://rocm.nightlies.amd.com/v4/whl-staging"
+      PACKAGE_INDEX_URL: "https://rocm.nightlies.amd.com/whl-multi-arch/"
       PYTHON_VERSION: "3.12"
       TORCH_PACKAGE: ${{ matrix.torch_package }}
     steps:
@@ -367,7 +367,7 @@ jobs:
             echo "dispatch=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Resolve staged torch version
+      - name: Resolve torch version
         if: ${{ steps.cadence.outputs.dispatch == 'true' }}
         id: resolve
         run: |
@@ -396,7 +396,7 @@ jobs:
 
       - name: Dispatch full PyTorch test workflow
         if: ${{ steps.cadence.outputs.dispatch == 'true' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: test_pytorch_wheels_full.yml
           inputs: |
