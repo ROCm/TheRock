@@ -29,6 +29,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly PyTorch wheel builds complete.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -199,6 +203,7 @@ jobs:
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "release_type": "${{ inputs.release_type }}",
+              "run_full_pytorch_tests": ${{ inputs.run_full_pytorch_tests }},
               "ref": "${{ inputs.ref || '' }}"
             }
 
