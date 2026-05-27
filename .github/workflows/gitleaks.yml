@@ -60,9 +60,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Bootstrap checkout (composite action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            .github/actions/compute_pr_fetch_depth
+            build_tools/github_actions/compute_pr_depth.py
+            build_tools/github_actions/github_actions_api.py
+          sparse-checkout-cone-mode: false
+
+      - name: Compute checkout fetch-depth
+        id: depth
+        uses: ./.github/actions/compute_pr_fetch_depth
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ steps.depth.outputs.value }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
