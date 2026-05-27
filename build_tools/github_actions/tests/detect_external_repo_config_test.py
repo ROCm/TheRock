@@ -45,6 +45,18 @@ class TestGetRepoConfig(unittest.TestCase):
         self.assertEqual(config["submodule_path"], "rocm-systems")
         self.assertEqual(config["skip_submodules"], ["rocm-systems"])
 
+    def test_rocgdb_config(self):
+        """Test rocgdb configuration (uses cmake_options + build_stages instead of cmake_source_var)"""
+        config = get_repo_config("rocgdb")
+        self.assertNotIn("cmake_source_var", config)
+        self.assertEqual(config["submodule_path"], "debug-tools/rocgdb/source")
+        self.assertEqual(config["skip_submodules"], ["rocgdb"])
+        self.assertIn("-DTHEROCK_USE_EXTERNAL_ROCGDB=ON", config["cmake_options"])
+        self.assertIn(
+            "-DTHEROCK_ROCGDB_SOURCE_DIR={checkout_path}", config["cmake_options"]
+        )
+        self.assertEqual(config["build_stages"], ["debug-tools"])
+
     def test_unknown_repo_raises_error(self):
         """Test that unknown repository raises ValueError"""
         with self.assertRaises(ValueError) as context:
@@ -55,7 +67,6 @@ class TestGetRepoConfig(unittest.TestCase):
     def test_all_repos_have_required_keys(self):
         """Test that all repo configs have required keys"""
         required_keys = {
-            "cmake_source_var",
             "submodule_path",
             "skip_submodules",
         }
@@ -65,6 +76,17 @@ class TestGetRepoConfig(unittest.TestCase):
                     required_keys.issubset(config.keys()),
                     f"Repo {repo_name} missing required keys: {required_keys - config.keys()}",
                 )
+
+    def test_repo_with_cmake_options_has_build_stages(self):
+        """Repos using cmake_options should declare build_stages (even if empty)."""
+        for repo_name, config in REPO_CONFIGS.items():
+            if "cmake_options" in config:
+                with self.subTest(repo=repo_name):
+                    self.assertIn(
+                        "build_stages",
+                        config,
+                        f"Repo {repo_name} sets cmake_options but is missing build_stages",
+                    )
 
 
 class TestOutputGithubActionsVars(unittest.TestCase):
@@ -139,6 +161,64 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         # Verify config_json is included with correct checkout_path (relative with external- prefix)
         self.assertIn("config_json=", output)
         self.assertIn('"checkout_path": "external-rocm-libraries"', output)
+
+    def test_rocgdb_config_json_resolves_template_and_scopes_stages(self):
+        """rocgdb's config_json should resolve {checkout_path} and emit build_stages."""
+        rc = detect_external_repo_config_main(["--repository", "rocgdb"])
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn("config_json=", output)
+        self.assertIn('"checkout_path": "external-rocgdb"', output)
+        # {checkout_path} resolved to "external-rocgdb"
+        self.assertIn(
+            '"-DTHEROCK_ROCGDB_SOURCE_DIR=external-rocgdb"',
+            output,
+        )
+        self.assertIn('"-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"', output)
+        self.assertIn('"build_stages": ["debug-tools"]', output)
+        # rocgdb has no cmake_source_var, so source_package is empty
+        self.assertIn('"source_package": ""', output)
+
+    def test_projects_to_test_defaults_to_star_when_no_test_list(self):
+        """When the external repo has no therock_matrix.project_map, projects_to_test should be '*'."""
+        # rocm-libraries' therock_matrix isn't accessible from this test
+        # environment, so get_test_list returns []. We expect the default.
+        rc = detect_external_repo_config_main(["--repository", "rocm-libraries"])
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn("projects_to_test=*", output)
+
+    @patch("detect_external_repo_config.get_test_list")
+    def test_projects_to_test_joins_test_list(self, mock_get_test_list):
+        """When the external repo declares tests via project_to_test, they should be comma-joined."""
+        mock_get_test_list.return_value = ["rocgdb-cpu", "rocgdb-gpu"]
+        rc = detect_external_repo_config_main(["--repository", "rocgdb"])
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn("projects_to_test=rocgdb-cpu,rocgdb-gpu", output)
+
+    def test_external_repo_json_repository_name_is_lowercased(self):
+        """`ROCm/ROCgdb` (case-preserved by GitHub) must resolve to the lowercase
+        REPO_CONFIGS key `rocgdb`, not the literal `ROCgdb` which would miss."""
+        rc = detect_external_repo_config_main(
+            ["--external-repo-json", '{"repository": "ROCm/ROCgdb", "ref": "main"}']
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn('"checkout_path": "external-rocgdb"', output)
+        self.assertNotIn("external-ROCgdb", output)
 
 
 class TestGetExternalRepoPath(unittest.TestCase):

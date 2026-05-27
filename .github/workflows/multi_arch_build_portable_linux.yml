@@ -43,6 +43,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      skip_stages:
+        type: string
+        default: ""
+        description: "Comma-separated build stages to skip entirely (no build, no prebuilt fetch). Used by external repos that only need a subset of the topology."
       build_runs_on:
         type: string
         default: "azure-linux-scale-rocm"
@@ -73,7 +77,7 @@ jobs:
   # STAGE: foundation (generic)
   # ==========================================================================
   foundation:
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'foundation') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'foundation') && !contains(inputs.skip_stages, 'foundation') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -97,7 +101,7 @@ jobs:
   # ==========================================================================
   compiler-runtime:
     needs: foundation
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -121,7 +125,7 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') && !contains(inputs.skip_stages, 'wsl-rocdxg') }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
@@ -144,7 +148,7 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') && !contains(inputs.skip_stages, 'math-libs') }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -181,7 +185,7 @@ jobs:
   # ==========================================================================
   comm-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') && !contains(inputs.skip_stages, 'comm-libs') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -206,7 +210,7 @@ jobs:
   # ==========================================================================
   debug-tools:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') && !contains(inputs.skip_stages, 'debug-tools') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -230,7 +234,7 @@ jobs:
   # ==========================================================================
   dctools-core:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') && !contains(inputs.skip_stages, 'dctools-core') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -254,7 +258,7 @@ jobs:
   # ==========================================================================
   profiler-apps:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') && !contains(inputs.skip_stages, 'profiler-apps') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -278,7 +282,7 @@ jobs:
   # ==========================================================================
   # iree-compiler:
   #   needs: compiler-runtime
-  #   if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') }}
+  #   if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'iree-compiler') && !contains(inputs.skip_stages, 'iree-compiler') }}
   #   uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
   #   secrets: inherit
   #   with:
@@ -308,6 +312,7 @@ jobs:
   #       !cancelled() &&
   #       !failure() &&
   #       !contains(inputs.prebuilt_stages, 'fusilli-libs') &&
+  #       !contains(inputs.skip_stages, 'fusilli-libs') &&
   #       inputs.build_variant_label != 'asan'
   #     }}
   #   uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
@@ -333,7 +338,7 @@ jobs:
   # ==========================================================================
   media-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') && !contains(inputs.skip_stages, 'media-libs') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:

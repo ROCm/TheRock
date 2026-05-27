@@ -28,6 +28,12 @@ on:
         type: string
       test_labels:
         type: string
+      projects_to_test:
+        description: >-
+          Comma-separated list of test project keys to include (matching
+          fetch_test_configurations.py's test_matrix keys). "*" runs all tests.
+        type: string
+        default: "*"
       run_extended_tests:
         type: string
         default: 'false'
@@ -68,6 +74,12 @@ on:
         type: string
       test_labels:
         type: string
+      projects_to_test:
+        description: >-
+          Comma-separated list of test project keys to include (matching
+          fetch_test_configurations.py's test_matrix keys). "*" runs all tests.
+        type: string
+        default: "*"
       run_extended_tests:
         type: string
         default: 'false'
@@ -138,6 +150,7 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
+          PROJECTS_TO_TEST: ${{ inputs.projects_to_test }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py

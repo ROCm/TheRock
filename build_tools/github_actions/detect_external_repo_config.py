@@ -40,7 +40,24 @@ from typing import Dict, Any, Optional
 from github_actions_api import gha_set_output
 
 
-# Repository configuration map
+# Repository configuration map.
+#
+# Recognized fields:
+#   cmake_source_var (str, optional): Legacy auto-injection. When set, the
+#       build workflow unconditionally adds
+#       `-D<cmake_source_var>=<checkout_path>` to every stage's configure step.
+#       Used by rocm-libraries and rocm-systems.
+#   cmake_options (list[str], optional): Extra CMake options to inject into
+#       the configure step. Supports the `{checkout_path}` template token,
+#       which is substituted before emit. When non-empty, scoped by
+#       `build_stages` below.
+#   build_stages (list[str], optional): Build stage names that consume the
+#       external source. When non-empty, `cmake_options` are only injected at
+#       configure steps for stages in this list. When empty/missing, options
+#       are injected at every stage.
+#   submodule_path (str): Path in TheRock where the repo lives as a submodule.
+#   skip_submodules (list[str]): Submodule names to skip in fetch_sources, so
+#       the external checkout is used instead.
 REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
     "rocm-libraries": {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
@@ -52,10 +69,18 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "submodule_path": "rocm-systems",
         "skip_submodules": ["rocm-systems"],
     },
+    "rocgdb": {
+        "submodule_path": "debug-tools/rocgdb/source",
+        "skip_submodules": ["rocgdb"],
+        "cmake_options": [
+            "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON",
+            "-DTHEROCK_ROCGDB_SOURCE_DIR={checkout_path}",
+        ],
+        "build_stages": ["debug-tools"],
+    },
     # Future repos can be added here:
     # "llvm-project": {...},
     # "hipify": {...},
-    # "rocgdb": {...},
     # "libhipcxx": {...},
 }
 
@@ -121,7 +146,7 @@ def get_external_repo_path(repo_name: str) -> Path:
         if (
             repo_path.exists()
             and _is_valid_repo_path(repo_path)
-            and repo_path.name == repo_name
+            and repo_path.name.lower() == repo_name.lower()
         ):
             print(
                 f"Found external repo via EXTERNAL_SOURCE_PATH: {repo_path}",
@@ -262,7 +287,14 @@ def get_test_list(repo_name: str) -> list[str]:
     Returns:
         list[str]: List of test names, or empty list if not found
     """
-    matrix_module = import_external_repo_module(repo_name, "therock_matrix")
+    try:
+        matrix_module = import_external_repo_module(repo_name, "therock_matrix")
+    except ValueError as e:
+        # External repo checkout isn't accessible (e.g. CI step running before
+        # the checkout, or unit-test environment). Fall back to "no test
+        # narrowing" rather than failing the whole config step.
+        _log_warning(f"Cannot load test list for {repo_name}: {e}")
+        return []
     if not matrix_module or not hasattr(matrix_module, "project_map"):
         return []
 
@@ -377,12 +409,14 @@ def main(argv=None):
             external_repo = json.loads(args.external_repo_json)
             source_repository = external_repo.get("repository", "")
             source_ref = external_repo.get("ref", "")
-            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries")
+            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries").
+            # Normalize to lowercase so REPO_CONFIGS keys can stay all-lowercase regardless
+            # of the GitHub repository's display casing (e.g. "ROCm/ROCgdb" → "rocgdb").
             if "/" in source_repository:
                 repo_name = source_repository.split("/")[-1]
             else:
                 repo_name = source_repository
-            args.repository = repo_name
+            args.repository = repo_name.lower()
             print(
                 f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
                 file=sys.stderr,
@@ -418,19 +452,42 @@ def main(argv=None):
                 file=sys.stderr,
             )
 
+        # projects_to_test narrows downstream test jobs to just the tests the
+        # external repo declares via therock_matrix.py's `project_to_test`
+        # entries. Empty/missing falls back to "*" (run everything), preserving
+        # historical behavior for external repos that haven't opted in.
+        test_list = get_test_list(args.repository)
+        config["projects_to_test"] = ",".join(test_list) if test_list else "*"
+        print(
+            f"Projects to test: {config['projects_to_test']}",
+            file=sys.stderr,
+        )
+
         # Build config_json with all fields needed by workflows
         final_source_repo = source_repository or f"ROCm/{args.repository}"
+        # cmake_source_var is optional. When absent, source_package is "" and
+        # the workflow's legacy `-DTHEROCK_{source_package}_SOURCE_DIR=...`
+        # auto-injection skips itself.
+        cmake_source_var = config.get("cmake_source_var", "")
         source_package = (
-            config["cmake_source_var"]
-            .replace("THEROCK_", "")
-            .replace("_SOURCE_DIR", "")
+            cmake_source_var.replace("THEROCK_", "").replace("_SOURCE_DIR", "")
+            if cmake_source_var
+            else ""
         )
+        # Resolve {checkout_path} template token in cmake_options before emit
+        # so workflows can consume the values as-is.
+        cmake_options = [
+            opt.format(checkout_path=checkout_path)
+            for opt in config.get("cmake_options", [])
+        ]
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
             "checkout_path": checkout_path,
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "cmake_options": cmake_options,
+            "build_stages": config.get("build_stages", []),
         }
         config["config_json"] = json.dumps(config_json)
         print(
