@@ -95,6 +95,10 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #
 # - additional_env_paths: Additional paths to prepend to the existing PATH, LD_LIBRARY_PATH, etc.
 #   relative to ROCM_PATH
+#
+# - env: Literal environment variables to set (overwriting any inherited value).
+#   Values are formatted with str.format() and currently support the placeholder
+#   "{rocm_path}", which expands to the absolute ROCM_PATH.
 
 COMPONENT_OVERRIDES = {
     # For rocprofiler-compute, we need the following additional paths:
@@ -108,6 +112,23 @@ COMPONENT_OVERRIDES = {
                 ["lib"],
                 ["lib", "rocm_sysdeps", "lib"],
             ],
+        },
+    },
+    # rocprofiler-systems tests are pytest-driven CTests living under
+    # share/rocprofiler-systems/tests. They need the rocm bin on PATH so the
+    # `rocprofv3` / `rocprof-sys-*` wrappers resolve, plus the example shared
+    # libraries on LD_LIBRARY_PATH so instrumented binaries can run.
+    # ROCPROFSYS_INSTALL_DIR points the generated test scripts at the install
+    # tree; ROCPROFSYS_MAX_THREADS caps thread oversubscription on CI hosts.
+    "rocprofiler-systems": {
+        "test_dir": ["share", "rocprofiler-systems", "tests"],
+        "additional_env_paths": {
+            "PATH": [["bin"]],
+            "LD_LIBRARY_PATH": [["share", "rocprofiler-systems", "examples", "lib"]],
+        },
+        "env": {
+            "ROCPROFSYS_INSTALL_DIR": "{rocm_path}",
+            "ROCPROFSYS_MAX_THREADS": "64",
         },
     },
 }
@@ -132,6 +153,8 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
         test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
+    for env_key, value_template in overrides.get("env", {}).items():
+        env[env_key] = value_template.format(rocm_path=str(rocm_path))
     return test_dir
 
 
