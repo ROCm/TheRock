@@ -296,3 +296,63 @@ DEFAULT_TARGET_FAMILY: str = "DEFAULT"
 
 # All available target families that this distribution has available.
 AVAILABLE_TARGET_FAMILIES: list[str] = []
+
+# Per-platform target family lists. Populated by the build system when the
+# rocm sdist is produced from a multi-arch release that knows about both
+# platforms' family sets. Empty when unknown (single-platform builds, or
+# loading this module before the build system has rewritten it). Consumed
+# by setup.py at install time to attach PEP 508 sys_platform markers to
+# device extras for platform-exclusive families.
+LINUX_TARGET_FAMILIES: list[str] = []
+WINDOWS_TARGET_FAMILIES: list[str] = []
+
+
+def get_target_family_platform_marker(target_family: str) -> str:
+    """Returns a PEP 508 sys_platform marker for a target family, or "".
+
+    Used by the rocm setup.py to attach markers to device-gfx* Requires-Dist
+    entries when a family is published only for one platform. Returns "" if
+    either platform list is empty (single-platform build or only one
+    platform participating in a multi-arch release) since there is no
+    cross-platform variant to disambiguate from.
+    """
+    if not LINUX_TARGET_FAMILIES or not WINDOWS_TARGET_FAMILIES:
+        return ""
+    in_linux = target_family in LINUX_TARGET_FAMILIES
+    in_windows = target_family in WINDOWS_TARGET_FAMILIES
+    if in_linux and not in_windows:
+        return 'sys_platform == "linux"'
+    if in_windows and not in_linux:
+        return 'sys_platform == "win32"'
+    return ""
+
+
+def build_per_target_extras() -> "dict[str, list[str]]":
+    """Builds the device-gfx* and device-all entries for EXTRAS_REQUIRE.
+
+    Returns a dict mapping each per-target extra name to its list of
+    Requires-Dist strings. For platform-exclusive targets, attaches a
+    PEP 508 sys_platform marker so `pip install rocm[device-all]` only
+    pulls device wheels published for the user's OS.
+
+    Returns an empty dict when no target-specific package exists or the
+    distribution covers a single target (legacy single-arch behavior;
+    the generic extras already in setup.py's EXTRAS_REQUIRE suffice).
+    """
+    result: dict[str, list[str]] = {}
+    if len(AVAILABLE_TARGET_FAMILIES) <= 1:
+        return result
+    for pkg in ALL_PACKAGES.values():
+        if not pkg.is_target_specific or pkg.required:
+            continue
+        all_requires: list[str] = []
+        for tf in sorted(AVAILABLE_TARGET_FAMILIES):
+            extra_name = f"{pkg.logical_name}-{tf}"
+            req = pkg.get_dist_package_require(target_family=tf)
+            marker = get_target_family_platform_marker(tf)
+            if marker:
+                req = f"{req}; {marker}"
+            result[extra_name] = [req]
+            all_requires.append(req)
+        result[f"{pkg.logical_name}-all"] = all_requires
+    return result
