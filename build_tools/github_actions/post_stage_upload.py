@@ -193,7 +193,11 @@ def run(args: argparse.Namespace):
         amdgpu_family=args.amdgpu_family,
     )
 
-    artifact_group = args.amdgpu_family or args.stage
+    artifact_group = args.artifact_group or args.amdgpu_family
+
+    if not artifact_group:
+        log("[INFO] No artifact group specified. Skipping manifest upload.")
+        return
 
     log("Upload manifest")
     log("---------------")
@@ -237,6 +241,13 @@ def main(argv: list[str] | None = None):
         default="",
         help="GPU family for per-arch stages (e.g., 'gfx1151'). "
         "Empty for generic stages.",
+    )
+    parser.add_argument(
+        "--artifact-group",
+        type=str,
+        default="",
+        help="Artifact group for manifest upload "
+        "(e.g., 'gfx94X-dcgpu', 'gfx110X-all')",
     )
     parser.add_argument(
         "--compression-level",
