@@ -293,7 +293,7 @@ jobs:
 
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: release_portable_linux_pytorch_wheels.yml
           inputs: |
@@ -313,7 +313,7 @@ jobs:
 
       - name: Trigger release JAX wheels
         if: ${{ github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: release_portable_linux_jax_wheels.yml
           inputs: |
@@ -330,7 +330,7 @@ jobs:
 
       - name: Trigger build native rpm package
         if: ${{ github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: build_native_linux_packages.yml
           inputs: |
@@ -344,7 +344,7 @@ jobs:
 
       - name: Trigger build native debian package
         if: ${{ github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: build_native_linux_packages.yml
           inputs: |
