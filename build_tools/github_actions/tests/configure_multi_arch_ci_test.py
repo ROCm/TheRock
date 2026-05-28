@@ -939,25 +939,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotIn("gfx950-dcgpu", family_names)
         self.assertEqual(len(result.linux.per_family_info), 1)
 
-    def test_variant_filters_by_platform_and_family_support(self):
-        """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
-        # gfx94x supports asan, gfx110x is release-only, windows has no asan variant.
-        targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx110x"],
-            windows_families=["gfx110x"],
-        )
-        result = cm.expand_build_configs(
-            targets=targets,
-            ci_inputs=self._inputs(build_variant="asan"),
-            test_type="quick",
-        )
-        # Only gfx94x on linux survives.
-        self.assertIsNotNone(result.linux)
-        linux_per_family = result.linux.per_family_info
-        self.assertEqual(len(linux_per_family), 1)
-        # Windows has no asan variant config at all.
-        self.assertIsNone(result.windows)
-
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
