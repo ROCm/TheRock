@@ -5,8 +5,10 @@
 """Pack a pre-built hipdnn_frontend package directory into a wheel.
 
 Stages the package next to the pyproject.toml + setup.py adjacent to
-this script, then delegates to `pip wheel` so wheel naming, METADATA,
-RECORD, and tag selection follow standard packaging tooling.
+this script, then delegates to `uv pip wheel` so wheel naming, METADATA,
+RECORD, and tag selection follow standard packaging tooling. `uv` is
+used instead of `pip` so the surrounding venv does not need pip seeded
+(uv-created venvs skip ensurepip by default).
 
 Usage:
     python pack_python_wheel.py \
@@ -80,10 +82,11 @@ def main() -> int:
 
         subprocess.check_call(
             [
-                sys.executable,
-                "-m",
+                "uv",
                 "pip",
                 "wheel",
+                "--python",
+                sys.executable,
                 "--no-deps",
                 "--wheel-dir",
                 str(wheel_dir),
