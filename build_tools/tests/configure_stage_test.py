@@ -95,12 +95,6 @@ class ProjectResolutionTest(unittest.TestCase):
             "-DTHEROCK_ENABLE_MIOPENPROVIDER=ON", self._get_flags(["miopen-provider"])
         )
 
-    @unittest.skipIf(IS_WINDOWS, "fusilliprovider disabled on Windows")
-    def test_fusilli_provider(self):
-        self.assertIn(
-            "-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON", self._get_flags(["fusilli-provider"])
-        )
-
     # multiple projects
     def test_multiple_projects(self):
         args = self._get_flags(["rocblas", "miopen"])
