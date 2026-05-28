@@ -172,7 +172,7 @@ jobs:
         if: ${{ always() }}
         run: |
           python3 build_tools/github_actions/detect_failed_logs.py
-          
+
       - name: Run build tests
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
