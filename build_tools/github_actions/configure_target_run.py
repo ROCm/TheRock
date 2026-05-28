@@ -49,6 +49,30 @@ def get_runner_label(target: str, platform: str) -> str:
     return ""
 
 
+def get_multi_gpu_runner_label(target: str, platform: str) -> str:
+    """Look up the multi-GPU runner label for the given GPU family and platform."""
+    print(
+        f"Searching for a multi-GPU runner for target '{target}' on platform '{platform}'"
+    )
+    amdgpu_family_info_matrix = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit"]
+    )
+    for key, info_for_key in amdgpu_family_info_matrix.items():
+        platform_for_key = info_for_key.get(platform)
+        if not platform_for_key:
+            continue
+
+        family_for_platform = platform_for_key.get("family")
+        if target != family_for_platform and key not in target.lower():
+            continue
+
+        label = platform_for_key.get("test-runs-on-multi-gpu", "")
+        if label:
+            print(f"  Found multi-GPU runner: '{label}'")
+            return label
+    return ""
+
+
 def get_upload_label(target: str, platform: str) -> str:
     print(f"Searching for a runner for target '{target}' on platform '{platform}'")
     amdgpu_family_info_matrix = get_all_families_for_trigger_types(
@@ -87,6 +111,9 @@ def main(target: str, platform: str):
     runner_label = get_runner_label(target, platform)
     if runner_label:
         gha_set_output({"test-runs-on": runner_label})
+    multi_gpu_label = get_multi_gpu_runner_label(target, platform)
+    if multi_gpu_label:
+        gha_set_output({"test-runs-on-multi-gpu": multi_gpu_label})
     upload_label = get_upload_label(target, platform)
     if upload_label:
         gha_set_output({"bypass_tests_for_releases": upload_label})

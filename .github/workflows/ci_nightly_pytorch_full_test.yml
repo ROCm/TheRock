@@ -5,11 +5,6 @@
 #
 # Current scope: Linux gfx94X-dcgpu only.
 # TODO: Expand to additional GPU families (Radeon, gfx950, etc.) and Windows.
-#       Runner labels should eventually come from amdgpu_family_matrix.py /
-#       configure_target_run.py instead of being passed as inputs here.
-#       Encode "run full pytorch tests" in amdgpu_family_matrix.py /
-#       new_amdgpu_family_matrix.py for central tracking of what builds/tests
-#       we enable on each GPU and platform.
 # TODO: This schedule-based trigger assumes the nightly build has completed.
 #       Neither is guaranteed — the build could fail or take longer than
 #       expected, in which case this re-runs tests against the previous
@@ -29,14 +24,6 @@ on:
         description: GPU family to test
         type: string
         default: "gfx94X-dcgpu"
-      test_runs_on:
-        description: Runner label for single-GPU test configs
-        type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
-      test_runs_on_multi_gpu:
-        description: Runner label for multi-GPU test configs (e.g. distributed)
-        type: string
-        default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
         description: "Base package index URL (without GPU family subdir)"
         type: string
@@ -72,8 +59,6 @@ run-name: >-
 
 env:
   AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-  TEST_RUNS_ON: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
-  TEST_RUNS_ON_MULTI_GPU: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
   PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
   TORCH_VERSION_INPUT: ${{ inputs.torch_version || '' }}
   PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
@@ -82,6 +67,23 @@ env:
   PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
 
 jobs:
+  generate_target_to_run:
+    name: Derive runner labels
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      test_runs_on_multi_gpu: ${{ steps.configure.outputs.test-runs-on-multi-gpu }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Derive runner labels from amdgpu_family_matrix
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
+          PLATFORM: "linux"
+        run: python ./build_tools/github_actions/configure_target_run.py
+
   resolve_torch_version:
     runs-on: ubuntu-24.04
     outputs:
@@ -121,12 +123,13 @@ jobs:
           echo "Resolved torch_version: ${TORCH_VERSION}"
 
   run_full_tests:
-    needs: resolve_torch_version
+    needs: [generate_target_to_run, resolve_torch_version]
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     uses: ./.github/workflows/test_pytorch_wheels_full.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-      test_runs_on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
-      test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+      test_runs_on_multi_gpu: ${{ needs.generate_target_to_run.outputs.test_runs_on_multi_gpu }}
       package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
       python_version: ${{ inputs.python_version || '3.12' }}
       torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
