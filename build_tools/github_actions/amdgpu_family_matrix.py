@@ -177,6 +177,7 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
+            "run-full-tests-only": True,
         }
     },
     "gfx110x": {
@@ -206,6 +207,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "run-full-tests-only": True,
             "nightly_check_only_for_family": True,
         },
         "windows": {
@@ -248,6 +250,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
+            "run-full-tests-only": True,
         }
     },
 }
@@ -312,6 +315,7 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
+            "run-full-tests-only": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -340,6 +344,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
+            "run-full-tests-only": True,
             "nightly_check_only_for_family": True,
         },
         "windows": {
