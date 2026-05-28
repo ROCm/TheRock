@@ -20,12 +20,12 @@ import hashlib
 from pathlib import Path
 import platform
 import shlex
-import shutil
 import subprocess
 import sys
 from typing import List
 import os
 
+import fetch_dvc_artifacts
 from _therock_utils.git_mirrors import MIRROR_DIR_ENV, url_to_mirror_relpath
 from _therock_utils.branch_config import (
     get_source_sets_for_artifact_groups,
@@ -328,13 +328,6 @@ def _append_source_set_contents(
                 external_sources_by_path[external_source.path] = external_source
 
 
-def parse_nested_submodules(input):
-    """Parse nested submodules string like 'iree:flatcc,something' into ("iree", ["flatcc", "something"])."""
-    project, nested = input.split(":", 1)
-    nested_list = [n.strip() for n in nested.split(",")] if nested else []
-    return (project, nested_list)
-
-
 def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
     """Get submodule and external git sources to fetch.
 
@@ -367,6 +360,19 @@ def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
             external_sources_by_path,
             current_platform=current_platform,
         )
+        # Apply --skip-submodules filter
+        skip_set = set(args.skip_submodules or [])
+        if skip_set:
+            original_count = len(projects_by_name)
+            projects_by_name = {
+                k: v for k, v in projects_by_name.items() if k not in skip_set
+            }
+            skipped_count = original_count - len(projects_by_name)
+            if skipped_count > 0:
+                log(
+                    f"Skipped {skipped_count} submodule(s) via --skip-submodules: "
+                    f"{sorted(skip_set)}"
+                )
         projects = list(projects_by_name)
         log(f"Stage '{args.stage}' requires submodules: {projects}")
         external_sources = list(external_sources_by_path.values())
@@ -393,8 +399,6 @@ def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
         projects.extend(args.ml_framework_projects)
     if args.include_media_libs:
         projects.extend(args.media_libs_projects)
-    if args.include_iree_libs:
-        projects.extend(args.iree_libs_projects)
     if args.include_math_libraries:
         projects.extend(args.math_library_projects)
 
@@ -409,6 +413,19 @@ def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
         external_sources_by_path,
         current_platform=current_platform,
     )
+    # Apply --skip-submodules filter
+    skip_set = set(args.skip_submodules or [])
+    if skip_set:
+        original_count = len(projects_by_name)
+        projects_by_name = {
+            k: v for k, v in projects_by_name.items() if k not in skip_set
+        }
+        skipped_count = original_count - len(projects_by_name)
+        if skipped_count > 0:
+            log(
+                f"Skipped {skipped_count} submodule(s) via --skip-submodules: "
+                f"{sorted(skip_set)}"
+            )
     return list(projects_by_name), list(external_sources_by_path.values())
 
 
@@ -480,41 +497,6 @@ def _fetch_one_external_git_source(
     run_command(["git", "reset", "--hard", source.commit], cwd=source_dir)
 
 
-def fetch_nested_submodules(args, projects):
-    """Fetch nested submodules for projects specified in --nested-submodules."""
-    update_args = []
-    if args.depth:
-        update_args += ["--depth", str(args.depth)]
-    if args.progress:
-        update_args += ["--progress"]
-    if args.jobs:
-        update_args += ["--jobs", str(args.jobs)]
-    if args.remote:
-        update_args += ["--remote"]
-
-    for parent, nested_submodules in dict(args.nested_submodules).items():
-        if len(nested_submodules) == 0:
-            continue
-
-        # Skip if parent project wasn't fetched
-        if parent not in projects:
-            continue
-
-        # Fetch the nested submodules
-        parent_dir = THEROCK_DIR / get_submodule_path(parent)
-        nested_submodule_paths = [
-            get_submodule_path(nested_submodule, cwd=parent_dir)
-            for nested_submodule in nested_submodules
-        ]
-        run_command(
-            ["git", "submodule", "update", "--init"]
-            + update_args
-            + ["--"]
-            + nested_submodule_paths,
-            cwd=parent_dir,
-        )
-
-
 def run(args):
     projects, external_sources = get_enabled_sources(args)
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
@@ -551,11 +533,7 @@ def run(args):
                 )
         fetch_external_git_sources(args, external_sources)
     if args.dvc_projects:
-        pull_large_files(args.dvc_projects, projects)
-
-    # Fetch nested submodules
-    if args.update_submodules:
-        fetch_nested_submodules(args, projects)
+        pull_large_files(args.dvc_projects, projects, jobs=args.jobs)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
@@ -575,30 +553,26 @@ def run(args):
         apply_patches(args, projects)
 
 
-def pull_large_files(dvc_projects, projects):
+def pull_large_files(dvc_projects, projects, jobs=None):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
         return
-    dvc_missing = shutil.which("dvc") is None
-    if dvc_missing:
-        if is_windows():
-            print("Could not find `dvc` on PATH so large files could not be fetched")
-            print("Visit https://dvc.org/doc/install for installation instructions.")
-            sys.exit(1)
-        else:
-            print("`dvc` not found, skipping large file pull on Linux.")
-            return
+    pull_jobs = jobs if jobs is not None else fetch_dvc_artifacts.DEFAULT_JOBS
     for project in dvc_projects:
         if not project in projects:
             continue
         submodule_path = get_submodule_path(project)
         project_dir = THEROCK_DIR / submodule_path
         dvc_config_file = project_dir / ".dvc" / "config"
-        if dvc_config_file.exists():
-            print(f"dvc detected in {project_dir}, running dvc pull")
-            run_command(["dvc", "pull"], cwd=project_dir)
-        else:
+        if not dvc_config_file.exists():
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
+            continue
+        print(f"dvc config detected in {project_dir}, fetching large files")
+        result = fetch_dvc_artifacts.pull(project_dir, jobs=pull_jobs)
+        print(
+            f"  done: fetched={result.fetched} "
+            f"cached={result.cached} skipped={result.skipped}"
+        )
 
 
 def remove_smrev_files(args, projects):
@@ -646,6 +620,7 @@ def apply_patches(args, projects):
                 "user.email=therockbot@amd.com",
                 "am",
                 "--whitespace=nowarn",
+                "--no-gpg-sign",
             ]
             + patch_files,
             cwd=project_dir,
@@ -825,23 +800,6 @@ def main(argv):
         default=None,
     )
     parser.add_argument(
-        "--nested-submodules",
-        nargs="+",
-        type=parse_nested_submodules,
-        default=[
-            (
-                "iree",
-                [
-                    "third_party/flatcc",
-                    "third_party/benchmark",
-                    "third_party/llvm-project",
-                    "third_party/torch-mlir",
-                ],
-            )
-        ],
-        help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
-    )
-    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -884,16 +842,20 @@ def main(argv):
         help="Include media projects that are part of ROCM",
     )
     parser.add_argument(
-        "--include-iree-libs",
-        default=False,
-        action=argparse.BooleanOptionalAction,
-        help="Include IREE and related libraries",
-    )
-    parser.add_argument(
         "--include-math-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
+        "--skip-submodules",
+        nargs="+",
+        default=[],
+        help=(
+            "Submodule names to skip (e.g., 'rocm-libraries rocm-systems'). "
+            "These will not be fetched regardless of stage or source set configuration. "
+            "Useful for external repo builds where the submodule is checked out separately."
+        ),
     )
     parser.add_argument(
         "--system-projects",
@@ -932,15 +894,6 @@ def main(argv):
                 "amd-mesa",
             ]
         ),
-    )
-    parser.add_argument(
-        "--iree-libs-projects",
-        nargs="+",
-        type=str,
-        default=[
-            "iree",
-            "fusilli",
-        ],
     )
     parser.add_argument(
         # projects that use DVC to manage large files

@@ -28,16 +28,25 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+  pull_request:
+    types:
+      - labeled
+      - opened
+      - synchronize
 
 permissions:
   contents: read
 
 concurrency:
-  # A PR number if a pull request and otherwise the commit hash. This cancels
-  # queued and in-progress runs for the same PR (presubmit) or commit
-  # (postsubmit). The workflow name is prepended to avoid conflicts between
-  # different workflows.
-  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+  #
+  # Only allow one run at a time for 'pull_request' events.
+  # Allow multiple runs for 'push' and 'workflow_dispatch'.
+  #
+  # `github.workflow`: each workflow gets its own concurrency group
+  # `github.head_ref`: the branch name (only defined for pull_request events)
+  # `github.run_id`  : fallback, unique for each run
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -85,6 +94,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --workflow-name="${{ github.workflow }}" \
-            --run-id="${{ github.run_id }}" \
-            --run-attempt="${{ github.run_attempt }}"
+            --needs-json '${{ toJSON(needs) }}'

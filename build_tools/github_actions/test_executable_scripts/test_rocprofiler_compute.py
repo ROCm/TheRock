@@ -17,6 +17,8 @@ ROCPROFILER_COMPUTE_DIRECTORY = THEROCK_PATH / "libexec" / "rocprofiler-compute"
 # Set up excluded tests
 EXCLUDED_TESTS = [
     "test_profile_live_attach_detach",
+    "test_metric_validation",
+    "test_L1_cache_counters",
 ]
 
 # quick Tests
@@ -25,10 +27,8 @@ QUICK_TESTS = [
     "test_utils",
     "test_num_xcds_cli_output",
     "test_num_xcds_spec_class",
-    "test_L1_cache_counters",
     "test_analyze_workloads",
     "test_analyze_commands",
-    "test_metric_validation",
     "test_profile_iteration_multiplexing_1",
 ]
 

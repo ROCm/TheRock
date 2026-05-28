@@ -46,13 +46,13 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 
 # Build runner configuration for Linux builds
-# Uses weighted distribution: 90% Azure, 10% AWS
+# Uses weighted distribution: 80% Azure, 20% AWS
 # Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 1.0},
-            {"label": "aws-linux-scale-rocm", "weight": 0.0},
+            {"label": "azure-linux-scale-rocm", "weight": 0.8},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 0.2},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -150,35 +150,34 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            # 1-GPU distribution: 17N (vultr) + 4N (cirrascale) + 8N (core42)
             "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.59,
-                },  # vultr (17/29)
+                    "weight": 0.81,
+                },  # vultr (17/21)
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.14,
-                },  # cirrascale (4/29)
+                    "weight": 0.19,
+                },  # cirrascale (4/21)
+                # Temporarily removed due to cluster issues
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.27,
-                },  # core42 (8/29)
+                    "weight": 0.0,
+                },  # core42 (25/46)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
-            # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
+            "test-runs-on-sandbox": "",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {
                     "label": "linux-gfx942-8gpu-ossci-rocm",
-                    "weight": 0.61,
-                },  # cirrascale (11/18)
+                    "weight": 0.78,
+                },  # cirrascale (11/14)
                 {
                     "label": "linux-gfx942-8gpu-core42-ossci-rocm",
-                    "weight": 0.39,
-                },  # core42 (7/18)
+                    "weight": 0.21,
+                },  # core42 (3/14)
             ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
@@ -201,7 +200,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -241,7 +240,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,

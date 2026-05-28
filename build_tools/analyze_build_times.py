@@ -57,7 +57,6 @@ NAME_MAPPING = {
     "rocwmma": "rocWMMA",
     "miopenprovider": "miopenprovider",
     "hipblasltprovider": "hipblasltprovider",
-    "fusilliprovider": "fusilliprovider",
 }
 
 # Top-level directories for ROCm components
