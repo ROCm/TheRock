@@ -53,7 +53,6 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.s3_buckets import get_artifacts_bucket_config_for_workflow_run
 
-
 # ---------------------------------------------------------------------------
 # WorkflowOutputRoot
 # ---------------------------------------------------------------------------
@@ -194,6 +193,13 @@ class WorkflowOutputRoot:
         return StorageLocation(
             self.bucket,
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
+        )
+
+    def manifest_root(self) -> StorageLocation:
+        """Location for the workflow-level therock_manifest.json."""
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/manifests/therock_manifest.json",
         )
 
     # -- Native packages --------------------------------------------------------
