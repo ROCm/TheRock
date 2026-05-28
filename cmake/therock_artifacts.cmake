@@ -20,8 +20,6 @@
 # This will produce the following convenience targets:
 # - artifact-${slice_name} : Populate the build/artifacts/{qualified_name}
 #   directory. Added as a dependency of the `therock-artifacts` target.
-# - archive-${slice_name} : Populate the build/artifacts/{qualified_name}.tar.xz
-#   archive file. Added as a dependency of the `therock-archives` target.
 #
 # Convenience targets with a "+expunge" suffix are created to remove corresponding
 # files. Invoking the project level "expunge" will depend on all of them.
@@ -68,7 +66,6 @@ function(therock_provide_artifact slice_name)
 
   # Normalize arguments.
   set(_target_name "artifact-${slice_name}")
-  set(_archive_target_name "archive-${slice_name}")
 
   # Check if targets exist from topology (expected) vs duplicate definition (error)
   set(_target_exists FALSE)
@@ -80,9 +77,6 @@ function(therock_provide_artifact slice_name)
     else()
       message(FATAL_ERROR "Artifact slice '${slice_name}' provided more than once")
     endif()
-  endif()
-  if(TARGET "${_archive_target_name}")
-    message(FATAL_ERROR "Archive slice '${slice_name}' provided more than once")
   endif()
 
   if(NOT ARG_DESCRIPTOR)
@@ -160,6 +154,21 @@ function(therock_provide_artifact slice_name)
   set(_fprint)
   if(_fprint_is_valid)
     string(SHA256 _fprint "${_fprint_content}")
+  endif()
+
+  # Write fingerprint files for each component (configure-time).
+  # TODO: Also write fingerprint files when splitting is enabled.
+  if(NOT _should_split)
+    set(_artifacts_dir "${THEROCK_BINARY_DIR}/artifacts")
+    file(MAKE_DIRECTORY "${_artifacts_dir}")
+    foreach(_component ${ARG_COMPONENTS})
+      set(_fprint_file "${_artifacts_dir}/${slice_name}_${_component}${_bundle_suffix}.fprint")
+      if(_fprint_is_valid)
+        file(WRITE "${_fprint_file}" "${_fprint}")
+      elseif(EXISTS "${_fprint_file}")
+        file(REMOVE "${_fprint_file}")
+      endif()
+    endforeach()
   endif()
 
   # Populate commands.
@@ -327,71 +336,6 @@ function(therock_provide_artifact slice_name)
   if(ARG_DISTRIBUTION)
     add_dependencies("dist-${ARG_DISTRIBUTION}" "${_target_name}")
   endif()
-
-  # Generate artifact archive commands and save fingerprints.
-  #
-  # NOTE: In the multi-arch CI flow that kpack splitting enables, archive
-  # generation moves out of the build system and into the upload phase.
-  # Once fully transitioned to that model, archive generation logic here
-  # can be removed entirely.
-  #
-  # For now, skip archive generation when splitting is enabled since split
-  # produces generic + per-arch directories with different naming conventions
-  # that the current archive loop doesn't handle.
-  set(_archive_files)
-  set(_archive_sha_files)
-  set(_artifacts_dir "${THEROCK_BINARY_DIR}/artifacts")
-  file(MAKE_DIRECTORY "${_artifacts_dir}")
-  if(_should_split)
-    message(STATUS "Skipping archive generation for split artifact: ${slice_name}")
-  endif()
-  foreach(_component ${ARG_COMPONENTS})
-    if(_should_split)
-      continue()
-    endif()
-    set(_component_dir "${_artifacts_dir}/${slice_name}_${_component}${_bundle_suffix}")
-    set(_fprint_file "${_component_dir}.fprint")
-    if(_fprint_is_valid)
-      file(WRITE "${_fprint_file}" "${_fprint}")
-    elseif(EXISTS "${_fprint_file}")
-      file(REMOVE "${_fprint_file}")
-    endif()
-    set(_manifest_file "${_component_dir}/artifact_manifest.txt")
-    set(_archive_file "${_component_dir}${THEROCK_ARTIFACT_ARCHIVE_SUFFIX}.tar.xz")
-    list(APPEND _archive_files "${_archive_file}")
-    set(_archive_sha_file "${_archive_file}.sha256sum")
-    list(APPEND _archive_sha_files "${_archive_sha_file}")
-    # TODO(#726): Lower compression levels are much faster for development and CI.
-    #             Set back to 6+ for production builds?
-    set(_archive_compression_level 2)
-    add_custom_command(
-      OUTPUT
-        "${_archive_file}"
-        "${_archive_sha_file}"
-      COMMENT "Creating archive ${_archive_file}"
-      COMMAND
-        "${Python3_EXECUTABLE}" "${_fileset_tool}"
-        artifact-archive "${_component_dir}"
-          -o "${_archive_file}"
-          --compression-level "${_archive_compression_level}"
-          --hash-file "${_archive_sha_file}" --hash-algorithm sha256
-      DEPENDS
-        "${_manifest_file}"
-        "${_fileset_tool}"
-      VERBATIM
-    )
-  endforeach()
-  add_custom_target("${_archive_target_name}" DEPENDS ${_archive_files})
-  add_dependencies(therock-archives "${_archive_target_name}")
-
-  # Archive expunge target.
-  add_custom_target(
-    "${_archive_target_name}+expunge"
-    COMMAND
-      "${CMAKE_COMMAND}" -E rm -f ${_archive_files} ${_archive_sha_files}
-    VERBATIM
-  )
-  add_dependencies(therock-expunge "${_archive_target_name}+expunge")
 
   # Generate expunge targets.
   set(_expunge_paths ${_component_dirs})

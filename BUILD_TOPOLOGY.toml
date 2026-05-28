@@ -125,10 +125,6 @@ description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
 disable_platforms = ["windows"]
 
-[source_sets.iree-libs]
-description = "IREE integration submodules"
-submodules = ["iree", "fusilli"]
-
 [source_sets.media-libs]
 description = "ROCm media libraries submodules"
 submodules = []
@@ -185,14 +181,6 @@ artifact_groups = ["dctools-core"]
 # description = "Data center tools that depend on ROCm libraries"
 # artifact_groups = ["dctools-rocm"]
 # depends_on = ["math-libs"]  # Will need math/ML libraries
-
-[build_stages.iree-compiler]
-description = "IREE compiler (parallel to math-libs)"
-artifact_groups = ["iree-compiler"]
-
-[build_stages.fusilli-libs]
-description = "Fusilli hipdnn provider (needs math-libs + iree-compiler)"
-artifact_groups = ["fusilli-libs"]
 
 [build_stages.profiler-apps]
 description = "Profiler applications (depends on profiler-core)"
@@ -317,20 +305,6 @@ description = "Profiler applications and analysis tools"
 type = "generic"
 artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems"]
-
-[artifact_groups.iree-compiler]
-description = "IREE compiler"
-type = "generic"
-artifact_group_deps = ["hip-runtime"]
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["iree-libs", "rocm-systems"]
-
-[artifact_groups.fusilli-libs]
-description = "Fusilli hipdnn provider"
-type = "generic"
-artifact_group_deps = ["hip-runtime", "iree-compiler"]
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["iree-libs", "rocm-libraries", "rocm-systems"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
@@ -700,24 +674,6 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 subprojects = ["hip-kernel-provider"]
 
-# --- IREE Integration ---
-
-[artifacts.iree-compiler]
-artifact_group = "iree-compiler"
-type = "target-neutral"
-artifact_deps = ["core-hip"]
-disable_platforms = ["windows"]
-feature_group = "IREE_LIBS"
-subprojects = ["iree", "iree-compiler"]
-
-[artifacts.fusilliprovider]
-artifact_group = "fusilli-libs"
-type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler", "hipdnn-integration-tests"]
-disable_platforms = ["windows"]
-feature_group = "IREE_LIBS"
-subprojects = ["fusilli-provider"]
-
 # --- Media Integration ---
 
 [artifacts.rocdecode]
@@ -790,6 +746,13 @@ feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 subprojects = ["rocprofiler-systems"]
+
+[artifacts.rocprofiler-systems-examples]
+artifact_group = "profiler-apps"
+type = "target-neutral"
+artifact_deps = ["rocprofiler-systems"]
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
 
 # --- Data Center Tools ---
 

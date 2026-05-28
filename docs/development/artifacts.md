@@ -106,11 +106,14 @@ Artifact directories are populated as part of `all` but can be built manually vi
 
 ### Artifact Archives
 
-The build system also generates a `therock-archive-{name}` for each artifact. This will create a `.tar.xz` file and sha256sum of the artifact directory. All archives can be built with `therock-archives`. These archives are built and streamed to the CI cloud storage server for subsequent phases and packaging workflows.
+Archives of artifacts can be created as `.tar.xz` or `tar.zst` files using either:
 
-Building the artifacts is done via the `build_tools/fileset_too.py artifact-archive` command. This command always ensures that the `artifact_manifest.txt` is written to the tar file first, as this is a precondition that the `artifact-flatten` command requires in order to process them.
+- [`python build_tools/fileset_tool.py artifact-archive`](/build_tools/fileset_tool.py)
+- [`python build_tools/artifact_manager.py push`](/build_tools/artifact_manager.py) (this calls `fileset_tool.py`)
 
-Archives are not built by default as part of `all` and must be explicitly requested. CI systems typically include a `therock-archives` target in their build to ensure this.
+These artifact archives are uploaded to CI cloud storage servers for subsequent phases and packaging workflows.
+
+These commands always ensure that the `artifact_manifest.txt` is written to the tar file first, as this is a precondition that the `artifact-flatten` command requires in order to process them.
 
 ## Building Artifacts
 
