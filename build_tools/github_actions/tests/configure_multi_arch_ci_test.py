@@ -874,6 +874,83 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
+    def test_variant_filters_by_trigger(self):
+        """ASAN: based on event type, we run an expected ASAN build variant"""
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+        )
+        test_cases = [
+            ("schedule", "linux-release-asan"),
+            ("push", "linux-release-host-asan"),
+            ("workflow_dispatch", "linux-release-asan"),
+        ]
+        for event_name, expected_variant in test_cases:
+            with self.subTest(event_name=event_name):
+                defaults = dict(
+                    run_id="12345",
+                    event_name=event_name,
+                    commit_ref="main",
+                    base_ref="HEAD^1",
+                    build_variant="asan",
+                )
+                ci_inputs = cm.CIInputs(**defaults)
+                result = cm.expand_build_configs(
+                    targets=targets,
+                    ci_inputs=ci_inputs,
+                    test_type="quick",
+                )
+                # Only gfx94x on linux survives.
+                self.assertIsNotNone(result.linux)
+                build_variant_cmake_preset = result.linux.build_variant_cmake_preset
+                self.assertEqual(build_variant_cmake_preset, expected_variant)
+
+    def test_push_asan_excludes_families_without_host_asan_support(self):
+        """Push ASAN: gfx950 supports asan but not host-asan, so it must be excluded.
+
+        When build_variant=asan on push events, the effective variant becomes
+        host-asan. Families must be filtered using this effective variant, not
+        the original asan variant. gfx950 supports asan but not host-asan, so
+        it should be excluded from the result.
+        """
+        # gfx94x supports host-asan, gfx950 only supports asan (not host-asan)
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x", "gfx950"],
+        )
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",  # push triggers asan -> host-asan remap
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="asan",
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=ci_inputs,
+            test_type="quick",
+        )
+        self.assertIsNotNone(result.linux)
+        # Verify it's a host-asan build
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
+        )
+        # Only gfx94x should survive (it supports host-asan), gfx950 should be excluded
+        family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
+        self.assertIn("gfx94X-dcgpu", family_names)
+        self.assertNotIn("gfx950-dcgpu", family_names)
+        self.assertEqual(len(result.linux.per_family_info), 1)
+
+    def test_test_runner_kernel_overrides_runner_label(self):
+        """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
+        targets = cm.TargetSelection(linux_families=["gfx1151"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            test_type="quick",
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "")
+
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""
         # gfx94x has no test-runs-on-kernel entry
@@ -1194,9 +1271,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIsNotNone(builds.linux)
         # Check that the second label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
-        )
+        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_third_label_selected_when_random_high(self):
         """When random() >= first two weights, third label should be selected."""
@@ -1216,9 +1291,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIsNotNone(builds.linux)
         # Check that the third label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
-        )
+        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_families_without_multi_label_use_primary_only(self):
         """Families without multi-label config should only use primary label."""

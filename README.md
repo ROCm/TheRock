@@ -209,7 +209,6 @@ minimal build):
 | `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                            |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                     |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
-| `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                              |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
@@ -222,7 +221,6 @@ hipDNN provider plugins:
 | --------------------------------------- | ----------------------------------------- |
 | `-DTHEROCK_ENABLE_MIOPENPROVIDER=ON`    | Enables hipDNN MIOpen-provider plugin     |
 | `-DTHEROCK_ENABLE_HIPBLASLTPROVIDER=ON` | Enables hipDNN hipBLASLt-provider plugin  |
-| `-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON`   | Enables hipDNN Fusilli-provider plugin    |
 | `-DTHEROCK_ENABLE_HIPKERNELPROVIDER=ON` | Enables hipDNN hip kernel provider plugin |
 
 > [!TIP]

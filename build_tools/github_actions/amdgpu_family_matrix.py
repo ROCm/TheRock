@@ -96,10 +96,19 @@ all_build_variants = {
             # "build_variant_cmake_preset": "linux-release-package",
             "build_variant_cmake_preset": "",
         },
+        # full ASAN builds are run on nightly
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+        },
+        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
+        # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
+        "host-asan": {
+            "build_variant_label": "host-asan",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan",
+            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -145,15 +154,16 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.369,
-                },  # vultr (17/46)
+                    "weight": 0.81,
+                },  # vultr (17/21)
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.086,
-                },  # cirrascale (4/46)
+                    "weight": 0.19,
+                },  # cirrascale (4/21)
+                # Temporarily removed due to cluster issues
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.543,
+                    "weight": 0.0,
                 },  # core42 (25/46)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
@@ -175,7 +185,7 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "host-asan", "tsan"],
         }
     },
     "gfx110x": {
