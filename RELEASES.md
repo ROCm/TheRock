@@ -279,10 +279,6 @@ print(torch.cuda.get_device_name(0))
 See [external-builds/pytorch/README.md](/external-builds/pytorch/README.md) for
 more details on supported PyTorch versions and building from source.
 
-On Windows, multi-arch nightly builds also publish **`triton_windows`** to
-`https://rocm.nightlies.amd.com/v4/whl/triton_windows/`. Install it explicitly if
-you are not using a `torch` wheel that already declares the dependency.
-
 ### Installing multi-arch tarballs
 
 Standalone "ROCm SDK tarballs" are a flattened view of ROCm
@@ -715,23 +711,7 @@ also install `torch`, `torchaudio`, `torchvision`, and `apex`.
 > pip uninstall pytorch-triton-rocm
 > ```
 >
-> The triton package is now named `triton` on Linux.
-
-> [!NOTE]
-> **Triton on Windows:** Nightly `torch` wheels from TheRock declare a dependency
-> on **`triton_windows`** (not `triton`). `pip install torch ...` from a Windows
-> per-family index installs both packages. The distribution name differs from Linux
-> because Windows builds use [triton-windows](https://github.com/triton-lang/triton-windows);
-> the Python import name is still `triton`, which enables `torch.compile`.
-> Triton is included on **nightly** Windows builds only; stable `release/*` wheels
-> may not publish `triton_windows` yet. See
-> [external-builds/pytorch/README.md](/external-builds/pytorch/README.md#triton-on-windows).
->
-> TheRock wheels add `triton` (Linux) or `triton_windows` (Windows) to the
-> `torch` package install requirements so one `pip install torch …` pulls the
-> matching Triton build. Upstream PyTorch ROCm wheels do not do this. To install
-> Triton separately, use the same index URL and package name, for example
-> `pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ triton_windows`.
+> The triton package is now named `triton`.
 
 ##### torch for gfx94X-dcgpu
 
@@ -790,7 +770,6 @@ Supported devices in this family:
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ torch torchaudio torchvision
 # Optional additional packages on Linux:
 #   apex
-# On Windows nightly indices, triton_windows is installed automatically with torch.
 ```
 
 ##### torch for gfx120X-all

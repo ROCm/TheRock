@@ -195,7 +195,7 @@ mix/match build steps.
 Windows nightly builds use the community
 [triton-windows](https://github.com/triton-lang/triton-windows) fork instead of
 [ROCm/triton](https://github.com/ROCm/triton). The resulting wheel is published
-as the **`triton_windows`** PyPI distribution (the import name remains `triton`).
+as **`triton_windows`** (the import name remains `triton`).
 
 When building from source, check out triton after torch and pass `--build-triton`:
 
@@ -330,7 +330,7 @@ uploaded alongside the other PyTorch packages on each family's index (for exampl
 `https://rocm.nightlies.amd.com/v2/gfx1151/triton_windows/`).
 
 Multi-arch Windows releases publish `triton_windows` to the unified index at
-`https://rocm.nightlies.amd.com/v4/whl/triton_windows/`.
+`https://rocm.nightlies.amd.com/whl-multi-arch/`.
 
 ### Gating releases with Pytorch tests
 
