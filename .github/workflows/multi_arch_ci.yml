@@ -41,7 +41,7 @@ on:
       baseline_run_id:
         type: string
         default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+        description: "Workflow run ID to copy prebuilt stage artifacts from; if empty with prebuilt_stages set, setup will try to resolve one"
   pull_request:
     types:
       - labeled
@@ -50,6 +50,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency

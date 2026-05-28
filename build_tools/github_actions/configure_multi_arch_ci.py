@@ -61,6 +61,7 @@ from amdgpu_family_matrix import (
     select_build_runner,
     select_weighted_label,
 )
+from baseline_runs import RequiredArtifact, select_baseline_run
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -465,6 +466,13 @@ class BuildConfigs:
         print("BuildConfigs:")
         self._log_platform("linux", self.linux)
         self._log_platform("windows", self.windows)
+
+    def replace_platform(self, platform: str, config: BuildConfig | None):
+        if platform == "linux":
+            return replace(self, linux=config)
+        if platform == "windows":
+            return replace(self, windows=config)
+        raise ValueError(f"Unknown platform: {platform!r}")
 
 
 @dataclass(frozen=True)
@@ -1019,6 +1027,128 @@ def expand_build_configs(
     )
 
 
+def _split_semicolon_list(raw: str) -> list[str]:
+    return [value.strip() for value in raw.split(";") if value.strip()]
+
+
+def _required_artifacts_for_prebuilt_stages(
+    *,
+    prebuilt_stages: list[str],
+    platform: str,
+    dist_amdgpu_families: str,
+) -> tuple[RequiredArtifact, ...]:
+    """Return artifact/family pairs needed to copy prebuilt stages."""
+    topology = get_topology()
+    target_families = _split_semicolon_list(dist_amdgpu_families)
+    requirements: list[RequiredArtifact] = []
+    seen: set[RequiredArtifact] = set()
+
+    for stage_name in prebuilt_stages:
+        for artifact_name in sorted(topology.get_produced_artifacts(stage_name)):
+            artifact = topology.artifacts[artifact_name]
+            if artifact.platform and artifact.platform != platform:
+                continue
+            if platform in artifact.disable_platforms:
+                continue
+
+            if artifact.type == "target-neutral":
+                families = ["generic"]
+            elif artifact.type == "target-specific":
+                families = target_families
+            else:
+                raise ValueError(
+                    f"Unsupported artifact type for {artifact.name}: {artifact.type}"
+                )
+
+            for family in families:
+                required_artifact = RequiredArtifact(artifact.name, family)
+                if required_artifact in seen:
+                    continue
+                seen.add(required_artifact)
+                requirements.append(required_artifact)
+
+    if not requirements:
+        raise ValueError(
+            f"No required artifacts found for prebuilt stages: {prebuilt_stages}"
+        )
+    return tuple(requirements)
+
+
+def _resolve_auto_baseline_run_ids(
+    *,
+    ci_inputs: CIInputs,
+    jobs: JobDecisions,
+    builds: BuildConfigs,
+) -> tuple[JobDecisions, BuildConfigs]:
+    """Resolve baseline_run_id when prebuilt stages are requested without one.
+
+    This is intentionally conservative example wiring for workflow_dispatch
+    validation. Full topology-aware baseline selection will need richer policy.
+    """
+    prebuilt_stages = jobs.build_rocm.prebuilt_stages
+    if not prebuilt_stages or jobs.build_rocm.baseline_run_id:
+        return jobs, builds
+
+    platform_configs = [
+        ("linux", builds.linux),
+        ("windows", builds.windows),
+    ]
+    platform_configs = [
+        (platform, config)
+        for platform, config in platform_configs
+        if config is not None
+    ]
+    if not platform_configs:
+        return jobs, builds
+
+    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    resolved: dict[str, str] = {}
+    updated_builds = builds
+
+    for platform, config in platform_configs:
+        required_artifacts = _required_artifacts_for_prebuilt_stages(
+            prebuilt_stages=prebuilt_stages,
+            platform=platform,
+            dist_amdgpu_families=config.dist_amdgpu_families,
+        )
+        baseline = select_baseline_run(
+            required_artifacts=required_artifacts,
+            github_repository=github_repository,
+            workflow_name="multi_arch_ci.yml",
+            branch="main",
+            platform=platform,
+            exclude_run_ids=[ci_inputs.run_id],
+            required_successful_job_name_substrings=["Build Multi-Arch Stages"],
+        )
+        if baseline is None:
+            raise RuntimeError(
+                "Could not resolve a baseline run for "
+                f"{platform} prebuilt stages {prebuilt_stages}. "
+                "Pass baseline_run_id explicitly or run full CI."
+            )
+
+        resolved[platform] = baseline.run_id
+        updated_builds = updated_builds.replace_platform(
+            platform,
+            replace(config, baseline_run_id=baseline.run_id),
+        )
+
+    unique_run_ids = set(resolved.values())
+    if len(unique_run_ids) != 1:
+        raise RuntimeError(
+            "Resolved different baseline runs per platform "
+            f"({resolved}). Pass baseline_run_id explicitly."
+        )
+
+    baseline_run_id = unique_run_ids.pop()
+    updated_jobs = replace(
+        jobs,
+        build_rocm=replace(jobs.build_rocm, baseline_run_id=baseline_run_id),
+    )
+    print(f"Resolved baseline_run_id={baseline_run_id} for {prebuilt_stages}")
+    return updated_jobs, updated_builds
+
+
 # ---------------------------------------------------------------------------
 # Step 6: Format and Write Outputs
 # ---------------------------------------------------------------------------
@@ -1094,6 +1224,11 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+    )
+    jobs, builds = _resolve_auto_baseline_run_ids(
+        ci_inputs=ci_inputs,
+        jobs=jobs,
+        builds=builds,
     )
     builds.log()
 

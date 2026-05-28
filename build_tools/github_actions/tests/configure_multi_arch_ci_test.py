@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from dataclasses import fields
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -433,6 +434,70 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "foundation"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
+
+    def test_required_artifacts_for_prebuilt_stages(self):
+        """Prebuilt stages map to artifact/family requirements."""
+        requirements = cm._required_artifacts_for_prebuilt_stages(
+            prebuilt_stages=["foundation"],
+            platform="linux",
+            dist_amdgpu_families="gfx94X-dcgpu",
+        )
+
+        self.assertIn(
+            cm.RequiredArtifact("base", "generic"),
+            requirements,
+        )
+        self.assertIn(
+            cm.RequiredArtifact("sysdeps", "generic"),
+            requirements,
+        )
+
+    @patch("configure_multi_arch_ci.select_baseline_run")
+    def test_auto_resolves_baseline_run_id_for_prebuilt_stages(
+        self, mock_select_baseline
+    ):
+        """Workflow dispatch can omit baseline_run_id when prebuilt_stages is set."""
+        mock_select_baseline.return_value = SimpleNamespace(run_id="999999")
+        outputs = cm.configure(
+            self._inputs(
+                event_name="workflow_dispatch",
+                linux_amdgpu_families=["gfx94x"],
+                windows_amdgpu_families=["none"],
+                prebuilt_stages="foundation",
+            ),
+            git_context=cm.GitContext.empty(),
+        )
+
+        self.assertEqual(outputs.jobs.build_rocm.baseline_run_id, "999999")
+        self.assertIsNotNone(outputs.builds.linux)
+        assert outputs.builds.linux is not None
+        self.assertEqual(outputs.builds.linux.baseline_run_id, "999999")
+        mock_select_baseline.assert_called_once()
+        self.assertEqual(mock_select_baseline.call_args.kwargs["platform"], "linux")
+        self.assertEqual(
+            mock_select_baseline.call_args.kwargs[
+                "required_successful_job_name_substrings"
+            ],
+            ["Build Multi-Arch Stages"],
+        )
+
+    @patch("configure_multi_arch_ci.select_baseline_run")
+    def test_auto_baseline_resolution_fails_closed_when_missing(
+        self, mock_select_baseline
+    ):
+        """A missing baseline is an explicit failure, not a silent full rebuild."""
+        mock_select_baseline.return_value = None
+
+        with self.assertRaisesRegex(RuntimeError, "Could not resolve"):
+            cm.configure(
+                self._inputs(
+                    event_name="workflow_dispatch",
+                    linux_amdgpu_families=["gfx94x"],
+                    windows_amdgpu_families=["none"],
+                    prebuilt_stages="foundation",
+                ),
+                git_context=cm.GitContext.empty(),
+            )
 
 
 # ---------------------------------------------------------------------------
