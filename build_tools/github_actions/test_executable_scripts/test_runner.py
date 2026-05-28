@@ -110,6 +110,16 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    "rocrtst": {
+        # PR/standard rocrtst runs use the Core group to stay within CI budget.
+        # Comprehensive/nightly and full/weekly keep rocrtst's default groups unless
+        # the workflow explicitly sets ROCRTST_TEST_GROUPS.
+        "additional_env_by_test_type": {
+            "standard": {
+                "ROCRTST_TEST_GROUPS": "Core",
+            },
+        },
+    },
 }
 
 
@@ -132,6 +142,12 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
         test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
+    for key, value in overrides.get("additional_env", {}).items():
+        env.setdefault(key, value)
+    test_type_env = overrides.get("additional_env_by_test_type", {}).get(TEST_TYPE.lower(), {})
+    for key, value in test_type_env.items():
+        env.setdefault(key, value)
+
     return test_dir
 
 
