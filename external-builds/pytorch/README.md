@@ -31,15 +31,15 @@ This incorporates advice from:
 The following projects and features are packaged and released through TheRock's
 stable, nightly, and dev release channels.
 
-| Project / feature | Linux support | Windows support                                                                             |
-| ----------------- | ------------- | ------------------------------------------------------------------------------------------- |
-| torch             | ✅ Supported  | ✅ Supported                                                                                |
-| ↳ aotriton        | ✅ Supported  | ✅ Supported                                                                                |
+| Project / feature | Linux support | Windows support                                                           |
+| ----------------- | ------------- | ------------------------------------------------------------------------- |
+| torch             | ✅ Supported  | ✅ Supported                                                              |
+| ↳ aotriton        | ✅ Supported  | ✅ Supported                                                              |
 | ↳ triton          | ✅ Supported  | ✅ Supported (nightly only — see [Triton on Windows](#triton-on-windows)) |
-| ↳ FBGEMM GenAI    | ✅ Supported  | ❌ Not supported                                                                            |
-| torchaudio        | ✅ Supported  | ✅ Supported                                                                                |
-| torchvision       | ✅ Supported  | ✅ Supported                                                                                |
-| apex              | ✅ Supported  | ❌ Not supported                                                                            |
+| ↳ FBGEMM GenAI    | ✅ Supported  | ❌ Not supported                                                          |
+| torchaudio        | ✅ Supported  | ✅ Supported                                                              |
+| torchvision       | ✅ Supported  | ✅ Supported                                                              |
+| apex              | ✅ Supported  | ❌ Not supported                                                          |
 
 The following projects are not currently packaged and released by TheRock, functionality may vary.
 
