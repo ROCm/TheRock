@@ -33,14 +33,17 @@ _HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "python" / "hipdnn_fronte
 logging.basicConfig(level=logging.INFO)
 
 
-def find_pkg_dir(artifacts_path: Path) -> Path:
-    """Locate the hipdnn_frontend package directory in the test artifact."""
-    candidate = artifacts_path / _HIPDNN_PKG_ARTIFACT_RELPATH
+def _require_artifact_dir(
+    artifacts_path: Path, relpath: Path, label: str, hint: str
+) -> Path:
+    """Resolve an artifact subdirectory and fail loudly if it is missing.
+
+    Failing upfront keeps a missing artifact from silently masking itself as
+    a green run later in the pipeline.
+    """
+    candidate = (artifacts_path / relpath).resolve()
     if not candidate.is_dir():
-        raise FileNotFoundError(
-            f"hipdnn_frontend package not found at: {candidate}\n"
-            "Ensure hipDNN was built with HIPDNN_BUILD_PYTHON_BINDINGS=ON"
-        )
+        raise FileNotFoundError(f"{label} not found at: {candidate}\n{hint}")
     return candidate
 
 
@@ -135,18 +138,20 @@ if __name__ == "__main__":
     artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
     logging.info(f"Using OUTPUT_ARTIFACTS_DIR: {artifacts_path}")
 
-    tests_dir = (artifacts_path / _HIPDNN_TESTS_ARTIFACT_RELPATH).resolve()
+    tests_dir = _require_artifact_dir(
+        artifacts_path,
+        _HIPDNN_TESTS_ARTIFACT_RELPATH,
+        "hipDNN upstream pytest directory",
+        "Ensure the hipDNN test artifact includes share/hipdnn/tests/python.",
+    )
     logging.info(f"Using hipDNN pytest dir: {tests_dir}")
 
-    # Fail upfront on missing test infra so a missing artifact cannot mask
-    # itself as a green run.
-    if not tests_dir.is_dir():
-        raise FileNotFoundError(
-            f"hipDNN upstream pytest directory not found: {tests_dir}. "
-            "Ensure the hipDNN test artifact includes share/hipdnn/tests/python."
-        )
-
-    pkg_dir = find_pkg_dir(artifacts_path)
+    pkg_dir = _require_artifact_dir(
+        artifacts_path,
+        _HIPDNN_PKG_ARTIFACT_RELPATH,
+        "hipdnn_frontend package",
+        "Ensure hipDNN was built with HIPDNN_BUILD_PYTHON_BINDINGS=ON.",
+    )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
     env = build_runtime_env(artifacts_path)
