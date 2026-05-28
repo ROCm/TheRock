@@ -4,16 +4,10 @@
 name: CodeQL
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
-    paths:
-      - ".github/**"
-      - "build_tools/**"
-      - "scan_tools/**"
-      - "tests/**"
-  # Run every Saturday at 10:00 UTC.
-  schedule:
-    - cron: "0 10 * * 6"
   workflow_dispatch:
 
 concurrency:
