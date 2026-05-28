@@ -40,7 +40,6 @@ _HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "python" / "hipdnn_fronte
 # the step instead of consuming the full CI matrix budget.
 _TIMEOUT_WHEEL_BUILD = 5 * 60
 _TIMEOUT_PIP_INSTALL = 5 * 60
-_TIMEOUT_IMPORT_CHECK = 60
 _TIMEOUT_PYTEST = 20 * 60
 
 
@@ -99,23 +98,6 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
     )
 
 
-def validate_import(python: Path, cwd: Path, env: dict) -> None:
-    """Verify the installed package can be imported.
-
-    Runs from `cwd` (a neutral directory) so that `import hipdnn_frontend`
-    cannot accidentally resolve to a sibling staged package directory. Uses
-    the same loader env as `run_pytests` so the native extension can resolve
-    `libhipdnn_backend` and its transitive ROCm deps.
-    """
-    subprocess.run(
-        [str(python), "-c", "import hipdnn_frontend; print(hipdnn_frontend.__file__)"],
-        cwd=cwd,
-        env=env,
-        check=True,
-        timeout=_TIMEOUT_IMPORT_CHECK,
-    )
-
-
 def run_pytests(python: Path, tests_dir: Path, env: dict) -> None:
     """Run the upstream hipDNN Python test suite."""
     # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
@@ -170,9 +152,6 @@ if __name__ == "__main__":
 
         install_wheel(python, wheel_path)
         logging.info("Wheel installed successfully")
-
-        validate_import(python, tmp_path, env)
-        logging.info("Import validation passed")
 
         run_pytests(python, tests_dir, env)
 
