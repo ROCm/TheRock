@@ -1,0 +1,69 @@
+From 2227b1f5b1f6963d26a884bf74a6b1de52f77ca9 Mon Sep 17 00:00:00 2001
+From: Ron Lieberman <ron.lieberman@amd.com>
+Date: Mon, 25 May 2026 09:23:10 -0500
+Subject: [PATCH] ck cmake Suppress all lifetime warnings as errors
+
+---
+ projects/composablekernel/CMakeLists.txt                  | 5 +++++
+ .../composablekernel/cmake/EnableCompilerWarnings.cmake   | 8 ++++++++
+ projects/composablekernel/dispatcher/CMakeLists.txt       | 2 +-
+ 3 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/projects/composablekernel/CMakeLists.txt b/projects/composablekernel/CMakeLists.txt
+index e2f3c46619b..eac7efed4e3 100644
+--- a/projects/composablekernel/CMakeLists.txt
++++ b/projects/composablekernel/CMakeLists.txt
+@@ -690,6 +690,11 @@ SET(BUILD_DEV ON CACHE BOOL "BUILD_DEV")
+ if(BUILD_DEV)
+     add_compile_options(-Werror)
+     add_compile_options(-Weverything)
++    add_compile_options(-Wno-lifetime-safety-intra-tu-suggestions)
++    add_compile_options(-Wno-lifetime-safety-cross-tu-suggestions)
++    add_compile_options(-Wno-lifetime-safety-lifetimebound-violation)
++    add_compile_options(-Wno-unknown-warning-option)
++
+ endif()
+ message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+ 
+diff --git a/projects/composablekernel/cmake/EnableCompilerWarnings.cmake b/projects/composablekernel/cmake/EnableCompilerWarnings.cmake
+index 9cc960cc234..2f9a04f4855 100644
+--- a/projects/composablekernel/cmake/EnableCompilerWarnings.cmake
++++ b/projects/composablekernel/cmake/EnableCompilerWarnings.cmake
+@@ -50,6 +50,10 @@ else()
+             -Wsign-compare
+             -Wno-extra-semi-stmt
+             -Wno-unused-template
++            -Wno-lifetime-safety-intra-tu-suggestions
++            -Wno-lifetime-safety-cross-tu-suggestions
++            -Wno-lifetime-safety-lifetimebound-violation
++            -Wno-unknown-warning-option
+         )
+         if (CMAKE_${COMPILER}_COMPILER_ID MATCHES "Clang")
+             list(APPEND CMAKE_COMPILER_WARNINGS
+@@ -76,6 +80,10 @@ else()
+                 -Wno-unsafe-buffer-usage
+                 -Wno-unused-lambda-capture
+                 -Wno-nvcc-compat
++                -Wno-lifetime-safety-intra-tu-suggestions
++                -Wno-lifetime-safety-cross-tu-suggestions
++                -Wno-lifetime-safety-lifetimebound-violation
++                -Wno-unknown-warning-option
+             )
+             if(CK_CXX_STANDARD GREATER_EQUAL 20)
+                 list(APPEND CMAKE_COMPILER_WARNINGS -Wno-c++20-compat)
+diff --git a/projects/composablekernel/dispatcher/CMakeLists.txt b/projects/composablekernel/dispatcher/CMakeLists.txt
+index ed9b20d33c9..79bdde45e87 100644
+--- a/projects/composablekernel/dispatcher/CMakeLists.txt
++++ b/projects/composablekernel/dispatcher/CMakeLists.txt
+@@ -59,7 +59,7 @@ endif()
+ # Compiler warnings
+ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+     target_compile_options(ck_tile_dispatcher PRIVATE
+-        -Wall -Wextra -Wpedantic
++        -Wall -Wextra -Wpedantic -Wno-lifetime-safety-intra-tu-suggestions -Wno-lifetime-safety-cross-tu-suggestions -Wno-lifetime-safety-lifetimebound-violation -Wno-unknown-warning-option
+     )
+ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+     target_compile_options(ck_tile_dispatcher PRIVATE
+-- 
+2.43.0
+
