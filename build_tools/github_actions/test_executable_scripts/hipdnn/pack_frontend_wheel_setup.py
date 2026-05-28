@@ -3,10 +3,17 @@
 
 """Pre-built hipdnn_frontend wheel setup.
 
-Mirrors the rocm-sdk-* template setups: plain `setup()` with
-`Distribution.has_ext_modules() -> True` so bdist_wheel emits a
-`cp{X}{Y}-cp{X}{Y}-<plat>` tag for the CPython-ABI-bound
-`hipdnn_frontend_python.so`.
+Differs from the rocm-sdk-* templates: those templates ship loose ROCm shared
+libraries (not CPython extensions) and produce a `py3-none-<plat>` wheel via
+`include_package_data=True` + a `platform/<pkg>/` source layout. This wheel,
+in contrast, contains `hipdnn_frontend_python.so` — a nanobind extension
+linked to a specific CPython ABI — so it must install only on a matching
+interpreter.
+
+`Distribution.has_ext_modules() -> True` forces bdist_wheel to emit the
+CPython-ABI tag `cp{X}{Y}-cp{X}{Y}-<plat>` even though we are not invoking
+any setuptools build extension (the .so is pre-built and staged into the
+package directory by the driver script).
 """
 
 import os

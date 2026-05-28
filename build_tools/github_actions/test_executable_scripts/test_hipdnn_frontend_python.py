@@ -15,15 +15,22 @@ Requires a GPU and OUTPUT_ARTIFACTS_DIR pointing at the merged artifact tree.
 
 import logging
 import os
-import platform
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from libhipcxx_utils import build_rocm_loader_env
+
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACK_WHEEL_SCRIPT = SCRIPT_DIR / "hipdnn" / "pack_frontend_wheel.py"
+
+# build_tools/ on sys.path so we can reuse the shared venv helpers instead of
+# re-implementing platform-specific python-exe discovery here.
+_BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+from setup_venv import create_venv, find_venv_python_exe  # noqa: E402
 
 _HIPDNN_SHARE_RELPATH = Path("share/hipdnn")
 _HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "tests" / "python"
@@ -32,7 +39,6 @@ _HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "python" / "hipdnn_fronte
 # Per-step timeouts (seconds). Bounded so a hung GPU / deadlocked pytest fails
 # the step instead of consuming the full CI matrix budget.
 _TIMEOUT_WHEEL_BUILD = 5 * 60
-_TIMEOUT_VENV_CREATE = 2 * 60
 _TIMEOUT_PIP_INSTALL = 5 * 60
 _TIMEOUT_IMPORT_CHECK = 60
 _TIMEOUT_PYTEST = 20 * 60
@@ -55,27 +61,6 @@ def _require_artifact_dir(
     return candidate
 
 
-def build_runtime_env(artifacts_path: Path) -> dict:
-    """Construct env exposing the ROCm loader path for the native extension.
-
-    The `hipdnn_frontend_python` extension links against `libhipdnn_backend`
-    (and transitively HIP/ROCm libs). Without LD_LIBRARY_PATH (Linux) or PATH
-    (Windows) pointing at the artifact tree, `import hipdnn_frontend` fails in
-    a clean venv. Shared by `validate_import` and `run_pytests` so both run
-    against the same loader configuration.
-    """
-    env = os.environ.copy()
-    if platform.system() == "Windows":
-        # Windows ROCm DLLs live in bin/ (Linux uses lib/), so PATH must
-        # include artifacts_path / "bin" for the loader to find them.
-        rocm_lib = str(artifacts_path / "bin")
-        env["PATH"] = f"{rocm_lib};{env.get('PATH', '')}"
-    else:
-        rocm_lib = str(artifacts_path / "lib")
-        env["LD_LIBRARY_PATH"] = f"{rocm_lib}:{env.get('LD_LIBRARY_PATH', '')}"
-    return env
-
-
 def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
     """Build a wheel from the staged package directory."""
     subprocess.run(
@@ -94,18 +79,6 @@ def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
     if not wheels:
         raise RuntimeError(f"No wheel produced in {wheel_dir}")
     return wheels[0]
-
-
-def create_venv(venv_dir: Path) -> Path:
-    """Create a virtual environment and return the python executable path."""
-    subprocess.run(
-        [sys.executable, "-m", "venv", str(venv_dir)],
-        check=True,
-        timeout=_TIMEOUT_VENV_CREATE,
-    )
-    if platform.system() == "Windows":
-        return venv_dir / "Scripts" / "python.exe"
-    return venv_dir / "bin" / "python"
 
 
 def install_wheel(python: Path, wheel_path: Path) -> None:
@@ -178,7 +151,7 @@ if __name__ == "__main__":
     )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
-    env = build_runtime_env(artifacts_path)
+    env = build_rocm_loader_env(artifacts_path)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -189,7 +162,10 @@ if __name__ == "__main__":
         wheel_path = build_wheel(pkg_dir, wheel_dir)
         logging.info(f"Built wheel: {wheel_path.name}")
 
-        python = create_venv(venv_dir)
+        create_venv(venv_dir)
+        python = find_venv_python_exe(venv_dir)
+        if python is None:
+            raise RuntimeError(f"venv created but no python executable in {venv_dir}")
         logging.info(f"Created venv: {venv_dir}")
 
         install_wheel(python, wheel_path)
