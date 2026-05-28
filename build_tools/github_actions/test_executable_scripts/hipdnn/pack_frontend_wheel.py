@@ -72,6 +72,14 @@ def main() -> int:
             f"{pkg_dir}; refusing to build a platform wheel from pure-Python sources"
         )
 
+    uv_path = shutil.which("uv")
+    if not uv_path:
+        raise SystemExit(
+            "'uv' executable not found on PATH; install uv "
+            "(https://docs.astral.sh/uv/getting-started/installation/) "
+            "or ensure the venv that runs this script has uv available"
+        )
+
     wheel_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as td:
@@ -82,7 +90,7 @@ def main() -> int:
 
         subprocess.check_call(
             [
-                "uv",
+                uv_path,
                 "pip",
                 "wheel",
                 "--python",

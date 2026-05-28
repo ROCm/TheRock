@@ -29,6 +29,14 @@ _HIPDNN_SHARE_RELPATH = Path("share/hipdnn")
 _HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "tests" / "python"
 _HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "python" / "hipdnn_frontend"
 
+# Per-step timeouts (seconds). Bounded so a hung GPU / deadlocked pytest fails
+# the step instead of consuming the full CI matrix budget.
+_TIMEOUT_WHEEL_BUILD = 5 * 60
+_TIMEOUT_VENV_CREATE = 2 * 60
+_TIMEOUT_PIP_INSTALL = 5 * 60
+_TIMEOUT_IMPORT_CHECK = 60
+_TIMEOUT_PYTEST = 20 * 60
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -70,7 +78,7 @@ def build_runtime_env(artifacts_path: Path) -> dict:
 
 def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
     """Build a wheel from the staged package directory."""
-    subprocess.check_call(
+    subprocess.run(
         [
             sys.executable,
             str(PACK_WHEEL_SCRIPT),
@@ -78,7 +86,9 @@ def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
             str(pkg_dir),
             "--wheel-dir",
             str(wheel_dir),
-        ]
+        ],
+        check=True,
+        timeout=_TIMEOUT_WHEEL_BUILD,
     )
     wheels = list(wheel_dir.glob("hipdnn_frontend-*.whl"))
     if not wheels:
@@ -88,7 +98,11 @@ def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
 
 def create_venv(venv_dir: Path) -> Path:
     """Create a virtual environment and return the python executable path."""
-    subprocess.check_call([sys.executable, "-m", "venv", str(venv_dir)])
+    subprocess.run(
+        [sys.executable, "-m", "venv", str(venv_dir)],
+        check=True,
+        timeout=_TIMEOUT_VENV_CREATE,
+    )
     if platform.system() == "Windows":
         return venv_dir / "Scripts" / "python.exe"
     return venv_dir / "bin" / "python"
@@ -100,10 +114,16 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
     Two calls: `--no-deps` is per-invocation, not per-requirement, so the
     wheel install must be isolated from pytest's dependency resolution.
     """
-    subprocess.check_call(
-        [str(python), "-m", "pip", "install", "--no-deps", str(wheel_path)]
+    subprocess.run(
+        [str(python), "-m", "pip", "install", "--no-deps", str(wheel_path)],
+        check=True,
+        timeout=_TIMEOUT_PIP_INSTALL,
     )
-    subprocess.check_call([str(python), "-m", "pip", "install", "pytest>=7,<9"])
+    subprocess.run(
+        [str(python), "-m", "pip", "install", "pytest>=7,<9"],
+        check=True,
+        timeout=_TIMEOUT_PIP_INSTALL,
+    )
 
 
 def validate_import(python: Path, cwd: Path, env: dict) -> None:
@@ -114,20 +134,24 @@ def validate_import(python: Path, cwd: Path, env: dict) -> None:
     the same loader env as `run_pytests` so the native extension can resolve
     `libhipdnn_backend` and its transitive ROCm deps.
     """
-    subprocess.check_call(
+    subprocess.run(
         [str(python), "-c", "import hipdnn_frontend; print(hipdnn_frontend.__file__)"],
         cwd=cwd,
         env=env,
+        check=True,
+        timeout=_TIMEOUT_IMPORT_CHECK,
     )
 
 
 def run_pytests(python: Path, tests_dir: Path, env: dict) -> None:
     """Run the upstream hipDNN Python test suite."""
     # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
-    subprocess.check_call(
+    subprocess.run(
         [str(python), "-m", "pytest", "-v", str(tests_dir)],
         env=env,
         cwd=str(tests_dir),
+        check=True,
+        timeout=_TIMEOUT_PYTEST,
     )
 
 
