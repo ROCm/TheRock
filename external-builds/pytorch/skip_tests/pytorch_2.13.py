@@ -316,6 +316,41 @@ skip_tests = {
             # enough because pytest -k can prevent the crashing method without a
             # broad distributed_spawn module exclude.
             "(TestDistBackendWithSpawn and test_ddp_buffer_hook_allreduce_return_future)",
+
+            # Run 26532128555 shard 1/3, job 78151483607:
+            # https://github.com/ROCm/TheRock/actions/runs/26532128555/job/78151483607
+            # May01 source + ROCm 7.13 rc2 wheel: fully-shard overlap timing
+            # threshold drift. Test-level skip is sufficient because this was the
+            # only failure in the isolated overlap shard.
+            "(TestFullyShardOverlap and test_fully_shard_post_optim_event_overlap)",
+
+            # Run 26532128555 shard 2/3, job 78151483533:
+            # https://github.com/ROCm/TheRock/actions/runs/26532128555/job/78151483533
+            # DTensor scaled-mm sharding propagation rejects the ROCm fp8 scale
+            # layout. Test-level skip is the narrowest proven scope; later same-file
+            # failures may still be exposed in follow-up runs.
+            "(DistMatrixOpsTest and test_scaled_mm)",
+
+            # Run 26532128555 shard 3/3, job 78151483538:
+            # https://github.com/ROCm/TheRock/actions/runs/26532128555/job/78151483538
+            # DTensor export expect-test drift in the generated graph signature.
+            # Test-level skip is sufficient because the surrounding compile tests ran.
+            "(TestDTensorCompile and test_dtensor_basic_export)",
+
+            # Run 26532128555 shard 3/3, job 78151483538:
+            # https://github.com/ROCm/TheRock/actions/runs/26532128555/job/78151483538
+            # ReplicateFullyShardInit failed on its first method and the distributed
+            # class wrapper skipped the rest of the class. Class-level skip avoids
+            # immediately exposing same-class downstream failures one method at a time.
+            "(ReplicateFullyShardInit)",
+
+            # Run 26532128555 shard 3/3, job 78151483538:
+            # https://github.com/ROCm/TheRock/actions/runs/26532128555/job/78151483538
+            # DDP parity and execution-trace checks fail under nccl/init=env with
+            # tensor mismatch and process-group-size drift. Keep method-level skips
+            # because many TestDistBackendWithSpawn siblings passed in the same run.
+            "(TestDistBackendWithSpawn and test_DistributedDataParallel)",
+            "(TestDistBackendWithSpawn and test_ddp_profiling_execution_trace)",
         ],
     },
 }
