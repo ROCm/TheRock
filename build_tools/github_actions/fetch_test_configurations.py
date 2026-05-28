@@ -126,6 +126,73 @@ _rocgdb_common = {
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
+
+TEST_TYPE_ALIASES = {"smoke": "quick"}
+
+# Canonical test_type values produced by configure_ci.py. Kept in sync with
+# VALID_TEST_CATEGORIES in test_executable_scripts/test_runner.py.
+CANONICAL_TEST_TYPES = frozenset({"quick", "standard", "comprehensive", "full"})
+
+
+def _resolve_timeout(value: int | dict[str, int], test_type: str) -> int:
+    """timeout_minutes may be an int (legacy) or a dict keyed by test_type
+    with an optional 'default' fallback. Returns an int."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, dict):
+        tt = TEST_TYPE_ALIASES.get(test_type, test_type)
+        if tt in value:
+            return int(value[tt])
+        if "default" in value:
+            return int(value["default"])
+        raise ValueError(
+            f"timeout_minutes dict has no '{tt}' or 'default' key: {value!r}"
+        )
+    raise TypeError(f"timeout_minutes must be int or dict, got {type(value).__name__}")
+
+
+def _validate_timeout_minutes(job_name: str, value) -> None:
+    """Fail-fast schema check for a component's timeout_minutes field.
+
+    Scalar int is always accepted. Dict must either contain 'default' or
+    cover every canonical test_type. Unknown keys (typos) are rejected.
+    Values must be positive ints.
+    """
+    if isinstance(value, bool):
+        raise TypeError(f"{job_name}: timeout_minutes must be int or dict, got bool")
+    if isinstance(value, int):
+        if value <= 0:
+            raise ValueError(
+                f"{job_name}: timeout_minutes must be positive, got {value}"
+            )
+        return
+    if not isinstance(value, dict):
+        raise TypeError(
+            f"{job_name}: timeout_minutes must be int or dict, "
+            f"got {type(value).__name__}"
+        )
+
+    allowed_keys = CANONICAL_TEST_TYPES | {"default"}
+    unknown = set(value) - allowed_keys
+    if unknown:
+        raise ValueError(
+            f"{job_name}: timeout_minutes has unknown keys {sorted(unknown)}; "
+            f"allowed: {sorted(allowed_keys)}"
+        )
+    if "default" not in value and not CANONICAL_TEST_TYPES.issubset(value):
+        missing = sorted(CANONICAL_TEST_TYPES - set(value))
+        raise ValueError(
+            f"{job_name}: timeout_minutes dict must contain 'default' or "
+            f"cover every canonical test_type; missing {missing}"
+        )
+    for k, v in value.items():
+        if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
+            raise ValueError(
+                f"{job_name}: timeout_minutes[{k!r}] must be a positive int, "
+                f"got {v!r}"
+            )
+
+
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
@@ -634,6 +701,18 @@ test_matrix = {
 }
 
 
+# Fail fast at import time if any matrix entry has a malformed timeout_minutes.
+for _name, _entry in test_matrix.items():
+    if "timeout_minutes" in _entry:
+        _validate_timeout_minutes(_name, _entry["timeout_minutes"])
+for _name, _entry in functional_matrix.items():
+    if "timeout_minutes" in _entry:
+        _validate_timeout_minutes(_name, _entry["timeout_minutes"])
+for _name, _entry in benchmark_matrix.items():
+    if "timeout_minutes" in _entry:
+        _validate_timeout_minutes(_name, _entry["timeout_minutes"])
+
+
 def run():
     platform = os.getenv("RUNNER_OS").lower()
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
@@ -709,12 +788,13 @@ def run():
                 if test_type == "quick":
                     total_shards = 1
                 shard_arr = list(range(1, total_shards + 1))
+                resolved_timeout = _resolve_timeout(base["timeout_minutes"], test_type)
 
                 pal_entry = {
                     **_common_settings,
                     "job_name": "hip-tests (PAL)",
                     "fetch_artifact_args": base["fetch_artifact_args"],
-                    "timeout_minutes": base["timeout_minutes"],
+                    "timeout_minutes": resolved_timeout,
                     "test_script": base["test_script"],
                     "platform": base["platform"],
                     "total_shards": total_shards,
@@ -729,7 +809,7 @@ def run():
                         **_common_settings,
                         "job_name": "hip-tests (ROCR)",
                         "fetch_artifact_args": base["fetch_artifact_args"],
-                        "timeout_minutes": base["timeout_minutes"],
+                        "timeout_minutes": resolved_timeout,
                         "test_script": base["test_script"],
                         "platform": base["platform"],
                         "total_shards": total_shards,
@@ -743,6 +823,10 @@ def run():
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
+            if "timeout_minutes" in job_config_data:
+                job_config_data["timeout_minutes"] = _resolve_timeout(
+                    job_config_data["timeout_minutes"], test_type
+                )
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index

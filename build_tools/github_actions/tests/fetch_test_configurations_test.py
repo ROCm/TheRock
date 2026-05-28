@@ -390,6 +390,182 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
+    # -----------------------
+    # Per-category timeout_minutes resolution (end-to-end via run())
+    # -----------------------
+
+    def test_miopen_per_category_timeout_resolved(self):
+        """miopen ships a dict timeout_minutes; each TEST_TYPE resolves to its int."""
+        os.environ["PROJECTS_TO_TEST"] = "miopen"
+        expected = {
+            "quick": 30,
+            "standard": 60,
+            "comprehensive": 120,
+            "full": 120,
+        }
+        for test_type, want in expected.items():
+            with self.subTest(test_type=test_type):
+                self.gha_output.clear()
+                os.environ["TEST_TYPE"] = test_type
+                fetch_test_configurations.run()
+                components = self._get_components()
+                miopen = next(j for j in components if j["job_name"] == "miopen")
+                self.assertEqual(miopen["timeout_minutes"], want)
+
+    def test_scalar_timeout_unchanged_for_other_components(self):
+        """Legacy scalar timeout_minutes passes through across all TEST_TYPE values."""
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+        expected = fetch_test_configurations.test_matrix["rocblas"]["timeout_minutes"]
+        self.assertIsInstance(expected, int)
+        for test_type in ("quick", "standard", "comprehensive", "full"):
+            with self.subTest(test_type=test_type):
+                self.gha_output.clear()
+                os.environ["TEST_TYPE"] = test_type
+                fetch_test_configurations.run()
+                components = self._get_components()
+                rocblas = next(j for j in components if j["job_name"] == "rocblas")
+                self.assertEqual(rocblas["timeout_minutes"], expected)
+
+    def test_windows_hip_tests_uses_resolved_timeout(self):
+        """The Windows hip-tests path has its own _resolve_timeout call site.
+
+        Patch hip-tests to a dict timeout to confirm both PAL and ROCR entries
+        carry the resolved int.
+        """
+        os.environ["RUNNER_OS"] = "Windows"
+        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
+        os.environ["TEST_TYPE"] = "standard"
+        os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
+
+        orig = fetch_test_configurations.test_matrix["hip-tests"]["timeout_minutes"]
+        fetch_test_configurations.test_matrix["hip-tests"]["timeout_minutes"] = {
+            "default": 90,
+            "quick": 15,
+        }
+        try:
+            fetch_test_configurations.run()
+            components = self._get_components()
+            hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
+            self.assertEqual(len(hip_jobs), 2)
+            for job in hip_jobs:
+                self.assertEqual(job["timeout_minutes"], 90)
+        finally:
+            fetch_test_configurations.test_matrix["hip-tests"]["timeout_minutes"] = orig
+
+
+class ResolveTimeoutTest(unittest.TestCase):
+    """Unit tests for fetch_test_configurations._resolve_timeout()."""
+
+    def test_int_passthrough(self):
+        self.assertEqual(fetch_test_configurations._resolve_timeout(60, "quick"), 60)
+        self.assertEqual(fetch_test_configurations._resolve_timeout(120, "full"), 120)
+
+    def test_dict_exact_key(self):
+        d = {"quick": 30, "standard": 60, "comprehensive": 120, "full": 120}
+        for test_type, want in d.items():
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    fetch_test_configurations._resolve_timeout(d, test_type), want
+                )
+
+    def test_dict_default_fallback(self):
+        d = {"default": 45}
+        for test_type in ("quick", "standard", "comprehensive", "full"):
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    fetch_test_configurations._resolve_timeout(d, test_type), 45
+                )
+
+    def test_dict_smoke_aliases_to_quick(self):
+        d = {"quick": 10, "default": 99}
+        self.assertEqual(fetch_test_configurations._resolve_timeout(d, "smoke"), 10)
+
+    def test_dict_missing_key_and_no_default_raises(self):
+        d = {"quick": 10}
+        with self.assertRaises(ValueError):
+            fetch_test_configurations._resolve_timeout(d, "standard")
+
+    def test_invalid_type_raises(self):
+        with self.assertRaises(TypeError):
+            fetch_test_configurations._resolve_timeout("60", "quick")
+        with self.assertRaises(TypeError):
+            fetch_test_configurations._resolve_timeout(None, "quick")
+
+
+class ValidateTimeoutMinutesTest(unittest.TestCase):
+    """Unit tests for fetch_test_configurations._validate_timeout_minutes()."""
+
+    def _ok(self, value):
+        fetch_test_configurations._validate_timeout_minutes("job", value)
+
+    def test_positive_int_ok(self):
+        self._ok(1)
+        self._ok(60)
+        self._ok(7200)
+
+    def test_zero_or_negative_int_raises(self):
+        with self.assertRaises(ValueError):
+            self._ok(0)
+        with self.assertRaises(ValueError):
+            self._ok(-5)
+
+    def test_bool_rejected(self):
+        # True/False are technically int subclasses; the validator must reject them.
+        with self.assertRaises(TypeError):
+            self._ok(True)
+        with self.assertRaises(TypeError):
+            self._ok(False)
+
+    def test_non_dict_non_int_raises(self):
+        for bad in ("60", 60.0, None, [60], (60,)):
+            with self.subTest(value=bad):
+                with self.assertRaises(TypeError):
+                    self._ok(bad)
+
+    def test_dict_with_default_ok(self):
+        self._ok({"default": 60})
+        self._ok({"default": 60, "quick": 30})
+
+    def test_dict_with_all_canonical_ok(self):
+        self._ok({"quick": 30, "standard": 60, "comprehensive": 120, "full": 120})
+
+    def test_dict_with_partial_keys_no_default_raises(self):
+        with self.assertRaises(ValueError):
+            self._ok({"quick": 30})
+        with self.assertRaises(ValueError):
+            self._ok({"quick": 30, "standard": 60})
+
+    def test_dict_with_unknown_key_raises(self):
+        with self.assertRaises(ValueError):
+            self._ok({"default": 60, "comprehesnive": 120})
+        with self.assertRaises(ValueError):
+            self._ok({"default": 60, "sanity": 5})
+
+    def test_dict_with_non_positive_value_raises(self):
+        with self.assertRaises(ValueError):
+            self._ok({"default": 0})
+        with self.assertRaises(ValueError):
+            self._ok({"default": 60, "quick": -1})
+
+    def test_dict_with_bool_value_raises(self):
+        with self.assertRaises(ValueError):
+            self._ok({"default": True})
+
+    def test_dict_with_non_int_value_raises(self):
+        with self.assertRaises(ValueError):
+            self._ok({"default": "60"})
+        with self.assertRaises(ValueError):
+            self._ok({"default": 60.0})
+
+    def test_shipped_miopen_entry_is_valid(self):
+        """Pin the canonical example: the miopen dict in test_matrix passes."""
+        miopen_timeout = fetch_test_configurations.test_matrix["miopen"][
+            "timeout_minutes"
+        ]
+        # Sanity: this is the dict form we expect to be testing.
+        self.assertIsInstance(miopen_timeout, dict)
+        fetch_test_configurations._validate_timeout_minutes("miopen", miopen_timeout)
+
 
 if __name__ == "__main__":
     unittest.main()
