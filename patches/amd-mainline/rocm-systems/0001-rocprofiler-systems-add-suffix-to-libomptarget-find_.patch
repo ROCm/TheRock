@@ -1,0 +1,27 @@
+From f0bf6a4407a1a7c3ab027aefa6aaf9278921f671 Mon Sep 17 00:00:00 2001
+From: Ethan Stewart <ethan.stewart@amd.com>
+Date: Thu, 28 May 2026 17:25:07 -0500
+Subject: [PATCH] [rocprofiler-systems] - add suffix to libomptarget
+ find_library
+
+Temporary fix to get unblocked.
+---
+ .../rocprofiler-systems/examples/openmp/target/CMakeLists.txt   | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt b/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
+index c415ecf0c5..b9f9a31318 100644
+--- a/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
++++ b/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
+@@ -67,7 +67,7 @@ set(_LLVM_LIB_HINTS
+ )
+ 
+ # Find libomptarget
+-find_library(LIBOMPTARGET_SO NAMES omptarget HINTS ${_LLVM_LIB_HINTS})
++find_library(LIBOMPTARGET_SO NAMES omptarget HINTS ${_LLVM_LIB_HINTS} PATH_SUFFIXES x86_64-unknown-linux-gnu)
+ 
+ if(NOT LIBOMPTARGET_SO)
+     message(FATAL_ERROR "Could not find libomptarget in any of:\n  ${_LLVM_LIB_HINTS}")
+-- 
+2.34.1
+
