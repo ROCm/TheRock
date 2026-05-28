@@ -322,15 +322,12 @@ PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 
 ## Nightly releases
 
-Per-family Windows nightly workflows build `triton_windows` only for
-`pytorch_git_ref: nightly` (upstream `pytorch/pytorch` nightlies). Stable
-`release/*` branches from [ROCm/pytorch](https://github.com/ROCm/pytorch) currently
-build `torch`, `torchaudio`, and `torchvision` without Triton. Built wheels are
-uploaded alongside the other PyTorch packages on each family's index (for example
-`https://rocm.nightlies.amd.com/v2/gfx1151/triton_windows/`).
-
-Multi-arch Windows releases publish `triton_windows` to the unified index at
-`https://rocm.nightlies.amd.com/whl-multi-arch/`.
+For Windows workflows, `triton_windows` is built only when
+`pytorch_git_ref` is `nightly` (upstream `pytorch/pytorch` nightlies). For
+stable `release/*` refs from [ROCm/pytorch](https://github.com/ROCm/pytorch),
+the build currently produces `torch`, `torchaudio`, and `torchvision` without
+Triton. Windows nightly releases publish `triton_windows` to the unified
+multi-arch index at `https://rocm.nightlies.amd.com/whl-multi-arch/`.
 
 ### Gating releases with Pytorch tests
 

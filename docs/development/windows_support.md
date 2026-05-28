@@ -339,13 +339,13 @@ and require MSVC (Developer Command Prompt) plus a one-time download of a pinned
 LLVM toolchain; see
 [Triton on Windows](../../external-builds/pytorch/README.md#triton-on-windows).
 
-**Installing nightly wheels:** Use a per-family index at
-`https://rocm.nightlies.amd.com/v2/<amdgpu-family>/` (for example `gfx1151` for
-Strix Halo). Example:
+**Installing nightly wheels:** Use the unified multi-arch index at
+`https://rocm.nightlies.amd.com/whl-multi-arch/` and select your GPU target
+with device extras (for example `gfx1151` for Strix Halo). Example:
 
 ```powershell
-pip install --pre --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ `
-  torch torchaudio torchvision
+pip install --pre --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ `
+  "torch[device-gfx1151]" "torchvision[device-gfx1151]" torchaudio
 # triton_windows is pulled in automatically for nightly torch wheels
 ```
 
