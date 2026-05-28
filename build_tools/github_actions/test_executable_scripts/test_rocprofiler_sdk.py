@@ -4,6 +4,7 @@
 import logging
 import os
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 import sys
@@ -29,6 +30,34 @@ ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
 
 logging.basicConfig(level=logging.INFO)
 environ_vars = os.environ.copy()
+
+
+def install_mpi():
+    # OpenMPI is required so CMake's find_package(MPI) succeeds and the
+    # rocprofv3-test-mpi-ranks-with-mpi* tests in
+    # tests/rocprofv3/mpi-ranks/CMakeLists.txt flip from DISABLED to enabled.
+    # The default CI container (no_rocm_image_ubuntu24_04) ships without MPI.
+    if shutil.which("mpiexec"):
+        logging.info("mpiexec already present; skipping OpenMPI install")
+        return
+
+    apt_env = os.environ.copy()
+    apt_env["DEBIAN_FRONTEND"] = "noninteractive"
+
+    apt_update_cmd = ["apt-get", "update", "-qq"]
+    apt_install_cmd = [
+        "apt-get",
+        "install",
+        "-y",
+        "--no-install-recommends",
+        "openmpi-bin",
+        "libopenmpi-dev",
+    ]
+
+    logging.info(f"++ Exec $ {shlex.join(apt_update_cmd)}")
+    subprocess.run(apt_update_cmd, check=True, env=apt_env)
+    logging.info(f"++ Exec $ {shlex.join(apt_install_cmd)}")
+    subprocess.run(apt_install_cmd, check=True, env=apt_env)
 
 
 def setup_env():
@@ -111,6 +140,7 @@ def execute_tests():
 
 
 if __name__ == "__main__":
+    install_mpi()
     setup_env()
     cmake_config()
     cmake_build()
