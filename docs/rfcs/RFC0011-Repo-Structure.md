@@ -1,11 +1,21 @@
 ---
 author: Saad Rahim (saadrahim)
 created: 2026-04-08
-modified: 2026-05-26
+modified: 2026-05-28
 status: draft
 ---
 
 # ROCm software ecosystem package repository structure
+
+## Related RFCs
+
+- **RFC0008** — multi-arch Python wheels and device extras (source of the
+  `pyindex/multi-arch/` model used here).
+- **RFC0009** — native packaging conventions (source of the
+  `amdrocm<major>-<project>` package-naming family referenced for extras).
+- **RFC0012** — end-user projects independent release lifecycle (defines
+  the per-project release model for extras; this RFC defines where those
+  artifacts land on `repo.amd.com`).
 
 ## Overview
 
@@ -15,10 +25,21 @@ repo.amd.com's open source software release publications need standardization. I
 
 - Repository Streams
   - nightly - nightly builds from the develop branch
-  - stablerc - release candidate builds for the next stable release
+  - rc - release candidate builds for the next stable release
   - stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
   - ltsrc - *(future)* release candidate builds for the next LTS release
   - lts - *(future)* long term stability (LTS) releases
+
+  > **Note on stream vocabulary:** RFC0012 does not define a strict
+  > stream taxonomy for extras — it only states that extras may publish
+  > "nightly / pre-release builds … to a staging repository for early
+  > validation" alongside ordinary releases. The canonical streams on
+  > `repo.amd.com` are the ones defined in this RFC
+  > (`nightly`/`rc`/`stable`, with `ltsrc`/`lts` reserved).
+  > Per-extra publishing maps into those streams as follows: nightly /
+  > staging builds → `nightly/`, pre-release builds intended for QA →
+  > `rc/`, GA releases → `stable/`. Each extra's release notes
+  > record which stream a given build landed in.
 - Products
   - Core SDK
   - expansions - SDK built with dependencies on the ROCm Core SDK
@@ -31,11 +52,53 @@ repo.amd.com's open source software release publications need standardization. I
   - `pyindex/multi-arch-compat/` — backward-compatible multi-arch index
     where `pip install rocm` pulls in all device extras automatically
 
+## Stream Subdomains
+
+Each release stream is hosted at its own subdomain of `repo.amd.com`,
+using the pattern `<stream>.repo.amd.com`. The subdomain *is* the
+stream selector — stream-scoped paths sit at the root of the subdomain
+rather than under a `<stream>/` prefix on the parent domain.
+
+| Stream                | Subdomain                  | Status                  |
+| :-------------------- | :------------------------- | :---------------------- |
+| nightly               | `nightly.repo.amd.com`     | required at v1          |
+| rc              | `rc.repo.amd.com`    | required at v1          |
+| stable                | `stable.repo.amd.com`      | required at v1          |
+| ltsrc                 | `ltsrc.repo.amd.com`       | future (reserved)       |
+| lts                   | `lts.repo.amd.com`         | future (reserved)       |
+| archives              | `archives.repo.amd.com`    | required at v1          |
+| amd-repos (repo pkgs) | `amd-repos.repo.amd.com`   | required at v1          |
+
+Rules:
+
+- Each subdomain serves **only** the artifacts for its own stream. There
+  is no cross-stream pathing on a single subdomain.
+- The folder hierarchy under each subdomain matches the per-stream
+  structure defined in the next section (e.g. `core/`, `expansions/`,
+  `extras-[ROCm-major]/`, `pyindex/`, `pytorch/`, etc.).
+- The bare `repo.amd.com` domain serves as a **navigation landing
+  page only**: it must list and link to every stream subdomain so a
+  user starting at `https://repo.amd.com/` can click through to any
+  active stream. It is **not** required to serve any artifact content
+  directly — `repo.amd.com/<stream>/...` paths are not part of the
+  contract, and canonical artifact URLs live exclusively on the stream
+  subdomains. The landing page is the only required content at the
+  bare domain.
+- `amdrocm-repo` packages (see Repository Package section) point
+  `baseurl` / APT sources at the stream subdomain selected by the user's
+  active stream variable (e.g. `https://${amdrocm_release_stream}.repo.amd.com/...`).
+- TLS certificates must cover every stream subdomain (wildcard
+  `*.repo.amd.com` is acceptable).
+- Reserved future subdomains (`ltsrc`, `lts`) must resolve before
+  content is published, even if they initially serve an empty index, so
+  that repo-package definitions referencing them do not break.
+
 ## Repository Structure
 
-`repo.amd.com` will have the following folder structure:
+`repo.amd.com` will have the following folder structure (replicated under
+each stream subdomain as described above):
 
-- **amdgpu** *(reserved for future use; follows the same stream structure as `rocm-platform`: **nightly**, **stablerc**, **stable**, **ltsrc**, **lts**)*
+- **amdgpu** *(reserved for future use; follows the same stream structure as `rocm-platform`: **nightly**, **rc**, **stable**, **ltsrc**, **lts**)*
 - **amdrepos**
   - packages
     - **Linux Distros [a–z]**
@@ -44,26 +107,89 @@ repo.amd.com's open source software release publications need standardization. I
 - **rocm-platform**
 
   - **nightly** *(Retention policy: 30 dev, 120 nightly)*
-    - **pyindex** *(see Python Indices section)*
-      - **multi-arch** *(device extras specified manually)*
-      - **multi-arch-compat** *(backward-compatible; `pip install rocm` pulls in all device extras)*
+    - **pyindex/** — **central** PEP 503 simple index for the entire
+      stream. A single `pyindex/` serves wheels from every wheel-
+      producing area in the stream (`core/`, `expansions/`,
+      wheel-producing extras, `pytorch/`, `jax/`, `onnx-runtime/`).
+      There is no per-package `pyindex/`. Required sub-folders:
+      - **one/** — single-arch variant (user picks device extras)
+      - **all/** — all-arch variant (`pip install rocm` pulls in every
+        device extra automatically)
+
+      See Python Indices section.
     - **core**
       - tarball
       - zip
       - installers
-      - whl
+      - **whl** — must publish two variants: (1) single-arch wheels
+        where the user picks device extras at install time, and (2)
+        all-arch wheels where `pip install rocm` pulls in every device
+        extra automatically. Internal folder layout, filenames, and
+        sub-paths are implementation details left to the publish
+        tooling — not consumed by humans.
       - packages
         - **Linux Distros [a–z]**
     - **windows**
       - MSI and EXE files for Windows
     - **expansions [a–z]** *(e.g. **hpc-sdk** — see HPC SDK Release Model section)*
       - tarball
-      - whl
+      - **whl** — same two-variant rule as `core/whl` (single-arch +
+        all-arch). Internal layout is implementation-defined.
       - packages
     - **extras-[ROCm-major]** #projects released independently for each ROCm major version
-      - **Decision:** per-project folder structure (each extra gets its own
-        folder; allows S3 bucket permission granularity by group). Flat
-        structure was considered and rejected.
+      - **Decision:** per-project folder structure on `repo.amd.com` (each
+        extra gets its own folder; allows S3 bucket permission granularity
+        by group). A flat distribution structure was considered and rejected.
+      - **Distribution vs install layout — these are separate concerns
+        and do not conflict:**
+        - *Distribution layout* (this RFC, on `repo.amd.com`): **per
+          project**. Each extra has its own folder under
+          `extras-[ROCm-major]/` (e.g.
+          `rocm-platform/stable/extras-7/rvs/`,
+          `.../extras-7/rocoptiq/`). Chosen so S3 bucket permissions can
+          be granted per project/group.
+        - *Install layout* (RFC0012, on the user's disk): **flat**. After
+          install, all extras for a given ROCm major share a single
+          merged tree (e.g. `/opt/rocm/extras-7/bin/`,
+          `/opt/rocm/extras-7/lib/`, ...) — binaries and libraries from
+          different extras live side-by-side, not in per-project
+          subdirectories.
+        - The two layouts are independent: per-project folders on
+          `repo.amd.com` are how artifacts are *published and
+          permissioned*; the flat tree under `/opt/rocm/extras-7/` is how
+          they are *installed and consumed*. A reader should not infer
+          that the on-disk layout mirrors the publication folders, or
+          vice versa. RFC0012 is the source of truth for the install
+          layout.
+        - **Name-collision note:** the string `extras-7` appears in both
+          places (`rocm-platform/<stream>/extras-7/` here and
+          `/opt/rocm/extras-7/` in RFC0012) **because both are scoped to
+          the ROCm major version**, not because one mirrors the other.
+          The matching name is a coincidence of versioning, not a layout
+          guarantee — distribution folders and install prefixes remain
+          governed by their respective RFCs.
+      - **Package naming:** native packages for extras follow the
+        `amdrocm<major>-<project>` convention on `repo.amd.com` (e.g.
+        `amdrocm7-rvs`, `amdrocm7-rocoptiq`); the **distro-native**
+        equivalent shipped through distro repositories is
+        `rocm<major>-<project>` (e.g. `rocm7-rvs`). Optional `-devel` /
+        `-dev` sibling packages follow the same prefix when an extra
+        exposes a public API. See RFC0009 and RFC0012 §5 for the full
+        naming and split rules.
+      - **Versioning:** extras use **semver**
+        (`<project>-<major>.<minor>.<patch>`, e.g. `rvs-1.2.0`) per
+        RFC0012 §2. The date-based `YYYY.MM` scheme used elsewhere in
+        this RFC is **HPC-SDK-only** and must not be applied to extras.
+      - **Python wheels for extras:** when an extra ships a wheel, the
+        selector package is named `rocm<major>-<project>` (per RFC0012
+        §5) and declares `Requires-Dist: rocm[core] >=X.0, <(X+1).0`.
+        Wheels are published through `pyindex/multi-arch{,-compat}/`
+        like all other ROCm wheels.
+      - **Major-version compatibility:** each `extras-[ROCm-major]`
+        directory is the compatibility boundary. An extra published under
+        `extras-7` is guaranteed to install against any ROCm 7.x Core SDK
+        release; cross-major compatibility is not promised. See RFC0012
+        for the full compat contract.
       - **rvs**
         - tarball
         - packages
@@ -74,16 +200,13 @@ repo.amd.com's open source software release publications need standardization. I
       - **omnistat**
         - whl
     - **pytorch**
-      - **nightly**
-        - whl
-      - **stablerc**
-        - whl
-      - **stable**
-        - whl
+      - **nightly** — `whl` (two variants, same rule as `core/whl`)
+      - **rc** — `whl` (two variants, same rule as `core/whl`)
+      - **stable** — `whl` (two variants, same rule as `core/whl`)
     - **jax** *(follows the same stream and artifact rules as **pytorch**)*
     - **onnx-runtime** *(follows the same stream and artifact rules as **pytorch**)*
 
-  - **stablerc** *(Retention policy: 2 years)*
+  - **rc** *(Retention policy: 2 years)*
 
     - Release candidate builds for the next stable release
     - Mirrors nightly folder structure
@@ -112,34 +235,99 @@ ROCm publishes wheels through two parallel multi-arch indices, per the
 direction in ROCm/TheRock#5289. Per-family indices were considered and
 rejected — only the two multi-arch flavors below are in scope.
 
-- **`pyindex/multi-arch/`** — multi-arch index where the user explicitly
-  picks the device extras they need. Smaller installs, but the user
-  must know their target architecture.
+**`pyindex/` is central** — a single PEP 503 simple index per stream
+serves wheels from every wheel-producing area in that stream (`core/`,
+`expansions/`, any extras that ship wheels, `pytorch/`, `jax/`,
+`onnx-runtime/`). There is no per-package `pyindex/`. Centralizing the
+index lets `pip install rocm` (and `pip install torch`, `pip install
+jax`, etc.) resolve cross-package dependencies in one resolution pass
+against a single `--index-url`.
+
+The central index has **two required sub-folders**:
+
+- **`pyindex/one/`** — single-arch variant. The user explicitly picks
+  the device extras they need. Smaller installs, but the user must
+  know their target architecture.
   ```
-  pip install --index-url https://repo.amd.com/.../pyindex/multi-arch/ rocm[device-gfx942]
+  pip install --index-url https://<stream>.repo.amd.com/pyindex/one/ rocm[device-gfx942]
   ```
 
-- **`pyindex/multi-arch-compat/`** — backward-compatible multi-arch
-  index. `pip install rocm` (or `pip install torch`) pulls in **all**
-  device extras automatically, matching the "it just works" behavior
-  users expect from `pip install torch --index-url
-  https://download.pytorch.org/whl/rocm7.2`. Larger download (~5.5 GB
-  for the torch case), but no architecture knowledge required.
+- **`pyindex/all/`** — all-arch variant. `pip install rocm` (or `pip
+  install torch`) pulls in **all** device extras automatically,
+  matching the "it just works" behavior users expect from `pip install
+  torch --index-url https://download.pytorch.org/whl/rocm7.2`. Larger
+  download (~5.5 GB for the torch case), but no architecture knowledge
+  required.
   ```
-  pip install --index-url https://repo.amd.com/.../pyindex/multi-arch-compat/ rocm
+  pip install --index-url https://<stream>.repo.amd.com/pyindex/all/ rocm
   ```
 
-Both indices ship under every stream that publishes wheels (`nightly`,
-`stablerc`, `stable`; not `ltsrc`/`lts` until LTS exists), and both are
-built from the same underlying wheel set — `multi-arch-compat/` simply
-republishes the entry-point wheels (`rocm`, `torch`, `torchvision`, …)
-with `device-all` added as an automatic requirement, plus links to the
-unmodified device wheels in `multi-arch/` so storage is not duplicated.
+> **Naming note:** the `one/` and `all/` sub-folders under `pyindex/`
+> are required and stable — they are the entry points that
+> `amdrocm-repo` templates into `--index-url` and are part of the
+> public contract. The layout *under* each (sharding, filename
+> conventions) and the layout of the underlying `whl/` folders that
+> back them remain implementation details left to the publish tooling
+> and are not required to be human-readable.
+
+Both variants ship under every stream that publishes wheels
+(`nightly`, `rc`, `stable`; not `ltsrc`/`lts` until LTS exists), and
+both are built from the same underlying wheel set — `pyindex/all/`
+simply republishes the entry-point wheels (`rocm`, `torch`,
+`torchvision`, …) with `device-all` added as an automatic requirement,
+plus links to the unmodified device wheels in `pyindex/one/` so
+storage is not duplicated.
+
+**Wheel-only ROCm dependency rule (applies to every wheel published on
+`repo.amd.com`):** any package distributed as a Python wheel — Core
+SDK wheels, expansion wheels, extras wheels, third-party AI fork
+wheels — **must obtain its ROCm dependency exclusively through
+`pyindex/`**. That is:
+
+- Wheel `install_requires` / `Requires-Dist` entries that resolve a
+  ROCm dependency must resolve to **other ROCm wheels served by
+  `pyindex/one/` or `pyindex/all/`**.
+- Wheels must not depend on, assume the presence of, or trigger the
+  installation of ROCm via any **non-wheel** channel: rpm/deb native
+  packages, tarballs, runfile installers, container base images,
+  out-of-band scripts, etc. If a wheel needs HIP, a ROCm library, or
+  any other ROCm component, that component must itself be available as
+  a wheel through `pyindex/`.
+- A `pip install <pkg> --index-url https://<stream>.repo.amd.com/pyindex/{one,all}/`
+  must complete the entire ROCm install chain. The user must not be
+  required to run `yum`, `apt`, a `.run` installer, or extract a
+  tarball as a prerequisite.
+- Native package installs (rpm/deb/tar/runfile) remain the supported
+  path for users who want ROCm from native packages — but the **wheel
+  path is fully self-contained** and never crosses over into the
+  native-package world.
+
+This rule keeps every `pip`-driven install fully resolvable from a
+single `--index-url`, makes the wheel ecosystem reproducible across
+distros (and inside container images that have no system package
+manager), and ensures the central `pyindex/` is the single source of
+truth for the wheel side of the ROCm ecosystem.
 
 Future direction: WheelNext (`uv pip install` with a wheel-variant
 provider backed by `rocm-bootstrap`) is the long-term plan and will
-eventually make `multi-arch-compat/` unnecessary. Until that lands and
-is widely adopted, both indices must coexist.
+eventually make `pyindex/all/` unnecessary. Until that lands and is
+widely adopted, both variants must coexist.
+
+**Native multi-arch (parallel mechanism):** `pyindex/one/` and
+`pyindex/all/` cover the **wheel** side of multi-arch. The **native-package**
+side is covered by `rocm-kpack` per RFC0008 — host and device code are
+split into separate packages, with device code shipped either as
+per-architecture packages (`amdrocm-<library>-gfx<arch>`) or loaded at
+runtime from kpack archives. These device packages and the
+architecture-family meta-packages that group them (`rocm-gfx94X`,
+`rocm-gfx90X`, etc.) are published under
+`rocm-platform/<stream>/core/packages/<distro>/` alongside the host
+ROCm Core SDK packages — they are not a separate folder. Wheel
+multi-arch (via the two `pyindex` variants) and native multi-arch (via
+`rocm-kpack`) are sibling mechanisms: wheel users go through whichever
+`--index-url` matches their workflow, native users install the
+matching device or `rocm-gfx<family>X` package from `core/packages/`.
+RFC0008 owns the full multi-arch contract for both sides.
 
 ## Third Party AI Forks
 
@@ -155,17 +343,17 @@ Rules that apply to all third-party AI forks:
   (or upstream nightly), with ROCm patches applied on top. Metadata in
   every artifact records the upstream version and the ROCm version it
   was built against.
-- **Streams:** published only under `nightly/`, `stablerc/`, and
+- **Streams:** published only under `nightly/`, `rc/`, and
   `stable/`. Not published under `ltsrc/` or `lts/` — long-term-support
   guarantees do not extend to third-party fork builds.
 - **Artifact format:** `whl` only. No tarballs, no native distro
   packages — users install via `pip` from the matching ROCm wheel index.
 - **Dependency rule:** framework wheels must depend **only on Python
-  wheels of the ROCm Core SDK** (published under `core/whl/` and surfaced
-  through `pyindex/`). They must not depend on system packages, native
-  distro packages, or any non-wheel ROCm artifact. This keeps `pip
-  install` of a framework wheel fully self-contained and reproducible
-  across distros.
+  wheels of the ROCm Core SDK** (published under `core/whl/` and
+  surfaced through the central `pyindex/one/` and `pyindex/all/`).
+  They must not depend on system packages, native distro packages, or
+  any non-wheel ROCm artifact. This keeps `pip install` of a framework
+  wheel fully self-contained and reproducible across distros.
 - **Versioning:** uses the upstream framework's own version string
   (e.g. PyTorch's `2.x.y+rocm<rocm-version>` convention), not the ROCm
   `YYYYMM`/`YYYY.MM` scheme.
@@ -197,18 +385,55 @@ Rules:
   artifact in a different format (e.g. an rpm that quietly needs a wheel
   to be installed, or vice versa). Each install path must be
   self-sufficient.
+- **Host-only dependencies for extras (transitive chains stop at host
+  packages):** the **typical case** for extras (RFC0012 §5) is that
+  they call ROCm host APIs and do not ship their own GPU device code.
+  In that case, extras declare hard dependencies only on host-side ROCm
+  Core SDK packages (compilers, runtimes, host libraries). The
+  transitive dependency chain must terminate at host packages —
+  consuming-only extras must never pull in a specific GPU architecture
+  or any `amdrocm<major>-<library>-gfx*` device package as a hard
+  requirement, directly or transitively. Device coverage is the user's
+  choice at install time, selected via the multi-arch wheel index
+  (`pyindex/multi-arch/` with explicit `device-gfxNNNN` extras) or by
+  installing the matching device or architecture-family meta-packages
+  (e.g. `rocm-gfx94X`) alongside the extra. Recommended/suggested deps
+  (rpm `Recommends:`, deb `Recommends:`) are allowed for discoverability
+  but must remain non-hard.
+
+  - **Exception — extras that ship their own GPU kernels (RFC0012 §5,
+    "rare case"):** when an extra produces its own pre-compiled device
+    code, it must be split into per-architecture package variants named
+    `amdrocm<major>-<project>-gfx<arch>` (e.g.
+    `amdrocm7-mytool-gfx942`). Each architecture variant **may**
+    declare a hard dependency on the matching ROCm library device
+    package (e.g. `amdrocm-blas-gfx942`). The host-only rule applies
+    only to the consuming case; kernel-shipping extras are explicitly
+    exempt for their own device variants and only for them. The host
+    (non-`-gfx*`) package of such an extra still follows the host-only
+    rule.
+
+  - **CI enforcement:** the dependency-closure check runs in a
+    **host-only image** for every consuming extra; pulling in any
+    device package as a hard dep fails the publish. Kernel-shipping
+    `-gfx<arch>` variants are tested in an image with the matching
+    device packages installed.
+
+  This rule mirrors the device-extras model in RFC0008 and the
+  end-user-project dependency rules in RFC0012 §5, and applies to both
+  native packages and Python wheels.
 - **CI enforcement:** the publish pipeline runs a clean-environment
   install test for every expansion and extra in each stream
-  (`nightly`/`stablerc`/`stable`) on every supported distro. Missing
+  (`nightly`/`rc`/`stable`) on every supported distro. Missing
   transitive dependencies fail the publish.
-- **Meta-packages:** umbrella packages such as `rocm-hpc-YYYY.MM` (HPC
+- **Meta-packages:** umbrella packages such as `amdrocm-hpc-YYYY.MM` (HPC
   SDK) inherit this rule and additionally declare their hard dependency
   on the pinned ROCm Core SDK version.
 
 ## HPC SDK Release Model
 
 The HPC SDK is a ROCm expansion and is published under the `expansions [a–z]`
-folder of the matching `rocm-platform` stream (nightly, stablerc, stable,
+folder of the matching `rocm-platform` stream (nightly, rc, stable,
 ltsrc, lts). Unlike other expansions, it is released on its own cadence — decoupled
 from ROCm release cadence — and uses date-based versioning. This mirrors the
 model used by NVIDIA's HPC SDK, which is published independently of CUDA
@@ -227,12 +452,12 @@ releases.
   available regardless of LTS status.
 - **Patch releases:** bug fixes are delivered as patch releases (`YYYY.MM.N`)
   against the pinned ROCm version, on the same model as LTS maintenance.
-- **Streams (required in v1):** `nightly/`, `stablerc/`, and `stable/` are
+- **Streams (required in v1):** `nightly/`, `rc/`, and `stable/` are
   all required at launch. `ltsrc/` and `lts/` are reserved for future use,
   aligned with ROCm LTS.
   - `nightly/` — daily builds against the develop ROCm branch; retention
     matches the `rocm-platform` nightly policy (30 dev / 120 nightly).
-  - `stablerc/` — release candidates for the next stable HPC SDK, tested
+  - `rc/` — release candidates for the next stable HPC SDK, tested
     by QA, mirrors `stable/` layout. Retention: 2 years.
   - `stable/` — GA HPC SDK releases, pinned to a stable ROCm version.
     Retention: forever.
@@ -245,7 +470,7 @@ releases.
   (`expansions/hpc-sdk/nightly/<YYYYMMDD>/`).
 - **First target:** the first HPC SDK stable release is pinned to ROCm 7.14.
 - **Meta-package:** each release ships an installable umbrella package
-  `rocm-hpc-YYYY.MM` (rpm and deb) that depends on every HPC SDK component
+  `amdrocm-hpc-YYYY.MM` (rpm and deb) that depends on every HPC SDK component
   at the versions in that release, plus a hard dependency on the pinned
   ROCm Core SDK version. Patch releases update the component pins without
   changing the meta-package name.
