@@ -41,16 +41,7 @@ on:
         type: string
         default: "."
 # Reusable workflows declare the *minimum* permissions every caller
-# must grant. We intentionally do NOT request `security-events: write`
-# here even though the SARIF upload step needs it: declaring it at the
-# workflow level would force every PR caller (which typically only
-# asks for CSV/JSON artifacts) to grant it too, otherwise GitHub
-# rejects the call with `requesting 'security-events: write', but is
-# only allowed 'security-events: none'`. Instead, callers that
-# actually upload SARIF (e.g. `gitleaks_main.yml`) grant
-# `security-events: write` on their own `uses:` job, and the
-# upload-sarif step uses it transparently. PR callers that don't need
-# SARIF stay on the repo's restrictive default.
+# must grant.
 permissions:
   contents: read
 
@@ -93,7 +84,7 @@ jobs:
         with:
           sarif_file: ${{ steps.scan.outputs.sarif_path }}
           category: gitleaks
-
+ 
       - name: Upload non-SARIF reports
         if: always() && steps.scan.outputs.non_sarif_paths != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

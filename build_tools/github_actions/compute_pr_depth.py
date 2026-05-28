@@ -3,8 +3,6 @@
 # SPDX-License-Identifier: MIT
 """Compute the smallest `actions/checkout` fetch-depth for the current event."""
 
-from __future__ import annotations
-
 import sys
 from typing import Any
 
