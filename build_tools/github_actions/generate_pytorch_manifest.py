@@ -192,7 +192,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument(
         "--pytorch-git-ref",
         required=True,
-        help="PyTorch ref for manifest naming (e.g. nightly or release/2.8).",
+        help="PyTorch ref for manifest naming (e.g. nightly or release/2.10).",
     )
     ap.add_argument(
         "--pytorch-audio-git-ref",

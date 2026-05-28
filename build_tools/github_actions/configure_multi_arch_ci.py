@@ -806,10 +806,11 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
-    ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
     test_type: str,
+    pr_labels: list[str],
+    is_schedule: bool,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -824,12 +825,12 @@ def _expand_build_config_for_platform(
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
     """
-    build_variant = ci_inputs.build_variant
+    build_variant = variant_config["build_variant_label"]
 
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
     test_runner_kernel = ""
-    for label in ci_inputs.pr_labels:
+    for label in pr_labels:
         if label.startswith("test_runner:"):
             test_runner_kernel = label.split(":")[1]
             break
@@ -877,9 +878,9 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
-        # For ASAN builds, use sandbox runner to avoid impacting production
-        if build_variant == "asan":
+        if build_variant == "asan" or build_variant == "host-asan":
+            # TODO(#3433): Remove sandbox logic once ASAN tests are passing
+            # For ASAN builds, use sandbox runner to avoid impacting production
             if "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
@@ -901,7 +902,7 @@ def _expand_build_config_for_platform(
         # If nightly_check_only_for_family is set for schedule runs only
         if (
             platform_info.get("nightly_check_only_for_family", False)
-            and not ci_inputs.is_schedule
+            and not is_schedule
         ):
             test_runs_on = ""
             print(
@@ -929,7 +930,7 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, ci_inputs.build_variant)
+    build_runs_on = select_build_runner(platform, build_variant)
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -965,6 +966,10 @@ def expand_build_configs(
         ["presubmit", "postsubmit", "nightly"]
     )
     build_variant = ci_inputs.build_variant
+    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
+    # Otherwise, push events run "host-asan"
+    if build_variant == "asan" and ci_inputs.is_push:
+        build_variant = "host-asan"
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -983,10 +988,11 @@ def expand_build_configs(
         config = _expand_build_config_for_platform(
             families=families,
             platform=platform,
-            ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
             test_type=test_type,
+            pr_labels=ci_inputs.pr_labels,
+            is_schedule=ci_inputs.is_schedule,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
