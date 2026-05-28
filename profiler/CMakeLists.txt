@@ -272,12 +272,6 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 # rocprofiler-systems
 ##############################################################################
 if(THEROCK_ENABLE_ROCPROFSYS)
-  # Escape semicolons in GPU targets list to prevent shell interpretation
-  if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
-    set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
-  else()
-    string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
-  endif()
 
   therock_detect_python_versions(_rocprofsys_detected_python_executables _rocprofsys_detected_python_versions)
   if(NOT _rocprofsys_detected_python_versions OR NOT _rocprofsys_detected_python_executables)
