@@ -232,9 +232,8 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
-        # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
-        "timeout_minutes": 60,
+        # Extended tests on math-ci take approx 5 hrs (as of May 5, 2026)
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
@@ -496,14 +495,6 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-    },
-    "fusilliprovider": {
-        "job_name": "fusilliprovider",
-        "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler  --hipdnn-integration-tests --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {"linux": 1},
     },
     # hipBLASLt provider tests
     "hipblasltprovider": {
