@@ -891,7 +891,7 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan":
+        if build_variant == "asan" or build_variant == "host-asan":
             # Only run ASAN tests on scheduled or workflow_dispatch runs
             if not (is_schedule or is_workflow_dispatch):
                 test_runs_on = ""
