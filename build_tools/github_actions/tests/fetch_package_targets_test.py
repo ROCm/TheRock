@@ -157,7 +157,7 @@ class FetchPackageTargetsTest(unittest.TestCase):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
-        self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ccs-ossci-rocm")
+        self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_gfx94x_multi_label_selects_third_when_random_high(self):
         """When random() is high, third label should be selected."""
@@ -171,9 +171,7 @@ class FetchPackageTargetsTest(unittest.TestCase):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
-        self.assertEqual(
-            targets[0]["test_machine"], "linux-gfx942-1gpu-core42-ossci-rocm"
-        )
+        self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_families_without_multi_label_use_primary(self):
         """Families without multi-label config should use primary label."""
