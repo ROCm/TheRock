@@ -44,6 +44,7 @@ import os
 import shutil
 import sys
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -249,7 +250,10 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     if cache_file.exists():
         return
-    tmp = cache_file.with_suffix(cache_file.suffix + ".tmp")
+    # Unique temp name: distinct pointer files referencing the same content hash
+    # are materialized by separate workers, which would otherwise race on a
+    # shared `<cache_file>.tmp` path. os.replace stays atomic and idempotent.
+    tmp = cache_file.with_suffix(f"{cache_file.suffix}.{uuid.uuid4().hex}.tmp")
     try:
         try:
             os.link(src, tmp)

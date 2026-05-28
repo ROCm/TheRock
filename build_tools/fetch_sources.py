@@ -391,7 +391,7 @@ def run(args):
                 cwd=THEROCK_DIR,
             )
     if args.dvc_projects:
-        pull_large_files(args.dvc_projects, projects)
+        pull_large_files(args.dvc_projects, projects, jobs=args.jobs)
 
     # Fetch nested submodules
     if args.update_submodules:
@@ -414,10 +414,11 @@ def run(args):
         apply_patches(args, projects)
 
 
-def pull_large_files(dvc_projects, projects):
+def pull_large_files(dvc_projects, projects, jobs=None):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
         return
+    pull_jobs = jobs if jobs is not None else fetch_dvc_artifacts.DEFAULT_JOBS
     for project in dvc_projects:
         if not project in projects:
             continue
@@ -428,7 +429,7 @@ def pull_large_files(dvc_projects, projects):
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
             continue
         print(f"dvc config detected in {project_dir}, fetching large files")
-        result = fetch_dvc_artifacts.pull(project_dir)
+        result = fetch_dvc_artifacts.pull(project_dir, jobs=pull_jobs)
         print(
             f"  done: fetched={result.fetched} "
             f"cached={result.cached} skipped={result.skipped}"
