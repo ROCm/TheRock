@@ -21,12 +21,23 @@ fi
 rm -f $PREFIX/lib/*.la
 
 # Remove shared libraries that are not consumed downstream.
-# Only libiberty.a is needed by rocprofiler-systems / dyninst.
-rm -f "$PREFIX/lib"/libbfd*.so* \
-      "$PREFIX/lib"/libopcodes*.so* \
-      "$PREFIX/lib"/libctf*.so* \
-      "$PREFIX/lib"/libsframe*.so* \
-      "$PREFIX/lib"/libiberty*.so*
+# libiberty.so is created below. We run configure with --disable-shared,
+# so no shared libraries are built, but if that changes in the future,
+# make sure to delete any unneeded .so files, for example
+# rm -f "$PREFIX/lib"/libbfd*.so*
+
+# Create libiberty.so from the PIC-compiled libiberty.a so that downstream
+# consumers can dynamically link against it (required for GPL/LGPL compliance
+# in an MIT-licensed project).
+if [ -f "$PREFIX/lib/libiberty.a" ]; then
+  echo "Creating libiberty.so from libiberty.a..."
+  cc -shared \
+     -Wl,--whole-archive "$PREFIX/lib/libiberty.a" \
+     -Wl,--no-whole-archive \
+     -o "$PREFIX/lib/libiberty.so"
+  "${PATCHELF}" --set-rpath '$ORIGIN' "$PREFIX/lib/libiberty.so"
+  echo "Created $PREFIX/lib/libiberty.so"
+fi
 
 if [ -d "$PREFIX/lib/bfd-plugins" ]; then
   rm -rf $PREFIX/lib/bfd-plugins

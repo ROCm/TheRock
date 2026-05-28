@@ -7,16 +7,15 @@ if(_IMPORT_PREFIX STREQUAL "/")
 endif()
 
 set(LibIberty_FOUND TRUE)
-set(LibIberty_LIBRARIES "${_IMPORT_PREFIX}/lib/libiberty.a")
+set(LibIberty_LIBRARIES "${_IMPORT_PREFIX}/lib/libiberty.so")
 set(LibIberty_INCLUDE_DIRS "${_IMPORT_PREFIX}/include;${_IMPORT_PREFIX}/include/libiberty")
 set(LibIberty_LIBRARY_DIRS "${_IMPORT_PREFIX}/lib")
 
 if(NOT TARGET LibIberty::LibIberty)
-  add_library(LibIberty::LibIberty STATIC IMPORTED)
+  add_library(LibIberty::LibIberty SHARED IMPORTED)
   set_target_properties(LibIberty::LibIberty PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;${_IMPORT_PREFIX}/include/libiberty"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libiberty.a"
-    POSITION_INDEPENDENT_CODE ON
+    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libiberty.so"
   )
 endif()
 
