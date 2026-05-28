@@ -26,7 +26,6 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PACK_WHEEL_SCRIPT = SCRIPT_DIR / "hipdnn" / "pack_frontend_wheel.py"
 
 _HIPDNN_TESTS_ARTIFACT_RELPATH = Path("share/hipdnn/tests/python")
-_HIPDNN_TESTS_SOURCE_RELPATH = Path("projects/hipdnn/python/hipdnn_frontend/test")
 
 
 def _resolve_hipdnn_tests_dir(artifacts_path: Path) -> Path:
@@ -34,15 +33,12 @@ def _resolve_hipdnn_tests_dir(artifacts_path: Path) -> Path:
 
     Prefers the test artifact path (share/hipdnn/tests/python) so the test job
     validates exactly the artifacts it downloaded. Honors
-    HIPDNN_PYTHON_TESTS_DIR / ROCM_LIBRARIES_DIR for developer overrides
-    pointing at a rocm-libraries checkout.
+    HIPDNN_PYTHON_TESTS_DIR for developer overrides pointing at a local
+    rocm-libraries checkout.
     """
     override = os.getenv("HIPDNN_PYTHON_TESTS_DIR")
     if override:
         return Path(override).resolve()
-    rocm_libraries_dir = os.getenv("ROCM_LIBRARIES_DIR")
-    if rocm_libraries_dir:
-        return (Path(rocm_libraries_dir) / _HIPDNN_TESTS_SOURCE_RELPATH).resolve()
     return (artifacts_path / _HIPDNN_TESTS_ARTIFACT_RELPATH).resolve()
 
 
@@ -160,7 +156,7 @@ if __name__ == "__main__":
         raise FileNotFoundError(
             f"hipDNN upstream pytest directory not found: {tests_dir}. "
             "Ensure the hipDNN test artifact includes share/hipdnn/tests/python, "
-            "or set HIPDNN_PYTHON_TESTS_DIR / ROCM_LIBRARIES_DIR for local runs."
+            "or set HIPDNN_PYTHON_TESTS_DIR for local runs."
         )
 
     pkg_dir = find_pkg_dir(artifacts_path)
