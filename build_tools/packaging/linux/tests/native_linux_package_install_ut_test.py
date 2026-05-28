@@ -413,7 +413,7 @@ class MainValidationTest(unittest.TestCase):
                 "--test-type",
                 "sanity",
                 "--repo-url",
-                "https://x.com",
+                "https://repo_url.com",
                 "--gfx-arch",
                 "gfx94x",
             ],
@@ -451,7 +451,7 @@ class MainValidationTest(unittest.TestCase):
                 "--os-profile",
                 "ubuntu2404",
                 "--repo-url",
-                "https://x.com",
+                "https://repo_url.com",
             ],
         ):
             with self.assertRaises(SystemExit) as cm:
@@ -467,7 +467,7 @@ class MainValidationTest(unittest.TestCase):
                 "--test-type",
                 "install",
                 "--repo-url",
-                "https://x.com",
+                "https://repo_url.com",
                 "--gfx-arch",
                 "gfx94x",
             ],

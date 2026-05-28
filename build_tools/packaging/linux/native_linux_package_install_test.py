@@ -6,8 +6,6 @@
 Full installation and simulate-install test script for ROCm native packages.
 
 Test modes (--test-type):
-- install: Repo-based install only (step 1). No rocminfo or component checks.
-  Used by release workflows that dispatch install tests off the critical path.
 - sanity: Basic test. Repo-based install plus basic verification only
   (steps 1 and 2).
 - full: Full test. Repo-based install plus basic verification plus full
@@ -18,6 +16,8 @@ Test modes (--test-type):
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
+- install: Repo-based install only (step 1). No rocminfo or component checks.
+  Used by release workflows that dispatch install tests off the critical path.
 - simulate: Dry-run only. Simulated install of local .deb or .rpm files
   (apt install --simulate or rpm -Uvh --test --nodeps). No repo setup or
   actual install. Requires --packages-dir.
@@ -923,6 +923,11 @@ Examples:
  python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type install: install only
+ python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
+ --gfx-arch gfx94x --release-type dev --install-prefix /opt/rocm/core
 
  # Simulate install (dry-run) from local packages
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
