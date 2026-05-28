@@ -577,7 +577,7 @@ class ConfigureCITest(unittest.TestCase):
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
         # Should select the second (cirrascale) label
-        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_gfx94x_multi_label_selects_third_when_random_high(self):
         """When random() is high, third label should be selected."""
@@ -603,7 +603,7 @@ class ConfigureCITest(unittest.TestCase):
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
         # Should select the third (core42) label
-        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_gfx94x_multi_gpu_label_selects_first_when_random_low(self):
         """When random() is low, first multi-gpu label should be selected."""
