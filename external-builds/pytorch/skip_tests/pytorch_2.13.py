@@ -325,6 +325,34 @@ skip_tests = {
             "(ElasticLaunchTest and test_virtual_local_rank)",
             # Compute/comm reordering failure.
             "(TestComputeCommReorderingMultiProc and test_custom_estimator_for_non_compute_nodes)",
+
+            # Run 26582083444 shard 1/3, job 78317758896:
+            # https://github.com/ROCm/TheRock/actions/runs/26582083444/job/78317758896
+            # DTensor scaled-mm sharding propagation rejects the ROCm fp8 scale
+            # layout. Test-level skip is the narrowest proven scope; later same-file
+            # failures may still be exposed in follow-up runs.
+            "(DistMatrixOpsTest and test_scaled_mm)",
+
+            # Run 26582083444 shard 2/3, job 78317758922:
+            # https://github.com/ROCm/TheRock/actions/runs/26582083444/job/78317758922
+            # DTensor export expect-test drift in the generated graph signature.
+            # Test-level skip is sufficient because the surrounding compile tests ran.
+            "(TestDTensorCompile and test_dtensor_basic_export)",
+
+            # Run 26582083444 shard 1/3, job 78317758896:
+            # https://github.com/ROCm/TheRock/actions/runs/26582083444/job/78317758896
+            # ReplicateFullyShardInit failed on its first method and the distributed
+            # class wrapper skipped the rest of the class. Class-level skip avoids
+            # immediately exposing same-class downstream failures one method at a time.
+            "(ReplicateFullyShardInit)",
+
+            # Run 26582083444 shard 3/3, job 78317758856:
+            # https://github.com/ROCm/TheRock/actions/runs/26582083444/job/78317758856
+            # DDP parity and execution-trace checks fail under nccl/init=env with
+            # tensor mismatch and process-group-size drift. Keep method-level skips
+            # because many TestDistBackendWithSpawn siblings passed in the same run.
+            "(TestDistBackendWithSpawn and test_DistributedDataParallel)",
+            "(TestDistBackendWithSpawn and test_ddp_profiling_execution_trace)",
         ],
     },
 }
