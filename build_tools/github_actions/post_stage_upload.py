@@ -191,6 +191,9 @@ def run(args: argparse.Namespace):
         stage_name=args.stage,
         amdgpu_family=args.amdgpu_family,
     )
+    if args.stage != "foundation":
+        log("[INFO] Manifest upload is only performed by foundation stage. Skipping.")
+        return
 
     log("Upload manifest")
     log("---------------")
