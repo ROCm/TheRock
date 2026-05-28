@@ -84,7 +84,7 @@ jobs:
         with:
           sarif_file: ${{ steps.scan.outputs.sarif_path }}
           category: gitleaks
- 
+
       - name: Upload non-SARIF reports
         if: always() && steps.scan.outputs.non_sarif_paths != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
