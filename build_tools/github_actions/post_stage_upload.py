@@ -148,24 +148,11 @@ def upload_manifest(
 ):
     """Upload therock_manifest.json when present."""
 
-    manifest_paths = [
-        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json",
-        build_dir
-        / "base"
-        / "aux-overlay"
-        / "stage"
-        / "share"
-        / "therock"
-        / "therock_manifest.json",
-        build_dir / "dist" / "rocm" / "share" / "therock" / "therock_manifest.json",
-    ]
-
-    manifest_path = next(
-        (path for path in manifest_paths if path.is_file()),
-        None,
+    manifest_path = (
+        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
     )
 
-    if manifest_path is None:
+    if not manifest_path.is_file():
         log("[INFO] No therock_manifest.json found. Skipping upload.")
         return
 
@@ -191,17 +178,12 @@ def run(args: argparse.Namespace):
         stage_name=args.stage,
         amdgpu_family=args.amdgpu_family,
     )
-    if args.stage != "foundation":
-        log("[INFO] Manifest upload is only performed by foundation stage. Skipping.")
-        return
-
-    log("Upload manifest")
-    log("---------------")
-    upload_manifest(
-        build_dir=args.build_dir,
-        output_root=output_root,
-        backend=backend,
-    )
+    if args.stage == "foundation":
+        upload_manifest(
+            build_dir=args.build_dir,
+            output_root=output_root,
+            backend=backend,
+        )
 
 
 def main(argv: list[str] | None = None):
