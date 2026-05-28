@@ -160,6 +160,12 @@ Rules that apply to all third-party AI forks:
   guarantees do not extend to third-party fork builds.
 - **Artifact format:** `whl` only. No tarballs, no native distro
   packages — users install via `pip` from the matching ROCm wheel index.
+- **Dependency rule:** framework wheels must depend **only on Python
+  wheels of the ROCm Core SDK** (published under `core/whl/` and surfaced
+  through `pyindex/`). They must not depend on system packages, native
+  distro packages, or any non-wheel ROCm artifact. This keeps `pip
+  install` of a framework wheel fully self-contained and reproducible
+  across distros.
 - **Versioning:** uses the upstream framework's own version string
   (e.g. PyTorch's `2.x.y+rocm<rocm-version>` convention), not the ROCm
   `YYYYMM`/`YYYY.MM` scheme.
@@ -168,6 +174,36 @@ Rules that apply to all third-party AI forks:
   releases.
 - **Coverage list:** `pytorch`, `jax`, `onnx-runtime`. New third-party
   forks added to `repo.amd.com` follow this same model by default.
+
+## Dependency Closure for Expansions and Extras
+
+Every package published under `expansions/` and `extras-[ROCm-major]/`
+must declare a **complete dependency chain**. The goal is that a single
+one-line install command for any expansion or extra pulls in every
+required component automatically, with no manual follow-up.
+
+Rules:
+
+- **Native packages (rpm/deb):** `Requires:` / `Depends:` must list every
+  ROCm Core SDK package, expansion, or extra the component needs at
+  runtime, at the exact (or minimum-compatible) versions. A `yum install
+  <pkg>` or `apt install <pkg>` must succeed without the user adding
+  ROCm Core SDK packages by hand.
+- **Python wheels:** `install_requires` / `Requires-Dist` must list every
+  ROCm Core SDK wheel (and any other expansion wheel) the component
+  needs. A `pip install <pkg> --index-url <pyindex>` must pull in the
+  full chain.
+- **Cross-format:** packages must not silently rely on a parallel
+  artifact in a different format (e.g. an rpm that quietly needs a wheel
+  to be installed, or vice versa). Each install path must be
+  self-sufficient.
+- **CI enforcement:** the publish pipeline runs a clean-environment
+  install test for every expansion and extra in each stream
+  (`nightly`/`stablerc`/`stable`) on every supported distro. Missing
+  transitive dependencies fail the publish.
+- **Meta-packages:** umbrella packages such as `rocm-hpc-YYYY.MM` (HPC
+  SDK) inherit this rule and additionally declare their hard dependency
+  on the pinned ROCm Core SDK version.
 
 ## HPC SDK Release Model
 
