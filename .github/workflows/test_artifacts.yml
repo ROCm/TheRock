@@ -187,7 +187,8 @@ jobs:
       # Route to the appropriate runner:
       #   1. Benchmark components use the dedicated benchmark runner
       #   2. Multi-GPU components use the multi-GPU runner
-      #   3. Everything else uses the standard test runner
+      #   3. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
+      #   4. Everything else uses the standard test runner (GPU runners)
       test_runs_on: >-
         ${{
           (matrix.components.is_benchmark == true &&
@@ -195,6 +196,8 @@ jobs:
             inputs.benchmark_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
+          (matrix.components.linux_cpu_runner == true &&
+            'azure-linux-scale-rocm') ||
           inputs.test_runs_on
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}

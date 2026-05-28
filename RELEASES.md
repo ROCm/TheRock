@@ -16,7 +16,7 @@ AMD GPU architecture.
 >
 > Prerequisites:
 >
-> - We recommend installing the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation) on Linux and [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+> - We recommend installing the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation) on Linux and [Adrenalin driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
 > - Linux users, please be aware of [Configuring permissions for GPU access](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access) needed for ROCm
 
 Table of contents:
@@ -146,6 +146,17 @@ Select your GPU using the `[device-*]` extras from the
 > [SUPPORTED_GPUS.md](SUPPORTED_GPUS.md) are unverified. `pip install` will
 > succeed, but device enumeration, kernel launch, or library loads may fail at
 > runtime. Please file an issue if you hit one.
+
+> [!WARNING]
+> Known issue ([#5347](https://github.com/ROCm/TheRock/issues/5347)): some
+> `rocm` meta-package device extras may be missing from the published `rocm`
+> package metadata. If a `rocm[device-*]` extra does not install the expected
+> device package, install the device package directly, for example:
+>
+> ```bash
+> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+>     rocm-sdk-device-gfx942 rocm-sdk-device-gfx950
+> ```
 
 ```bash
 # Single device (replace device-gfx942 with your GPU):
@@ -1150,7 +1161,7 @@ If your GPU is not recognized or you encounter issues:
 - Review memory allocation settings (see the [FAQ](https://github.com/ROCm/TheRock/blob/main/faq.md)
   for GTT configuration on unified memory systems)
 - Ensure you have the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation)
-  on Linux or [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+  on Linux or [Adrenalin driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
 - For platform-specific troubleshooting when using PyTorch or JAX, see:
   - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)

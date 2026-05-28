@@ -124,9 +124,9 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
-      - name: Build therock-archives and therock-dist
+      - name: Build therock-artifacts and therock-dist
         run: |
-          cmake --build build --target therock-archives therock-dist -- -k 0
+          cmake --build build --target therock-artifacts therock-dist -- -k 0
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
@@ -141,9 +141,6 @@ jobs:
             echo "Full SDK du:"
             echo "------------"
             du -h -d 1 build/dist/rocm
-            echo "Artifact Archives:"
-            echo "------------------"
-            ls -lh build/artifacts/*.tar.xz
             echo "Artifacts:"
             echo "----------"
             du -h -d 1 build/artifacts
@@ -167,6 +164,13 @@ jobs:
       - name: Configure AWS Credentials
         if: ${{ always() }}
         uses: ./.github/actions/configure_aws_artifacts_credentials
+
+      - name: Push artifacts
+        run: |
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
+            --build-dir build \
+            --stage all
 
       - name: Post Build Upload
         if: always()
