@@ -192,7 +192,14 @@ test_matrix = {
         "job_name": "rocgdb",
         "fetch_artifact_args": "--debug-tools --tests",
         "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_rocgdb.py')}",
+        # Switched from the per-component test_rocgdb.py invocation to the
+        # generic test_runner.py as part of test-filter standardization (see
+        # ROCgdb/users/dravindr/tf_rocgdb). test_runner.py drives ctest from
+        # tests/rocgdb/ using labels emitted by the install-time
+        # CTestTestfile.cmake; each ctest test wraps back into test_rocgdb.py
+        # with the right --tier so the GCC/LLVM matrix and gdb.sum parsing
+        # are preserved.
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards": 1,
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:939b8e35887144d1ca4eca928dc2869991339cab869168790e495fc0a5907bbb",

@@ -654,6 +654,46 @@ if(BUILD_TESTING)
       COMPONENT tests
       USE_SOURCE_PERMISSIONS)
   endforeach()
+
+  # Generate the install-time CTestTestfile.cmake for ROCgdb from
+  # gdb/testsuite/test_categories.yaml. The generated file is installed to
+  # tests/rocgdb/CTestTestfile.cmake (alongside the testsuite tree) and
+  # contains one add_test() per tier (quick/standard/comprehensive/full).
+  # TheRock's test_runner.py drives it via `ctest -L <tier>` after setting
+  # TEST_RUNNER_SCRIPT_PATH so the wrapper can locate test_rocgdb.py.
+  set(ROCGDB_TEST_CATEGORIES_YAML
+      "${ROCGDB_SOURCE_DIR}/gdb/testsuite/test_categories.yaml")
+  set(ROCGDB_CTEST_GENERATOR
+      "${CMAKE_CURRENT_SOURCE_DIR}/gen_install_ctestfile.py")
+  set(ROCGDB_CTEST_INSTALL_FILE
+      "${CMAKE_CURRENT_BINARY_DIR}/install_CTestTestfile.cmake")
+
+  if(EXISTS "${ROCGDB_TEST_CATEGORIES_YAML}")
+    # find_program is cached but PyYAML availability isn't; the generator
+    # imports yaml at module top and exits with a clear message if missing.
+    find_program(ROCGDB_PYTHON3 NAMES python3 python REQUIRED)
+    message(STATUS "rocgdb tests: generating ${ROCGDB_CTEST_INSTALL_FILE} from ${ROCGDB_TEST_CATEGORIES_YAML}")
+    execute_process(
+      COMMAND "${ROCGDB_PYTHON3}" "${ROCGDB_CTEST_GENERATOR}"
+              --yaml "${ROCGDB_TEST_CATEGORIES_YAML}"
+              --out "${ROCGDB_CTEST_INSTALL_FILE}"
+      RESULT_VARIABLE _rocgdb_gen_rc
+      OUTPUT_VARIABLE _rocgdb_gen_out
+      ERROR_VARIABLE _rocgdb_gen_err)
+    if(NOT _rocgdb_gen_rc EQUAL 0)
+      message(FATAL_ERROR
+        "Failed to generate rocgdb CTestTestfile.cmake (rc=${_rocgdb_gen_rc}):\n"
+        "stdout: ${_rocgdb_gen_out}\n"
+        "stderr: ${_rocgdb_gen_err}")
+    endif()
+
+    install(FILES "${ROCGDB_CTEST_INSTALL_FILE}"
+      DESTINATION tests/rocgdb
+      COMPONENT tests
+      RENAME "CTestTestfile.cmake")
+  else()
+    message(STATUS "rocgdb tests: no test_categories.yaml at ${ROCGDB_TEST_CATEGORIES_YAML}; skipping CTest categorization install.")
+  endif()
 else()
   message(STATUS "rocgdb tests: BUILD_TESTING not set. Skipping installation integrity tests.")
 endif()

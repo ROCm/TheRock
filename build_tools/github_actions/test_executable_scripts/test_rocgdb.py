@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+import fnmatch
 import glob
 import logging
 import os
@@ -64,6 +65,12 @@ XFAILED_TESTS = {
         "gdb.dwarf2/pr13961.exp",
     ],
 }
+
+# Valid tier names recognised by --tier (also written by
+# debug-tools/rocgdb/gen_install_ctestfile.py into the install-time
+# CTestTestfile.cmake). Mirrors VALID_TEST_CATEGORIES in test_runner.py.
+VALID_TIERS = ("quick", "standard", "comprehensive", "full")
+
 
 # Test result categories.
 TEST_CATEGORIES = [
@@ -195,6 +202,8 @@ def parse_arguments() -> argparse.Namespace:
         epilog="""Examples:
   python %(prog)s --testsuite-dir /path/to/testsuite --rocgdb-bin /path/to/rocgdb
   python %(prog)s --tests gdb.base/break.exp gdb.base/call-ar-st.exp
+  python %(prog)s --tier quick           # uses test_categories.yaml
+  TEST_TYPE=standard python %(prog)s     # same, via env var
   python %(prog)s --parallel
   python %(prog)s --group-results
   python %(prog)s --timeout 600
@@ -258,7 +267,19 @@ def parse_arguments() -> argparse.Namespace:
         "--tests",
         nargs="+",
         default=["gdb.rocm", "gdb.dwarf2"],
-        help="List of tests to run. Default is gdb.rocm/*.exp and gdb.dwarf2/*.exp",
+        help="List of tests to run. Default is gdb.rocm/*.exp and gdb.dwarf2/*.exp. "
+        "Ignored when --tier is provided (the tier's test_patterns from "
+        "test_categories.yaml take precedence).",
+    )
+    parser.add_argument(
+        "--tier",
+        type=str,
+        default=os.environ.get("TEST_TYPE"),
+        choices=list(VALID_TIERS) + [None],
+        help="Test tier to run. When set, loads test_patterns from "
+        "<testsuite-dir>/test_categories.yaml and uses them in place of "
+        "--tests. Falls back to the TEST_TYPE env var when unset. This is the "
+        "primary entry point used by TheRock's test_runner.py + ctest.",
     )
     parser.add_argument(
         "--testsuite-dir",
@@ -1028,6 +1049,116 @@ def set_test_timeout(test_suite_dir: Path, timeout_value: int) -> None:
         _log_error_and_exit(f"Failed to write timeout to {site_exp_file}: {e}")
 
 
+def _load_test_categories_yaml(testsuite_dir: Path) -> dict:
+    """
+    Load gdb/testsuite/test_categories.yaml from an installed testsuite tree.
+
+    Args:
+        testsuite_dir: Path to GDB testsuite directory (the one containing
+            gdb.rocm/, gdb.dwarf2/, ... and our test_categories.yaml).
+
+    Returns:
+        Parsed YAML config as a dict.
+
+    Exits:
+        Code 1 if the YAML file is missing or PyYAML is unavailable.
+    """
+    yaml_path = testsuite_dir / "test_categories.yaml"
+    if not yaml_path.is_file():
+        _log_error_and_exit(
+            f"--tier was provided but {yaml_path} does not exist. "
+            "The installed ROCgdb testsuite is missing test_categories.yaml; "
+            "fall back to --tests or rebuild against a ROCgdb that includes it."
+        )
+
+    try:
+        import yaml
+    except ImportError:
+        _log_error_and_exit(
+            "PyYAML is required to use --tier. Install it via `pip install pyyaml`."
+        )
+
+    with yaml_path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def _resolve_tier_tests(
+    tier: str, testsuite_dir: Path, fallback_tests: List[str]
+) -> List[str]:
+    """
+    Expand a tier name to the underlying list of .exp file paths.
+
+    Reads test_patterns + exclude from test_categories.yaml for the requested
+    tier, globs the patterns relative to testsuite_dir, applies fnmatch-based
+    exclude filtering, and returns a sorted, de-duplicated path list ready to
+    be used as the --tests value.
+
+    Args:
+        tier: One of VALID_TIERS.
+        testsuite_dir: Path to GDB testsuite directory.
+        fallback_tests: Tests to use if the tier is somehow empty after
+            expansion (logged as a warning, not an error).
+
+    Returns:
+        List of .exp paths relative to testsuite_dir.
+
+    Exits:
+        Code 1 if tier is missing from the YAML.
+    """
+    cfg = _load_test_categories_yaml(testsuite_dir)
+    categories = cfg.get("test_categories") or {}
+    tier_cfg = categories.get(tier)
+    if not tier_cfg:
+        _log_error_and_exit(
+            f"--tier '{tier}' not found in test_categories.yaml "
+            f"(known tiers: {sorted(categories.keys())})."
+        )
+
+    patterns = tier_cfg.get("test_patterns") or []
+    excludes = tier_cfg.get("exclude") or []
+
+    matched: Set[str] = set()
+    for pattern in patterns:
+        if not isinstance(pattern, str):
+            continue
+        # Allow both single-file entries ("gdb.rocm/simple.exp") and
+        # directory globs ("gdb.rocm/*.exp"). Path.glob() handles both.
+        if any(ch in pattern for ch in ("*", "?", "[")):
+            for hit in testsuite_dir.glob(pattern):
+                if hit.is_file() and hit.suffix == ".exp":
+                    matched.add(str(hit.relative_to(testsuite_dir)))
+        else:
+            candidate = testsuite_dir / pattern
+            if candidate.is_file():
+                matched.add(pattern)
+            else:
+                logger.warning(
+                    f"Tier '{tier}' references {pattern}, but it does not exist "
+                    f"under {testsuite_dir}. Skipping."
+                )
+
+    # Filter out excludes via fnmatch so the YAML can use globs there too.
+    filtered: List[str] = []
+    for rel_path in sorted(matched):
+        if any(fnmatch.fnmatch(rel_path, pat) for pat in excludes):
+            continue
+        filtered.append(rel_path)
+
+    if not filtered:
+        logger.warning(
+            f"Tier '{tier}' expanded to an empty test list (patterns: "
+            f"{patterns}, excludes: {excludes}). Falling back to --tests "
+            f"defaults: {fallback_tests}."
+        )
+        return list(fallback_tests)
+
+    logger.info(
+        f"Tier '{tier}' expanded to {len(filtered)} test file(s) "
+        f"(from {len(patterns)} pattern(s), after {len(excludes)} exclude(s))."
+    )
+    return filtered
+
+
 def _extract_test_files(test_names: List[str]) -> List[str]:
     """
     Extract unique test file paths from full test names.
@@ -1376,6 +1507,15 @@ def main() -> None:
         ["hipcc", "gcc", "g++", "gfortran", "clang", "clang++", "flang", "runtest"]
     )
 
+    # When invoked under TheRock's test_runner.py via ctest, --tier (or the
+    # TEST_TYPE env var) drives test selection. Expand it here so the rest of
+    # the pipeline keeps treating args.tests as the source of truth.
+    if args.tier:
+        logger.info(f"Resolving --tier '{args.tier}' against test_categories.yaml")
+        args.tests = _resolve_tier_tests(
+            args.tier, rocgdb_testsuite_dir, fallback_tests=args.tests
+        )
+
     print_section("Expanding test paths")
     tests = expand_test_paths(args.tests, rocgdb_testsuite_dir)
 
@@ -1551,6 +1691,7 @@ def print_configuration(
     logger.info(f"  ROCgdb Binary:        {rocgdb_bin}")
     logger.info(f"  Testsuite Directory:  {testsuite_dir}")
     logger.info(f"  Configure Script:     {configure_script}")
+    logger.info(f"  Tier:                 {args.tier if args.tier else 'None (using --tests)'}")
     logger.info(f"  Tests:                {' '.join(args.tests)}")
     logger.info(f"  Check Type:           {args.check_type}")
     logger.info(f"  Parallel Execution:   {'Enabled' if args.parallel else 'Disabled'}")
