@@ -1813,8 +1813,19 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+
+    # Pin the HIP language to TheRock's toolchain. Without these, any subproject
+    # that does `project(... LANGUAGES HIP)` or `enable_language(HIP)` triggers
+    # CMakeDetermineHIPCompiler, which scans the system and silently picks up
+    # /opt/rocm-*/bin/* when present. See ROCm/TheRock#102 and the matching
+    # pattern in examples/CMakeLists.txt.
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_PLATFORM \"amd\" CACHE STRING \"\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_ROCM_ROOT \"@_hip_dist_dir@\" CACHE PATH \"\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\" CACHE FILEPATH \"\" FORCE)\n")
+
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
+      message(STATUS "CMAKE_HIP_COMPILER = ${AMD_LLVM_CXX_COMPILER}")
     endif()
   endif()
 
