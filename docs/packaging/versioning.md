@@ -161,9 +161,8 @@ checkout (pin in
 extra local segments use `-` after the single `+` (see comments in
 `build_triton_linux()`). CI builds `triton_windows` only for
 `pytorch_git_ref: nightly`.
-Per-family CI uploads to `v2-staging/<family>/triton_windows/` for testing, then
-promotes to `v2/<family>/triton_windows/` on the release index. Multi-arch
-releases use `v4/whl/triton_windows/`.
+Windows `triton_windows` wheels are published on the multi-arch index at
+`https://rocm.nightlies.amd.com/whl-multi-arch/`.
 
 #### JAX versions
 
