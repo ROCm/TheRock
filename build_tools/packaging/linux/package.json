@@ -666,6 +666,7 @@
         ]
       }
     ],
+    "Disable_DWZ": "True",
     "Gfxarch": "True"
   },
   {
@@ -990,6 +991,7 @@
         ]
       }
     ],
+    "Disable_DWZ": "True",
     "Gfxarch": "True"
   },
 
@@ -1234,6 +1236,7 @@
         ]
       }
     ],
+    "Disable_DWZ": "True",
     "Gfxarch": "True"
   },
   {
@@ -2657,6 +2660,7 @@
         ]
       }
     ],
+    "Disable_DWZ": "True",
     "Gfxarch": "False"
 
   },
