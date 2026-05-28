@@ -822,6 +822,7 @@ def _expand_build_config_for_platform(
     test_type: str,
     pr_labels: list[str],
     is_schedule: bool,
+    is_workflow_dispatch: bool,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -892,7 +893,7 @@ def _expand_build_config_for_platform(
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant == "asan":
             # Only run ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            if not (is_schedule or is_workflow_dispatch):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
@@ -1010,6 +1011,7 @@ def expand_build_configs(
             test_type=test_type,
             pr_labels=ci_inputs.pr_labels,
             is_schedule=ci_inputs.is_schedule,
+            is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
