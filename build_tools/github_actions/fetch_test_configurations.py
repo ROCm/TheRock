@@ -466,7 +466,7 @@ test_matrix = {
         "job_name": "hipdnn_python_bindings",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn_python.py')}",
+        "test_script": f"python {_get_script_path('test_hipdnn_frontend_python.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,

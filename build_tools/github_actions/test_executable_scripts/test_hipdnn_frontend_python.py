@@ -23,7 +23,7 @@ from pathlib import Path
 
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
-PACK_WHEEL_SCRIPT = SCRIPT_DIR / "pack_python_wheel.py"
+PACK_WHEEL_SCRIPT = SCRIPT_DIR / "hipdnn" / "pack_frontend_wheel.py"
 
 _HIPDNN_TESTS_ARTIFACT_RELPATH = Path("share/hipdnn/tests/python")
 _HIPDNN_TESTS_SOURCE_RELPATH = Path("projects/hipdnn/python/hipdnn_frontend/test")

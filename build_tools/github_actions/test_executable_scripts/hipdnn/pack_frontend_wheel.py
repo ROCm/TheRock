@@ -11,7 +11,7 @@ used instead of `pip` so the surrounding venv does not need pip seeded
 (uv-created venvs skip ensurepip by default).
 
 Usage:
-    python pack_python_wheel.py \
+    python pack_frontend_wheel.py \
         --pkg-dir /path/to/stage/hipdnn_frontend \
         --wheel-dir /path/to/output
 """
@@ -27,8 +27,8 @@ import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PYPROJECT_FILE = SCRIPT_DIR / "pack_python_wheel_pyproject.toml"
-SETUP_FILE = SCRIPT_DIR / "pack_python_wheel_setup.py"
+PYPROJECT_FILE = SCRIPT_DIR / "pack_frontend_wheel_pyproject.toml"
+SETUP_FILE = SCRIPT_DIR / "pack_frontend_wheel_setup.py"
 EXPECTED_PKG_NAME = "hipdnn_frontend"
 NATIVE_EXT_SUFFIXES = (".so", ".pyd")
 
