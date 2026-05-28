@@ -21,7 +21,7 @@ def compute_fetch_depth(payload: dict[str, Any]) -> str:
     return str(commits + 1)
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
     value = compute_fetch_depth(gha_load_github_event())
     print(f"fetch-depth = {value}")
     gha_set_output({"value": value})
@@ -29,4 +29,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
