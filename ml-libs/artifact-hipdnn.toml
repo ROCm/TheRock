@@ -20,4 +20,5 @@ include = [
   "share/hipdnn/python/**/*.py",
   "share/hipdnn/python/**/*.so",
   "share/hipdnn/python/**/*.pyd",
+  "share/hipdnn/tests/python/**/*.py",
 ]

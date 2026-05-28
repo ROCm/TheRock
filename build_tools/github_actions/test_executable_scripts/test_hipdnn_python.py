@@ -23,30 +23,28 @@ from pathlib import Path
 
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 PACK_WHEEL_SCRIPT = SCRIPT_DIR / "pack_python_wheel.py"
 
-_HIPDNN_TESTS_RELPATH = Path("projects/hipdnn/python/hipdnn_frontend/test")
+_HIPDNN_TESTS_ARTIFACT_RELPATH = Path("share/hipdnn/tests/python")
+_HIPDNN_TESTS_SOURCE_RELPATH = Path("projects/hipdnn/python/hipdnn_frontend/test")
 
 
-def _resolve_hipdnn_tests_dir() -> Path:
+def _resolve_hipdnn_tests_dir(artifacts_path: Path) -> Path:
     """Locate the upstream hipDNN pytest directory.
 
-    Honors HIPDNN_PYTHON_TESTS_DIR for explicit overrides, then ROCM_LIBRARIES_DIR
-    for callers that point at a rocm-libraries checkout. Falls back to a
-    sibling rocm-libraries directory next to the TheRock checkout, which matches
-    the layout used by the rocm-libraries CI workflows.
+    Prefers the test artifact path (share/hipdnn/tests/python) so the test job
+    validates exactly the artifacts it downloaded. Honors
+    HIPDNN_PYTHON_TESTS_DIR / ROCM_LIBRARIES_DIR for developer overrides
+    pointing at a rocm-libraries checkout.
     """
     override = os.getenv("HIPDNN_PYTHON_TESTS_DIR")
     if override:
         return Path(override).resolve()
     rocm_libraries_dir = os.getenv("ROCM_LIBRARIES_DIR")
     if rocm_libraries_dir:
-        return (Path(rocm_libraries_dir) / _HIPDNN_TESTS_RELPATH).resolve()
-    return (THEROCK_DIR / "rocm-libraries" / _HIPDNN_TESTS_RELPATH).resolve()
+        return (Path(rocm_libraries_dir) / _HIPDNN_TESTS_SOURCE_RELPATH).resolve()
+    return (artifacts_path / _HIPDNN_TESTS_ARTIFACT_RELPATH).resolve()
 
-
-HIPDNN_PYTHON_TESTS_DIR = _resolve_hipdnn_tests_dir()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -136,13 +134,13 @@ def validate_import(python: Path, cwd: Path, env: dict) -> None:
     )
 
 
-def run_pytests(python: Path, env: dict) -> None:
+def run_pytests(python: Path, tests_dir: Path, env: dict) -> None:
     """Run the upstream hipDNN Python test suite."""
     # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
     subprocess.check_call(
-        [str(python), "-m", "pytest", "-v", str(HIPDNN_PYTHON_TESTS_DIR)],
+        [str(python), "-m", "pytest", "-v", str(tests_dir)],
         env=env,
-        cwd=str(HIPDNN_PYTHON_TESTS_DIR),
+        cwd=str(tests_dir),
     )
 
 
@@ -153,13 +151,16 @@ if __name__ == "__main__":
     artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
     logging.info(f"Using OUTPUT_ARTIFACTS_DIR: {artifacts_path}")
 
-    # Fail upfront on missing test infra so a missing checkout cannot mask
+    tests_dir = _resolve_hipdnn_tests_dir(artifacts_path)
+    logging.info(f"Using hipDNN pytest dir: {tests_dir}")
+
+    # Fail upfront on missing test infra so a missing artifact cannot mask
     # itself as a green run.
-    if not HIPDNN_PYTHON_TESTS_DIR.is_dir():
+    if not tests_dir.is_dir():
         raise FileNotFoundError(
-            f"hipDNN upstream pytest directory not found: {HIPDNN_PYTHON_TESTS_DIR}. "
-            "Set HIPDNN_PYTHON_TESTS_DIR or ROCM_LIBRARIES_DIR to point at the "
-            "rocm-libraries checkout."
+            f"hipDNN upstream pytest directory not found: {tests_dir}. "
+            "Ensure the hipDNN test artifact includes share/hipdnn/tests/python, "
+            "or set HIPDNN_PYTHON_TESTS_DIR / ROCM_LIBRARIES_DIR for local runs."
         )
 
     pkg_dir = find_pkg_dir(artifacts_path)
@@ -185,6 +186,6 @@ if __name__ == "__main__":
         validate_import(python, tmp_path, env)
         logging.info("Import validation passed")
 
-        run_pytests(python, env)
+        run_pytests(python, tests_dir, env)
 
     logging.info("All hipDNN Python bindings tests passed!")
