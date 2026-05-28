@@ -11,9 +11,13 @@ $ python build_tools/determine_rocm_test_dependencies.py --projects rocSPARSE
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build_tools/github_actions"))
+from github_actions_api import gha_set_output
 
 
 def parse_cmake_test_subprojects(therock_dir):
@@ -119,6 +123,12 @@ def main():
         help="Alias for --changed",
     )
     parser.add_argument(
+        "--external-repo-config",
+        type=str,
+        default="",
+        help="JSON config with projects field (from external repo)",
+    )
+    parser.add_argument(
         "--list-subprojects", action="store_true", help="List all subprojects"
     )
     parser.add_argument(
@@ -132,6 +142,11 @@ def main():
         default="json",
         help="Output format: json (default) or list (newline-separated)",
     )
+    parser.add_argument(
+        "--gha-output",
+        action="store_true",
+        help="Write projects_to_test to GITHUB_OUTPUT",
+    )
 
     args = parser.parse_args()
 
@@ -142,15 +157,31 @@ def main():
         print(json.dumps(result, indent=2))
         return
 
+    # Get projects from args or external_repo_config
     changed = args.changed or args.projects
+    if not changed and args.external_repo_config:
+        try:
+            config = json.loads(args.external_repo_config)
+            projects_str = config.get("projects", "")
+            if projects_str and projects_str.strip():
+                changed = projects_str.split()
+        except json.JSONDecodeError:
+            pass
+
+    # If no projects specified, output "*" for all tests
     if not changed:
-        parser.error(
-            "one of the following arguments is required: --changed, --projects"
-        )
+        if args.gha_output:
+            gha_set_output({"projects_to_test": "*"})
+        else:
+            print("*")
+        return
 
     result = get_subprojects_to_test(changed, therock_dir)
+    projects_to_test = ",".join(sorted(result))
 
-    if args.format == "json":
+    if args.gha_output:
+        gha_set_output({"projects_to_test": projects_to_test})
+    elif args.format == "json":
         print(json.dumps(sorted(result)))
     else:
         for item in sorted(result):
