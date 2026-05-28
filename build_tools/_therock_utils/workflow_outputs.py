@@ -53,6 +53,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.s3_buckets import get_artifacts_bucket_config_for_workflow_run
 
+
 # ---------------------------------------------------------------------------
 # WorkflowOutputRoot
 # ---------------------------------------------------------------------------
