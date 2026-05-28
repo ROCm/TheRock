@@ -103,6 +103,9 @@ def do_checkout(args: argparse.Namespace):
             json.dump(build_env, f, indent=2)
 
     repo_management.do_checkout(args, custom_hipify=_do_hipify)
+    if IS_WINDOWS:
+        with open(repo_dir / "build_env.json", "w") as f:
+            json.dump({"TRITON_WHEEL_VERSION_SUFFIX": ""}, f, indent=2)
 
 
 def main(cl_args: list[str]):
