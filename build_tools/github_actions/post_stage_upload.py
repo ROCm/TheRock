@@ -142,7 +142,7 @@ def upload_stage_logs(
 
 
 def upload_manifest(
-    artifact_group: str,
+    amdgpu_family: str,
     build_dir: Path,
     output_root: WorkflowOutputRoot,
     backend: StorageBackend,
@@ -171,7 +171,7 @@ def upload_manifest(
         return
 
     log(f"[INFO] Uploading manifest {manifest_path}")
-    backend.upload_file(manifest_path, output_root.manifest(artifact_group))
+    backend.upload_file(manifest_path, output_root.manifest(amdgpu_family))
 
 
 def run(args: argparse.Namespace):
@@ -193,16 +193,16 @@ def run(args: argparse.Namespace):
         amdgpu_family=args.amdgpu_family,
     )
 
-    artifact_group = args.artifact_group or args.amdgpu_family
+    amdgpu_family = args.amdgpu_family
 
-    if not artifact_group:
-        log("[INFO] No artifact group specified. Skipping manifest upload.")
+    if not amdgpu_family:
+        log("[INFO] No AMDGPU family specified. Skipping manifest upload.")
         return
 
     log("Upload manifest")
     log("---------------")
     upload_manifest(
-        artifact_group=artifact_group,
+        amdgpu_family=amdgpu_family,
         build_dir=args.build_dir,
         output_root=output_root,
         backend=backend,
@@ -241,13 +241,6 @@ def main(argv: list[str] | None = None):
         default="",
         help="GPU family for per-arch stages (e.g., 'gfx1151'). "
         "Empty for generic stages.",
-    )
-    parser.add_argument(
-        "--artifact-group",
-        type=str,
-        default="",
-        help="Artifact group for manifest upload "
-        "(e.g., 'gfx94X-dcgpu', 'gfx110X-all')",
     )
     parser.add_argument(
         "--compression-level",
