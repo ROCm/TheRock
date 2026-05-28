@@ -467,7 +467,13 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": {
+            "default": 60,
+            "quick": 30,
+            "standard": 60,
+            "comprehensive": 120,
+            "full": 120,
+        },
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
