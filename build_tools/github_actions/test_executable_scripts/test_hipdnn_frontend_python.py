@@ -25,21 +25,9 @@ OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACK_WHEEL_SCRIPT = SCRIPT_DIR / "hipdnn" / "pack_frontend_wheel.py"
 
-_HIPDNN_TESTS_ARTIFACT_RELPATH = Path("share/hipdnn/tests/python")
-
-
-def _resolve_hipdnn_tests_dir(artifacts_path: Path) -> Path:
-    """Locate the upstream hipDNN pytest directory.
-
-    Prefers the test artifact path (share/hipdnn/tests/python) so the test job
-    validates exactly the artifacts it downloaded. Honors
-    HIPDNN_PYTHON_TESTS_DIR for developer overrides pointing at a local
-    rocm-libraries checkout.
-    """
-    override = os.getenv("HIPDNN_PYTHON_TESTS_DIR")
-    if override:
-        return Path(override).resolve()
-    return (artifacts_path / _HIPDNN_TESTS_ARTIFACT_RELPATH).resolve()
+_HIPDNN_SHARE_RELPATH = Path("share/hipdnn")
+_HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "tests" / "python"
+_HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "python" / "hipdnn_frontend"
 
 
 logging.basicConfig(level=logging.INFO)
@@ -47,7 +35,7 @@ logging.basicConfig(level=logging.INFO)
 
 def find_pkg_dir(artifacts_path: Path) -> Path:
     """Locate the hipdnn_frontend package directory in the test artifact."""
-    candidate = artifacts_path / "share" / "hipdnn" / "python" / "hipdnn_frontend"
+    candidate = artifacts_path / _HIPDNN_PKG_ARTIFACT_RELPATH
     if not candidate.is_dir():
         raise FileNotFoundError(
             f"hipdnn_frontend package not found at: {candidate}\n"
@@ -147,7 +135,7 @@ if __name__ == "__main__":
     artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
     logging.info(f"Using OUTPUT_ARTIFACTS_DIR: {artifacts_path}")
 
-    tests_dir = _resolve_hipdnn_tests_dir(artifacts_path)
+    tests_dir = (artifacts_path / _HIPDNN_TESTS_ARTIFACT_RELPATH).resolve()
     logging.info(f"Using hipDNN pytest dir: {tests_dir}")
 
     # Fail upfront on missing test infra so a missing artifact cannot mask
@@ -155,8 +143,7 @@ if __name__ == "__main__":
     if not tests_dir.is_dir():
         raise FileNotFoundError(
             f"hipDNN upstream pytest directory not found: {tests_dir}. "
-            "Ensure the hipDNN test artifact includes share/hipdnn/tests/python, "
-            "or set HIPDNN_PYTHON_TESTS_DIR for local runs."
+            "Ensure the hipDNN test artifact includes share/hipdnn/tests/python."
         )
 
     pkg_dir = find_pkg_dir(artifacts_path)
