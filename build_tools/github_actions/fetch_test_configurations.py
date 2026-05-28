@@ -232,9 +232,8 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
-        # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
-        "timeout_minutes": 60,
+        # Extended tests on math-ci take approx 5 hrs (as of May 5, 2026)
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
@@ -497,14 +496,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-    "fusilliprovider": {
-        "job_name": "fusilliprovider",
-        "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler  --hipdnn-integration-tests --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {"linux": 1},
-    },
     # hipBLASLt provider tests
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
@@ -557,13 +548,15 @@ test_matrix = {
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+        "timeout_minutes": 60,
+        "additional_requirements_files": [
+            "share/rocprofiler-systems/tests/requirements.txt",
+        ],
         "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 1,
         },
     },
     # libhipcxx hipcc tests

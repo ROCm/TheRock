@@ -225,7 +225,7 @@ jobs:
 
       - name: Build Projects
         run: |
-          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist
+          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-artifacts therock-dist
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
@@ -260,6 +260,14 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
+
+      - name: Push artifacts
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+        run: |
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
+            --build-dir ${{ env.OUTPUT_DIR }}/build \
+            --stage all
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
