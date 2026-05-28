@@ -106,8 +106,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
       -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
+      -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
