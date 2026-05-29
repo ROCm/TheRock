@@ -269,9 +269,12 @@ PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload `torch`, `torchvision`, `torchaudio`, `triton`, and `apex` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
+With passing builds we upload `torch`, `torchvision`, `torchaudio`, `triton`, and `apex` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/ for non-multi-arch packages.
+Multi-arch wheels are uploded to the "v4/whl-staging" directory with a public URL at https://rocm.nightlies.amd.com/whl-staging-multi-arch/.
 
 Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
+
+<!-- TODO: Add a reference to https://rocm.nightlies.amd.com/whl-multi-arch/ as soon as we promote tested wheels. -->
 
 If no runner is available: Promotion is blocked by default. Set `bypass_tests_for_releases=true` for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
 

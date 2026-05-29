@@ -5,7 +5,7 @@ wheel>=0.46.2
 six==1.17.0
 auditwheel==6.5.0
 scipy==1.16.3
-pytest==9.0.1
+pytest==9.0.3
 pytest-html==4.1.1
 pytest_html_merger==0.1.0
 pytest-reportlog==1.0.0

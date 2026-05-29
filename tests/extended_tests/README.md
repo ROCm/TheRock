@@ -132,25 +132,22 @@ ci_nightly.yml
   └─ ci_linux.yml / ci_windows.yml
       ├─ build_artifacts
       │
-      ├─ test_artifacts ────────────────────┐
-      │   └─ Component + Functional tests   │ Run in parallel
-      │                                     │ after build
-      └─ test_benchmarks ───────────────────┘
-          └─ Benchmark tests
+      └─ test_artifacts
+          └─ Component + Functional + Benchmark tests
+              (runner auto-selected per component)
 ```
 
 **Workflow Files:**
 
 - `.github/workflows/ci_nightly.yml` - Nightly CI orchestration
 - `.github/workflows/ci_linux.yml` / `ci_windows.yml` - Platform-specific CI logic
-- `.github/workflows/test_artifacts.yml` - Component and functional test execution (uses `test_runs_on`)
-- `.github/workflows/test_benchmarks.yml` - Benchmark test execution (uses `benchmark_runs_on`)
+- `.github/workflows/test_artifacts.yml` - All test execution (component, functional, benchmark)
 
 **Key Differences:**
 
-- **Component Tests**: Run on all PRs (smoke) and nightly (full), use regular runners
-- **Benchmark Tests**: Run only on nightly, use dedicated performance runners (`benchmark_runs_on`)
-- **Functional Tests**: Run only on nightly, use regular runners (`test_runs_on`)
+- **Component Tests**: Run on all PRs (smoke) and nightly (full), use regular runners (`test_runs_on`)
+- **Benchmark Tests**: Run only when globally enabled via `run_extended_tests == true` AND a dedicated performance runner is available (`benchmark-runs-on` in `amdgpu_family_matrix.py`). Runner is auto-selected per component.
+- **Functional Tests**: Run only when globally enabled via `run_extended_tests == true`, use regular runners (`test_runs_on`)
 
 ## Architecture
 

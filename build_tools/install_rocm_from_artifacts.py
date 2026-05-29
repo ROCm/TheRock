@@ -24,11 +24,13 @@ python build_tools/install_rocm_from_artifacts.py
     [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
     [--hipdnn | --no-hipdnn]
+    [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--fusilliprovider | --no-fusilliprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
+    [--hipkernelprovider | --no-hipkernelprovider]
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
@@ -345,13 +347,16 @@ def retrieve_artifacts_by_run_id(args):
             args.debug_tools,
             args.fft,
             args.hipdnn,
+            args.hipdnn_integration_tests,
             args.hipdnn_samples,
             args.miopen,
             args.miopenprovider,
             args.fusilliprovider,
             args.iree_compiler,
             args.hipblasltprovider,
+            args.hipkernelprovider,
             args.prim,
+            args.mpi,
             args.rand,
             args.rccl,
             args.rocdecode,
@@ -389,6 +394,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fftw3")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
+        if args.hipdnn_integration_tests:
+            extra_artifacts.append("hipdnn-integration-tests")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
@@ -399,6 +406,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rand_dev")
         if args.miopenprovider:
             extra_artifacts.append("miopenprovider")
+        if args.hipkernelprovider:
+            extra_artifacts.append("hipkernelprovider")
         if args.fusilliprovider:
             extra_artifacts.append("fusilliprovider")
         if args.iree_compiler:
@@ -410,6 +419,12 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocdecode_test")
             argv.append("base_dev")
             argv.append("amd-llvm_dev")
+        if args.mpi:
+            extra_artifacts.append("openmpi")
+            # Ensure binaries like mpiexec are installed
+            argv.append("openmpi_run")
+            # Optional but useful (headers, dev libs)
+            argv.append("openmpi_dev")
         if args.rocjpeg:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocjpeg")
@@ -677,6 +692,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hipdnn-integration-tests",
+        default=False,
+        help="Include 'hipdnn-integration-tests' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--hipdnn-samples",
         default=False,
         help="Include 'hipdnn-samples' artifacts",
@@ -694,6 +716,13 @@ def main(argv):
         "--miopenprovider",
         default=False,
         help="Include 'miopenprovider' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipkernelprovider",
+        default=False,
+        help="Include 'hipkernelprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -750,6 +779,13 @@ def main(argv):
         "--rccl",
         default=False,
         help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--mpi",
+        default=False,
+        help="Include OpenMPI (vendored by TheRock build)",
         action=argparse.BooleanOptionalAction,
     )
 

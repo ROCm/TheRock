@@ -50,6 +50,18 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
     return json.loads(manifest_path.read_text())
 
 
+def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
+    """Recreate unversioned profiler library symlinks expected by dlopen()."""
+    profiler_lib_dir = profiler.platform_dir / "lib"
+
+    for target in profiler_lib_dir.glob("librocprof-sys*.so.*"):
+        if target.is_symlink():
+            continue
+        link = target.with_suffix("")
+        if not link.exists():
+            link.symlink_to(target.name)
+
+
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
@@ -67,13 +79,77 @@ def run(args: argparse.Namespace):
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
     core.rpath_dep(core, "lib/llvm/lib")
+    core.rpath_dep(core, "lib/rocm_sysdeps/lib")
     core.populate_runtime_files(
         params.filter_artifacts(
             core_artifact_filter,
             # TODO: The base package is shoving CMake redirects into lib.
-            excludes=["**/cmake/**"],
+            excludes=[
+                "**/cmake/**",
+                # profiler binaries
+                "bin/rocprof-*",
+                # rocprofiler-systems payload
+                "include/rocprofiler-systems/**",
+                "lib/librocprof-sys*",
+                "lib/python/site-packages/rocprofsys/**",
+                "lib/rocprofiler-systems/**",
+                "libexec/rocprofiler-systems/**",
+                "share/**/rocprofiler-systems/**",
+            ],
         ),
     )
+
+    profiler_artifacts = params.filter_artifacts(
+        profiler_artifact_filter,
+        includes=[
+            # rocprofiler-systems
+            "bin/rocprof-sys-*",
+            "include/rocprofiler-systems/**",
+            "lib/librocprof-sys*",
+            "lib/python/site-packages/rocprofsys/**",
+            "lib/rocprofiler-systems/**",
+            "libexec/rocprofiler-systems/**",
+            "share/**/rocprofiler-systems/**",
+            # rocprofiler-compute
+            "bin/rocprof-*",
+            "libexec/rocprofiler-compute/**",
+            "lib/rocprofiler-compute/**",
+            "share/**/rocprofiler-compute/**",
+        ],
+    )
+
+    if profiler_artifacts.artifact_names:
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.rpath_dep(core, "lib")
+        profiler.rpath_dep(core, "lib/llvm/lib")
+        profiler.rpath_dep(core, "lib/rocm_sysdeps/lib")
+        profiler.populate_runtime_files(profiler_artifacts)
+        ensure_profiler_library_symlinks(profiler)
+
+        # The rocprofiler-compute artifact installs the launcher as a symlink:
+        # bin/rocprof-compute -> ../libexec/rocprofiler-compute/rocprof-compute
+        # However, populate_runtime_files() does not preserve symlinks and only
+        # materializes the real file under libexec/. Recreate the expected bin/
+        # entry here so CLI entrypoints (_exec("bin/rocprof-compute")) continue to work.
+        compute_target = (
+            profiler.platform_dir
+            / "libexec"
+            / "rocprofiler-compute"
+            / "rocprof-compute"
+        )
+        compute_link = profiler.platform_dir / "bin" / "rocprof-compute"
+
+        if compute_target.exists() and not compute_link.exists():
+            compute_link.parent.mkdir(parents=True, exist_ok=True)
+            compute_link.symlink_to("../libexec/rocprofiler-compute/rocprof-compute")
+    elif sys.platform == "win32":
+        print(
+            "::: No profiler artifacts found on Windows; skipping rocm-profiler package"
+        )
+    else:
+        raise RuntimeError(
+            "No profiler artifacts found; refusing to build an empty rocm-profiler package"
+        )
 
     if kpack_split:
         _run_kpack_split(args, params, core)
@@ -107,10 +183,14 @@ def _run_kpack_split(
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
-    # Per-ISA device wheels.
+    # Per-ISA device wheels. Device artifacts overlay into
+    # _rocm_sdk_libraries/lib/ and may include ELF .so files (per-arch
+    # MIOpen CK kernels) with dynamic deps on core.
     all_targets = sorted(params.all_target_families)
     for target in all_targets:
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
+        dev.rpath_dep(core, "lib")
+        dev.rpath_dep(core, "lib/rocm_sysdeps/lib")
         dev.populate_device_files(
             params.filter_artifacts(
                 filter=functools.partial(device_artifact_filter, target),
@@ -142,6 +222,7 @@ def _run_kpack_split(
             "rocwmma",
             "flatbuffers",
             "nlohmann-json",
+            "rocshmem",
         ],
         exclude_components=["test"],
         tarball_compression=args.devel_tarball_compression,
@@ -291,6 +372,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "miopen",
             "miopenprovider",
             "hipblasltprovider",
+            "hipkernelprovider",
             "rand",
             "rccl",
         ]
@@ -301,6 +383,13 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
         and (an.target_family == target_family or an.target_family == "generic")
     )
     return libraries
+
+
+def profiler_artifact_filter(an: ArtifactName) -> bool:
+    return an.name in [
+        "rocprofiler-compute",
+        "rocprofiler-systems",
+    ] and an.component in ["lib", "run"]
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
@@ -319,7 +408,6 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "miopenprovider",
             "hipblasltprovider",
             "rand",
-            "rccl",
         ]
         and an.component == "lib"
         and an.target_family == target

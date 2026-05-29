@@ -173,8 +173,15 @@ if(NOT WIN32)
   if(TARGET rocm_smi_lib)
     list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
   endif()
-elseif(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
+endif()
+if(THEROCK_BUILD_TESTING)
+  # Client tests link ILP64 reference BLAS (see cmake/finders/FindBLAS.cmake + BLA_SIZEOF_INTEGER=8).
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas64)
+endif()
+
+set(rocBLAS_extra_cmake_args)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_extra_cmake_args -DROCBLAS_CLIENTS_REFERENCE_ILP64=ON)
 endif()
 
 # Disable rocBLAS samples on Windows due to use of deprecated
@@ -206,6 +213,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_CLIENTS_SAMPLES=${_blas_build_samples}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DLINK_BLIS=OFF
+    ${rocBLAS_extra_cmake_args}
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
@@ -220,6 +228,9 @@ therock_cmake_subproject_declare(rocBLAS
     hipBLASLt
     ${rocBLAS_optional_runtime_deps}
     ${optional_profiler_deps}
+  TEST_SUBPROJECTS
+    hipBLAS
+    rocSOLVER
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
@@ -260,6 +271,9 @@ if(THEROCK_ENABLE_SPARSE)
     RUNTIME_DEPS
       hip-clr
       ${optional_profiler_deps}
+    TEST_SUBPROJECTS
+      rocSPARSE
+      hipSPARSE
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS
@@ -292,6 +306,8 @@ if(THEROCK_ENABLE_SPARSE)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+    TEST_SUBPROJECTS
+      hipSPARSE
   )
   therock_cmake_subproject_glob_c_sources(hipSPARSE
     SUBDIRS
@@ -341,6 +357,8 @@ if(THEROCK_ENABLE_SPARSE)
         therock-host-blas
         ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
+      TEST_SUBPROJECTS
+        hipSPARSELt
     )
     therock_cmake_subproject_glob_c_sources(hipSPARSELt
       SUBDIRS
@@ -425,6 +443,7 @@ if(THEROCK_ENABLE_SOLVER)
         -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
         -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
         -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
+        -DEXPORT_FORTRAN_BINDINGS=OFF
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS

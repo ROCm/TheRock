@@ -377,7 +377,7 @@ class S3Index:
         page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=prefix)
         for page in page_iterator:
             for obj in page['Contents']:
-                is_acceptable = ([path.dirname(obj['Key']) == prefix]) and obj['Key'].endswith(ACCEPTED_FILE_EXTENSIONS)
+                is_acceptable = (path.dirname(obj['Key']) == prefix) and obj['Key'].endswith(ACCEPTED_FILE_EXTENSIONS)
                 if not is_acceptable:
                     continue
                 obj_names.append(obj['Key'])

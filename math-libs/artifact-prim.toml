@@ -16,6 +16,7 @@ include = [
 [components.test."math-libs/hipCUB/stage"]
 include = [
   "bin/test_*",
+  "bin/benchmark_*",
   "bin/hipcub/CTestTestfile.cmake",
   "bin/hipcub/generate_resource_spec*",
 ]
@@ -27,6 +28,7 @@ include = [
 [components.test."math-libs/rocThrust/stage"]
 include = [
   "bin/test_*",
+  "bin/benchmark_thrust_*",
   "bin/*.hip",
   "bin/*.hip.exe", # Windows
   "bin/rocthrust/CTestTestfile.cmake",

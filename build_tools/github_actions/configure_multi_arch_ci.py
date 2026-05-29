@@ -47,21 +47,44 @@ Outputs (written to GITHUB_OUTPUT):
 import enum
 import json
 import os
-import random
+import sys
 from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 
+# Add parent directory to path for _therock_utils imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _therock_utils.build_topology import get_topology
 
-from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
+from amdgpu_family_matrix import (
+    all_build_variants,
+    get_all_families_for_trigger_types,
+    select_build_runner,
+    select_weighted_label,
+)
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from github_actions_api import gha_append_step_summary, gha_set_output
+from github_actions_api import (
+    gha_append_step_summary,
+    gha_load_github_event,
+    gha_set_output,
+)
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
 # ---------------------------------------------------------------------------
+
+
+def _get_all_build_stages() -> list[str]:
+    """Get all build stage names from BUILD_TOPOLOGY.toml.
+
+    Returns:
+        List of stage names in the order they appear in the TOML file
+    """
+    topology = get_topology()
+    return list(topology.build_stages.keys())
 
 
 def _parse_comma_list(raw: str) -> list[str]:
@@ -70,6 +93,21 @@ def _parse_comma_list(raw: str) -> list[str]:
     Example: "gfx94X, gfx120X" → ["gfx94x", "gfx120x"]
     """
     return [name.strip().lower() for name in raw.split(",") if name.strip()]
+
+
+def _parse_prebuilt_stages(raw: str) -> list[str]:
+    """Parse prebuilt_stages input, expanding 'all' to all available stages.
+
+    Reads stage names from BUILD_TOPOLOGY.toml when 'all' is specified.
+
+    Example:
+        "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
+        "all" → ["foundation", "compiler-runtime", "math-libs", ...]
+    """
+    stages = _parse_comma_list(raw)
+    if "all" in stages:
+        return _get_all_build_stages()
+    return stages
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +129,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
+    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -98,8 +137,8 @@ class CIInputs:
     # Per-platform workflow_dispatch overrides (parsed from comma-separated input)
     linux_amdgpu_families: list[str] = field(default_factory=list)
     windows_amdgpu_families: list[str] = field(default_factory=list)
-    linux_test_labels: str = ""
-    windows_test_labels: str = ""
+    linux_test_labels: list[str] = field(default_factory=list)
+    windows_test_labels: list[str] = field(default_factory=list)
 
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
@@ -135,17 +174,13 @@ class CIInputs:
         commit_ref = os.environ["GITHUB_REF_NAME"]
 
         # Read the full event webhook payload (common to all event triggers).
-        event_path = os.environ["GITHUB_EVENT_PATH"]
-        with open(event_path) as f:
-            event = json.load(f)
+        event = gha_load_github_event()
 
-        # Extract additional fields based on event type.
-
-        # "inputs" are set for workflow_dispatch, empty otherwise.
-        inputs = event.get("inputs") or {}
-
-        # BUILD_VARIANT comes from workflow_call inputs, not the event payload.
+        # Workflow inputs are passed as environment variables by
+        # setup_multi_arch.yml. GitHub-specific context (PR labels,
+        # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
+        release_type = os.environ.get("RELEASE_TYPE", "")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -161,25 +196,36 @@ class CIInputs:
         elif event_name == "push":
             base_ref = event.get("before", "HEAD^1")
 
+        # Test labels come from two sources:
+        # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
+        # 2. PR test:* labels (apply to both platforms)
+        pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        linux_test_labels = (
+            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
+        )
+        windows_test_labels = (
+            _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
+            + pr_test_labels
+        )
+
         return CIInputs(
             run_id=run_id,
             event_name=event_name,
             commit_ref=commit_ref,
             base_ref=base_ref,
             build_variant=build_variant,
+            release_type=release_type,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
-                inputs.get("linux_amdgpu_families", "")
+                os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
             windows_amdgpu_families=_parse_comma_list(
-                inputs.get("windows_amdgpu_families", "")
+                os.environ.get("WINDOWS_AMDGPU_FAMILIES", "")
             ),
-            linux_test_labels=_parse_comma_list(inputs.get("linux_test_labels", "")),
-            windows_test_labels=_parse_comma_list(
-                inputs.get("windows_test_labels", "")
-            ),
-            prebuilt_stages=inputs.get("prebuilt_stages", ""),
-            baseline_run_id=inputs.get("baseline_run_id", ""),
+            linux_test_labels=linux_test_labels,
+            windows_test_labels=windows_test_labels,
+            prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
         )
 
 
@@ -382,6 +428,8 @@ class BuildConfig:
     build_variant_cmake_preset: str
     expect_failure: bool
     build_pytorch: bool
+    # Build runner label for this platform/variant combination
+    build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
@@ -422,9 +470,10 @@ class CIOutputs:
     is_ci_enabled: bool = True
     builds: BuildConfigs = field(default_factory=BuildConfigs)
     jobs: JobDecisions | None = None
-    # Test labels pass through from inputs to outputs for downstream workflows.
-    linux_test_labels: str = ""
-    windows_test_labels: str = ""
+    # Test labels for downstream workflows. Merged from workflow_dispatch inputs
+    # and PR test:* labels.
+    linux_test_labels: list[str] = field(default_factory=list)
+    windows_test_labels: list[str] = field(default_factory=list)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -555,7 +604,7 @@ def decide_jobs(
     # Parse explicit prebuilt stages from workflow_dispatch input.
     stage_decisions: dict[str, JobAction] = {}
     if ci_inputs.prebuilt_stages:
-        for stage in _parse_comma_list(ci_inputs.prebuilt_stages):
+        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -646,10 +695,19 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
         # Manual trigger: caller specifies exact families per platform.
-        # Empty input means "no families for that platform" — the caller
-        # has full control over what runs.
+        # "all" = all known families. "none" or empty = skip platform.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
+        if linux_names == ["all"]:
+            linux_names = list(all_families.keys())
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif linux_names == ["none"]:
+            linux_names = []
+        if windows_names == ["all"]:
+            windows_names = list(all_families.keys())
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif windows_names == ["none"]:
+            windows_names = []
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
@@ -722,6 +780,7 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -764,22 +823,12 @@ def _expand_build_config_for_platform(
         # Determine test runner label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # Handle dual-label configuration with weighted random selection.
+        # Handle multi-label configuration with weighted random selection.
         # Some families (e.g. gfx94x) have multiple runner labels available.
-        if "test-runs-on-alternate" in platform_info:
-            alternate_label = platform_info["test-runs-on-alternate"]
-            alternate_weight = platform_info.get("test-runs-on-alternate-weight", 0.5)
-            if random.random() < alternate_weight:
-                test_runs_on = alternate_label
-                print(
-                    f"  {family_name}: selected alternate runner (weight={alternate_weight}): "
-                    f"{test_runs_on}"
-                )
-            else:
-                print(
-                    f"  {family_name}: selected primary runner (weight={1-alternate_weight}): "
-                    f"{test_runs_on}"
-                )
+        if "test-runs-on-labels" in platform_info:
+            test_runs_on = select_weighted_label(
+                platform_info["test-runs-on-labels"], family_name
+            )
 
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
@@ -798,6 +847,38 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: no {test_runner_kernel} kernel "
                     f"runner available, disabling tests"
                 )
+
+        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
+        # For ASAN builds, use sandbox runner to avoid impacting production
+        if build_variant == "asan":
+            if "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no ASAN sandbox runner available, "
+                    f"disabling tests"
+                )
+
+        # If run-full-tests-only is set and test_type is "quick", disable testing
+        if platform_info.get("run-full-tests-only", False) and test_type == "quick":
+            test_runs_on = ""
+            print(
+                f"  {family_name}: run-full-tests-only flag set, "
+                f"disabling tests for quick test run"
+            )
+
+        # If nightly_check_only_for_family is set for schedule runs only
+        if (
+            platform_info.get("nightly_check_only_for_family", False)
+            and not ci_inputs.is_schedule
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: nightly_check_only_for_family flag set, "
+                f"disabling test runner for non-scheduled runs"
+            )
 
         per_family_info.append(
             {
@@ -818,6 +899,9 @@ def _expand_build_config_for_platform(
     expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
 
+    # Select build runner using weighted distribution
+    build_runs_on = select_build_runner(platform, ci_inputs.build_variant)
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=";".join(family_names),
@@ -827,6 +911,7 @@ def _expand_build_config_for_platform(
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
         build_pytorch=not expect_failure and not expect_pytorch_failure,
+        build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
     )
@@ -835,6 +920,7 @@ def _expand_build_config_for_platform(
 def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
+    test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -868,6 +954,7 @@ def expand_build_configs(
             ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
+            test_type=test_type,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
@@ -954,6 +1041,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     builds = expand_build_configs(
         targets=targets,
         ci_inputs=ci_inputs,
+        test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
@@ -976,7 +1064,16 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    if ci_inputs.is_pull_request or ci_inputs.is_push:
+    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
+    # The "run everything" is initial state for superrepo multi-arch CI migration.
+    # We will eventually support path filtering and component selection.
+    # TODO: Provide custom decision logic to run specific components and paths
+    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+
+    if skip_path_filters:
+        # External repo: skip path filtering, run everything
+        git_context = GitContext.empty()
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
