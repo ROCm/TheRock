@@ -34,7 +34,7 @@ on:
         type: string
         default: "/opt/rocm/core"
       test_type:
-        description: "Test type: install, sanity, or full. If not set, script default is used."
+        description: "Test type: quick, standard, comprehensive, full, install, or sanity. CI test types are mapped to native install test modes."
         required: false
         type: string
         default: ""
@@ -83,7 +83,7 @@ on:
         default: "/opt/rocm/core"
         required: false
       test_type:
-        description: "Test type: install, sanity, or full (optional; leave empty for script default)"
+        description: "Test type: quick, standard, comprehensive, full, install, or sanity (optional; leave empty for sanity)"
         type: string
         default: ""
       repository:
@@ -107,6 +107,7 @@ jobs:
       pkg_type: ${{ steps.derive.outputs.pkg_type }}
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
+      native_test_type: ${{ steps.derive.outputs.native_test_type }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -122,6 +123,20 @@ jobs:
             *) PKG_TYPE="rpm" ;;
           esac
           echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
+          # Map shared CI test types to native package install test modes.
+          # quick/standard -> sanity, comprehensive/full -> full.
+          # Native install test modes (install/sanity/full) are also accepted.
+          # If empty -> default will be sanity
+          case "${{ inputs.test_type }}" in
+            ""|quick|standard) NATIVE_TEST_TYPE="sanity" ;;
+            comprehensive|full) NATIVE_TEST_TYPE="full" ;;
+            install|sanity) NATIVE_TEST_TYPE="${{ inputs.test_type }}" ;;
+            *)
+              echo "::error::Unsupported test_type '${{ inputs.test_type }}'. Expected quick, standard, comprehensive, full, install, or sanity."
+              exit 1
+              ;;
+          esac
+          echo "native_test_type=${NATIVE_TEST_TYPE}" >> $GITHUB_OUTPUT
           python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch \
             --artifact-group "${{ inputs.artifact_group }}"
           python build_tools/packaging/linux/get_url_repo_params.py get-container-image \
@@ -145,7 +160,7 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       GFX_ARCH: ${{ needs.prepare_install_context.outputs.gfx_arch }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
-      TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
+      TEST_TYPE: ${{ needs.prepare_install_context.outputs.native_test_type }}
     steps:
       - name: Install System Prerequisites
         run: |
