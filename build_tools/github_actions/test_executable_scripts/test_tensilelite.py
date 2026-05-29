@@ -107,6 +107,8 @@ subprocess.check_call(
 )
 
 # TensileLite Python unit tests (includes GPU subtile tests).
+# TODO(TheRock#3288): gfx950-dcgpu is excluded from PR CI (ci.yml) due to runner
+# capacity — GPU subtile tests only exercise on nightly/scheduled builds.
 logging.info("=== Running TensileLite unit tests ===")
 subprocess.check_call(
     [

@@ -14,6 +14,7 @@ packaging==25.0
 python-magic==0.4.27; sys_platform != "win32"
 
 # tensilelite/rocisa test requirements
+# TODO: Keep in sync with rocm-libraries/projects/hipblaslt/tensilelite/requirements.txt
 msgpack>=1.0.0
 joblib>=1.4.0
 numpy>=1.26.0

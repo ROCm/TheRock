@@ -67,12 +67,9 @@ class ROCmLibrariesTest(unittest.TestCase):
                     continue
 
                 if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
-                    # Python C extensions must be loaded via importlib, not
-                    # ctypes.CDLL. Stable ABI extensions (.abi3.so) target a
-                    # minimum CPython version and may use symbols absent from
-                    # older interpreters (e.g. PyType_FromMetaclass requires
-                    # 3.12+). Version-tagged extensions (.cpython-3XX) are
-                    # similarly incompatible across interpreter versions.
+                    # Python C extensions use symbols resolved at import time,
+                    # not via dlopen — ctypes.CDLL fails across interpreter
+                    # versions (e.g. .abi3.so using PyType_FromMetaclass on <3.12).
                     continue
 
                 extra_setup = ""
