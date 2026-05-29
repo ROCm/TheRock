@@ -138,7 +138,7 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
-- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
+- build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
@@ -150,24 +150,19 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
+            "test-runs-on": "linux-gfx942-1gpu-core42-ossci-rocm",
             "test-runs-on-labels": [
                 {
-                    "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.81,
-                },  # vultr (17/21)
-                {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.19,
-                },  # cirrascale (4/21)
-                # Temporarily removed due to cluster issues
+                    "weight": 0.138,
+                },  # cirrascale (4/29)
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.0,
-                },  # core42 (25/46)
+                    "weight": 0.862,
+                },  # core42 (25/29)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "",
+            "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {
