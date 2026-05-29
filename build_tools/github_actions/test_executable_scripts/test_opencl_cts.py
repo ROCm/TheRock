@@ -3,6 +3,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -103,6 +104,7 @@ def run_test(test_exe):
     logging.info(f"++ Exec [{test_exe.parent}]$ {shlex.join(cmd)}")
 
     try:
+        start = time.monotonic()
         with subprocess.Popen(
             cmd,
             cwd=str(test_exe.parent),
@@ -113,12 +115,13 @@ def run_test(test_exe):
             for line in proc.stdout:
                 print(line, end="", flush=True)
             returncode = proc.wait()
+        elapsed = (time.monotonic() - start) / 60
 
         if returncode == 0:
-            logging.info(f"✓ PASSED: {test_name}")
+            logging.info(f"✓ PASSED: {test_name} ({elapsed:.1f} min)")
             return True
         else:
-            logging.error(f"✗ FAILED: {test_name} (exit code: {returncode})")
+            logging.error(f"✗ FAILED: {test_name} ({elapsed:.1f} min, exit code: {returncode})")
             return False
 
     except Exception as e:
