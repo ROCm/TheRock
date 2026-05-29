@@ -204,9 +204,9 @@ jobs:
     needs: [build_tarballs]
     name: Validate JAX Multiarch Tarball
     runs-on: ubuntu-24.04
-    if: ${{ !fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}
     steps:
       - name: Missing multiarch tarball
+        if: ${{ !fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}
         run: |
           echo "Expected multiarch tarball URL was not produced for JAX release workflow"
           exit 1
