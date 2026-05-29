@@ -351,6 +351,15 @@ skip_tests = {
             # because many TestDistBackendWithSpawn siblings passed in the same run.
             "(TestDistBackendWithSpawn and test_DistributedDataParallel)",
             "(TestDistBackendWithSpawn and test_ddp_profiling_execution_trace)",
+
+            # Run 26611796814 shard 3/3, job 78419139757:
+            # https://github.com/ROCm/TheRock/actions/runs/26611796814/job/78419139757
+            # May12/PT + ROCm 7.13.0rc2: newly exposed distributed failures.
+            # Keep test-level skips where pytest -k can isolate the failing method.
+            "(MicroPipelineTPTest and test_fuse_all_gather_matmul_A_dims_3_gather_dim_1_return_A_False)",
+            "(TestOpSpecMesh and test_op_strategy_str_handles_all_specs_none)",
+            "(TestNodeGroupNameResolution and test_ag_group_key_with_node_group_name)",
+            "(SymmetricMemoryTest and test_pg_rendezvous_abort_after)",
         ],
     },
 }
