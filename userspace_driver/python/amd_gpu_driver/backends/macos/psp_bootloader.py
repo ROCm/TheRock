@@ -136,10 +136,18 @@ def parse_psp_firmware(data: bytes) -> list[PSPComponent]:
     return components
 
 
+def _valid_mmio_value(v: int) -> bool:
+    return v != 0xFFFFFFFF
+
+
+def _valid_sos_sign_of_life(v: int) -> bool:
+    return v != 0 and _valid_mmio_value(v)
+
+
 def is_sos_alive(client, mp0_base_dw: int) -> bool:
-    """C2PMSG_81 != 0 means the SOS is running."""
+    """C2PMSG_81 non-zero means SOS is running if MMIO is readable."""
     v = client.mmio_read32(5, c2pmsg_dw(mp0_base_dw, 81) * 4)
-    return v != 0
+    return _valid_sos_sign_of_life(v)
 
 
 def wait_bootloader_ready(client, mp0_base_dw: int,
@@ -154,7 +162,7 @@ def wait_bootloader_ready(client, mp0_base_dw: int,
     reg = c2pmsg_dw(mp0_base_dw, 35) * 4
     while time.time() < deadline:
         v = client.mmio_read32(5, reg)
-        if v & 0x80000000:
+        if _valid_mmio_value(v) and (v & 0x80000000):
             return v
         time.sleep(0.010)
     raise TimeoutError(
@@ -216,13 +224,14 @@ def load_bootloader_component(
         v81 = 0
         while time.time() < deadline:
             v81 = client.mmio_read32(5, c81)
-            if v81 != 0:
+            if _valid_sos_sign_of_life(v81):
                 break
             time.sleep(0.002)
-        if v81 == 0:
+        if not _valid_sos_sign_of_life(v81):
             raise TimeoutError(
                 f"SOS did not come alive after {sos_timeout_ms} ms "
-                f"(C2PMSG_81 still 0, C2PMSG_35=0x{client.mmio_read32(5, c35):08x})"
+                f"(C2PMSG_81=0x{v81:08x}, "
+                f"C2PMSG_35=0x{client.mmio_read32(5, c35):08x})"
             )
         diag["c81_post"] = v81
         diag["c35_post"] = client.mmio_read32(5, c35)
