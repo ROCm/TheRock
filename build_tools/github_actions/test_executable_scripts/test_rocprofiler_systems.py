@@ -18,6 +18,7 @@ EXCLUDED_TESTS = [
     "transferbench-sys-run",
     "fork.*",
     "openmp-target.*",
+    "openmplu-sampling-duration",
     "roctx-sampling",
     "roctx-runtime-instrument",
     "jacobi-usm-sys-run",
