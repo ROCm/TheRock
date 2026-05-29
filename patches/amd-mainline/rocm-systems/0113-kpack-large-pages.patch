@@ -1,4 +1,4 @@
-From 5db363b9bca04387f75509ea2567d2604c3eb4d3 Mon Sep 17 00:00:00 2001
+From 4487c37b2d79062d4e0bf2871306498694f90f75 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
 Date: Fri, 22 May 2026 20:46:50 -0400
 Subject: [PATCH] [kpack] Add per-architecture page size and relocation type
@@ -16,7 +16,7 @@ PPC64:  64KB pages, R_PPC64_RELATIVE (22)
 
 Adding support for a new architecture is a one-liner in _ARCH_CONFIGS.
 
-Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+Co-authored-by: Claude Sonnet 4 <noreply@anthropic.com>
 ---
  .../python/rocm_kpack/elf/kpack_transform.py  |  5 +-
  .../kpack/python/rocm_kpack/elf/operations.py |  8 ++-
@@ -28,7 +28,7 @@ Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
  7 files changed, 91 insertions(+), 37 deletions(-)
 
 diff --git a/shared/kpack/python/rocm_kpack/elf/kpack_transform.py b/shared/kpack/python/rocm_kpack/elf/kpack_transform.py
-index 9c41c6fa1b..fc77155abb 100644
+index 9c41c6fa1b0..fc77155abb1 100644
 --- a/shared/kpack/python/rocm_kpack/elf/kpack_transform.py
 +++ b/shared/kpack/python/rocm_kpack/elf/kpack_transform.py
 @@ -204,11 +204,12 @@ def verify_no_fatbin_relocations(
@@ -47,7 +47,7 @@ index 9c41c6fa1b..fc77155abb 100644
                  problematic.append(
                      ProblematicRelocation(
 diff --git a/shared/kpack/python/rocm_kpack/elf/operations.py b/shared/kpack/python/rocm_kpack/elf/operations.py
-index bfdb32d44c..8f7e6acc93 100644
+index bfdb32d44c1..8f7e6acc930 100644
 --- a/shared/kpack/python/rocm_kpack/elf/operations.py
 +++ b/shared/kpack/python/rocm_kpack/elf/operations.py
 @@ -95,13 +95,14 @@ def map_section_to_load(
@@ -77,10 +77,10 @@ index bfdb32d44c..8f7e6acc93 100644
      manager.add_program_header(new_load)
  
 diff --git a/shared/kpack/python/rocm_kpack/elf/phdr_manager.py b/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
-index e127f182e1..c8b04f226a 100644
+index e127f182e19..c8b04f226a7 100644
 --- a/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
 +++ b/shared/kpack/python/rocm_kpack/elf/phdr_manager.py
-@@ -135,7 +135,7 @@ class ProgramHeaderManager:
+@@ -135,7 +135,7 @@ def allocate_vaddr(self) -> int:
          Returns:
              Virtual address at page boundary after existing segments
          """
@@ -89,7 +89,7 @@ index e127f182e1..c8b04f226a 100644
  
      def _get_available_space(self) -> int:
          """Get available space for program headers at current location."""
-@@ -207,7 +207,7 @@ class ProgramHeaderManager:
+@@ -207,7 +207,7 @@ def _relocate_to_end(self) -> PhdrResizeResult:
  
          # Calculate file offset with proper alignment
          current_end = len(self._surgery.data)
@@ -98,7 +98,7 @@ index e127f182e1..c8b04f226a 100644
  
          # Add padding to reach aligned offset
          padding = new_phoff - current_end
-@@ -249,7 +249,7 @@ class ProgramHeaderManager:
+@@ -249,7 +249,7 @@ def _relocate_to_end(self) -> PhdrResizeResult:
              p_paddr=phdr_vaddr,
              p_filesz=allocated_size,
              p_memsz=allocated_size,
@@ -132,10 +132,10 @@ index e127f182e1..c8b04f226a 100644
 +        p_align=page_size,
      )
 diff --git a/shared/kpack/python/rocm_kpack/elf/surgery.py b/shared/kpack/python/rocm_kpack/elf/surgery.py
-index cfbe41ecc7..de9b462bc7 100644
+index cfbe41ecc77..de9b462bc73 100644
 --- a/shared/kpack/python/rocm_kpack/elf/surgery.py
 +++ b/shared/kpack/python/rocm_kpack/elf/surgery.py
-@@ -33,6 +33,8 @@ from .types import (
+@@ -33,6 +33,8 @@
      SHT_REL,
      SHF_ALLOC,
      R_X86_64_RELATIVE,
@@ -144,7 +144,7 @@ index cfbe41ecc7..de9b462bc7 100644
      get_section_name,
  )
  
-@@ -246,6 +248,16 @@ class ElfSurgery:
+@@ -246,6 +248,16 @@ def modifications(self) -> list[Modification]:
          """List of modifications made."""
          return self._modifications
  
@@ -162,10 +162,10 @@ index cfbe41ecc7..de9b462bc7 100644
      def is_pie_or_shared(self) -> bool:
          """Check if binary is PIE or shared library."""
 diff --git a/shared/kpack/python/rocm_kpack/elf/types.py b/shared/kpack/python/rocm_kpack/elf/types.py
-index 2d6c6c7347..c268415240 100644
+index 2d6c6c73470..c2684152401 100644
 --- a/shared/kpack/python/rocm_kpack/elf/types.py
 +++ b/shared/kpack/python/rocm_kpack/elf/types.py
-@@ -16,9 +16,13 @@ from typing import ClassVar
+@@ -16,9 +16,13 @@
  # Constants
  # =============================================================================
  
@@ -180,7 +180,7 @@ index 2d6c6c7347..c268415240 100644
  # ELF header offsets (for direct byte access)
  E_IDENT_OFFSET = 0
  E_IDENT_SIZE = 16
-@@ -100,6 +104,9 @@ R_X86_64_GLOB_DAT = 6
+@@ -100,6 +104,9 @@
  R_X86_64_JUMP_SLOT = 7
  R_X86_64_RELATIVE = 8  # Used for PIE/shared library pointer adjustments
  
@@ -190,7 +190,7 @@ index 2d6c6c7347..c268415240 100644
  # Dynamic section tags (d_tag)
  DT_NULL = 0
  DT_NEEDED = 1
-@@ -483,32 +490,35 @@ class RelaEntry:
+@@ -483,32 +490,35 @@ def make_info(sym: int, type_: int) -> int:
          """Create r_info value from symbol index and type."""
          return (sym << 32) | (type_ & 0xFFFFFFFF)
  
@@ -233,7 +233,7 @@ index 2d6c6c7347..c268415240 100644
          if target is None:
              return None
          range_end = range_start + range_size
-@@ -561,34 +571,55 @@ class RelEntry:
+@@ -561,34 +571,55 @@ def r_sym(self) -> int:
  # =============================================================================
  
  
@@ -300,10 +300,10 @@ index 2d6c6c7347..c268415240 100644
  
  def get_section_name(
 diff --git a/shared/kpack/python/rocm_kpack/elf/verify.py b/shared/kpack/python/rocm_kpack/elf/verify.py
-index 9a40ff6c88..0c8f09178a 100644
+index 9a40ff6c88f..0c8f09178a2 100644
 --- a/shared/kpack/python/rocm_kpack/elf/verify.py
 +++ b/shared/kpack/python/rocm_kpack/elf/verify.py
-@@ -141,9 +141,10 @@ class ElfVerifier(BinaryVerifier):
+@@ -141,9 +141,10 @@ def check_phdr_alignment(self) -> VerificationResult:
          """
          result = VerificationResult()
  
@@ -317,7 +317,7 @@ index 9a40ff6c88..0c8f09178a 100644
              if offset_mod != vaddr_mod:
                  result.add_error(
 diff --git a/shared/kpack/python/rocm_kpack/elf/zero_page.py b/shared/kpack/python/rocm_kpack/elf/zero_page.py
-index 4f33db60ee..4b34afc391 100644
+index 4f33db60ee0..4b34afc391a 100644
 --- a/shared/kpack/python/rocm_kpack/elf/zero_page.py
 +++ b/shared/kpack/python/rocm_kpack/elf/zero_page.py
 @@ -45,12 +45,15 @@ class ZeroPageResult:
@@ -388,6 +388,3 @@ index 4f33db60ee..4b34afc391 100644
  
      # Find the PT_LOAD containing the section
      target_result = surgery.find_phdr_containing_vaddr(section_vaddr)
--- 
-2.43.0
-

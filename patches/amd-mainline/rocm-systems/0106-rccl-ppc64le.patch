@@ -1,40 +1,42 @@
-From 8a7c9614b433eaa1c237b6ac219b548949984b9f Mon Sep 17 00:00:00 2001
+From 9878af57bcb88ff1de11f1c74d1b9e06932338bd Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Tue, 12 May 2026 20:05:04 +0000
-Subject: [PATCH] rccl ppc64le
+Date: Thu, 28 May 2026 19:23:55 +0000
+Subject: [PATCH] Guard x86-only code in rccl
 
 ---
- projects/rccl/src/init.cc | 8 +++++++-
- 1 file changed, 7 insertions(+), 1 deletion(-)
+ projects/rccl/src/init.cc | 4 ++++
+ 1 file changed, 4 insertions(+)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index 29470d0480..0ef9ad53e0 100644
+index 29470d0480..5ec487c5fc 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
 @@ -72,7 +72,9 @@
  
  #include "latency_profiler/CollTrace.h"
  #include "latency_profiler/CollTraceFunc.h"
--#include  <cpuid.h>
 +#if defined(__x86_64__) || defined(__i386__)
-+#include <cpuid.h>
+ #include  <cpuid.h>
 +#endif
  
  #ifndef STR2
    #define STR2(v) #v
-@@ -252,8 +254,12 @@ static ncclResult_t ncclInit() {
+@@ -251,6 +253,7 @@ static ncclResult_t ncclInit() {
+     }
      INFO(NCCL_INIT, "Kernel version: %s", verStr);
      if (strstr(verStr, "cray") == NULL) {
-       unsigned int eax, ebx, ecx, edx;
 +#if defined(__x86_64__) || defined(__i386__)
+       unsigned int eax, ebx, ecx, edx;
        if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx))
          ecx = 0; // cpuid not supported
-+#else
-+      	ecx=0;
+@@ -268,6 +271,7 @@ static ncclResult_t ncclInit() {
+         if (strstr(strValue, "iommu=pt") == NULL)
+           WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
+       }
 +#endif
-       NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
-       // Check BIOS string and hypervisor presence on ecx bit 31
-       if (strncmp("Hyper-V UEFI Release", strValue, 20) != 0 && (ecx & (1u << 31)) == 0) {
+ #ifndef HIP_UNCACHED_MEMORY
+       char *env = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
+       if (env == NULL || strcmp(env, "1") != 0)
 -- 
-2.47.3
+2.52.0
 
