@@ -200,24 +200,20 @@ jobs:
               "ref": "${{ inputs.ref || '' }}"
             }
 
-  validate_jax_tarball:
-    needs: [build_tarballs]
-    name: Validate JAX Multiarch Tarball
+  trigger_release_jax_wheels:
+    needs: [build_artifacts, build_tarballs]
+    name: Trigger Release JAX Wheels
     runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+
     steps:
-      - name: Missing multiarch tarball
+      - name: Validate Multiarch Tarball
         if: ${{ !fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}
         run: |
           echo "Expected multiarch tarball URL was not produced for JAX release workflow"
           exit 1
 
-  trigger_release_jax_wheels:
-    needs: [build_artifacts, build_tarballs, validate_jax_tarball]
-    name: Trigger Release JAX Wheels
-    runs-on: ubuntu-24.04
-    permissions:
-      actions: write
-    steps:
       - name: Trigger JAX Build
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
         with:
