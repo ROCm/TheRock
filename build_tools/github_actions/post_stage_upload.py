@@ -14,8 +14,8 @@ to S3, organized by stage name and (optionally) GPU family:
 This is the multi-arch counterpart to post_build_upload.py, which handles
 single-stage (monolithic) CI builds. Key differences:
 
+- Uploads the stage manifest alongside logs when present
 - No artifact upload (artifact_manager.py push handles that)
-- No manifest upload (deferred to workflow-level, see #1236)
 - No index generation (server-side Lambda handles that, see #3331)
 - Logs are scoped to one stage, not the entire build
 
@@ -141,6 +141,25 @@ def upload_stage_logs(
     backend.upload_directory(log_dir, dest, exclude=["ccache/**/*"])
 
 
+def upload_manifest(
+    build_dir: Path,
+    output_root: WorkflowOutputRoot,
+    backend: StorageBackend,
+):
+    """Upload therock_manifest.json when present."""
+
+    manifest_path = (
+        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
+    )
+
+    if not manifest_path.is_file():
+        log("[INFO] No therock_manifest.json found. Skipping upload.")
+        return
+
+    log(f"[INFO] Uploading manifest {manifest_path}")
+    backend.upload_file(manifest_path, output_root.manifest_root())
+
+
 def run(args: argparse.Namespace):
     log(f"Creating log archives for stage '{args.stage}'")
     create_ninja_log_archive(args.build_dir)
@@ -159,6 +178,12 @@ def run(args: argparse.Namespace):
         stage_name=args.stage,
         amdgpu_family=args.amdgpu_family,
     )
+    if args.stage == "foundation":
+        upload_manifest(
+            build_dir=args.build_dir,
+            output_root=output_root,
+            backend=backend,
+        )
 
 
 def main(argv: list[str] | None = None):
