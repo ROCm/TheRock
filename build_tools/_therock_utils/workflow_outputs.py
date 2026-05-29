@@ -196,6 +196,20 @@ class WorkflowOutputRoot:
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
         )
 
+    def manifest_root(self) -> StorageLocation:
+        """Location for the workflow-level therock_manifest.json."""
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/manifests/therock_manifest.json",
+        )
+
+    def manifests_index(self) -> StorageLocation:
+        """Location for the workflow-level manifests index."""
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/manifests/index.html",
+        )
+
     # -- Native packages --------------------------------------------------------
 
     def native_linux_packages(self, pkg_type: str) -> StorageLocation:
