@@ -206,14 +206,15 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       actions: write
-
     steps:
-      - name: Validate Multiarch Tarball
-        if: ${{ !fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}
+      - name: Verify multiarch tarball URL
+        env:
+          MULTIARCH_URL: ${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}
         run: |
-          echo "Expected multiarch tarball URL was not produced for JAX release workflow"
-          exit 1
-
+          if [ -z "${MULTIARCH_URL}" ]; then
+            echo "::error::No 'multiarch' entry in build_tarballs.outputs.tarball_urls; refusing to dispatch JAX build."
+            exit 1
+          fi
       - name: Trigger JAX Build
         uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
         with:
