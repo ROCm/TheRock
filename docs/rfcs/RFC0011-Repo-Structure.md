@@ -45,12 +45,10 @@ repo.amd.com's open source software release publications need standardization. I
   - expansions - SDK built with dependencies on the ROCm Core SDK
     - HPC SDK - a ROCm expansion released on its own cadence, pinned to a single ROCm version per release
   - extras - standalone components part of ROCm
-- pyindex - top-level folder for the ROCm Python package indices. Contains
-  two sibling indices (see "Python Indices" section):
-  - `pyindex/multi-arch/` — multi-arch index requiring explicit device
-    extras (e.g. `pip install rocm[device-gfx942]`)
-  - `pyindex/multi-arch-compat/` — backward-compatible multi-arch index
-    where `pip install rocm` pulls in all device extras automatically
+- `whl/` - backward-compatible multi-arch ROCm Python packages index
+  where `pip install rocm` pulls in all device extras automatically
+- `whl-next/` - multi-arch ROCm Python packages index requiring explicit device
+  extras (e.g. `pip install rocm[device-gfx942]`)
 
 ## Stream Subdomains
 
