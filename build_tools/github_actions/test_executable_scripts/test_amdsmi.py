@@ -126,9 +126,6 @@ cmd = [str(AMDSMITST_BIN)] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
-# -----------------------------
-# Optional safety checks (recommended)
-# -----------------------------
 if not AMDSMITST_BIN.exists():
     raise FileNotFoundError(f"amdsmitst not found at {AMDSMITST_BIN}")
 
