@@ -14,6 +14,7 @@
 set -e
 
 SOURCE_DIR="${1:?Source directory must be given}"
+CMAKE_SOURCE_DIR="${2:?CMake Source directory must be given}"
 
 verify_patch() {
     local file="$1" name="$2"
@@ -27,18 +28,15 @@ verify_patch() {
 echo "Patching TBB sources..."
 
 # tbb: insert OUTPUT_NAME after the SOVERSION line in set_target_properties.
-sed -i 's/    SOVERSION \${TBB_BINARY_VERSION}$/    SOVERSION ${TBB_BINARY_VERSION}\n    OUTPUT_NAME "rocm_sysdeps_tbb"/' \
-    "$SOURCE_DIR/src/tbb/CMakeLists.txt"
+patch "$SOURCE_DIR/src/tbb/CMakeLists.txt" "$CMAKE_SOURCE_DIR/patches/third-party/sysdeps/linux/tbb/0001-Add-OUTPUT_NAME-to-tbb.patch"
 verify_patch "$SOURCE_DIR/src/tbb/CMakeLists.txt" "tbb"
 
 # tbbmalloc: same.
-sed -i 's/    SOVERSION \${TBBMALLOC_BINARY_VERSION}$/    SOVERSION ${TBBMALLOC_BINARY_VERSION}\n    OUTPUT_NAME "rocm_sysdeps_tbbmalloc"/' \
-    "$SOURCE_DIR/src/tbbmalloc/CMakeLists.txt"
+patch "$SOURCE_DIR/src/tbbmalloc/CMakeLists.txt" "$CMAKE_SOURCE_DIR/patches/third-party/sysdeps/linux/tbb/0001-Add-OUTPUT_NAME-to-tbbmalloc.patch"
 verify_patch "$SOURCE_DIR/src/tbbmalloc/CMakeLists.txt" "tbbmalloc"
 
 # tbbmalloc_proxy: SOVERSION is followed by a closing paren on the same line.
-sed -i 's/    SOVERSION \${TBBMALLOC_BINARY_VERSION})$/    SOVERSION ${TBBMALLOC_BINARY_VERSION}\n    OUTPUT_NAME "rocm_sysdeps_tbbmalloc_proxy")/' \
-    "$SOURCE_DIR/src/tbbmalloc_proxy/CMakeLists.txt"
+patch "$SOURCE_DIR/src/tbbmalloc_proxy/CMakeLists.txt" "$CMAKE_SOURCE_DIR/patches/third-party/sysdeps/linux/tbb/0001-Add-OUTPUT_NAME-to-tbbmalloc_proxy.patch"
 verify_patch "$SOURCE_DIR/src/tbbmalloc_proxy/CMakeLists.txt" "tbbmalloc_proxy"
 
 echo "Done patching TBB sources."

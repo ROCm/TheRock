@@ -28,6 +28,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     CMAKE_ARGS
       "-DSOURCE_DIR=${_source_dir}"
       "-DPATCHELF=${PATCHELF}"
+      "-DTHEROCK_ROOT_DIR=${CMAKE_SOURCE_DIR}"
     INSTALL_DESTINATION
       lib/rocm_sysdeps
     INTERFACE_LINK_DIRS
@@ -68,7 +69,7 @@ add_custom_target(build ALL
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   # Patch source: rename library output names to rocm_sysdeps_ prefix.
   COMMAND
-    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s"
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s" "${THEROCK_ROOT_DIR}"
   # Configure oneTBB.
   COMMAND
     "${CMAKE_COMMAND}"
