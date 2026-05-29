@@ -61,12 +61,12 @@ rather than under a `<stream>/` prefix on the parent domain.
 
 | Stream    | Subdomain               | Status            |
 | :-------- | :---------------------- | :---------------- |
-| nightly   | `nightly.repo.amd.com`  | required at v1    |
+| nightly   | `nightly.repo.amd.com`  | required at v2    |
 | rc        | `rc.repo.amd.com`       | required at v1    |
 | stable    | `stable.repo.amd.com`   | required at v1    |
 | ltsrc     | `ltsrc.repo.amd.com`    | future (reserved) |
 | lts       | `lts.repo.amd.com`      | future (reserved) |
-| archives  | `archives.repo.amd.com` | required at v1    |
+| archives  | `archives.repo.amd.com` | required at v2    |
 
 Two folders are **singletons** on the bare `repo.amd.com` domain and
 do **not** follow the stream subdomain pattern:
