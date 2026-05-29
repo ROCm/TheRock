@@ -4,14 +4,32 @@
 
 """Prepare one PyTorch source manifest for a build workflow.
 
-The build workflow always consumes a manifest URL. This script either passes
-through an existing URL or generates, uploads, and outputs one manifest for a
-single PyTorch ref.
+The build workflow always consumes a manifest URL: an HTTP URL to a JSON source
+manifest that pins the exact repository URLs, commits, branches, and expected
+package versions for one PyTorch build. Passing this URL between jobs lets the
+workflow freeze source discovery once, then have the build job check out exactly
+the same sources even when floating refs such as ``nightly`` move later.
+
+This script supports two input modes:
+
+* Pass-through mode: ``--manifest-url`` is already known. The script emits that
+  URL as a GitHub Actions output. It does not write a step summary because the
+  caller that generated or selected the manifests owns that summary.
+* Generation mode: ``--pytorch-git-ref``, ``--rocm-version``, and ``--run-id``
+  identify the PyTorch ref, package version context, and artifact layout. The
+  script invokes ``generate_pytorch_source_manifest.py`` to write one manifest
+  under ``--manifest-dir``, uploads it to the workflow output location, emits
+  the manifest URL output, and writes a step summary.
+
+Optional inputs are either forwarded to the manifest generator (platform,
+project list, version suffix, and TheRock source info overrides) or used by this
+script for upload behavior (artifact bucket, local upload staging directory, and
+dry-run behavior).
 """
 
 import argparse
+import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -20,42 +38,13 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from github_actions.determine_version import derive_version_suffix
-from github_actions.generate_pytorch_source_manifest import (
-    default_projects_for_pytorch_ref,
-    generate_manifest,
-    manifest_filename,
-    write_manifest_file,
-)
+from github_actions.generate_pytorch_source_manifest import manifest_filename
 from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
-from github_actions.manifest_utils import GitSourceInfo, detect_therock_source_info
 
 
-@dataclass(frozen=True)
-class UploadResult:
-    manifest_url: str
-    manifest_s3_uri: str
-    manifest_dir_url: str
-    manifest_dir_s3_uri: str
-
-
-def _split_words(value: str) -> list[str]:
-    return value.replace(";", " ").split() if value else []
-
-
-def resolve_therock_source_info(
-    *,
-    therock_root: Path,
-    therock_commit: str,
-    therock_repo: str,
-    therock_branch: str,
-) -> GitSourceInfo:
-    detected = detect_therock_source_info(therock_root)
-    return GitSourceInfo(
-        commit=therock_commit or detected.commit,
-        repo=therock_repo or detected.repo,
-        branch=therock_branch or detected.branch,
-    )
+GENERATOR_SCRIPT = (
+    Path(__file__).resolve().with_name("generate_pytorch_source_manifest.py")
+)
 
 
 def make_output_root(
@@ -86,26 +75,37 @@ def generate_manifest_file(
     rocm_version: str,
     version_suffix: str,
     platform: str,
-    projects: list[str] | None,
-    therock_info: GitSourceInfo,
+    projects: str,
+    therock_commit: str,
+    therock_repo: str,
+    therock_branch: str,
 ) -> Path:
-    manifest_projects = projects or default_projects_for_pytorch_ref(
-        platform, pytorch_git_ref
-    )
-    manifest = generate_manifest(
-        pytorch_git_ref=pytorch_git_ref,
-        rocm_version=rocm_version,
-        version_suffix=version_suffix,
-        platform=platform,
-        projects=manifest_projects,
-        therock_commit=therock_info.commit,
-        therock_repo=therock_info.repo,
-        therock_branch=therock_info.branch or "",
-    )
     manifest_path = manifest_dir / manifest_filename(
         platform=platform, pytorch_git_ref=pytorch_git_ref
     )
-    write_manifest_file(manifest_path, manifest)
+    command = [
+        sys.executable,
+        str(GENERATOR_SCRIPT),
+        "--rocm-version",
+        rocm_version,
+        "--platform",
+        platform,
+        "--pytorch-git-refs",
+        pytorch_git_ref,
+        "--output",
+        str(manifest_path),
+    ]
+    if version_suffix:
+        command.extend(["--version-suffix", version_suffix])
+    if projects:
+        command.extend(["--projects", projects])
+    if therock_commit:
+        command.extend(["--therock-commit", therock_commit])
+    if therock_repo:
+        command.extend(["--therock-repo", therock_repo])
+    if therock_branch:
+        command.extend(["--therock-branch", therock_branch])
+    subprocess.check_call(command)
     return manifest_path
 
 
@@ -118,7 +118,7 @@ def upload_manifest_file(
     bucket: str | None = None,
     output_dir: Path | None = None,
     dry_run: bool = False,
-) -> UploadResult:
+) -> str:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
@@ -136,40 +136,18 @@ def upload_manifest_file(
 
     backend = create_storage_backend(staging_dir=output_dir, dry_run=dry_run)
     backend.upload_file(manifest_path, manifest_location)
-    return UploadResult(
-        manifest_url=manifest_location.https_url,
-        manifest_s3_uri=manifest_location.s3_uri,
-        manifest_dir_url=manifest_dir.https_url,
-        manifest_dir_s3_uri=manifest_dir.s3_uri,
-    )
+    return manifest_location.https_url
 
 
-def append_manifest_summary(
-    *, manifest_url: str, manifest_s3_uri: str = "", rocm_version: str = ""
-) -> None:
+def append_manifest_summary(*, manifest_url: str, rocm_version: str = "") -> None:
     lines = [
         "## PyTorch Manifest",
         "",
         f"* Manifest: {manifest_url}",
     ]
-    if manifest_s3_uri:
-        lines.append(f"* S3 URI: `{manifest_s3_uri}`")
     if rocm_version:
         lines.append(f"* ROCm version: `{rocm_version}`")
     gha_append_step_summary("\n".join(lines) + "\n")
-
-
-def emit_outputs(manifest_url: str, upload: UploadResult | None = None) -> None:
-    outputs = {"manifest_url": manifest_url}
-    if upload:
-        outputs.update(
-            {
-                "manifest_s3_uri": upload.manifest_s3_uri,
-                "manifest_dir_url": upload.manifest_dir_url,
-                "manifest_dir_s3_uri": upload.manifest_dir_s3_uri,
-            }
-        )
-    gha_set_output(outputs)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -235,43 +213,44 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Print upload plan without actually uploading.",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+
+    # Without a manifest URL, this script generates and uploads one.
+    if not args.manifest_url:
+        if not args.pytorch_git_ref:
+            parser.error("--pytorch-git-ref is required without --manifest-url")
+        if not args.rocm_version:
+            parser.error("--rocm-version is required when generating a manifest")
+        if not args.run_id:
+            parser.error(
+                "--run-id is required when generating and uploading a manifest"
+            )
+
+    return args
 
 
 def main(argv: list[str]) -> None:
     args = parse_args(argv)
     if args.manifest_url:
-        emit_outputs(args.manifest_url)
-        append_manifest_summary(manifest_url=args.manifest_url)
+        # Pass-through mode: the caller already selected or generated the
+        # manifest, so this job only forwards the URL to downstream jobs.
+        gha_set_output({"manifest_url": args.manifest_url})
         return
 
-    if not args.pytorch_git_ref:
-        raise ValueError("--pytorch-git-ref is required without --manifest-url")
-    if not args.rocm_version:
-        raise ValueError("--rocm-version is required when generating a manifest")
-    if not args.run_id:
-        raise ValueError(
-            "--run-id is required when generating and uploading a manifest"
-        )
-
-    version_suffix = args.version_suffix or derive_version_suffix(args.rocm_version)
-    projects = _split_words(args.projects) or None
-    therock_info = resolve_therock_source_info(
-        therock_root=Path(__file__).resolve().parents[2],
-        therock_commit=args.therock_commit,
-        therock_repo=args.therock_repo,
-        therock_branch=args.therock_branch,
-    )
+    # Generation mode: invoke the manifest generator, upload its output, then
+    # pass the uploaded URL to downstream jobs.
     manifest_path = generate_manifest_file(
         manifest_dir=args.manifest_dir,
         pytorch_git_ref=args.pytorch_git_ref,
         rocm_version=args.rocm_version,
-        version_suffix=version_suffix,
+        version_suffix=args.version_suffix,
         platform=args.platform,
-        projects=projects,
-        therock_info=therock_info,
+        projects=args.projects,
+        therock_commit=args.therock_commit,
+        therock_repo=args.therock_repo,
+        therock_branch=args.therock_branch,
     )
-    upload = upload_manifest_file(
+    manifest_url = upload_manifest_file(
         manifest_path=manifest_path,
         run_id=args.run_id,
         platform=args.platform,
@@ -281,11 +260,10 @@ def main(argv: list[str]) -> None:
         dry_run=args.dry_run,
     )
     append_manifest_summary(
-        manifest_url=upload.manifest_url,
-        manifest_s3_uri=upload.manifest_s3_uri,
+        manifest_url=manifest_url,
         rocm_version=args.rocm_version,
     )
-    emit_outputs(upload.manifest_url, upload)
+    gha_set_output({"manifest_url": manifest_url})
 
 
 if __name__ == "__main__":

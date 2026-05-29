@@ -1,7 +1,6 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-import json
 import os
 import sys
 import tempfile
@@ -22,7 +21,7 @@ class PreparePyTorchManifestsTest(unittest.TestCase):
             manifest_path = Path(tmp) / "manifest.json"
             manifest_path.write_text("{}", encoding="utf-8")
 
-            upload = m.upload_manifest_file(
+            manifest_url = m.upload_manifest_file(
                 manifest_path=manifest_path,
                 run_id="99999",
                 platform="linux",
@@ -40,12 +39,8 @@ class PreparePyTorchManifestsTest(unittest.TestCase):
             )
             self.assertTrue(uploaded_manifest.is_file())
             self.assertEqual(
-                upload.manifest_url,
+                manifest_url,
                 "https://test.s3.amazonaws.com/99999-linux/manifests/pytorch/manifest.json",
-            )
-            self.assertEqual(
-                upload.manifest_dir_s3_uri,
-                "s3://test/99999-linux/manifests/pytorch",
             )
 
     def test_main_passes_through_manifest_url(self) -> None:
@@ -59,39 +54,20 @@ class PreparePyTorchManifestsTest(unittest.TestCase):
         gha_set_output.assert_called_once_with(
             {"manifest_url": "https://example.com/manifest.json"}
         )
-        self.assertIn(
-            "https://example.com/manifest.json",
-            gha_append_step_summary.call_args.args[0],
-        )
+        gha_append_step_summary.assert_not_called()
 
     def test_main_generates_uploads_and_outputs_manifest_url(self) -> None:
-        generated_manifest = {
-            "pytorch": m.GitSourceInfo(
-                repo="https://github.com/ROCm/pytorch",
-                commit="1" * 40,
-                branch="release/2.12",
-                version="2.12.0+rocm7.13.0",
-            ),
-            "therock": m.GitSourceInfo(
-                repo="https://github.com/ROCm/TheRock",
-                commit="a" * 40,
-                branch="main",
-                version="7.13.0",
-            ),
-        }
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             manifest_dir = Path(tmp) / "manifests"
+            manifest_path = (
+                manifest_dir / "therock-manifest_torch_linux_release-2.12.json"
+            )
+            manifest_path.parent.mkdir(parents=True)
+            manifest_path.write_text("{}", encoding="utf-8")
+
             with mock.patch.object(
-                m, "generate_manifest", return_value=generated_manifest
-            ), mock.patch.object(
-                m,
-                "resolve_therock_source_info",
-                return_value=m.GitSourceInfo(
-                    repo="https://github.com/ROCm/TheRock",
-                    commit="a" * 40,
-                    branch="main",
-                ),
-            ), mock.patch.object(
+                m.subprocess, "check_call"
+            ) as check_call, mock.patch.object(
                 m, "gha_set_output"
             ) as gha_set_output, mock.patch.object(
                 m, "gha_append_step_summary"
@@ -119,12 +95,22 @@ class PreparePyTorchManifestsTest(unittest.TestCase):
                     ]
                 )
 
-            manifest_path = (
-                manifest_dir / "therock-manifest_torch_linux_release-2.12.json"
+            check_call.assert_called_once_with(
+                [
+                    sys.executable,
+                    str(m.GENERATOR_SCRIPT),
+                    "--rocm-version",
+                    "7.13.0",
+                    "--platform",
+                    "linux",
+                    "--pytorch-git-refs",
+                    "release/2.12",
+                    "--output",
+                    str(manifest_path),
+                    "--projects",
+                    "pytorch",
+                ]
             )
-            manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(manifest_data["schema_version"], 1)
-            self.assertEqual(manifest_data["pytorch"]["branch"], "release/2.12")
 
         outputs = gha_set_output.call_args.args[0]
         self.assertEqual(
@@ -132,15 +118,12 @@ class PreparePyTorchManifestsTest(unittest.TestCase):
             "https://test.s3.amazonaws.com/99999-linux/manifests/pytorch/"
             "therock-manifest_torch_linux_release-2.12.json",
         )
-        self.assertEqual(
-            outputs["manifest_dir_s3_uri"],
-            "s3://test/99999-linux/manifests/pytorch",
-        )
         gha_append_step_summary.assert_called_once()
 
     def test_main_requires_ref_when_generating_manifest(self) -> None:
-        with self.assertRaisesRegex(ValueError, "--pytorch-git-ref"):
+        with self.assertRaises(SystemExit) as context:
             m.main(["--rocm-version", "7.13.0", "--run-id", "99999"])
+        self.assertEqual(context.exception.code, 2)
 
 
 if __name__ == "__main__":
