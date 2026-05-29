@@ -163,14 +163,14 @@ in *Per-stream specializations* further down.
 - **amdgpu/** *(reserved for future use; same tree, future GPU driver
   artifacts)*
 - **rocm/**
-  - **pyindex/** — **central** PEP 503 simple index for the entire
-    stream. A single `pyindex/` serves wheels from every wheel-
+  - **whl/** - **central** backward-compatible ROCm Python packages index for the entire
+    stream. A single index serves wheels from every wheel-
     producing area in the stream (`core/`, `expansions/`,
     wheel-producing extras, `pytorch/`, `jax/`, `onnx-runtime/`).
-    There is no per-package `pyindex/`. Required sub-folders:
-    - **one/** — single-arch variant (user picks device extras)
-    - **all/** — all-arch variant (`pip install rocm` pulls in every
-      device extra automatically)
+  - **whl-next/** - **central** ROCm Python packages index for the entire
+    stream. A single index serves wheels from every wheel-
+    producing area in the stream (`core/`, `expansions/`,
+    wheel-producing extras, `pytorch/`, `jax/`, `onnx-runtime/`).   
 
     See Python Indices section.
   - **core/**
