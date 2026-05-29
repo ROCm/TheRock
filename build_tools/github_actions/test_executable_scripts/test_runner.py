@@ -47,11 +47,6 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
     "hipsparselt": "hipsparselt",
-    # rocgdb's install dir matches the job name, but the entry documents
-    # that this is a non-default test dir (resolved via COMPONENT_OVERRIDES
-    # to tests/rocgdb because bin/rocgdb is the rocgdb wrapper script, not
-    # a directory).
-    "rocgdb": "rocgdb",
     # Add more mappings as needed
 }
 
@@ -100,11 +95,6 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #
 # - additional_env_paths: Additional paths to prepend to the existing PATH, LD_LIBRARY_PATH, etc.
 #   relative to ROCM_PATH
-#
-# - env_vars: Extra environment variables to export into the ctest process.
-#   Values are lists of path parts joined relative to THEROCK_DIR (TheRock
-#   checkout root), letting components reference helper scripts that ship
-#   inside TheRock without baking absolute paths into install-time files.
 
 COMPONENT_OVERRIDES = {
     # For rocprofiler-compute, we need the following additional paths:
@@ -120,23 +110,13 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
-    # rocgdb's install-time CTestTestfile.cmake lives at tests/rocgdb/
-    # (bin/rocgdb is the rocgdb wrapper *script*, not a directory).
-    # Each ctest test wraps back into test_rocgdb.py via a bash launcher
-    # that reads $TEST_RUNNER_SCRIPT_PATH, so we export the absolute path
-    # to test_rocgdb.py here. The install file is generated from
-    # ROCgdb/gdb/testsuite/test_categories.yaml by
-    # debug-tools/rocgdb/gen_install_ctestfile.py at TheRock configure time.
+    # rocgdb installs its CTestTestfile.cmake alongside its testsuite at
+    # tests/rocgdb/gdb/testsuite/ (bin/rocgdb is the rocgdb wrapper
+    # *script*, not a directory). The CTestTestfile.cmake and the
+    # test_rocgdb.py launcher it invokes are both owned and shipped by the
+    # ROCgdb repo - TheRock just installs the testsuite tree verbatim.
     "rocgdb": {
-        "test_dir": ["tests", "rocgdb"],
-        "env_vars": {
-            "TEST_RUNNER_SCRIPT_PATH": [
-                "build_tools",
-                "github_actions",
-                "test_executable_scripts",
-                "test_rocgdb.py",
-            ],
-        },
+        "test_dir": ["tests", "rocgdb", "gdb", "testsuite"],
     },
 }
 
@@ -160,13 +140,6 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
         test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
-
-    # env_vars values are path parts relative to THEROCK_DIR; joining here
-    # lets install-time files reference helper scripts via $ENV without
-    # baking absolute paths.
-    for env_key, path_parts in overrides.get("env_vars", {}).items():
-        env[env_key] = str(THEROCK_DIR.joinpath(*path_parts))
-
     return test_dir
 
 
