@@ -338,7 +338,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   # From the repository root
-  cmake --build build --target therock-archives
+  cmake --build build --target therock-artifacts
 
   python ./build_tools/build_python_packages.py \
     --artifact-dir=build/artifacts \
