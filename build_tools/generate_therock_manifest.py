@@ -172,23 +172,12 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
-def rocm_version_from_package_version(rocm_package_version: str) -> str:
-    match = re.match(r"^(\d+\.\d+\.\d+)", rocm_package_version)
-    if not match:
-        raise ValueError(
-            f"Could not derive rocm_version from rocm_package_version: "
-            f"{rocm_package_version}"
-        )
-    return match.group(1)
-
-
 def build_manifest_schema(
     repo_root: Path,
     the_rock_commit: str,
     github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
-    rocm_version: str | None = None,
 ) -> dict:
     # Enumerate submodules from .gitmodules at the specified commit.
     entries = list_submodules_from_gitmodules_at_commit(repo_root, the_rock_commit)
@@ -220,9 +209,6 @@ def build_manifest_schema(
     if rocm_package_version:
         manifest["rocm_package_version"] = rocm_package_version
 
-    if rocm_version:
-        manifest["rocm_version"] = rocm_version
-
     manifest["submodules"] = rows
     return manifest
 
@@ -232,7 +218,6 @@ def build_partial_manifest_schema(
     github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
-    rocm_version: str | None = None,
 ) -> dict:
     # Enumerate submodules from the filesystem .gitmodules file when git metadata
     # is unavailable (for example, source trees with .git removed).
@@ -263,9 +248,6 @@ def build_partial_manifest_schema(
 
     if rocm_package_version:
         manifest["rocm_package_version"] = rocm_package_version
-
-    if rocm_version:
-        manifest["rocm_version"] = rocm_version
 
     manifest["submodules"] = rows
     return manifest
@@ -307,11 +289,6 @@ def main():
     github_job = os.getenv("GITHUB_JOB")
     github_run_id = os.getenv("GITHUB_RUN_ID")
     git_available = has_git_metadata(repo_root)
-    rocm_version = (
-        rocm_version_from_package_version(args.rocm_package_version)
-        if args.rocm_package_version
-        else None
-    )
 
     if git_available:
         the_rock_commit = capture(["git", "rev-parse", args.commit], cwd=repo_root)
@@ -321,7 +298,6 @@ def main():
             github_job,
             github_run_id,
             args.rocm_package_version,
-            rocm_version,
         )
     else:
         manifest = build_partial_manifest_schema(
@@ -329,7 +305,6 @@ def main():
             github_job,
             github_run_id,
             args.rocm_package_version,
-            rocm_version,
         )
 
     # Merge flag settings into the manifest if provided.
