@@ -90,6 +90,12 @@ else:
                 "amdsmitstReadWrite.FanReadWrite",
             ]
         },
+        "gfx103X-all": {
+            "linux": [
+                "amdsmitstReadWrite.FanReadWrite",
+            ]
+        },
+
     }
 
     if (
