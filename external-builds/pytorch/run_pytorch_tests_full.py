@@ -128,6 +128,11 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # 300s timeout; separated from test-level FSDP skips because the module
     # blocks attribution progress before narrower skips can be validated.
     "distributed/_composable/fsdp/test_fully_shard_comm",
+    # Run 26611796814 shard 3/3, job 78419139757:
+    # https://github.com/ROCm/TheRock/actions/runs/26611796814/job/78419139757
+    # May12/PT + ROCm 7.13.0rc2: distributed/tensor/test_dtensor_ops
+    # fails during module import before pytest -k can deselect a method.
+    "distributed/tensor/test_dtensor_ops",
 ]
 
 
