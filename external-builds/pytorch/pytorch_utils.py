@@ -323,6 +323,46 @@ def set_gpu_execution_policy(
         return flat_devices
 
 
+def configure_gpu_visibility(
+    amdgpu_family: str,
+    device_query: str,
+    gpu_policy: str,
+) -> list[str]:
+    """Query candidate GPUs, apply the selection policy, and set HIP_VISIBLE_DEVICES.
+
+    Combines the two GPU-selection stages shared by the PyTorch test runners:
+    stage 1 (``device_query``) builds the candidate set, stage 2 (``gpu_policy``)
+    decides how many candidates are made visible.
+
+    Must run BEFORE torch is imported: once torch.cuda is initialized, changing
+    HIP_VISIBLE_DEVICES has no effect.
+
+    Args:
+        amdgpu_family: AMDGPU family filter (empty string auto-detects).
+        device_query: Stage-1 candidate selection, "unique" or "all".
+        gpu_policy: Stage-2 visibility policy, "single" or "all".
+
+    Returns:
+        Sorted list of the architectures that were made visible.
+    """
+    if device_query == "unique":
+        supported_devices = get_unique_supported_devices(amdgpu_family)
+    else:
+        supported_devices = get_all_supported_devices(amdgpu_family)
+
+    selected_devices = set_gpu_execution_policy(supported_devices, policy=gpu_policy)
+
+    selected_archs = sorted({arch for arch, _ in selected_devices})
+    device_ids = [str(dev_id) for _, dev_id in selected_devices]
+    print(
+        f"Selected {len(selected_devices)} GPU(s): "
+        f"query={device_query}, policy={gpu_policy}, "
+        f"arch(es)={', '.join(selected_archs)}, "
+        f"device(s)={', '.join(device_ids)}"
+    )
+    return selected_archs
+
+
 def detect_pytorch_version() -> str:
     """Auto-detect the PyTorch version from the installed package.
 

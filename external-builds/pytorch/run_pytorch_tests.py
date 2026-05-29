@@ -82,9 +82,7 @@ import pytest
 
 from pytorch_utils import (
     check_pytorch_source_version,
-    get_all_supported_devices,
-    get_unique_supported_devices,
-    set_gpu_execution_policy,
+    configure_gpu_visibility,
     detect_pytorch_version,
 )
 
@@ -260,20 +258,9 @@ def main() -> int:
         # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
         # changing HIP_VISIBLE_DEVICES has no effect.
-        # Select device query function based on --device-query argument
-        if args.device_query == "unique":
-            supported_devices = get_unique_supported_devices(args.amdgpu_family)
-        else:
-            supported_devices = get_all_supported_devices(args.amdgpu_family)
-
-        # Set GPU execution policy based on --gpu-policy argument
-        selected_devices = set_gpu_execution_policy(
-            supported_devices, policy=args.gpu_policy
+        selected_archs = configure_gpu_visibility(
+            args.amdgpu_family, args.device_query, args.gpu_policy
         )
-
-        # Collect unique architectures from selected devices
-        selected_archs = sorted({arch for arch, _ in selected_devices})
-        print(f"Using AMDGPU families: {selected_archs}")
 
         # Determine PyTorch version
         pytorch_version = args.pytorch_version

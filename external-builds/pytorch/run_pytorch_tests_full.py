@@ -63,10 +63,8 @@ from skip_tests.create_skip_tests import get_tests
 
 from pytorch_utils import (
     check_pytorch_source_version,
+    configure_gpu_visibility,
     detect_pytorch_version,
-    get_all_supported_devices,
-    get_unique_supported_devices,
-    set_gpu_execution_policy,
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -320,23 +318,23 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     parser.add_argument(
         "--device-query",
         type=str,
-        choices=["unique", "all"],
-        default=None,
+        choices=["auto", "unique", "all"],
+        default="auto",
         help="""Stage 1: which GPUs enter the candidate set (see --gpu-policy for stage 2).
 - "unique": one device per architecture. E.g. {gfx942:[0], gfx1100:[2]}.
 - "all": every device of each architecture. E.g. {gfx942:[0,1], gfx1100:[2]}.
-Defaults to "all" when --test-config is "distributed", otherwise "unique".""",
+"auto" (default) derives from --test-config: "all" for "distributed", else "unique".""",
     )
 
     parser.add_argument(
         "--gpu-policy",
         type=str,
-        choices=["single", "all"],
-        default=None,
+        choices=["auto", "single", "all"],
+        default="auto",
         help="""Stage 2: how many candidate GPUs to make visible (see --device-query for stage 1).
 - "single": one GPU visible at a time. Suitable for most unit tests.
 - "all": all candidate GPUs visible at once. Useful for multi-GPU tests.
-Defaults to "all" when --test-config is "distributed", otherwise "single".""",
+"auto" (default) derives from --test-config: "all" for "distributed", else "single".""",
     )
 
     parser.add_argument(
@@ -362,6 +360,15 @@ Defaults to "all" when --test-config is "distributed", otherwise "single".""",
         parser.error(
             f"--shard ({args.shard}) cannot exceed --num-shards ({args.num_shards})."
         )
+
+    # Resolve GPU selection defaults from --test-config ("auto" means "derive").
+    # Distributed tests need all GPUs by default; other configs use a single
+    # unique device to avoid contention.
+    is_distributed = args.test_config == "distributed"
+    if args.device_query == "auto":
+        args.device_query = "all" if is_distributed else "unique"
+    if args.gpu_policy == "auto":
+        args.gpu_policy = "all" if is_distributed else "single"
 
     return args, passthrough_args
 
@@ -517,32 +524,10 @@ def main(argv: list[str]) -> int:
         pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
     )
 
-    # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
-    # torch or running pytest.  Once torch.cuda is initialized, changing
-    # HIP_VISIBLE_DEVICES has no effect. Distributed tests need all GPUs by
-    # default; other configs use a single unique device to avoid contention.
-    device_query = args.device_query
-    if device_query is None:
-        device_query = "all" if args.test_config == "distributed" else "unique"
-
-    gpu_policy = args.gpu_policy
-    if gpu_policy is None:
-        gpu_policy = "all" if args.test_config == "distributed" else "single"
-
-    if device_query == "unique":
-        supported_devices = get_unique_supported_devices(args.amdgpu_family)
-    else:
-        supported_devices = get_all_supported_devices(args.amdgpu_family)
-
-    selected_devices = set_gpu_execution_policy(supported_devices, policy=gpu_policy)
-
-    selected_archs = sorted({arch for arch, _ in selected_devices})
-    device_ids = [str(dev_id) for _, dev_id in selected_devices]
-    print(
-        f"Selected {len(selected_devices)} GPU(s): "
-        f"query={device_query}, policy={gpu_policy}, "
-        f"arch(es)={', '.join(selected_archs)}, "
-        f"device(s)={', '.join(device_ids)}"
+    # Set HIP_VISIBLE_DEVICES BEFORE importing torch or running pytest. Once
+    # torch.cuda is initialized, changing HIP_VISIBLE_DEVICES has no effect.
+    selected_archs = configure_gpu_visibility(
+        args.amdgpu_family, args.device_query, args.gpu_policy
     )
 
     pytorch_version = args.pytorch_version
