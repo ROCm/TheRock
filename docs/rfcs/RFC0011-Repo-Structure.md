@@ -342,7 +342,7 @@ wheels — **must obtain its ROCm dependency exclusively through
   out-of-band scripts, etc. If a wheel needs HIP, a ROCm library, or
   any other ROCm component, that component must itself be available as
   a wheel through `pyindex/`.
-- A `pip install <pkg> --index-url https://<stream>.repo.amd.com/pyindex/{one,all}/`
+- A `pip install <pkg> --index-url https://<stream>.repo.amd.com/whl{,-next}/`
   must complete the entire ROCm install chain. The user must not be
   required to run `yum`, `apt`, a `.run` installer, or extract a
   tarball as a prerequisite.
@@ -354,16 +354,16 @@ wheels — **must obtain its ROCm dependency exclusively through
 This rule keeps every `pip`-driven install fully resolvable from a
 single `--index-url`, makes the wheel ecosystem reproducible across
 distros (and inside container images that have no system package
-manager), and ensures the central `pyindex/` is the single source of
+manager), and ensures the central index is the single source of
 truth for the wheel side of the ROCm ecosystem.
 
 Future direction: WheelNext (`uv pip install` with a wheel-variant
 provider backed by `rocm-bootstrap`) is the long-term plan and will
-eventually make `pyindex/all/` unnecessary. Until that lands and is
+eventually make `whl/` unnecessary. Until that lands and is
 widely adopted, both variants must coexist.
 
-**Native multi-arch (parallel mechanism):** `pyindex/one/` and
-`pyindex/all/` cover the **wheel** side of multi-arch. The **native-package**
+**Native multi-arch (parallel mechanism):** `whl/` and
+`whl-next/` cover the Python side of ROCm. The **native-package**
 side is covered by `rocm-kpack` per RFC0008 — host and device code are
 split into separate packages, with device code shipped either as
 per-architecture packages (`amdrocm-<library>-gfx<arch>`) or loaded at
@@ -372,7 +372,7 @@ architecture-family meta-packages that group them (`rocm-gfx94X`,
 `rocm-gfx90X`, etc.) are published under
 `rocm/<stream>/core/packages/<distro>/` alongside the host
 ROCm Core SDK packages — they are not a separate folder. Wheel
-multi-arch (via the two `pyindex` variants) and native multi-arch (via
+multi-arch (via the two index variants) and native multi-arch (via
 `rocm-kpack`) are sibling mechanisms: wheel users go through whichever
 `--index-url` matches their workflow, native users install the
 matching device or `rocm-gfx<family>X` package from `core/packages/`.
