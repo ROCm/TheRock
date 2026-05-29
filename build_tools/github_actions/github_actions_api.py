@@ -485,27 +485,39 @@ def gha_query_last_workflow_run(
     workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
     accepted_statuses: set[str] | None = None,
+    max_pages: int = 5,
 ) -> dict | None:
     """Find the most recent run of a workflow on ``branch`` whose conclusion
     is in ``accepted_statuses`` (default ``{"success"}``).
 
-    Filters client-side from the most-recent 100 runs because the
-    workflow-runs endpoint accepts at most one ``status=`` filter.
+    Paginates through up to ``max_pages`` pages of 100 runs each
+    (newest first), filtering client-side because the workflow-runs
+    endpoint accepts at most one ``status=`` filter. Stops early when
+    a match is found or when the API returns an empty page.
 
-    Returns the matching run dict, or ``None`` if none of the last ~100
-    runs on ``branch`` has an accepted conclusion.
+    The ``max_pages`` cap (default 5 = up to 500 most-recent runs) bounds
+    the number of API calls in the pathological case where the filter
+    matches nothing on a high-volume branch.
+
+    Returns the matching run dict, or ``None`` if no run within the
+    search window on ``branch`` has an accepted conclusion.
     """
     if accepted_statuses is None:
         accepted_statuses = {"success"}
-    url = (
-        f"https://api.github.com/repos/{github_repository}"
-        f"/actions/workflows/{workflow_name}/runs"
-        f"?branch={branch}&per_page=100&sort=created&direction=desc"
-    )
-    response = gha_send_request(url)
-    for run in response.get("workflow_runs", []) if response else []:
-        if run.get("conclusion") in accepted_statuses:
-            return run
+    for page in range(1, max_pages + 1):
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/workflows/{workflow_name}/runs"
+            f"?branch={branch}&per_page=100&sort=created&direction=desc"
+            f"&page={page}"
+        )
+        response = gha_send_request(url)
+        runs = response.get("workflow_runs", []) if response else []
+        if not runs:
+            return None
+        for run in runs:
+            if run.get("conclusion") in accepted_statuses:
+                return run
     return None
 
 

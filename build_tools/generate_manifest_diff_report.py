@@ -1484,7 +1484,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     start_commit, end_commit = resolve_commits(args)
     if start_commit is None:
-        return 0
+        # No comparison was performed (e.g. --find-last-run with no prior
+        # matching run on a first-ever branch). Exit non-zero so callers
+        # gating on step conclusion skip the upload step instead of trying
+        # to push a non-existent report.
+        print("No comparison performed — nothing to upload.", file=sys.stderr)
+        return 1
 
     diff = compare_manifests(start_commit, end_commit)
     generate_html_report(diff, args.output_dir)
