@@ -66,6 +66,15 @@ class ROCmLibrariesTest(unittest.TestCase):
                     # Though this is not needed for the amd-smi client.
                     continue
 
+                if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
+                    # Python C extensions must be loaded via importlib, not
+                    # ctypes.CDLL. Stable ABI extensions (.abi3.so) target a
+                    # minimum CPython version and may use symbols absent from
+                    # older interpreters (e.g. PyType_FromMetaclass requires
+                    # 3.12+). Version-tagged extensions (.cpython-3XX) are
+                    # similarly incompatible across interpreter versions.
+                    continue
+
                 extra_setup = ""
                 if (
                     "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
