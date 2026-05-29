@@ -606,6 +606,19 @@ def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> byte
         raise GitHubAPIError(f"Failed to decode GitHub contents for {path!r}") from e
 
 
+def gha_fetch_text_file_contents(
+    github_repository: str, path: str, ref: str, *, encoding: str = "utf-8"
+) -> str:
+    """Fetch and decode a text file from a GitHub repo at a specific ref."""
+    contents = gha_fetch_file_contents(github_repository, path, ref)
+    try:
+        return contents.decode(encoding)
+    except UnicodeDecodeError as e:
+        raise GitHubAPIError(
+            f"Failed to decode GitHub contents for {path!r} as {encoding}"
+        ) from e
+
+
 # TODO: Consider moving str2bool to a general-purpose utils module. It's useful
 # for GitHub Actions (YAML has fuzzy boolean handling) but is also used broadly.
 def str2bool(value: str | None) -> bool:

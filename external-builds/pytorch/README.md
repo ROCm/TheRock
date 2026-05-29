@@ -378,6 +378,11 @@ If you want to make changes to PyTorch source code, prefer in this order:
 
 ### Checking out PyTorch repositories
 
+For release-branch work, prefer the manifest-based flow in
+[Checking out using manifests](#checking-out-using-manifests). It records the
+exact torch, audio, vision, triton, and apex commits in one JSON file, then
+checks out all requested repositories from that file.
+
 Each `pytorch_*_repo.py` script handles checkout and preparation:
 
 1. Clone the repository as needed from `--gitrepo-origin` to the `--repo-name`
@@ -454,26 +459,91 @@ the fork at https://github.com/ROCm/pytorch.
 
 > [!TIP]
 > You are welcome to maintain your own branches that extend one of AMD's.
-> Change origins and tags as appropriate.
+> Fork these scripts and change origins/tags/commits/versions as appropriate.
 
-In order to check out and build one of these, use the following instructions:
+For most work, run these commands from the TheRock repository root to generate
+a manifest for the release branch and check out from that manifest:
 
 ```bash
-# Other common --repo-hashtag values:
-#   release/2.12
-#   release/2.11
-#   release/2.10
-#   release/2.9
-python pytorch_torch_repo.py checkout \
-  --gitrepo-origin https://github.com/ROCm/pytorch.git \
-  --repo-hashtag release/2.12
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+  --rocm-version 7.13.0a20260501 \
+  --output external-builds/pytorch/pytorch_manifest.json \
+  --pytorch-git-refs release/2.12
 
-# Backport branches have `related_commits` files that point to specific
-# sub-project commits, so the main torch repo must be checked out first to
-# have proper defaults.
-python pytorch_audio_repo.py checkout --require-related-commit
-python pytorch_vision_repo.py checkout --require-related-commit
+python external-builds/pytorch/checkout_from_manifest.py \
+  --manifest external-builds/pytorch/pytorch_manifest.json \
+  --checkout-root ./external-builds/pytorch
+```
 
-python pytorch_triton_repo.py checkout
-python pytorch_apex_repo.py checkout --require-related-commit
+The manifest generator creates files like
+[`pytorch_manifest_nightly.example.json`](pytorch_manifest_nightly.example.json)
+which can then be read by the checkout script.
+
+> [!TIP]
+> You can also use the lower-level checkout scripts that individually read the
+> `related_commit` pins from the torch repository by running these commands from
+> this `external-builds/pytorch/` directory:
+>
+> ```bash
+> python pytorch_torch_repo.py checkout \
+>   --gitrepo-origin https://github.com/ROCm/pytorch.git \
+>   --repo-hashtag release/2.12
+> python pytorch_audio_repo.py checkout --require-related-commit
+> python pytorch_vision_repo.py checkout --require-related-commit
+> python pytorch_triton_repo.py checkout
+> python pytorch_apex_repo.py checkout --require-related-commit
+> ```
+
+#### Generating a manifest
+
+```bash
+# Single version (writes to an explicit path):
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --output external-builds/pytorch/pytorch_manifest.json \
+    --pytorch-git-refs "release/2.10"
+
+# Multiple versions (computed filenames in a directory):
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --manifest-dir external-builds/pytorch/manifests/ \
+    --pytorch-git-refs "release/2.10 release/2.11 nightly"
+
+# The target platform defaults to the current host. Pass it explicitly when
+# generating a manifest for another platform:
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --platform windows \
+    --output manifest.json \
+    --pytorch-git-refs "release/2.10"
+
+# Only pytorch (skip audio/vision/triton/apex):
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --output external-builds/pytorch/manifest.json \
+    --pytorch-git-refs "release/2.10" \
+    --projects pytorch
+```
+
+#### Checking out from a manifest
+
+```bash
+cd external-builds/pytorch
+
+# Check out all projects at pinned commits:
+python checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src
+
+# Check out only pytorch:
+python checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src \
+    --projects pytorch
+
+# Skip HIPIFY (e.g. for test-only runs):
+python checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src \
+    --no-hipify
 ```
