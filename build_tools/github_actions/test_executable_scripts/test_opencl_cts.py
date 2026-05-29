@@ -121,7 +121,9 @@ def run_test(test_exe):
             logging.info(f"✓ PASSED: {test_name} ({elapsed:.1f} min)")
             return True
         else:
-            logging.error(f"✗ FAILED: {test_name} ({elapsed:.1f} min, exit code: {returncode})")
+            logging.error(
+                f"✗ FAILED: {test_name} ({elapsed:.1f} min, exit code: {returncode})"
+            )
             return False
 
     except Exception as e:
