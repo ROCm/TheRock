@@ -1,0 +1,101 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Multi-Arch Release Linux JAX Wheels
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        type: string
+        required: true
+      release_type:
+        type: string
+        required: true
+      rocm_version:
+        type: string
+        required: true
+      tar_url:
+        type: string
+        required: true
+      repository:
+        type: string
+        default: ""
+      ref:
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        type: string
+        default: "gfx94X-dcgpu"
+      release_type:
+        description: 'Release type. All developer-triggered jobs should use "dev"!'
+        type: choice
+        options:
+          - dev
+        default: dev
+      rocm_version:
+        type: string
+        required: true
+      tar_url:
+        type: string
+        required: true
+      repository:
+        type: string
+        default: ""
+      ref:
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+jobs:
+  build_jax_wheels:
+    name: Build Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.11", "3.12"]
+        jax_ref: ["rocm-jaxlib-v0.9.1"]
+
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Checkout rocm-jax
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          path: rocm-jax
+          repository: ROCm/rocm-jax
+          ref: ${{ matrix.jax_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Build JAX wheels
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+        working-directory: rocm-jax
+        run: |
+
+          python3 build/ci_build \
+            --compiler=clang \
+            --python-versions="${{ matrix.python_version }}" \
+            --rocm-version="${ROCM_VERSION}" \
+            --therock-path="${{ inputs.tar_url }}" \
+            dist_wheels

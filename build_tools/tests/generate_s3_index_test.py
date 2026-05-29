@@ -124,6 +124,65 @@ class TestDiscoverDirsWithFilesLocal(unittest.TestCase):
             self.assertEqual(dirs, [])
 
 
+class TestExpandWithIntermediateDirs(unittest.TestCase):
+    """Tests for _expand_with_intermediate_dirs()."""
+
+    def test_adds_intermediate_ancestors(self):
+        """Each ancestor of a deep dir is added, up to and including run_prefix."""
+        dirs = ["12345-linux/logs/math-libs/gfx908"]
+        expanded = generate_s3_index._expand_with_intermediate_dirs(dirs, "12345-linux")
+        self.assertEqual(
+            expanded,
+            [
+                "12345-linux",
+                "12345-linux/logs",
+                "12345-linux/logs/math-libs",
+                "12345-linux/logs/math-libs/gfx908",
+            ],
+        )
+
+    def test_dedupes_shared_ancestors(self):
+        """Sibling leaves share ancestors; expansion does not duplicate them."""
+        dirs = [
+            "12345-linux/logs/math-libs/gfx908",
+            "12345-linux/logs/math-libs/gfx90a",
+        ]
+        expanded = generate_s3_index._expand_with_intermediate_dirs(dirs, "12345-linux")
+        self.assertEqual(
+            expanded,
+            [
+                "12345-linux",
+                "12345-linux/logs",
+                "12345-linux/logs/math-libs",
+                "12345-linux/logs/math-libs/gfx908",
+                "12345-linux/logs/math-libs/gfx90a",
+            ],
+        )
+
+    def test_input_already_contains_ancestors(self):
+        """Already-present ancestors are not duplicated."""
+        dirs = [
+            "12345-linux",
+            "12345-linux/logs/math-libs/gfx908",
+        ]
+        expanded = generate_s3_index._expand_with_intermediate_dirs(dirs, "12345-linux")
+        self.assertEqual(len(expanded), len(set(expanded)))
+        self.assertIn("12345-linux/logs", expanded)
+        self.assertIn("12345-linux/logs/math-libs", expanded)
+
+    def test_run_prefix_always_included(self):
+        """The run_prefix itself is in the result even when no input contains files."""
+        expanded = generate_s3_index._expand_with_intermediate_dirs([], "12345-linux")
+        self.assertEqual(expanded, ["12345-linux"])
+
+    def test_dir_equal_to_run_prefix(self):
+        """A dir equal to run_prefix yields just the run_prefix (no spurious ancestors)."""
+        expanded = generate_s3_index._expand_with_intermediate_dirs(
+            ["12345-linux"], "12345-linux"
+        )
+        self.assertEqual(expanded, ["12345-linux"])
+
+
 class TestGenerateIndexHtml(unittest.TestCase):
     """Tests for _generate_index_html()."""
 
