@@ -232,6 +232,8 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         fetch_args.extend(["--depth", str(args.depth)])
     if args.jobs:
         fetch_args.extend(["-j", str(args.jobs)])
+    if not args.submodules:
+        fetch_args.extend(["--no-recurse-submodules"])
     run_command(
         ["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir
     )
