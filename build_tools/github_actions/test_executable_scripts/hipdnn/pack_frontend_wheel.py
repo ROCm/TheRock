@@ -5,10 +5,10 @@
 """Pack a pre-built hipdnn_frontend package directory into a wheel.
 
 Stages the package next to the pyproject.toml + setup.py adjacent to
-this script, then delegates to `uv pip wheel` so wheel naming, METADATA,
-RECORD, and tag selection follow standard packaging tooling. `uv` is
-used instead of `pip` so the surrounding venv does not need pip seeded
-(uv-created venvs skip ensurepip by default).
+this script, then delegates to `uv build --wheel` so wheel naming,
+METADATA, RECORD, and tag selection follow standard packaging tooling.
+`uv` is used instead of `pip` so the surrounding venv does not need pip
+seeded (uv-created venvs skip ensurepip by default).
 
 Usage:
     python pack_frontend_wheel.py \
@@ -91,12 +91,11 @@ def main() -> int:
         subprocess.check_call(
             [
                 uv_path,
-                "pip",
-                "wheel",
+                "build",
+                "--wheel",
                 "--python",
                 sys.executable,
-                "--no-deps",
-                "--wheel-dir",
+                "--out-dir",
                 str(wheel_dir),
                 str(build_dir),
             ]
@@ -104,7 +103,7 @@ def main() -> int:
 
     wheels = list(wheel_dir.glob("hipdnn_frontend-*.whl"))
     if not wheels:
-        raise SystemExit(f"pip wheel produced no hipdnn_frontend wheel in {wheel_dir}")
+        raise SystemExit(f"uv build produced no hipdnn_frontend wheel in {wheel_dir}")
 
     logger.info(f"Wheel(s) written to {wheel_dir}: {[w.name for w in wheels]}")
     return 0
