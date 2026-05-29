@@ -19,13 +19,17 @@ Usage:
 ===============================================================================
 """
 
-import pytest
 import logging
 import os
+import platform
 import shlex
 import subprocess
 from pathlib import Path
-import sys
+
+
+def is_windows():
+    return "windows" == platform.system().lower()
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -36,7 +40,7 @@ AMDSMITST_BIN = (
     THEROCK_DIR / "build" / "share" / "amd_smi" / "tests" / "amdsmitst"
 ).resolve()
 
-PLATFORM = os.getenv("PLATFORM")
+platform_key = "windows" if is_windows() else "linux"
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # -----------------------------
@@ -45,9 +49,9 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 SHARD_INDEX = os.getenv("SHARD_INDEX", "1")
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", "1")
 
-envion_vars = os.environ.copy()
-envion_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
-envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+environ_vars = os.environ.copy()
+environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
+environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 test_type = os.getenv("TEST_TYPE", "full")
 
 if test_type == "quick":
@@ -95,16 +99,19 @@ else:
                 "amdsmitstReadWrite.FanReadWrite",
             ]
         },
-
     }
 
     if (
         AMDGPU_FAMILIES in TESTS_TO_IGNORE
-        and PLATFORM in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
+        and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
     ):
-        ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][PLATFORM]
+        ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
         logging.info(f"Adding arch-specific excludes: {ignored_tests}")
         exclude_tests.extend(ignored_tests)
+
+    logging.info(f"AMDGPU_FAMILIES={AMDGPU_FAMILIES}")
+    logging.info(f"platform_key={platform_key}")
+    logging.info(f"Final exclude_tests={exclude_tests}")
 
     # -----------------------------
     # Build final filter
@@ -134,6 +141,6 @@ if not os.access(AMDSMITST_BIN, os.X_OK):
 subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
-    env=envion_vars,
+    env=environ_vars,
     check=True,
 )
