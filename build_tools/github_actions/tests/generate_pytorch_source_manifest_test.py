@@ -468,8 +468,8 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                     therock_branch="main",
                 )
 
-    def test_main_writes_single_output_manifest_with_project_filter(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+    def test_main_writes_uploads_and_outputs_manifest_url(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             out_path = Path(tmp) / "manifest.json"
             pytorch_sha = "1" * 40
             triton_sha = "2" * 40
@@ -527,7 +527,13 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                     commit="a" * 40,
                     branch="main",
                 ),
-            ), self._patch_github_api(resolves=resolves, files=files):
+            ), mock.patch.object(
+                m, "gha_set_output"
+            ) as gha_set_output, mock.patch.object(
+                m, "gha_append_step_summary"
+            ) as gha_append_step_summary, self._patch_github_api(
+                resolves=resolves, files=files
+            ):
                 m.main(
                     [
                         "--rocm-version",
@@ -540,10 +546,33 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                         pytorch_ref,
                         "--projects",
                         "pytorch;triton",
+                        "--upload",
+                        "--run-id",
+                        "99999",
+                        "--bucket",
+                        "test",
+                        "--output-dir",
+                        staging,
                     ]
                 )
 
             self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), expected)
+            uploaded_manifest = (
+                Path(staging) / "99999-linux/manifests/pytorch/manifest.json"
+            )
+            self.assertTrue(uploaded_manifest.is_file())
+
+            manifest_url = (
+                "https://test.s3.amazonaws.com/99999-linux/manifests/pytorch/"
+                "manifest.json"
+            )
+            gha_set_output.assert_called_once_with(
+                {
+                    "manifest_urls": json.dumps({pytorch_ref: manifest_url}),
+                    "manifest_url": manifest_url,
+                }
+            )
+            gha_append_step_summary.assert_called_once()
 
     def test_output_requires_single_ref(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -558,6 +587,21 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                         str(Path(tmp) / "manifest.json"),
                         "--pytorch-git-refs",
                         "release/2.10 nightly",
+                    ]
+                )
+
+    def test_upload_requires_run_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit):
+                m.main(
+                    [
+                        "--rocm-version",
+                        "7.13.0",
+                        "--output",
+                        str(Path(tmp) / "manifest.json"),
+                        "--pytorch-git-refs",
+                        "release/2.10",
+                        "--upload",
                     ]
                 )
 
