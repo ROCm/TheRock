@@ -168,28 +168,38 @@ jobs:
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
           ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --repo-hashtag nightly
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout
+            --repo-hashtag nightly \
+            --no-commit-hipify
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --no-commit-hipify
           ./external-builds/pytorch/pytorch_apex_repo.py checkout \
-            --repo-hashtag master
+            --repo-hashtag master \
+            --no-commit-hipify
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
-            --repo-hashtag ${{ inputs.pytorch_git_ref }}
+            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --require-related-commit
+            --require-related-commit \
+            --no-commit-hipify
           ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --require-related-commit
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout
+            --require-related-commit \
+            --no-commit-hipify
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --no-commit-hipify
           ./external-builds/pytorch/pytorch_apex_repo.py checkout \
-            --require-related-commit
+            --require-related-commit \
+            --no-commit-hipify
 
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
