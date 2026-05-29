@@ -10,7 +10,7 @@ status: draft
 ## Related RFCs
 
 - **RFC0008** — multi-arch Python wheels and device extras (source of the
-  `pyindex/multi-arch/` model used here).
+  `whl{,next/` model used here).
 - **RFC0009** — native packaging conventions (source of the
   `amdrocm<major>-<project>` package-naming family referenced for extras).
 - **RFC0012** — end-user projects independent release lifecycle (defines
