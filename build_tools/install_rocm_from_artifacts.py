@@ -28,7 +28,6 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
-    [--fusilliprovider | --no-fusilliprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
     [--hipkernelprovider | --no-hipkernelprovider]
     [--prim | --no-prim]
@@ -353,8 +352,6 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn_samples,
             args.miopen,
             args.miopenprovider,
-            args.fusilliprovider,
-            args.iree_compiler,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
@@ -419,10 +416,6 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
             extra_artifacts.append("hipkernelprovider")
-        if args.fusilliprovider:
-            extra_artifacts.append("fusilliprovider")
-        if args.iree_compiler:
-            extra_artifacts.append("iree-compiler")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -743,20 +736,6 @@ def main(argv):
         "--hipkernelprovider",
         default=False,
         help="Include 'hipkernelprovider' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--fusilliprovider",
-        default=False,
-        help="Include 'fusilliprovider' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--iree-compiler",
-        default=False,
-        help="Include 'iree-compiler' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
