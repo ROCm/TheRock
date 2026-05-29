@@ -627,7 +627,7 @@ End-user projects should be prepared for this model:
    ```bash
    # User installs the end-user project + their architecture
    apt install amdrocm7-rvs
-   apt install rocm-gfx90X        # User's architecture choice
+   apt install amdrocm-gfx90X        # User's architecture choice
    ```
 
 1. **Test against both fat and split layouts.** During the transition
