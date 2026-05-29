@@ -194,16 +194,6 @@ test_matrix = {
             ],
         },
     },
-    "tensilelite": {
-        "job_name": "tensilelite",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_tensilelite.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",

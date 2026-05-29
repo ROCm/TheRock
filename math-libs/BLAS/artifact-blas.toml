@@ -84,8 +84,6 @@ include = [
   "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
-  # TensileLite Python test artifacts
-  "share/hipblaslt/tensilelite/**",
 ]
 
 # rocBLAS
