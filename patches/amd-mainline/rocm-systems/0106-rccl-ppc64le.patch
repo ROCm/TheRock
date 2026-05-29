@@ -1,27 +1,27 @@
-From 9878af57bcb88ff1de11f1c74d1b9e06932338bd Mon Sep 17 00:00:00 2001
+From 2c13a769f5cadaf918160800106ca2f92f8f46c0 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 28 May 2026 19:23:55 +0000
-Subject: [PATCH] Guard x86-only code in rccl
+Date: Fri, 29 May 2026 20:05:08 +0000
+Subject: [PATCH] rccl ppc64le
 
 ---
  projects/rccl/src/init.cc | 4 ++++
  1 file changed, 4 insertions(+)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index 29470d0480..5ec487c5fc 100644
+index fd84fcb788..20cb2297c7 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
-@@ -72,7 +72,9 @@
- 
- #include "latency_profiler/CollTrace.h"
+@@ -75,7 +75,9 @@
  #include "latency_profiler/CollTraceFunc.h"
+ #include "dda_all_reduce_ipc.h"
+ #include "ipc_init.h"
 +#if defined(__x86_64__) || defined(__i386__)
  #include  <cpuid.h>
 +#endif
  
  #ifndef STR2
    #define STR2(v) #v
-@@ -251,6 +253,7 @@ static ncclResult_t ncclInit() {
+@@ -255,6 +257,7 @@ static ncclResult_t ncclInit() {
      }
      INFO(NCCL_INIT, "Kernel version: %s", verStr);
      if (strstr(verStr, "cray") == NULL) {
@@ -29,7 +29,7 @@ index 29470d0480..5ec487c5fc 100644
        unsigned int eax, ebx, ecx, edx;
        if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx))
          ecx = 0; // cpuid not supported
-@@ -268,6 +271,7 @@ static ncclResult_t ncclInit() {
+@@ -272,6 +275,7 @@ static ncclResult_t ncclInit() {
          if (strstr(strValue, "iommu=pt") == NULL)
            WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
        }
