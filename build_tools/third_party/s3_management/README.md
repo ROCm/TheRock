@@ -35,13 +35,13 @@ python -m pip install \
 
 ## Running tests
 
-`test_update_dependencies.py` contains unit tests for the wheel filtering
+`update_dependencies_test.py` contains unit tests for the wheel filtering
 logic in `update_dependencies.py`. No AWS credentials or network access
 are required.
 
 ```bash
 cd build_tools/third_party/s3_management
-python -m pytest test_update_dependencies.py -v
+python -m pytest update_dependencies_test.py -v
 ```
 
 ## Playbook for running the scripts
