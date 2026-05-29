@@ -198,7 +198,7 @@ test_matrix = {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipblas.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         # TODO(#2616): Enable full tests once known machine issues are resolved
         "total_shards_dict": {
