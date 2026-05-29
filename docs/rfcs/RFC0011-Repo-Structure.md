@@ -177,19 +177,15 @@ in *Per-stream specializations* further down.
     - tarball
     - zip
     - installers
-    - **whl** — must publish two variants: (1) single-arch wheels
-      where the user picks device extras at install time, and (2)
-      all-arch wheels where `pip install rocm` pulls in every device
-      extra automatically. Internal folder layout, filenames, and
-      sub-paths are implementation details left to the publish
-      tooling — not consumed by humans.
+    - **whl**
+    - **whl-next**
     - packages
       - **Linux Distros [a–z]**
   - **windows/** — MSI and EXE files for Windows.
   - **expansions [a–z]/** *(e.g. **hpc-sdk** — see HPC SDK Release Model section)*
     - tarball
-    - **whl** — same two-variant rule as `core/whl` (single-arch +
-      all-arch). Internal layout is implementation-defined.
+    - **whl**
+    - **whl-next**
     - packages
   - **extras-[ROCm-major]/** — projects released independently for each
     ROCm major version.
@@ -325,21 +321,21 @@ The central index has **two required sub-folders**:
 
 Both variants ship under every stream that publishes wheels
 (`nightly`, `rc`, `stable`; not `ltsrc`/`lts` until LTS exists), and
-both are built from the same underlying wheel set — `pyindex/all/`
+both are built from the same underlying wheel set — `whl/`
 simply republishes the entry-point wheels (`rocm`, `torch`,
 `torchvision`, …) with `device-all` added as an automatic requirement,
-plus links to the unmodified device wheels in `pyindex/one/` so
+plus links to the unmodified device wheels in `whl-next/` so
 storage is not duplicated.
 
 **Wheel-only ROCm dependency rule (applies to every wheel published on
 `repo.amd.com`):** any package distributed as a Python wheel — Core
 SDK wheels, expansion wheels, extras wheels, third-party AI fork
 wheels — **must obtain its ROCm dependency exclusively through
-`pyindex/`**. That is:
+`whl{,-next}/`**. That is:
 
 - Wheel `install_requires` / `Requires-Dist` entries that resolve a
   ROCm dependency must resolve to **other ROCm wheels served by
-  `pyindex/one/` or `pyindex/all/`**.
+  `whl/` or `whl-next/`**.
 - Wheels must not depend on, assume the presence of, or trigger the
   installation of ROCm via any **non-wheel** channel: rpm/deb native
   packages, tarballs, runfile installers, container base images,
