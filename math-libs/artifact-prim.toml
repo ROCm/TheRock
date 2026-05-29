@@ -18,6 +18,7 @@ include = [
 include = [
   "bin/test_*",
   "bin/benchmark_*",
+  "bin/hipcub/control.txt",
   "bin/hipcub/CTestTestfile.cmake",
   "bin/hipcub/generate_resource_spec*",
 ]
