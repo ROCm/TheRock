@@ -28,6 +28,14 @@ __pycache__
 /output-*/
 /out/
 
+# macOS eGPU out-of-tree build trees (one per agent/library config).
+/build-macos-egpu*/
+# Validation smoke build outputs and Xcode DriverKit build trees.
+/validation/**/build/
+/userspace_driver/macos_driver/build/
+# Compiled debug smoke binaries (sources are tracked, binaries are not).
+/userspace_driver/debug/macgpu_phase10_compute_direct
+
 # DriverKit iig-generated header symlink (points to Xcode DerivedSources;
 # re-created by the xcodeproj's "Create generated symlink" build phase).
 /userspace_driver/macos_driver/ROCmGPU/ROCmGPUDriver/generated
