@@ -15,7 +15,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       test_runs_on_multi_gpu:
         description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-multi-gpu in amdgpu_family_matrix.py
         type: string
@@ -64,7 +64,7 @@ on:
       test_runs_on:
         required: false
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       test_runs_on_multi_gpu:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"

@@ -522,7 +522,7 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         entry = linux_target_output[0]
-        self.assertEqual(entry["test-runs-on"], "")
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-gpu-rocm-cpu-sandbox")
 
     ###########################################################################
     # Tests for multi-label runner selection
@@ -532,7 +532,7 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.1 (< 0.59 first weight)
+        # Mock random.random() to return 0.1 (< 0.369 first weight)
         with patch("random.random", return_value=0.1):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
@@ -550,16 +550,15 @@ class ConfigureCITest(unittest.TestCase):
         ]
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
-        # Should select the first (vultr) label
-        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm")
 
     def test_gfx94x_multi_label_selects_second_when_random_medium(self):
         """When random() is in middle range, second label should be selected."""
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.65 (>= 0.59, < 0.59+0.14=0.73)
-        with patch("random.random", return_value=0.65):
+        # Mock random.random() to return 0.4 (>= 0.369, < 0.369+0.086=0.455)
+        with patch("random.random", return_value=0.4):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
                 is_workflow_dispatch=False,
@@ -576,16 +575,15 @@ class ConfigureCITest(unittest.TestCase):
         ]
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
-        # Should select the second (cirrascale) label
-        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm")
+        self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm")
 
     def test_gfx94x_multi_label_selects_third_when_random_high(self):
         """When random() is high, third label should be selected."""
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.8 (>= 0.59+0.14=0.73)
-        with patch("random.random", return_value=0.8):
+        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
+        with patch("random.random", return_value=0.5):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
                 is_workflow_dispatch=False,
@@ -602,7 +600,6 @@ class ConfigureCITest(unittest.TestCase):
         ]
         self.assertEqual(len(gfx94x_entries), 1, "Expected exactly one gfx94X entry")
         entry = gfx94x_entries[0]
-        # Should select the third (core42) label
         self.assertEqual(entry["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm")
 
     def test_gfx94x_multi_gpu_label_selects_first_when_random_low(self):
@@ -610,7 +607,7 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.3 (< 0.61 first weight)
+        # Mock random.random() to return 0.3 (< 0.78 first weight)
         with patch("random.random", return_value=0.3):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
@@ -638,8 +635,8 @@ class ConfigureCITest(unittest.TestCase):
         base_args = {"build_variant": "release"}
         build_families = {"amdgpu_families": "gfx94X"}
 
-        # Mock random.random() to return 0.7 (>= 0.61)
-        with patch("random.random", return_value=0.7):
+        # Mock random.random() to return 0.85 (>= 0.78)
+        with patch("random.random", return_value=0.85):
             linux_target_output, _ = configure_ci.matrix_generator(
                 is_pull_request=True,
                 is_workflow_dispatch=False,
