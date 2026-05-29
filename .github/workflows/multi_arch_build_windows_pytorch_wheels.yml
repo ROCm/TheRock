@@ -255,9 +255,7 @@ jobs:
             build ^
             --install-rocm ^
             --find-links "${{ inputs.rocm_package_find_links_url }}" ^
-            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
-            --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
-            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
