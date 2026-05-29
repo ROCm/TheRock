@@ -333,10 +333,10 @@ or by downloading from one of TheRock's release indices. See the instructions at
 [external-builds/pytorch](../../external-builds/pytorch/README.md).
 
 **Triton (`triton_windows`) on Windows:** Nightly PyTorch wheels built by TheRock
-include Triton for `torch.compile`. The wheel is published as **`triton_windows`**
+include Triton for `torch.compile` and sage-attention v1. The wheel is published as **`triton_windows`**
 (import `triton`). Local builds use [triton-windows](https://github.com/triton-lang/triton-windows)
-and require MSVC (Developer Command Prompt) plus a one-time download of a pinned
-LLVM toolchain; see
+and a one-time download of a pinned LLVM toolchain (see [Install tools](#install-tools)
+for MSVC); see
 [Triton on Windows](../../external-builds/pytorch/README.md#triton-on-windows).
 
 **Installing nightly wheels:** Use the unified multi-arch index at
