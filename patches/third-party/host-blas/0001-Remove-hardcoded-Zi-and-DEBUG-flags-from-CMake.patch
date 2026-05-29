@@ -1,0 +1,47 @@
+From ee6c6faf195dad595909a51a0383653226f23d94 Mon Sep 17 00:00:00 2001
+From: Nick Kuo <139732210+amd-nicknick@users.noreply.github.com>
+Date: Wed, 20 May 2026 16:46:12 +0000
+Subject: [PATCH] Remove hardcoded /Zi and /DEBUG flags from CMake
+
+ccache does not support /Zi since it's impossible to track the separate
+PDB file generated during compilation. Projects should not include such
+flags in their CMake files without a clean way to remove them.
+
+Explicitly removes the /Zi and /DEBUG compile & link flags. Let upstream
+projects decide and specify them.
+
+  third-party/host-blas/host-blas
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Total compilations: 6961
+    Cache hit:               2  (  0.0%)
+    Cache miss:           2324  ( 33.4%)
+    Uncacheable:          4635  ( 66.6%)
+    Cacheable rate:      33.4%  (2326/6961)
+    Uncacheable rate:    66.6%  (4635/6961)
+
+    Uncacheable reasons:
+      [unsupported_compiler_option] x4635
+        -> /Zi  (4635 occurrences)
+
+See-also: https://github.com/ROCm/TheRock/issues/4519
+See-also: https://github.com/ROCm/TheRock/pull/4419
+---
+ CMakeLists.txt | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4f0e82096..1d86a1701 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -231,8 +231,6 @@ if(MSVC)
+   if (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} VERSION_LESS 3.4)
+     set(OpenBLAS_DEF_FILE "${PROJECT_BINARY_DIR}/openblas.def")
+   endif()
+-  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Zi")
+-  set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+ endif()
+ 
+ if (${DYNAMIC_ARCH})
+-- 
+2.53.0
+

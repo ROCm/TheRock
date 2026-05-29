@@ -95,7 +95,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--pytorch-git-ref",
         type=str,
         required=True,
-        help="PyTorch ref (e.g. nightly, release/2.8, users/name/branch).",
+        help="PyTorch ref (e.g. nightly, release/2.10, users/name/branch).",
     )
     parser.add_argument(
         "--bucket",

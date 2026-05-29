@@ -371,6 +371,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
 
+    def test_container_options_on_windows_is_string_not_list(self):
+        # Regression: a list value here caused
+        # `options: ${{ fromJSON(...).container_options }}` in test_component.yml
+        # to evaluate to a YAML sequence, failing template parsing.
+        job = {
+            "container_options": [
+                "--cap-add SYS_MODULE",
+                "-v /lib/modules:/lib/modules",
+            ]
+        }
+        out = fetch_test_configurations._build_container_options(job, "windows")
+        self.assertIsInstance(out["container_options"], str)
+
+    def test_container_options_on_linux_is_joined_string(self):
+        job = {"container_options": ["--cap-add=SYS_PTRACE"]}
+        out = fetch_test_configurations._build_container_options(job, "linux")
+        self.assertIsInstance(out["container_options"], str)
+        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -174,6 +174,7 @@ if(THEROCK_ENABLE_HIPDNN)
     BUILD_DEPS
       therock-googletest
       therock-fmt
+      therock-nanobind
       therock-spdlog
     RUNTIME_DEPS
       hip-clr
@@ -319,6 +320,8 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN

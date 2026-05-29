@@ -15,7 +15,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       test_runs_on_multi_gpu:
         description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-multi-gpu in amdgpu_family_matrix.py
         type: string
@@ -64,7 +64,7 @@ on:
       test_runs_on:
         required: false
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       test_runs_on_multi_gpu:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"
@@ -210,6 +210,7 @@ jobs:
             --no-hipify
 
       - name: Set up virtual environment
+        timeout-minutes: 15
         run: |
           if [ "${{ inputs.multi_arch }}" = "true" ]; then
             python build_tools/setup_venv.py ${VENV_DIR} \
@@ -225,6 +226,7 @@ jobs:
           fi
 
       - name: Install ROCm devel packages
+        timeout-minutes: 15
         run: |
           if [ "${{ inputs.multi_arch }}" = "true" ]; then
             pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
@@ -295,10 +297,12 @@ jobs:
           ./build_tools/health_status.py
 
       - name: Run rocm-sdk sanity tests
+        timeout-minutes: 5
         run: |
           rocm-sdk test
 
       - name: Run PyTorch smoketests
+        timeout-minutes: 10
         run: |
           python ./external-builds/pytorch/run_pytorch_smoke_tests.py -- \
             --log-cli-level=INFO \
