@@ -24,7 +24,7 @@ endblock()
 # Tensile is using msgpack and will pull in Boost otherwise.
 add_compile_definitions(MSGPACK_NO_BOOST)
 
-if(NOT WIN32)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # Configure roctracer if on a supported operating system (Linux).
   # rocBLAS has deprecated dependencies on roctracer. We apply a patch to redirect
   # naked linking against `-lroctx64` to an explicitly found version of the library.

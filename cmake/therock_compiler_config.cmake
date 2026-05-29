@@ -88,13 +88,40 @@ if(APPLE)
   endif()
 
   # Default to ARM64 on Apple Silicon
-  if(NOT DEFINED CMAKE_OSX_ARCHITECTURES)
-    set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS architecture")
+  if(NOT CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS architecture" FORCE)
+  endif()
+
+  # Apple's ar does not support @response files, which CMake/Ninja need for
+  # large static archives such as OpenBLAS. Prefer an LLVM archiver when one is
+  # available from Homebrew or PATH.
+  find_program(THEROCK_APPLE_LLVM_AR
+    NAMES llvm-ar
+    HINTS
+      "$ENV{HOMEBREW_PREFIX}/opt/llvm/bin"
+      /opt/homebrew/opt/llvm/bin
+      /usr/local/opt/llvm/bin
+  )
+  find_program(THEROCK_APPLE_LLVM_RANLIB
+    NAMES llvm-ranlib
+    HINTS
+      "$ENV{HOMEBREW_PREFIX}/opt/llvm/bin"
+      /opt/homebrew/opt/llvm/bin
+      /usr/local/opt/llvm/bin
+  )
+  if(THEROCK_APPLE_LLVM_AR AND THEROCK_APPLE_LLVM_RANLIB)
+    set(CMAKE_AR "${THEROCK_APPLE_LLVM_AR}")
+    set(CMAKE_RANLIB "${THEROCK_APPLE_LLVM_RANLIB}")
+    set(CMAKE_AR "${THEROCK_APPLE_LLVM_AR}" CACHE FILEPATH "Archiver" FORCE)
+    set(CMAKE_RANLIB "${THEROCK_APPLE_LLVM_RANLIB}" CACHE FILEPATH "Ranlib" FORCE)
   endif()
 
   message(STATUS "macOS build configuration:")
   message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
   message(STATUS "  Architecture: ${CMAKE_OSX_ARCHITECTURES}")
+  if(DEFINED CMAKE_AR)
+    message(STATUS "  Archiver: ${CMAKE_AR}")
+  endif()
   if(DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     message(STATUS "  Deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()

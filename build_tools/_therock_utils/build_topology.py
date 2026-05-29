@@ -340,7 +340,7 @@ class BuildTopology:
         # Valid type values
         valid_stage_types = {"generic", "per-arch"}
         valid_artifact_types = {"target-neutral", "target-specific"}
-        valid_platforms = {"windows", "linux"}
+        valid_platforms = {"windows", "linux", "darwin"}
 
         # Validate build stage names and types
         for stage_name, stage in self.build_stages.items():

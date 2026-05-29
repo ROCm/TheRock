@@ -98,14 +98,25 @@ endif()
 ##############################################################################
 
 set(hipBLASLt_runtime_deps)
-if(NOT WIN32)
+set(hipBLASLt_enable_amd_smi OFF)
+set(hipBLASLt_enable_client ON)
+set(hipBLASLt_enable_marker OFF)
+set(hipBLASLt_enable_openmp ON)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
+  set(hipBLASLt_enable_marker ON)
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # Required on Linux.
   list(APPEND hipBLASLt_runtime_deps amdsmi)
+  set(hipBLASLt_enable_amd_smi ON)
 
   # rocm_smi_lib remains optional (guarded).
   if(TARGET rocm_smi_lib)
     list(APPEND hipBLASLt_runtime_deps rocm_smi_lib)
   endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(hipBLASLt_enable_client OFF)
+  set(hipBLASLt_enable_openmp OFF)
 endif()
 
 set(hipBLASLt_rocRoller_deps)
@@ -132,6 +143,10 @@ therock_cmake_subproject_declare(hipBLASLt
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
+    -DHIPBLASLT_ENABLE_AMD_SMI=${hipBLASLt_enable_amd_smi}
+    -DHIPBLASLT_ENABLE_CLIENT=${hipBLASLt_enable_client}
+    -DHIPBLASLT_ENABLE_MARKER=${hipBLASLt_enable_marker}
+    -DHIPBLASLT_ENABLE_OPENMP=${hipBLASLt_enable_openmp}
     -DTENSILELITE_BUILD_TESTING=OFF
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
@@ -186,6 +201,11 @@ else()
   set(_blas_build_samples ${THEROCK_BUILD_TESTING})
 endif()
 
+set(rocBLAS_cmake_includes)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND rocBLAS_cmake_includes therock_explicit_finders.cmake)
+endif()
+
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
@@ -207,7 +227,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DLINK_BLIS=OFF
   CMAKE_INCLUDES
-    therock_explicit_finders.cmake
+    ${rocBLAS_cmake_includes}
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
@@ -308,9 +328,18 @@ if(THEROCK_ENABLE_SPARSE)
   if(NOT WIN32) # Remove this block once hipSPARSELt is supported on Windows
     # hipSPARSELt expects amd_smi on Linux.
     set(hipSPARSELt_runtime_deps)
+    set(hipSPARSELt_enable_client ON)
+    set(hipSPARSELt_enable_marker ON)
+    set(hipSPARSELt_enable_openmp ON)
 
     # Required on Linux.
-    list(APPEND hipSPARSELt_runtime_deps amdsmi)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      list(APPEND hipSPARSELt_runtime_deps amdsmi)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+      set(hipSPARSELt_enable_client OFF)
+      set(hipSPARSELt_enable_marker OFF)
+      set(hipSPARSELt_enable_openmp OFF)
+    endif()
 
     # rocm_smi_lib is optional.
     if(TARGET rocm_smi_lib)
@@ -324,8 +353,12 @@ if(THEROCK_ENABLE_SPARSE)
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DHIPSPARSELT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+        -DHIPSPARSELT_ENABLE_CLIENT=${hipSPARSELt_enable_client}
         -DHIPSPARSELT_ENABLE_BENCHMARKS=${THEROCK_BUILD_TESTING}
         -DHIPSPARSELT_ENABLE_SAMPLES=OFF
+        -DHIPSPARSELT_ENABLE_MARKER=${hipSPARSELt_enable_marker}
+        -DHIPSPARSELT_ENABLE_OPENMP=${hipSPARSELt_enable_openmp}
+        -DHIPBLASLT_ENABLE_OPENMP=${hipSPARSELt_enable_openmp}
         -DHIPSPARSELT_ENABLE_FETCH=OFF
         -DHIPSPARSELT_ENABLE_THEROCK=ON
       COMPILER_TOOLCHAIN

@@ -340,7 +340,7 @@ function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;CMAKE_COMMAND;MACOSX_DEPLOYMENT_TARGET;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
@@ -456,7 +456,7 @@ function(therock_cmake_subproject_declare target_name)
   # RPATH Executable and Library dir.
   if(NOT ARG_INSTALL_RPATH_EXECUTABLE_DIR)
     if(ARG_INSTALL_DESTINATION)
-      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR ARG_INSTALL_DESTINATION)
+      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "${ARG_INSTALL_DESTINATION}")
       cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
     else()
       set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
@@ -464,8 +464,8 @@ function(therock_cmake_subproject_declare target_name)
   endif()
   if(NOT ARG_INSTALL_RPATH_LIBRARY_DIR)
     if(ARG_INSTALL_DESTINATION)
-      set(ARG_INSTALL_RPATH_LIBRARY_DIR ARG_INSTALL_DESTINATION)
-      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "lib")
+      set(ARG_INSTALL_RPATH_LIBRARY_DIR "${ARG_INSTALL_DESTINATION}")
+      cmake_path(APPEND ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
     else()
       set(ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
     endif()
@@ -507,6 +507,8 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_CMAKE_SOURCE_DIR "${_cmake_source_dir}"
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
+    THEROCK_CMAKE_COMMAND "${ARG_CMAKE_COMMAND}"
+    THEROCK_MACOSX_DEPLOYMENT_TARGET "${ARG_MACOSX_DEPLOYMENT_TARGET}"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
     THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
     # Non-transitive build deps.
@@ -609,6 +611,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_dist_dir "${target_name}" THEROCK_DIST_DIR)
   get_target_property(_runtime_deps "${target_name}" THEROCK_RUNTIME_DEPS)
   get_target_property(_cmake_args "${target_name}" THEROCK_CMAKE_ARGS)
+  get_target_property(_subproject_cmake_command "${target_name}" THEROCK_CMAKE_COMMAND)
   get_target_property(_cmake_includes "${target_name}" THEROCK_CMAKE_INCLUDES)
   get_target_property(_cmake_project_init_file "${target_name}" THEROCK_CMAKE_PROJECT_INIT_FILE)
   get_target_property(_cmake_project_toolchain_file "${target_name}" THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE)
@@ -655,6 +658,9 @@ function(therock_cmake_subproject_activate target_name)
   # Handle optional properties.
   if(NOT _sources)
     set(_sources)
+  endif()
+  if(NOT _subproject_cmake_command)
+    set(_subproject_cmake_command "${CMAKE_COMMAND}")
   endif()
 
   # Defaults.
@@ -973,8 +979,8 @@ function(therock_cmake_subproject_activate target_name)
       OUTPUT "${_configure_stamp_file}"
       COMMAND
         ${_configure_log_prefix}
-        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-        "${CMAKE_COMMAND}"
+        "${_subproject_cmake_command}" -E env ${_build_env_pairs} --
+        "${_subproject_cmake_command}"
         "-G${CMAKE_GENERATOR}"
         "-B${_binary_dir}"
         "-S${_cmake_source_dir}"
@@ -986,9 +992,9 @@ function(therock_cmake_subproject_activate target_name)
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
       # the build graph sane.
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_binary_dir}/compile_commands.json"
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
-      COMMAND "${CMAKE_COMMAND}" -E copy "${_binary_dir}/compile_commands.json" "${_compile_commands_file}"
+      COMMAND "${_subproject_cmake_command}" -E touch "${_binary_dir}/compile_commands.json"
+      COMMAND "${_subproject_cmake_command}" -E touch "${_configure_stamp_file}"
+      COMMAND "${_subproject_cmake_command}" -E copy "${_binary_dir}/compile_commands.json" "${_compile_commands_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Configure sub-project ${target_name}${_configure_comment_suffix}"
       ${_terminal_option}
@@ -1034,9 +1040,9 @@ function(therock_cmake_subproject_activate target_name)
       OUTPUT "${_build_stamp_file}"
       COMMAND
         ${_build_log_prefix}
-        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-        "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
+        "${_subproject_cmake_command}" -E env ${_build_env_pairs} --
+        "${_subproject_cmake_command}" "--build" "${_binary_dir}"
+      COMMAND "${_subproject_cmake_command}" -E touch "${_build_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Building sub-project ${target_name}${_build_comment_suffix}"
       ${_build_terminal_option}
@@ -1079,7 +1085,7 @@ function(therock_cmake_subproject_activate target_name)
         )
         # install component to stage directory.
         list(APPEND _optional_component_install_commands
-          COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" --component "${_comp}" ${_install_strip_option}
+          COMMAND ${_install_log_prefix} "${_subproject_cmake_command}" --install "${_binary_dir}" --component "${_comp}" ${_install_strip_option}
         )
       endforeach()
     endif()
@@ -1094,12 +1100,12 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
       # Install default (all target) to stage directory.
-      COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
+      COMMAND ${_install_log_prefix} "${_subproject_cmake_command}" --install "${_binary_dir}" ${_install_strip_option}
       # Expand optional components _install command(s).
       ${_optional_component_install_commands}
       # Populate local dist directory with this+all transitive stage installs.
       COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
-      COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
+      COMMAND "${_subproject_cmake_command}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"
       ${_terminal_option}
@@ -1441,6 +1447,10 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_toolchain_contents)
 
   get_target_property(_disable_amdgpu_targets "${target_name}" THEROCK_DISABLE_AMDGPU_TARGETS)
+  get_target_property(_macosx_deployment_target "${target_name}" THEROCK_MACOSX_DEPLOYMENT_TARGET)
+  if(NOT _macosx_deployment_target)
+    set(_macosx_deployment_target "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  endif()
   set(_filtered_gpu_targets)
   if(NOT _disable_amdgpu_targets)
     _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}")
@@ -1471,6 +1481,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
     string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(GPU_BUILD_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "set(CMAKE_HIP_ARCHITECTURES @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
   endif()
 
@@ -1478,11 +1489,18 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n")
   string(APPEND _toolchain_contents "set(CMAKE_INSTALL_LIBDIR @CMAKE_INSTALL_LIBDIR@)\n")
   string(APPEND _toolchain_contents "set(CMAKE_PLATFORM_NO_VERSIONED_SONAME @CMAKE_PLATFORM_NO_VERSIONED_SONAME@)\n")
+  if(APPLE)
+    string(APPEND _toolchain_contents "set(CMAKE_OSX_ARCHITECTURES \"@CMAKE_OSX_ARCHITECTURES@\" CACHE STRING \"From super-project\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_OSX_DEPLOYMENT_TARGET \"@_macosx_deployment_target@\" CACHE STRING \"From super-project\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_OSX_SYSROOT \"@CMAKE_OSX_SYSROOT@\" CACHE PATH \"From super-project\" FORCE)\n")
+  endif()
 
   # Propagate super-project flags to the sub-project by default.
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@CMAKE_C_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@CMAKE_CXX_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@CMAKE_LINKER@\")\n")
+  string(APPEND _toolchain_contents "set(CMAKE_AR \"@CMAKE_AR@\" CACHE FILEPATH \"From super-project\" FORCE)\n")
+  string(APPEND _toolchain_contents "set(CMAKE_RANLIB \"@CMAKE_RANLIB@\" CACHE FILEPATH \"From super-project\" FORCE)\n")
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
@@ -1572,6 +1590,21 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
+    if(APPLE)
+      if(CMAKE_OSX_SYSROOT)
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -isysroot @CMAKE_OSX_SYSROOT@\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -isysroot @CMAKE_OSX_SYSROOT@\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_HIP_FLAGS_INIT \" -isysroot @CMAKE_OSX_SYSROOT@\")\n")
+      endif()
+      if(CMAKE_OSX_ARCHITECTURES AND _macosx_deployment_target AND NOT CMAKE_OSX_ARCHITECTURES MATCHES ";")
+        set(_macos_toolchain_target "${CMAKE_OSX_ARCHITECTURES}-apple-macos${_macosx_deployment_target}")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -target @_macos_toolchain_target@\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -target @_macos_toolchain_target@\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_HIP_FLAGS_INIT \" -target @_macos_toolchain_target@\")\n")
+      endif()
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -stdlib=libc++\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_HIP_FLAGS_INIT \" -stdlib=libc++\")\n")
+    endif()
 
     therock_sanitizer_configure(
       _sanitizer_stanza
@@ -1604,8 +1637,14 @@ function(_therock_cmake_subproject_setup_toolchain
     # Add a dependency on HIP's stamp.
     set(_amd_llvm_device_lib_path "${_amd_llvm_dist_dir}/lib/llvm/amdgcn/bitcode")
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\" CACHE FILEPATH \"\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_ROCM_ROOT \"@_hip_dist_dir@\" CACHE PATH \"\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(HIP_HIPCC_EXECUTABLE \"@_hip_dist_dir@/bin/hipcc\" CACHE FILEPATH \"\" FORCE)\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_HIP_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_HIP_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_FLAGS \"\${CMAKE_HIP_FLAGS_INIT}\" CACHE STRING \"From super-project\" FORCE)\n")
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()

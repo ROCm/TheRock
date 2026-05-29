@@ -490,7 +490,7 @@ type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl", "amd-llvm"]
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
-disable_platforms = ["windows"]
+disable_platforms = ["windows", "darwin"]
 
 [artifacts.core-kpack]
 artifact_group = "hip-runtime"
@@ -550,6 +550,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
+python_requires = ["PyYAML==6.0.2", "joblib>=1.4.2", "msgpack>=1.1.0"]  # hipBLASLt/Tensile code generation
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
@@ -694,6 +695,7 @@ disable_platforms = ["windows"]
 artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "base", "aqlprofile"]  # rocprofiler-register is in base
+python_requires = ["CppHeaderParser==2.7.4"]  # roctracer header generation
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]

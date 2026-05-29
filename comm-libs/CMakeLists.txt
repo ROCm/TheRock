@@ -117,12 +117,18 @@ if(THEROCK_ENABLE_ROCSHMEM)
   # rocSHMEM
   ##############################################################################
   set(_rocshmem_subproject_names)
+  set(_rocshmem_source_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem")
+  set(_rocshmem_enable_gda ON)
+  if(APPLE)
+    # The GDA/RDMA backend currently depends on Linux-only headers/providers.
+    set(_rocshmem_enable_gda OFF)
+  endif()
   therock_cmake_subproject_declare(rocshmem
     # rocshmem uses .hip_fatbin/.hip_gpubin_* ELF sections for device code
     # instead of .hipFatBinSegment, making it incompatible with kpack injection.
     # Build all GPU targets in a single target-neutral artifact as a workaround.
     USE_TEST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem"
+    EXTERNAL_SOURCE_DIR "${_rocshmem_source_dir}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocshmem"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
@@ -130,10 +136,10 @@ if(THEROCK_ENABLE_ROCSHMEM)
       -DCMAKE_VERBOSE_MAKEFILE=OFF
       -DUSE_RO=ON
       -DUSE_IPC=ON
-      -DUSE_GDA=ON
-      -DGDA_MLX5=ON
-      -DGDA_BNXT=ON
-      -DGDA_IONIC=ON
+      -DUSE_GDA=${_rocshmem_enable_gda}
+      -DGDA_MLX5=${_rocshmem_enable_gda}
+      -DGDA_BNXT=${_rocshmem_enable_gda}
+      -DGDA_IONIC=${_rocshmem_enable_gda}
       # When using MPI (e.g. for bootsrapping or using RO) it only works with Open MPI and is
       # incompatible with MPICH, Intel MPI, or MVAPICH.
       # The loading mechanisms for using MPI is using dlopen() at run-time. It only support
@@ -147,7 +153,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
       "-DEXPLICIT_ROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
       -DBUILD_FUNCTIONAL_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_UNIT_TESTS=${THEROCK_BUILD_TESTING}
-      -DSOURCE_DIR=${_source_dir}
+      "-DSOURCE_DIR=${_rocshmem_source_dir}"
       -DPATCHELF=${PATCHELF}
       -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
     CMAKE_INCLUDES

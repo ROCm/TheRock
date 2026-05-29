@@ -83,6 +83,11 @@ if(THEROCK_ENABLE_ROCPROFV3)
     list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
   endif()
 
+  set(_rocprofiler_build_gotcha ON)
+  if(APPLE)
+    set(_rocprofiler_build_gotcha OFF)
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-sdk
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
@@ -92,6 +97,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DHIP_PLATFORM=amd
       -DROCPROFILER_BUILD_CI=OFF
       -DROCPROFILER_BUILD_DEVELOPER=OFF
+      -DROCPROFILER_BUILD_GOTCHA=${_rocprofiler_build_gotcha}
       -DROCPROFILER_BUILD_TESTS=${THEROCK_BUILD_TESTING}
       -DROCPROFILER_BUILD_INTEGRATION_TESTS=OFF
       -DROCPROFILER_BUILD_SAMPLES=OFF
@@ -141,11 +147,16 @@ if(THEROCK_ENABLE_ROCPROFV3)
       librocprofiler-sdk-rocpd.so
       librocprofiler-sdk-rocattach.so
   )
+  set(_rocprofiler_sdk_tool_libs
+    librocprofiler-sdk-tool-kokkosp.so
+    librocprofv3-list-avail.so
+  )
+  if(_rocprofiler_build_gotcha)
+    list(APPEND _rocprofiler_sdk_tool_libs libgotcha.so)
+  endif()
   therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk/dist/lib/rocprofiler-sdk
     LIB_NAMES
-      libgotcha.so
-      librocprofiler-sdk-tool-kokkosp.so
-      librocprofv3-list-avail.so
+      ${_rocprofiler_sdk_tool_libs}
   )
 
   ##############################################################################
@@ -203,6 +214,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       amd-hip
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DROCTRACER_BUILD_TESTS=${THEROCK_BUILD_TESTING}
     INTERFACE_INCLUDE_DIRS
       # All old clients of roctx64 expect to just be able to find its include
       # with no further qualification. Bad design, but also deprecated, so meh.

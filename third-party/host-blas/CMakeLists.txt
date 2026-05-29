@@ -143,6 +143,27 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(OpenBLAS_BUILD)
 
+if(APPLE)
+  find_program(_therock_llvm_ar
+    NAMES llvm-ar
+    HINTS
+      "$ENV{HOMEBREW_PREFIX}/opt/llvm/bin"
+      /opt/homebrew/opt/llvm/bin
+      /usr/local/opt/llvm/bin
+  )
+  find_program(_therock_llvm_ranlib
+    NAMES llvm-ranlib
+    HINTS
+      "$ENV{HOMEBREW_PREFIX}/opt/llvm/bin"
+      /opt/homebrew/opt/llvm/bin
+      /usr/local/opt/llvm/bin
+  )
+  if(_therock_llvm_ar AND _therock_llvm_ranlib)
+    set(CMAKE_AR "${_therock_llvm_ar}")
+    set(CMAKE_RANLIB "${_therock_llvm_ranlib}")
+  endif()
+endif()
+
 if(INTERFACE64)
   set(_SUFFIX64 64)
   set(_SUFFIX64_UNDERSCORE _64)

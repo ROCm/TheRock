@@ -1,6 +1,18 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_therock_iree_cmake_command "${CMAKE_COMMAND}")
+if(THEROCK_IREE_CMAKE_COMMAND)
+  set(_therock_iree_cmake_command "${THEROCK_IREE_CMAKE_COMMAND}")
+endif()
+
+set(_therock_fusilli_macosx_deployment_arg)
+if(APPLE)
+  # libc++ gates floating-point std::format support behind macOS 13.3.
+  list(APPEND _therock_fusilli_macosx_deployment_arg
+    MACOSX_DEPLOYMENT_TARGET 13.3)
+endif()
+
 ##############################################################################
 # IREE Compiler - builds libIREECompiler.so
 ##############################################################################
@@ -14,6 +26,7 @@ if(THEROCK_ENABLE_IREE_COMPILER)
     NO_MERGE_COMPILE_COMMANDS
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
+    CMAKE_COMMAND "${_therock_iree_cmake_command}"
     CMAKE_ARGS
       # Build the compiler
       -DIREE_BUILD_COMPILER=ON
@@ -46,6 +59,7 @@ if(THEROCK_ENABLE_IREE_COMPILER)
     DESCRIPTOR artifact-iree-compiler.toml
     COMPONENTS
       lib
+      run
       dbg
       dev
     SUBPROJECT_DEPS
@@ -65,6 +79,8 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
     OUTPUT_ON_FAILURE
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilli"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fusilli"
+    CMAKE_COMMAND "${_therock_iree_cmake_command}"
+    ${_therock_fusilli_macosx_deployment_arg}
     RUNTIME_DEPS
       hip-clr
       rocminfo  # Provides rocm_agent_enumerator
@@ -94,6 +110,8 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/fusilli-provider"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilliprovider"
     BACKGROUND_BUILD
+    CMAKE_COMMAND "${_therock_iree_cmake_command}"
+    ${_therock_fusilli_macosx_deployment_arg}
     CMAKE_ARGS
       -DFUSILLI_PLUGIN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>
       -DIREE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/iree

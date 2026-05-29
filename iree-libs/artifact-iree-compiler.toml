@@ -2,6 +2,12 @@
 # Produces libIREECompiler.so for use by Fusilli
 
 [components.lib."iree-libs/iree-compiler/stage"]
+
+[components.run."iree-libs/iree-compiler/stage"]
+include = [
+  "bin/iree-compile",
+]
+
 [components.dbg."iree-libs/iree-compiler/stage"]
 
 [components.dev."iree-libs/iree-compiler/stage"]

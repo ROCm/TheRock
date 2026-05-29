@@ -395,6 +395,8 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DROCM_DIR=
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
       -DCMAKE_CXX_STANDARD=17
+      -Dlibhipcxx_ENABLE_CMAKE_TESTS=${THEROCK_BUILD_TESTING}
+      -DLIBCUDACXX_ENABLE_LIBCUDACXX_TESTS=${THEROCK_BUILD_TESTING}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -411,7 +413,9 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     SUBDIRS
       .
   )
-  therock_cmake_subproject_require_host_program(libhipcxx lit)
+  if(THEROCK_BUILD_TESTING)
+    therock_cmake_subproject_require_host_program(libhipcxx lit)
+  endif()
   therock_cmake_subproject_activate(libhipcxx)
 
   therock_provide_artifact(libhipcxx
