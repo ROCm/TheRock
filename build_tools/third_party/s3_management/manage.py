@@ -90,8 +90,6 @@ PREFIXES = [
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
-    # Multi-arch flat index: triton (Linux), triton_windows (Windows), torch, rocm, …
-    "v4/whl",
 ]
 
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
@@ -588,7 +586,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--starting-from",
         type=str,
         help=(
-            "Base prefix for auto-detection (e.g. v2/, v2-staging/, v4/whl/). "
+            "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/whl/). "
             "Required when using --auto-detect-prefixes."
     )
     )
@@ -627,7 +625,7 @@ def resolve_prefixes(args) -> List[str]:
 def detect_prefixes_from_bucket(base_prefix: str) -> List[str]:
     """
     Detects architecture prefixes dynamically by listing common prefixes
-    under a base path (e.g. v2/, v2-staging/, v4/whl/).
+    under a base path (e.g. v2/, v2-staging/, v3/whl/).
     """
 
     print(f"INFO: Auto-detecting prefixes under '{base_prefix}'")

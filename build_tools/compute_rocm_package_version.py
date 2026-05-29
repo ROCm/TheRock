@@ -143,7 +143,7 @@ def compute_version(
         elif release_type == "dev":
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
-            git_sha = get_git_sha(short=True, override_git_sha=override_git_sha)
+            git_sha = get_git_sha(override_git_sha=override_git_sha)
             version_suffix = f".dev0+{git_sha}"
         elif release_type == "nightly":
             # Construct a nightly (a / "alpha") version:

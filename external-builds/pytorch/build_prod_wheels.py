@@ -268,21 +268,11 @@ def get_installed_package_version(dist_package_name: str) -> str:
 
 
 def get_version_suffix_for_installed_rocm_package() -> str:
-    build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
-    if str(build_tools_dir) not in sys.path:
-        sys.path.insert(0, str(build_tools_dir))
-    from compute_rocm_package_version import get_git_sha
-
     rocm_version = get_installed_package_version("rocm")
     print(f"Computing version suffix for installed rocm package: {rocm_version}")
     # Compute a version suffix to be used as a local version identifier:
     # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
     # This logic is copied from build_tools/github_actions/determine_version.py.
-    # Match dev wheel locals (compute_rocm_package_version.get_git_sha(short=True));
-    # staging may still ship a full SHA until those wheels are rebuilt.
-    if "+" in rocm_version:
-        base, local = rocm_version.split("+", 1)
-        rocm_version = f"{base}+{get_git_sha(short=True, override_git_sha=local)}"
     parsed_version = parse(rocm_version)
     base_name = "devrocm" if "dev" in rocm_version else "rocm"
     version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"

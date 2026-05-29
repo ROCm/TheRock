@@ -236,13 +236,13 @@ class RpmPackageVersionTest(unittest.TestCase):
 class GitShaOverrideTest(unittest.TestCase):
     """Tests for explicit override_git_sha parameter."""
 
-    def test_wheel_dev_uses_short_git_sha(self):
+    def test_wheel_dev_uses_provided_git_sha(self):
         version = compute_rocm_package_version.compute_version(
             release_type="dev",
             override_base_version="8.1.0",
             override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
         )
-        self.assertEqual(version, "8.1.0.dev0+abcdef12")
+        self.assertEqual(version, "8.1.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
 
     def test_rpm_dev_truncates_long_git_sha(self):
         version = compute_rocm_package_version.compute_version(

@@ -113,7 +113,6 @@ jobs:
       contents: read
     env:
       CHECKOUT_ROOT: B:/src
-      TRITON_BUILD_ARGS: ${{ matrix.pytorch_git_ref == 'nightly' && '--triton-dir B:/src/triton --build-triton' || '' }}
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       optional_build_prod_arguments: ""
@@ -236,6 +235,7 @@ jobs:
 
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
+      # Triton nightly-only; keep triton args inline in the build step below for #5110 checkout cleanup.
       - name: Build PyTorch wheels
         shell: cmd
         run: |
@@ -250,8 +250,7 @@ jobs:
             --find-links "${{ inputs.rocm_package_find_links_url }}" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
-            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
-            %TRITON_BUILD_ARGS% ^
+            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ${{ matrix.pytorch_git_ref == 'nightly' && format('--triton-dir {0}/triton --build-triton', env.CHECKOUT_ROOT) || '' }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
