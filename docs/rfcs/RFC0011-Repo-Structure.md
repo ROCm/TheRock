@@ -403,7 +403,7 @@ Rules that apply to all third-party AI forks:
   packages — users install via `pip` from the matching ROCm wheel index.
 - **Dependency rule:** framework wheels must depend **only on Python
   wheels of the ROCm Core SDK** (published under `core/whl/` and
-  surfaced through the central `pyindex/one/` and `pyindex/all/`).
+  surfaced through the central `whl/` and `whl-next/`).
   They must not depend on system packages, native distro packages, or
   any non-wheel ROCm artifact. This keeps `pip install` of a framework
   wheel fully self-contained and reproducible across distros.
