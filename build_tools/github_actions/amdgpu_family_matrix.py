@@ -96,10 +96,19 @@ all_build_variants = {
             # "build_variant_cmake_preset": "linux-release-package",
             "build_variant_cmake_preset": "",
         },
+        # full ASAN builds are run on nightly
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+        },
+        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
+        # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
+        "host-asan": {
+            "build_variant_label": "host-asan",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan",
+            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -129,7 +138,7 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
-- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
+- build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
@@ -158,7 +167,7 @@ amdgpu_family_info_matrix_presubmit = {
                 },  # core42 (25/46)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "",
+            "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {
@@ -176,7 +185,7 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "host-asan", "tsan"],
         }
     },
     "gfx110x": {
