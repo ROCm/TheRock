@@ -82,10 +82,8 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
             str(resolved_checkout_root / "pytorch"),
         )
         self.assertNotIn("--torch-dir", pytorch_command)
-        self.assertEqual(
-            self._option_value(audio_command, "--torch-dir"),
-            str(resolved_checkout_root / "pytorch"),
-        )
+        self.assertNotIn("--torch-dir", audio_command)
+        self.assertNotIn("--torch-dir", triton_command)
         self.assertEqual(
             self._option_value(audio_command, "--checkout-dir"),
             str(resolved_checkout_root / "pytorch_audio"),
@@ -140,7 +138,6 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
             tmp_path = Path(tmp)
             manifest_path = self._write_manifest(tmp_path / "manifest.json", manifest)
             checkout_root = tmp_path / "checkouts"
-            resolved_checkout_root = checkout_root.resolve()
 
             checkout_from_manifest.main(
                 [
@@ -160,10 +157,7 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
         )
         for command in commands.values():
             self.assertIn("--no-hipify", command)
-        self.assertEqual(
-            self._option_value(commands["pytorch_vision_repo.py"], "--torch-dir"),
-            str(resolved_checkout_root / "pytorch"),
-        )
+            self.assertNotIn("--torch-dir", command)
 
     def test_unknown_requested_project_errors(self) -> None:
         manifest = {
@@ -201,6 +195,32 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
             manifest_path = self._write_manifest(tmp_path / "manifest.json", [])
 
             with self.assertRaisesRegex(ValueError, "Manifest root"):
+                checkout_from_manifest.main(
+                    [
+                        "--manifest",
+                        str(manifest_path),
+                        "--checkout-root",
+                        str(tmp_path / "checkouts"),
+                    ]
+                )
+
+        check_call.assert_not_called()
+
+    def test_unsupported_manifest_schema_version_errors_before_checkout(self) -> None:
+        manifest = {
+            "schema_version": 2,
+            "pytorch": {
+                "repo": "https://github.com/ROCm/pytorch",
+                "commit": "1" * 40,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            checkout_from_manifest.subprocess, "check_call"
+        ) as check_call:
+            tmp_path = Path(tmp)
+            manifest_path = self._write_manifest(tmp_path / "manifest.json", manifest)
+
+            with self.assertRaisesRegex(ValueError, "schema_version"):
                 checkout_from_manifest.main(
                     [
                         "--manifest",

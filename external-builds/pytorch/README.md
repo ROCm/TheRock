@@ -509,7 +509,8 @@ python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --manifest-dir external-builds/pytorch/manifests/ \
     --pytorch-git-refs "release/2.10 release/2.11 nightly"
 
-# Explicit platform selection (Windows may include different packages):
+# The target platform defaults to the current host. Pass it explicitly when
+# generating a manifest for another platform:
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --platform windows \

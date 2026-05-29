@@ -500,6 +500,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
             # Expected output from the CLI after resolving refs, deriving the
             # version suffix, filtering projects, and writing the manifest.
             expected = {
+                "schema_version": 1,
                 "pytorch": {
                     "repo": "https://github.com/ROCm/pytorch",
                     "commit": pytorch_sha,

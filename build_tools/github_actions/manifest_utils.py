@@ -16,6 +16,12 @@ def log(*args, **kwargs) -> None:
     sys.stdout.flush()
 
 
+def warn(*args, **kwargs) -> None:
+    """Consistent warning helper for manifest generation scripts."""
+    print("WARNING:", *args, file=sys.stderr, **kwargs)
+    sys.stderr.flush()
+
+
 @dataclass(frozen=True)
 class GitSourceInfo:
     """Git source info for a repository checkout."""
@@ -141,13 +147,23 @@ def detect_therock_source_info(repo_root: Path) -> GitSourceInfo:
     Falls back to "unknown" for fields that cannot be determined (e.g. when
     not inside a git worktree).
     """
-    commit = capture_optional(["git", "rev-parse", "HEAD"], cwd=repo_root) or "unknown"
-    repo_url = (
-        capture_optional(["git", "remote", "get-url", "origin"], cwd=repo_root)
-        or "https://github.com/ROCm/TheRock"
-    )
+    commit = capture_optional(["git", "rev-parse", "HEAD"], cwd=repo_root)
+    if commit is None:
+        warn(f"Could not detect TheRock commit from {repo_root}; using 'unknown'")
+        commit = "unknown"
+
+    repo_url = capture_optional(["git", "remote", "get-url", "origin"], cwd=repo_root)
+    if repo_url is None:
+        warn(
+            f"Could not detect TheRock origin from {repo_root}; "
+            "using https://github.com/ROCm/TheRock"
+        )
+        repo_url = "https://github.com/ROCm/TheRock"
     repo_url = repo_url.removesuffix(".git")
-    branch = git_branch_best_effort(repo_root) or "unknown"
+    branch = git_branch_best_effort(repo_root)
+    if branch is None:
+        warn(f"Could not detect TheRock branch from {repo_root}; using 'unknown'")
+        branch = "unknown"
     return GitSourceInfo(commit=commit, repo=repo_url, branch=branch)
 
 

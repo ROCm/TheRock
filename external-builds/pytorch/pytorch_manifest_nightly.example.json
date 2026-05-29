@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "pytorch": {
     "repo": "https://github.com/pytorch/pytorch",
     "commit": "cac8bcf1ca69bff4364b793b570f850cf9e1faa1",

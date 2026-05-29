@@ -45,6 +45,7 @@ DEFAULT_PYTORCH_GIT_REFS = [
     "release/2.12",
     "nightly",
 ]
+SCHEMA_VERSION = 1
 
 THEROCK_DIR = Path(__file__).resolve().parents[2]
 TRITON_WINDOWS_REPO = "triton-lang/triton-windows"
@@ -92,6 +93,8 @@ REPOS: dict[str, RepoConfig] = {
     "triton": RepoConfig(
         stable_repo="ROCm/triton",
         nightly_repo="ROCm/triton",
+        # Triton does not use a floating nightly branch. PyTorch's pin files
+        # resolve the exact commit and the base package version.
         # Windows release Triton is not enabled by default until PyTorch repos
         # publish a shared pin format for release branches.
         exclude_platforms=("windows",),
@@ -130,7 +133,10 @@ def manifest_filename(*, platform: str, pytorch_git_ref: str) -> str:
 
 
 def write_manifest_file(path: Path, manifest: Manifest) -> None:
-    serialized_manifest = {name: entry.to_dict() for name, entry in manifest.items()}
+    serialized_manifest: dict[str, object] = {"schema_version": SCHEMA_VERSION}
+    serialized_manifest.update(
+        {name: entry.to_dict() for name, entry in manifest.items()}
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(serialized_manifest, indent=2, sort_keys=False) + "\n",
@@ -229,7 +235,9 @@ def _resolve_triton(
         )
 
     config = REPOS["triton"]
-    triton_repo = config.stable_repo
+    triton_repo = (
+        config.nightly_repo if pytorch_ref == "nightly" else config.stable_repo
+    )
     pin_file = ".ci/docker/ci_commit_pins/triton.txt"
 
     # Use PyTorch's explicit Triton pin. triton_version.txt only provides the
@@ -256,15 +264,16 @@ def default_projects_for_pytorch_ref(platform: str, pytorch_ref: str) -> list[st
     """Return default projects for a platform and PyTorch ref."""
     projects = default_projects_for_platform(platform)
 
-    # TODO: Flip this once Windows Triton nightly builds are ready by default.
-    # Release branches still need a shared PyTorch-hosted pin format.
-    if (
-        False
-        and platform == "windows"
-        and pytorch_ref == "nightly"
-        and "triton" not in projects
-    ):
-        projects.append("triton")
+    if False:
+        # TODO: Flip this once Windows Triton nightly builds are ready by
+        # default. Release branches still need a shared PyTorch-hosted pin
+        # format.
+        if (
+            platform == "windows"
+            and pytorch_ref == "nightly"
+            and "triton" not in projects
+        ):
+            projects.append("triton")
     return projects
 
 

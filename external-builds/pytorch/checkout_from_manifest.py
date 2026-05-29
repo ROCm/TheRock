@@ -33,6 +33,7 @@ import urllib.request
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
+SCHEMA_VERSION = 1
 
 # Maps manifest project names to their checkout scripts.
 CHECKOUT_SCRIPTS: dict[str, str] = {
@@ -81,13 +82,6 @@ def checkout_project(
         str(checkout_dir),
     ]
 
-    # pytorch_torch_repo.py doesn't have --torch-dir, but the others do.
-    # When checking out from a manifest we pass explicit origin/hashtag,
-    # so related_commits is not needed. We still pass --torch-dir pointing
-    # to the pytorch checkout so the scripts can find it if needed.
-    if name != "pytorch":
-        cmd.extend(["--torch-dir", str(checkout_root / "pytorch")])
-
     if no_hipify:
         cmd.append("--no-hipify")
 
@@ -109,6 +103,12 @@ def load_manifest(manifest_path: Path) -> dict[str, object]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict):
         raise ValueError("Manifest root must be a JSON object")
+    schema_version = manifest.get("schema_version")
+    if schema_version is not None and schema_version != SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported manifest schema_version {schema_version!r}; "
+            f"expected {SCHEMA_VERSION}"
+        )
     return manifest
 
 
@@ -230,7 +230,7 @@ def main(argv: list[str]) -> None:
 
     checkout_root.mkdir(parents=True, exist_ok=True)
 
-    # Always check out pytorch first (other scripts may reference --torch-dir).
+    # Keep pytorch first so a full checkout tree is easy to inspect.
     if "pytorch" in projects:
         projects = ["pytorch"] + [p for p in projects if p != "pytorch"]
 
