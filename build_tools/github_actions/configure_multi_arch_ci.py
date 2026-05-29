@@ -652,6 +652,17 @@ def decide_jobs(
         test_type_reason=test_type_reason,
     )
 
+    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
+    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
+    if ci_inputs.build_variant == "asan":
+        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
+        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            test_rocm = TestRocmDecision(
+                action=JobAction.SKIP,
+                test_type=test_type,
+                test_type_reason="ASAN tests skipped due to non-nightly trigger",
+            )
+
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
@@ -811,6 +822,7 @@ def _expand_build_config_for_platform(
     test_type: str,
     pr_labels: list[str],
     is_schedule: bool,
+    is_workflow_dispatch: bool,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -878,10 +890,16 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
+        # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant == "asan" or build_variant == "host-asan":
-            # TODO(#3433): Remove sandbox logic once ASAN tests are passing
-            # For ASAN builds, use sandbox runner to avoid impacting production
-            if "test-runs-on-sandbox" in platform_info:
+            # Only run ASAN tests on scheduled or workflow_dispatch runs
+            if not (is_schedule or is_workflow_dispatch):
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
@@ -993,6 +1011,7 @@ def expand_build_configs(
             test_type=test_type,
             pr_labels=ci_inputs.pr_labels,
             is_schedule=ci_inputs.is_schedule,
+            is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
         )
