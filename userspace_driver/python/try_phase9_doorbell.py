@@ -132,6 +132,13 @@ SCHED_WPTR_VRAM_OFF = 0x1871000
 SCHED_SCH_CTX_VRAM_OFF = 0x1880000
 SCHED_QUERY_STATUS_VRAM_OFF = 0x1881000
 SCHED_RESOURCE1_VRAM_OFF = 0x1890000
+# MES-managed (map_legacy) compute queue backing memory.
+COMPUTE_MQD_VRAM_OFF = 0x18A0000
+COMPUTE_RING_VRAM_OFF = 0x18A2000
+COMPUTE_EOP_VRAM_OFF = 0x18B0000
+COMPUTE_RPTR_VRAM_OFF = 0x18C0000
+COMPUTE_WPTR_VRAM_OFF = 0x18C1000
+COMPUTE_FENCE_VRAM_OFF = 0x18D0000
 
 MQD_SIZE  = 0x1000
 RING_SIZE = 0x1000
@@ -144,6 +151,9 @@ MES_SCH_API_SET_HW_RSRC = 0
 MES_SCH_API_ADD_QUEUE = 2
 MES_SCH_API_QUERY_SCHEDULER_STATUS = 11
 MES_SCH_API_SET_HW_RSRC_1 = 19
+MES_QUEUE_TYPE_GFX = 0
+MES_QUEUE_TYPE_COMPUTE = 1
+MES_QUEUE_TYPE_SDMA = 2
 MES_QUEUE_TYPE_SCHQ = 3
 GC_BASES = (0x1260, 0xA000, 0x1C000, 0x2402C00, 0, 0, 0, 0)
 MMHUB_BASES = (0x1A000, 0x2408800, 0, 0, 0, 0, 0, 0)
@@ -989,6 +999,160 @@ def main():
                 print("  MES QUERY_SCHEDULER_STATUS did not signal fence before timeout")
             if fence_dma is not None:
                 c.free_dma(fence_dma.buffer_id)
+
+    if os.environ.get("PHASE9_MAP_COMPUTE") == "1":
+        # Map a legacy kernel COMPUTE queue via MES (mes_v12_0_map_legacy_queue).
+        # For uni_mes, ADD_QUEUE map_legacy_kq is submitted on the KIQ pipe; MES
+        # reads the compute MQD, activates the compute HQD, and owns scheduling.
+        # This avoids the direct-HQD0 path's manual per-submit dequeue, which is
+        # the suspected cause of the 0x1000 queue-abort coherence wedge.
+        #
+        # Assumptions to validate on hardware (first prototype):
+        #   - compute queue at me=1 pipe=0 queue=0, doorbell DWORD index 0x20
+        #     (the proven direct-compute location);
+        #   - MES accepts queue 0 for a legacy compute queue (the SET_HW_RSRC
+        #     compute HQD mask was 0x0C = queues 2,3 for MES-dynamic queues; a
+        #     legacy queue may still need to sit in that mask — if MES rejects
+        #     queue 0, retry comp_queue=2);
+        #   - the gfx12 compute MQD layout matches build_sched_mqd().
+        comp_me, comp_pipe, comp_queue = 1, 0, 0
+        comp_doorbell = 0x20  # DWORD index into BAR2 doorbell aperture
+        comp_mqd_mc   = fb_base + COMPUTE_MQD_VRAM_OFF
+        comp_ring_mc  = fb_base + COMPUTE_RING_VRAM_OFF
+        comp_eop_mc   = fb_base + COMPUTE_EOP_VRAM_OFF
+        comp_rptr_mc  = fb_base + COMPUTE_RPTR_VRAM_OFF
+        comp_wptr_mc  = fb_base + COMPUTE_WPTR_VRAM_OFF
+        comp_fence_mc = fb_base + COMPUTE_FENCE_VRAM_OFF
+
+        for base, size in [(COMPUTE_MQD_VRAM_OFF, MQD_SIZE),
+                           (COMPUTE_RING_VRAM_OFF, RING_SIZE),
+                           (COMPUTE_EOP_VRAM_OFF, MES_EOP_SIZE),
+                           (COMPUTE_RPTR_VRAM_OFF, 0x40),
+                           (COMPUTE_WPTR_VRAM_OFF, 0x40),
+                           (COMPUTE_FENCE_VRAM_OFF, 0x40)]:
+            for i in range(0, size, 4):
+                vram_wr(base + i, 0)
+
+        # gfx12 compute MQD (mirrors build_sched_mqd with the compute doorbell).
+        comp_mqd = [0] * (MQD_SIZE // 4)
+        comp_mqd[0] = 0xC0310800
+        comp_mqd[1] = 1
+        for dw in (0x17, 0x18, 0x1A, 0x1B):
+            comp_mqd[dw] = 0xFFFFFFFF
+        comp_mqd[0x2C] = 7
+        eop_shift = comp_eop_mc >> 8
+        comp_mqd[0xA5] = eop_shift & 0xFFFFFFFF
+        comp_mqd[0xA6] = (eop_shift >> 32) & 0xFFFFFFFF
+        eop_size_enc = ((MES_EOP_SIZE // 4).bit_length() - 2) & 0x3f
+        comp_mqd[0xA7] = (0x6 & ~0x3f) | eop_size_enc
+        comp_mqd[0x80] = comp_mqd_mc & 0xFFFFFFFC
+        comp_mqd[0x81] = (comp_mqd_mc >> 32) & 0xFFFFFFFF
+        comp_mqd[0xA2] = 0x100
+        pq_base_shift = comp_ring_mc >> 8
+        comp_mqd[0x88] = pq_base_shift & 0xFFFFFFFF
+        comp_mqd[0x89] = (pq_base_shift >> 32) & 0xFFFFFFFF
+        comp_mqd[0x8B] = comp_rptr_mc & 0xFFFFFFFC
+        comp_mqd[0x8C] = (comp_rptr_mc >> 32) & 0xFFFF
+        comp_mqd[0x8D] = comp_wptr_mc & 0xFFFFFFF8
+        comp_mqd[0x8E] = (comp_wptr_mc >> 32) & 0xFFFF
+        ring_dw = RING_SIZE // 4
+        queue_size_val = (ring_dw.bit_length() - 2) & 0x3f
+        comp_mqd[0x91] = (
+            queue_size_val | (5 << 8) |
+            (1 << 0x1b) | (1 << 0x1c) | (1 << 0x1e) | (1 << 0x1f) |
+            0x300000 | 0x8000
+        )
+        comp_mqd[0x8F] = ((comp_doorbell & 0x3FFFFFF) << 2) | (1 << 30)
+        comp_mqd[0x95] = 0x00300000
+        comp_mqd[0x82] = 1
+        comp_mqd[0x84] = (CP_HQD_PERSISTENT_STATE_DEFAULT & ~(0x3ff << 8)) | (0x55 << 8)
+        comp_mqd[0xB8] = (1 << 15)
+        for i, v in enumerate(comp_mqd):
+            vram_wr(COMPUTE_MQD_VRAM_OFF + i * 4, v)
+
+        print(f"\n== MES map_legacy compute queue ==")
+        print(f"  me={comp_me} pipe={comp_pipe} queue={comp_queue} "
+              f"doorbell=0x{comp_doorbell:x}")
+        print(f"  comp_mqd=0x{comp_mqd_mc:x} ring=0x{comp_ring_mc:x} "
+              f"wptr=0x{comp_wptr_mc:x} fence=0x{comp_fence_mc:x}")
+        print(f"  cp_hqd_pq_control       = 0x{comp_mqd[0x91]:08x}")
+        print(f"  cp_hqd_pq_doorbell_ctrl = 0x{comp_mqd[0x8F]:08x}")
+
+        # ADD_QUEUE(map_legacy_kq) on the KIQ ring, continuing its wptr.
+        select_hqd(kiq_me, kiq_pipe, kiq_queue)
+        kiq_wptr = hqd_rd(regCP_HQD_PQ_WPTR_LO)
+        comp_add_fence = 0x99
+        pkt = [0] * API_FRAME_SIZE_IN_DWORDS
+        pkt[0] = mes_header(MES_SCH_API_ADD_QUEUE)
+        pkt[ADD_QUEUE_DW_DOORBELL_OFFSET] = comp_doorbell
+        put64(pkt, ADD_QUEUE_DW_MQD_ADDR, comp_mqd_mc)
+        put64(pkt, ADD_QUEUE_DW_WPTR_ADDR, comp_wptr_mc)
+        pkt[ADD_QUEUE_DW_QUEUE_TYPE] = MES_QUEUE_TYPE_COMPUTE
+        pkt[ADD_QUEUE_DW_FLAGS] = 1 << 13  # map_legacy_kq
+        put64(pkt, ADD_QUEUE_DW_API_STATUS, fb_base + FENCE_VRAM_OFF)
+        put64(pkt, ADD_QUEUE_DW_API_STATUS + 2, comp_add_fence)
+        pkt[ADD_QUEUE_DW_PIPE_ID] = comp_pipe
+        pkt[ADD_QUEUE_DW_QUEUE_ID] = comp_queue
+
+        comp_mapped, _ = submit_api_and_poll(
+            "MES ADD_QUEUE compute (map_legacy)",
+            RING_VRAM_OFF, WPTR_VRAM_OFF, mes_kiq_doorbell,
+            (kiq_me, kiq_pipe, kiq_queue, 0),
+            kiq_wptr, pkt, comp_add_fence,
+        )
+
+        select_hqd(comp_me, comp_pipe, comp_queue)
+        print(f"\nCompute HQD readback after ADD_QUEUE:")
+        print(f"  ACTIVE=0x{hqd_rd(regCP_HQD_ACTIVE):08x} "
+              f"PQ_BASE=0x{hqd_rd(regCP_HQD_PQ_BASE_HI):08x}:"
+              f"{hqd_rd(regCP_HQD_PQ_BASE):08x} "
+              f"PQ_CONTROL=0x{hqd_rd(regCP_HQD_PQ_CONTROL):08x} "
+              f"DOORBELL_CONTROL=0x{hqd_rd(regCP_HQD_PQ_DOORBELL_CONTROL):08x} "
+              f"MQD=0x{hqd_rd(regCP_MQD_BASE_ADDR_HI):08x}:"
+              f"{hqd_rd(regCP_MQD_BASE_ADDR):08x} "
+              f"RPTR=0x{hqd_rd(regCP_HQD_PQ_RPTR):08x} "
+              f"WPTR=0x{hqd_rd(regCP_HQD_PQ_WPTR_LO):08x}")
+
+        if comp_mapped:
+            # PM4 NOP + WRITE_DATA on the MES-managed compute queue. Ring its
+            # doorbell and let MES schedule it; poll for the WRITE_DATA marker.
+            marker = 0xCAFE0001
+            pm4 = [
+                0xC0001000, 0x00000000,                       # NOP (2 dw)
+                0xC0033700,                                    # WRITE_DATA, count=3
+                0x00100500,                                    # DST_SEL=mem, WR_CONFIRM
+                comp_fence_mc & 0xFFFFFFFC,
+                (comp_fence_mc >> 32) & 0xFFFFFFFF,
+                marker,
+            ]
+            for i, word in enumerate(pm4):
+                vram_wr(COMPUTE_RING_VRAM_OFF + i * 4, word)
+            vram_wr64(COMPUTE_WPTR_VRAM_OFF, len(pm4))
+            bar2_wr64(comp_doorbell * 4, len(pm4))
+
+            print(f"\n== compute PM4 NOP+WRITE_DATA doorbell=0x{comp_doorbell:x} "
+                  f"wptr={len(pm4)} ==")
+            deadline = time.time() + 5
+            last = None
+            consumed = False
+            while time.time() < deadline:
+                fence_val = vram_rd(COMPUTE_FENCE_VRAM_OFF)
+                select_hqd(comp_me, comp_pipe, comp_queue)
+                rptr = hqd_rd(regCP_HQD_PQ_RPTR)
+                wptr = hqd_rd(regCP_HQD_PQ_WPTR_LO)
+                active = hqd_rd(regCP_HQD_ACTIVE)
+                snap = (fence_val, rptr, wptr, active)
+                if snap != last:
+                    print(f"  fence=0x{fence_val:08x} rptr=0x{rptr:x} "
+                          f"wptr=0x{wptr:x} active=0x{active:x}")
+                    last = snap
+                if fence_val == marker:
+                    print(f"  COMPUTE QUEUE WRITE_DATA via MES ✓")
+                    consumed = True
+                    break
+                time.sleep(0.05)
+            if not consumed:
+                print(f"  compute queue did not complete WRITE_DATA before timeout")
 
     gc1_wr(regGRBM_GFX_CNTL, 0)
 
