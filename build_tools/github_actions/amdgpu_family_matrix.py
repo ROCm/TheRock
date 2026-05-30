@@ -171,7 +171,7 @@ amdgpu_family_info_matrix_presubmit = {
                     "weight": 0.21,
                 },  # core42 (3/14)
             ],
-            "test-runs-on-emulator": "azure-linux-scale-rocm",
+            "test-runs-on-emulator": "rocjitsu-cpu",
             "rocjitsu-config": "amdgpu_cdna3_kmd.json",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
@@ -248,7 +248,7 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
-            "test-runs-on-emulator": "azure-linux-scale-rocm",
+            "test-runs-on-emulator": "rocjitsu-cpu",
             "rocjitsu-config": "amdgpu_cdna4_kmd.json",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
