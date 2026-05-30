@@ -236,6 +236,47 @@ def main():
     def hqd_rd(o): return gc0_rd(o)
     def hqd_wr(o, v): gc0_wr(o, v)
 
+    def configure_clockgating():
+        # Port of tinygrad am AM_GFX.set_clockgating_state for gfx12. Without
+        # this, RLC clock/power-gates the idle compute block and silently drops
+        # HQD context, which produces the 0x1000 queue-abort wedge after a
+        # variable number of dispatches. RLC regs are GC BASE_IDX=1; CP regs are
+        # BASE_IDX=0. SDMA CGCG (tinygrad also sets it) is skipped — we do not
+        # use SDMA on this path.
+        regRLC_SAFE_MODE          = 0x0980  # B1
+        regRLC_CGCG_CGLS_CTRL     = 0x4c49  # B1
+        regRLC_CGTT_MGCG_OVERRIDE = 0x4c48  # B1
+        regCP_RB_WPTR_POLL_CNTL   = 0x0f62  # B0
+        regCP_INT_CNTL            = 0x1de9  # B0
+
+        # Enter RLC safe mode (message=1, cmd=1); wait for the cmd bit to clear.
+        gc1_wr(regRLC_SAFE_MODE, (1 << 1) | (1 << 0))
+        deadline = time.time() + 1.0
+        while time.time() < deadline and (gc1_rd(regRLC_SAFE_MODE) & 0x1):
+            time.sleep(0.001)
+
+        # cgcg_en=1, cgls_en=1, cgls_rep_compansat_delay=0xf,
+        # cgcg_gfx_idle_threshold=0x36.
+        v = gc1_rd(regRLC_CGCG_CGLS_CTRL) & ~0x07FFFFFF
+        v |= (1 << 0) | (1 << 1) | (0xf << 2) | (0x36 << 8)
+        gc1_wr(regRLC_CGCG_CGLS_CTRL, v)
+
+        # poll_frequency=0x100, idle_poll_count=0x90.
+        gc0_wr(regCP_RB_WPTR_POLL_CNTL, 0x100 | (0x90 << 16))
+
+        # Enable cmp/cntx busy + cntx empty CP interrupts.
+        v = gc0_rd(regCP_INT_CNTL) | (1 << 18) | (1 << 19) | (1 << 20)
+        gc0_wr(regCP_INT_CNTL, v)
+
+        # Clear all gfx CG overrides (allow clock gating); perfmon_clock_state=1.
+        v = gc1_rd(regRLC_CGTT_MGCG_OVERRIDE) & ~0x73E
+        v |= (1 << 10)
+        gc1_wr(regRLC_CGTT_MGCG_OVERRIDE, v)
+
+        # Exit RLC safe mode (message=0, cmd=1).
+        gc1_wr(regRLC_SAFE_MODE, (1 << 0))
+        print("clock gating configured (CGCG/CGLS + MGCG overrides cleared)")
+
     # Bring up GFX unless attaching to an already live MEC/MES instance.
     if attach_only:
         print("PHASE9_ATTACH_ONLY=1: skipping gfx_bring_up() and PSP firmware loads")
@@ -244,6 +285,8 @@ def main():
         if not (r.bootload_status & 0x80000000):
             print("BOOTLOAD_COMPLETE not set — aborting.")
             sys.exit(1)
+        if os.environ.get("PHASE9_SKIP_CLOCKGATING") != "1":
+            configure_clockgating()
 
     fb_base = (c.mmio_read32(_MMIO_BAR, (0x1A000 + 0x0554) * 4) & 0xFFFFFF) << 24
     bar0_cpu, _ = c.map_bar(0)
