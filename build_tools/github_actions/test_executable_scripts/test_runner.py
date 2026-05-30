@@ -48,6 +48,7 @@ COMPONENT_DIR_MAPPING = {
     "miopen_plugin": "miopen_legacy_plugin",
     "hipsparselt": "hipsparselt",
     "hipblas": "hipblas",
+    "hipblasltprovider": "hipblaslt_plugin",
     # Add more mappings as needed
 }
 
