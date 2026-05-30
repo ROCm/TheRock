@@ -115,9 +115,6 @@ is passed, it will overwrite the default "therock-build" directory.
 """
 
 import argparse
-import boto3
-from botocore import UNSIGNED
-from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from pathlib import Path
@@ -127,20 +124,13 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from urllib.request import urlopen
 from typing import Optional
 
 PLATFORM = platform.system().lower()
-s3_client = boto3.client(
-    "s3",
-    verify=False,
-    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
-)
-# S3 bucket names for TheRock releases.
-# NOTE: These buckets will be restricted to CloudFront-only access in the future.
-# When that happens, direct S3 API calls (list_objects, download_fileobj) will fail
-# and this script will need to be updated to use CloudFront URLs instead.
-NIGHTLY_BUCKET_NAME = "therock-nightly-tarball"
-DEV_BUCKET_NAME = "therock-dev-tarball"
+# Public CloudFront tarball indexes.
+NIGHTLY_TARBALL_INDEX_URL = "https://rocm.nightlies.amd.com/tarball/"
+DEV_TARBALL_INDEX_URL = "https://rocm.devreleases.amd.com/tarball/"
 
 
 def parse_nightly_version(version: str) -> Optional[datetime]:
@@ -169,6 +159,25 @@ def extract_version_from_asset_name(
     return None
 
 
+def _extract_asset_names_from_index(index_html: str) -> set[str]:
+    """Extract .tar.gz asset names from a CloudFront tarball index page."""
+    # Match both href="name" and href=".../name" variants.
+    href_matches = re.findall(
+        r'href=["\'](?:[^"\']*/)?([^"\']+\.tar\.gz)["\']', index_html
+    )
+    # Match JavaScript object lists containing entries like:
+    # {"name": "therock-dist-linux-gfx110X-all-7.13.0a20260417.tar.gz", ...}
+    json_name_matches = re.findall(r'"name"\s*:\s*"([^"]+\.tar\.gz)"', index_html)
+    return set(href_matches + json_name_matches)
+
+
+def _fetch_tarball_asset_names(index_url: str) -> set[str]:
+    """Fetch available tarball asset names from a CloudFront index."""
+    with urlopen(index_url) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    return _extract_asset_names_from_index(html)
+
+
 def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str]:
     """
     Query S3 to find all GPU families that have nightly releases.
@@ -176,15 +185,13 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
     """
     prefix = f"therock-dist-{platform_str}-"
 
-    paginator = s3_client.get_paginator("list_objects_v2")
     families: set[str] = set()
 
-    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
-            match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
-            if match:
-                families.add(match.group(1))
+    for asset_name in _fetch_tarball_asset_names(NIGHTLY_TARBALL_INDEX_URL):
+        # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
+        match = re.match(rf"{prefix}([\w-]+)-", asset_name)
+        if match:
+            families.add(match.group(1))
 
     return families
 
@@ -192,41 +199,35 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
 def _fetch_and_sort_nightly_releases(
     artifact_group: str,
     platform_str: str = PLATFORM,
-) -> list[dict]:
+) -> list[dict[str, datetime | str | None]]:
     """
-    Fetch and sort nightly releases from S3 bucket for a given artifact group.
+    Fetch and sort nightly releases from CloudFront for a given artifact group.
 
     Returns:
-        List of dicts with keys: version, asset_name, last_modified, size, parsed_date
-        Sorted by recency (newest first).
+        List of dicts with keys: version, asset_name, parsed_date
+        Sorted by recency (newest first) by parsed date then version string.
     """
     prefix = f"therock-dist-{platform_str}-{artifact_group}-"
+    releases: list[dict[str, datetime | str | None]] = []
 
-    paginator = s3_client.get_paginator("list_objects_v2")
-    releases: list[dict] = []
+    for asset_name in _fetch_tarball_asset_names(NIGHTLY_TARBALL_INDEX_URL):
+        if not asset_name.startswith(prefix):
+            continue
+        version = extract_version_from_asset_name(asset_name, artifact_group, platform_str)
+        if version:
+            releases.append(
+                {
+                    "version": version,
+                    "asset_name": asset_name,
+                    "parsed_date": parse_nightly_version(version),
+                }
+            )
 
-    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if not key.endswith(".tar.gz"):
-                continue
-            version = extract_version_from_asset_name(key, artifact_group, platform_str)
-            if version:
-                releases.append(
-                    {
-                        "version": version,
-                        "asset_name": key,
-                        "last_modified": obj["LastModified"],
-                        "size": obj["Size"],
-                        "parsed_date": parse_nightly_version(version),
-                    }
-                )
-
-    # Sort by parsed date (newest first), falling back to last_modified
+    # Sort by parsed date (newest first), falling back to version text ordering.
     releases.sort(
         key=lambda x: (
             x["parsed_date"] if x["parsed_date"] else datetime.min,
-            x["last_modified"],
+            x["version"],
         ),
         reverse=True,
     )
@@ -280,20 +281,26 @@ def _create_output_directory(output_dir: Path):
     log(f"Created output directory '{output_dir.resolve()}'")
 
 
-def _retrieve_s3_release_assets(
-    release_bucket, artifact_group, release_version, output_dir
+def _download_release_asset(index_url: str, asset_name: str, output_dir: Path):
+    """Download an asset from a CloudFront index and extract it."""
+    destination = output_dir / asset_name
+    download_url = f"{index_url}{asset_name}"
+
+    log(f"Downloading {download_url}")
+    with urlopen(download_url) as response, open(destination, "wb") as f:
+        shutil.copyfileobj(response, f)
+
+    _untar_files(output_dir, destination)
+
+
+def _retrieve_release_assets(
+    release_index_url: str, artifact_group: str, release_version: str, output_dir: Path
 ):
     """
-    Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
+    Retrieve and extract the release asset matching the artifact group.
     """
     asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
-    destination = output_dir / asset_name
-
-    with open(destination, "wb") as f:
-        s3_client.download_fileobj(release_bucket, asset_name, f)
-
-    # After downloading the asset, untar-ing the file
-    _untar_files(output_dir, destination)
+    _download_release_asset(release_index_url, asset_name, output_dir)
 
 
 def retrieve_artifacts_by_run_id(args):
@@ -516,18 +523,18 @@ def retrieve_artifacts_by_release(args):
         log("This script requires a nightly-tarball or dev-tarball version.")
         log("Please retrieve the correct release version from:")
         log(
-            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
+            "\t - https://rocm.nightlies.amd.com/tarball/ (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
         )
         log(
-            "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+            "\t - https://rocm.devreleases.amd.com/tarball/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
         )
         log("Exiting...")
         return
 
-    release_bucket = NIGHTLY_BUCKET_NAME if nightly_release else DEV_BUCKET_NAME
+    release_index_url = NIGHTLY_TARBALL_INDEX_URL if nightly_release else DEV_TARBALL_INDEX_URL
     release_version = args.release
 
-    log(f"Retrieving artifacts from release bucket {release_bucket}")
+    log(f"Retrieving artifacts from release index {release_index_url}")
 
     if args.dry_run:
         asset_name = (
@@ -536,8 +543,11 @@ def retrieve_artifacts_by_release(args):
         log(f"[DRY RUN] Would download: {asset_name} (version {release_version})")
         return
 
-    _retrieve_s3_release_assets(
-        release_bucket, artifact_group, release_version, output_dir
+    _retrieve_release_assets(
+        release_index_url=release_index_url,
+        artifact_group=artifact_group,
+        release_version=release_version,
+        output_dir=output_dir,
     )
 
 
@@ -597,8 +607,8 @@ def retrieve_artifacts_by_latest_release(args):
         return
 
     # Reuse existing download logic
-    _retrieve_s3_release_assets(
-        release_bucket=NIGHTLY_BUCKET_NAME,
+    _retrieve_release_assets(
+        release_index_url=NIGHTLY_TARBALL_INDEX_URL,
         artifact_group=args.artifact_group,
         release_version=version,
         output_dir=args.output_dir,

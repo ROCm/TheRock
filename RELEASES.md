@@ -963,12 +963,12 @@ such as setting environment variables.
 
 Release tarballs are uploaded to the following locations:
 
-| Tarball index                             | S3 bucket                                                                                | Description                                        |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| https://repo.amd.com/rocm/tarball/        | (not publicly accessible)                                                                | Stable releases                                    |
-| https://rocm.nightlies.amd.com/tarball/   | [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the default development branch |
-| https://rocm.prereleases.amd.com/tarball/ | (not publicly accessible)                                                                | ⚠️ Prerelease builds for QA testing ⚠️             |
-| https://rocm.devreleases.amd.com/tarball/ | [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️  |
+| Tarball index                                                     | Legacy bucket name       | Description                                        |
+| ----------------------------------------------------------------- | ------------------------ | -------------------------------------------------- |
+| [https://repo.amd.com/rocm/tarball/](https://repo.amd.com/rocm/tarball/)                 | n/a                      | Stable releases                                    |
+| [https://rocm.nightlies.amd.com/tarball/](https://rocm.nightlies.amd.com/tarball/)       | therock-nightly-tarball | Nightly builds from the default development branch |
+| [https://rocm.prereleases.amd.com/tarball/](https://rocm.prereleases.amd.com/tarball/)   | n/a                      | ⚠️ Prerelease builds for QA testing ⚠️             |
+| [https://rocm.devreleases.amd.com/tarball/](https://rocm.devreleases.amd.com/tarball/)   | therock-dev-tarball     | ⚠️ Development builds from project maintainers ⚠️  |
 
 #### Manual tarball extraction
 
