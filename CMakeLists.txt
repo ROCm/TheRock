@@ -261,6 +261,12 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 ################################################################################
 # Manual features that don't map to artifacts
 ################################################################################
+therock_add_feature(FLANG
+  GROUP ALL
+  DESCRIPTION "Enables flang support"
+  REQUIRES COMPILER
+)
+set(THEROCK_ENABLE_FLANG_SUPPORT "${THEROCK_ENABLE_FLANG}")
 
 # Core Features.
 # The HIP runtime for ROCm uses different implementations per platform today:
