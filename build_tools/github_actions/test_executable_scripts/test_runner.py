@@ -19,6 +19,7 @@ import sys
 import subprocess
 import re
 import os
+import platform
 
 import logging
 import shlex
@@ -30,6 +31,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+OS_TYPE = platform.system().lower()  # 'linux' | 'windows' | 'darwin'
 
 # Map job names to actual test directory names
 # The job names come from TEST_COMPONENT env var (set by GitHub Actions workflow)
@@ -60,8 +62,17 @@ if not test_component_job_name:
     )
     sys.exit(1)
 
+# A job_name like "hip-tests (PAL)" is a CI matrix variant of the underlying
+# "hip-tests" component (see fetch_test_configurations.py). Strip the trailing
+# parenthesised variant suffix before COMPONENT_DIR_MAPPING / COMPONENT_OVERRIDES
+# lookups so a single override entry covers the base job and all its variants.
+component_lookup_key = (
+    re.sub(r"\s*\([^)]*\)\s*$", "", test_component_job_name).strip()
+    or test_component_job_name
+)
+
 TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
-    test_component_job_name, test_component_job_name
+    component_lookup_key, component_lookup_key
 )
 
 # GTest sharding
@@ -111,6 +122,21 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # hip-tests installs Catch2 binaries + CTestTestfile.cmake under
+    # ROCM_PATH/share/hip/catch_tests (not ROCM_PATH/bin/<component>/).
+    # Tier (quick/standard/...) and arch-exclude
+    # (gfx950_linux_exclude / gfx110X_windows_exclude / ...) labels are baked
+    # into the test binaries via catch_discover_tests(ADD_TAGS_AS_LABELS
+    # DISCOVERY_MODE PRE_TEST), wired by rocm-systems#6315.  `ctest -L <tier>`
+    # picks up the tiers, and find_matching_arch_exclude_labels() above
+    # honours the arch-exclude labels for the current host GPU/OS.
+    # The tests dlopen HIP from ROCM_PATH/lib.
+    "hip-tests": {
+        "test_dir": ["share", "hip", "catch_tests"],
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [["lib"]],
+        },
+    },
 }
 
 
@@ -138,7 +164,7 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR = apply_component_overrides(
-    test_component_job_name, ROCM_PATH, TEST_DIR, environ_vars
+    component_lookup_key, ROCM_PATH, TEST_DIR, environ_vars
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -168,6 +194,47 @@ def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str 
             return pattern
 
     return None
+
+
+# Recognised arch-exclude label shapes (used by find_matching_arch_exclude_labels):
+#   gfx950_exclude            -> OS-agnostic, exact arch
+#   gfx94X_linux_exclude      -> Linux-only,  wildcard arch
+#   gfx110X_windows_exclude   -> Windows-only, wildcard arch
+_ARCH_EXCLUDE_RE = re.compile(
+    r"^(?P<arch>gfx[0-9a-zA-Z]+?)(?:_(?P<os>linux|windows|darwin))?_exclude$"
+)
+
+
+def find_matching_arch_exclude_labels(gpu_arch, exclude_labels, os_type):
+    """
+    Return labels of form <gfx_pattern>[_<os>]_exclude matching the current GPU/OS.
+
+    Lets test_categories.yaml express per-arch known-broken tests
+    (e.g. hip-tests' `gfx950_linux_exclude`, `gfx110X_windows_exclude`)
+    without baking the convention into individual component runners.
+    Plain `<tier>_exclude` labels are untouched and continue to flow
+    through the category_exclude path in build_ctest_command.
+
+    Labels without an OS suffix are treated as OS-agnostic. Labels with an
+    OS suffix that doesn't match the current host are skipped.
+
+    Arch is matched against `gpu_arch` using the same wildcard semantics
+    as find_matching_gpu_arch (e.g. `gfx94X` matches gfx940/gfx941/...).
+    """
+    if not gpu_arch:
+        return []
+    matched = []
+    for label in exclude_labels:
+        m = _ARCH_EXCLUDE_RE.match(label)
+        if not m:
+            continue
+        label_os = m.group("os")
+        if label_os and label_os != os_type:
+            continue
+        arch = m.group("arch")
+        if find_matching_gpu_arch(gpu_arch, {arch}) == arch:
+            matched.append(label)
+    return matched
 
 
 def check_available_labels():
@@ -257,6 +324,13 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
     if category_exclude_label in exclude_labels:
         le_patterns.append(category_exclude_label)
         print(f"# Excluding tests with label: {category_exclude_label}")
+
+    # Honour <gfx_pattern>[_<os>]_exclude labels for the current GPU/OS.
+    # Lets components express per-arch known-broken tests purely in YAML
+    # (e.g. hip-tests' gfx950_linux_exclude / gfx110X_windows_exclude).
+    for lbl in find_matching_arch_exclude_labels(gpu_arch, exclude_labels, OS_TYPE):
+        le_patterns.append(lbl)
+        print(f"# Excluding tests with arch-specific label: {lbl}")
 
     if gpu_arch.lower() in ["generic", "none", ""]:
         le_patterns.append("ex_gpu")
