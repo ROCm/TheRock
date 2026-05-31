@@ -47,6 +47,8 @@ include = [
   "bin/hipblas_gtest.data",
   "bin/hipblas_v2-test*",
   "bin/hipblas_v2_gtest.data",
+  # Clients tests outputs
+  "bin/hipblas/**",
 ]
 
 # hipBLASLt
