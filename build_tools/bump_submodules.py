@@ -86,11 +86,6 @@ def parse_components(components: list[str]) -> list[list]:
     else:
         arguments.append("--no-include-compilers")
 
-    if "iree-libs" in components:
-        arguments.append("--include-iree-libs")
-    else:
-        arguments.append("--no-include-iree-libs")
-
     if "debug-tools" in components:
         arguments.append("--include-debug-tools")
     else:
@@ -193,7 +188,6 @@ def main(argv):
                   rocm-libraries,
                   rocm-systems,
                   profiler,
-                  iree-libs,
                   debug-tools,
                   media-libs,
                   math-libraries

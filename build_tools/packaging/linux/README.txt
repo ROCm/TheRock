@@ -13,7 +13,12 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt (build_tools/packaging/linux/requirements.txt)
 
 #Usage:
-Ubuntu:
+Ubuntu (with auto-detected architectures - recommended):
+./build_package.py --artifacts-dir ./ARTIFACTS_DIR --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb --version-suffix build_type
+
+Ubuntu (with explicit target):
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb --version-suffix build_type
+
+Note: The --target argument is optional. If not provided, the script will automatically detect GFX architectures from the artifact directory.
 
 For more options ./build_package.py -h

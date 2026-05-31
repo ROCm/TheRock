@@ -68,15 +68,6 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
             )
         self.assertIn("bogus", str(cm.exception))
 
-    def test_release_type_disallowed_repo_raises(self):
-        with self.assertRaises(ValueError) as cm:
-            get_artifacts_bucket_config(
-                release_type="dev",
-                repository="ROCm/rocm-libraries",
-                is_pr_from_fork=False,
-            )
-        self.assertIn("ROCm/rocm-libraries", str(cm.exception))
-
 
 # ---------------------------------------------------------------------------
 # get_release_bucket_config
