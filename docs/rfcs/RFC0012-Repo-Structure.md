@@ -483,10 +483,8 @@ Rules:
 
 The HPC SDK is a ROCm expansion and is published under the `expansions [a–z]`
 folder of the matching `rocm` stream (nightly, rc, stable,
-ltsrc, lts). Unlike other expansions, it is released on its own cadence — decoupled
-from ROCm release cadence — and uses date-based versioning. This mirrors the
-model used by NVIDIA's HPC SDK, which is published independently of CUDA
-releases.
+ltsrc, lts). It is released on its own cadence — decoupled
+from ROCm Core SDK release cadence — and uses date-based versioning. 
 
 - **Cadence:** approximately 4 releases per year. Not every ROCm release will
   have a corresponding HPC SDK release.
