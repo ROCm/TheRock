@@ -5,6 +5,7 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 # Resolve paths
@@ -92,6 +93,26 @@ def execute_tests():
     )
 
 
+def install_requirements():
+    # rocprof-compute's runtime version-check enforces strict `==` pins on
+    # dash, numpy, pandas, plotille, pyyaml, sqlalchemy, textual, ...
+    # Install the bundled requirements.txt into /opt/venv so the pins line
+    # up with what rocprof-compute expects. The FFM container is ephemeral
+    # so this only affects this leg's run.
+    requirements_txt = ROCPROFILER_COMPUTE_DIRECTORY / "requirements.txt"
+    if not requirements_txt.is_file():
+        logging.warning(
+            f"requirements.txt not found at {requirements_txt}; "
+            "skipping rocprof-compute pip install"
+        )
+        return
+    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_txt)]
+    logging.info(f"++ Exec $ {shlex.join(cmd)}")
+    subprocess.run(cmd, check=True, env=environ_vars)
+
+
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     setup_env()
+    install_requirements()
     execute_tests()
