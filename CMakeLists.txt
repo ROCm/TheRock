@@ -111,8 +111,6 @@ set(THEROCK_PACKAGE_VERSION "git" CACHE STRING "Sets the package version string"
 # Disable compatibility symlinks created in default ROCM cmake project wide
 set(ROCM_SYMLINK_LIBS OFF)
 
-set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
-
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
 # TODO: Set default to true for Linux branch after necessary changes land
@@ -126,7 +124,6 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_BUILD_COMGR_TESTS "Enables building Comgr tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 

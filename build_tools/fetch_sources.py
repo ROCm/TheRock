@@ -20,12 +20,12 @@ import hashlib
 from pathlib import Path
 import platform
 import shlex
-import shutil
 import subprocess
 import sys
 from typing import List
 import os
 
+import fetch_dvc_artifacts
 from _therock_utils.git_mirrors import MIRROR_DIR_ENV, url_to_mirror_relpath
 from _therock_utils.branch_config import (
     get_source_sets_for_artifact_groups,
@@ -533,7 +533,7 @@ def run(args):
                 )
         fetch_external_git_sources(args, external_sources)
     if args.dvc_projects:
-        pull_large_files(args.dvc_projects, projects)
+        pull_large_files(args.dvc_projects, projects, jobs=args.jobs)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
@@ -553,30 +553,26 @@ def run(args):
         apply_patches(args, projects)
 
 
-def pull_large_files(dvc_projects, projects):
+def pull_large_files(dvc_projects, projects, jobs=None):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
         return
-    dvc_missing = shutil.which("dvc") is None
-    if dvc_missing:
-        if is_windows():
-            print("Could not find `dvc` on PATH so large files could not be fetched")
-            print("Visit https://dvc.org/doc/install for installation instructions.")
-            sys.exit(1)
-        else:
-            print("`dvc` not found, skipping large file pull on Linux.")
-            return
+    pull_jobs = jobs if jobs is not None else fetch_dvc_artifacts.DEFAULT_JOBS
     for project in dvc_projects:
         if not project in projects:
             continue
         submodule_path = get_submodule_path(project)
         project_dir = THEROCK_DIR / submodule_path
         dvc_config_file = project_dir / ".dvc" / "config"
-        if dvc_config_file.exists():
-            print(f"dvc detected in {project_dir}, running dvc pull")
-            run_command(["dvc", "pull"], cwd=project_dir)
-        else:
+        if not dvc_config_file.exists():
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
+            continue
+        print(f"dvc config detected in {project_dir}, fetching large files")
+        result = fetch_dvc_artifacts.pull(project_dir, jobs=pull_jobs)
+        print(
+            f"  done: fetched={result.fetched} "
+            f"cached={result.cached} skipped={result.skipped}"
+        )
 
 
 def remove_smrev_files(args, projects):
