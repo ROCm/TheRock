@@ -138,7 +138,7 @@ def main():
     parser.add_argument(
         "--gha-output",
         action="store_true",
-        help="Write changed_projects to GITHUB_OUTPUT",
+        help="Write projects_to_test to GITHUB_OUTPUT",
     )
 
     args = parser.parse_args()
@@ -158,16 +158,16 @@ def main():
     # If no projects specified, output "*" for all tests
     if not changed:
         if args.gha_output:
-            gha_set_output({"changed_projects": "*"})
+            gha_set_output({"projects_to_test": "*"})
         else:
             print("*")
         return
 
     result = get_subprojects_to_test(changed, therock_dir)
-    changed_projects = ",".join(sorted(result))
+    projects_to_test = ",".join(sorted(result))
 
     if args.gha_output:
-        gha_set_output({"changed_projects": changed_projects})
+        gha_set_output({"projects_to_test": projects_to_test})
     elif args.format == "json":
         print(json.dumps(sorted(result)))
     else:
