@@ -58,6 +58,7 @@ if(_ck_enabled)
       ${THEROCK_BUNDLED_BZIP2}
       ${optional_profiler_deps}
     TEST_SUBPROJECTS
+      MIOpen
   )
   therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
 
