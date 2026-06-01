@@ -442,7 +442,7 @@ test_matrix = {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
