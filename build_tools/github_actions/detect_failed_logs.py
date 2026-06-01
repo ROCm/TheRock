@@ -116,7 +116,6 @@ def write_companion_log(
     dst: Path,
     failure_end: str,
 ) -> None:
-
     lines = src.read_text(encoding="utf-8", errors="replace").splitlines()
     excerpt = build_excerpt(lines)
 
