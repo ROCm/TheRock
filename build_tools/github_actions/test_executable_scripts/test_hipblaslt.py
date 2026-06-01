@@ -49,4 +49,6 @@ elif test_type == "quick":
 cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test"] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+subprocess.run(
+    cmd, cwd=THEROCK_DIR, check=True, env=environ_vars, stderr=subprocess.STDOUT
+)

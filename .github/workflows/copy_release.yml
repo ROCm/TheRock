@@ -13,7 +13,7 @@ on:
         type: choice
         options:
           - gfx101X-dgpu
-          - gfx103X-dgpu
+          - gfx103X-all
           - gfx110X-all
           - gfx1150
           - gfx1151
@@ -75,7 +75,7 @@ jobs:
         run: ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.destbucket }}-releases
@@ -99,11 +99,3 @@ jobs:
             s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
             s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*"  --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
-
-      - name: (Re-)Generate Python package release index
-        env:
-          S3_BUCKET_PY: "therock-${{ inputs.destbucket }}-python"
-          CUSTOM_PREFIX: "${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${CUSTOM_PREFIX}

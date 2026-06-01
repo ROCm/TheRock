@@ -56,6 +56,7 @@ import os
 import json
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
+    select_weighted_label,
 )
 import string
 
@@ -99,6 +100,13 @@ def determine_package_targets(args):
 
         family = platform_for_key.get("family")
         test_machine = platform_for_key.get("test-runs-on")
+
+        # Handle multi-label configuration with weighted random selection.
+        if "test-runs-on-labels" in platform_for_key:
+            test_machine = select_weighted_label(
+                platform_for_key["test-runs-on-labels"], family
+            )
+
         sanity_check_only_for_family = platform_for_key.get(
             "sanity_check_only_for_family", False
         )

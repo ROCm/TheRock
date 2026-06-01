@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
+from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
@@ -35,12 +36,16 @@ def _run_from_environ(
     *,
     commit_ref: str = "main",
     build_variant: str = "release",
+    extra_env: dict[str, str] | None = None,
 ) -> cm.CIInputs:
     """Call CIInputs.from_environ() with a synthetic event payload.
 
     GitHub Actions sets GITHUB_EVENT_PATH to a JSON file containing the full
     webhook event payload. This helper writes a temporary JSON file and patches
     the environment to simulate that.
+
+    Workflow inputs (families, labels, prebuilt config) are passed via env vars,
+    matching how setup_multi_arch.yml passes them to the script.
 
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
     """
@@ -56,6 +61,8 @@ def _run_from_environ(
             "GITHUB_REF_NAME": commit_ref,
             "BUILD_VARIANT": build_variant,
         }
+        if extra_env:
+            env.update(extra_env)
         with patch.dict(os.environ, env, clear=False):
             return cm.CIInputs.from_environ()
     finally:
@@ -110,19 +117,18 @@ class TestCIInputsFromEnviron(unittest.TestCase):
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-environment-variables#default-environment-variables
     """
 
-    def test_workflow_dispatch_reads_inputs(self):
-        """workflow_dispatch inputs (families, labels, prebuilt config)."""
+    def test_workflow_dispatch_reads_inputs_from_env(self):
+        """Workflow inputs (families, labels, prebuilt config) come from env vars."""
         inputs = _run_from_environ(
             event_name="workflow_dispatch",
-            event_payload={
-                "inputs": {
-                    "linux_amdgpu_families": "gfx94X, gfx120X",
-                    "linux_test_labels": "test:rocprim",
-                    "windows_amdgpu_families": "",
-                    "windows_test_labels": "",
-                    "prebuilt_stages": "foundation,compiler-runtime",
-                    "baseline_run_id": "12345",
-                }
+            event_payload={},
+            extra_env={
+                "LINUX_AMDGPU_FAMILIES": "gfx94X, gfx120X",
+                "LINUX_TEST_LABELS": "test:rocprim",
+                "WINDOWS_AMDGPU_FAMILIES": "",
+                "WINDOWS_TEST_LABELS": "",
+                "PREBUILT_STAGES": "foundation,compiler-runtime",
+                "BASELINE_RUN_ID": "12345",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -146,6 +152,23 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
+
+    def test_pull_request_test_labels_extracted_to_test_labels(self):
+        """PR test:* labels are merged into linux/windows_test_labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "test:rccl", "id": 1},
+                        {"name": "test:rocprim", "id": 2},
+                        {"name": "gfx950", "id": 3},
+                    ]
+                }
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["test:rccl", "test:rocprim"])
+        self.assertEqual(inputs.windows_test_labels, ["test:rccl", "test:rocprim"])
 
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
@@ -214,6 +237,42 @@ class TestShouldSkipCI(unittest.TestCase):
         git = cm.GitContext()
         self.assertFalse(cm.should_skip_ci(inputs, git))
         mock_filter.assert_not_called()
+
+    def test_asan_pr_without_submodule_change_skips(self):
+        """ASAN PR without submodule changes skips CI."""
+        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt", "build_tools/script.py"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_asan_pr_with_submodule_change_runs(self):
+        """ASAN PR with submodule changes runs CI."""
+        inputs = self._inputs(build_variant="asan", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["rocm-libraries", "CMakeLists.txt"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_asan_non_pr_runs_regardless_of_submodule(self):
+        """ASAN on schedule/push runs regardless of submodule changes."""
+        inputs = self._inputs(event_name="schedule", build_variant="asan")
+        git = cm.GitContext(
+            changed_files=None,
+            submodule_paths=["rocm-libraries"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_release_pr_without_submodule_change_runs(self):
+        """Release variant PR without submodule changes still runs (not skipped)."""
+        inputs = self._inputs(build_variant="release", pr_labels=[])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+            submodule_paths=["rocm-libraries"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
 
 
 # ---------------------------------------------------------------------------
@@ -290,11 +349,33 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                linux_test_labels="test:rocprim",
+                linux_test_labels=["test:rocprim"],
             ),
             git_context=cm.GitContext(),
         )
         self.assertEqual(result.test_rocm.test_type, "full")
+
+    def test_nightly_release_is_comprehensive(self):
+        """Nightly release → comprehensive tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="nightly"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_prerelease_is_full(self):
+        """Prerelease → full tests."""
+        result = cm.decide_jobs(
+            self._inputs(release_type="prerelease"), git_context=cm.GitContext()
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertIn("release", result.test_rocm.test_type_reason)
+
+    def test_dev_release_falls_through_to_default(self):
+        """Dev release without other signals → quick (falls through)."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(self._inputs(release_type="dev"), git_context=git)
+        self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_test_filter_label_overrides(self):
         """test_filter: PR label overrides the computed test_type."""
@@ -352,6 +433,42 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "foundation"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
+
+    # TODO(#3433): Remove ASAN tests once ASAN tests are passing
+    def test_asan_tests_only_run_on_nightly_triggers(self):
+        """ASAN tests only run on schedule/workflow_dispatch, skip on PR/push."""
+        git_context = cm.GitContext()
+
+        # PR and push should skip ASAN tests
+        for event in ["pull_request", "push"]:
+            result = cm.decide_jobs(
+                self._inputs(event_name=event, build_variant="asan"),
+                git_context=git_context,
+            )
+            self.assertEqual(
+                result.test_rocm.action,
+                cm.JobAction.SKIP,
+                f"ASAN tests should skip on {event}",
+            )
+
+        # Schedule and workflow_dispatch should run ASAN tests
+        for event in ["schedule", "workflow_dispatch"]:
+            result = cm.decide_jobs(
+                self._inputs(event_name=event, build_variant="asan"),
+                git_context=git_context,
+            )
+            self.assertEqual(
+                result.test_rocm.action,
+                cm.JobAction.RUN,
+                f"ASAN tests should run on {event}",
+            )
+
+        # Release builds should always run tests (contrast with ASAN)
+        result = cm.decide_jobs(
+            self._inputs(event_name="pull_request", build_variant="release"),
+            git_context=git_context,
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +644,68 @@ class TestSelectTargets(unittest.TestCase):
         with self.assertRaises(ValueError):
             cm.select_targets(inputs)
 
+    def test_workflow_dispatch_all_expands_to_all_families(self):
+        """workflow_dispatch with 'all' expands to all known families."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            release_type="dev",
+            linux_amdgpu_families=["all"],
+            windows_amdgpu_families=["all"],
+        )
+        result = cm.select_targets(inputs)
+        all_families = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        linux_families_in_matrix = [
+            name for name, info in all_families.items() if "linux" in info
+        ]
+        self.assertEqual(
+            sorted(result.linux_families), sorted(linux_families_in_matrix)
+        )
+        windows_families_in_matrix = [
+            name for name, info in all_families.items() if "windows" in info
+        ]
+        self.assertEqual(
+            sorted(result.windows_families), sorted(windows_families_in_matrix)
+        )
+
+    def test_workflow_dispatch_empty_means_no_families(self):
+        """workflow_dispatch with empty families builds nothing for that platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            release_type="dev",
+            # linux uses "none" sentinel value
+            linux_amdgpu_families=["none"],
+            # (windows omitted)
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(len(result.linux_families), 0)
+        self.assertEqual(len(result.windows_families), 0)
+
+    def test_workflow_dispatch_release_type_with_explicit_families(self):
+        """workflow_dispatch with release_type AND explicit families uses explicit list."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            release_type="dev",
+            linux_amdgpu_families=["gfx94x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx94x", [f.split("-")[0] for f in result.linux_families])
+        # Should NOT include all families — explicit list takes precedence
+        self.assertLessEqual(len(result.linux_families), 2)
+
     def test_unsupported_event_type_raises(self):
         """Unknown event type raises ValueError."""
         inputs = cm.CIInputs(
@@ -589,6 +768,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="",
             expect_failure=False,
             build_pytorch=True,
+            build_native_linux=True,
         )
         d = config.to_dict()
         # to_dict keys should match dataclass fields.
@@ -598,7 +778,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
 
@@ -614,6 +796,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="release",
             expect_failure=False,
             build_pytorch=True,
+            build_native_linux=True,
         )
         # Present config → valid JSON
         serialized = json.dumps(config.to_dict())
@@ -636,7 +819,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant="release",
         )
         targets = cm.select_targets(inputs)
-        result = cm.expand_build_configs(targets=targets, ci_inputs=inputs)
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=inputs, test_type="quick"
+        )
         required_keys = {
             "amdgpu_family",
             "amdgpu_targets",
@@ -667,7 +852,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 {
                     "amdgpu_family": "gfx94X-dcgpu",
                     "amdgpu_targets": "gfx942",
-                    "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+                    "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
                     "sanity_check_only_for_family": false
                 },
                 ...
@@ -684,7 +869,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x", "gfx110x"],
             windows_families=["gfx110x"],
         )
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
 
         # All target families that support the variant appear in output.
         linux_per_family = result.linux.per_family_info
@@ -712,7 +899,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(build_variant="asan")
+            targets=targets,
+            ci_inputs=self._inputs(build_variant="asan"),
+            test_type="quick",
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -721,16 +910,82 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
+    def test_variant_filters_by_trigger(self):
+        """ASAN: based on event type, we run an expected ASAN build variant"""
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+        )
+        test_cases = [
+            ("schedule", "linux-release-asan"),
+            ("push", "linux-release-host-asan"),
+            ("workflow_dispatch", "linux-release-asan"),
+        ]
+        for event_name, expected_variant in test_cases:
+            with self.subTest(event_name=event_name):
+                defaults = dict(
+                    run_id="12345",
+                    event_name=event_name,
+                    commit_ref="main",
+                    base_ref="HEAD^1",
+                    build_variant="asan",
+                )
+                ci_inputs = cm.CIInputs(**defaults)
+                result = cm.expand_build_configs(
+                    targets=targets,
+                    ci_inputs=ci_inputs,
+                    test_type="quick",
+                )
+                # Only gfx94x on linux survives.
+                self.assertIsNotNone(result.linux)
+                build_variant_cmake_preset = result.linux.build_variant_cmake_preset
+                self.assertEqual(build_variant_cmake_preset, expected_variant)
+
+    def test_push_asan_excludes_families_without_host_asan_support(self):
+        """Push ASAN: gfx950 supports asan but not host-asan, so it must be excluded.
+
+        When build_variant=asan on push events, the effective variant becomes
+        host-asan. Families must be filtered using this effective variant, not
+        the original asan variant. gfx950 supports asan but not host-asan, so
+        it should be excluded from the result.
+        """
+        # gfx94x supports host-asan, gfx950 only supports asan (not host-asan)
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x", "gfx950"],
+        )
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",  # push triggers asan -> host-asan remap
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="asan",
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=ci_inputs,
+            test_type="quick",
+        )
+        self.assertIsNotNone(result.linux)
+        # Verify it's a host-asan build
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
+        )
+        # Only gfx94x should survive (it supports host-asan), gfx950 should be excluded
+        family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
+        self.assertIn("gfx94X-dcgpu", family_names)
+        self.assertNotIn("gfx950-dcgpu", family_names)
+        self.assertEqual(len(result.linux.per_family_info), 1)
+
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
         result = cm.expand_build_configs(
             targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            test_type="quick",
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "linux-strix-halo-gpu-rocm-oem")
+        self.assertEqual(entry["test-runs-on"], "")
 
     def test_test_runner_kernel_clears_unsupported_family(self):
         """test_runner:oem label clears runner for families without kernel support."""
@@ -739,6 +994,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         result = cm.expand_build_configs(
             targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            test_type="quick",
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -746,13 +1002,38 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
     def test_no_test_runner_label_uses_default(self):
         """Without test_runner: label, default runner labels are used."""
-        targets = cm.TargetSelection(linux_families=["gfx1151"])
-        result = cm.expand_build_configs(targets=targets, ci_inputs=self._inputs())
+        targets = cm.TargetSelection(linux_families=["gfx908"])
+        result = cm.expand_build_configs(
+            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+        )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
         # Default runner, not the oem one
-        self.assertNotEqual(entry["test-runs-on"], "")
+        self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
+
+    # TODO(#3433): Remove sandbox tests once ASAN tests are passing
+    def test_asan_runner_selection(self):
+        """ASAN uses sandbox on nightly, disables tests on PR/push."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+
+        # Schedule: uses sandbox runner
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
+            test_type="quick",
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertIn("sandbox", entry["test-runs-on"])
+
+        # PR: disables tests (empty runner)
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
+            test_type="quick",
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["test-runs-on"], "")
 
 
 # ---------------------------------------------------------------------------
@@ -833,6 +1114,34 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
 
+    def test_test_labels_thread_to_outputs(self):
+        """test_labels on CIInputs pass through to CIOutputs."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:rccl"],
+            windows_test_labels=["test:rccl"],
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertEqual(outputs.linux_test_labels, ["test:rccl"])
+        self.assertEqual(outputs.windows_test_labels, ["test:rccl"])
+
+    def test_no_test_labels_has_empty_outputs(self):
+        """Without test labels, outputs are empty lists."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertEqual(outputs.linux_test_labels, [])
+        self.assertEqual(outputs.windows_test_labels, [])
+
 
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
@@ -888,25 +1197,57 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
+        # build_native_linux is Linux-only, not used in Windows workflow
+        linux_only_fields = {"build_native_linux"}
         self.assertEqual(
             yaml_fields,
-            python_fields,
+            python_fields - linux_only_fields,
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
-            f"  In Python but not YAML: {python_fields - yaml_fields}",
+            f"  In Python but not YAML: {python_fields - yaml_fields - linux_only_fields}",
         )
 
 
+class TestFamilyTestFilters(unittest.TestCase):
+    """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
+
+    def test_real_family_gfx90a_nightly_check_only(self):
+        """Integration test: gfx90a has nightly_check_only_for_family in the matrix."""
+        # gfx90a (in nightly matrix) has nightly_check_only_for_family=True for linux
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",  # Non-schedule run
+            commit_ref="feature-branch",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
+        )
+        targets = cm.select_targets(ci_inputs)
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx90a in the linux build config
+        if outputs.builds.linux:
+            gfx90a_info = None
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx90a":
+                    gfx90a_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx90a_info)
+        self.assertEqual(gfx90a_info["test-runs-on"], "")
+
+
 # ---------------------------------------------------------------------------
-# Dual-label runner selection
+# Multi-label runner selection
 # ---------------------------------------------------------------------------
 
 
-class TestDualLabelRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of dual-label runner configurations."""
+class TestMultiLabelRunnerSelection(unittest.TestCase):
+    """Test weighted random selection of multi-label runner configurations."""
 
-    def test_gfx94x_has_dual_label_config(self):
-        """Verify gfx94x has the dual-label configuration."""
+    def test_gfx94x_has_multi_label_config(self):
+        """Verify gfx94x has the multi-label configuration."""
         from amdgpu_family_matrix import get_all_families_for_trigger_types
 
         all_families = get_all_families_for_trigger_types(["presubmit"])
@@ -914,18 +1255,44 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
 
         gfx94x_linux = all_families["gfx94x"].get("linux", {})
         self.assertIn("test-runs-on", gfx94x_linux)
-        self.assertIn("test-runs-on-alternate", gfx94x_linux)
-        self.assertIn("test-runs-on-alternate-weight", gfx94x_linux)
+        self.assertIn("test-runs-on-labels", gfx94x_linux)
+        self.assertIn("test-runs-on-multi-gpu-labels", gfx94x_linux)
 
-        # Verify the expected labels
-        self.assertEqual(gfx94x_linux["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
-        self.assertEqual(
-            gfx94x_linux["test-runs-on-alternate"],
-            "linux-gfx942-1gpu-ccs-ossci-rocm",
-        )
+        # Verify we have 3 labels for 1-gpu
+        labels = gfx94x_linux["test-runs-on-labels"]
+        self.assertEqual(len(labels), 2)
 
-    def test_alternate_label_selected_when_random_below_weight(self):
-        """When random() < weight, alternate label should be selected."""
+        # Verify label names
+        label_names = [l["label"] for l in labels]
+        self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
+
+        # Verify weights sum to ~1.0
+        total_weight = sum(l["weight"] for l in labels)
+        self.assertAlmostEqual(total_weight, 1.0, places=1)
+
+    def test_gfx94x_multi_gpu_has_dual_label_config(self):
+        """Verify gfx94x has the multi-gpu dual-label configuration."""
+        from amdgpu_family_matrix import get_all_families_for_trigger_types
+
+        all_families = get_all_families_for_trigger_types(["presubmit"])
+        gfx94x_linux = all_families["gfx94x"].get("linux", {})
+
+        # Verify we have 2 labels for 8-gpu
+        labels = gfx94x_linux["test-runs-on-multi-gpu-labels"]
+        self.assertEqual(len(labels), 2)
+
+        # Verify label names
+        label_names = [l["label"] for l in labels]
+        self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-8gpu-core42-ossci-rocm", label_names)
+
+        # Verify weights sum to 1.0
+        total_weight = sum(l["weight"] for l in labels)
+        self.assertAlmostEqual(total_weight, 1.0, places=1)
+
+    def test_first_label_selected_when_random_low(self):
+        """When random() < first weight, first label should be selected."""
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
@@ -935,19 +1302,19 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.1 (< 0.2 weight)
+        # Mock random.random() to return 0.1 (< 0.369 first weight)
         with patch("random.random", return_value=0.1):
-            builds = cm.expand_build_configs(targets, ci_inputs)
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
-        # Check that the alternate label was selected
+        # Check that the first label was selected
         gfx94x_info = builds.linux.per_family_info[0]
         self.assertEqual(
             gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
         )
 
-    def test_primary_label_selected_when_random_above_weight(self):
-        """When random() >= weight, primary label should be selected."""
+    def test_second_label_selected_when_random_medium(self):
+        """When random() is in second range, second label should be selected."""
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
@@ -957,51 +1324,41 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.5 (>= 0.2 weight)
-        with patch("random.random", return_value=0.5):
-            builds = cm.expand_build_configs(targets, ci_inputs)
+        # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
+        with patch("random.random", return_value=0.4):
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
         self.assertIsNotNone(builds.linux)
-        # Check that the primary label was selected
+        # Check that the second label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+        self.assertEqual(
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+        )
 
-    def test_distribution_approximates_weight(self):
-        """Over many runs, selection should approximate the configured weight."""
+    def test_third_label_selected_when_random_high(self):
+        """When random() >= first two weights, third label should be selected."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+
+        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
         with patch("random.random", return_value=0.5):
-            ci_inputs = cm.CIInputs(
-                run_id="12345",
-                event_name="pull_request",
-                commit_ref="feature",
-                base_ref="HEAD^",
-                build_variant="release",
-            )
-            targets = cm.TargetSelection(linux_families=["gfx94x"])
-            builds = cm.expand_build_configs(targets, ci_inputs)
-            gfx94x_info = builds.linux.per_family_info[0]
-            self.assertEqual(
-                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
-            )
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
 
-    def test_distribution_approximates_alternative_weight(self):
-        """Over many runs, selection should approximate the configured weight."""
-        with patch("random.random", return_value=0.2):
-            ci_inputs = cm.CIInputs(
-                run_id="12345",
-                event_name="pull_request",
-                commit_ref="feature",
-                base_ref="HEAD^",
-                build_variant="release",
-            )
-            targets = cm.TargetSelection(linux_families=["gfx94x"])
-            builds = cm.expand_build_configs(targets, ci_inputs)
-            gfx94x_info = builds.linux.per_family_info[0]
-            self.assertEqual(
-                gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
-            )
+        self.assertIsNotNone(builds.linux)
+        # Check that the third label was selected
+        gfx94x_info = builds.linux.per_family_info[0]
+        self.assertEqual(
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+        )
 
-    def test_families_without_alternate_use_primary_only(self):
-        """Families without dual-label config should only use primary label."""
+    def test_families_without_multi_label_use_primary_only(self):
+        """Families without multi-label config should only use primary label."""
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="schedule",
@@ -1009,16 +1366,61 @@ class TestDualLabelRunnerSelection(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        # gfx103x doesn't have alternate label
+        # gfx103x doesn't have multi-label config
         targets = cm.TargetSelection(linux_families=["gfx103x"])
 
         # Run multiple times to ensure consistency
         for _ in range(10):
-            builds = cm.expand_build_configs(targets, ci_inputs)
+            builds = cm.expand_build_configs(targets, ci_inputs, test_type="full")
             if builds.linux and builds.linux.per_family_info:
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
+
+
+# ---------------------------------------------------------------------------
+# Build runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunnerSelection(unittest.TestCase):
+    """Test weighted random selection of build runners (Azure vs AWS)."""
+
+    def test_select_build_runner_weighted_selection(self):
+        """Test weighted selection: Azure (80%) vs AWS (20%) for default builds."""
+        from amdgpu_family_matrix import select_build_runner
+
+        # Random < 0.8 should select Azure
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("linux", "release"), "azure-linux-scale-rocm"
+            )
+
+        # Random >= 0.8 should select AWS
+        with patch("random.random", return_value=0.95):
+            self.assertEqual(
+                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
+            )
+
+        # Random >= 0.9 should select Azure
+        with patch("random.random", return_value=0.95):
+            self.assertEqual(
+                select_build_runner("windows", "release"), "azure-windows-scale-rocm"
+            )
+
+    def test_select_build_runner_sanitizer_uses_ramdisk(self):
+        """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
+        from amdgpu_family_matrix import select_build_runner
+
+        with patch("random.random", return_value=0.99):
+            self.assertEqual(
+                select_build_runner("linux", "asan"),
+                "azure-linux-scale-rocm-heavy-ramdisk",
+            )
+            self.assertEqual(
+                select_build_runner("linux", "tsan"),
+                "azure-linux-scale-rocm-heavy-ramdisk",
+            )
 
 
 if __name__ == "__main__":

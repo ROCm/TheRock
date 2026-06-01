@@ -45,4 +45,6 @@ subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
     check=True,
+    env=environ_vars,
+    stderr=subprocess.STDOUT,
 )
