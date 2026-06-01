@@ -34,8 +34,8 @@ on:
       windows_hip_rocr_tests:
         type: string
         default: 'false'
-      external_repo_config:
-        description: 'JSON config for external repo (includes projects field for test filtering).'
+      projects_to_test:
+        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
         type: string
         default: ""
       release_type:
@@ -78,8 +78,8 @@ on:
       windows_hip_rocr_tests:
         type: string
         default: 'false'
-      external_repo_config:
-        description: 'JSON config for external repo (includes projects field for test filtering).'
+      projects_to_test:
+        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
         type: string
         default: ""
       release_type:
@@ -142,10 +142,10 @@ jobs:
       - name: "Determine test dependencies"
         id: test_deps
         env:
-          EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
+          PROJECTS_TO_TEST: ${{ inputs.projects_to_test }}
         run: |
           python ./test_tools/determine_rocm_test_dependencies.py \
-            --external-repo-config "$EXTERNAL_REPO_CONFIG" \
+            --projects $PROJECTS_TO_TEST \
             --gha-output
 
       - name: "Configuring CI options"

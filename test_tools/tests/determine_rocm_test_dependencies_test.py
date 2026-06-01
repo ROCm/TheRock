@@ -73,6 +73,10 @@ class CMakeParserTest(unittest.TestCase):
         result = get_subprojects_to_test(["rocBLAS"], therock_dir)
         self.assertEqual(result, {"rocblas", "hipblas", "rocsolver"})
 
+        # Test path format normalization (projects/rocblas -> rocblas)
+        result = get_subprojects_to_test([Path("projects/rocblas").name], therock_dir)
+        self.assertEqual(result, {"rocblas", "hipblas", "rocsolver"})
+
         # Test rocSPARSE
         result = get_subprojects_to_test(["ROCSPARSE"], therock_dir)
         self.assertEqual(result, {"rocsparse", "hipsparse", "rocsolver", "hipsolver"})
