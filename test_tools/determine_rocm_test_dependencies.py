@@ -115,7 +115,7 @@ def main():
         help="Changed subproject(s)",
     )
     parser.add_argument(
-        "--projects",
+        "--changed-projects",
         type=str,
         nargs="+",
         metavar="PROJECT",
@@ -138,7 +138,7 @@ def main():
     parser.add_argument(
         "--gha-output",
         action="store_true",
-        help="Write projects_to_test to GITHUB_OUTPUT",
+        help="Write changed_projects to GITHUB_OUTPUT",
     )
 
     args = parser.parse_args()
@@ -151,23 +151,23 @@ def main():
         return
 
     # Get projects from args, normalize path format (projects/rocblas -> rocblas)
-    changed = args.changed or args.projects
+    changed = args.changed or args.changed_projects
     if changed:
         changed = [Path(p).name for p in changed]
 
     # If no projects specified, output "*" for all tests
     if not changed:
         if args.gha_output:
-            gha_set_output({"projects_to_test": "*"})
+            gha_set_output({"changed_projects": "*"})
         else:
             print("*")
         return
 
     result = get_subprojects_to_test(changed, therock_dir)
-    projects_to_test = ",".join(sorted(result))
+    changed_projects = ",".join(sorted(result))
 
     if args.gha_output:
-        gha_set_output({"projects_to_test": projects_to_test})
+        gha_set_output({"changed_projects": changed_projects})
     elif args.format == "json":
         print(json.dumps(sorted(result)))
     else:

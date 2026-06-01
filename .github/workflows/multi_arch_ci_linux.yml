@@ -34,6 +34,10 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
+      changed_projects:
+        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -141,7 +145,7 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
-      external_repo_config: ${{ inputs.external_repo_config }}
+      changed_projects: ${{ inputs.changed_projects }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
