@@ -51,17 +51,17 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
+# concurrency:
+#   # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+#   #
+#   # Only allow one run at a time for 'pull_request' events.
+#   # Allow multiple runs for 'push' and 'workflow_dispatch'.
+#   #
+#   # `github.workflow`: each workflow gets its own concurrency group
+#   # `github.head_ref`: the branch name (only defined for pull_request events)
+#   # `github.run_id`  : fallback, unique for each run
+#   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+#   cancel-in-progress: true
 
 jobs:
   setup:
@@ -131,3 +131,4 @@ jobs:
         run: |
           python build_tools/github_actions/workflow_summary.py \
             --needs-json '${{ toJSON(needs) }}'
+
