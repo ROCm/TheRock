@@ -166,12 +166,27 @@ Windows packages must avoid reliance on `C:\Windows\System32` for ROCm runtime d
 All new Windows ROCm runtime components must be installed into the package installation root, primarily under `bin`, and discovered through one or more of the following supported mechanisms:
 
 - Application-local deployment for redistributable scenarios
-- `PATH` entries associated with the selected ROCm installation
 - Registry-based SDK discovery
 - Environment-variable-based SDK discovery
 - Optional `ROCM_PATH` environment variable for convenience-based discovery of the selected ROCm installation
 
+Process-wide `PATH` modifications must not be used for DLL discovery. `PATH`-based lookup is global, order-sensitive, difficult to audit, and creates DLL preloading exposure. 
+
 New installations must not place core ROCm runtime DLLs into `System32`. Legacy driver-installed runtime DLLs in `System32` that conflict with the new Windows packaging model must be detected and handled by the appropriate runtime installer. At a minimum, the Windows runtime package must handle cleanup of legacy `amdhip64` and `amd_comgr` placements when present, while preserving installer robustness if files are locked or permissions are insufficient.
+
+### Versioned DLL Naming
+
+Windows ROCm runtime DLLs must use ABI-versioned filenames to prevent loader collisions when multiple ROCm versions coexist in a single process or on a single system.
+
+The Windows PE loader resolves transitive DLL dependencies by basename through a global per-process module list. If two ROCm installations ship the same unversioned DLL name (e.g., `amdhip64.dll`), the loader may bind to whichever copy was loaded first, regardless of version compatibility.
+
+To prevent this:
+
+- Runtime DLLs with unstable or versioned ABIs must encode the ABI version in the filename (e.g. `amdhip64_7.dll`)
+- Corresponding import libraries must reference the versioned filename
+- Versioned naming must be applied at build time through TheRock so that downstream consumers link against the correct versioned name
+
+This aligns with the top-ranked DLL resolution strategies: versioned filenames prevent loaded-module-list collisions and allow multiple ABI versions to coexist safely.
 
 ### OpenCL Changes
 
@@ -415,7 +430,6 @@ Uninstall requirements:
 - Remove files owned by the installation being removed
 - Remove environment-variable updates owned by that installation if they still reference that installation
 - Remove registry entries created by that installation
-- Remove package-owned `PATH` entries associated with that installation only
 - Avoid impacting other installed ROCm major.minor versions
 
 ### Environment Variables
@@ -425,11 +439,10 @@ After successful installation, Windows installers must publish a stable discover
 At minimum:
 
 - `ROCM_PATH` may point to the installation root of the latest installed and active ROCm version, but must be treated as a convenience variable only, not a guaranteed or authoritative source of truth
-- The selected installation's `bin` directory may be prepended to the relevant `PATH`, provided:
-  - Duplicate `PATH` entries are not introduced across reinstalls or upgrades
-  - Existing user or system configuration is not overridden in a way that breaks other ROCm installations or development environments
 - Per-machine installs must modify machine-scoped environment variables
 - Per-user installs must modify user-scoped environment variables only
+
+The installer must not prepend the ROCm `bin` directory to the system or user `PATH` for runtime DLL discovery. `PATH`-based DLL lookup is a poor strategy for DLL resolution on Windows due to global scope, order sensitivity, and DLL preloading exposure. Applications and build systems that need ROCm binaries on `PATH` for command-line tool invocation (e.g., `hipcc`) should add the path explicitly in their own environment rather than relying on a system-wide installer modification.
 
 The following constraints apply:
 
