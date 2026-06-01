@@ -119,6 +119,14 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
 
+      - name: Simulated install Test
+        id: test-packages
+        run: |
+          python ./build_tools/packaging/linux/native_linux_package_install_test.py \
+            --test-type simulate \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --pkg-type ${{ inputs.native_package_type }}
+
       - name: Configure AWS credentials for artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:

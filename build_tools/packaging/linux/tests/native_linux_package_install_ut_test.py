@@ -227,7 +227,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx94x")
         self.assertEqual(
             t.package_names,
-            ["amdrocm-gfx94x", "amdrocm-core-sdk-gfx94x"],
+            ["amdrocm", "amdrocm-core-sdk"],
         )
 
     def test_gfx_arch_string_normalized_to_list(self):
@@ -240,7 +240,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx110x")
         self.assertEqual(
             t.package_names,
-            ["amdrocm-gfx110x", "amdrocm-core-sdk-gfx110x"],
+            ["amdrocm", "amdrocm-core-sdk"],
         )
 
     def test_gfx_arch_list_uses_first_element(self):
@@ -253,7 +253,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx1151")
         self.assertEqual(
             t.package_names,
-            ["amdrocm-gfx1151", "amdrocm-core-sdk-gfx1151"],
+            ["amdrocm", "amdrocm-core-sdk"],
         )
 
     def test_gfx_arch_empty_string_falls_back_to_default(self):
@@ -413,7 +413,7 @@ class MainValidationTest(unittest.TestCase):
                 "--test-type",
                 "sanity",
                 "--repo-url",
-                "https://x.com",
+                "https://repo_url.com",
                 "--gfx-arch",
                 "gfx94x",
             ],
@@ -451,12 +451,102 @@ class MainValidationTest(unittest.TestCase):
                 "--os-profile",
                 "ubuntu2404",
                 "--repo-url",
-                "https://x.com",
+                "https://repo_url.com",
             ],
         ):
             with self.assertRaises(SystemExit) as cm:
                 native_linux_package_install_test.main()
             self.assertEqual(cm.exception.code, 2)
+
+    def test_install_requires_os_profile(self):
+        # install uses the same required args as sanity (no verification step).
+        with patch(
+            "sys.argv",
+            [
+                "prog",
+                "--test-type",
+                "install",
+                "--repo-url",
+                "https://repo_url.com",
+                "--gfx-arch",
+                "gfx94x",
+            ],
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                native_linux_package_install_test.main()
+            self.assertEqual(cm.exception.code, 2)
+
+
+class ArgvFromCiEnvTest(unittest.TestCase):
+    """Tests for _argv_from_ci_env() (CI workflow env → CLI argv)."""
+
+    def test_builds_argv_for_install_test_type(self):
+        env = {
+            "TEST_TYPE": "install",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--test-type", argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "install")
+        self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
+        self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
+
+    def test_returns_none_when_required_env_missing(self):
+        with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
+            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
+
+
+class RunTestsTestTypeTest(unittest.TestCase):
+    """Tests for run_tests() early exit paths for install."""
+
+    def _base_args(self, test_type: str):
+        from argparse import Namespace
+
+        return Namespace(
+            test_type=test_type,
+            os_profile="ubuntu2404",
+            repo_url="https://example.com",
+            release_type="dev",
+            install_prefix="/opt/rocm/core",
+            gfx_arch=["gfx94x"],
+            gpg_key_url=None,
+            packages_dir=None,
+            pkg_type=None,
+        )
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_repo_setup_and_install",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_basic_verification",
+    )
+    def test_install_skips_basic_verification(self, mock_basic, mock_repo_setup):
+        args = self._base_args("install")
+        with _suppress_script_output():
+            rc = native_linux_package_install_test.run_tests(args)
+        self.assertEqual(rc, 0)
+        mock_repo_setup.assert_called_once()
+        mock_basic.assert_not_called()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_repo_setup_and_install",
+        return_value=False,
+    )
+    def test_install_fails_when_repo_setup_fails(self, mock_repo_setup):
+        args = self._base_args("install")
+        with _suppress_script_output():
+            rc = native_linux_package_install_test.run_tests(args)
+        self.assertEqual(rc, 1)
 
 
 class RunBasicVerificationTest(unittest.TestCase):
@@ -773,7 +863,7 @@ class InstallDebPackagesTest(unittest.TestCase):
         self.assertTrue(t.install_deb_packages())
         call_args = mock_streaming.call_args[0][0]
         self.assertEqual(call_args[0], "apt")
-        self.assertIn("amdrocm-gfx94x", call_args)
+        self.assertIn("amdrocm", call_args)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_false_when_apt_install_fails(self, mock_streaming):
