@@ -3,17 +3,32 @@
 # SPDX-License-Identifier: MIT
 
 """
-Detects failed teatime build logs and creates a small companion file named
-0.error.<original>.log that contains only the important failure context.
+Detects failed teatime build logs and creates a small 0.error.*.log file
+that contains only the important failure context.
 
-The original log is preserved unchanged. The companion file is meant to sort
-first in CI artifact/log listings and make failures easier to spot quickly.
+The original log is preserved unchanged.
 
-A log is considered failed if it contains an END line with a non-zero exit code.
+Log directory resolution order:
+1. --log-dir
+2. OUTPUT_DIR/build/logs on Linux CI
+3. BUILD_DIR/logs as fallback
+4. build/logs as the final default
+
+Summary output resolution order:
+1. --summary-path
+2. GITHUB_STEP_SUMMARY
+3. skip summary generation if neither is available
+
+This script can also be run manually:
+    python build_tools/github_actions/detect_failed_logs.py \
+        --log-dir build/logs \
+        --summary-path /tmp/summary.md
+
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import sys
@@ -22,7 +37,6 @@ from pathlib import Path
 FAILED_END_RE = re.compile(r"^END\t[0-9.]*\t[0-9.]*\t[1-9][0-9]*$")
 IMPORTANT_RE = re.compile(
     r"(FAILED:|error:|CMake Error|Traceback|FileNotFoundError|ninja: build stopped|subcommand failed)",
-    re.IGNORECASE,
 )
 
 
@@ -33,7 +47,8 @@ def get_failed_end_line(path: Path, tail_bytes: int = 4096) -> str | None:
             size = f.tell()
             f.seek(max(0, size - tail_bytes))
             tail = f.read().decode("utf-8", errors="replace")
-    except OSError:
+    except OSError as e:
+        print(f"Warning: failed to read log {path}: {e}", file=sys.stderr)
         return None
 
     for line in reversed(tail.splitlines()):
@@ -43,11 +58,11 @@ def get_failed_end_line(path: Path, tail_bytes: int = 4096) -> str | None:
     return None
 
 
-def find_failed_logs(log_dir: Path) -> list[tuple[Path, str]]:
+def find_failed_logs(log_dir: Path, tail_bytes: int = 4096) -> list[tuple[Path, str]]:
     failed: list[tuple[Path, str]] = []
 
     for path in sorted(log_dir.glob("*.log")):
-        failure_end = get_failed_end_line(path)
+        failure_end = get_failed_end_line(path, tail_bytes=tail_bytes)
         if failure_end:
             failed.append((path, failure_end))
 
@@ -94,7 +109,7 @@ def write_companion_log(
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     with dst.open("w", encoding="utf-8") as out:
-        out.write(f"Failure companion for: {src.name}\n")
+        out.write(f"Failure summary for: {src.name}\n")
         out.write(f"Source log: {src}\n")
         out.write("\n")
 
@@ -107,22 +122,52 @@ def write_companion_log(
         out.write(f"See original log: {src.name}\n")
 
 
-def main() -> int:
+def resolve_logs_dir(args: argparse.Namespace) -> Path:
+    if args.log_dir:
+        return args.log_dir
+
     output_dir = os.environ.get("OUTPUT_DIR")
-    build_dir = os.environ.get("BUILD_DIR", "build")
-
     if output_dir:
-        logs_dir = Path(output_dir) / "build" / "logs"
-    else:
-        logs_dir = Path(build_dir) / "logs"
+        return Path(output_dir) / "build" / "logs"
 
-    summary_env = os.environ.get("GITHUB_STEP_SUMMARY")
-    if not summary_env:
+    build_dir = os.environ.get("BUILD_DIR", "build")
+    return Path(build_dir) / "logs"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Detect failed teatime logs and generate 0.error.*.log summaries."
+    )
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        help="Directory containing *.log files. Overrides env-based fallback.",
+    )
+    parser.add_argument(
+        "--summary-path",
+        type=Path,
+        help="GitHub step summary file path. Overrides GITHUB_STEP_SUMMARY.",
+    )
+    parser.add_argument(
+        "--tail-bytes",
+        type=int,
+        default=4096,
+        help="Number of bytes to read from the end of each log when searching for END.",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    logs_dir = resolve_logs_dir(args)
+
+    summary_path = args.summary_path or os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
         print("GITHUB_STEP_SUMMARY is not set; skipping failed log summary generation.")
         return 0
 
-    summary_path = Path(summary_env)
-    failed_logs = find_failed_logs(logs_dir)
+    summary_path = Path(summary_path)
+    failed_logs = find_failed_logs(logs_dir, tail_bytes=args.tail_bytes)
 
     if not failed_logs:
         print("No failed log found.")
