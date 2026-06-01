@@ -38,7 +38,10 @@
 # Build arguments
 # - BASE_IMAGE       : Base Docker image (default: ubuntu:24.04)
 # - VERSION          : Full version string (e.g., 7.11.0a20251211, 7.10.0)
-# - AMDGPU_FAMILY    : AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu)
+# - AMDGPU_FAMILY    : AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu).
+#                      Use 'multi-arch' to install AMD's all-GPU artifact in
+#                      a single image (works with both INSTALL_METHOD=packages
+#                      and INSTALL_METHOD=tarball).
 # - RELEASE_TYPE     : Release type (default: nightlies). Options: prereleases, devreleases, stable
 #                      Note: devreleases is only supported with INSTALL_METHOD=tarball.
 # - INSTALL_METHOD   : Installation method (default: tarball). Options: tarball, packages
@@ -147,6 +150,26 @@
 #     --build-arg INSTALL_METHOD=packages \
 #     -f dockerfiles/rocm_runtime.Dockerfile \
 #     -t rocm-nightly-pkg:rhel9.7-gfx94x-7.13.0a20260322 \
+#     dockerfiles/
+#
+#   # Ubuntu 24.04 + all GPU families via multi-arch packages (nightly)
+#   docker build \
+#     --build-arg BASE_IMAGE=ubuntu:24.04 \
+#     --build-arg VERSION=7.13.0a20260322 \
+#     --build-arg AMDGPU_FAMILY=multi-arch \
+#     --build-arg INSTALL_METHOD=packages \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-nightly-pkg:ubuntu24.04-multi-arch-7.13.0a20260322 \
+#     dockerfiles/
+#
+#   # Ubuntu 24.04 + all GPU families via multi-arch tarball (nightly)
+#   docker build \
+#     --build-arg BASE_IMAGE=ubuntu:24.04 \
+#     --build-arg VERSION=7.13.0a20260515 \
+#     --build-arg AMDGPU_FAMILY=multi-arch \
+#     --build-arg INSTALL_METHOD=tarball \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-nightly-tar:ubuntu24.04-multi-arch-7.13.0a20260515 \
 #     dockerfiles/
 #
 # Run example:
