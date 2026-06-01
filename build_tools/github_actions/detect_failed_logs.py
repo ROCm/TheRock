@@ -111,7 +111,7 @@ def build_excerpt(
     return excerpt
 
 
-def write_companion_log(
+def write_failure_summary_log(
     src: Path,
     dst: Path,
     failure_end: str,
@@ -193,11 +193,11 @@ def main() -> int:
         for src, failure_end in failed_logs:
             dst = src.with_name(f"0.error.{src.name}")
             try:
-                write_companion_log(src, dst, failure_end)
+                write_failure_summary_log(src, dst, failure_end)
                 print(f"Created {dst.name} from {src.name}")
                 summary.write(f"- `{dst.name}`\n")
             except OSError as e:
-                print(f"Failed to create companion log for {src}: {e}", file=sys.stderr)
+                print(f"Failed to create failure summary log for {src}: {e}", file=sys.stderr)
 
     return 0
 
