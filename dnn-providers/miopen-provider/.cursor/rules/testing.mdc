@@ -1,0 +1,72 @@
+---
+globs: ["*.cpp", "*.hpp", "*.h"]
+---
+
+# Testing Guidelines
+
+## Framework
+
+- Use Google Test (gtest) framework for all C/C++ tests
+- Never generate a main() function in test files - gtest provides its own
+- Use TEST(), TEST_F(), or TEST_P() macros as appropriate
+
+## Test Naming Guidelines
+
+Rules below apply ONLY to the TestSuite name (first parameter of `TEST` / `TEST_F` / `TEST_P`). The TestCase (second parameter) can be descriptive but should still avoid the reserved keywords where noted. TestCase should be PascalCase.
+
+### Ordering & Composition (left → right)
+
+1. Optional `Integration` prefix for integration tests.
+2. Optional `Gpu` (immediately after `Integration` if both apply) for GPU-required tests.
+3. Core Feature / Subject under test (PascalCase, no underscores).
+4. Optional Datatype token (`Bfp16`, `Fp16`, `Fp32`) at the end.
+
+Omit any category that does not apply.
+
+### Keywords (reserved positions)
+
+- **Integration** (only for integration tests, always first if present).
+- **Gpu** (always first unless preceded by Integration).
+- **Datatypes**: Bfp16, Fp16, Fp32.
+
+### Unit Tests
+
+In most cases unit style tests should be named so they directly mirror the class under test. If the class is named `MyClass`, then the test suite should be named `TestMyClass`. In general these kinds of tests should try to avoid using anything that requires Gpu support. This is not always possible, in the cases where Gpu support is required, the test suite should be named `GpuTestMyClass`.
+
+### Valid Examples
+
+```cpp
+IntegrationGpuConvolutionPlannerNchwFp32
+GpuTestActivationKernelNchwFp32
+GpuTestExecutionPlanBuilderFp32
+GpuTestExecutionPlanBuilderNchw
+IntegrationGraphFusion
+TestConvolutionHeuristicsFp32
+TestConvolutionHeuristics
+```
+
+## Test File Example
+
+```cpp
+// Copyright © Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier:  MIT
+
+#include <gtest/gtest.h>
+
+class MyTestFixture : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        // Setup code
+    }
+
+private:
+    int _testData;
+};
+
+TEST_F(MyTestFixture, TestSomething)
+{
+    // Test implementation
+}
+```

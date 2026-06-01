@@ -1,0 +1,20 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+# ONLY XDL_AND_WMMA_KERNELS
+set(GROUPED_CONV3D_FWD_SCALE
+   xdl/device_grouped_conv3d_fwd_xdl_scale_ndhwgc_gkzyxc_ndhwgk_bf16_instance.cpp
+   xdl/device_grouped_conv3d_fwd_xdl_scale_ndhwgc_gkzyxc_ndhwgk_f16_instance.cpp
+   xdl/device_grouped_conv3d_fwd_xdl_scale_ndhwgc_gkzyxc_ndhwgk_f32_instance.cpp
+   xdl/device_grouped_conv3d_fwd_xdl_scale_ndhwgc_gkzyxc_ndhwgk_f32_tf32_instance.cpp
+   xdl/device_grouped_conv3d_fwd_xdl_scale_ndhwgc_gkzyxc_ndhwgk_int8_instance.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_bf16_instance_part1.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_bf16_instance_part2.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_bf16_instance_part3.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_bf16_instance_part4.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_f16_instance_part1.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_f16_instance_part2.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_f16_instance_part3.cpp
+   wmma/device_grouped_conv3d_fwd_wmma_scale_ndhwgc_gkzyxc_ndhwgk_f16_instance_part4.cpp)
+
+add_instance_library(device_grouped_conv3d_fwd_scale_instance ${GROUPED_CONV3D_FWD_SCALE})

@@ -1,0 +1,105 @@
+# Update documentation on Read the docs
+# -----------------------------------
+# This GitHub Actions workflow runs on push commits. It detects commit's target branch and project,
+# then triggers the corresponding build on Read the Docs.
+# Key Steps:
+# 1. Compare the current commit to the last commit and obtain the path of changed files
+# 2. Extract a set of project names from changed file path
+# 3. Obtain the target branch name and convert it into Read the Docs format
+# 4. Use Read the Docs V3 API to trigger the build for the corresponding docs:
+#    Github project name -> Read the docs project name
+#    Github branch name -> Read the docs version
+#
+# This ensures live documentation is synchronized with the latest change.
+
+name: RTD Docs Synchronization
+
+on:
+  push:
+    branches:
+      - 'develop'
+      - 'docs/**'
+    paths:
+     - 'projects/**'
+     - 'shared/**'
+
+jobs:
+  trigger-rtd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get changed files using GitHub REST API
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching changed files between ${{ github.event.before }} and ${{ github.event.after }}"
+
+          changed_files=$(gh api \
+            repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.event.after }} \
+            --jq '.files[].filename')
+
+          echo "Changed files:"
+          echo "$changed_files"
+
+          # Extract project names from paths like projects/rocprim/...
+          project_names=$(echo "$changed_files" \
+            | grep '^projects/' \
+            | awk -F/ '{print $2}' \
+            | sort -u)
+
+          echo "Detected changed projects:"
+          echo "$project_names"
+
+          echo "changed_projects<<EOF" >> $GITHUB_OUTPUT
+          echo "$project_names" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Trigger RTD build
+        if: steps.diff.outputs.changed_projects
+        env:
+          changed_projects: ${{ steps.diff.outputs.changed_projects }}
+          RTD_TOKEN: ${{ secrets.RTD_TOKEN }}
+        run: |
+          branch_name="${GITHUB_REF#refs/heads/}"
+          version_slug="${branch_name//\//-}"
+          echo "Target github branch: $branch_name"
+          echo "Read the Docs version slug: $version_slug"
+
+          # List of project slugs on RTD
+          project_list=$( curl \
+                 -H "Authorization: Token $RTD_TOKEN" \
+                 "https://app.readthedocs.com/api/v3/projects/?expand=advanced-micro-devices&limit=300" \
+                 | jq -r '.results[].slug'
+          )
+
+          for project in $changed_projects; do
+            slug="advanced-micro-devices-$project"
+            if echo "$project_list" | grep -Fxq "$slug"; then
+              latest_branch=$(curl -s \
+                  -H "Authorization: Token $RTD_TOKEN" \
+                  "https://app.readthedocs.com/api/v3/projects/$slug/" \
+                  | jq -r ".default_branch" \
+                  | tr -d '[:space:]')
+              echo "Latest branch for $project: $latest_branch"
+              if [ "$branch_name" = "$latest_branch" ]; then
+                echo "Detected latest release branch, trigger builds for 'latest' version"
+                response=$(curl -f -s -X POST \
+                      -H "Authorization: Token $RTD_TOKEN" \
+                      "https://readthedocs.com/api/v3/projects/$slug/versions/latest/builds/") || {
+                      echo "Failed to trigger RTD build for $project. Response: $response"
+                      exit 1
+                    }
+                echo "Successfully triggered RTD build for $project 'latest' version. Response: $response"
+              fi
+              echo "Triggering RTD build for $project, version: $version_slug"
+              response=$(curl -f -s -X POST \
+                  -H "Authorization: Token $RTD_TOKEN" \
+                  "https://readthedocs.com/api/v3/projects/$slug/versions/$version_slug/builds/") || {
+                  echo "Failed to trigger RTD build for $project. Response: $response"
+                  exit 1
+              }
+              echo "Successfully triggered RTD build for $project. Response: $response"
+            else
+              echo "Skipping $project - Does not exist on Read the Docs"
+            fi
+          done

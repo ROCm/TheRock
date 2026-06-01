@@ -1,0 +1,152 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 0, 1000 ]
+
+  - &incx_incy_range
+    - { incx:  1, incy:  1 }
+    - { incx: -1, incy: -2 }
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  # rot, rotm
+  - name: rot_general
+    category: quick
+    function:
+      - rot: *rot_precisions
+      - rotm: *single_double_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: rot_batched_general
+    category: quick
+    function:
+      - rot_batched: *rot_precisions
+      - rotm_batched: *single_double_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: rot_strided_batched_general
+    category: quick
+    function:
+      - rot_strided_batched: *rot_precisions
+      - rotm_strided_batched: *single_double_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  # ILP-64 tests
+  # - name: rot_64
+  #   category: stress
+  #   function:
+  #     - rot: *single_precision
+  #     - rotm: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1, incy: 1 }
+  #     - { N: 2, incx:  1, incy: 2147483649 }
+  #     - { N: 2, incx:  2147483649, incy: 1 }
+  #   api: [ C_64 ]
+
+  # - name: rot_64
+  #   category: stress
+  #   function:
+  #     - rot_batched: *single_precision
+  #     - rot_strided_batched: *single_precision
+  #     - rotm_batched: *single_precision
+  #     - rotm_strided_batched: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1, incy: 1, batch_count: 1 }
+  #     - { N: 2, incx:  2147483649, incy: 1, batch_count: 1 }
+  #     - { N: 2, incx:  1, incy: 2147483649, batch_count: 1 }
+  #     - { N: 2, incx:  1, stride_x: 2, incy: 1, stride_y: 2, batch_count: 666666 }
+  #   api: [ C_64 ]
+  #   backend_flags: AMD
+
+  # rotg, rotmg
+  - name: rotg_general
+    category: quick
+    function:
+      - rotg: *rotg_precisions
+      - rotmg: *single_double_precisions
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: rotg_batched_general
+    category: quick
+    function:
+      - rotg_batched: *rotg_precisions
+      - rotmg_batched: *single_double_precisions
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: rotg_strided_batched_general
+    category: quick
+    function:
+      - rotg_strided_batched: *rotg_precisions
+      - rotmg_strided_batched: *single_double_precisions
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  # ILP-64 tests
+  # - name: rotg_64
+  #   category: stress
+  #   function:
+  #     - rotg_batched: *single_precision
+  #     - rotg_strided_batched: *single_precision
+  #     - rotmg_batched: *single_precision
+  #     - rotmg_strided_batched: *single_precision
+  #   batch_count: 666666
+  #   api: [ C_64 ]
+  #   os_flags: [ LINUX ]
+  #   gpu_arch: '90a'
+  #   backend_flags: AMD
+
+  # bad arg tests
+  - name: rot_bad_arg
+    category: pre_checkin
+    function:
+      - rot_bad_arg: *rot_precisions
+      - rotm_bad_arg: *single_double_precisions
+      - rotg_bad_arg: *rotg_precisions
+      - rotmg_bad_arg: *single_double_precisions
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: rot_bad_arg
+    category: pre_checkin
+    function:
+      - rot_bad_arg: *rot_precisions
+      - rotm_bad_arg: *single_double_precisions
+      - rotg_bad_arg: *rotg_precisions
+      - rotmg_bad_arg: *single_double_precisions
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: rot_bad_arg
+    category: pre_checkin
+    function:
+      - rot_batched_bad_arg: *rot_precisions
+      - rot_strided_batched_bad_arg: *rot_precisions
+      - rotm_batched_bad_arg: *single_double_precisions
+      - rotm_strided_batched_bad_arg: *single_double_precisions
+      - rotg_batched_bad_arg: *rotg_precisions
+      - rotg_strided_batched_bad_arg: *rotg_precisions
+      - rotmg_batched_bad_arg: *single_double_precisions
+      - rotmg_strided_batched_bad_arg: *single_double_precisions
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

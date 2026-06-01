@@ -1,0 +1,6 @@
+*.db.bz2 binary
+*.db.txt.bz2 binary
+*.fdb.txt.bz2 binary
+*.kdb.bz2 filter=lfs diff=lfs merge=lfs -text
+*.ktn.model binary
+*.zip filter=lfs diff=lfs merge=lfs -text

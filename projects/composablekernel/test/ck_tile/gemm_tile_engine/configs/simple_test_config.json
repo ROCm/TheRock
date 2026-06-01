@@ -1,0 +1,34 @@
+{
+  "problem": {
+    "description": "Basic functionality validation with moderate problem sizes"
+  },
+  "test_params": {
+    "problem_sizes": [
+      {"m": 256, "n": 256, "k": 128, "split_k": 1},
+      {"m": 512, "n": 256, "k": 256, "split_k": 1},
+      {"m": 256, "n": 512, "k": 256, "split_k": 1}
+    ]
+  },
+  "tile_config": {
+    "tile_m": {"values": [128]},
+    "tile_n": {"values": [128]},
+    "tile_k": {"values": [64]},
+    "warp_m": {"values": [2]},
+    "warp_n": {"values": [2]},
+    "warp_k": {"values": [1]},
+    "warp_tile_m": {"values": [16]},
+    "warp_tile_n": {"values": [16]},
+    "warp_tile_k": {"values": [16]}
+  },
+  "trait_config": {
+    "pipeline": {"values": ["compv3", "compv4"]},
+    "epilogue": {"values": ["default"]},
+    "scheduler": {"values": ["intrawave"]},
+    "pad_m": {"values": [false]},
+    "pad_n": {"values": [false]},
+    "pad_k": {"values": [false]},
+    "persistent": {"values": [false]}
+  },
+  "k_block_per_cu": 1,
+  "permute_n": false
+}

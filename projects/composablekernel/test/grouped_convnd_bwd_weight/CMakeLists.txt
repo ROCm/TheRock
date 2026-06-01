@@ -1,0 +1,32 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+if(GPU_TARGETS MATCHES "gfx9|gfx11|gfx12")
+   add_gtest_executable(test_grouped_convnd_bwd_weight test_grouped_convnd_bwd_weight.cpp)
+   target_link_libraries(test_grouped_convnd_bwd_weight PRIVATE utility device_grouped_conv1d_bwd_weight_instance device_grouped_conv2d_bwd_weight_instance device_grouped_conv3d_bwd_weight_instance device_grouped_convnd_bwd_weight_instance)
+
+   add_gtest_executable(test_grouped_convnd_bwd_weight_bilinear test_grouped_convnd_bwd_weight_bilinear.cpp)
+   target_link_libraries(test_grouped_convnd_bwd_weight_bilinear PRIVATE utility device_grouped_conv3d_bwd_weight_bilinear_instance)
+   add_gtest_executable(test_grouped_convnd_bwd_weight_scale test_grouped_convnd_bwd_weight_scale.cpp)
+   target_link_libraries(test_grouped_convnd_bwd_weight_scale PRIVATE utility device_grouped_conv3d_bwd_weight_scale_instance)
+
+   add_executable(test_grouped_convnd_bwd_weight_dataset_xdl test_grouped_convnd_bwd_weight_dataset_xdl.cpp)
+   target_compile_options(test_grouped_convnd_bwd_weight_dataset_xdl PRIVATE -Wno-global-constructors -Wno-undef)
+   target_link_libraries(test_grouped_convnd_bwd_weight_dataset_xdl PRIVATE gtest_main getopt::getopt utility device_grouped_conv1d_bwd_weight_instance device_grouped_conv2d_bwd_weight_instance device_grouped_conv3d_bwd_weight_instance device_grouped_convnd_bwd_weight_instance)
+elseif(DL_KERNELS)
+   add_gtest_executable(test_grouped_convnd_bwd_weight test_grouped_convnd_bwd_weight.cpp)
+   target_link_libraries(test_grouped_convnd_bwd_weight PRIVATE utility device_grouped_conv1d_bwd_weight_instance device_grouped_conv2d_bwd_weight_instance device_grouped_conv3d_bwd_weight_instance)
+endif()
+
+add_gtest_executable(test_grouped_convnd_bwd_weight_interface_xdl test_grouped_convnd_bwd_weight_interface_xdl.cpp)
+if(result EQUAL 0)
+   target_link_libraries(test_grouped_convnd_bwd_weight_interface_xdl PRIVATE utility)
+endif()
+add_gtest_executable(test_grouped_convnd_bwd_weight_v3_interface_xdl test_grouped_convnd_bwd_weight_v3_interface_xdl.cpp)
+if(result EQUAL 0)
+   target_link_libraries(test_grouped_convnd_bwd_weight_v3_interface_xdl PRIVATE utility)
+endif()
+add_gtest_executable(test_grouped_convnd_bwd_weight_interface_wmma test_grouped_convnd_bwd_weight_interface_wmma.cpp)
+if(result EQUAL 0)
+   target_link_libraries(test_grouped_convnd_bwd_weight_interface_wmma PRIVATE utility)
+endif()

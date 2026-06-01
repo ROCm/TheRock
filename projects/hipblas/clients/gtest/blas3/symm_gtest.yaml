@@ -1,0 +1,69 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { M:  -1, N:  -1, lda:  -1, ldb:  -1, ldc:  -1 }
+    - { M: 600, N: 500, lda: 500, ldb: 600, ldc: 501 }
+
+  - &alpha_beta_range
+    - { alpha: 2.0, alphai: -3.0, beta: 0.0, betai:  0.0 }
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: symm_general
+    category: quick
+    function: symm
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    uplo: [ 'L', 'U' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_beta_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+
+  - name: symm_batched_general
+    category: quick
+    function: symm_batched
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    uplo: [ 'L', 'U' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_beta_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    backend_flags: AMD
+
+  - name: symm_strided_batched_general
+    category: quick
+    function: symm_strided_batched
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    uplo: [ 'L', 'U' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_beta_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    backend_flags: AMD
+
+  - name: symm_bad_arg
+    category: pre_checkin
+    function:
+      - symm_bad_arg
+      - symm_batched_bad_arg
+      - symm_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    backend_flags: AMD
+
+  - name: symm_bad_arg
+    category: pre_checkin
+    function:
+      - symm_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...

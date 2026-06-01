@@ -1,0 +1,30 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { N: -1, lda: -1 }
+    - { N: 500, lda: 700 }
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  - name: getri_batched_general
+    category: quick
+    function:
+      - getri_batched: *single_double_precisions_complex_real
+      - getri_npvt_batched: *single_double_precisions_complex_real
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C ]
+
+  - name: getri_bad_arg
+    category: quick
+    function:
+      - getri_batched_bad_arg
+      - getri_npvt_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+...

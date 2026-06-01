@@ -1,0 +1,51 @@
+{
+    "problem" : {
+    },
+
+    "problem_size" : {
+         "input_shape" : [
+            [128, 64, 2],
+            [32, 8, 64, 16]
+        ]
+    },
+
+    "tile_config" : {
+        "fixed": [
+            {"tile_m": 128, "tile_n": 128, "warp_per_block_m": 4, "warp_per_block_n": 1, "warp_tile_m": 32, "warp_tile_n": 128, "thread_tile_m": 8, "thread_tile_n": 8}
+        ],
+        "combination": {
+            "tile_m" : {
+                "values" : [
+                ]
+            },
+            "tile_n" : {
+                "values": [
+                ]
+            },
+            "warp_per_block_m" : {
+                "values" : [
+                ]
+            },
+            "warp_per_block_n" : {
+                "values" : [
+                ]
+            },
+            "warp_tile_m" : {
+                "values" : [
+                ]
+            },
+            "warp_tile_n" : {
+                "values" : [
+                ]
+            },
+            "thread_tile_m" : {
+                "values" : [
+                ]
+            },
+            "thread_tile_n" : {
+                "values" : [
+                ]
+            }
+        }
+    }
+}

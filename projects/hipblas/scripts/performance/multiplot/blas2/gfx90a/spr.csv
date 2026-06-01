@@ -1,0 +1,74 @@
+Query device success: there are 8 devices
+Device ID 0 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 1 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 2 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 3 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 4 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 5 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 6 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+Device ID 7 :  ------------------------------------------------------
+with 68.7 GB memory, clock rate 1700MHz @ computing capability 9.0
+maxGridDimX 2147483647, sharedMemPerBlock 65.5 KB, maxThreadsPerBlock 1024, warpSize 64
+-------------------------------------------------------------------------
+
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,2048,1,1,109.333, 437.333, 38.4,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,2048,1,1,79.2151, 633.721, 53,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,4096,1,1,128.231, 512.923, 130.9,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,4096,1,1,89.0945, 712.756, 188.4,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,6144,1,1,132.915, 531.658, 284.1,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,6144,1,1,91.809, 734.472, 411.3,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,8192,1,1,134.817, 539.267, 497.9,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,8192,1,1,92.997, 743.976, 721.8,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,10240,1,1,135.624, 542.496, 773.3,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,10240,1,1,93.3827, 747.061, 1123.1,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,12288,1,1,135.956, 543.823, 1110.8,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,12288,1,1,93.5279, 748.223, 1614.7,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,14336,1,1,135.892, 543.566, 1512.6,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,14336,1,1,93.5635, 748.508, 2196.9,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,16384,1,1,136.037, 544.146, 1973.5,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,16384,1,1,93.7225, 749.78, 2864.5,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,18432,1,1,136.073, 544.294, 2497,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,18432,1,1,94.0321, 752.257, 3613.4,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f32_r,f32_r,f32_r,f32_r,f32_r,L,20480,1,1,136.121, 544.485, 3081.6,
+function,a_type,b_type,c_type,d_type,compute_type,uplo,N,alpha,incx,hipblas-Gflops,hipblas-GB/s,hipblas-us,
+spr,f64_r,f64_r,f64_r,f64_r,f64_r,L,20480,1,1,94.1849, 753.479, 4453.7,

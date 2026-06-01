@@ -1,0 +1,86 @@
+---
+include: ../../../tests/data/hipblaslt_common.yaml
+include: ../../../tests/data/matmul_common.yaml
+
+Definitions:
+Tests:
+- name: real_precisions_agfhc
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M: 4096,  N: 8192,  K: 4096  }
+    - { M: 8192,  N: 8192,  K: 8192  }
+    - { M: 8192,  N: 8192,  K: 8960  }
+    - { M: 8192,  N: 4096,  K: 12288 }
+    - { M: 8192,  N: 16384, K: 8192  }
+    - { M: 8640,  N: 8640,  K: 8640  }
+    - { M: 28000, N: 28000, K: 28000 }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: real_precisions_agfhc_batched
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M: 8640, N: 8640, K: 8640 }
+  initialization: trig_float
+  transA: N
+  transB: N
+  batch_count: 96
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: f8_fnuz_precision_dst_f8_fnuz_agfhc
+  function:
+    matmul: *f8_fnuz_precision_dst_f8_fnuz
+  matrix_size:
+    - { M: 8192,  N: 8192, K: 8192  }
+    - { M: 8192,  N: 16384,K: 8192  }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: i8_precision_dst_i8_agfhc
+  function:
+    matmul: *i8_precision_dst_i8
+  matrix_size:
+    - { M: 8192,  N: 17792,K: 13312 }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: mxf6_mxf6_precision_dst_fp32_agfhc
+  function:
+    matmul: *mxf6_mxf6_precision_dst_fp32
+  matrix_size:
+    - { M: 2048, N: 2048,K:  2048  }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: mxf4_mxf4_precision_dst_fp32_agfhc
+  function:
+    matmul: *mxf4_mxf4_precision_dst_fp32
+  matrix_size:
+    - { M: 2048, N: 2048,K:  2048  }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+...

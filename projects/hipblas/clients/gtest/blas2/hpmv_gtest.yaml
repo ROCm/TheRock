@@ -1,0 +1,78 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 100 ]
+
+  - &incx_incy_range
+    - { incx:  -2, incy:  1 }
+
+  - &alpha_beta_range
+    - { alpha:  2.0, alphai: -1.5, beta:  1.0, betai:  1.5 }
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: hpmv_general
+    category: quick
+    function: hpmv
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: hpmv_batched_general
+    category: quick
+    function: hpmv_batched
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: hpmv_strided_batched_general
+    category: quick
+    function: hpmv_strided_batched
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: hpmv_bad_arg
+    category: pre_checkin
+    function:
+      - hpmv_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: hpmv_bad_arg
+    category: pre_checkin
+    function:
+      - hpmv_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: hpmv_bad_arg
+    category: pre_checkin
+    function:
+      - hpmv_batched_bad_arg
+      - hpmv_strided_batched_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

@@ -1,0 +1,1371 @@
+
+/* ************************************************************************
+ * Copyright (C) 2020-2024 Advanced Micro Devices, Inc. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * ************************************************************************ */
+
+#ifndef _HIPBLAS_NO_FORTRAN_HPP
+#define _HIPBLAS_NO_FORTRAN_HPP
+
+/*!\file
+ *  This file interfaces with our Fortran BLAS interface.
+ */
+
+/*
+ * ============================================================================
+ *     Fortran functions
+ * ============================================================================
+ */
+
+/* ==========
+ *    Aux
+ * ========== */
+#define hipblasSetVectorFortran hipblasSetVector
+#define hipblasGetVectorFortran hipblasGetVector
+#define hipblasSetMatrixFortran hipblasSetMatrix
+#define hipblasGetMatrixFortran hipblasGetMatrix
+#define hipblasSetVectorAsyncFortran hipblasSetVectorAsync
+#define hipblasGetVectorAsyncFortran hipblasGetVectorAsync
+#define hipblasSetMatrixAsyncFortran hipblasSetMatrixAsync
+#define hipblasGetMatrixAsyncFortran hipblasGetMatrixAsync
+#define hipblasSetAtomicsModeFortran hipblasSetAtomicsMode
+#define hipblasGetAtomicsModeFortran hipblasGetAtomicsMode
+
+/* ==========
+ *    L1
+ * ========== */
+
+#define hipblasSscalFortran hipblasSscal
+#define hipblasDscalFortran hipblasDscal
+#define hipblasCscalFortran hipblasCscal
+#define hipblasZscalFortran hipblasZscal
+#define hipblasCsscalFortran hipblasCsscal
+#define hipblasZdscalFortran hipblasZdscal
+#define hipblasSscalBatchedFortran hipblasSscalBatched
+#define hipblasDscalBatchedFortran hipblasDscalBatched
+#define hipblasCscalBatchedFortran hipblasCscalBatched
+#define hipblasZscalBatchedFortran hipblasZscalBatched
+#define hipblasCsscalBatchedFortran hipblasCsscalBatched
+#define hipblasZdscalBatchedFortran hipblasZdscalBatched
+#define hipblasSscalStridedBatchedFortran hipblasSscalStridedBatched
+#define hipblasDscalStridedBatchedFortran hipblasDscalStridedBatched
+#define hipblasCscalStridedBatchedFortran hipblasCscalStridedBatched
+#define hipblasZscalStridedBatchedFortran hipblasZscalStridedBatched
+#define hipblasCsscalStridedBatchedFortran hipblasCsscalStridedBatched
+#define hipblasZdscalStridedBatchedFortran hipblasZdscalStridedBatched
+
+#define hipblasSscal_64Fortran hipblasSscal_64
+#define hipblasDscal_64Fortran hipblasDscal_64
+#define hipblasCscal_64Fortran hipblasCscal_64
+#define hipblasZscal_64Fortran hipblasZscal_64
+#define hipblasCsscal_64Fortran hipblasCsscal_64
+#define hipblasZdscal_64Fortran hipblasZdscal_64
+#define hipblasSscalBatched_64Fortran hipblasSscalBatched_64
+#define hipblasDscalBatched_64Fortran hipblasDscalBatched_64
+#define hipblasCscalBatched_64Fortran hipblasCscalBatched_64
+#define hipblasZscalBatched_64Fortran hipblasZscalBatched_64
+#define hipblasCsscalBatched_64Fortran hipblasCsscalBatched_64
+#define hipblasZdscalBatched_64Fortran hipblasZdscalBatched_64
+#define hipblasSscalStridedBatched_64Fortran hipblasSscalStridedBatched_64
+#define hipblasDscalStridedBatched_64Fortran hipblasDscalStridedBatched_64
+#define hipblasCscalStridedBatched_64Fortran hipblasCscalStridedBatched_64
+#define hipblasZscalStridedBatched_64Fortran hipblasZscalStridedBatched_64
+#define hipblasCsscalStridedBatched_64Fortran hipblasCsscalStridedBatched_64
+#define hipblasZdscalStridedBatched_64Fortran hipblasZdscalStridedBatched_64
+
+#define hipblasScopyFortran hipblasScopy
+#define hipblasDcopyFortran hipblasDcopy
+#define hipblasCcopyFortran hipblasCcopy
+#define hipblasZcopyFortran hipblasZcopy
+#define hipblasScopyBatchedFortran hipblasScopyBatched
+#define hipblasDcopyBatchedFortran hipblasDcopyBatched
+#define hipblasCcopyBatchedFortran hipblasCcopyBatched
+#define hipblasZcopyBatchedFortran hipblasZcopyBatched
+#define hipblasScopyStridedBatchedFortran hipblasScopyStridedBatched
+#define hipblasDcopyStridedBatchedFortran hipblasDcopyStridedBatched
+#define hipblasCcopyStridedBatchedFortran hipblasCcopyStridedBatched
+#define hipblasZcopyStridedBatchedFortran hipblasZcopyStridedBatched
+
+#define hipblasScopy_64Fortran hipblasScopy_64
+#define hipblasDcopy_64Fortran hipblasDcopy_64
+#define hipblasCcopy_64Fortran hipblasCcopy_64
+#define hipblasZcopy_64Fortran hipblasZcopy_64
+#define hipblasScopyBatched_64Fortran hipblasScopyBatched_64
+#define hipblasDcopyBatched_64Fortran hipblasDcopyBatched_64
+#define hipblasCcopyBatched_64Fortran hipblasCcopyBatched_64
+#define hipblasZcopyBatched_64Fortran hipblasZcopyBatched_64
+#define hipblasScopyStridedBatched_64Fortran hipblasScopyStridedBatched_64
+#define hipblasDcopyStridedBatched_64Fortran hipblasDcopyStridedBatched_64
+#define hipblasCcopyStridedBatched_64Fortran hipblasCcopyStridedBatched_64
+#define hipblasZcopyStridedBatched_64Fortran hipblasZcopyStridedBatched_64
+
+#define hipblasSdotFortran hipblasSdot
+#define hipblasDdotFortran hipblasDdot
+#define hipblasHdotFortran hipblasHdot
+#define hipblasBfdotFortran hipblasBfdot
+#define hipblasCdotuFortran hipblasCdotu
+#define hipblasCdotcFortran hipblasCdotc
+#define hipblasZdotuFortran hipblasZdotu
+#define hipblasZdotcFortran hipblasZdotc
+#define hipblasSdotBatchedFortran hipblasSdotBatched
+#define hipblasDdotBatchedFortran hipblasDdotBatched
+#define hipblasHdotBatchedFortran hipblasHdotBatched
+#define hipblasBfdotBatchedFortran hipblasBfdotBatched
+#define hipblasCdotuBatchedFortran hipblasCdotuBatched
+#define hipblasCdotcBatchedFortran hipblasCdotcBatched
+#define hipblasZdotuBatchedFortran hipblasZdotuBatched
+#define hipblasZdotcBatchedFortran hipblasZdotcBatched
+#define hipblasSdotStridedBatchedFortran hipblasSdotStridedBatched
+#define hipblasDdotStridedBatchedFortran hipblasDdotStridedBatched
+#define hipblasHdotStridedBatchedFortran hipblasHdotStridedBatched
+#define hipblasBfdotStridedBatchedFortran hipblasBfdotStridedBatched
+#define hipblasCdotuStridedBatchedFortran hipblasCdotuStridedBatched
+#define hipblasCdotcStridedBatchedFortran hipblasCdotcStridedBatched
+#define hipblasZdotuStridedBatchedFortran hipblasZdotuStridedBatched
+#define hipblasZdotcStridedBatchedFortran hipblasZdotcStridedBatched
+
+#define hipblasSdot_64Fortran hipblasSdot_64
+#define hipblasDdot_64Fortran hipblasDdot_64
+#define hipblasHdot_64Fortran hipblasHdot_64
+#define hipblasBfdot_64Fortran hipblasBfdot_64
+#define hipblasCdotu_64Fortran hipblasCdotu_64
+#define hipblasCdotc_64Fortran hipblasCdotc_64
+#define hipblasZdotu_64Fortran hipblasZdotu_64
+#define hipblasZdotc_64Fortran hipblasZdotc_64
+#define hipblasSdotBatched_64Fortran hipblasSdotBatched_64
+#define hipblasDdotBatched_64Fortran hipblasDdotBatched_64
+#define hipblasHdotBatched_64Fortran hipblasHdotBatched_64
+#define hipblasBfdotBatched_64Fortran hipblasBfdotBatched_64
+#define hipblasCdotuBatched_64Fortran hipblasCdotuBatched_64
+#define hipblasCdotcBatched_64Fortran hipblasCdotcBatched_64
+#define hipblasZdotuBatched_64Fortran hipblasZdotuBatched_64
+#define hipblasZdotcBatched_64Fortran hipblasZdotcBatched_64
+#define hipblasSdotStridedBatched_64Fortran hipblasSdotStridedBatched_64
+#define hipblasDdotStridedBatched_64Fortran hipblasDdotStridedBatched_64
+#define hipblasHdotStridedBatched_64Fortran hipblasHdotStridedBatched_64
+#define hipblasBfdotStridedBatched_64Fortran hipblasBfdotStridedBatched_64
+#define hipblasCdotuStridedBatched_64Fortran hipblasCdotuStridedBatched_64
+#define hipblasCdotcStridedBatched_64Fortran hipblasCdotcStridedBatched_64
+#define hipblasZdotuStridedBatched_64Fortran hipblasZdotuStridedBatched_64
+#define hipblasZdotcStridedBatched_64Fortran hipblasZdotcStridedBatched_64
+
+#define hipblasSswapFortran hipblasSswap
+#define hipblasDswapFortran hipblasDswap
+#define hipblasCswapFortran hipblasCswap
+#define hipblasZswapFortran hipblasZswap
+#define hipblasSswapBatchedFortran hipblasSswapBatched
+#define hipblasDswapBatchedFortran hipblasDswapBatched
+#define hipblasCswapBatchedFortran hipblasCswapBatched
+#define hipblasZswapBatchedFortran hipblasZswapBatched
+#define hipblasSswapStridedBatchedFortran hipblasSswapStridedBatched
+#define hipblasDswapStridedBatchedFortran hipblasDswapStridedBatched
+#define hipblasCswapStridedBatchedFortran hipblasCswapStridedBatched
+#define hipblasZswapStridedBatchedFortran hipblasZswapStridedBatched
+
+#define hipblasSswap_64Fortran hipblasSswap_64
+#define hipblasDswap_64Fortran hipblasDswap_64
+#define hipblasCswap_64Fortran hipblasCswap_64
+#define hipblasZswap_64Fortran hipblasZswap_64
+#define hipblasSswapBatched_64Fortran hipblasSswapBatched_64
+#define hipblasDswapBatched_64Fortran hipblasDswapBatched_64
+#define hipblasCswapBatched_64Fortran hipblasCswapBatched_64
+#define hipblasZswapBatched_64Fortran hipblasZswapBatched_64
+#define hipblasSswapStridedBatched_64Fortran hipblasSswapStridedBatched_64
+#define hipblasDswapStridedBatched_64Fortran hipblasDswapStridedBatched_64
+#define hipblasCswapStridedBatched_64Fortran hipblasCswapStridedBatched_64
+#define hipblasZswapStridedBatched_64Fortran hipblasZswapStridedBatched_64
+
+#define hipblasHaxpyFortran hipblasHaxpy
+#define hipblasSaxpyFortran hipblasSaxpy
+#define hipblasDaxpyFortran hipblasDaxpy
+#define hipblasCaxpyFortran hipblasCaxpy
+#define hipblasZaxpyFortran hipblasZaxpy
+#define hipblasHaxpyBatchedFortran hipblasHaxpyBatched
+#define hipblasSaxpyBatchedFortran hipblasSaxpyBatched
+#define hipblasDaxpyBatchedFortran hipblasDaxpyBatched
+#define hipblasCaxpyBatchedFortran hipblasCaxpyBatched
+#define hipblasZaxpyBatchedFortran hipblasZaxpyBatched
+#define hipblasHaxpyStridedBatchedFortran hipblasHaxpyStridedBatched
+#define hipblasSaxpyStridedBatchedFortran hipblasSaxpyStridedBatched
+#define hipblasDaxpyStridedBatchedFortran hipblasDaxpyStridedBatched
+#define hipblasCaxpyStridedBatchedFortran hipblasCaxpyStridedBatched
+#define hipblasZaxpyStridedBatchedFortran hipblasZaxpyStridedBatched
+
+#define hipblasHaxpy_64Fortran hipblasHaxpy_64
+#define hipblasSaxpy_64Fortran hipblasSaxpy_64
+#define hipblasDaxpy_64Fortran hipblasDaxpy_64
+#define hipblasCaxpy_64Fortran hipblasCaxpy_64
+#define hipblasZaxpy_64Fortran hipblasZaxpy_64
+#define hipblasHaxpyBatched_64Fortran hipblasHaxpyBatched_64
+#define hipblasSaxpyBatched_64Fortran hipblasSaxpyBatched_64
+#define hipblasDaxpyBatched_64Fortran hipblasDaxpyBatched_64
+#define hipblasCaxpyBatched_64Fortran hipblasCaxpyBatched_64
+#define hipblasZaxpyBatched_64Fortran hipblasZaxpyBatched_64
+#define hipblasHaxpyStridedBatched_64Fortran hipblasHaxpyStridedBatched_64
+#define hipblasSaxpyStridedBatched_64Fortran hipblasSaxpyStridedBatched_64
+#define hipblasDaxpyStridedBatched_64Fortran hipblasDaxpyStridedBatched_64
+#define hipblasCaxpyStridedBatched_64Fortran hipblasCaxpyStridedBatched_64
+#define hipblasZaxpyStridedBatched_64Fortran hipblasZaxpyStridedBatched_64
+
+#define hipblasSasumFortran hipblasSasum
+#define hipblasDasumFortran hipblasDasum
+#define hipblasScasumFortran hipblasScasum
+#define hipblasDzasumFortran hipblasDzasum
+#define hipblasSasumBatchedFortran hipblasSasumBatched
+#define hipblasDasumBatchedFortran hipblasDasumBatched
+#define hipblasScasumBatchedFortran hipblasScasumBatched
+#define hipblasDzasumBatchedFortran hipblasDzasumBatched
+#define hipblasSasumStridedBatchedFortran hipblasSasumStridedBatched
+#define hipblasDasumStridedBatchedFortran hipblasDasumStridedBatched
+#define hipblasScasumStridedBatchedFortran hipblasScasumStridedBatched
+#define hipblasDzasumStridedBatchedFortran hipblasDzasumStridedBatched
+
+#define hipblasSasum_64Fortran hipblasSasum_64
+#define hipblasDasum_64Fortran hipblasDasum_64
+#define hipblasScasum_64Fortran hipblasScasum_64
+#define hipblasDzasum_64Fortran hipblasDzasum_64
+#define hipblasSasumBatched_64Fortran hipblasSasumBatched_64
+#define hipblasDasumBatched_64Fortran hipblasDasumBatched_64
+#define hipblasScasumBatched_64Fortran hipblasScasumBatched_64
+#define hipblasDzasumBatched_64Fortran hipblasDzasumBatched_64
+#define hipblasSasumStridedBatched_64Fortran hipblasSasumStridedBatched_64
+#define hipblasDasumStridedBatched_64Fortran hipblasDasumStridedBatched_64
+#define hipblasScasumStridedBatched_64Fortran hipblasScasumStridedBatched_64
+#define hipblasDzasumStridedBatched_64Fortran hipblasDzasumStridedBatched_64
+
+#define hipblasSnrm2Fortran hipblasSnrm2
+#define hipblasDnrm2Fortran hipblasDnrm2
+#define hipblasScnrm2Fortran hipblasScnrm2
+#define hipblasDznrm2Fortran hipblasDznrm2
+#define hipblasSnrm2BatchedFortran hipblasSnrm2Batched
+#define hipblasDnrm2BatchedFortran hipblasDnrm2Batched
+#define hipblasScnrm2BatchedFortran hipblasScnrm2Batched
+#define hipblasDznrm2BatchedFortran hipblasDznrm2Batched
+#define hipblasSnrm2StridedBatchedFortran hipblasSnrm2StridedBatched
+#define hipblasDnrm2StridedBatchedFortran hipblasDnrm2StridedBatched
+#define hipblasScnrm2StridedBatchedFortran hipblasScnrm2StridedBatched
+#define hipblasDznrm2StridedBatchedFortran hipblasDznrm2StridedBatched
+
+#define hipblasSnrm2_64Fortran hipblasSnrm2_64
+#define hipblasDnrm2_64Fortran hipblasDnrm2_64
+#define hipblasScnrm2_64Fortran hipblasScnrm2_64
+#define hipblasDznrm2_64Fortran hipblasDznrm2_64
+#define hipblasSnrm2Batched_64Fortran hipblasSnrm2Batched_64
+#define hipblasDnrm2Batched_64Fortran hipblasDnrm2Batched_64
+#define hipblasScnrm2Batched_64Fortran hipblasScnrm2Batched_64
+#define hipblasDznrm2Batched_64Fortran hipblasDznrm2Batched_64
+#define hipblasSnrm2StridedBatched_64Fortran hipblasSnrm2StridedBatched_64
+#define hipblasDnrm2StridedBatched_64Fortran hipblasDnrm2StridedBatched_64
+#define hipblasScnrm2StridedBatched_64Fortran hipblasScnrm2StridedBatched_64
+#define hipblasDznrm2StridedBatched_64Fortran hipblasDznrm2StridedBatched_64
+
+#define hipblasIsamaxFortran hipblasIsamax
+#define hipblasIdamaxFortran hipblasIdamax
+#define hipblasIcamaxFortran hipblasIcamax
+#define hipblasIzamaxFortran hipblasIzamax
+#define hipblasIsamaxBatchedFortran hipblasIsamaxBatched
+#define hipblasIdamaxBatchedFortran hipblasIdamaxBatched
+#define hipblasIcamaxBatchedFortran hipblasIcamaxBatched
+#define hipblasIzamaxBatchedFortran hipblasIzamaxBatched
+#define hipblasIsamaxStridedBatchedFortran hipblasIsamaxStridedBatched
+#define hipblasIdamaxStridedBatchedFortran hipblasIdamaxStridedBatched
+#define hipblasIcamaxStridedBatchedFortran hipblasIcamaxStridedBatched
+#define hipblasIzamaxStridedBatchedFortran hipblasIzamaxStridedBatched
+
+#define hipblasIsamax_64Fortran hipblasIsamax_64
+#define hipblasIdamax_64Fortran hipblasIdamax_64
+#define hipblasIcamax_64Fortran hipblasIcamax_64
+#define hipblasIzamax_64Fortran hipblasIzamax_64
+#define hipblasIsamaxBatched_64Fortran hipblasIsamaxBatched_64
+#define hipblasIdamaxBatched_64Fortran hipblasIdamaxBatched_64
+#define hipblasIcamaxBatched_64Fortran hipblasIcamaxBatched_64
+#define hipblasIzamaxBatched_64Fortran hipblasIzamaxBatched_64
+#define hipblasIsamaxStridedBatched_64Fortran hipblasIsamaxStridedBatched_64
+#define hipblasIdamaxStridedBatched_64Fortran hipblasIdamaxStridedBatched_64
+#define hipblasIcamaxStridedBatched_64Fortran hipblasIcamaxStridedBatched_64
+#define hipblasIzamaxStridedBatched_64Fortran hipblasIzamaxStridedBatched_64
+
+#define hipblasIsaminFortran hipblasIsamin
+#define hipblasIdaminFortran hipblasIdamin
+#define hipblasIcaminFortran hipblasIcamin
+#define hipblasIzaminFortran hipblasIzamin
+#define hipblasIsaminBatchedFortran hipblasIsaminBatched
+#define hipblasIdaminBatchedFortran hipblasIdaminBatched
+#define hipblasIcaminBatchedFortran hipblasIcaminBatched
+#define hipblasIzaminBatchedFortran hipblasIzaminBatched
+#define hipblasIsaminStridedBatchedFortran hipblasIsaminStridedBatched
+#define hipblasIdaminStridedBatchedFortran hipblasIdaminStridedBatched
+#define hipblasIcaminStridedBatchedFortran hipblasIcaminStridedBatched
+#define hipblasIzaminStridedBatchedFortran hipblasIzaminStridedBatched
+
+#define hipblasIsamin_64Fortran hipblasIsamin_64
+#define hipblasIdamin_64Fortran hipblasIdamin_64
+#define hipblasIcamin_64Fortran hipblasIcamin_64
+#define hipblasIzamin_64Fortran hipblasIzamin_64
+#define hipblasIsaminBatched_64Fortran hipblasIsaminBatched_64
+#define hipblasIdaminBatched_64Fortran hipblasIdaminBatched_64
+#define hipblasIcaminBatched_64Fortran hipblasIcaminBatched_64
+#define hipblasIzaminBatched_64Fortran hipblasIzaminBatched_64
+#define hipblasIsaminStridedBatched_64Fortran hipblasIsaminStridedBatched_64
+#define hipblasIdaminStridedBatched_64Fortran hipblasIdaminStridedBatched_64
+#define hipblasIcaminStridedBatched_64Fortran hipblasIcaminStridedBatched_64
+#define hipblasIzaminStridedBatched_64Fortran hipblasIzaminStridedBatched_64
+
+#define hipblasSrotFortran hipblasSrot
+#define hipblasDrotFortran hipblasDrot
+#define hipblasCsrotFortran hipblasCsrot
+#define hipblasZdrotFortran hipblasZdrot
+#define hipblasCrotFortran hipblasCrot
+#define hipblasZrotFortran hipblasZrot
+#define hipblasSrotBatchedFortran hipblasSrotBatched
+#define hipblasDrotBatchedFortran hipblasDrotBatched
+#define hipblasCsrotBatchedFortran hipblasCsrotBatched
+#define hipblasZdrotBatchedFortran hipblasZdrotBatched
+#define hipblasCrotBatchedFortran hipblasCrotBatched
+#define hipblasZrotBatchedFortran hipblasZrotBatched
+#define hipblasSrotStridedBatchedFortran hipblasSrotStridedBatched
+#define hipblasDrotStridedBatchedFortran hipblasDrotStridedBatched
+#define hipblasCsrotStridedBatchedFortran hipblasCsrotStridedBatched
+#define hipblasZdrotStridedBatchedFortran hipblasZdrotStridedBatched
+#define hipblasCrotStridedBatchedFortran hipblasCrotStridedBatched
+#define hipblasZrotStridedBatchedFortran hipblasZrotStridedBatched
+
+#define hipblasSrot_64Fortran hipblasSrot_64
+#define hipblasDrot_64Fortran hipblasDrot_64
+#define hipblasCsrot_64Fortran hipblasCsrot_64
+#define hipblasZdrot_64Fortran hipblasZdrot_64
+#define hipblasCrot_64Fortran hipblasCrot_64
+#define hipblasZrot_64Fortran hipblasZrot_64
+#define hipblasSrotBatched_64Fortran hipblasSrotBatched_64
+#define hipblasDrotBatched_64Fortran hipblasDrotBatched_64
+#define hipblasCsrotBatched_64Fortran hipblasCsrotBatched_64
+#define hipblasZdrotBatched_64Fortran hipblasZdrotBatched_64
+#define hipblasCrotBatched_64Fortran hipblasCrotBatched_64
+#define hipblasZrotBatched_64Fortran hipblasZrotBatched_64
+#define hipblasSrotStridedBatched_64Fortran hipblasSrotStridedBatched_64
+#define hipblasDrotStridedBatched_64Fortran hipblasDrotStridedBatched_64
+#define hipblasCsrotStridedBatched_64Fortran hipblasCsrotStridedBatched_64
+#define hipblasZdrotStridedBatched_64Fortran hipblasZdrotStridedBatched_64
+#define hipblasCrotStridedBatched_64Fortran hipblasCrotStridedBatched_64
+#define hipblasZrotStridedBatched_64Fortran hipblasZrotStridedBatched_64
+
+#define hipblasSrotgFortran hipblasSrotg
+#define hipblasDrotgFortran hipblasDrotg
+#define hipblasCrotgFortran hipblasCrotg
+#define hipblasZrotgFortran hipblasZrotg
+#define hipblasSrotgBatchedFortran hipblasSrotgBatched
+#define hipblasDrotgBatchedFortran hipblasDrotgBatched
+#define hipblasCrotgBatchedFortran hipblasCrotgBatched
+#define hipblasZrotgBatchedFortran hipblasZrotgBatched
+#define hipblasSrotgStridedBatchedFortran hipblasSrotgStridedBatched
+#define hipblasDrotgStridedBatchedFortran hipblasDrotgStridedBatched
+#define hipblasCrotgStridedBatchedFortran hipblasCrotgStridedBatched
+#define hipblasZrotgStridedBatchedFortran hipblasZrotgStridedBatched
+
+#define hipblasSrotg_64Fortran hipblasSrotg_64
+#define hipblasDrotg_64Fortran hipblasDrotg_64
+#define hipblasCrotg_64Fortran hipblasCrotg_64
+#define hipblasZrotg_64Fortran hipblasZrotg_64
+#define hipblasSrotgBatched_64Fortran hipblasSrotgBatched_64
+#define hipblasDrotgBatched_64Fortran hipblasDrotgBatched_64
+#define hipblasCrotgBatched_64Fortran hipblasCrotgBatched_64
+#define hipblasZrotgBatched_64Fortran hipblasZrotgBatched_64
+#define hipblasSrotgStridedBatched_64Fortran hipblasSrotgStridedBatched_64
+#define hipblasDrotgStridedBatched_64Fortran hipblasDrotgStridedBatched_64
+#define hipblasCrotgStridedBatched_64Fortran hipblasCrotgStridedBatched_64
+#define hipblasZrotgStridedBatched_64Fortran hipblasZrotgStridedBatched_64
+
+#define hipblasSrotmFortran hipblasSrotm
+#define hipblasDrotmFortran hipblasDrotm
+#define hipblasSrotmBatchedFortran hipblasSrotmBatched
+#define hipblasDrotmBatchedFortran hipblasDrotmBatched
+#define hipblasSrotmStridedBatchedFortran hipblasSrotmStridedBatched
+#define hipblasDrotmStridedBatchedFortran hipblasDrotmStridedBatched
+#define hipblasSrotmgFortran hipblasSrotmg
+#define hipblasDrotmgFortran hipblasDrotmg
+#define hipblasSrotmgBatchedFortran hipblasSrotmgBatched
+#define hipblasDrotmgBatchedFortran hipblasDrotmgBatched
+#define hipblasSrotmgStridedBatchedFortran hipblasSrotmgStridedBatched
+#define hipblasDrotmgStridedBatchedFortran hipblasDrotmgStridedBatched
+
+#define hipblasSrotm_64Fortran hipblasSrotm_64
+#define hipblasDrotm_64Fortran hipblasDrotm_64
+#define hipblasSrotmBatched_64Fortran hipblasSrotmBatched_64
+#define hipblasDrotmBatched_64Fortran hipblasDrotmBatched_64
+#define hipblasSrotmStridedBatched_64Fortran hipblasSrotmStridedBatched_64
+#define hipblasDrotmStridedBatched_64Fortran hipblasDrotmStridedBatched_64
+#define hipblasSrotmg_64Fortran hipblasSrotmg_64
+#define hipblasDrotmg_64Fortran hipblasDrotmg_64
+#define hipblasSrotmgBatched_64Fortran hipblasSrotmgBatched_64
+#define hipblasDrotmgBatched_64Fortran hipblasDrotmgBatched_64
+#define hipblasSrotmgStridedBatched_64Fortran hipblasSrotmgStridedBatched_64
+#define hipblasDrotmgStridedBatched_64Fortran hipblasDrotmgStridedBatched_64
+
+/* ==========
+ *    L2
+ * ========== */
+
+#define hipblasSgerFortran hipblasSger
+#define hipblasDgerFortran hipblasDger
+#define hipblasCgeruFortran hipblasCgeru
+#define hipblasZgeruFortran hipblasZgeru
+#define hipblasCgercFortran hipblasCgerc
+#define hipblasZgercFortran hipblasZgerc
+#define hipblasSgerBatchedFortran hipblasSgerBatched
+#define hipblasDgerBatchedFortran hipblasDgerBatched
+#define hipblasCgeruBatchedFortran hipblasCgeruBatched
+#define hipblasZgeruBatchedFortran hipblasZgeruBatched
+#define hipblasCgercBatchedFortran hipblasCgercBatched
+#define hipblasZgercBatchedFortran hipblasZgercBatched
+#define hipblasSgerStridedBatchedFortran hipblasSgerStridedBatched
+#define hipblasDgerStridedBatchedFortran hipblasDgerStridedBatched
+#define hipblasCgeruStridedBatchedFortran hipblasCgeruStridedBatched
+#define hipblasZgeruStridedBatchedFortran hipblasZgeruStridedBatched
+#define hipblasCgercStridedBatchedFortran hipblasCgercStridedBatched
+#define hipblasZgercStridedBatchedFortran hipblasZgercStridedBatched
+
+#define hipblasSger_64Fortran hipblasSger_64
+#define hipblasDger_64Fortran hipblasDger_64
+#define hipblasCgeru_64Fortran hipblasCgeru_64
+#define hipblasZgeru_64Fortran hipblasZgeru_64
+#define hipblasCgerc_64Fortran hipblasCgerc_64
+#define hipblasZgerc_64Fortran hipblasZgerc_64
+#define hipblasSgerBatched_64Fortran hipblasSgerBatched_64
+#define hipblasDgerBatched_64Fortran hipblasDgerBatched_64
+#define hipblasCgeruBatched_64Fortran hipblasCgeruBatched_64
+#define hipblasZgeruBatched_64Fortran hipblasZgeruBatched_64
+#define hipblasCgercBatched_64Fortran hipblasCgercBatched_64
+#define hipblasZgercBatched_64Fortran hipblasZgercBatched_64
+#define hipblasSgerStridedBatched_64Fortran hipblasSgerStridedBatched_64
+#define hipblasDgerStridedBatched_64Fortran hipblasDgerStridedBatched_64
+#define hipblasCgeruStridedBatched_64Fortran hipblasCgeruStridedBatched_64
+#define hipblasZgeruStridedBatched_64Fortran hipblasZgeruStridedBatched_64
+#define hipblasCgercStridedBatched_64Fortran hipblasCgercStridedBatched_64
+#define hipblasZgercStridedBatched_64Fortran hipblasZgercStridedBatched_64
+
+#define hipblasChbmvFortran hipblasChbmv
+#define hipblasZhbmvFortran hipblasZhbmv
+#define hipblasChbmvBatchedFortran hipblasChbmvBatched
+#define hipblasZhbmvBatchedFortran hipblasZhbmvBatched
+#define hipblasChbmvStridedBatchedFortran hipblasChbmvStridedBatched
+#define hipblasZhbmvStridedBatchedFortran hipblasZhbmvStridedBatched
+
+#define hipblasChbmv_64Fortran hipblasChbmv_64
+#define hipblasZhbmv_64Fortran hipblasZhbmv_64
+#define hipblasChbmvBatched_64Fortran hipblasChbmvBatched_64
+#define hipblasZhbmvBatched_64Fortran hipblasZhbmvBatched_64
+#define hipblasChbmvStridedBatched_64Fortran hipblasChbmvStridedBatched_64
+#define hipblasZhbmvStridedBatched_64Fortran hipblasZhbmvStridedBatched_64
+
+#define hipblasChemvFortran hipblasChemv
+#define hipblasZhemvFortran hipblasZhemv
+#define hipblasChemvBatchedFortran hipblasChemvBatched
+#define hipblasZhemvBatchedFortran hipblasZhemvBatched
+#define hipblasChemvStridedBatchedFortran hipblasChemvStridedBatched
+#define hipblasZhemvStridedBatchedFortran hipblasZhemvStridedBatched
+
+#define hipblasChemv_64Fortran hipblasChemv_64
+#define hipblasZhemv_64Fortran hipblasZhemv_64
+#define hipblasChemvBatched_64Fortran hipblasChemvBatched_64
+#define hipblasZhemvBatched_64Fortran hipblasZhemvBatched_64
+#define hipblasChemvStridedBatched_64Fortran hipblasChemvStridedBatched_64
+#define hipblasZhemvStridedBatched_64Fortran hipblasZhemvStridedBatched_64
+
+#define hipblasCherFortran hipblasCher
+#define hipblasZherFortran hipblasZher
+#define hipblasCherBatchedFortran hipblasCherBatched
+#define hipblasZherBatchedFortran hipblasZherBatched
+#define hipblasCherStridedBatchedFortran hipblasCherStridedBatched
+#define hipblasZherStridedBatchedFortran hipblasZherStridedBatched
+#define hipblasCher2Fortran hipblasCher2
+#define hipblasZher2Fortran hipblasZher2
+#define hipblasCher2BatchedFortran hipblasCher2Batched
+#define hipblasZher2BatchedFortran hipblasZher2Batched
+#define hipblasCher2StridedBatchedFortran hipblasCher2StridedBatched
+#define hipblasZher2StridedBatchedFortran hipblasZher2StridedBatched
+
+#define hipblasCher_64Fortran hipblasCher_64
+#define hipblasZher_64Fortran hipblasZher_64
+#define hipblasCherBatched_64Fortran hipblasCherBatched_64
+#define hipblasZherBatched_64Fortran hipblasZherBatched_64
+#define hipblasCherStridedBatched_64Fortran hipblasCherStridedBatched_64
+#define hipblasZherStridedBatched_64Fortran hipblasZherStridedBatched_64
+#define hipblasCher2_64Fortran hipblasCher2_64
+#define hipblasZher2_64Fortran hipblasZher2_64
+#define hipblasCher2Batched_64Fortran hipblasCher2Batched_64
+#define hipblasZher2Batched_64Fortran hipblasZher2Batched_64
+#define hipblasCher2StridedBatched_64Fortran hipblasCher2StridedBatched_64
+#define hipblasZher2StridedBatched_64Fortran hipblasZher2StridedBatched_64
+
+#define hipblasChpmvFortran hipblasChpmv
+#define hipblasZhpmvFortran hipblasZhpmv
+#define hipblasChpmvBatchedFortran hipblasChpmvBatched
+#define hipblasZhpmvBatchedFortran hipblasZhpmvBatched
+#define hipblasChpmvStridedBatchedFortran hipblasChpmvStridedBatched
+#define hipblasZhpmvStridedBatchedFortran hipblasZhpmvStridedBatched
+
+#define hipblasChpmv_64Fortran hipblasChpmv_64
+#define hipblasZhpmv_64Fortran hipblasZhpmv_64
+#define hipblasChpmvBatched_64Fortran hipblasChpmvBatched_64
+#define hipblasZhpmvBatched_64Fortran hipblasZhpmvBatched_64
+#define hipblasChpmvStridedBatched_64Fortran hipblasChpmvStridedBatched_64
+#define hipblasZhpmvStridedBatched_64Fortran hipblasZhpmvStridedBatched_64
+
+#define hipblasChprFortran hipblasChpr
+#define hipblasZhprFortran hipblasZhpr
+#define hipblasChprBatchedFortran hipblasChprBatched
+#define hipblasZhprBatchedFortran hipblasZhprBatched
+#define hipblasChprStridedBatchedFortran hipblasChprStridedBatched
+#define hipblasZhprStridedBatchedFortran hipblasZhprStridedBatched
+
+#define hipblasChpr_64Fortran hipblasChpr_64
+#define hipblasZhpr_64Fortran hipblasZhpr_64
+#define hipblasChprBatched_64Fortran hipblasChprBatched_64
+#define hipblasZhprBatched_64Fortran hipblasZhprBatched_64
+#define hipblasChprStridedBatched_64Fortran hipblasChprStridedBatched_64
+#define hipblasZhprStridedBatched_64Fortran hipblasZhprStridedBatched_64
+
+#define hipblasChpr2Fortran hipblasChpr2
+#define hipblasZhpr2Fortran hipblasZhpr2
+#define hipblasChpr2BatchedFortran hipblasChpr2Batched
+#define hipblasZhpr2BatchedFortran hipblasZhpr2Batched
+#define hipblasChpr2StridedBatchedFortran hipblasChpr2StridedBatched
+#define hipblasZhpr2StridedBatchedFortran hipblasZhpr2StridedBatched
+
+#define hipblasChpr2_64Fortran hipblasChpr2_64
+#define hipblasZhpr2_64Fortran hipblasZhpr2_64
+#define hipblasChpr2Batched_64Fortran hipblasChpr2Batched_64
+#define hipblasZhpr2Batched_64Fortran hipblasZhpr2Batched_64
+#define hipblasChpr2StridedBatched_64Fortran hipblasChpr2StridedBatched_64
+#define hipblasZhpr2StridedBatched_64Fortran hipblasZhpr2StridedBatched_64
+
+#define hipblasSsbmvFortran hipblasSsbmv
+#define hipblasDsbmvFortran hipblasDsbmv
+#define hipblasSsbmvBatchedFortran hipblasSsbmvBatched
+#define hipblasDsbmvBatchedFortran hipblasDsbmvBatched
+#define hipblasSsbmvStridedBatchedFortran hipblasSsbmvStridedBatched
+#define hipblasDsbmvStridedBatchedFortran hipblasDsbmvStridedBatched
+
+#define hipblasSsbmv_64Fortran hipblasSsbmv_64
+#define hipblasDsbmv_64Fortran hipblasDsbmv_64
+#define hipblasSsbmvBatched_64Fortran hipblasSsbmvBatched_64
+#define hipblasDsbmvBatched_64Fortran hipblasDsbmvBatched_64
+#define hipblasSsbmvStridedBatched_64Fortran hipblasSsbmvStridedBatched_64
+#define hipblasDsbmvStridedBatched_64Fortran hipblasDsbmvStridedBatched_64
+
+#define hipblasSspmvFortran hipblasSspmv
+#define hipblasDspmvFortran hipblasDspmv
+#define hipblasSspmvBatchedFortran hipblasSspmvBatched
+#define hipblasDspmvBatchedFortran hipblasDspmvBatched
+#define hipblasSspmvStridedBatchedFortran hipblasSspmvStridedBatched
+#define hipblasDspmvStridedBatchedFortran hipblasDspmvStridedBatched
+
+#define hipblasSspmv_64Fortran hipblasSspmv_64
+#define hipblasDspmv_64Fortran hipblasDspmv_64
+#define hipblasSspmvBatched_64Fortran hipblasSspmvBatched_64
+#define hipblasDspmvBatched_64Fortran hipblasDspmvBatched_64
+#define hipblasSspmvStridedBatched_64Fortran hipblasSspmvStridedBatched_64
+#define hipblasDspmvStridedBatched_64Fortran hipblasDspmvStridedBatched_64
+
+#define hipblasSsprFortran hipblasSspr
+#define hipblasDsprFortran hipblasDspr
+#define hipblasCsprFortran hipblasCspr
+#define hipblasZsprFortran hipblasZspr
+#define hipblasSsprBatchedFortran hipblasSsprBatched
+#define hipblasDsprBatchedFortran hipblasDsprBatched
+#define hipblasCsprBatchedFortran hipblasCsprBatched
+#define hipblasZsprBatchedFortran hipblasZsprBatched
+#define hipblasSsprStridedBatchedFortran hipblasSsprStridedBatched
+#define hipblasDsprStridedBatchedFortran hipblasDsprStridedBatched
+#define hipblasCsprStridedBatchedFortran hipblasCsprStridedBatched
+#define hipblasZsprStridedBatchedFortran hipblasZsprStridedBatched
+
+#define hipblasSspr_64Fortran hipblasSspr_64
+#define hipblasDspr_64Fortran hipblasDspr_64
+#define hipblasCspr_64Fortran hipblasCspr_64
+#define hipblasZspr_64Fortran hipblasZspr_64
+#define hipblasSsprBatched_64Fortran hipblasSsprBatched_64
+#define hipblasDsprBatched_64Fortran hipblasDsprBatched_64
+#define hipblasCsprBatched_64Fortran hipblasCsprBatched_64
+#define hipblasZsprBatched_64Fortran hipblasZsprBatched_64
+#define hipblasSsprStridedBatched_64Fortran hipblasSsprStridedBatched_64
+#define hipblasDsprStridedBatched_64Fortran hipblasDsprStridedBatched_64
+#define hipblasCsprStridedBatched_64Fortran hipblasCsprStridedBatched_64
+#define hipblasZsprStridedBatched_64Fortran hipblasZsprStridedBatched_64
+
+#define hipblasSspr2Fortran hipblasSspr2
+#define hipblasDspr2Fortran hipblasDspr2
+#define hipblasSspr2BatchedFortran hipblasSspr2Batched
+#define hipblasDspr2BatchedFortran hipblasDspr2Batched
+#define hipblasSspr2StridedBatchedFortran hipblasSspr2StridedBatched
+#define hipblasDspr2StridedBatchedFortran hipblasDspr2StridedBatched
+
+#define hipblasSspr2_64Fortran hipblasSspr2_64
+#define hipblasDspr2_64Fortran hipblasDspr2_64
+#define hipblasSspr2Batched_64Fortran hipblasSspr2Batched_64
+#define hipblasDspr2Batched_64Fortran hipblasDspr2Batched_64
+#define hipblasSspr2StridedBatched_64Fortran hipblasSspr2StridedBatched_64
+#define hipblasDspr2StridedBatched_64Fortran hipblasDspr2StridedBatched_64
+
+#define hipblasSsymvFortran hipblasSsymv
+#define hipblasDsymvFortran hipblasDsymv
+#define hipblasCsymvFortran hipblasCsymv
+#define hipblasZsymvFortran hipblasZsymv
+
+#define hipblasSsymv_64Fortran hipblasSsymv_64
+#define hipblasDsymv_64Fortran hipblasDsymv_64
+#define hipblasCsymv_64Fortran hipblasCsymv_64
+#define hipblasZsymv_64Fortran hipblasZsymv_64
+
+#define hipblasSsymvBatchedFortran hipblasSsymvBatched
+#define hipblasDsymvBatchedFortran hipblasDsymvBatched
+#define hipblasCsymvBatchedFortran hipblasCsymvBatched
+#define hipblasZsymvBatchedFortran hipblasZsymvBatched
+
+#define hipblasSsymvBatched_64Fortran hipblasSsymvBatched_64
+#define hipblasDsymvBatched_64Fortran hipblasDsymvBatched_64
+#define hipblasCsymvBatched_64Fortran hipblasCsymvBatched_64
+#define hipblasZsymvBatched_64Fortran hipblasZsymvBatched_64
+
+#define hipblasSsymvStridedBatchedFortran hipblasSsymvStridedBatched
+#define hipblasDsymvStridedBatchedFortran hipblasDsymvStridedBatched
+#define hipblasCsymvStridedBatchedFortran hipblasCsymvStridedBatched
+#define hipblasZsymvStridedBatchedFortran hipblasZsymvStridedBatched
+
+#define hipblasSsymvStridedBatched_64Fortran hipblasSsymvStridedBatched_64
+#define hipblasDsymvStridedBatched_64Fortran hipblasDsymvStridedBatched_64
+#define hipblasCsymvStridedBatched_64Fortran hipblasCsymvStridedBatched_64
+#define hipblasZsymvStridedBatched_64Fortran hipblasZsymvStridedBatched_64
+
+#define hipblasSsyrFortran hipblasSsyr
+#define hipblasDsyrFortran hipblasDsyr
+#define hipblasCsyrFortran hipblasCsyr
+#define hipblasZsyrFortran hipblasZsyr
+
+#define hipblasSsyr_64Fortran hipblasSsyr_64
+#define hipblasDsyr_64Fortran hipblasDsyr_64
+#define hipblasCsyr_64Fortran hipblasCsyr_64
+#define hipblasZsyr_64Fortran hipblasZsyr_64
+
+#define hipblasSsyrBatchedFortran hipblasSsyrBatched
+#define hipblasDsyrBatchedFortran hipblasDsyrBatched
+#define hipblasCsyrBatchedFortran hipblasCsyrBatched
+#define hipblasZsyrBatchedFortran hipblasZsyrBatched
+
+#define hipblasSsyrBatched_64Fortran hipblasSsyrBatched_64
+#define hipblasDsyrBatched_64Fortran hipblasDsyrBatched_64
+#define hipblasCsyrBatched_64Fortran hipblasCsyrBatched_64
+#define hipblasZsyrBatched_64Fortran hipblasZsyrBatched_64
+
+#define hipblasSsyrStridedBatchedFortran hipblasSsyrStridedBatched
+#define hipblasDsyrStridedBatchedFortran hipblasDsyrStridedBatched
+#define hipblasCsyrStridedBatchedFortran hipblasCsyrStridedBatched
+#define hipblasZsyrStridedBatchedFortran hipblasZsyrStridedBatched
+
+#define hipblasSsyrStridedBatched_64Fortran hipblasSsyrStridedBatched_64
+#define hipblasDsyrStridedBatched_64Fortran hipblasDsyrStridedBatched_64
+#define hipblasCsyrStridedBatched_64Fortran hipblasCsyrStridedBatched_64
+#define hipblasZsyrStridedBatched_64Fortran hipblasZsyrStridedBatched_64
+
+#define hipblasSsyr2Fortran hipblasSsyr2
+#define hipblasDsyr2Fortran hipblasDsyr2
+#define hipblasCsyr2Fortran hipblasCsyr2
+#define hipblasZsyr2Fortran hipblasZsyr2
+
+#define hipblasSsyr2_64Fortran hipblasSsyr2_64
+#define hipblasDsyr2_64Fortran hipblasDsyr2_64
+#define hipblasCsyr2_64Fortran hipblasCsyr2_64
+#define hipblasZsyr2_64Fortran hipblasZsyr2_64
+
+#define hipblasSsyr2BatchedFortran hipblasSsyr2Batched
+#define hipblasDsyr2BatchedFortran hipblasDsyr2Batched
+#define hipblasCsyr2BatchedFortran hipblasCsyr2Batched
+#define hipblasZsyr2BatchedFortran hipblasZsyr2Batched
+
+#define hipblasSsyr2Batched_64Fortran hipblasSsyr2Batched_64
+#define hipblasDsyr2Batched_64Fortran hipblasDsyr2Batched_64
+#define hipblasCsyr2Batched_64Fortran hipblasCsyr2Batched_64
+#define hipblasZsyr2Batched_64Fortran hipblasZsyr2Batched_64
+
+#define hipblasSsyr2StridedBatchedFortran hipblasSsyr2StridedBatched
+#define hipblasDsyr2StridedBatchedFortran hipblasDsyr2StridedBatched
+#define hipblasCsyr2StridedBatchedFortran hipblasCsyr2StridedBatched
+#define hipblasZsyr2StridedBatchedFortran hipblasZsyr2StridedBatched
+
+#define hipblasSsyr2StridedBatched_64Fortran hipblasSsyr2StridedBatched_64
+#define hipblasDsyr2StridedBatched_64Fortran hipblasDsyr2StridedBatched_64
+#define hipblasCsyr2StridedBatched_64Fortran hipblasCsyr2StridedBatched_64
+#define hipblasZsyr2StridedBatched_64Fortran hipblasZsyr2StridedBatched_64
+
+#define hipblasStbmvFortran hipblasStbmv
+#define hipblasDtbmvFortran hipblasDtbmv
+#define hipblasCtbmvFortran hipblasCtbmv
+#define hipblasZtbmvFortran hipblasZtbmv
+#define hipblasStbmvBatchedFortran hipblasStbmvBatched
+#define hipblasDtbmvBatchedFortran hipblasDtbmvBatched
+#define hipblasCtbmvBatchedFortran hipblasCtbmvBatched
+#define hipblasZtbmvBatchedFortran hipblasZtbmvBatched
+#define hipblasStbmvStridedBatchedFortran hipblasStbmvStridedBatched
+#define hipblasDtbmvStridedBatchedFortran hipblasDtbmvStridedBatched
+#define hipblasCtbmvStridedBatchedFortran hipblasCtbmvStridedBatched
+#define hipblasZtbmvStridedBatchedFortran hipblasZtbmvStridedBatched
+
+#define hipblasStbmv_64Fortran hipblasStbmv_64
+#define hipblasDtbmv_64Fortran hipblasDtbmv_64
+#define hipblasCtbmv_64Fortran hipblasCtbmv_64
+#define hipblasZtbmv_64Fortran hipblasZtbmv_64
+#define hipblasStbmvBatched_64Fortran hipblasStbmvBatched_64
+#define hipblasDtbmvBatched_64Fortran hipblasDtbmvBatched_64
+#define hipblasCtbmvBatched_64Fortran hipblasCtbmvBatched_64
+#define hipblasZtbmvBatched_64Fortran hipblasZtbmvBatched_64
+#define hipblasStbmvStridedBatched_64Fortran hipblasStbmvStridedBatched_64
+#define hipblasDtbmvStridedBatched_64Fortran hipblasDtbmvStridedBatched_64
+#define hipblasCtbmvStridedBatched_64Fortran hipblasCtbmvStridedBatched_64
+#define hipblasZtbmvStridedBatched_64Fortran hipblasZtbmvStridedBatched_64
+
+#define hipblasStbsvFortran hipblasStbsv
+#define hipblasDtbsvFortran hipblasDtbsv
+#define hipblasCtbsvFortran hipblasCtbsv
+#define hipblasZtbsvFortran hipblasZtbsv
+#define hipblasStbsvBatchedFortran hipblasStbsvBatched
+#define hipblasDtbsvBatchedFortran hipblasDtbsvBatched
+#define hipblasCtbsvBatchedFortran hipblasCtbsvBatched
+#define hipblasZtbsvBatchedFortran hipblasZtbsvBatched
+#define hipblasStbsvStridedBatchedFortran hipblasStbsvStridedBatched
+#define hipblasDtbsvStridedBatchedFortran hipblasDtbsvStridedBatched
+#define hipblasCtbsvStridedBatchedFortran hipblasCtbsvStridedBatched
+#define hipblasZtbsvStridedBatchedFortran hipblasZtbsvStridedBatched
+
+#define hipblasStbsv_64Fortran hipblasStbsv_64
+#define hipblasDtbsv_64Fortran hipblasDtbsv_64
+#define hipblasCtbsv_64Fortran hipblasCtbsv_64
+#define hipblasZtbsv_64Fortran hipblasZtbsv_64
+#define hipblasStbsvBatched_64Fortran hipblasStbsvBatched_64
+#define hipblasDtbsvBatched_64Fortran hipblasDtbsvBatched_64
+#define hipblasCtbsvBatched_64Fortran hipblasCtbsvBatched_64
+#define hipblasZtbsvBatched_64Fortran hipblasZtbsvBatched_64
+#define hipblasStbsvStridedBatched_64Fortran hipblasStbsvStridedBatched_64
+#define hipblasDtbsvStridedBatched_64Fortran hipblasDtbsvStridedBatched_64
+#define hipblasCtbsvStridedBatched_64Fortran hipblasCtbsvStridedBatched_64
+#define hipblasZtbsvStridedBatched_64Fortran hipblasZtbsvStridedBatched_64
+
+#define hipblasStpmvFortran hipblasStpmv
+#define hipblasDtpmvFortran hipblasDtpmv
+#define hipblasCtpmvFortran hipblasCtpmv
+#define hipblasZtpmvFortran hipblasZtpmv
+#define hipblasStpmvBatchedFortran hipblasStpmvBatched
+#define hipblasDtpmvBatchedFortran hipblasDtpmvBatched
+#define hipblasCtpmvBatchedFortran hipblasCtpmvBatched
+#define hipblasZtpmvBatchedFortran hipblasZtpmvBatched
+#define hipblasStpmvStridedBatchedFortran hipblasStpmvStridedBatched
+#define hipblasDtpmvStridedBatchedFortran hipblasDtpmvStridedBatched
+#define hipblasCtpmvStridedBatchedFortran hipblasCtpmvStridedBatched
+#define hipblasZtpmvStridedBatchedFortran hipblasZtpmvStridedBatched
+
+#define hipblasStpmv_64Fortran hipblasStpmv_64
+#define hipblasDtpmv_64Fortran hipblasDtpmv_64
+#define hipblasCtpmv_64Fortran hipblasCtpmv_64
+#define hipblasZtpmv_64Fortran hipblasZtpmv_64
+#define hipblasStpmvBatched_64Fortran hipblasStpmvBatched_64
+#define hipblasDtpmvBatched_64Fortran hipblasDtpmvBatched_64
+#define hipblasCtpmvBatched_64Fortran hipblasCtpmvBatched_64
+#define hipblasZtpmvBatched_64Fortran hipblasZtpmvBatched_64
+#define hipblasStpmvStridedBatched_64Fortran hipblasStpmvStridedBatched_64
+#define hipblasDtpmvStridedBatched_64Fortran hipblasDtpmvStridedBatched_64
+#define hipblasCtpmvStridedBatched_64Fortran hipblasCtpmvStridedBatched_64
+#define hipblasZtpmvStridedBatched_64Fortran hipblasZtpmvStridedBatched_64
+
+#define hipblasStpsvFortran hipblasStpsv
+#define hipblasDtpsvFortran hipblasDtpsv
+#define hipblasCtpsvFortran hipblasCtpsv
+#define hipblasZtpsvFortran hipblasZtpsv
+#define hipblasStpsvBatchedFortran hipblasStpsvBatched
+#define hipblasDtpsvBatchedFortran hipblasDtpsvBatched
+#define hipblasCtpsvBatchedFortran hipblasCtpsvBatched
+#define hipblasZtpsvBatchedFortran hipblasZtpsvBatched
+#define hipblasStpsvStridedBatchedFortran hipblasStpsvStridedBatched
+#define hipblasDtpsvStridedBatchedFortran hipblasDtpsvStridedBatched
+#define hipblasCtpsvStridedBatchedFortran hipblasCtpsvStridedBatched
+#define hipblasZtpsvStridedBatchedFortran hipblasZtpsvStridedBatched
+
+#define hipblasStpsv_64Fortran hipblasStpsv_64
+#define hipblasDtpsv_64Fortran hipblasDtpsv_64
+#define hipblasCtpsv_64Fortran hipblasCtpsv_64
+#define hipblasZtpsv_64Fortran hipblasZtpsv_64
+#define hipblasStpsvBatched_64Fortran hipblasStpsvBatched_64
+#define hipblasDtpsvBatched_64Fortran hipblasDtpsvBatched_64
+#define hipblasCtpsvBatched_64Fortran hipblasCtpsvBatched_64
+#define hipblasZtpsvBatched_64Fortran hipblasZtpsvBatched_64
+#define hipblasStpsvStridedBatched_64Fortran hipblasStpsvStridedBatched_64
+#define hipblasDtpsvStridedBatched_64Fortran hipblasDtpsvStridedBatched_64
+#define hipblasCtpsvStridedBatched_64Fortran hipblasCtpsvStridedBatched_64
+#define hipblasZtpsvStridedBatched_64Fortran hipblasZtpsvStridedBatched_64
+
+#define hipblasStrmvFortran hipblasStrmv
+#define hipblasDtrmvFortran hipblasDtrmv
+#define hipblasCtrmvFortran hipblasCtrmv
+#define hipblasZtrmvFortran hipblasZtrmv
+#define hipblasStrmvBatchedFortran hipblasStrmvBatched
+#define hipblasDtrmvBatchedFortran hipblasDtrmvBatched
+#define hipblasCtrmvBatchedFortran hipblasCtrmvBatched
+#define hipblasZtrmvBatchedFortran hipblasZtrmvBatched
+#define hipblasStrmvStridedBatchedFortran hipblasStrmvStridedBatched
+#define hipblasDtrmvStridedBatchedFortran hipblasDtrmvStridedBatched
+#define hipblasCtrmvStridedBatchedFortran hipblasCtrmvStridedBatched
+#define hipblasZtrmvStridedBatchedFortran hipblasZtrmvStridedBatched
+
+#define hipblasStrmv_64Fortran hipblasStrmv_64
+#define hipblasDtrmv_64Fortran hipblasDtrmv_64
+#define hipblasCtrmv_64Fortran hipblasCtrmv_64
+#define hipblasZtrmv_64Fortran hipblasZtrmv_64
+#define hipblasStrmvBatched_64Fortran hipblasStrmvBatched_64
+#define hipblasDtrmvBatched_64Fortran hipblasDtrmvBatched_64
+#define hipblasCtrmvBatched_64Fortran hipblasCtrmvBatched_64
+#define hipblasZtrmvBatched_64Fortran hipblasZtrmvBatched_64
+#define hipblasStrmvStridedBatched_64Fortran hipblasStrmvStridedBatched_64
+#define hipblasDtrmvStridedBatched_64Fortran hipblasDtrmvStridedBatched_64
+#define hipblasCtrmvStridedBatched_64Fortran hipblasCtrmvStridedBatched_64
+#define hipblasZtrmvStridedBatched_64Fortran hipblasZtrmvStridedBatched_64
+
+#define hipblasStrsvFortran hipblasStrsv
+#define hipblasDtrsvFortran hipblasDtrsv
+#define hipblasCtrsvFortran hipblasCtrsv
+#define hipblasZtrsvFortran hipblasZtrsv
+#define hipblasStrsvBatchedFortran hipblasStrsvBatched
+#define hipblasDtrsvBatchedFortran hipblasDtrsvBatched
+#define hipblasCtrsvBatchedFortran hipblasCtrsvBatched
+#define hipblasZtrsvBatchedFortran hipblasZtrsvBatched
+#define hipblasStrsvStridedBatchedFortran hipblasStrsvStridedBatched
+#define hipblasDtrsvStridedBatchedFortran hipblasDtrsvStridedBatched
+#define hipblasCtrsvStridedBatchedFortran hipblasCtrsvStridedBatched
+#define hipblasZtrsvStridedBatchedFortran hipblasZtrsvStridedBatched
+
+#define hipblasStrsv_64Fortran hipblasStrsv_64
+#define hipblasDtrsv_64Fortran hipblasDtrsv_64
+#define hipblasCtrsv_64Fortran hipblasCtrsv_64
+#define hipblasZtrsv_64Fortran hipblasZtrsv_64
+#define hipblasStrsvBatched_64Fortran hipblasStrsvBatched_64
+#define hipblasDtrsvBatched_64Fortran hipblasDtrsvBatched_64
+#define hipblasCtrsvBatched_64Fortran hipblasCtrsvBatched_64
+#define hipblasZtrsvBatched_64Fortran hipblasZtrsvBatched_64
+#define hipblasStrsvStridedBatched_64Fortran hipblasStrsvStridedBatched_64
+#define hipblasDtrsvStridedBatched_64Fortran hipblasDtrsvStridedBatched_64
+#define hipblasCtrsvStridedBatched_64Fortran hipblasCtrsvStridedBatched_64
+#define hipblasZtrsvStridedBatched_64Fortran hipblasZtrsvStridedBatched_64
+
+#define hipblasSgbmvFortran hipblasSgbmv
+#define hipblasDgbmvFortran hipblasDgbmv
+#define hipblasCgbmvFortran hipblasCgbmv
+#define hipblasZgbmvFortran hipblasZgbmv
+#define hipblasSgbmvBatchedFortran hipblasSgbmvBatched
+#define hipblasDgbmvBatchedFortran hipblasDgbmvBatched
+#define hipblasCgbmvBatchedFortran hipblasCgbmvBatched
+#define hipblasZgbmvBatchedFortran hipblasZgbmvBatched
+#define hipblasSgbmvStridedBatchedFortran hipblasSgbmvStridedBatched
+#define hipblasDgbmvStridedBatchedFortran hipblasDgbmvStridedBatched
+#define hipblasCgbmvStridedBatchedFortran hipblasCgbmvStridedBatched
+#define hipblasZgbmvStridedBatchedFortran hipblasZgbmvStridedBatched
+
+#define hipblasSgbmv_64Fortran hipblasSgbmv_64
+#define hipblasDgbmv_64Fortran hipblasDgbmv_64
+#define hipblasCgbmv_64Fortran hipblasCgbmv_64
+#define hipblasZgbmv_64Fortran hipblasZgbmv_64
+#define hipblasSgbmvBatched_64Fortran hipblasSgbmvBatched_64
+#define hipblasDgbmvBatched_64Fortran hipblasDgbmvBatched_64
+#define hipblasCgbmvBatched_64Fortran hipblasCgbmvBatched_64
+#define hipblasZgbmvBatched_64Fortran hipblasZgbmvBatched_64
+#define hipblasSgbmvStridedBatched_64Fortran hipblasSgbmvStridedBatched_64
+#define hipblasDgbmvStridedBatched_64Fortran hipblasDgbmvStridedBatched_64
+#define hipblasCgbmvStridedBatched_64Fortran hipblasCgbmvStridedBatched_64
+#define hipblasZgbmvStridedBatched_64Fortran hipblasZgbmvStridedBatched_64
+
+#define hipblasSgemvFortran hipblasSgemv
+#define hipblasDgemvFortran hipblasDgemv
+#define hipblasCgemvFortran hipblasCgemv
+#define hipblasZgemvFortran hipblasZgemv
+#define hipblasSgemvBatchedFortran hipblasSgemvBatched
+#define hipblasDgemvBatchedFortran hipblasDgemvBatched
+#define hipblasCgemvBatchedFortran hipblasCgemvBatched
+#define hipblasZgemvBatchedFortran hipblasZgemvBatched
+#define hipblasSgemvStridedBatchedFortran hipblasSgemvStridedBatched
+#define hipblasDgemvStridedBatchedFortran hipblasDgemvStridedBatched
+#define hipblasCgemvStridedBatchedFortran hipblasCgemvStridedBatched
+#define hipblasZgemvStridedBatchedFortran hipblasZgemvStridedBatched
+
+#define hipblasSgemv_64Fortran hipblasSgemv_64
+#define hipblasDgemv_64Fortran hipblasDgemv_64
+#define hipblasCgemv_64Fortran hipblasCgemv_64
+#define hipblasZgemv_64Fortran hipblasZgemv_64
+#define hipblasSgemvBatched_64Fortran hipblasSgemvBatched_64
+#define hipblasDgemvBatched_64Fortran hipblasDgemvBatched_64
+#define hipblasCgemvBatched_64Fortran hipblasCgemvBatched_64
+#define hipblasZgemvBatched_64Fortran hipblasZgemvBatched_64
+#define hipblasSgemvStridedBatched_64Fortran hipblasSgemvStridedBatched_64
+#define hipblasDgemvStridedBatched_64Fortran hipblasDgemvStridedBatched_64
+#define hipblasCgemvStridedBatched_64Fortran hipblasCgemvStridedBatched_64
+#define hipblasZgemvStridedBatched_64Fortran hipblasZgemvStridedBatched_64
+
+/* ==========
+ *    L3
+ * ========== */
+
+#define hipblasCherkFortran hipblasCherk
+#define hipblasZherkFortran hipblasZherk
+#define hipblasCherkBatchedFortran hipblasCherkBatched
+#define hipblasZherkBatchedFortran hipblasZherkBatched
+#define hipblasCherkStridedBatchedFortran hipblasCherkStridedBatched
+#define hipblasZherkStridedBatchedFortran hipblasZherkStridedBatched
+
+#define hipblasCherk_64Fortran hipblasCherk_64
+#define hipblasZherk_64Fortran hipblasZherk_64
+#define hipblasCherkBatched_64Fortran hipblasCherkBatched_64
+#define hipblasZherkBatched_64Fortran hipblasZherkBatched_64
+#define hipblasCherkStridedBatched_64Fortran hipblasCherkStridedBatched_64
+#define hipblasZherkStridedBatched_64Fortran hipblasZherkStridedBatched_64
+
+#define hipblasCher2kFortran hipblasCher2k
+#define hipblasZher2kFortran hipblasZher2k
+#define hipblasCher2kBatchedFortran hipblasCher2kBatched
+#define hipblasZher2kBatchedFortran hipblasZher2kBatched
+#define hipblasCher2kStridedBatchedFortran hipblasCher2kStridedBatched
+#define hipblasZher2kStridedBatchedFortran hipblasZher2kStridedBatched
+
+#define hipblasCher2k_64Fortran hipblasCher2k_64
+#define hipblasZher2k_64Fortran hipblasZher2k_64
+#define hipblasCher2kBatched_64Fortran hipblasCher2kBatched_64
+#define hipblasZher2kBatched_64Fortran hipblasZher2kBatched_64
+#define hipblasCher2kStridedBatched_64Fortran hipblasCher2kStridedBatched_64
+#define hipblasZher2kStridedBatched_64Fortran hipblasZher2kStridedBatched_64
+
+#define hipblasCherkxFortran hipblasCherkx
+#define hipblasZherkxFortran hipblasZherkx
+#define hipblasCherkxBatchedFortran hipblasCherkxBatched
+#define hipblasZherkxBatchedFortran hipblasZherkxBatched
+#define hipblasCherkxStridedBatchedFortran hipblasCherkxStridedBatched
+#define hipblasZherkxStridedBatchedFortran hipblasZherkxStridedBatched
+
+#define hipblasCherkx_64Fortran hipblasCherkx_64
+#define hipblasZherkx_64Fortran hipblasZherkx_64
+#define hipblasCherkxBatched_64Fortran hipblasCherkxBatched_64
+#define hipblasZherkxBatched_64Fortran hipblasZherkxBatched_64
+#define hipblasCherkxStridedBatched_64Fortran hipblasCherkxStridedBatched_64
+#define hipblasZherkxStridedBatched_64Fortran hipblasZherkxStridedBatched_64
+
+#define hipblasSsymmFortran hipblasSsymm
+#define hipblasDsymmFortran hipblasDsymm
+#define hipblasCsymmFortran hipblasCsymm
+#define hipblasZsymmFortran hipblasZsymm
+#define hipblasSsymmBatchedFortran hipblasSsymmBatched
+#define hipblasDsymmBatchedFortran hipblasDsymmBatched
+#define hipblasCsymmBatchedFortran hipblasCsymmBatched
+#define hipblasZsymmBatchedFortran hipblasZsymmBatched
+#define hipblasSsymmStridedBatchedFortran hipblasSsymmStridedBatched
+#define hipblasDsymmStridedBatchedFortran hipblasDsymmStridedBatched
+#define hipblasCsymmStridedBatchedFortran hipblasCsymmStridedBatched
+#define hipblasZsymmStridedBatchedFortran hipblasZsymmStridedBatched
+
+#define hipblasSsymm_64Fortran hipblasSsymm_64
+#define hipblasDsymm_64Fortran hipblasDsymm_64
+#define hipblasCsymm_64Fortran hipblasCsymm_64
+#define hipblasZsymm_64Fortran hipblasZsymm_64
+#define hipblasSsymmBatched_64Fortran hipblasSsymmBatched_64
+#define hipblasDsymmBatched_64Fortran hipblasDsymmBatched_64
+#define hipblasCsymmBatched_64Fortran hipblasCsymmBatched_64
+#define hipblasZsymmBatched_64Fortran hipblasZsymmBatched_64
+#define hipblasSsymmStridedBatched_64Fortran hipblasSsymmStridedBatched_64
+#define hipblasDsymmStridedBatched_64Fortran hipblasDsymmStridedBatched_64
+#define hipblasCsymmStridedBatched_64Fortran hipblasCsymmStridedBatched_64
+#define hipblasZsymmStridedBatched_64Fortran hipblasZsymmStridedBatched_64
+
+#define hipblasSsyrkFortran hipblasSsyrk
+#define hipblasDsyrkFortran hipblasDsyrk
+#define hipblasCsyrkFortran hipblasCsyrk
+#define hipblasZsyrkFortran hipblasZsyrk
+#define hipblasSsyrkBatchedFortran hipblasSsyrkBatched
+#define hipblasDsyrkBatchedFortran hipblasDsyrkBatched
+#define hipblasCsyrkBatchedFortran hipblasCsyrkBatched
+#define hipblasZsyrkBatchedFortran hipblasZsyrkBatched
+#define hipblasSsyrkStridedBatchedFortran hipblasSsyrkStridedBatched
+#define hipblasDsyrkStridedBatchedFortran hipblasDsyrkStridedBatched
+#define hipblasCsyrkStridedBatchedFortran hipblasCsyrkStridedBatched
+#define hipblasZsyrkStridedBatchedFortran hipblasZsyrkStridedBatched
+
+#define hipblasSsyrk_64Fortran hipblasSsyrk_64
+#define hipblasDsyrk_64Fortran hipblasDsyrk_64
+#define hipblasCsyrk_64Fortran hipblasCsyrk_64
+#define hipblasZsyrk_64Fortran hipblasZsyrk_64
+#define hipblasSsyrkBatched_64Fortran hipblasSsyrkBatched_64
+#define hipblasDsyrkBatched_64Fortran hipblasDsyrkBatched_64
+#define hipblasCsyrkBatched_64Fortran hipblasCsyrkBatched_64
+#define hipblasZsyrkBatched_64Fortran hipblasZsyrkBatched_64
+#define hipblasSsyrkStridedBatched_64Fortran hipblasSsyrkStridedBatched_64
+#define hipblasDsyrkStridedBatched_64Fortran hipblasDsyrkStridedBatched_64
+#define hipblasCsyrkStridedBatched_64Fortran hipblasCsyrkStridedBatched_64
+#define hipblasZsyrkStridedBatched_64Fortran hipblasZsyrkStridedBatched_64
+
+#define hipblasSsyr2kFortran hipblasSsyr2k
+#define hipblasDsyr2kFortran hipblasDsyr2k
+#define hipblasCsyr2kFortran hipblasCsyr2k
+#define hipblasZsyr2kFortran hipblasZsyr2k
+#define hipblasSsyr2kBatchedFortran hipblasSsyr2kBatched
+#define hipblasDsyr2kBatchedFortran hipblasDsyr2kBatched
+#define hipblasCsyr2kBatchedFortran hipblasCsyr2kBatched
+#define hipblasZsyr2kBatchedFortran hipblasZsyr2kBatched
+#define hipblasSsyr2kStridedBatchedFortran hipblasSsyr2kStridedBatched
+#define hipblasDsyr2kStridedBatchedFortran hipblasDsyr2kStridedBatched
+#define hipblasCsyr2kStridedBatchedFortran hipblasCsyr2kStridedBatched
+#define hipblasZsyr2kStridedBatchedFortran hipblasZsyr2kStridedBatched
+
+#define hipblasSsyr2k_64Fortran hipblasSsyr2k_64
+#define hipblasDsyr2k_64Fortran hipblasDsyr2k_64
+#define hipblasCsyr2k_64Fortran hipblasCsyr2k_64
+#define hipblasZsyr2k_64Fortran hipblasZsyr2k_64
+#define hipblasSsyr2kBatched_64Fortran hipblasSsyr2kBatched_64
+#define hipblasDsyr2kBatched_64Fortran hipblasDsyr2kBatched_64
+#define hipblasCsyr2kBatched_64Fortran hipblasCsyr2kBatched_64
+#define hipblasZsyr2kBatched_64Fortran hipblasZsyr2kBatched_64
+#define hipblasSsyr2kStridedBatched_64Fortran hipblasSsyr2kStridedBatched_64
+#define hipblasDsyr2kStridedBatched_64Fortran hipblasDsyr2kStridedBatched_64
+#define hipblasCsyr2kStridedBatched_64Fortran hipblasCsyr2kStridedBatched_64
+#define hipblasZsyr2kStridedBatched_64Fortran hipblasZsyr2kStridedBatched_64
+
+#define hipblasSsyrkxFortran hipblasSsyrkx
+#define hipblasDsyrkxFortran hipblasDsyrkx
+#define hipblasCsyrkxFortran hipblasCsyrkx
+#define hipblasZsyrkxFortran hipblasZsyrkx
+#define hipblasSsyrkxBatchedFortran hipblasSsyrkxBatched
+#define hipblasDsyrkxBatchedFortran hipblasDsyrkxBatched
+#define hipblasCsyrkxBatchedFortran hipblasCsyrkxBatched
+#define hipblasZsyrkxBatchedFortran hipblasZsyrkxBatched
+#define hipblasSsyrkxStridedBatchedFortran hipblasSsyrkxStridedBatched
+#define hipblasDsyrkxStridedBatchedFortran hipblasDsyrkxStridedBatched
+#define hipblasCsyrkxStridedBatchedFortran hipblasCsyrkxStridedBatched
+#define hipblasZsyrkxStridedBatchedFortran hipblasZsyrkxStridedBatched
+
+#define hipblasSsyrkx_64Fortran hipblasSsyrkx_64
+#define hipblasDsyrkx_64Fortran hipblasDsyrkx_64
+#define hipblasCsyrkx_64Fortran hipblasCsyrkx_64
+#define hipblasZsyrkx_64Fortran hipblasZsyrkx_64
+#define hipblasSsyrkxBatched_64Fortran hipblasSsyrkxBatched_64
+#define hipblasDsyrkxBatched_64Fortran hipblasDsyrkxBatched_64
+#define hipblasCsyrkxBatched_64Fortran hipblasCsyrkxBatched_64
+#define hipblasZsyrkxBatched_64Fortran hipblasZsyrkxBatched_64
+#define hipblasSsyrkxStridedBatched_64Fortran hipblasSsyrkxStridedBatched_64
+#define hipblasDsyrkxStridedBatched_64Fortran hipblasDsyrkxStridedBatched_64
+#define hipblasCsyrkxStridedBatched_64Fortran hipblasCsyrkxStridedBatched_64
+#define hipblasZsyrkxStridedBatched_64Fortran hipblasZsyrkxStridedBatched_64
+
+#define hipblasSgeamFortran hipblasSgeam
+#define hipblasDgeamFortran hipblasDgeam
+#define hipblasCgeamFortran hipblasCgeam
+#define hipblasZgeamFortran hipblasZgeam
+#define hipblasSgeamBatchedFortran hipblasSgeamBatched
+#define hipblasDgeamBatchedFortran hipblasDgeamBatched
+#define hipblasCgeamBatchedFortran hipblasCgeamBatched
+#define hipblasZgeamBatchedFortran hipblasZgeamBatched
+#define hipblasSgeamStridedBatchedFortran hipblasSgeamStridedBatched
+#define hipblasDgeamStridedBatchedFortran hipblasDgeamStridedBatched
+#define hipblasCgeamStridedBatchedFortran hipblasCgeamStridedBatched
+#define hipblasZgeamStridedBatchedFortran hipblasZgeamStridedBatched
+
+#define hipblasSgeam_64Fortran hipblasSgeam_64
+#define hipblasDgeam_64Fortran hipblasDgeam_64
+#define hipblasCgeam_64Fortran hipblasCgeam_64
+#define hipblasZgeam_64Fortran hipblasZgeam_64
+#define hipblasSgeamBatched_64Fortran hipblasSgeamBatched_64
+#define hipblasDgeamBatched_64Fortran hipblasDgeamBatched_64
+#define hipblasCgeamBatched_64Fortran hipblasCgeamBatched_64
+#define hipblasZgeamBatched_64Fortran hipblasZgeamBatched_64
+#define hipblasSgeamStridedBatched_64Fortran hipblasSgeamStridedBatched_64
+#define hipblasDgeamStridedBatched_64Fortran hipblasDgeamStridedBatched_64
+#define hipblasCgeamStridedBatched_64Fortran hipblasCgeamStridedBatched_64
+#define hipblasZgeamStridedBatched_64Fortran hipblasZgeamStridedBatched_64
+
+#define hipblasChemmFortran hipblasChemm
+#define hipblasZhemmFortran hipblasZhemm
+#define hipblasChemmBatchedFortran hipblasChemmBatched
+#define hipblasZhemmBatchedFortran hipblasZhemmBatched
+#define hipblasChemmStridedBatchedFortran hipblasChemmStridedBatched
+#define hipblasZhemmStridedBatchedFortran hipblasZhemmStridedBatched
+
+#define hipblasChemm_64Fortran hipblasChemm_64
+#define hipblasZhemm_64Fortran hipblasZhemm_64
+#define hipblasChemmBatched_64Fortran hipblasChemmBatched_64
+#define hipblasZhemmBatched_64Fortran hipblasZhemmBatched_64
+#define hipblasChemmStridedBatched_64Fortran hipblasChemmStridedBatched_64
+#define hipblasZhemmStridedBatched_64Fortran hipblasZhemmStridedBatched_64
+
+#define hipblasStrmmFortran hipblasStrmm
+#define hipblasDtrmmFortran hipblasDtrmm
+#define hipblasCtrmmFortran hipblasCtrmm
+#define hipblasZtrmmFortran hipblasZtrmm
+#define hipblasStrmmBatchedFortran hipblasStrmmBatched
+#define hipblasDtrmmBatchedFortran hipblasDtrmmBatched
+#define hipblasCtrmmBatchedFortran hipblasCtrmmBatched
+#define hipblasZtrmmBatchedFortran hipblasZtrmmBatched
+#define hipblasStrmmStridedBatchedFortran hipblasStrmmStridedBatched
+#define hipblasDtrmmStridedBatchedFortran hipblasDtrmmStridedBatched
+#define hipblasCtrmmStridedBatchedFortran hipblasCtrmmStridedBatched
+#define hipblasZtrmmStridedBatchedFortran hipblasZtrmmStridedBatched
+
+#define hipblasStrmm_64Fortran hipblasStrmm_64
+#define hipblasDtrmm_64Fortran hipblasDtrmm_64
+#define hipblasCtrmm_64Fortran hipblasCtrmm_64
+#define hipblasZtrmm_64Fortran hipblasZtrmm_64
+#define hipblasStrmmBatched_64Fortran hipblasStrmmBatched_64
+#define hipblasDtrmmBatched_64Fortran hipblasDtrmmBatched_64
+#define hipblasCtrmmBatched_64Fortran hipblasCtrmmBatched_64
+#define hipblasZtrmmBatched_64Fortran hipblasZtrmmBatched_64
+#define hipblasStrmmStridedBatched_64Fortran hipblasStrmmStridedBatched_64
+#define hipblasDtrmmStridedBatched_64Fortran hipblasDtrmmStridedBatched_64
+#define hipblasCtrmmStridedBatched_64Fortran hipblasCtrmmStridedBatched_64
+#define hipblasZtrmmStridedBatched_64Fortran hipblasZtrmmStridedBatched_64
+
+#define hipblasSdgmmFortran hipblasSdgmm
+#define hipblasDdgmmFortran hipblasDdgmm
+#define hipblasCdgmmFortran hipblasCdgmm
+#define hipblasZdgmmFortran hipblasZdgmm
+#define hipblasSdgmmBatchedFortran hipblasSdgmmBatched
+#define hipblasDdgmmBatchedFortran hipblasDdgmmBatched
+#define hipblasCdgmmBatchedFortran hipblasCdgmmBatched
+#define hipblasZdgmmBatchedFortran hipblasZdgmmBatched
+#define hipblasSdgmmStridedBatchedFortran hipblasSdgmmStridedBatched
+#define hipblasDdgmmStridedBatchedFortran hipblasDdgmmStridedBatched
+#define hipblasCdgmmStridedBatchedFortran hipblasCdgmmStridedBatched
+#define hipblasZdgmmStridedBatchedFortran hipblasZdgmmStridedBatched
+
+#define hipblasSdgmm_64Fortran hipblasSdgmm_64
+#define hipblasDdgmm_64Fortran hipblasDdgmm_64
+#define hipblasCdgmm_64Fortran hipblasCdgmm_64
+#define hipblasZdgmm_64Fortran hipblasZdgmm_64
+#define hipblasSdgmmBatched_64Fortran hipblasSdgmmBatched_64
+#define hipblasDdgmmBatched_64Fortran hipblasDdgmmBatched_64
+#define hipblasCdgmmBatched_64Fortran hipblasCdgmmBatched_64
+#define hipblasZdgmmBatched_64Fortran hipblasZdgmmBatched_64
+#define hipblasSdgmmStridedBatched_64Fortran hipblasSdgmmStridedBatched_64
+#define hipblasDdgmmStridedBatched_64Fortran hipblasDdgmmStridedBatched_64
+#define hipblasCdgmmStridedBatched_64Fortran hipblasCdgmmStridedBatched_64
+#define hipblasZdgmmStridedBatched_64Fortran hipblasZdgmmStridedBatched_64
+
+#define hipblasStrsmFortran hipblasStrsm
+#define hipblasDtrsmFortran hipblasDtrsm
+#define hipblasCtrsmFortran hipblasCtrsm
+#define hipblasZtrsmFortran hipblasZtrsm
+#define hipblasStrsmBatchedFortran hipblasStrsmBatched
+#define hipblasDtrsmBatchedFortran hipblasDtrsmBatched
+#define hipblasCtrsmBatchedFortran hipblasCtrsmBatched
+#define hipblasZtrsmBatchedFortran hipblasZtrsmBatched
+#define hipblasStrsmStridedBatchedFortran hipblasStrsmStridedBatched
+#define hipblasDtrsmStridedBatchedFortran hipblasDtrsmStridedBatched
+#define hipblasCtrsmStridedBatchedFortran hipblasCtrsmStridedBatched
+#define hipblasZtrsmStridedBatchedFortran hipblasZtrsmStridedBatched
+
+#define hipblasStrsm_64Fortran hipblasStrsm_64
+#define hipblasDtrsm_64Fortran hipblasDtrsm_64
+#define hipblasCtrsm_64Fortran hipblasCtrsm_64
+#define hipblasZtrsm_64Fortran hipblasZtrsm_64
+#define hipblasStrsmBatched_64Fortran hipblasStrsmBatched_64
+#define hipblasDtrsmBatched_64Fortran hipblasDtrsmBatched_64
+#define hipblasCtrsmBatched_64Fortran hipblasCtrsmBatched_64
+#define hipblasZtrsmBatched_64Fortran hipblasZtrsmBatched_64
+#define hipblasStrsmStridedBatched_64Fortran hipblasStrsmStridedBatched_64
+#define hipblasDtrsmStridedBatched_64Fortran hipblasDtrsmStridedBatched_64
+#define hipblasCtrsmStridedBatched_64Fortran hipblasCtrsmStridedBatched_64
+#define hipblasZtrsmStridedBatched_64Fortran hipblasZtrsmStridedBatched_64
+
+#define hipblasHgemmFortran hipblasHgemm
+#define hipblasSgemmFortran hipblasSgemm
+#define hipblasDgemmFortran hipblasDgemm
+#define hipblasCgemmFortran hipblasCgemm
+#define hipblasZgemmFortran hipblasZgemm
+#define hipblasHgemmBatchedFortran hipblasHgemmBatched
+#define hipblasSgemmBatchedFortran hipblasSgemmBatched
+#define hipblasDgemmBatchedFortran hipblasDgemmBatched
+#define hipblasCgemmBatchedFortran hipblasCgemmBatched
+#define hipblasZgemmBatchedFortran hipblasZgemmBatched
+#define hipblasHgemmStridedBatchedFortran hipblasHgemmStridedBatched
+#define hipblasSgemmStridedBatchedFortran hipblasSgemmStridedBatched
+#define hipblasDgemmStridedBatchedFortran hipblasDgemmStridedBatched
+#define hipblasCgemmStridedBatchedFortran hipblasCgemmStridedBatched
+#define hipblasZgemmStridedBatchedFortran hipblasZgemmStridedBatched
+
+#define hipblasHgemm_64Fortran hipblasHgemm_64
+#define hipblasSgemm_64Fortran hipblasSgemm_64
+#define hipblasDgemm_64Fortran hipblasDgemm_64
+#define hipblasCgemm_64Fortran hipblasCgemm_64
+#define hipblasZgemm_64Fortran hipblasZgemm_64
+#define hipblasHgemmBatched_64Fortran hipblasHgemmBatched_64
+#define hipblasSgemmBatched_64Fortran hipblasSgemmBatched_64
+#define hipblasDgemmBatched_64Fortran hipblasDgemmBatched_64
+#define hipblasCgemmBatched_64Fortran hipblasCgemmBatched_64
+#define hipblasZgemmBatched_64Fortran hipblasZgemmBatched_64
+#define hipblasHgemmStridedBatched_64Fortran hipblasHgemmStridedBatched_64
+#define hipblasSgemmStridedBatched_64Fortran hipblasSgemmStridedBatched_64
+#define hipblasDgemmStridedBatched_64Fortran hipblasDgemmStridedBatched_64
+#define hipblasCgemmStridedBatched_64Fortran hipblasCgemmStridedBatched_64
+#define hipblasZgemmStridedBatched_64Fortran hipblasZgemmStridedBatched_64
+
+#define hipblasStrtriFortran hipblasStrtri
+#define hipblasDtrtriFortran hipblasDtrtri
+#define hipblasCtrtriFortran hipblasCtrtri
+#define hipblasZtrtriFortran hipblasZtrtri
+#define hipblasStrtriBatchedFortran hipblasStrtriBatched
+#define hipblasDtrtriBatchedFortran hipblasDtrtriBatched
+#define hipblasCtrtriBatchedFortran hipblasCtrtriBatched
+#define hipblasZtrtriBatchedFortran hipblasZtrtriBatched
+#define hipblasStrtriStridedBatchedFortran hipblasStrtriStridedBatched
+#define hipblasDtrtriStridedBatchedFortran hipblasDtrtriStridedBatched
+#define hipblasCtrtriStridedBatchedFortran hipblasCtrtriStridedBatched
+#define hipblasZtrtriStridedBatchedFortran hipblasZtrtriStridedBatched
+
+#define hipblasGemmExFortran hipblasGemmEx
+#define hipblasGemmBatchedExFortran hipblasGemmBatchedEx
+#define hipblasGemmStridedBatchedExFortran hipblasGemmStridedBatchedEx
+#define hipblasGemmExWithFlagsFortran hipblasGemmExWithFlags
+#define hipblasGemmBatchedExWithFlagsFortran hipblasGemmBatchedExWithFlags
+#define hipblasGemmStridedBatchedExWithFlagsFortran hipblasGemmStridedBatchedExWithFlags
+
+#define hipblasGemmEx_64Fortran hipblasGemmEx_64
+#define hipblasGemmBatchedEx_64Fortran hipblasGemmBatchedEx_64
+#define hipblasGemmStridedBatchedEx_64Fortran hipblasGemmStridedBatchedEx_64
+#define hipblasGemmExWithFlags_64Fortran hipblasGemmExWithFlags_64
+#define hipblasGemmBatchedExWithFlags_64Fortran hipblasGemmBatchedExWithFlags_64
+#define hipblasGemmStridedBatchedExWithFlags_64Fortran hipblasGemmStridedBatchedExWithFlags_64
+
+#define hipblasSyrkExFortran hipblasSyrkEx
+#define hipblasHerkExFortran hipblasHerkEx
+
+#define hipblasTrsmExFortran hipblasTrsmEx
+#define hipblasTrsmBatchedExFortran hipblasTrsmBatchedEx
+#define hipblasTrsmStridedBatchedExFortran hipblasTrsmStridedBatchedEx
+
+#define hipblasAxpyExFortran hipblasAxpyEx
+#define hipblasAxpyBatchedExFortran hipblasAxpyBatchedEx
+#define hipblasAxpyStridedBatchedExFortran hipblasAxpyStridedBatchedEx
+
+#define hipblasAxpyEx_64Fortran hipblasAxpyEx_64
+#define hipblasAxpyBatchedEx_64Fortran hipblasAxpyBatchedEx_64
+#define hipblasAxpyStridedBatchedEx_64Fortran hipblasAxpyStridedBatchedEx_64
+
+#define hipblasDotExFortran hipblasDotEx
+#define hipblasDotBatchedExFortran hipblasDotBatchedEx
+#define hipblasDotStridedBatchedExFortran hipblasDotStridedBatchedEx
+#define hipblasDotcExFortran hipblasDotcEx
+#define hipblasDotcBatchedExFortran hipblasDotcBatchedEx
+#define hipblasDotcStridedBatchedExFortran hipblasDotcStridedBatchedEx
+
+#define hipblasDotEx_64Fortran hipblasDotEx_64
+#define hipblasDotBatchedEx_64Fortran hipblasDotBatchedEx_64
+#define hipblasDotStridedBatchedEx_64Fortran hipblasDotStridedBatchedEx_64
+#define hipblasDotcEx_64Fortran hipblasDotcEx_64
+#define hipblasDotcBatchedEx_64Fortran hipblasDotcBatchedEx_64
+#define hipblasDotcStridedBatchedEx_64Fortran hipblasDotcStridedBatchedEx_64
+
+#define hipblasNrm2ExFortran hipblasNrm2Ex
+#define hipblasNrm2BatchedExFortran hipblasNrm2BatchedEx
+#define hipblasNrm2StridedBatchedExFortran hipblasNrm2StridedBatchedEx
+
+#define hipblasNrm2Ex_64Fortran hipblasNrm2Ex_64
+#define hipblasNrm2BatchedEx_64Fortran hipblasNrm2BatchedEx_64
+#define hipblasNrm2StridedBatchedEx_64Fortran hipblasNrm2StridedBatchedEx_64
+
+#define hipblasRotExFortran hipblasRotEx
+#define hipblasRotBatchedExFortran hipblasRotBatchedEx
+#define hipblasRotStridedBatchedExFortran hipblasRotStridedBatchedEx
+
+#define hipblasRotEx_64Fortran hipblasRotEx_64
+#define hipblasRotBatchedEx_64Fortran hipblasRotBatchedEx_64
+#define hipblasRotStridedBatchedEx_64Fortran hipblasRotStridedBatchedEx_64
+
+#define hipblasScalExFortran hipblasScalEx
+#define hipblasScalBatchedExFortran hipblasScalBatchedEx
+#define hipblasScalStridedBatchedExFortran hipblasScalStridedBatchedEx
+
+#define hipblasScalEx_64Fortran hipblasScalEx_64
+#define hipblasScalBatchedEx_64Fortran hipblasScalBatchedEx_64
+#define hipblasScalStridedBatchedEx_64Fortran hipblasScalStridedBatchedEx_64
+
+/* ==========
+ *    Solver
+ * ========== */
+
+#define hipblasSgetrfFortran hipblasSgetrf
+#define hipblasDgetrfFortran hipblasDgetrf
+#define hipblasCgetrfFortran hipblasCgetrf
+#define hipblasZgetrfFortran hipblasZgetrf
+#define hipblasSgetrfBatchedFortran hipblasSgetrfBatched
+#define hipblasDgetrfBatchedFortran hipblasDgetrfBatched
+#define hipblasCgetrfBatchedFortran hipblasCgetrfBatched
+#define hipblasZgetrfBatchedFortran hipblasZgetrfBatched
+#define hipblasSgetrfStridedBatchedFortran hipblasSgetrfStridedBatched
+#define hipblasDgetrfStridedBatchedFortran hipblasDgetrfStridedBatched
+#define hipblasCgetrfStridedBatchedFortran hipblasCgetrfStridedBatched
+#define hipblasZgetrfStridedBatchedFortran hipblasZgetrfStridedBatched
+#define hipblasSgetrsFortran hipblasSgetrs
+#define hipblasDgetrsFortran hipblasDgetrs
+#define hipblasCgetrsFortran hipblasCgetrs
+#define hipblasZgetrsFortran hipblasZgetrs
+#define hipblasSgetrsBatchedFortran hipblasSgetrsBatched
+#define hipblasDgetrsBatchedFortran hipblasDgetrsBatched
+#define hipblasCgetrsBatchedFortran hipblasCgetrsBatched
+#define hipblasZgetrsBatchedFortran hipblasZgetrsBatched
+#define hipblasSgetrsStridedBatchedFortran hipblasSgetrsStridedBatched
+#define hipblasDgetrsStridedBatchedFortran hipblasDgetrsStridedBatched
+#define hipblasCgetrsStridedBatchedFortran hipblasCgetrsStridedBatched
+#define hipblasZgetrsStridedBatchedFortran hipblasZgetrsStridedBatched
+#define hipblasSgetriFortran hipblasSgetri
+#define hipblasDgetriFortran hipblasDgetri
+#define hipblasCgetriFortran hipblasCgetri
+#define hipblasZgetriFortran hipblasZgetri
+#define hipblasSgetriBatchedFortran hipblasSgetriBatched
+#define hipblasDgetriBatchedFortran hipblasDgetriBatched
+#define hipblasCgetriBatchedFortran hipblasCgetriBatched
+#define hipblasZgetriBatchedFortran hipblasZgetriBatched
+#define hipblasSgetriStridedBatchedFortran hipblasSgetriStridedBatched
+#define hipblasDgetriStridedBatchedFortran hipblasDgetriStridedBatched
+#define hipblasCgetriStridedBatchedFortran hipblasCgetriStridedBatched
+#define hipblasZgetriStridedBatchedFortran hipblasZgetriStridedBatched
+#define hipblasSgeqrfFortran hipblasSgeqrf
+#define hipblasDgeqrfFortran hipblasDgeqrf
+#define hipblasCgeqrfFortran hipblasCgeqrf
+#define hipblasZgeqrfFortran hipblasZgeqrf
+#define hipblasSgelsFortran hipblasSgels
+#define hipblasDgelsFortran hipblasDgels
+#define hipblasCgelsFortran hipblasCgels
+#define hipblasZgelsFortran hipblasZgels
+#define hipblasSgelsBatchedFortran hipblasSgelsBatched
+#define hipblasDgelsBatchedFortran hipblasDgelsBatched
+#define hipblasCgelsBatchedFortran hipblasCgelsBatched
+#define hipblasZgelsBatchedFortran hipblasZgelsBatched
+#define hipblasSgelsStridedBatchedFortran hipblasSgelsStridedBatched
+#define hipblasDgelsStridedBatchedFortran hipblasDgelsStridedBatched
+#define hipblasCgelsStridedBatchedFortran hipblasCgelsStridedBatched
+#define hipblasZgelsStridedBatchedFortran hipblasZgelsStridedBatched
+#define hipblasSgeqrfBatchedFortran hipblasSgeqrfBatched
+#define hipblasDgeqrfBatchedFortran hipblasDgeqrfBatched
+#define hipblasCgeqrfBatchedFortran hipblasCgeqrfBatched
+#define hipblasZgeqrfBatchedFortran hipblasZgeqrfBatched
+#define hipblasSgeqrfStridedBatchedFortran hipblasSgeqrfStridedBatched
+#define hipblasDgeqrfStridedBatchedFortran hipblasDgeqrfStridedBatched
+#define hipblasCgeqrfStridedBatchedFortran hipblasCgeqrfStridedBatched
+#define hipblasZgeqrfStridedBatchedFortran hipblasZgeqrfStridedBatched
+
+#endif

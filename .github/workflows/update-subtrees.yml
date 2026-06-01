@@ -1,0 +1,75 @@
+name: Synchronize Subtrees
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+
+env:
+  MONOREPO_URL: github.com/ROCm/rocm-libraries.git
+  MONOREPO_BRANCH: develop
+
+concurrency:
+  group: pr-update-subtrees-develop
+  cancel-in-progress: false
+
+jobs:
+  synchronize-subtrees:
+    if: github.repository == 'ROCm/rocm-libraries'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout the Monorepo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0 # needed for git subtree pull/push
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Set up Git user
+        run: |
+          git config user.name "assistant-librarian[bot]"
+          git config user.email "assistant-librarian[bot]@users.noreply.github.com"
+
+      - name: Switch to the Monorepo branch
+        run: |
+          git checkout -B "${{ env.MONOREPO_BRANCH }}" "origin/${{ env.MONOREPO_BRANCH }}"
+
+      - name: Update Repositories in the Monorepo
+        run: |
+          has_errors=false
+          for repo in $(cat .github/repos-config.json | jq -r '.repositories[].name'); do
+            url=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .url")
+            branch=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .branch")
+            category=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .category")
+            enable_pull=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .auto_subtree_pull")
+            enable_push=$(cat .github/repos-config.json | jq -r ".repositories[] | select(.name == \"$repo\") | .auto_subtree_push")
+            if [ "$enable_pull" = true ]; then
+              git subtree pull --prefix "${category}/${repo}" https://github.com/${url}.git $branch || {
+                has_errors=true
+              }
+            fi
+            # if [ "$enable_push" = true ]; then
+              # git fetch origin subtrees/${repo}/${branch}
+              # git branch -f subtrees/${repo}/${branch} origin/subtrees/${repo}/${branch}
+              # git subtree split --prefix="${category}/${repo}" -b subtrees/${repo}/${branch} --quiet --rejoin || {
+              #  has_errors=true
+              # }
+              # git push origin subtrees/${repo}/${branch}
+              # git push https://github.com/${url}.git subtrees/${repo}/${branch}:${branch}
+            # fi
+          done
+
+          if [ "$has_errors" = true ]; then
+            echo "One or more errors occurred during the repository update."
+            exit 1
+          else
+            git push https://${{ env.MONOREPO_URL }} ${{ env.MONOREPO_BRANCH }}
+            echo "All repositories updated successfully!"
+          fi

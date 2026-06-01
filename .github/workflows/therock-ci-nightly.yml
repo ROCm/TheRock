@@ -1,0 +1,149 @@
+name: TheRock CI Nightly
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # Runs nightly at 7 AM UTC
+  workflow_dispatch:
+    inputs:
+      projects:
+        type: string
+        description: "Insert space-separated list of projects to test or 'all' to test all projects. ex: 'projects/rocprim projects/hipcub'"
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: "Setup"
+    runs-on: ubuntu-24.04
+    outputs:
+      linux_projects: ${{ steps.linux_projects.outputs.linux_projects }}
+      windows_projects: ${{ steps.windows_projects.outputs.windows_projects }}
+      test_type: ${{ steps.linux_projects.outputs.test_type }}
+      linux_package_targets: ${{ steps.configure_linux.outputs.package_targets }}
+      windows_package_targets: ${{ steps.configure_windows.outputs.package_targets }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: true
+          fetch-depth: 2
+
+      - name: Checkout TheRock repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: "ROCm/TheRock"
+          path: TheRock
+          ref: 98493c8c29f8303bfbe860e2f1c2cf3fb9e487f1 # 2026-01-05 commit
+
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic requests
+
+      - name: Determine Linux projects to run
+        id: linux_projects
+        env:
+          PROJECTS: ${{ inputs.projects }}
+          PLATFORM: "linux"
+        run: |
+          python .github/scripts/therock_configure_ci.py
+
+      - name: Determine Windows projects to run
+        id: windows_projects
+        env:
+          PROJECTS: ${{ inputs.projects }}
+          PLATFORM: "windows"
+        run: |
+          python .github/scripts/therock_configure_ci.py
+
+      - name: Fetch Linux targets for build and test
+        env:
+          THEROCK_PACKAGE_PLATFORM: "linux"
+          # TODO(geomin12): Allow dynamic values of AMDGPU_FAMILIES, with opt-in options
+          AMDGPU_FAMILIES: "gfx94X, gfx950"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: true
+        id: configure_linux
+        run: python ./TheRock/build_tools/github_actions/fetch_package_targets.py
+
+      - name: Fetch Windows targets for build and test
+        env:
+          THEROCK_PACKAGE_PLATFORM: "windows"
+          # TODO(geomin12): Allow dynamic values of AMDGPU_FAMILIES, with opt-in options
+          AMDGPU_FAMILIES: "gfx1151"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: true
+        id: configure_windows
+        run: python ./TheRock/build_tools/github_actions/fetch_package_targets.py
+
+  therock-ci-linux:
+    name: Linux (${{ matrix.projects.project_to_test }} | ${{ matrix.target_bundle.amdgpu_family }})
+    permissions:
+      contents: read
+      id-token: write
+    needs: setup
+    if: ${{ needs.setup.outputs.linux_projects != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        projects: ${{ fromJSON(needs.setup.outputs.linux_projects) }}
+        target_bundle: ${{ fromJSON(needs.setup.outputs.linux_package_targets) }}
+    uses: ./.github/workflows/therock-ci-linux.yml
+    secrets: inherit
+    with:
+      cmake_options: ${{ matrix.projects.cmake_options }}
+      project_to_test: ${{ matrix.projects.project_to_test }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
+      test_runs_on: ${{ matrix.target_bundle.test_machine }}
+
+  therock-ci-windows:
+    name: Windows (${{ matrix.projects.project_to_test }} | ${{ matrix.target_bundle.amdgpu_family }})
+    permissions:
+      contents: read
+      id-token: write
+    needs: setup
+    if: ${{ needs.setup.outputs.windows_projects != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        projects: ${{ fromJSON(needs.setup.outputs.windows_projects) }}
+        target_bundle: ${{ fromJSON(needs.setup.outputs.windows_package_targets) }}
+    uses: ./.github/workflows/therock-ci-windows.yml
+    secrets: inherit
+    with:
+      cmake_options: ${{ matrix.projects.cmake_options }}
+      project_to_test: ${{ matrix.projects.project_to_test }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
+      test_runs_on: ${{ matrix.target_bundle.test_machine }}
+
+  therock_ci_nightly_summary:
+    name: TheRock CI Nightly Summary
+    if: always()
+    needs:
+      - setup
+      - therock-ci-linux
+      - therock-ci-windows
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Output failed jobs
+        run: |
+          echo '${{ toJson(needs) }}'
+          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
+            | jq --raw-output \
+            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
+          )"
+          if [[ "${FAILED_JOBS}" != "" ]]; then
+            echo "The following jobs failed: ${FAILED_JOBS}"
+            exit 1
+          fi

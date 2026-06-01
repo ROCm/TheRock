@@ -1,0 +1,601 @@
+# Data types are defined as either aliases to Python-recognized ctypes,
+# or enums defined with c_int base clases and attributes.
+Datatypes:
+  - int: c_int
+  - hipDataType:
+      bases: [ c_int ]
+      attr:
+        f32_r:   0
+        f64_r:   1
+        f16_r:   2
+        i8_r:    3
+        f32_c:   4
+        f64_c:   5
+        f16_c:   6
+        i8_c:    7
+        u8_r:    8
+        u8_c:    9
+        i32_r:  10
+        i32_c:  11
+        u32_r:  12
+        u32_c:  13
+        bf16_r: 14
+        bf16_c: 15
+        i4_r:   16
+        i4_c:   17
+        u4_r:   18
+        u4_c:   19
+        i16_r:  20
+        i16_c:  21
+        u16_r:  22
+        u16_c:  23
+        i64_r:  24
+        i64_c:  25
+        u64_r:  26
+        u64_c:  27
+        f8_r: 28
+        bf8_r: 29
+        f8_r_fnuz: 1000
+        bf8_r_fnuz: 1001
+  - { half: f16_r, single: f32_r, double: f64_r }
+  - { half complex: f16_c, single complex: f32_c, double complex: f64_c }
+  - hipblas_initialization:
+      bases: [ c_int ]
+      attr:
+        rand_int: 111
+        trig_float: 222
+        hpl: 333
+  - hipblas_atomics_mode:
+      bases: [ c_int ]
+      attr:
+        atomics_not_allowed: 0
+        atomics_allowed: 1
+  - hipblasComputeType_t:
+      bases: [ c_int ]
+      attr:
+        c16f: 0
+        c16f_pedantic: 1
+        c32f: 2
+        c32f_pedantic: 3
+        c32f_fast_16f: 4
+        c32f_fast_16bf: 5
+        c32f_fast_tf32: 6
+        c64f: 7
+        c64f_pedantic: 8
+        c32i: 9
+        c32i_pedantic: 10
+  - hipblas_client_os:
+      bases: [ c_uint32 ]
+      attr:
+        LINUX: 1
+        WINDOWS: 2
+        ALL_OS: 3
+  - hipblas_backend:
+      bases: [ c_uint32 ]
+      attr:
+        AMD: 1
+        NVIDIA: 2
+        ALL_BACKEND: 3
+  - hipblas_client_api:
+      bases: [ c_uint32 ]
+      attr:
+        C: 0
+        C_64: 1
+        FORTRAN: 2
+        FORTRAN_64: 3
+
+Real precisions: &real_precisions
+  - &half_precision
+    { a_type: f16_r, b_type: f16_r, c_type: f16_r, d_type: f16_r, compute_type: f16_r }
+  - &hpa_half_precision
+    { a_type: f16_r, b_type: f16_r, c_type: f16_r, d_type: f16_r, compute_type: f32_r }
+  - &single_precision
+    { a_type: f32_r, b_type: f32_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r }
+  - &double_precision
+    { a_type: f64_r, b_type: f64_r, c_type: f64_r, d_type: f64_r, compute_type: f64_r }
+  - &int8_precision
+    { a_type:  i8_r, b_type:  i8_r, c_type: i32_r, d_type: i32_r, compute_type: i32_r }
+  - &bf16_precision
+    { a_type:  bf16_r, b_type:  bf16_r, c_type: bf16_r, d_type: bf16_r, compute_type: bf16_r }
+  - &hpa_bf16_precision
+    { a_type:  bf16_r, b_type:  bf16_r, c_type: bf16_r, d_type: bf16_r, compute_type: f32_r }
+  - &alpha_f32_hpa_bf16_precision
+    { a_type:  f32_r, b_type:  bf16_r, c_type: bf16_r, d_type: bf16_r, compute_type: f32_r }
+  - &hpa_half_float_alpha
+    { a_type: f32_r, b_type: f16_r, c_type: f16_r, d_type: f16_r, compute_type: f32_r }
+  - &hpa_bf16_in_single_out_precision
+    { a_type:  bf16_r, b_type:  bf16_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r }
+  - &hpa_half_in_single_out_precision
+    { a_type: f16_r, b_type: f16_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r }
+  - &single_precision_ex
+    { a_type: f32_r, b_type: f32_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r, compute_type_gemm: c32f }
+  - &double_precision_ex
+    { a_type: f64_r, b_type: f64_r, c_type: f64_r, d_type: f64_r, compute_type: f64_r, compute_type_gemm: c64f }
+
+C precisions: &single_double_precisions
+  - *single_precision
+  - *double_precision
+
+Short simple precisions: &half_single_precisions
+  - *half_precision
+  - *single_precision
+
+Short precisions: &int8_half_single_precisions
+  - *int8_precision
+  - *half_precision
+  - *single_precision
+
+ML precisions: &hpa_half_single_precisions
+  - *hpa_half_precision
+  - *half_precision
+  - *single_precision
+
+Non-int precisions: &hpa_half_single_double_precisions
+  - *hpa_half_precision
+  - *half_precision
+  - *single_precision
+  - *double_precision
+
+Non-int8 Real precisions: &nonint8_real_precisions
+  - *hpa_half_precision
+  - *hpa_half_in_single_out_precision
+  - *half_precision
+  - *single_precision
+  - *double_precision
+  - *bf16_precision
+  - *hpa_bf16_precision
+  - *hpa_bf16_in_single_out_precision
+  - *hpa_half_float_alpha
+
+Simple precisions: &half_single_double_precisions
+  - *half_precision
+  - *single_precision
+  - *double_precision
+
+Complex precisions: &complex_precisions
+  - &half_precision_complex
+    { a_type: f16_c, b_type: f16_c, c_type: f16_c, d_type: f16_c, compute_type: f16_c }
+  - &hpa_half_precision_complex
+    { a_type: f16_c, b_type: f16_c, c_type: f16_c, d_type: f16_c, compute_type: f32_c }
+  - &single_precision_complex
+    { a_type: f32_c, b_type: f32_c, c_type: f32_c, d_type: f32_c, compute_type: f32_c }
+  - &double_precision_complex
+    { a_type: f64_c, b_type: f64_c, c_type: f64_c, d_type: f64_c, compute_type: f64_c }
+  - &int8_precision_complex
+    { a_type:  i8_c, b_type:  i8_c, c_type: i32_c, d_type: i32_c, compute_type: i32_c }
+  - &hpa_bf16_precision_complex
+    { a_type:  bf16_c, b_type:  bf16_c, c_type: bf16_c, d_type: bf16_c, compute_type: f32_c }
+  - &single_precision_complex_ex
+    { a_type: f32_c, b_type: f32_c, c_type: f32_c, d_type: f32_c, compute_type: f32_c, compute_type_gemm: c32f }
+  - &double_precision_complex_ex
+    { a_type: f64_c, b_type: f64_c, c_type: f64_c, d_type: f64_c, compute_type: f64_c, compute_type_gemm: c64f }
+
+Half Precision complex and real: &half_precision_complex_real
+  - *half_precision
+  - *half_precision_complex
+
+Hpa Half Precision complex and real: &hpa_half_precision_complex_real
+  - *hpa_half_precision
+  - *hpa_half_precision_complex
+
+Single Precision complex and real: &single_precision_complex_real
+  - *single_precision
+  - *single_precision_complex
+
+Double Precision complex and real: &double_precision_complex_real
+  - *double_precision
+  - *double_precision_complex
+
+int8 Precision complex and real: &int8_precision_complex_real
+  - *int8_precision
+  - *int8_precision_complex
+
+hpabf16 Precision complex and real: &hpa_bf16_precision_complex_real
+  - *hpa_bf16_precision
+  - *hpa_bf16_precision_complex
+
+C precisions complex: &single_double_precisions_complex
+  - *single_precision_complex
+  - *double_precision_complex
+
+C precisions complex and real: &single_double_precisions_complex_real
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex
+  - *double_precision_complex
+
+C precisions complex and real: &single_double_precisions_complex_real_gemm_ex
+  - *single_precision_ex
+  - *double_precision_ex
+  - *single_precision_complex_ex
+  - *double_precision_complex_ex
+
+C precisions complex and real and half real: &single_double_precisions_complex_real_half_real
+  - *half_precision
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex
+  - *double_precision_complex
+
+Short simple precisions complex and real: &half_single_precisions_complex_real
+  - *half_precision
+  - *single_precision
+  - *half_precision_complex
+  - *single_precision_complex
+
+Short precisions complex and real: &int8_half_single_precisions_complex_real
+  - *int8_precision
+  - *half_precision
+  - *single_precision
+  - *int8_precision_complex
+  - *half_precision_complex
+  - *single_precision_complex
+
+ML precisions complex and real: &hpa_half_single_precisions_complex_real
+  - *hpa_half_precision
+  - *half_precision
+  - *single_precision
+  - *hpa_half_precision_complex
+  - *half_precision_complex
+  - *single_precision_complex
+
+Non-int precisions complex and real: &hpa_half_single_double_precisions_complex_real
+  - *hpa_half_precision
+  - *half_precision
+  - *single_precision
+  - *double_precision
+  - *hpa_half_precision_complex
+  - *half_precision_complex
+  - *single_precision_complex
+  - *double_precision_complex
+
+Simple precisions complex and real: &half_single_double_precisions_complex_real
+  - *half_precision
+  - *single_precision
+  - *double_precision
+  - *half_precision_complex
+  - *single_precision_complex
+  - *double_precision_complex
+
+#############################################
+#               Used for Scal               #
+#############################################
+Joined precisions: &complex_real_in_complex_out
+  - &single_precision_complex_real_in_complex_out
+    { a_type: f32_c, b_type: f32_r, c_type: f32_r, d_type: f32_c, compute_type: f32_c }
+  - &double_precision_complex_real_in_complex_out
+    { a_type: f64_c, b_type: f64_r, c_type: f64_r, d_type: f64_c, compute_type: f64_c }
+
+Single double joined: &single_double_complex_real_in_complex_out
+  - *single_precision_complex_real_in_complex_out
+  - *double_precision_complex_real_in_complex_out
+
+#############################################
+#             Used for Scal_ex              #
+#############################################
+Hpa half and half: &hpa_half_half_precisions
+  - *hpa_half_precision
+  - *half_precision
+
+# scal_ex order mapping is alpha, x, y, o, compute
+scal_ex precisions: &scal_ex_complex_real_alpha_complex_out
+  - &scal_ex_single_precision_complex_real_alpha_complex_out
+    { a_type: f32_r, b_type: f32_c, c_type: f32_c, d_type: f32_c, compute_type: f32_c }
+  - &scal_ex_double_precision_complex_real_alpha_complex_out
+    { a_type: f64_r, b_type: f64_c, c_type: f64_c, d_type: f64_c, compute_type: f64_c }
+
+Hpa bfloat half single double complex real: &scal_ex_precision_all
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex
+  - *double_precision_complex
+  - *hpa_half_float_alpha
+  - *alpha_f32_hpa_bf16_precision
+
+Scal ex precisions amd: &scal_ex_precision_amd
+  - *hpa_bf16_precision
+  - *hpa_half_precision
+  - *half_precision
+  - *scal_ex_single_precision_complex_real_alpha_complex_out
+  - *scal_ex_double_precision_complex_real_alpha_complex_out
+
+#############################################
+#           Used for axpy_ex                #
+#############################################
+Hpa bfloat half single double complex real: &axpy_ex_precision_all
+  - *alpha_f32_hpa_bf16_precision
+  - *hpa_half_float_alpha
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex
+  - *double_precision_complex
+
+Axpy ex precisions amd: &axpy_ex_precision_amd
+  - *hpa_bf16_precision
+  - *hpa_half_precision
+  - *half_precision
+
+#############################################
+#               Used for rot*               #
+#############################################
+Complex real mixed: &complex_real_mixed
+  - &single_precision_complex_real_in_complex_compute
+    { a_type: f32_c, b_type: f32_r, c_type: f32_c, d_type: f32_c, compute_type: f32_c }
+  - &double_precision_complex_real_in_complex_compute
+    { a_type: f64_c, b_type: f64_r, c_type: f64_c, d_type: f64_c, compute_type: f64_c }
+  - &single_precision_complex_real_in_real_compute
+    { a_type: f32_c, b_type: f32_r, c_type: f32_c, d_type: f32_c, compute_type: f32_r }
+  - &double_precision_complex_real_in_real_compute
+    { a_type: f64_c, b_type: f64_r, c_type: f64_c, d_type: f64_c, compute_type: f64_r }
+  - &single_precision_complex_real_c
+    { a_type: f32_c, b_type: f32_c, c_type: f32_r, d_type: f32_c, compute_type: f32_c }
+  - &double_precision_complex_real_c
+    { a_type: f64_c, b_type: f64_c, c_type: f64_r, d_type: f64_c, compute_type: f64_c }
+
+rot precisions: &rot_precisions
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex_real_in_complex_compute
+  - *single_precision_complex_real_in_real_compute
+  - *double_precision_complex_real_in_complex_compute
+  - *double_precision_complex_real_in_real_compute
+
+rot_ex precisions: &rot_ex_precisions
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex
+  - *double_precision_complex
+  - *hpa_half_precision
+  - *hpa_bf16_precision
+  - *single_precision_complex_real_c
+  - *double_precision_complex_real_c
+
+rotg precisions: &rotg_precisions
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex_real_in_complex_compute
+  - *double_precision_complex_real_in_complex_compute
+
+#############################################
+#           Used for Dot (quick)            #
+#############################################
+Half bfloat single double complex real: &half_bfloat_single_double_complex_real_precisions
+  - *half_precision
+  - *hpa_bf16_precision
+  - *single_precision
+  - *double_precision
+  # - *half_precision_complex
+  - *single_precision_complex
+  - *double_precision_complex
+
+# dot_ex on nvidia doesn't include half_precision support
+Dot ex precisions no half: &dot_ex_precision_all
+  - *hpa_bf16_precision
+  - *single_precision
+  - *double_precision
+  # - *half_precision_complex
+  - *single_precision_complex
+  - *double_precision_complex
+
+#############################################
+#           Used for axpy_ex                #
+#############################################
+Hpa single double complex real: &half_single_double_complex_real_precisions
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex
+  - *double_precision_complex
+  - *hpa_half_precision
+  - *half_precision
+
+#############################################
+#           Used for nrm2_ex                #
+#############################################
+nrm2_ex precisions: &nrm2_ex_precisions
+  - &half_precision_nrm2
+    { a_type: f16_r, b_type: f16_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r }
+  - &bfloat_precision_nrm2
+    { a_type: bf16_r, b_type: bf16_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r }
+  - *single_precision
+  - *double_precision
+  - *single_precision_complex_real_in_real_compute
+  - *double_precision_complex_real_in_real_compute
+
+nrm2_ex precisions double: &nrm2_ex_precisions_double
+  - *double_precision
+  - *double_precision_complex_real_in_real_compute
+
+#############################################
+#               Used for syrk_ex            #
+#############################################
+syrk_ex precisions: &syrk_ex_precisions
+  - &half_out_precision_syrk_ex
+    { a_type: f16_r, b_type: f16_r, c_type: f16_r, d_type: f32_r, compute_type: f32_r }
+  - &bfloat_out_precision_syrk_ex
+    { a_type: bf16_r, b_type: bf16_r, c_type: bf16_r, d_type: f32_r, compute_type: f32_r }
+  - &half_precision_syrk_ex
+    { a_type: f16_r, b_type: f16_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r }
+  - &bfloat_precision_syrk_ex
+    { a_type: bf16_r, b_type: bf16_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r }
+  - &float_precision_syrk_ex
+    { a_type: f32_r, b_type: f32_r, c_type: f32_r, d_type: f32_r, compute_type: f64_r }
+  - &double_out_precision_syrk_ex
+    { a_type: f32_r, b_type: f32_r, c_type: f64_r, d_type: f32_r, compute_type: f64_r }
+
+#############################################
+#               Used for herk_ex            #
+#############################################
+herk_ex precisions: &herk_ex_precisions
+  - &float_precision_herk_ex
+    { a_type: f32_c, b_type: f32_c, c_type: f32_c, d_type: f32_c, compute_type: f64_c }
+  - &double_out_precision_herk_ex
+    { a_type: f32_c, b_type: f32_c, c_type: f64_c, d_type: f32_c, compute_type: f64_c }
+
+
+Definitions:
+  - &c_pos_int64_t_value
+   - [2147483649] # force looping over y/z chunks
+
+  - &c_neg_int64_t_value
+   - [-2147483649] # force looping over y/z chunks
+
+  - &c_grid_yz_require_passes
+   - [666666] # force looping over y/z chunks
+
+Arguments:
+  - M: c_int64
+  - N: c_int64
+  - K: c_int64
+  - KL: c_int64
+  - KU: c_int64
+  - rows: c_int64
+  - cols: c_int64
+  - lda: c_int64
+  - ldb: c_int64
+  - ldc: c_int64
+  - ldd: c_int64
+  - a_type: hipDataType
+  - b_type: hipDataType
+  - c_type: hipDataType
+  - d_type: hipDataType
+  - compute_type: hipDataType
+  - compute_type_gemm: hipblasComputeType_t
+  - incx: c_int64
+  - incy: c_int64
+  - incd: c_int64
+  - incb: c_int64
+  - stride_scale: c_double
+  - stride_a: c_int64
+  - stride_b: c_int64
+  - stride_c: c_int64
+  - stride_d: c_int64
+  - stride_x: c_int64
+  - stride_y: c_int64
+  - user_allocated_workspace: c_size_t
+  - start: int
+  - end: int
+  - step: int
+  - alpha: c_double
+  - alphai: c_double
+  - beta: c_double
+  - betai: c_double
+  - transA: c_char
+  - transB: c_char
+  - side: c_char
+  - uplo: c_char
+  - diag: c_char
+  - call_count: int
+  - batch_count: c_int64
+  - inplace: c_bool
+  - with_flags: c_bool
+  - norm_check: int
+  - unit_check: int
+  - timing: int
+  - iters: int
+  - cold_iters: int
+  - algo: c_uint
+  - solution_index: c_int
+  - flags: c_uint
+  - function: c_char*64
+  - name: c_char*64
+  - category: c_char*64
+  - atomics_mode: hipblas_atomics_mode
+  - os_flags: hipblas_client_os
+  - gpu_arch: c_char*4
+  - backend_flags: hipblas_backend
+  - api: hipblas_client_api
+  - pad: c_uint32
+  - initialization: hipblas_initialization
+  - bad_arg_all: c_bool
+  # - known_bug_platforms: c_char*64
+  # - c_noalias_d: c_bool
+
+
+# These named dictionary lists [ {dict1}, {dict2}, etc. ] supply subsets of
+# test arguments in a structured way. The dictionaries are applied to the test
+# one at a time, to generate combinations.  If one of this table's entries is
+# a dictionary of size one, it means that the argument named by its key takes
+# on values paired with argument named by its value. For example:
+#
+# - function: precision
+#
+# when used with the code:
+#
+# function:
+#   func1: prec1
+#   func2: prec2
+#   func3: prec3
+#
+# causes (function, precision) to take on the values (func1, prec1),
+# (func2, prec2), (func3, prec3), etc.
+
+Dictionary lists to expand:
+  - arguments
+  - transA_transB
+  - alpha_beta
+  - alphai_betai
+  - incx_incy
+  - matrix_size
+  - precision
+  - function: precision
+
+# In case an array argument needs to be passed directly to C as an array,
+# it needs to be listed here to avoid being expanded into multiple test
+# cases with each of its elements.
+Lists to not expand:
+  - e.g., an array argument not to be expanded
+
+# Defaults
+Defaults:
+  M: -1
+  N: -1
+  K: -1
+  KL: -1
+  KU: -1
+  rows: 128
+  cols: 128
+  incx: 1
+  incy: 1
+  incd: 0
+  incb: 0
+  user_allocated_workspace: 0
+  stride_scale: 1.0
+  start: 1024
+  end: 10240
+  step: 1000
+  alpha: 1.0
+  alphai: 0.0
+  beta: 0.0
+  betai: 0.0
+  transA: '*'
+  transB: '*'
+  side: '*'
+  uplo: '*'
+  diag: '*'
+  call_count: 1
+  batch_count: -1
+  inplace: false
+  with_flags: false
+  pad: 4096
+  norm_check: 0
+  unit_check: 1
+  timing: 0
+  iters: 10
+  cold_iters: 2
+  algo: 0
+  solution_index: 0
+  flags: 0
+  name: hipblas-bench
+  category: nightly
+  # default benchmarking to faster atomics_allowed (test is default not allowed)
+  atomics_mode: atomics_allowed
+  os_flags: ALL_OS
+  gpu_arch: ''
+  backend_flags: ALL_BACKEND
+  api: C
+  initialization: rand_int
+  bad_arg_all: true
+  compute_type_gemm: 2
+#workspace_size: 0
+#  known_bug_platforms: ''
+#c_noalias_d: false

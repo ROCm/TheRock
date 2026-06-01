@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "branch": "rocsolver-test-filter",
+  "mainBranch": "main",
+  "lastCommit": "f96e3b8b915da2d934977ed9c6faa04a5cec56d8",
+  "lastUpdate": "2026-05-04T12:43:09-06:00",
+  "scope": {
+    "include": [],
+    "exclude": []
+  }
+}

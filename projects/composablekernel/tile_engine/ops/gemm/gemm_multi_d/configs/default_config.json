@@ -1,0 +1,104 @@
+{
+    "tile_config": {
+        "tile_m": {
+            "max": 256,
+            "min": 64,
+            "step": 64
+        },
+        "tile_n": {
+            "max": 256,
+            "min": 64,
+            "step": 64
+        },
+        "tile_k": {
+            "max": 256,
+            "min": 64,
+            "step": 64
+        },
+        "warp_m": {
+            "values": [
+                4,
+                2,
+                1
+            ]
+        },
+        "warp_n": {
+            "values": [
+                4,
+                2,
+                1
+            ]
+        },
+        "warp_k": {
+            "values": [
+                1
+            ]
+        },
+        "warp_tile_m": {
+            "values": [
+                4,
+                16,
+                32
+            ]
+        },
+        "warp_tile_n": {
+            "values": [
+                16,
+                32,
+                64
+            ]
+        },
+        "warp_tile_k": {
+            "values": [
+                8,
+                16,
+                32,
+                64,
+                128
+            ]
+        }
+    },
+    "trait_config": {
+        "pipeline": {
+            "values": [
+                "compv3",
+                "compv4",
+                "mem"
+            ]
+        },
+        "scheduler": {
+            "values": [
+                "intrawave",
+                "interwave"
+            ]
+        },
+        "epilogue": {
+            "values": [
+                "cshuffle",
+                "default"
+            ]
+        },
+        "pad_m": {
+            "values": [
+                false
+            ]
+        },
+        "pad_n": {
+            "values": [
+                false
+            ]
+        },
+        "pad_k": {
+            "values": [
+                false
+            ]
+        },
+        "persistent": {
+            "values": [
+                false,
+                true
+            ]
+        }
+    },
+    "k_block_per_cu": 1
+}

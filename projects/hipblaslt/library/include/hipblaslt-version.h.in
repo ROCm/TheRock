@@ -1,0 +1,42 @@
+/*******************************************************************************
+ *
+ * MIT License
+ *
+ * Copyright (C) 2022 Advanced Micro Devices, Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ *******************************************************************************/
+
+/*!\file
+ * \brief hipblaslt-version.h provides the configured version and settings
+ */
+
+#pragma once
+#ifndef _HIPBLASLT_VERSION_H_
+#define _HIPBLASLT_VERSION_H_
+
+/* clang-format off */
+#define HIPBLASLT_VERSION_MAJOR     @hipblaslt_VERSION_MAJOR@
+#define HIPBLASLT_VERSION_MINOR     @hipblaslt_VERSION_MINOR@
+#define HIPBLASLT_VERSION_PATCH     @hipblaslt_VERSION_PATCH@
+#define HIPBLASLT_VERSION_TWEAK     @hipblaslt_VERSION_TWEAK@
+/* clang-format on */
+
+#endif /* _HIPBLASLT_VERSION_H_ */

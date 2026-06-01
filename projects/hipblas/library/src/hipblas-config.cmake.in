@@ -1,0 +1,53 @@
+# ########################################################################
+# Copyright (C) 2017-2022 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell cop-
+# ies of the Software, and to permit persons to whom the Software is furnished
+# to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IM-
+# PLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNE-
+# CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# ########################################################################
+
+# Configure hipblas package to be used in another cmake project.
+#
+# Defines the following variables:
+#
+#  hipblas_INCLUDE_DIRS - include directories for hipblas
+#
+# Also defines the library variables below as normal
+# variables.  These contain debug/optimized keywords when
+# a debugging library is found.
+#
+# Accepts the following variables as input:
+#
+#-----------------------
+# Example Usage:
+#
+# find_package( hipblas REQUIRED CONFIG
+#     HINTS <hipblas_ROOT>/package )
+#
+#    add_executable( foo foo.cc )
+
+#    # uses imported targets from package, including setting header paths
+#    target_link_libraries( foo hipblas )
+#
+#-----------------------
+
+@PACKAGE_INIT@
+
+set_and_check( hipblas_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@" )
+set_and_check( hipblas_INCLUDE_DIRS "${hipblas_INCLUDE_DIR}" )
+set_and_check( hipblas_LIB_INSTALL_DIR "@PACKAGE_LIB_INSTALL_DIR@" )
+
+include( "${CMAKE_CURRENT_LIST_DIR}/hipblas-targets.cmake" )

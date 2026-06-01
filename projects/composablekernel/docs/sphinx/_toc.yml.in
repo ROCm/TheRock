@@ -1,0 +1,53 @@
+defaults:
+  numbered: False
+root: index
+subtrees:
+
+- caption: Install
+  entries:
+  - file: install/Composable-Kernel-prerequisites.rst
+    title: Composable Kernel prerequisites
+  - file: install/Composable-Kernel-install.rst
+    title: Build and install Composable Kernel
+  - file: install/Composable-Kernel-Docker.rst
+    title: Composable Kernel Docker images
+
+- caption: Conceptual
+  entries:
+  - file: conceptual/Composable-Kernel-structure.rst
+    title: Composable Kernel structure
+  - file: conceptual/Composable-Kernel-math.rst
+    title: Composable Kernel mathematical basis
+  - file: conceptual/ck_tile/index.rst
+    title: CK Tile conceptual documentation
+
+- caption: Tutorial
+  entries:
+  - file: tutorial/Composable-Kernel-examples.rst
+    title: Composable Kernel examples
+
+- caption: Reference
+  entries:
+  - file: reference/Composable_Kernel_supported_scalar_types.rst
+    title: Composable Kernel scalar types
+  - file: reference/Composable_Kernel_custom_types.rst
+    title: Composable Kernel custom types
+  - file: reference/Composable_Kernel_vector_utilities.rst
+    title: Composable Kernel vector utilities
+  - file: reference/Composable-Kernel-wrapper.rst
+    title: Composable Kernel wrapper
+  - file: doxygen/html/namespace_c_k.rst
+    title: CK API reference 
+  - file: doxygen/html/namespaceck__tile.rst
+    title: CK Tile API reference
+  - file: doxygen/html/annotated.rst
+    title: Full API class list
+  - file: reference/Composable-Kernel-Glossary.rst
+    title: Glossary
+
+- caption: About
+  entries:
+  - file: Contributors_Guide.rst
+    title: Contributing to Composable Kernel
+  - file: license.rst
+    title: License

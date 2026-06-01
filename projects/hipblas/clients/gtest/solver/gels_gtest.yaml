@@ -1,0 +1,70 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { M: -1, N: -1, K: -1, lda: -1, ldb: -1 }
+    - { M: 600, N: 500, K: 400, lda: 601, ldb: 700 }
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  - name: gels_general
+    category: quick
+    function: gels
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    matrix_size: *size_range
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: gels_batched_general
+    category: quick
+    function: gels_batched
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N' ]
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C ]
+
+  - name: gels_batched_amd
+    category: quick
+    function: gels_batched
+    precision: *single_double_precisions_complex_real
+    transA: [ 'T', 'C' ]
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: gels_strided_batched_general
+    category: quick
+    function: gels_strided_batched
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    matrix_size: *size_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.0 ]
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: gels_bad_arg
+    category: quick
+    function:
+      - gels_bad_arg
+      - gels_batched_bad_arg
+      - gels_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: gels_bad_arg
+    category: quick
+    function:
+      - gels_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...

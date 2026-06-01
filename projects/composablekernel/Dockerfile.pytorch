@@ -1,0 +1,32 @@
+ARG BASE_DOCKER="rocm/pytorch-nightly:latest"
+FROM $BASE_DOCKER
+ARG CK_PYTORCH_BRANCH="develop"
+RUN groupadd -g 109 render && \
+    usermod -u 1001 jenkins && \
+    groupmod -g 1001 jenkins && \
+    cd /tmp/pytorch && \
+    rm -rf build && \
+    cd /tmp/pytorch/third_party && \
+    rm -rf composable_kernel && \
+    git clone -b "$CK_PYTORCH_BRANCH" https://github.com/ROCm/composable_kernel.git && \
+    cd /tmp/pytorch/third_party/aiter/3rdparty && \
+    rm -rf composable_kernel && \
+    git clone -b "$CK_PYTORCH_BRANCH" https://github.com/ROCm/composable_kernel.git && \
+    cd /tmp/pytorch/third_party/fbgemm/external && \
+    rm -rf composable_kernel && \
+    git clone -b "$CK_PYTORCH_BRANCH" https://github.com/ROCm/composable_kernel.git && \
+    cd /tmp/pytorch/third_party/flash-attention/csrc && \
+    rm -rf composable_kernel && \
+    git clone -b "$CK_PYTORCH_BRANCH" https://github.com/ROCm/composable_kernel.git && \
+    chown -R jenkins:jenkins /tmp/pytorch && \
+    chmod -R a+rwx /tmp/pytorch && \
+    sudo usermod -aG irc jenkins && \
+    #install hipblaslt
+    git clone --no-checkout --filter=blob:none https://github.com/ROCm/rocm-libraries.git && \
+    cd rocm-libraries && \
+    git checkout develop && \
+    git sparse-checkout init --cone && \
+    git sparse-checkout set projects/hipblaslt shared/origami && \
+    cd projects/hipblaslt && \
+    git show --oneline -s && \
+    CPLUS_INCLUDE_PATH="/opt/amdgpu/include/" ./install.sh -idc --architecture="gfx942;gfx950" -j 128 --skip_rocroller

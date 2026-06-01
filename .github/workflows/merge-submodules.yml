@@ -1,0 +1,27 @@
+name: Merge .gitmodules
+
+on:
+  workflow_dispatch:
+
+jobs:
+  combine-gitmodules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Monorepo
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Run Merge Script
+        run: python .github/scripts/merge-submodules.py
+
+      - name: Commit Merged .gitmodules
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .gitmodules
+          git commit -m "Combine subrepo .gitmodules files into root" || echo "No changes"
+          git push

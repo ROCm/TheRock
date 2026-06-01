@@ -1,0 +1,69 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { N: -1, K: -1, lda: -1, ldc: -1 }
+    - { N: 65, K:  4, lda: 67, ldc: 68 }
+
+  - &alpha_beta_range
+    - { alpha:  2.0, alphai: 1.0, beta: 2.0, betai: 1.0 }
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: herkx_general
+    category: quick
+    function: herkx
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    transA: [ 'N', 'C' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_beta_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+
+  - name: herkx_batched_general
+    category: quick
+    function: herkx_batched
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    transA: [ 'N', 'C' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_beta_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    backend_flags: AMD
+
+  - name: herkx_strided_batched_general
+    category: quick
+    function: herkx_strided_batched
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    transA: [ 'N', 'C' ]
+    matrix_size: *size_range
+    alpha_beta: *alpha_beta_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    backend_flags: AMD
+
+  - name: herkx_bad_arg
+    category: pre_checkin
+    function:
+      - herkx_bad_arg
+      - herkx_batched_bad_arg
+      - herkx_strided_batched_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    backend_flags: AMD
+
+  - name: herkx_bad_arg
+    category: pre_checkin
+    function:
+      - herkx_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...

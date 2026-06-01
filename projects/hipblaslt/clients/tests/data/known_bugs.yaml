@@ -1,0 +1,9 @@
+# A list of known bugs/failures. The bug can be specific or general.
+# A test case is considered as matching if all indicated parameters match.
+# Wildcards can be used for the function
+#example
+#- { function: a_type: bf16_r, b_type: bf16_r, c_type: bf16_r, d_type: bf16_r, compute_type: f32_r, transA: N, transB: N, M: 512, N: 512, K: 512, lda: 512, ldb: 512, ldc: 512, ldd: 512, alpha: 5.0, alphai: 0.0, beta: 0.0, betai: 0.0, known_bug_platforms: gfx908 }
+
+#Known bugs:
+#- { function: matmul, grouped_gemm: 1, known_bug_platforms: "gfx1100, gfx1101, gfx1102, gfx1200, gfx1201" }
+#- { function: matmul, gradient: 1, known_bug_platforms: "gfx1100, gfx1101, gfx1102, gfx1200, gfx1201" }

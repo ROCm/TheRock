@@ -1,0 +1,102 @@
+{
+  "tile_config": {
+    "tile_m": {
+      "max": 256,
+      "min": 64,
+      "step": 64
+    },
+    "tile_n": {
+      "max": 256,
+      "min": 64,
+      "step": 64
+    },
+    "tile_k": {
+      "max": 256,
+      "min": 64,
+      "step": 64
+    },
+    "warp_m": {
+      "values": [
+        4,
+        2,
+        1
+      ]
+    },
+    "warp_n": {
+      "values": [
+        4,
+        2,
+        1
+      ]
+    },
+    "warp_k": {
+      "values": [
+        1
+      ]
+    },
+    "warp_tile_m": {
+      "values": [
+        4,
+        16,
+        32
+      ]
+    },
+    "warp_tile_n": {
+      "values": [
+        16,
+        32,
+        64
+      ]
+    },
+    "warp_tile_k": {
+      "values": [
+        8,
+        16,
+        32,
+        64,
+        128
+      ]
+    }
+  },
+  "trait_config": {
+    "pipeline": {
+      "values": [
+        "preshufflev2"
+      ]
+    },
+    "scheduler": {
+      "values": [
+        "default"
+      ]
+    },
+    "epilogue": {
+      "values": [
+        "default",
+        "cshuffle"
+      ]
+    },
+    "pad_m": {
+      "values": [
+        false
+      ]
+    },
+    "pad_n": {
+      "values": [
+        false
+      ]
+    },
+    "pad_k": {
+      "values": [
+        false
+      ]
+    },
+    "persistent": {
+      "values": [
+        true,
+        false
+      ]
+    }
+  },
+  "k_block_per_cu": 1,
+  "permute_n": true
+}

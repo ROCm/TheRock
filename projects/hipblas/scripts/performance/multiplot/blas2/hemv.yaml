@@ -1,0 +1,29 @@
+---
+include: ../../../../clients/include/hipblas_common.yaml
+
+Definitions:
+  - &sizes
+    - {N:  2048, lda:  2048 }
+    - {N:  4096, lda:  4096 }
+    - {N:  6144, lda:  6144 }
+    - {N:  8192, lda:  8192 }
+    - {N: 10240, lda: 10240 }
+    - {N: 12288, lda: 12288 }
+    - {N: 14336, lda: 14336 }
+    - {N: 16384, lda: 16384 }
+    - {N: 18432, lda: 18432 }
+    - {N: 20480, lda: 20480 }
+
+
+Tests:
+- name: hemv
+  function: hemv
+  precision: *single_double_precisions_complex
+  samples: 10
+  uplo: L
+  alpha: 1
+  beta: 1
+  incx: 1
+  incy: 1
+  matrix_size: *sizes
+...

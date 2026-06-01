@@ -1,0 +1,23 @@
+---
+include: hipblaslt_common.yaml
+include: matmul_common.yaml
+
+
+Tests:
+- name: rocroller_predicate
+  category: pre_checkin
+  function:
+    rocroller_predicate: *rocroller_predicate
+  M: [128]
+  N: [128]
+  K: [96]
+  transA: T
+  transB: N
+  alpha: 1.5
+  beta: 2.0
+  initialization: hpl
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '950'
+
+...

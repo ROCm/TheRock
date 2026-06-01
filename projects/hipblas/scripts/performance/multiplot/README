@@ -1,0 +1,55 @@
+
+- It is intended that benchmark_plot.sh be used to drive benchmark.py and plot.py
+- There are three modes for use of the script
+
+---------------------------------------------------------------------
+--- plot performance for a single architecture with commands like ---
+---------------------------------------------------------------------
+
+# to run benchmarks in blas1/*.yaml files and output results in blas1/my_arch/*.csv files
+./benchmark_plot.sh --benchmark true  --plot false --level1 true --level2 false --level3 false --tag1 my_arch
+
+# to plot data in blas1/my_arch/*.csv files and output in blas1/my_arch/plot_gflops/*.png
+./benchmark_plot.sh --benchmark false --plot true  --level1 true --level2 false --level3 false --tag1 my_arch
+
+
+---------------------------------------------------------------------------------------------------------------
+--- plot performance relative to theoretical maximum performance for memory bound BLAS1 and BLAS2 functions ---
+--- for a single architecture with commands like                                                            ---
+---------------------------------------------------------------------------------------------------------------
+
+     Note that the memory bandwidth in the parameter GBps needs to be defined for the architecture for which
+     you are running in the file benchmark.py. It is defined for the architectures below:
+
+    if machine_spec_dict['arch'] == 'gfx906':
+        GBps = 1000
+    elif machine_spec_dict['arch'] == 'gfx908':
+        GBps = 1100
+    elif machine_spec_dict['arch'] == 'gfx90a':
+        GBps = 1600
+    else:
+        print("do not know GBps memory bandwidth for ", machine_spec_dict['arch'])
+        print("add GBps to", sys.argv[0])
+        print("quitting ", sys.argv[0])
+        quit(
+
+# to run benchmarks, no need to run it a second time if you have run it above
+./benchmark_plot.sh --benchmark true  --plot false --level1 true --level2 false --level3 false --tag1 my_arch
+
+# To plot data in blas1/my_arch/*.csv and blas1/my_arch/machine_spec.yaml files and output in blas1/my_arch/plot_vs_theo_max/*.png
+./benchmark_plot.sh --benchmark false --plot true  --level1 true --level2 false --level3 false --tag1 my_arch --theo_max true
+
+
+------------------------------------------------------------
+--- plot performance of one architecture against another ---
+------------------------------------------------------------
+
+# to run benchmarks in blas1/*.yaml files and output results in blas1/my_arch1/*.csv files
+./benchmark_plot.sh --benchmark true  --plot false --level1 true --level2 false --level3 false --tag1 my_arch1 --perf_vs_perf true
+
+# to run benchmarks in blas1/*.yaml files and output results in blas1/my_arch2/*.csv files
+./benchmark_plot.sh --benchmark true  --plot false --level1 true --level2 false --level3 false --tag1 my_arch2 --perf_vs_perf true
+
+# to plot performance of data in blas1/my_arch1/*.csv files relative to blas1/my_arch2/*.csv files and output
+# plots in blas1/my_arch1_my_arch2/plots_perf_vs_perf/*.png
+./benchmark_plot.sh --benchmark false --plot true  --level1 true --level2 false --level3 false --tag1 my_arch1 --tag2 my_arch2 --perf_vs_perf true

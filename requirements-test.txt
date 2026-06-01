@@ -3,6 +3,7 @@ pytest==9.0.3 # This versions has subtests built-in.
 pytest-check==2.5.3
 pytest-cov==6.0.0
 pytest-timeout==2.4.0
+pytest-xdist==3.6.1
 perfetto==0.7.0 # Newer versions of perfetto remove support for required GLIBC version.
 PyYAML==6.0.2
 pyzstd>=0.16.0
@@ -17,3 +18,7 @@ python-magic==0.4.27; sys_platform != "win32"
 lit==18.1.8
 psutil==7.1.3
 sccache==0.10.0
+
+# Tensile test requirements
+filelock==3.16.1
+joblib==1.4.2

@@ -1,0 +1,77 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 0, 1000 ]
+
+  - &incx_incy_range
+    - { incx:  1, incy:  2 }
+
+  - &batch_count_range
+    - [ 0, 5 ]
+
+Tests:
+  - name: dot_ex_general_all
+    category: quick
+    function:
+      - dot_ex: *dot_ex_precision_all
+      - dotc_ex: *dot_ex_precision_all
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: dot_ex_general_amd
+    category: quick
+    function:
+      - dot_ex: *half_precision
+      - dotc_ex: *half_precision
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dot_batched_ex_general
+    category: quick
+    function:
+      - dot_batched_ex: *half_bfloat_single_double_complex_real_precisions
+      - dotc_batched_ex: *half_bfloat_single_double_complex_real_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dot_strided_batched_ex_general
+    category: quick
+    function:
+      - dot_strided_batched_ex: *half_bfloat_single_double_complex_real_precisions
+      - dotc_strided_batched_ex: *half_bfloat_single_double_complex_real_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dot_ex_bad_arg
+    category: pre_checkin
+    function:
+      - dot_ex_bad_arg: *half_bfloat_single_double_complex_real_precisions
+      - dotc_ex_bad_arg: *half_bfloat_single_double_complex_real_precisions
+      - dot_batched_ex_bad_arg: *half_bfloat_single_double_complex_real_precisions
+      - dot_strided_batched_ex_bad_arg: *half_bfloat_single_double_complex_real_precisions
+      - dotc_batched_ex_bad_arg: *half_bfloat_single_double_complex_real_precisions
+      - dotc_strided_batched_ex_bad_arg: *half_bfloat_single_double_complex_real_precisions
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dot_ex_bad_arg
+    category: pre_checkin
+    function:
+      - dot_ex_bad_arg: *dot_ex_precision_all
+      - dotc_ex_bad_arg: *dot_ex_precision_all
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...

@@ -1,0 +1,161 @@
+# Import Subrepo PR Workflow
+# --------------------------
+# This workflow imports an open PR from a sub-repository into the monorepo.
+# It is intended for maintainers to migrate pending pull requests from
+# the subrepos, to help developers onboard to the monorepo sooner.
+#
+# Trigger: Manually via `workflow_dispatch` with the following inputs:
+#   - subrepo-prefix:     Path within the monorepo where the subrepo lives (e.g., "projects/rocblas")
+#   - subrepo-pr-number:  PR number in the subrepo to import
+#   - subrepo-repo:       Full subrepo or fork name (e.g., "ROCm/rocBLAS" or "user/rocBLAS-fork")
+#   - subrepo-upstream:   Canonical subrepo repo name (e.g., "ROCm/rocBLAS")
+#
+# Steps:
+#   1. Validate that the caller has 'admin' or 'maintain' permission on the monorepo
+#   2. Generate a GitHub App token for authenticated API access
+#   3. Checkout only the necessary parts of the monorepo (sparse checkout)
+#   4. Fetch PR metadata from the subrepo using GitHub CLI
+#   5. Create a new branch and import the PR using `git subtree pull`
+#   6. Create a corresponding draft PR in the monorepo with metadata preserved
+#
+# Notes:
+# - This workflow requires GitHub App credentials (APP_ID and APP_PRIVATE_KEY)
+# - The resulting monorepo PR is a draft and includes attribution to the original author
+
+name: Import Subrepo PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      subrepo-prefix:
+        description: "Monorepo path prefix (e.g., projects/rocblas)"
+        required: true
+      subrepo-pr-number:
+        description: "Subrepo PR number to import"
+        required: true
+      subrepo-repo:
+        description: "Full name of subrepo repo or fork (e.g., ROCm/rocBLAS or user/rocBLAS-fork)"
+        required: true
+      subrepo-upstream:
+        description: "Canonical subrepo repo (e.g., ROCm/rocBLAS)"
+        required: true
+      monorepo-target-branch:
+        description: "Target branch in the monorepo (default: develop)"
+        required: false
+        default: "develop"
+
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate maintainer permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Actor is: ${{ github.actor }}"
+          PERMISSION=$(gh api \
+            repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission \
+            --jq .permission)
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
+            echo "❌ User ${{ github.actor }} is not authorized to run this workflow"
+            exit 1
+          fi
+
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.1.1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: |
+            .github
+            ${{ github.event.inputs.subrepo-prefix }}
+          sparse-checkout-cone-mode: true
+          token: ${{ steps.generate-token.outputs.token }}
+          fetch-depth: 0  #for subtree operations
+
+      - name: Set up Git user
+        run: |
+          git config user.name "assistant-librarian[bot]"
+          git config user.email "assistant-librarian[bot]@users.noreply.github.com"
+
+      - name: Fetch subrepo PR info using gh
+        id: prdata
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          PR_JSON=$(gh pr view ${{ github.event.inputs.subrepo-pr-number }} \
+            --repo ${{ github.event.inputs.subrepo-upstream }} \
+            --json title,body,headRefName,headRepository,isDraft \
+            --jq '{title: .title, body: .body, head_ref: .headRefName, head_repo: .headRepository.cloneUrl, is_draft: .isDraft}')
+
+          echo "$PR_JSON" > pr.json
+
+          # properly escape backticks in title
+          TITLE=$(jq -r .title pr.json | sed 's/`/\\`/g')
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+
+          {
+            echo 'body<<EOF'
+            jq -r .body pr.json
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+          echo "head_ref=$(jq -r .head_ref pr.json)" >> $GITHUB_OUTPUT
+          echo "head_repo=$(jq -r .head_repo pr.json)" >> $GITHUB_OUTPUT
+          echo "is_draft=$(jq -r .is_draft pr.json)" >> $GITHUB_OUTPUT
+
+      - name: Create new branch for import
+        id: import-branch
+        run: |
+          git fetch origin ${{ github.event.inputs.monorepo-target-branch }}
+          git checkout ${{ github.event.inputs.monorepo-target-branch }}
+          SANITIZED_BASE=$(echo "${{ github.event.inputs.monorepo-target-branch }}" | sed 's|/|_|g')
+          SANITIZED_REPO=$(echo "${{ github.event.inputs.subrepo-repo }}" | sed 's|/|_|g')
+          SANITIZED_REF=$(echo "${{ steps.prdata.outputs.head_ref }}" | sed 's|/|_|g')
+          IMPORT_BRANCH="import/${SANITIZED_BASE}/${SANITIZED_REPO}/${SANITIZED_REF}"
+          echo "import_branch=$IMPORT_BRANCH" >> $GITHUB_OUTPUT
+          git checkout -b "$IMPORT_BRANCH"
+
+      - name: Split subrepo prefix from main branch
+        run: |
+          git subtree pull --prefix=${{ github.event.inputs.subrepo-prefix }} https://github.com/${{ github.event.inputs.subrepo-repo }} ${{ steps.prdata.outputs.head_ref }}
+          git push origin ${{ steps.import-branch.outputs.import_branch }}
+
+      - name: Create monorepo PR
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          IMPORT_BRANCH="import/${{ github.event.inputs.subrepo-prefix }}/pr-${{ github.event.inputs.subrepo-pr-number }}"
+          PR_TITLE="${{ steps.prdata.outputs.title }}"
+          UPSTREAM_REPO="${{ github.event.inputs.subrepo-upstream }}"
+          SUBREPO_REPO="${{ github.event.inputs.subrepo-repo }}"
+          SUBREPO_PR_NUMBER="${{ github.event.inputs.subrepo-pr-number }}"
+          SUBREPO_URL="https://github.com/$UPSTREAM_REPO/pull/$SUBREPO_PR_NUMBER"
+          AUTHOR=$(gh pr view "$SUBREPO_PR_NUMBER" --repo "$UPSTREAM_REPO" --json author --jq .author.login)
+
+          echo "${{ steps.prdata.outputs.body }}" > pr_body.txt
+          {
+            echo ""
+            echo "---"
+            echo "🔁 Imported from [$UPSTREAM_REPO#$SUBREPO_PR_NUMBER]($SUBREPO_URL)"
+            echo "🧑‍💻 Originally authored by @$AUTHOR"
+          } >> pr_body.txt
+
+          DRAFT_FLAG=""
+          if [[ "${{ steps.prdata.outputs.is_draft }}" == "true" ]]; then
+            DRAFT_FLAG="--draft"
+          fi
+
+          gh pr create \
+            --base "${{ github.event.inputs.monorepo-target-branch }}" \
+            --head "${{ steps.import-branch.outputs.import_branch }}" \
+            --title "$PR_TITLE" \
+            --label "imported pr" \
+            $DRAFT_FLAG \
+            --body-file pr_body.txt

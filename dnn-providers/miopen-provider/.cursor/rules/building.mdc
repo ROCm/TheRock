@@ -1,0 +1,75 @@
+---
+alwaysApply: false
+---
+
+# Building & Testing MIOpen Provider Plugin
+
+**Only build or run tests if explicitly requested in the user's prompt.** Do not proactively run `ninja`, test binaries, or build commands unless asked.
+
+## Build Commands
+
+### Building as Part of hipDNN
+
+```bash
+# From hipDNN root directory
+cd <workspace>/projects/hipdnn
+mkdir -p build && cd build
+
+# Configure (one-time or after CMakeLists changes)
+cmake -GNinja ..
+
+# Build everything (plugin included by default)
+ninja
+```
+
+### Building Standalone
+
+Requires hipDNN and MIOpen already installed on the system.
+
+```bash
+# From workspace root, navigate to plugin directory
+cd <workspace>/dnn-providers/miopen-provider
+mkdir -p build && cd build
+
+# Configure with AMD clang++
+cmake -DCMAKE_CXX_COMPILER=/opt/rocm/llvm/bin/clang++ ..
+
+# Build plugin
+ninja
+
+# Run tests
+ninja test
+```
+
+See [Plugin README](../README.md) for detailed build instructions.
+
+## Test Binaries
+
+Plugin-specific test binaries (in `build/bin/` when building from hipDNN root):
+
+| Binary | Tests | Typical Use |
+|--------|-------|-------------|
+| `miopen_legacy_plugin_tests` | Plugin unit tests | Engine manager, plan builders, MIOpen integration |
+| `miopen_plugin_integration_test` | GPU integration tests | End-to-end operation execution on GPU |
+
+## Running Specific Tests with `--gtest_filter`
+
+**Use `--gtest_filter` when iterating on specific functionality:**
+
+```bash
+# From hipDNN build directory
+./bin/miopen_legacy_plugin_tests --gtest_filter="TestMiopenEngine.*"
+
+# Run a specific test case
+./bin/miopen_plugin_integration_test --gtest_filter="IntegrationGpuConvolutionFwdFp32.*"
+
+# Run tests matching a pattern
+./bin/miopen_legacy_plugin_tests --gtest_filter="*Batchnorm*"
+```
+
+## When Modifying Code
+
+When requested to build/test:
+1. Rebuild with `ninja` (from build directory)
+2. Run relevant tests using `--gtest_filter` for fast iteration
+3. Use plugin-specific test binaries listed above
