@@ -197,7 +197,10 @@ def main() -> int:
                 print(f"Created {dst.name} from {src.name}")
                 summary.write(f"- `{dst.name}`\n")
             except OSError as e:
-                print(f"Failed to create failure summary log for {src}: {e}", file=sys.stderr)
+                print(
+                    f"Failed to create failure summary log for {src}: {e}",
+                    file=sys.stderr,
+                )
 
     return 0
 
