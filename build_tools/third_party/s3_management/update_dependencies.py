@@ -5,20 +5,40 @@
 # Forked from https://github.com/pytorch/test-infra/blob/1ffc7f7b3b421b57c380de469e11744f54399f09/s3_management/update_dependencies.py.
 # Changes incorporated from https://github.com/pytorch/test-infra/blob/a87d94b148bbd2c68e69e542350099a971f4c8d3/s3_management/update_dependencies.py.
 
+"""
+Operational notes
+-----------------
+
+Architecture prefixes are no longer hardcoded in this script.
+
+To preserve the previous "all architectures under a root" behavior,
+use automatic prefix discovery:
+
+    python update_dependencies.py \
+        --package torch \
+        --auto-detect-prefixes \
+        --base-prefix v2/
+
+This dynamically discovers child prefixes such as:
+
+    v2/gfx110X-all
+    v2/gfx120X-all
+    v2/gfx950-dcgpu
+
+For narrow reconciliation of a single prefix, use:
+
+    python update_dependencies.py \
+        --package torch \
+        --prefix v2/gfx110X-all
+"""
+
 from typing import Dict, List
 from os import getenv
 
-import boto3  # type: ignore[import-untyped]
 import re
-
-
-S3 = boto3.resource("s3")
-CLIENT = boto3.client("s3")
-# We also manage `therock-nightly-python` (not the default to make the script safer to test)
-BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-dev-python"))
-# Note: v2-staging first, in case issues are observed while the script runs
-# and the developer wants to more safely cancel the script.
-VERSIONS = ["v2-staging", "v2"]
+import boto3  # type: ignore[import-untyped]
+from boto3.resources.base import ServiceResource
+from botocore.exceptions import ClientError
 
 # Whitelist of allowed wheel platform and Python tags.
 # Wheels not matching both criteria are skipped (not uploaded to S3).
@@ -65,6 +85,89 @@ PACKAGES_PER_PROJECT = {
     "rocm-bootstrap": {"versions": ["latest"], "project": "torch"},
     "setuptools": {"versions": ["81.0.0"], "project": "rocm"},
 }
+
+
+def normalize_package_name(name: str) -> str:
+    """Normalize a Python distribution name for comparison."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def get_project_paths() -> List[str]:
+    # Deduplicate project names from PACKAGES_PER_PROJECT and return them sorted.
+    return sorted(
+        set(pkg_info["project"] for pkg_info in PACKAGES_PER_PROJECT.values())
+    )
+
+
+def get_dependency_package_names(project: str) -> frozenset[str]:
+    """
+    Return dependency package names for the given project.
+
+    Used by Lambda-side dependency trigger filtering.
+    """
+    return frozenset(
+        pkg_name
+        for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
+        if pkg_info["project"] == project
+    )
+
+
+def get_s3_bucket(bucket_name: str | None = None) -> ServiceResource:
+    s3 = boto3.resource("s3")
+    resolved_bucket_name = bucket_name or getenv("S3_BUCKET_PY")
+    if not resolved_bucket_name:
+        raise RuntimeError("Bucket must be provided via --bucket or S3_BUCKET_PY")
+    return s3.Bucket(resolved_bucket_name)
+
+
+def detect_prefixes_from_bucket(bucket: ServiceResource, base_prefix: str) -> List[str]:
+    normalized_base_prefix = base_prefix.rstrip("/") + "/"
+    print(f"INFO: Auto-detecting prefixes under '{normalized_base_prefix}'")
+
+    # Reuse the bucket-associated client/session.
+    client = bucket.meta.client
+    paginator = client.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(
+        Bucket=bucket.name,
+        Prefix=normalized_base_prefix,
+        Delimiter="/",
+    )
+
+    prefixes: set[str] = set()
+    for page in page_iterator:
+        for common_prefix in page.get("CommonPrefixes", []):
+            prefixes.add(common_prefix["Prefix"].rstrip("/"))
+
+    detected_prefixes = sorted(prefixes)
+    print(f"INFO: Detected prefixes: {detected_prefixes}")
+    return detected_prefixes
+
+
+def resolve_target_prefixes(
+    *,
+    bucket: ServiceResource,
+    explicit_prefix: str | None = None,
+    auto_detect_prefixes: bool = False,
+    base_prefix: str | None = None,
+) -> List[str]:
+    if explicit_prefix:
+        return [explicit_prefix.rstrip("/")]
+
+    if base_prefix and not auto_detect_prefixes:
+        raise RuntimeError(
+            "--auto-detect-prefixes must be provided when using --base-prefix"
+        )
+
+    if auto_detect_prefixes:
+        if not base_prefix:
+            raise RuntimeError(
+                "--base-prefix must be provided when using --auto-detect-prefixes"
+            )
+        return detect_prefixes_from_bucket(bucket, base_prefix)
+
+    raise RuntimeError(
+        "Must provide either --prefix or --auto-detect-prefixes with --base-prefix"
+    )
 
 
 def download(url: str) -> bytes:
@@ -135,7 +238,19 @@ def is_wheel_allowed(pkg: str) -> bool:
     return platform_ok and python_ok
 
 
+def s3_object_exists(bucket: ServiceResource, key: str) -> bool:
+    try:
+        bucket.meta.client.head_object(Bucket=bucket.name, Key=key)
+        return True
+    except ClientError as exc:
+        error_code = exc.response.get("Error", {}).get("Code")
+        if error_code in {"404", "NoSuchKey", "NotFound"}:
+            return False
+        raise
+
+
 def upload_missing_whls(
+    bucket: ServiceResource,
     pkg_name: str = "numpy",
     prefix: str = "whl/test",
     *,
@@ -163,82 +278,184 @@ def upload_missing_whls(
 
     pypi_latest_packages = get_wheels_of_version(pypi_idx, selected_version)
 
-    download_latest_packages: Dict[str, str] = {}
     # if not only_pypi:
     #     download_idx = parse_simple_idx(
     #         f"https://download.pytorch.org/{prefix}/{pkg_name}"
     #     )
 
     has_updates = False
+    uploaded_or_present = 0
+
     for pkg in pypi_latest_packages:
-        if pkg in download_latest_packages:
-            continue
         if not is_wheel_allowed(pkg):
             continue
+
+        s3_key = f"{prefix}/{pkg}"
+        if s3_object_exists(bucket, s3_key):
+            print(f"Skipping existing {pkg} at s3://{bucket.name}/{s3_key}")
+            uploaded_or_present += 1
+            continue
+
         print(f"Downloading {pkg}")
         if dry_run:
             has_updates = True
-            print(f"Dry Run - not Uploading {pkg} to s3://{BUCKET.name}/{prefix}/")
+            uploaded_or_present += 1
+            print(f"Dry Run - not Uploading {pkg} to s3://{bucket.name}/{prefix}/")
             continue
+
         data = download(pypi_idx[pkg])
-        print(f"Uploading {pkg} to s3://{BUCKET.name}/{prefix}/")
-        BUCKET.Object(key=f"{prefix}/{pkg}").put(
-            ContentType="binary/octet-stream", Body=data
-        )
+        print(f"Uploading {pkg} to s3://{bucket.name}/{prefix}/")
+        bucket.Object(key=s3_key).put(ContentType="binary/octet-stream", Body=data)
         has_updates = True
-    if not has_updates:
+        uploaded_or_present += 1
+
+    if uploaded_or_present == 0:
+        print(
+            f"No allowed wheels found for {pkg_name} version {selected_version} "
+            f"for {prefix}"
+        )
+    elif not has_updates:
         print(
             f"{pkg_name} is already at latest version {selected_version} for {prefix}"
         )
 
 
+def run_update_dependencies(
+    *,
+    package: str = "torch",
+    dry_run: bool = False,
+    only_pypi: bool = False,
+    bucket_name: str | None = None,
+    prefix: str | None = None,
+    auto_detect_prefixes: bool = False,
+    base_prefix: str | None = None,
+    dependency_names: frozenset[str] | None = None,
+) -> None:
+    print(f"Running update_dependencies for package={package}, dry_run={dry_run}")
+
+    project_paths = get_project_paths()
+    if package not in project_paths:
+        raise ValueError(
+            f"Unsupported package '{package}'. Expected one of: {', '.join(project_paths)}"
+        )
+
+    normalized_dependency_names = (
+        frozenset(normalize_package_name(name) for name in dependency_names)
+        if dependency_names is not None
+        else None
+    )
+
+    bucket = get_s3_bucket(bucket_name)
+    project_dependency_names = frozenset(
+        normalize_package_name(pkg_name)
+        for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
+        if pkg_info["project"] == package
+    )
+
+    if normalized_dependency_names is not None:
+        unmatched_dependency_names = (
+            normalized_dependency_names - project_dependency_names
+        )
+        if unmatched_dependency_names:
+            raise ValueError(
+                f"Unknown --dependency-package value(s) for project '{package}': "
+                f"{sorted(unmatched_dependency_names)}. "
+                f"Valid names: {sorted(project_dependency_names)}"
+            )
+
+    selected_packages = {
+        pkg_name: pkg_info
+        for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
+        if pkg_info["project"] == package
+        and (
+            normalized_dependency_names is None
+            or normalize_package_name(pkg_name) in normalized_dependency_names
+        )
+    }
+    if not selected_packages:
+        raise ValueError(f"No dependency packages selected for project '{package}'")
+
+    target_prefixes = resolve_target_prefixes(
+        bucket=bucket,
+        explicit_prefix=prefix,
+        auto_detect_prefixes=auto_detect_prefixes,
+        base_prefix=base_prefix,
+    )
+
+    for full_path in target_prefixes:
+        for pkg_name, pkg_info in selected_packages.items():
+            pkg_prefix = full_path
+            if "target" in pkg_info and pkg_info["target"] != "":
+                pkg_prefix = f"{full_path}/{pkg_info['target']}"
+
+            for target_version in pkg_info["versions"]:
+                upload_missing_whls(
+                    bucket,
+                    pkg_name,
+                    pkg_prefix,
+                    dry_run=dry_run,
+                    only_pypi=only_pypi,
+                    target_version=target_version,
+                )
+
+
 def main() -> None:
     from argparse import ArgumentParser
 
-    parser = ArgumentParser(f"Upload dependent packages to s3://{BUCKET}")
-    # Get unique paths from the packages list
-    project_paths = list(
-        set(pkg_info["project"] for pkg_info in PACKAGES_PER_PROJECT.values())
-    )
+    parser = ArgumentParser("Upload dependent packages to S3")
+    project_paths = get_project_paths()
     parser.add_argument("--package", choices=project_paths, default="torch")
+    parser.add_argument("--bucket", type=str, help="S3 bucket name")
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        help=(
+            "Explicit prefix to update "
+            "(e.g. v2/gfx110X-all, v2-staging/gfx110X-all, v4/whl)"
+        ),
+    )
+    parser.add_argument(
+        "--auto-detect-prefixes",
+        action="store_true",
+        help=(
+            "Automatically detect architecture prefixes under the given base "
+            "path using S3 CommonPrefixes."
+        ),
+    )
+    parser.add_argument(
+        "--base-prefix",
+        type=str,
+        help=(
+            "Base prefix for auto-detection (e.g. v2/, v2-staging/, v3/). "
+            "Required when using --auto-detect-prefixes."
+        ),
+    )
+    parser.add_argument(
+        "--dependency-package",
+        action="append",
+        dest="dependency_packages",
+        help=(
+            "Limit reconciliation to one dependency package. "
+            "Can be passed multiple times."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only-pypi", action="store_true")
+
     args = parser.parse_args()
 
-    SUBFOLDERS = [
-        "gfx101X-dgpu",
-        "gfx103X-all",
-        "gfx110X-all",
-        "gfx1150",
-        "gfx1151",
-        "gfx120X-all",
-        "gfx90X-dcgpu",
-        "gfx94X-dcgpu",
-        "gfx950-dcgpu",
-    ]
-
-    for prefix in SUBFOLDERS:
-        # Filter packages by the selected project path
-        selected_packages = {
-            pkg_name: pkg_info
-            for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
-            if pkg_info["project"] == args.package
-        }
-        for VERSION in VERSIONS:
-            for pkg_name, pkg_info in selected_packages.items():
-                if "target" in pkg_info and pkg_info["target"] != "":
-                    full_path = f'{VERSION}/{prefix}/{pkg_info["target"]}'
-                else:
-                    full_path = f"{VERSION}/{prefix}"
-
-                for target_version in pkg_info["versions"]:
-                    upload_missing_whls(
-                        pkg_name,
-                        full_path,
-                        dry_run=args.dry_run,
-                        only_pypi=args.only_pypi,
-                        target_version=target_version,
-                    )
+    run_update_dependencies(
+        package=args.package,
+        dry_run=args.dry_run,
+        only_pypi=args.only_pypi,
+        bucket_name=args.bucket,
+        prefix=args.prefix,
+        auto_detect_prefixes=args.auto_detect_prefixes,
+        base_prefix=args.base_prefix,
+        dependency_names=(
+            frozenset(args.dependency_packages) if args.dependency_packages else None
+        ),
+    )
 
 
 if __name__ == "__main__":

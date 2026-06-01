@@ -141,7 +141,13 @@ PyTorch packages versions are handled via scripts:
 - [`build_tools/github_actions/determine_version.py`](/build_tools/github_actions/determine_version.py) (this generates e.g. `--version-suffix +rocm7.10.0`)
   - [`build_tools/github_actions/tests/determine_version_test.py`](/build_tools/github_actions/tests/determine_version_test.py)
 - [`external-builds/pytorch/build_prod_wheels.py`](/external-builds/pytorch/build_prod_wheels.py) (this appends the version suffix to each build version)
-- [`build_tools/github_actions/write_torch_versions.py`](/build_tools/github_actions/write_torch_versions.py) (this finds the versions in built packages)
+- [`build_tools/github_actions/write_torch_versions.py`](/build_tools/github_actions/write_torch_versions.py)
+  (this finds the versions in built packages)
+- [`build_tools/github_actions/generate_pytorch_source_manifest.py`](/build_tools/github_actions/generate_pytorch_source_manifest.py)
+  (this computes expected PyTorch ecosystem package versions and records them
+  with pinned source commits for checkout/build jobs)
+- [`external-builds/pytorch/checkout_from_manifest.py`](/external-builds/pytorch/checkout_from_manifest.py)
+  (this checks out the exact source commits recorded in the manifest)
 
 The scripts produce these versions for each distribution channel:
 
@@ -188,6 +194,8 @@ When working with versions please use these tools and avoid custom parsing
   - [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
   - [`build_tools/github_actions/determine_version.py`](/build_tools/github_actions/determine_version.py)
   - [`build_tools/github_actions/write_torch_versions.py`](/build_tools/github_actions/write_torch_versions.py)
+  - [`build_tools/github_actions/generate_pytorch_source_manifest.py`](/build_tools/github_actions/generate_pytorch_source_manifest.py)
+  - [`external-builds/pytorch/checkout_from_manifest.py`](/external-builds/pytorch/checkout_from_manifest.py)
 
 #### Tip - installing prereleases
 

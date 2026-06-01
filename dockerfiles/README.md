@@ -124,6 +124,17 @@ The installation method is selected via the `INSTALL_METHOD` build argument:
 - `packages`: Configures the AMD package repository and installs ROCm via
   apt/dnf/tdnf/zypper.
 
+By default each image targets a single GPU family (e.g.,
+`AMDGPU_FAMILY=gfx110X-all`). To build one image that supports all GPU
+families, set `AMDGPU_FAMILY=multi-arch` (works with both `INSTALL_METHOD`
+options):
+
+- With `INSTALL_METHOD=packages`: pulls the all-GPU meta-package from AMD's
+  `packages-multi-arch/` repository.
+- With `INSTALL_METHOD=tarball`: downloads AMD's bundled `multiarch`
+  tarball from the `tarball-multi-arch/` path (contains per-family `.kpack/`
+  files for every supported GPU target).
+
 Supporting scripts:
 
 - [`install_rocm_deps.sh`](install_rocm_deps.sh): Auto-detects the distribution
@@ -144,6 +155,10 @@ Supporting scripts:
   # Example: Install ROCm 7.13.0a20260322 for gfx110x (nightly)
   curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
     sudo bash -s -- 7.13.0a20260322 gfx110x nightlies
+
+  # Example: Install ROCm 7.13.0a20260322 with multi-arch (all GPU families)
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- 7.13.0a20260322 multi-arch nightlies
   ```
 
 - [`install_rocm_tarball.sh`](install_rocm_tarball.sh): Downloads ROCm tarball

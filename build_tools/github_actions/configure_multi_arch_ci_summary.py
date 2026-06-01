@@ -180,13 +180,13 @@ def _append_build_rocm(
             lines.append(f"| {platform} | {families} | `{config.artifact_group}` |")
     lines.append("")
 
-    # Link to log and artifact index pages
+    # Link to log, artifact, and manifest index pages
     lines.extend(
         [
             "## Build outputs",
             "",
-            "Platform | 📋 Logs | 📦 Artifacts",
-            "-- | -- | --",
+            "Platform | 📋 Logs | 📦 Artifacts | 📄 Manifests",
+            "-- | -- | -- | --",
         ]
     )
     for platform_name in ["linux", "windows"]:
@@ -195,7 +195,10 @@ def _append_build_rocm(
         )
         log_url = output_root.log_root_index().https_url
         artifact_url = output_root.artifact_index().https_url
-        lines.append(f"{platform_name.capitalize()} | {log_url} | {artifact_url}")
+        manifest_url = output_root.manifests_index().https_url
+        lines.append(
+            f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
+        )
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
