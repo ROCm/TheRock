@@ -279,6 +279,10 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
   "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
 
+option(THEROCK_HIPBLASLT_INSTALL_OPTIONAL_COMPONENTS
+  "Installs optional hipBLASLt subproject components (tests, benchmarks, clients-common, samples)"
+  OFF)
+
 # Additional manual features that don't map to artifacts
 
 # Finalize all feature flags.

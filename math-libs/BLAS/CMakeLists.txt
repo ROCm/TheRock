@@ -123,6 +123,16 @@ if(_enable_rocRoller)
   )
 endif()
 
+set(_hipblaslt_optional_install_components)
+if(THEROCK_HIPBLASLT_INSTALL_OPTIONAL_COMPONENTS)
+  list(APPEND _hipblaslt_optional_install_components
+    tests
+    benchmarks
+    clients-common
+    samples
+  )
+endif()
+
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
@@ -153,6 +163,8 @@ therock_cmake_subproject_declare(hipBLASLt
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
     ${optional_profiler_deps}
+  INSTALL_OPTIONAL_COMPONENTS
+    ${_hipblaslt_optional_install_components}
   TEST_SUBPROJECTS
     hipSPARSELt
     MIOpen
