@@ -32,12 +32,12 @@
 	branch = amd-decode-only
 [submodule "iree"]
 	path = iree-libs/iree
-	url = https://github.com/iree-org/iree.git
-	branch = main
+	url = https://github.com/powderluv/iree.git
+	branch = users/powderluv/macos-egpu
 [submodule "fusilli"]
 	path = iree-libs/fusilli
-	url = https://github.com/iree-org/fusilli.git
-	branch = main
+	url = https://github.com/powderluv/fusilli.git
+	branch = users/powderluv/macos-egpu
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
