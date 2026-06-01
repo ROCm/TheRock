@@ -74,12 +74,13 @@ def do_checkout(args: argparse.Namespace):
     else:
         print("Using ROCm/triton repository (Linux build)")
 
-        if not torch_dir.exists():
-            raise ValueError(
-                f"Could not find torch dir: {torch_dir} (did you check out torch first)"
-            )
-
         if args.repo_hashtag is None:
+            if not torch_dir.exists():
+                raise ValueError(
+                    f"Could not find torch dir: {torch_dir} "
+                    "(did you check out torch first)"
+                )
+
             if args.release:
                 # Derive the commit pin based on --release.
                 pin_version = get_triton_version(torch_dir)

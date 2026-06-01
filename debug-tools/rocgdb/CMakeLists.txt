@@ -56,31 +56,34 @@ project(rocgdb C CXX)
 include(ExternalProject)
 include(ProcessorCount)
 
-# Function to extract a single path that matches a given regex pattern
-# from a list of paths.
+# Function to find a library package and extract its install prefix.
+# Uses find_package() which respects CMAKE_PREFIX_PATH and TheRock's
+# dependency provider system.
 #
 # Usage:
-#   fetch_library_prefix(<input_path_list> <pattern> <output_var>)
+#   find_library_prefix(<package_name> <target_name> <output_var>)
 #
 # Example:
-#   fetch_library_prefix(CMAKE_PREFIX_PATH "gmp" GMP_PREFIX)
+#   find_library_prefix(gmp gmp::gmp GMP_PREFIX)
 #
-function(fetch_library_prefix input_path_list pattern output_var)
-  # Access the list contents using the input variable name
-  set(_input_list "${${input_path_list}}")
+function(find_library_prefix package_name target_name output_var)
+  find_package(${package_name} REQUIRED)
 
-  # Filter the list using the provided pattern
-  list(FILTER _input_list INCLUDE REGEX "${pattern}")
-
-  # Check if a match was found.
-  if(_input_list)
-    # Store the first match in the output variable provided by the caller.
-    list(GET _input_list 0 _result_path)
-    set(${output_var} "${_result_path}" PARENT_SCOPE)
-    message(STATUS "Extracted path for pattern '${pattern}': ${_result_path}")
+  if(TARGET ${target_name})
+    # Extract the library location from the imported target
+    get_target_property(_lib_location ${target_name} IMPORTED_LOCATION)
+    if(_lib_location)
+      # Get the directory containing the library (e.g., .../lib)
+      cmake_path(GET _lib_location PARENT_PATH _lib_dir)
+      # Get the install prefix (e.g., .../lib -> ...)
+      cmake_path(GET _lib_dir PARENT_PATH _prefix)
+      set(${output_var} "${_prefix}" PARENT_SCOPE)
+      message(STATUS "Found ${package_name} at prefix: ${_prefix}")
+    else()
+      message(FATAL_ERROR "Found ${package_name} target but could not extract location")
+    endif()
   else()
-    message(STATUS "No path containing '${pattern}' found in CMAKE_PREFIX_PATH; will use system detection.")
-    set(${output_var} "" PARENT_SCOPE)
+    message(FATAL_ERROR "Required package ${package_name} not found.")
   endif()
 endfunction()
 
@@ -98,13 +101,21 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Standard flags are handled by CMAKE_C_FLAGS, CMAKE_C_FLAGS_DEBUG, etc.
-set(CUSTOM_C_FLAGS)
-set(CUSTOM_CXX_FLAGS)
+# Initialize with base flags and build-type-specific flags.
+set(CUSTOM_C_FLAGS "${CMAKE_C_FLAGS}")
+set(CUSTOM_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
+# Append build-type-specific flags.
+string(TOUPPER "${CMAKE_BUILD_TYPE}" _build_type_upper)
+if(_build_type_upper)
+  string(APPEND CUSTOM_C_FLAGS " ${CMAKE_C_FLAGS_${_build_type_upper}}")
+  string(APPEND CUSTOM_CXX_FLAGS " ${CMAKE_CXX_FLAGS_${_build_type_upper}}")
+endif()
 
 # Set custom flags for Debug builds.
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-  set(CUSTOM_C_FLAGS "-O0 -g3")
-  set(CUSTOM_CXX_FLAGS "-O0 -g3")
+  string(APPEND CUSTOM_C_FLAGS " -O0 -g3")
+  string(APPEND CUSTOM_CXX_FLAGS " -O0 -g3")
 endif()
 
 # Compiler commands to chain to autotools.
@@ -119,15 +130,19 @@ endif()
 
 message(STATUS "Build type set to: ${CMAKE_BUILD_TYPE}")
 
+# amd-dbgapi is always a required dependency for ROCgdb
+find_package(amd-dbgapi REQUIRED CONFIG)
+
 # Fetch the install prefixes for the library and executables rocgdb
 # depends on. When THEROCK_BUNDLE_SYSDEPS is OFF, these are left empty and
 # GDB's configure script discovers the libraries via pkg-config instead.
 set(NCURSES_RPATH "")
+set(NCURSES_INCLUDE "")
 if(THEROCK_BUNDLE_SYSDEPS)
-  fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
-  fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
-  fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
-  fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
+  find_library_prefix(gmp gmp::gmp GMP_PREFIX)
+  find_library_prefix(mpfr mpfr::mpfr MPFR_PREFIX)
+  find_library_prefix(expat expat::expat EXPAT_PREFIX)
+  find_library_prefix(ncurses ncurses::ncurses NCURSES_PREFIX)
 
   # We need to explicitly pass ncurses' include path and set the rpath for
   # the library. The reason we need to explicitly pass rpath is because gdb's
@@ -136,16 +151,40 @@ if(THEROCK_BUNDLE_SYSDEPS)
   #
   # Since we're building our own ncurses and it is in a non-standard location,
   # the rpath assures the configure tests properly locate the library.
-  set(NCURSES_RPATH "-Wl,-rpath,${NCURSES_PREFIX}/lib")
-  set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
+  # Extract include and lib directories from the ncurses imported target.
+  if(TARGET ncurses::ncurses)
+    get_target_property(_ncurses_includes ncurses::ncurses INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(_ncurses_location ncurses::ncurses IMPORTED_LOCATION)
+    if(_ncurses_includes)
+      set(NCURSES_INCLUDE "-I${_ncurses_includes}")
+    endif()
+    if(_ncurses_location)
+      cmake_path(GET _ncurses_location PARENT_PATH _ncurses_lib_dir)
+      set(NCURSES_RPATH "-Wl,-rpath,${_ncurses_lib_dir}")
+    endif()
+  endif()
 
   # Adjust the compilation flags with the bundled ncurses include path.
-  set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
-  set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+  if(NCURSES_INCLUDE)
+    set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
+    set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+  endif()
 endif()
 
-# Adjust LDFLAGS. NCURSES_RPATH is empty when not using bundled sysdeps.
-set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags")
+# Add RPATH entries for sanitizer runtime libraries if needed.
+# THEROCK_PRIVATE_BUILD_RPATH_DIRS contains absolute paths to directories
+# needed during build/configure (e.g., clang sanitizer runtime).
+set(SANITIZER_RPATH "")
+if(DEFINED THEROCK_PRIVATE_BUILD_RPATH_DIRS AND NOT "${THEROCK_PRIVATE_BUILD_RPATH_DIRS}" STREQUAL "")
+  foreach(build_rpath_dir ${THEROCK_PRIVATE_BUILD_RPATH_DIRS})
+    string(APPEND SANITIZER_RPATH "-Wl,-rpath,${build_rpath_dir} ")
+  endforeach()
+  string(STRIP "${SANITIZER_RPATH}" SANITIZER_RPATH)
+  message(STATUS "Adding sanitizer RPATH for configure/build: ${SANITIZER_RPATH}")
+endif()
+
+# Adjust LDFLAGS. NCURSES_RPATH and SANITIZER_RPATH are empty when not using bundled sysdeps or sanitizers.
+set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} ${SANITIZER_RPATH} -Wl,--enable-new-dtags")
 
 # Replace all semicolons (the CMake separator) with colons (the ENV separator).
 # We need this to pass it on to rocgdb's configure.
@@ -153,16 +192,28 @@ string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 
 # Set conditional configure flags for bundled sysdep prefixes. When using system
 # libraries, these are left empty so autotools discovers them via pkg-config.
-# Furthermore, set an RPATH segment for the bundled sysdeps lib directory.
 set(ROCGDB_EXPAT_FLAG "")
 set(ROCGDB_GMP_FLAG "")
 set(ROCGDB_MPFR_FLAG "")
-set(ROCGDB_SYSDEPS_RPATH_SEGMENT "")
 if(THEROCK_BUNDLE_SYSDEPS)
   set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
   set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
   set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
-  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
+endif()
+
+# Build RPATH segments from THEROCK_PRIVATE_INSTALL_RPATH_DIRS if defined.
+# These paths are relative to <root>, but need to be relative to <root>/bin.
+# If not defined, fall back to hardcoded sysdeps path for backward compatibility.
+set(ROCGDB_EXTRA_RPATH_SEGMENTS "")
+if(DEFINED THEROCK_PRIVATE_INSTALL_RPATH_DIRS AND NOT "${THEROCK_PRIVATE_INSTALL_RPATH_DIRS}" STREQUAL "")
+  foreach(rpath_dir ${THEROCK_PRIVATE_INSTALL_RPATH_DIRS})
+    # Convert path from <root>-relative to <root>/bin-relative by prepending ../
+    string(APPEND ROCGDB_EXTRA_RPATH_SEGMENTS ":\\\$ORIGIN/../${rpath_dir}")
+  endforeach()
+  message(STATUS "RPATH segments from THEROCK_PRIVATE_INSTALL_RPATH_DIRS: ${ROCGDB_EXTRA_RPATH_SEGMENTS}")
+elseif(THEROCK_BUNDLE_SYSDEPS)
+  # Fallback for older builds without THEROCK_PRIVATE_INSTALL_RPATH_DIRS
+  set(ROCGDB_EXTRA_RPATH_SEGMENTS ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
 endif()
 
 # Set some global variables for the configure/build.
@@ -381,7 +432,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}${LIBPYTHON_RPATH}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN${ROCGDB_EXTRA_RPATH_SEGMENTS}${LIBPYTHON_RPATH}\"
       \"${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}\"
       COMMAND_ERROR_IS_FATAL ANY
     )"
@@ -486,7 +537,7 @@ foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
 
   # Patch in the RUNPATH.
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN${ROCGDB_EXTRA_RPATH_SEGMENTS}\"
       \"${rocgdb_exec_file}\"
       COMMAND_ERROR_IS_FATAL ANY
   )"
