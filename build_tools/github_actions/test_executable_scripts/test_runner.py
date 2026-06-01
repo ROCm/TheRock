@@ -47,6 +47,8 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
     "hipsparselt": "hipsparselt",
+    "rocroller": "rocroller",
+    "hipblas": "hipblas",
     # Add more mappings as needed
 }
 
@@ -86,15 +88,20 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
-
 # Component-specific ENV VARs/PATHs applied on top of defaults.
 #
 # - test_dir: The default TEST_DIR for ctest is THEROCK_BIN_DIR/TEST_COMPONENT.
 #   If any component needs to override the default TEST_DIR, it can use test_dir
-#   by specifying the path relative to ROCM_PATH.
+#   by specifying the path parts relative to ROCM_PATH.
 #
-# - additional_env_paths: Additional paths to prepend to the existing PATH, LD_LIBRARY_PATH, etc.
-#   relative to ROCM_PATH
+# - additional_env_paths: Additional paths to prepend to the existing PATH,
+#   LD_LIBRARY_PATH, etc. The path parts are relative to ROCM_PATH.
+#
+# - env_prepend_from_therock: Same shape as additional_env_paths, but the path
+#   parts are interpreted relative to THEROCK_DIR (the source/build tree
+#   checkout root) rather than ROCM_PATH (the install prefix). Use this for
+#   components whose tests need to load libraries straight out of the build
+#   tree, e.g. rocroller.
 #
 # - env: Literal environment variables to set (overwriting any inherited value).
 #   Values are formatted with str.format() and currently support the placeholder
@@ -105,7 +112,6 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   (i.e. run ctest serially) for components whose tests can't share GPU/host
 #   resources safely (e.g. rocprofiler-systems, whose pytest-driven CTests
 #   attach to the same profiling backend).
-
 COMPONENT_OVERRIDES = {
     # For rocprofiler-compute, we need the following additional paths:
     # - PATH=ROCM_PATH/bin:$PATH
@@ -141,6 +147,28 @@ COMPONENT_OVERRIDES = {
         # 0 = drop the --parallel flag (ctest runs serially).
         "ctest_parallel_count": 0,
     },
+    # rocroller's gtests link against shared libraries that live in the
+    # build tree (under THEROCK_DIR/build/...), not in the install prefix,
+    # so prepend those build-tree paths to LD_LIBRARY_PATH.
+    "rocroller": {
+        "env_prepend_from_therock": {
+            "LD_LIBRARY_PATH": [
+                ["build", "core", "clr", "dist", "lib"],
+                ["build", "core", "clr", "dist", "lib", "llvm", "lib"],
+                ["build", "math-libs", "BLAS", "rocRoller", "dist", "lib"],
+                [
+                    "build",
+                    "math-libs",
+                    "BLAS",
+                    "rocRoller",
+                    "dist",
+                    "lib",
+                    "host-math",
+                    "lib",
+                ],
+            ],
+        },
+    },
 }
 
 
@@ -152,8 +180,18 @@ def _prepend_env_paths(env, base_path, additional_paths_dict):
         env[env_key] = ":".join(filter(None, new_paths + [existing_path]))
 
 
-def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
-    """Apply component-specific overrides for test_dir and environment variables."""
+def apply_component_overrides(job_name, rocm_path, therock_dir, default_test_dir, env):
+    """Apply component-specific overrides for test_dir and environment variables.
+
+    - 'test_dir' (path parts relative to rocm_path) overrides the default
+      test directory.
+    - 'additional_env_paths' prepends ROCM_PATH-relative paths to env vars.
+    - 'env_prepend_from_therock' prepends THEROCK_DIR-relative (build tree)
+      paths to env vars. Used by components like rocroller that load shared
+      libraries straight out of the build tree.
+    - 'env' sets literal environment variables (str.format() with the
+      "{rocm_path}" placeholder).
+    """
     overrides = COMPONENT_OVERRIDES.get(job_name)
     if not overrides:
         return default_test_dir
@@ -163,6 +201,7 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
         test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
+    _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
     for env_key, value_template in overrides.get("env", {}).items():
         env[env_key] = value_template.format(rocm_path=str(rocm_path))
     return test_dir
@@ -170,7 +209,7 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR = apply_component_overrides(
-    test_component_job_name, ROCM_PATH, TEST_DIR, environ_vars
+    test_component_job_name, ROCM_PATH, THEROCK_DIR, TEST_DIR, environ_vars
 )
 
 logging.basicConfig(level=logging.INFO)

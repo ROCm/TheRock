@@ -17,6 +17,7 @@ from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
     gha_fetch_file_contents,
+    gha_fetch_text_file_contents,
     gha_load_github_event,
     gha_query_last_successful_workflow_run,
     gha_query_recent_branch_commits,
@@ -497,6 +498,19 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         gha_send_request.assert_called_once_with(
             "https://api.github.com/repos/ROCm/pytorch/contents/some%20path/version.txt?ref=release%2F2.12"
         )
+
+    def test_fetch_text_file_contents_decodes_text(self):
+        content = "2.13.0a0\n".encode("utf-8")
+        encoded = base64.b64encode(content).decode("ascii")
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={"type": "file", "encoding": "base64", "content": encoded},
+        ):
+            text = gha_fetch_text_file_contents(
+                "pytorch/pytorch", "version.txt", "nightly"
+            )
+
+        self.assertEqual(text, "2.13.0a0\n")
 
     def test_fetch_file_contents_rejects_non_file_response(self):
         with mock.patch("github_actions_api.gha_send_request", return_value=[]):
