@@ -67,6 +67,7 @@
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
+#   subprojects = ["rocblas", "hipblas"]        # Optional: alternative names for build selection
 #
 # ==============================================================================
 
@@ -474,12 +475,14 @@ type = "target-neutral"
 artifact_deps = ["sysdeps"]
 feature_name = "COMPILER"
 feature_group = "ALL"
+subprojects = ["amd-llvm", "amd-comgr"]
 
 [artifacts.hipify]
 artifact_group = "compiler"
 type = "target-neutral"
 artifact_deps = ["amd-llvm"]  # Built on top of amd-llvm
 feature_group = "ALL"
+subprojects = ["hipify"]
 
 # --- Runtime Artifacts ---
 
@@ -490,6 +493,7 @@ artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
+subprojects = ["rocr-runtime"]
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -505,6 +509,7 @@ artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl", "amd-llvm
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
+subprojects = ["amdsmi", "rocm-smi-lib"]
 
 [artifacts.core-kpack]
 artifact_group = "hip-runtime"
@@ -519,6 +524,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
+subprojects = ["hip", "clr", "hipother", "hotswap"]
 
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
@@ -557,6 +563,7 @@ artifact_group = "hip-runtime"
 type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
+subprojects = ["hip-tests"]
 
 # --- Math Libraries (per-arch) ---
 
@@ -564,47 +571,57 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
-split_databases = ["rocblas", "hipblaslt", "hipsparselt"]
+split_databases = ["rocblas", "hipblaslt"]
+subprojects = ["rocblas", "hipblas", "hipblaslt", "hipblas-common", "tensile", "rocroller", "mxdatagenerator", "origami", "stinkytofu"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
+subprojects = ["rocrand", "hiprand"]
 
 [artifacts.fft]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
+subprojects = ["rocfft", "hipfft"]
 
 [artifacts.prim]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "rand"]
+subprojects = ["rocprim", "hipcub", "rocthrust", "hipthrust"]
 
 [artifacts.sparse]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim"]
+split_databases = ["hipsparselt"]
+subprojects = ["rocsparse", "hipsparse", "hipsparselt"]
 
 [artifacts.solver]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
+subprojects = ["rocsolver", "hipsolver"]
 
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
+subprojects = ["rocwmma"]
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+subprojects = ["libhipcxx"]
 
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = []
+subprojects = ["rocsupport"]
 
 # --- ML Libraries (per-arch) ---
 
@@ -612,43 +629,51 @@ artifact_deps = []
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
+subprojects = ["composablekernel"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
 split_databases = ["miopen"]
+subprojects = ["miopen"]
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
+subprojects = ["hipdnn"]
 
 [artifacts.hipdnn-integration-tests]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+subprojects = ["integration-tests"]
 
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "hipdnn-integration-tests"]
+subprojects = ["miopen-provider"]
 
 [artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "hipdnn-integration-tests"]
+subprojects = ["hipblaslt-provider"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
+subprojects = ["hipdnn_samples"]
 
 # Disabled until rocm-libraries bump that has hip-kernel-provider passing
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
+subprojects = ["hip-kernel-provider"]
 
 # --- Media Integration ---
 
@@ -658,6 +683,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "sysdeps-amd-mesa"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 disable_platforms = ["windows"]
+subprojects = ["rocdecode"]
 
 [artifacts.rocjpeg]
 artifact_group = "media-libs"
@@ -665,6 +691,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "sysdeps-amd-mesa"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 disable_platforms = ["windows"]
+subprojects = ["rocjpeg"]
 
 # --- Communication Libraries (per-arch) ---
 
@@ -673,6 +700,7 @@ artifact_group = "comm-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
 disable_platforms = ["windows"]
+subprojects = ["rccl", "rccl-tests"]
 
 [artifacts.rocshmem]
 # target-neutral: rocshmem embeds device code via .hip_fatbin ELF sections
@@ -682,6 +710,7 @@ artifact_group = "comm-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
 disable_platforms = ["windows"]
+subprojects = ["rocshmem"]
 
 # --- Profiler Tools ---
 
@@ -691,6 +720,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+subprojects = ["aqlprofile"]
 
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
@@ -699,6 +729,7 @@ artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-r
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+subprojects = ["rocprofiler-sdk", "rocprofiler", "roctracer", "rocprofiler-register"]
 
 [artifacts.rocprofiler-compute]
 artifact_group = "profiler-core"
@@ -706,6 +737,7 @@ type = "target-neutral"
 artifact_deps = ["rocprofiler-sdk", "openmpi"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+subprojects = ["rocprofiler-compute"]
 
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
@@ -714,6 +746,7 @@ artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdl
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+subprojects = ["rocprofiler-systems"]
 
 [artifacts.rocprofiler-systems-examples]
 artifact_group = "profiler-apps"
@@ -730,6 +763,7 @@ type = "target-neutral"
 artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps", "core-amdsmi"]
 feature_group = "DC_TOOLS"  # Part of DC tools, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
+subprojects = ["rdc", "cuid"]
 
 # Future dctools-rocm artifacts will go here
 # [artifacts.some-future-tool]
@@ -744,6 +778,7 @@ artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+subprojects = ["amd-dbgapi", "rocdbgapi"]
 
 [artifacts.rocr-debug-agent]
 artifact_group = "debug-tools"
@@ -751,6 +786,7 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-runtime", "amd-dbgapi", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
+subprojects = ["rocr-debug-agent"]
 
 [artifacts.rocr-debug-agent-tests]
 artifact_group = "debug-tools"
@@ -765,6 +801,7 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
+subprojects = ["rocgdb"]
 
 # --- ROCm Emulation Tools ---
 
@@ -774,3 +811,4 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
+subprojects = ["rocjitsu", "mirage"]
