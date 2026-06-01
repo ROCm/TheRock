@@ -34,6 +34,10 @@ on:
       windows_hip_rocr_tests:
         type: string
         default: 'false'
+      changed_projects:
+        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
+        type: string
+        default: ""
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
         type: string
@@ -74,6 +78,10 @@ on:
       windows_hip_rocr_tests:
         type: string
         default: 'false'
+      changed_projects:
+        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
+        type: string
+        default: ""
       release_type:
         type: string
         default: ""
@@ -131,6 +139,15 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: "Determine test dependencies"
+        id: test_deps
+        env:
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+        run: |
+          python ./test_tools/determine_rocm_test_dependencies.py \
+            --changed-projects $CHANGED_PROJECTS \
+            --gha-output
+
       - name: "Configuring CI options"
         id: configure
         env:
@@ -140,6 +157,7 @@ jobs:
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
+          PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
