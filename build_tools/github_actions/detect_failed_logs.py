@@ -196,7 +196,6 @@ def main() -> int:
                 write_companion_log(src, dst, failure_end)
                 print(f"Created {dst.name} from {src.name}")
                 summary.write(f"- `{dst.name}`\n")
-                summary.write("\n")
             except OSError as e:
                 print(f"Failed to create companion log for {src}: {e}", file=sys.stderr)
 
