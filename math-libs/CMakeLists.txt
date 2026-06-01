@@ -122,8 +122,10 @@ if(THEROCK_ENABLE_PRIM)
     # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
     # that depend on rocPRIM
     # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
-    # amdsmi is Linux-only; benchmarks depend on primbench which requires amd_smi
-    if(WIN32)
+    # amdsmi is Linux-only; benchmarks depend on primbench which requires amd_smi.
+    # Sliced builds may disable amdsmi (THEROCK_ENABLE_CORE_AMDSMI=OFF), in which
+    # case the amdsmi target does not exist and the benchmarks must be skipped.
+    if(WIN32 OR NOT THEROCK_ENABLE_CORE_AMDSMI)
       set(_rocprim_benchmark_enable "OFF")
       set(_rocprim_benchmark_deps)
       set(_rocprim_benchmark_includes)
