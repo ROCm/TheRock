@@ -65,11 +65,16 @@ if platform.system() == "Linux":
             )
             sys.exit(e.returncode)
 
-    # Create linker symlink libmount.so -> librocm_sysdeps_mount.so
-    # using the common update_library_links function
-    mount_lib = lib_dir / "librocm_sysdeps_mount.so"
-    if mount_lib.exists():
-        update_library_links(mount_lib, "libmount.so", patchelf_exe)
+    # Create linker-name symlinks (e.g. libmount.so -> librocm_sysdeps_mount.so)
+    # using the common update_library_links function.
+    libraries = [
+        ("librocm_sysdeps_mount.so", "libmount.so"),
+        ("librocm_sysdeps_blkid.so", "libblkid.so"),
+    ]
+    for source_name, linker_name in libraries:
+        source = lib_dir / source_name
+        if source.exists():
+            update_library_links(source, linker_name, patchelf_exe)
 
     # Fix .pc files to use relocatable paths using the common function
     pkgconfig_dir = lib_dir / "pkgconfig"
