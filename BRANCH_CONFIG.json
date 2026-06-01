@@ -1,0 +1,6 @@
+{
+  "flags": {
+    "HIP_KERNEL_PROVIDER_ENABLE": true,
+    "HIPDNN_ENABLE_SDPA": true
+  }
+}
