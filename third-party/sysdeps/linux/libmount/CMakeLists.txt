@@ -45,15 +45,21 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_cmake_subproject_provide_package(therock-libmount libmount lib/rocm_sysdeps/lib/cmake/libmount)
     therock_cmake_subproject_activate(therock-libmount)
 
+    # Validate the libraries produced by util-linux (libmount + libblkid).
     therock_test_validate_shared_lib(
       PATH build/dist/lib/rocm_sysdeps/lib
-      LIB_NAMES libmount.so
+      LIB_NAMES libmount.so libblkid.so
     )
 
-    add_test(
-      NAME libmount_header_test
-      COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/include/libmount/libmount.h"
-    )
+    # Test key headers
+    set(LIBMOUNT_HEADERS "libmount/libmount.h" "blkid/blkid.h")
+    foreach(libmount_header ${LIBMOUNT_HEADERS})
+      string(REPLACE "/" "_" header_test_name "${libmount_header}")
+      add_test(
+        NAME libmount_header_test:${header_test_name}
+        COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/include/${libmount_header}"
+      )
+    endforeach()
 
     return()
 endif()
@@ -69,16 +75,16 @@ endif()
 include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
 therock_get_meson_compiler_env(_meson_cc _meson_cxx)
 
-#set(patch_source_commands)
-#list(APPEND patch_source_commands   COMMAND
-#    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+set(patch_source_commands)
+list(APPEND patch_source_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
 
 add_custom_target(
   meson_build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 
-#  COMMAND
-#    ${patch_source_commands}
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
@@ -86,8 +92,10 @@ add_custom_target(
     # Run meson from the source directory to avoid this issue.
     "${CMAKE_COMMAND}" -E chdir "${SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
-      # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
-#      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      # Symbol versioning is applied by patch_source.sh, which overwrites
+      # libmount.sym and libblkid.sym with version.lds contents. Meson then
+      # picks them up via its existing link_args: -Wl,--version-script=...
+      # RPATH is set post-install via patch_install.py.
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
@@ -110,10 +118,18 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
       "${MESON_BUILD}" install
-#  COMMAND
-#    "${CMAKE_COMMAND}" -E env
-#      "PATCHELF=${PATCHELF}"
-#      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-#      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-#    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
+  COMMAND
+    "${CMAKE_COMMAND}" -E env
+      "PATCHELF=${PATCHELF}"
+      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
+      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 )
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/libmount-config.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/libmount-config.cmake
+  @ONLY
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libmount-config.cmake" DESTINATION lib/cmake/libmount)
