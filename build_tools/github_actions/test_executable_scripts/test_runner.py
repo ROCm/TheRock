@@ -316,9 +316,9 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
     # ctest_parallel_count is the module-level default (arch-tuned). Components
     # can override it via COMPONENT_OVERRIDES[...]["ctest_parallel_count"];
     # a value of 0 means "drop --parallel entirely" (serial execution).
-    component_parallel_count = COMPONENT_OVERRIDES.get(
-        test_component_job_name, {}
-    ).get("ctest_parallel_count", ctest_parallel_count)
+    component_parallel_count = COMPONENT_OVERRIDES.get(test_component_job_name, {}).get(
+        "ctest_parallel_count", ctest_parallel_count
+    )
     if component_parallel_count > 0:
         cmd.extend(["--parallel", f"{component_parallel_count}"])
 
