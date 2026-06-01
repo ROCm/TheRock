@@ -51,9 +51,10 @@ on:
         default: ""
       device_query:
         description: >-
-          GPU candidate-set selection (--device-query, stage 1): "unique" or
-          "all". Use "auto" to derive from the test config ("all" for
-          distributed, "unique" otherwise).
+          GPU candidate-set selection (--device-query, stage 1). "unique": one
+          device per architecture. "all": every device of each architecture.
+          "auto": derive from the test config ("all" for distributed, "unique"
+          otherwise).
         type: choice
         options:
           - "auto"
@@ -62,9 +63,10 @@ on:
         default: "auto"
       gpu_policy:
         description: >-
-          How many candidate GPUs are made visible (--gpu-policy, stage 2):
-          "single" or "all". Use "auto" to derive from the test config ("all"
-          for distributed, "single" otherwise).
+          How many candidate GPUs are made visible (--gpu-policy, stage 2).
+          "single": one GPU visible at a time. "all": all candidate GPUs visible
+          at once. "auto": derive from the test config ("all" for distributed,
+          "single" otherwise).
         type: choice
         options:
           - "auto"
@@ -126,14 +128,14 @@ on:
         default: ""
       device_query:
         description: >-
-          --device-query ("unique" or "all"). Use "auto" to derive from the
-          test config.
+          --device-query. "unique": one device per architecture; "all": every
+          device of each architecture; "auto": derive from the test config.
         type: string
         default: "auto"
       gpu_policy:
         description: >-
-          --gpu-policy ("single" or "all"). Use "auto" to derive from the test
-          config.
+          --gpu-policy. "single": one GPU visible at a time; "all": all candidate
+          GPUs visible at once; "auto": derive from the test config.
         type: string
         default: "auto"
 
