@@ -1,0 +1,3 @@
+# libmount
+[components.lib."third-party/sysdeps/linux/libmount/build/stage"]
+[components.dev."third-party/sysdeps/linux/libmount/build/stage"]
