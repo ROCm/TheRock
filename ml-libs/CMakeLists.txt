@@ -391,7 +391,6 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
     therock_cmake_subproject_activate(hipkernelprovider)
 
     therock_provide_artifact(hipkernelprovider
-      TARGET_NEUTRAL
       DESCRIPTOR artifact-hipkernelprovider.toml
       COMPONENTS
         dbg

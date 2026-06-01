@@ -644,11 +644,14 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
-# Disabled until rocm-libraries bump that has hip-kernel-provider passing
+# target-specific: ships AITER ASM kernel .co code objects under per-arch
+# asm_kernels/<arch>/ directories, split per GPU arch by the kpack
+# "hip-kernel-provider-asm" database handler (see ALMIOPEN-1929).
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
-type = "target-neutral"
+type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
+split_databases = ["hip-kernel-provider-asm"]
 
 # --- Media Integration ---
 
