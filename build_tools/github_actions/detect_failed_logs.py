@@ -34,11 +34,26 @@ import re
 import sys
 from pathlib import Path
 
-FAILED_END_RE = re.compile(r"^END\t[0-9.]*\t[0-9.]*\t[1-9][0-9]*$")
 IMPORTANT_RE = re.compile(
     r"(FAILED:|error:|CMake Error|Traceback|FileNotFoundError|ninja: build stopped|subcommand failed)",
 )
 
+# teatime END records are tab-separated.
+# We only care that the line starts with END and that the last field is a
+# non-zero exit code, so the parser is resilient if teatime adds fields later.
+def is_failed_end_line(line: str) -> bool:
+    fields = line.rstrip("\n").split("\t")
+
+    if len(fields) < 4:
+        return False
+
+    if fields[0] != "END":
+        return False
+
+    try:
+        return int(fields[-1]) != 0
+    except ValueError:
+        return False
 
 def get_failed_end_line(path: Path, tail_bytes: int = 4096) -> str | None:
     try:
@@ -52,7 +67,7 @@ def get_failed_end_line(path: Path, tail_bytes: int = 4096) -> str | None:
         return None
 
     for line in reversed(tail.splitlines()):
-        if FAILED_END_RE.match(line):
+        if is_failed_end_line(line):
             return line
 
     return None
