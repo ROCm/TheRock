@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import sys
 from pathlib import Path
 
@@ -27,18 +26,30 @@ IMPORTANT_RE = re.compile(
 )
 
 
-def find_failed_logs(log_dir: Path) -> list[Path]:
-    failed: list[Path] = []
+def get_failed_end_line(path: Path, tail_bytes: int = 4096) -> str | None:
+    try:
+        with path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - tail_bytes))
+            tail = f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return None
+
+    for line in reversed(tail.splitlines()):
+        if FAILED_END_RE.match(line):
+            return line
+
+    return None
+
+
+def find_failed_logs(log_dir: Path) -> list[tuple[Path, str]]:
+    failed: list[tuple[Path, str]] = []
 
     for path in sorted(log_dir.glob("*.log")):
-        try:
-            with path.open("r", encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if FAILED_END_RE.match(line.rstrip("\n")):
-                        failed.append(path)
-                        break
-        except OSError:
-            continue
+        failure_end = get_failed_end_line(path)
+        if failure_end:
+            failed.append((path, failure_end))
 
     return failed
 
@@ -72,10 +83,13 @@ def build_excerpt(
     return excerpt
 
 
-def write_companion_log(src: Path, dst: Path) -> None:
+def write_companion_log(
+    src: Path,
+    dst: Path,
+    failure_end: str,
+) -> None:
     lines = src.read_text(encoding="utf-8", errors="replace").splitlines()
 
-    failure_end = next((line for line in lines if FAILED_END_RE.match(line)), None)
     excerpt = build_excerpt(lines)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -84,9 +98,8 @@ def write_companion_log(src: Path, dst: Path) -> None:
         out.write(f"Source log: {src}\n")
         out.write("\n")
 
-        if failure_end:
-            out.write("Failed END line:\n")
-            out.write(f"{failure_end}\n\n")
+        out.write("Failed END line:\n")
+        out.write(f"{failure_end}\n\n")
 
         out.write("Important excerpt:\n")
         out.write("\n".join(excerpt))
@@ -120,10 +133,10 @@ def main() -> int:
         summary.write(f"**Error logs:** {len(failed_logs)}\n")
         summary.write("\n")
 
-        for src in failed_logs:
+        for src, failure_end in failed_logs:
             dst = src.with_name(f"0.error.{src.name}")
             try:
-                write_companion_log(src, dst)
+                write_companion_log(src, dst, failure_end)
                 print(f"Created {dst.name} from {src.name}")
                 summary.write(f"- `{dst.name}`\n")
                 summary.write("\n")
