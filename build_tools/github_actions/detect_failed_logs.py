@@ -103,7 +103,12 @@ def main() -> int:
     else:
         logs_dir = Path(build_dir) / "logs"
 
-    summary_path = Path(os.environ["GITHUB_STEP_SUMMARY"])
+    summary_env = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_env:
+        print("GITHUB_STEP_SUMMARY is not set; skipping failed log summary generation.")
+        return 0
+
+    summary_path = Path(summary_env)
     failed_logs = find_failed_logs(logs_dir)
 
     if not failed_logs:
