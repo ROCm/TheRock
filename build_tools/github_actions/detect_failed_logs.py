@@ -73,27 +73,23 @@ def build_excerpt(
     lines: list[str],
     window_before: int = 12,
     window_after: int = 20,
-    max_lines: int = 60,
 ) -> list[str]:
     """
-    Return a small, deterministic excerpt centered around the first important
-    failure line. Falls back to the tail of the log if nothing matches.
+    Return a small, deterministic excerpt centered around the most recent
+    important failure line. Falls back to the tail of the log if nothing matches.
     """
     important_idx = None
-    for i, line in enumerate(lines):
-        if IMPORTANT_RE.search(line):
+    for i in range(len(lines) - 1, -1, -1):
+        if IMPORTANT_RE.search(lines[i]):
             important_idx = i
             break
 
     if important_idx is None:
-        excerpt = lines[-max_lines:]
+        excerpt = lines[-(window_before + window_after):]
     else:
         start = max(0, important_idx - window_before)
         end = min(len(lines), important_idx + window_after)
         excerpt = lines[start:end]
-
-    if len(excerpt) > max_lines:
-        excerpt = excerpt[:max_lines]
 
     return excerpt
 
