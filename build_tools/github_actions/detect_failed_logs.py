@@ -38,6 +38,7 @@ IMPORTANT_RE = re.compile(
     r"(FAILED:|error:|CMake Error|Traceback|FileNotFoundError|ninja: build stopped|subcommand failed)",
 )
 
+
 # teatime END records are tab-separated.
 # We only care that the line starts with END and that the last field is a
 # non-zero exit code, so the parser is resilient if teatime adds fields later.
@@ -54,6 +55,7 @@ def is_failed_end_line(line: str) -> bool:
         return int(fields[-1]) != 0
     except ValueError:
         return False
+
 
 def get_failed_end_line(path: Path, tail_bytes: int = 4096) -> str | None:
     try:
@@ -100,7 +102,7 @@ def build_excerpt(
             break
 
     if important_idx is None:
-        excerpt = lines[-(window_before + window_after):]
+        excerpt = lines[-(window_before + window_after) :]
     else:
         start = max(0, important_idx - window_before)
         end = min(len(lines), important_idx + window_after)
@@ -114,8 +116,8 @@ def write_companion_log(
     dst: Path,
     failure_end: str,
 ) -> None:
-    lines = src.read_text(encoding="utf-8", errors="replace").splitlines()
 
+    lines = src.read_text(encoding="utf-8", errors="replace").splitlines()
     excerpt = build_excerpt(lines)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
