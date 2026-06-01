@@ -571,8 +571,8 @@ subprojects = ["hip-tests"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
-split_databases = ["rocblas", "hipblaslt", "hipsparselt"]
-subprojects = ["rocblas", "hipblas", "hipblaslt", "hipsparselt", "hipblas-common", "tensile", "rocroller", "mxdatagenerator", "origami", "stinkytofu"]
+split_databases = ["rocblas", "hipblaslt"]
+subprojects = ["rocblas", "hipblas", "hipblaslt", "hipblas-common", "tensile", "rocroller", "mxdatagenerator", "origami", "stinkytofu"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
@@ -596,7 +596,8 @@ subprojects = ["rocprim", "hipcub", "rocthrust", "hipthrust"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim"]
-subprojects = ["rocsparse", "hipsparse"]
+split_databases = ["hipsparselt"]
+subprojects = ["rocsparse", "hipsparse", "hipsparselt"]
 
 [artifacts.solver]
 artifact_group = "math-libs"

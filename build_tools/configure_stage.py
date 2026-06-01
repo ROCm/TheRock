@@ -297,7 +297,7 @@ def main(argv: List[str] = None):
         alias_map = topology.get_alias_to_artifact_map()
         unknown = [p for p in args.projects if p.lower() not in alias_map]
         if unknown:
-            log(f"Warning: Unknown project(s): {', '.join(unknown)}")
+            parser.error(f"Unknown project(s): {', '.join(unknown)}")
 
     # Generate arguments
     cmake_args = generate_cmake_args(
