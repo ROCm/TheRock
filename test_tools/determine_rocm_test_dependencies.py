@@ -11,7 +11,6 @@ $ python build_tools/determine_rocm_test_dependencies.py --projects rocSPARSE
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -120,13 +119,7 @@ def main():
         type=str,
         nargs="+",
         metavar="PROJECT",
-        help="Alias for --changed",
-    )
-    parser.add_argument(
-        "--external-repo-config",
-        type=str,
-        default="",
-        help="JSON config with projects field (from external repo)",
+        help="Project(s) to test. Accepts 'rocblas' or 'projects/rocblas' format.",
     )
     parser.add_argument(
         "--list-subprojects", action="store_true", help="List all subprojects"
@@ -157,16 +150,10 @@ def main():
         print(json.dumps(result, indent=2))
         return
 
-    # Get projects from args or external_repo_config
+    # Get projects from args, normalize path format (projects/rocblas -> rocblas)
     changed = args.changed or args.projects
-    if not changed and args.external_repo_config:
-        try:
-            config = json.loads(args.external_repo_config)
-            projects_str = config.get("projects", "")
-            if projects_str and projects_str.strip():
-                changed = projects_str.split()
-        except json.JSONDecodeError:
-            pass
+    if changed:
+        changed = [Path(p).name for p in changed]
 
     # If no projects specified, output "*" for all tests
     if not changed:
