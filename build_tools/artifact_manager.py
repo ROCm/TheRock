@@ -569,21 +569,31 @@ def do_push(args: argparse.Namespace):
     """Push produced artifacts after building with parallel compress and upload."""
     topology = get_topology(args.topology)
 
-    # Validate stage
-    if args.stage not in topology.build_stages:
-        log(f"ERROR: Stage '{args.stage}' not found")
-        log(f"Available stages: {', '.join(topology.build_stages.keys())}")
-        sys.exit(1)
+    # Determine which artifacts to push
+    if args.stage == "all":
+        produced = set()
+        stages = topology.get_build_stages()
+        for stage in stages:
+            produced.update(topology.get_produced_artifacts(stage.name))
+        log(
+            f"All stages produced {len(produced)} artifacts: {', '.join(sorted(produced))}"
+        )
+    else:
+        # Validate stage
+        if args.stage not in topology.build_stages:
+            log(f"ERROR: Stage '{args.stage}' not found")
+            log(f"Available stages: {', '.join(topology.build_stages.keys())}")
+            sys.exit(1)
 
-    # Get produced artifacts for this stage
-    produced = topology.get_produced_artifacts(args.stage)
-    if not produced:
-        log(f"Stage '{args.stage}' produces no artifacts")
-        return
+        # Get produced artifacts for this stage
+        produced = topology.get_produced_artifacts(args.stage)
+        if not produced:
+            log(f"Stage '{args.stage}' produces no artifacts")
+            return
 
-    log(
-        f"Stage '{args.stage}' produces {len(produced)} artifacts: {', '.join(sorted(produced))}"
-    )
+        log(
+            f"Stage '{args.stage}' produces {len(produced)} artifacts: {', '.join(sorted(produced))}"
+        )
 
     # Create backend
     backend = create_backend_from_env(
