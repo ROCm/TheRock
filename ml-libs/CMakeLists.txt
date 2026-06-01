@@ -57,6 +57,7 @@ if(_ck_enabled)
       rocRAND
       ${THEROCK_BUNDLED_BZIP2}
       ${optional_profiler_deps}
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
 
@@ -130,6 +131,8 @@ if(THEROCK_ENABLE_MIOPEN)
       ${THEROCK_BUNDLED_BZIP2}
       ${THEROCK_BUNDLED_SQLITE3}
       ${optional_profiler_deps}
+    TEST_SUBPROJECTS
+      miopenprovider
   )
   therock_cmake_subproject_provide_package(MIOpen miopen lib/cmake/miopen)
   therock_cmake_subproject_activate(MIOpen)
@@ -180,6 +183,7 @@ if(THEROCK_ENABLE_HIPDNN)
       hip-clr
       therock-flatbuffers
       therock-nlohmann-json
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
@@ -236,6 +240,8 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
       hipDNN
       therock-flatbuffers
       therock-nlohmann-json
+    TEST_SUBPROJECTS
+      miopenprovider
   )
   therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
   SUBDIRS
@@ -287,6 +293,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
     RUNTIME_DEPS
       hipdnn_integration_tests
       MIOpen
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(miopenprovider
   SUBDIRS
@@ -333,6 +340,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       hipBLAS-common
       hipBLASLt
       hipdnn_integration_tests
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipblasltprovider
   SUBDIRS
@@ -381,6 +389,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       RUNTIME_DEPS
         hip-clr
         hipdnn_integration_tests
+      TEST_SUBPROJECTS
     )
     therock_cmake_subproject_glob_c_sources(hipkernelprovider
     SUBDIRS
@@ -425,6 +434,7 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       therock-nlohmann-json
     RUNTIME_DEPS
       miopenprovider
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipDNN_samples
   SUBDIRS

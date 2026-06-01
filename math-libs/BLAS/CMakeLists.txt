@@ -511,6 +511,7 @@ therock_cmake_subproject_declare(hipBLAS
     hip-clr
     rocBLAS
     ${hipBLAS_optional_deps}
+  TEST_SUBPROJECTS
 )
 therock_cmake_subproject_glob_c_sources(hipBLAS
 SUBDIRS

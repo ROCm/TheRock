@@ -140,6 +140,7 @@ if(THEROCK_ENABLE_PRIM)
         rocPRIM
       RUNTIME_DEPS
         hip-clr
+      TEST_SUBPROJECTS
     )
     therock_cmake_subproject_glob_c_sources(rocPRIM_tests
       SUBDIRS
@@ -423,6 +424,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       amd-llvm
       hip-clr
       hipcc
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
     SUBDIRS
