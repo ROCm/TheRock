@@ -242,6 +242,24 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
+# SPIRV Target - Experimental
+# Most projects are disabled for it, they can be enabled when we know they work
+therock_add_amdgpu_target(amdgcnspirv "SPIRV Target for AMDGPUs" FAMILY amdgcnspirv
+  EXCLUDE_TARGET_PROJECTS
+    rocRAND hipRAND
+    rocPRIM rocPRIM_tests hipCUB rocThrust
+    rocFFT hipFFT
+    rocBLAS hipBLAS hipBLAS-common rocRoller hipBLASLt
+    rocSPARSE hipSPARSE hipSPARSELt
+    rocSOLVER hipSOLVER
+    rocWMMA libhipcxx
+    composable_kernel MIOpen hipDNN hipdnn_integration_tests
+    miopenprovider hipblasltprovider hipkernelprovider hipDNN_samples
+    rccl rccl-tests rocshmem
+    fusilli fusilliprovider
+    rocprofiler-compute
+)
+
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)
 
