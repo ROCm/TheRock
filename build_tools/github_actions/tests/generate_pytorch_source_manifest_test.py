@@ -388,7 +388,6 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
         self.assertNotIn("apex", manifest)
         self.assertNotIn("triton", manifest)
 
-    @unittest.skip("Enable when Windows Triton nightly builds are on by default")
     def test_windows_nightly_default_projects_include_triton(self) -> None:
         self.assertEqual(
             m.default_projects_for_pytorch_ref("windows", "nightly"),
