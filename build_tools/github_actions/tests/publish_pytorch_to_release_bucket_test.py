@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Unit tests for publish_pytorch_to_staging.py."""
+"""Unit tests for publish_pytorch_to_release_bucket.py."""
 
 import os
 import sys
@@ -10,10 +10,10 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
-from github_actions.publish_pytorch_to_staging import main
+from github_actions.publish_pytorch_to_release_bucket import main
 
 
-class TestPublishPytorchToStaging(unittest.TestCase):
+class TestPublishPytorchToReleaseBucket(unittest.TestCase):
     """Tests for the main() CLI entry point."""
 
     def setUp(self):
@@ -26,7 +26,7 @@ class TestPublishPytorchToStaging(unittest.TestCase):
         self._tmp.cleanup()
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
-    def test_dev_uploads_to_v4_whl_staging_in_dev_python(self, mock_upload):
+    def test_dev_uploads_to_v4_whl_in_dev_python(self, mock_upload):
         mock_upload.return_value = 3
         main(
             [
@@ -43,7 +43,7 @@ class TestPublishPytorchToStaging(unittest.TestCase):
         source, dest = call_args.args
         self.assertEqual(source, self.source_dir)
         self.assertEqual(dest.bucket, "therock-dev-python")
-        self.assertEqual(dest.relative_path, "v4/whl-staging")
+        self.assertEqual(dest.relative_path, "v4/whl")
         self.assertEqual(call_args.kwargs.get("include"), ["*.whl"])
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
@@ -61,7 +61,7 @@ class TestPublishPytorchToStaging(unittest.TestCase):
 
         _source, dest = mock_upload.call_args.args
         self.assertEqual(dest.bucket, "therock-nightly-python")
-        self.assertEqual(dest.relative_path, "v4/whl-staging")
+        self.assertEqual(dest.relative_path, "v4/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
     def test_prerelease_selects_prerelease_bucket(self, mock_upload):
