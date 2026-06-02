@@ -110,14 +110,7 @@ def get_project_features(
     platform_name: str = "",
     build_dir: Path = None,
 ) -> Set[str]:
-    """Resolve project names to CMake feature names.
-
-    Args:
-        topology: BuildTopology instance
-        project_names: List of project/subproject names
-        platform_name: Optional platform name for filtering
-        build_dir: Optional CMake build directory for accurate manifest-based resolution
-    """
+    """Resolve project names to CMake feature names."""
     return topology.resolve_projects_to_features(
         project_names, platform_name, build_dir
     )
@@ -134,19 +127,7 @@ def generate_cmake_args(
     project_names: List[str] = None,
     build_dir: Path = None,
 ) -> List[str]:
-    """Generate CMake arguments for building a specific stage or projects.
-
-    Args:
-        stage_name: Name of the build stage
-        amdgpu_families: GPU families for shard-specific targets
-        dist_amdgpu_families: GPU families for dist targets
-        topology: BuildTopology instance
-        include_comments: Whether to include comments in output
-        platform_name: Platform name for filtering
-        manylinux: Whether to add manylinux Python executable args
-        project_names: Optional list of project names to enable
-        build_dir: Optional CMake build directory for accurate manifest-based resolution
-    """
+    """Generate CMake arguments for building a specific stage or projects."""
     args = []
 
     if stage_name and project_names:

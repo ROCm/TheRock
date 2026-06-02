@@ -870,66 +870,37 @@ class BuildTopology:
     def load_subproject_manifest(
         self, manifest_path: Optional[Path] = None
     ) -> Optional[Dict[str, List[str]]]:
-        """Load artifact→subprojects manifest.
-
-        Args:
-            manifest_path: Optional path to manifest file. If not provided,
-                          looks for artifact_subprojects.json in the repo root
-                          (next to BUILD_TOPOLOGY.toml).
-
-        Returns:
-            Dict mapping artifact names to lists of subproject names,
-            or None if manifest doesn't exist.
-        """
+        """Load artifact_subprojects.json from manifest_path or repo root."""
         if manifest_path is None:
-            # Default: look in repo root (same directory as BUILD_TOPOLOGY.toml)
             manifest_path = self.toml_path.parent / "artifact_subprojects.json"
-
         if not manifest_path.exists():
             return None
-
         with manifest_path.open() as f:
             return json.load(f)
 
     def get_alias_to_artifact_map(
         self, build_dir: Optional[Path] = None
     ) -> Dict[str, str]:
-        """Map subproject names to artifact names (e.g., 'rocblas' -> 'blas').
-
-        Args:
-            build_dir: Optional path to CMake build directory. If provided,
-                      looks for artifact_subprojects.json there first, then
-                      falls back to repo root.
-
-        Returns:
-            Dict mapping lowercase project/subproject names to artifact names.
-        """
+        """Map subproject/artifact names to artifact names."""
         alias_map: Dict[str, str] = {}
 
-        # Try to load manifest - check build_dir first, then repo root
         manifest = None
         if build_dir:
             build_manifest = build_dir / "artifact_subprojects.json"
             if build_manifest.exists():
                 manifest = self.load_subproject_manifest(build_manifest)
         if manifest is None:
-            # Fall back to repo root manifest
             manifest = self.load_subproject_manifest()
 
         for artifact in self.artifacts.values():
-            # Artifact name always maps to itself
             alias_map[artifact.name.lower()] = artifact.name
 
-            # Get subprojects from manifest
             if manifest and artifact.name in manifest:
                 for alias in manifest[artifact.name]:
                     alias_lower = alias.lower()
-                    # Only set if not already mapped, OR if the artifact name
-                    # matches the subproject name (prefer exact matches)
                     if alias_lower not in alias_map or alias_lower == artifact.name:
                         alias_map[alias_lower] = artifact.name
 
-            # split_databases always come from TOML (they're packaging metadata)
             for db_name in artifact.split_databases:
                 alias_map[db_name.lower()] = artifact.name
 
@@ -938,12 +909,7 @@ class BuildTopology:
     def resolve_project_to_artifact(
         self, project_name: str, build_dir: Optional[Path] = None
     ) -> Optional[str]:
-        """Resolve a project name to its artifact name.
-
-        Args:
-            project_name: Name of the project/subproject to resolve
-            build_dir: Optional path to CMake build directory for accurate mappings
-        """
+        """Resolve a project name to its artifact name."""
         return self.get_alias_to_artifact_map(build_dir).get(project_name.lower())
 
     def resolve_projects_to_features(
@@ -952,13 +918,7 @@ class BuildTopology:
         platform_name: str = "",
         build_dir: Optional[Path] = None,
     ) -> Set[str]:
-        """Resolve project names to CMake feature names.
-
-        Args:
-            project_names: List of project/subproject names to resolve
-            platform_name: Optional platform name to filter disabled artifacts
-            build_dir: Optional path to CMake build directory for accurate mappings
-        """
+        """Resolve project names to CMake feature names."""
         features: Set[str] = set()
         alias_map = self.get_alias_to_artifact_map(build_dir)
         for project in project_names:

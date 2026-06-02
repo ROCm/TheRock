@@ -392,6 +392,9 @@ function(therock_write_subproject_manifest)
     return()
   endif()
 
+  # Sort mappings for deterministic output
+  list(SORT _mappings)
+
   # Build JSON content
   set(_json_content "{\n")
   set(_first TRUE)
@@ -407,8 +410,10 @@ function(therock_write_subproject_manifest)
     math(EXPR _value_start "${_colon_pos} + 1")
     string(SUBSTRING "${_mapping}" ${_value_start} -1 _subprojects_csv)
 
-    # Convert comma-separated to JSON array
-    string(REPLACE "," "\", \"" _subprojects_json "${_subprojects_csv}")
+    # Sort subprojects for deterministic output
+    string(REPLACE "," ";" _subprojects_list "${_subprojects_csv}")
+    list(SORT _subprojects_list)
+    string(REPLACE ";" "\", \"" _subprojects_json "${_subprojects_list}")
 
     # Add comma before all entries except the first
     if(_first)

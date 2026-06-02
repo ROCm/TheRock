@@ -1,19 +1,65 @@
 {
+  "amd-dbgapi": [
+    "amd-comgr",
+    "amd-dbgapi"
+  ],
+  "amd-llvm": [
+    "amd-comgr",
+    "amd-llvm",
+    "hipcc"
+  ],
+  "aqlprofile": [
+    "aqlprofile"
+  ],
   "base": [
-    "rocm_smi_lib",
-    "rocprofiler-register",
     "rocm-cmake",
     "rocm-core",
     "rocm-half",
+    "rocm_smi_lib",
+    "rocprofiler-register",
     "therock-aux-overlay"
   ],
-  "amd-llvm": [
-    "amd-llvm",
-    "hipcc",
-    "amd-comgr"
+  "blas": [
+    "hipBLAS",
+    "hipBLAS-common",
+    "hipBLASLt",
+    "hipSOLVER",
+    "hipSPARSE",
+    "hipSPARSELt",
+    "rocBLAS",
+    "rocRoller"
   ],
-  "hipify": [
-    "hipify"
+  "composable-kernel": [
+    "composable_kernel"
+  ],
+  "core-amdsmi": [
+    "amdsmi"
+  ],
+  "core-hip": [
+    "hip-clr"
+  ],
+  "core-hiptests": [
+    "hip-tests"
+  ],
+  "core-kpack": [
+    "rocm-kpack"
+  ],
+  "core-ocl-icd": [
+    "ocl-icd"
+  ],
+  "core-ocl": [
+    "ocl-clr"
+  ],
+  "core-runtime": [
+    "ROCR-Runtime",
+    "rocminfo"
+  ],
+  "elfio": [
+    "therock-elfio"
+  ],
+  "fft": [
+    "hipFFT",
+    "rocFFT"
   ],
   "fftw3": [
     "therock-fftw3",
@@ -22,11 +68,20 @@
   "flatbuffers": [
     "therock-flatbuffers"
   ],
-  "nlohmann-json": [
-    "therock-nlohmann-json"
+  "hipblasltprovider": [
+    "hipblasltprovider"
   ],
-  "elfio": [
-    "therock-elfio"
+  "hipdnn-integration-tests": [
+    "hipdnn_integration_tests"
+  ],
+  "hipdnn-samples": [
+    "hipDNN_samples"
+  ],
+  "hipdnn": [
+    "hipDNN"
+  ],
+  "hipify": [
+    "hipify"
   ],
   "host-blas": [
     "therock-host-blas",
@@ -35,140 +90,85 @@
   "host-suite-sparse": [
     "therock-SuiteSparse"
   ],
-  "core-kpack": [
-    "rocm-kpack"
+  "miopen": [
+    "MIOpen"
   ],
-  "core-amdsmi": [
-    "amdsmi"
+  "miopenprovider": [
+    "miopenprovider"
   ],
-  "core-runtime": [
-    "ROCR-Runtime",
-    "rocminfo"
+  "nlohmann-json": [
+    "therock-nlohmann-json"
   ],
-  "core-hip": [
-    "hip-clr"
+  "prim": [
+    "hipCUB",
+    "rocPRIM",
+    "rocPRIM_tests",
+    "rocThrust"
   ],
-  "core-hiptests": [
-    "hip-tests"
+  "rand": [
+    "hipRAND",
+    "rocRAND"
   ],
-  "core-ocl-icd": [
-    "ocl-icd"
+  "rccl": [
+    "rccl",
+    "rccl-tests"
   ],
-  "core-ocl": [
-    "ocl-clr"
+  "rdc": [
+    "amdsmi",
+    "rdc",
+    "rocprofiler-sdk"
   ],
-  "rocrtst": [
-    "rocrtst"
-  ],
-  "amd-dbgapi": [
-    "amd-comgr",
-    "amd-dbgapi"
-  ],
-  "rocr-debug-agent": [
-    "amd-dbgapi",
-    "rocr-debug-agent",
-    "ROCR-Runtime"
-  ],
-  "rocr-debug-agent-tests": [
-    "amd-dbgapi",
-    "hip-clr",
-    "rocr-debug-agent",
-    "rocr-debug-agent-tests",
-    "ROCR-Runtime"
+  "rocdecode": [
+    "rocdecode"
   ],
   "rocgdb": [
     "amd-comgr",
     "amd-dbgapi",
     "rocgdb"
   ],
-  "aqlprofile": [
-    "aqlprofile"
-  ],
-  "rocprofiler-sdk": [
-    "rocprofiler-sdk",
-    "roctracer",
-    "rocprof-trace-decoder"
+  "rocjpeg": [
+    "rocjpeg"
   ],
   "rocprofiler-compute": [
     "aqlprofile",
+    "rocprofiler-compute",
+    "rocprofiler-sdk"
+  ],
+  "rocprofiler-sdk": [
+    "rocprof-trace-decoder",
     "rocprofiler-sdk",
-    "rocprofiler-compute"
+    "roctracer"
+  ],
+  "rocprofiler-systems-examples": [
+    "rocprofiler-systems-examples"
   ],
   "rocprofiler-systems": [
     "amdsmi",
     "rocprofiler-sdk",
     "rocprofiler-systems"
   ],
-  "rocprofiler-systems-examples": [
-    "rocprofiler-systems-examples"
+  "rocr-debug-agent-tests": [
+    "ROCR-Runtime",
+    "amd-dbgapi",
+    "hip-clr",
+    "rocr-debug-agent",
+    "rocr-debug-agent-tests"
   ],
-  "rdc": [
-    "amdsmi",
-    "rocprofiler-sdk",
-    "rdc"
+  "rocr-debug-agent": [
+    "ROCR-Runtime",
+    "amd-dbgapi",
+    "rocr-debug-agent"
   ],
-  "rccl": [
-    "rccl",
-    "rccl-tests"
+  "rocrtst": [
+    "rocrtst"
   ],
   "rocshmem": [
     "rocshmem"
   ],
-  "rand": [
-    "rocRAND",
-    "hipRAND"
-  ],
-  "prim": [
-    "rocPRIM",
-    "hipCUB",
-    "rocThrust",
-    "rocPRIM_tests"
-  ],
-  "fft": [
-    "rocFFT",
-    "hipFFT"
-  ],
-  "support": [
-    "mxDataGenerator"
-  ],
-  "blas": [
-    "hipBLAS-common",
-    "rocRoller",
-    "hipBLASLt",
-    "rocBLAS",
-    "hipSPARSE",
-    "hipSPARSELt",
-    "hipSOLVER",
-    "hipBLAS"
-  ],
   "rocwmma": [
     "rocWMMA"
   ],
-  "composable-kernel": [
-    "composable_kernel"
-  ],
-  "miopen": [
-    "MIOpen"
-  ],
-  "hipdnn": [
-    "hipDNN"
-  ],
-  "hipdnn-integration-tests": [
-    "hipdnn_integration_tests"
-  ],
-  "miopenprovider": [
-    "miopenprovider"
-  ],
-  "hipblasltprovider": [
-    "hipblasltprovider"
-  ],
-  "hipdnn-samples": [
-    "hipDNN_samples"
-  ],
-  "rocdecode": [
-    "rocdecode"
-  ],
-  "rocjpeg": [
-    "rocjpeg"
+  "support": [
+    "mxDataGenerator"
   ]
 }
