@@ -268,6 +268,26 @@ if(THEROCK_ENABLE_ROCGDB)
     message(WARNING "Configuring ROCgdb with modified source directory: ${THEROCK_ROCGDB_SOURCE_DIR}")
   endif()
 
+  # Default to building ROCm's rocgdb branch (with NOTICES.txt, roccoremerge, etc.).
+  # For upstream master builds, which currently lack AMD-specific files:
+  #   - NOTICES.txt file
+  #   - roccoremerge program
+  #   - roccoremerge man page
+  # set: -DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON
+  # Note: upstream master will eventually include roccoremerge.
+  if(NOT DEFINED THEROCK_ROCGDB_UPSTREAM_BUILD)
+    set(THEROCK_ROCGDB_UPSTREAM_BUILD OFF)
+  endif()
+
+  # When ON, download the test_rocgdb.py CI wrapper script from ROCm/ROCgdb
+  # amd-staging if it is not already present in the rocgdb source tree, and
+  # install it into tests/rocgdb. Required by TheRock CI when building a
+  # rocgdb source tree that is not part of the branches exercised by CI.
+  # Off by default to avoid a network fetch at configure time.
+  if(NOT DEFINED THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT)
+    set(THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT OFF)
+  endif()
+
   therock_cmake_subproject_declare(rocgdb
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "rocgdb"
@@ -279,6 +299,8 @@ if(THEROCK_ENABLE_ROCGDB)
       "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables_escaped}"
       "-DTHEROCK_BUNDLE_SYSDEPS=${THEROCK_BUNDLE_SYSDEPS}"
       "-DROCGDB_SOURCE_DIR=${THEROCK_ROCGDB_SOURCE_DIR}"
+      "-DROCGDB_UPSTREAM_BUILD=${THEROCK_ROCGDB_UPSTREAM_BUILD}"
+      "-DROCGDB_DOWNLOAD_CI_SCRIPT=${THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT}"
     COMPILER_TOOLCHAIN
       amd-llvm
     RUNTIME_DEPS
