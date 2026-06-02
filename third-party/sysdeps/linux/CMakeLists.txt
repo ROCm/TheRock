@@ -18,6 +18,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zlib" "${CMAKE_CURRENT_B
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_BINARY_DIR}/zstd")
 
 # Core system deps that depend on the above.
+add_subdirectory(binutils)
 add_subdirectory(elfutils)
 
 therock_provide_artifact(sysdeps
