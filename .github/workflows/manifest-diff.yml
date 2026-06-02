@@ -96,6 +96,10 @@ jobs:
           ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
 
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+
       - name: Generate manifest diff report
         id: gen-report
         env:
