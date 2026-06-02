@@ -42,6 +42,10 @@ Usage examples:
     # Disable pytest caching (useful with read-only pytorch directory):
     python run_pytorch_tests_full.py --no-cache
 
+    # GPU selection options:
+    python run_pytorch_tests_full.py --gpu-policy all --device-query all
+    python run_pytorch_tests_full.py --gpu-policy single --device-query all
+
 Environment variables (all overridable via CLI flags or workflow YAML):
     AMDGPU_FAMILY, TEST_CONFIG, SHARD_NUMBER, NUM_TEST_SHARDS,
     TESTS_TO_INCLUDE, PYTORCH_VERSION
@@ -59,8 +63,8 @@ from skip_tests.create_skip_tests import get_tests
 
 from pytorch_utils import (
     check_pytorch_source_version,
+    configure_gpu_visibility,
     detect_pytorch_version,
-    set_gpu_execution_policy,
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -307,6 +311,32 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         default=False,
         help="Pass --dry-run to run_test.py to list tests without running them.",
     )
+
+    # GPU selection happens in two stages:
+    #   1. --device-query  decides which GPUs enter the candidate set.
+    #   2. --gpu-policy    decides how many candidates are made visible to tests.
+    parser.add_argument(
+        "--device-query",
+        type=str,
+        choices=["auto", "unique", "all"],
+        default="auto",
+        help="""Stage 1: which GPUs enter the candidate set (see --gpu-policy for stage 2).
+- "unique": one device per architecture. E.g. {gfx942:[0], gfx1100:[2]}.
+- "all": every device of each architecture. E.g. {gfx942:[0,1], gfx1100:[2]}.
+"auto" (default) derives from --test-config: "all" for "distributed", else "unique".""",
+    )
+
+    parser.add_argument(
+        "--gpu-policy",
+        type=str,
+        choices=["auto", "single", "all"],
+        default="auto",
+        help="""Stage 2: how many candidate GPUs to make visible (see --device-query for stage 1).
+- "single": one GPU visible at a time. Suitable for most unit tests.
+- "all": all candidate GPUs visible at once. Useful for multi-GPU tests.
+"auto" (default) derives from --test-config: "all" for "distributed", else "single".""",
+    )
+
     parser.add_argument(
         "--allow-version-mismatch",
         default=False,
@@ -330,6 +360,15 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         parser.error(
             f"--shard ({args.shard}) cannot exceed --num-shards ({args.num_shards})."
         )
+
+    # Resolve GPU selection defaults from --test-config ("auto" means "derive").
+    # Distributed tests need all GPUs by default; other configs use a single
+    # unique device to avoid contention.
+    is_distributed = args.test_config == "distributed"
+    if args.device_query == "auto":
+        args.device_query = "all" if is_distributed else "unique"
+    if args.gpu_policy == "auto":
+        args.gpu_policy = "all" if is_distributed else "single"
 
     return args, passthrough_args
 
@@ -485,23 +524,11 @@ def main(argv: list[str]) -> int:
         pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
     )
 
-    # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
-    # torch or running pytest.  Once torch.cuda is initialized, changing
-    # HIP_VISIBLE_DEVICES has no effect.  Distributed tests need all GPUs;
-    # other configs use a single device to avoid multi-GPU contention.
-    gpu_policy = "all" if args.test_config == "distributed" else "single"
-    selected = set_gpu_execution_policy(args.amdgpu_family, policy=gpu_policy)
-    first_arch = selected[0][0]
-    unique_archs = sorted(set(arch for arch, _ in selected))
-    device_ids = [str(dev_id) for _, dev_id in selected]
-    print(
-        f"Selected {len(selected)} GPU(s): "
-        f"arch(es)={', '.join(unique_archs)}, "
-        f"device(s)={', '.join(device_ids)}"
+    # Set HIP_VISIBLE_DEVICES BEFORE importing torch or running pytest. Once
+    # torch.cuda is initialized, changing HIP_VISIBLE_DEVICES has no effect.
+    selected_archs = configure_gpu_visibility(
+        args.amdgpu_family, args.device_query, args.gpu_policy
     )
-
-    # get_tests amdgpu_family requires list[str]
-    first_arch = [first_arch]
 
     pytorch_version = args.pytorch_version
     if not pytorch_version:
@@ -512,7 +539,7 @@ def main(argv: list[str]) -> int:
         tests_to_skip = args.k
     else:
         tests_to_skip = get_tests(
-            amdgpu_family=first_arch,
+            amdgpu_family=selected_archs,
             pytorch_version=pytorch_version,
             platform=platform.system(),
             create_skip_list=not args.debug,

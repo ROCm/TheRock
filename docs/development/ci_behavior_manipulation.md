@@ -78,14 +78,14 @@ workflow supports skipping individual build stages by copying their artifacts
 from a previous workflow run. This will be used in a few scenarios. For example:
 
 - Changes to the rocm-libraries project will use prebuilt artifacts for
-  `foundation,compiler-runtime`
+  `compiler-runtime`
 - Changes to just test scripts or python packages will use prebuilt artifacts for
   all stages
 
 Two workflow inputs control this:
 
 - **`prebuilt_stages`**: Comma-separated list of stage names to skip
-  (e.g. `foundation,compiler-runtime`). Artifacts for these stages are copied
+  (e.g. `compiler-runtime,runtime-tests,math-libs`). Artifacts for these stages are copied
   from the baseline run instead of being built. Applied to both Linux and
   Windows; stages not present on a platform are ignored.
 - **`baseline_run_id`**: The workflow run ID to copy prebuilt artifacts from.
@@ -113,6 +113,6 @@ be computed based on dependencies and a special "all" option may be available.
 For now, these are the common configurations used for testing:
 
 ```
-foundation,compiler-runtime
-foundation,compiler-runtime,math-libs,comm-libs,debug-tools,dctools-core,profiler-apps,media-libs
+compiler-runtime
+compiler-runtime,runtime-tests,math-libs,comm-libs,debug-tools,dctools-core,profiler-apps,media-libs
 ```

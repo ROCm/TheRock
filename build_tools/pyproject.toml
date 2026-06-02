@@ -2,6 +2,7 @@
 testpaths = [
     "tests",
     "github_actions/tests",
+    "third_party/s3_management/tests",
 ]
 python_files = ["*_test.py"]
 addopts = "-ra"
@@ -12,6 +13,7 @@ source = ["."]
 omit = [
     "tests/*",
     "github_actions/tests/*",
+    "third_party/s3_management/tests/*",
     "*/__pycache__/*",
 ]
 
