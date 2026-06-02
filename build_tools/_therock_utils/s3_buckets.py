@@ -74,6 +74,8 @@ s3_bucket_configs = [
 
 _BUCKET_CONFIGS_BY_NAME = {c.name: c for c in s3_bucket_configs}
 
+_ALLOWED_ARTIFACT_RELEASE_TYPES = {"ci", "dev", "nightly", "prerelease"}
+
 _ALLOWED_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
 
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
@@ -87,25 +89,26 @@ def get_artifacts_bucket_config(
     """Look up the artifacts bucket config for a repository.
 
     Args:
-        release_type: "" for CI builds, or "dev", "nightly", "prerelease".
+        release_type: "ci", "dev", "nightly", or "prerelease".
         repository: GitHub repository (e.g. "ROCm/TheRock").
         is_pr_from_fork: Whether this is a PR from a fork.
 
     Raises:
         ValueError: If release_type is invalid.
     """
-    if release_type:
-        if release_type not in _ALLOWED_RELEASE_TYPES:
-            raise ValueError(
-                f"release_type={release_type!r} is invalid, "
-                f"expected empty string or one of {_ALLOWED_RELEASE_TYPES}"
-            )
-        bucket_name = f"therock-{release_type}-artifacts"
-    else:
+    if release_type not in _ALLOWED_ARTIFACT_RELEASE_TYPES:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {_ALLOWED_ARTIFACT_RELEASE_TYPES}"
+        )
+
+    if release_type == "ci":
         if is_pr_from_fork or repository != "ROCm/TheRock":
             bucket_name = "therock-ci-artifacts-external"
         else:
             bucket_name = "therock-ci-artifacts"
+    else:
+        bucket_name = f"therock-{release_type}-artifacts"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
@@ -182,7 +185,7 @@ def get_artifacts_bucket_config_for_workflow_run(
     Args:
         github_repository: GitHub repository (e.g. "ROCm/TheRock").
         release_type: Release type override. If None, reads RELEASE_TYPE
-            from the environment (default: empty string = CI build).
+            from the environment (default: "ci").
         workflow_run_id: If set and ``workflow_run`` is None, fetches the
             workflow run from the GitHub API for fork detection.
         workflow_run: Optional workflow run dict from GitHub API. If
@@ -192,9 +195,8 @@ def get_artifacts_bucket_config_for_workflow_run(
     _log(f"  github_repository: {github_repository}")
 
     if release_type is None:
-        release_type = os.environ.get("RELEASE_TYPE", "")
-    if release_type:
-        _log(f"  release_type: {release_type}")
+        release_type = os.environ.get("RELEASE_TYPE", "ci")
+    _log(f"  release_type: {release_type}")
 
     # Fetch workflow_run from API if not provided but workflow_run_id is set.
     # Deferred import: github_actions is an optional dependency not available in

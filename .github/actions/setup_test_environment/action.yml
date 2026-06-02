@@ -24,8 +24,8 @@ inputs:
   FETCH_ARTIFACT_ARGS:
     description: (string) Extra arguments to install_rocm_from_artifacts.py (e.g. `--blas --tests`)
   RELEASE_TYPE:
-    description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
-    default: ""
+    description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+    default: ci
 
 runs:
   using: "composite"
