@@ -60,6 +60,7 @@ rather than under a `<stream>/` prefix on the parent domain.
 
 | Stream    | Subdomain               | Status            |
 | :-------- | :---------------------- | :---------------- |
+| dev| `dev.repo.amd.com`  | required at v2    |
 | nightly   | `nightly.repo.amd.com`  | required at v2    |
 | rc        | `rc.repo.amd.com`       | required at v1    |
 | stable    | `stable.repo.amd.com`   | required at v1    |
@@ -74,6 +75,8 @@ do **not** follow the stream subdomain pattern:
   section). Hosted at `https://repo.amd.com/amdrepos/`. Serves all
   streams; stream selection happens inside the installed
   `amdrocm-repo` package via the active stream variable.
+  GPG keys and other common public infrastructure files 
+  published in this folder as well.
 - `rocm/` — the existing non-production `rocm/` folder. Hosted at
   `https://repo.amd.com/rocm/`. Retained as-is for backward
   compatibility and scheduled to move to `archives.repo.amd.com` in
