@@ -21,8 +21,15 @@ to the existing test driver:
 Required env (set by the workflow):
 
   THEROCK_BIN_DIR
-      Directory containing the populated ROCm dist (i.e. ``<dist>/rocm`` with
-      ``lib/``, ``bin/``, ``share/rocjitsu/``).
+      Path to the ``bin/`` directory of the populated ROCm dist (i.e.
+      ``<rocm_root>/bin``). This mirrors the convention used by the rest of
+      TheRock's per-component test drivers (e.g. ``test_rocdecode.py``,
+      ``test_runner.py``) which compute the ROCm root as
+      ``Path(THEROCK_BIN_DIR).parent``. Rocjitsu's interposer, config and
+      schema are looked up under that ROCm root:
+      ``<root>/lib/librocjitsu_kmd.so``,
+      ``<root>/share/rocjitsu/configs/...``,
+      ``<root>/share/rocjitsu/schemas/...``.
 
 Usage:
   python simulator_runner.py --component rocrand --filter-preset basic
@@ -59,23 +66,34 @@ COMPONENT_DRIVERS = {
 def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
     """Locate the rocjitsu interposer, config and schema in a populated dist.
 
-    The rocjitsu artifact installs into ``<dist>/rocm`` so the expected layout
-    relative to ``THEROCK_BIN_DIR`` is::
+    ``bin_dir`` is the ``bin/`` directory of the unified ROCm install (the
+    value of ``THEROCK_BIN_DIR`` in TheRock's test harness). The rocjitsu
+    artifact installs side-by-side with the rest of ROCm, so we resolve
+    everything relative to the ROCm root (``bin_dir.parent``)::
 
-        lib/librocjitsu_kmd.so
-        share/rocjitsu/configs/amdgpu_cdna4_kmd.json
-        share/rocjitsu/schemas/simulation_config.fbs
+        <root>/lib/librocjitsu_kmd.so
+        <root>/share/rocjitsu/configs/amdgpu_cdna4_kmd.json
+        <root>/share/rocjitsu/schemas/simulation_config.fbs
     """
+    rocm_root = bin_dir.parent
     paths = {
-        "preload": bin_dir / "lib" / "librocjitsu_kmd.so",
-        "config": bin_dir / "share" / "rocjitsu" / "configs" / "amdgpu_cdna4_kmd.json",
-        "schema": bin_dir / "share" / "rocjitsu" / "schemas" / "simulation_config.fbs",
+        "preload": rocm_root / "lib" / "librocjitsu_kmd.so",
+        "config": rocm_root
+        / "share"
+        / "rocjitsu"
+        / "configs"
+        / "amdgpu_cdna4_kmd.json",
+        "schema": rocm_root
+        / "share"
+        / "rocjitsu"
+        / "schemas"
+        / "simulation_config.fbs",
     }
     missing = [str(p) for p in paths.values() if not p.exists()]
     if missing:
         raise FileNotFoundError(
             "rocjitsu install is incomplete under "
-            f"THEROCK_BIN_DIR={bin_dir}. Missing:\n  "
+            f"ROCm root {rocm_root} (THEROCK_BIN_DIR={bin_dir}). Missing:\n  "
             + "\n  ".join(missing)
             + "\nMake sure the build enabled "
             "-DTHEROCK_ENABLE_EMULATION=ON -DTHEROCK_ENABLE_ROCJITSU=ON "
@@ -172,7 +190,8 @@ def main(argv: list[str] | None = None) -> int:
     if not bin_dir_env:
         print(
             "ERROR: THEROCK_BIN_DIR is not set. The simulator runner needs "
-            "the path to the populated ROCm dist (e.g. build/dist/rocm).",
+            "the path to the populated ROCm `bin/` dir "
+            "(e.g. build/dist/rocm/bin).",
             file=sys.stderr,
         )
         return 2
