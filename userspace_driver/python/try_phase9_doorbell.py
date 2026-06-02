@@ -277,6 +277,38 @@ def main():
         gc1_wr(regRLC_SAFE_MODE, (1 << 0))
         print("clock gating configured (CGCG/CGLS + MGCG overrides cleared)")
 
+    def configure_scratch_aperture():
+        # gfx12 scratch (private memory) needs the per-VMID private aperture set
+        # in SH_MEM_BASES, else scratch_load/store flat addresses translate
+        # against a zero private base and fault the CP (HSA 0x1000) — the root
+        # cause of bool reductions (and any register-spilling kernel) faulting.
+        # Port of tinygrad am ip.py: private_base=0x2, shared_base=0x1 for all
+        # VMIDs (gfx10+). The compute queue runs under VMID 0. SH_MEM_BASES is
+        # GC BASE_IDX=1 and NOT a SET_SH_REG register, so it is programmed via
+        # MMIO under a GRBM VMID select (same mechanism as select_hqd).
+        regSH_MEM_BASES = 0x09e3   # B1
+        regSH_MEM_CONFIG = 0x09e4  # B1
+        SH_MEM_BASES_VAL = (0x1 << 16) | 0x2  # shared_base[31:16]=1, private_base[15:0]=2
+        # gfx12 SH_MEM_CONFIG (gc_12_0_0): address_mode[0]=0 (64-bit),
+        # alignment_mode[3:2]=3 (UNALIGNED), initial_inst_prefetch[15:14]=3.
+        # = 0xC00C. The HW reset value 0xC000 has alignment_mode=DWORD(0), which
+        # faults the sub-dword scratch_store_b8/scratch_load_u8 that spilling
+        # kernels emit. Both amdgpu (gfx_v12_0.c DEFAULT_SH_MEM_CONFIG) and
+        # tinygrad program UNALIGNED.
+        SH_MEM_CONFIG_VAL = (0x3 << 2) | (0x3 << 14)  # 0xC00C
+        gc1_wr(regGRBM_GFX_CNTL, 0)  # select VMID 0 for the read-back
+        pre_bases, pre_cfg = gc1_rd(regSH_MEM_BASES), gc1_rd(regSH_MEM_CONFIG)
+        for vmid in range(16):
+            gc1_wr(regGRBM_GFX_CNTL, (vmid & 0xf) << 4)
+            gc1_wr(regSH_MEM_BASES, SH_MEM_BASES_VAL)
+            gc1_wr(regSH_MEM_CONFIG, SH_MEM_CONFIG_VAL)
+        gc1_wr(regGRBM_GFX_CNTL, 0)
+        post_bases, post_cfg = gc1_rd(regSH_MEM_BASES), gc1_rd(regSH_MEM_CONFIG)
+        print(f"scratch aperture: SH_MEM_BASES vmid0 0x{pre_bases:08x} -> 0x{post_bases:08x} "
+              f"(wrote 0x{SH_MEM_BASES_VAL:08x}); "
+              f"SH_MEM_CONFIG 0x{pre_cfg:08x} -> 0x{post_cfg:08x} "
+              f"(wrote 0x{SH_MEM_CONFIG_VAL:08x}) to all 16 vmids")
+
     # Bring up GFX unless attaching to an already live MEC/MES instance.
     if attach_only:
         print("PHASE9_ATTACH_ONLY=1: skipping gfx_bring_up() and PSP firmware loads")
@@ -287,6 +319,8 @@ def main():
             sys.exit(1)
         if os.environ.get("PHASE9_SKIP_CLOCKGATING") != "1":
             configure_clockgating()
+        if os.environ.get("PHASE9_SKIP_SH_MEM") != "1":
+            configure_scratch_aperture()
 
     fb_base = (c.mmio_read32(_MMIO_BAR, (0x1A000 + 0x0554) * 4) & 0xFFFFFF) << 24
     bar0_cpu, _ = c.map_bar(0)
