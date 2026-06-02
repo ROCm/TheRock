@@ -61,6 +61,7 @@ from amdgpu_family_matrix import (
     select_build_runner,
     select_weighted_label,
 )
+from ci_config_loader import config_exists, load_runner_config, log_config_version
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -706,29 +707,12 @@ def _filter_families_by_platform(
     ]
 
 
-def select_targets(ci_inputs: CIInputs) -> TargetSelection:
-    """Determine GPU families per platform based on trigger type and inputs.
-
-    Trigger types run progressively larger sets of builds and tests:
-
-    - pull_request: Smallest default set (presubmit families). Designed for
-      fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (ci:run-all-archs).
-    - push: Broader coverage (presubmit + postsubmit families). Runs on
-      code that has landed, so we want more thorough validation than PRs
-      without paying the full nightly cost.
-    - schedule: Full coverage (all families including nightly-only). Catches
-      regressions on targets that are too slow or expensive for every push.
-    - workflow_dispatch: Full manual control. Per-platform family inputs are
-      taken directly from the workflow inputs, giving the caller the ability
-      to either replicate what CI does on PRs/push or build/test a narrow
-      set of targets for investigation.
-
-    Returns per-platform family lists, filtered to only include families
-    that have a platform entry in amdgpu_family_matrix.py.
-    """
+def select_targets(
+    ci_inputs: CIInputs, external_config: dict | None = None
+) -> TargetSelection:
+    """Determine GPU families per platform based on trigger type and inputs."""
     all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
+        ["presubmit", "postsubmit", "nightly"], external_config=external_config
     )
 
     # Select family names per platform based on trigger type.
@@ -752,7 +736,11 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
         # for everything).
-        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
+        defaults = list(
+            get_all_families_for_trigger_types(
+                ["presubmit"], external_config=external_config
+            ).keys()
+        )
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_push:
@@ -760,7 +748,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         # we validate on more targets (e.g. gfx950) without paying full
         # nightly cost.
         defaults = list(
-            get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
+            get_all_families_for_trigger_types(
+                ["presubmit", "postsubmit"], external_config=external_config
+            ).keys()
         )
         linux_names = list(defaults)
         windows_names = list(defaults)
@@ -974,14 +964,11 @@ def expand_build_configs(
     test_type: str,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
+    external_config: dict | None = None,
 ) -> BuildConfigs:
-    """Build a BuildConfig for each platform that supports the variant.
-
-    Returns BuildConfigs with a BuildConfig per platform, or None for
-    platforms where the variant isn't available or no families match.
-    """
+    """Build a BuildConfig for each platform that supports the variant."""
     all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
+        ["presubmit", "postsubmit", "nightly"], external_config=external_config
     )
     build_variant = ci_inputs.build_variant
     # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
@@ -1088,13 +1075,12 @@ def write_outputs(
 # ---------------------------------------------------------------------------
 
 
-def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
-    """Main pipeline. Each step feeds the next.
-
-    This function is the primary entry point for testing — construct
-    CIInputs and GitContext directly and assert on the returned CIOutputs.
-    No git operations or environment access needed.
-    """
+def configure(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    external_config: dict | None = None,
+) -> CIOutputs:
+    """Main pipeline. Each step feeds the next."""
     print("=== Inputs ===")
     ci_inputs.log()
     git_context.log()
@@ -1109,7 +1095,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     jobs.log()
 
     print("\n=== Selecting GPU target families ===")
-    targets = select_targets(ci_inputs)
+    targets = select_targets(ci_inputs, external_config=external_config)
     targets.log()
 
     print("\n=== Building per-platform configs ===")
@@ -1119,6 +1105,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        external_config=external_config,
     )
     builds.log()
 
@@ -1136,7 +1123,22 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 # ---------------------------------------------------------------------------
 
 
+def _load_external_config():
+    """Load external CI config from CI_CONFIG_PATH."""
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if not ci_config_path:
+        raise RuntimeError("CI_CONFIG_PATH environment variable is required")
+    config_path = Path(ci_config_path)
+    if not config_exists(config_path):
+        raise RuntimeError(f"CI config not found at {ci_config_path}")
+    config = load_runner_config(config_path)
+    log_config_version(config, config_path)
+    return config
+
+
 def main():
+    external_config = _load_external_config()
+
     ci_inputs = CIInputs.from_environ()
 
     # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
@@ -1157,7 +1159,7 @@ def main():
         # a "prior commit" to compare against.
         git_context = GitContext.empty()
 
-    outputs = configure(ci_inputs, git_context)
+    outputs = configure(ci_inputs, git_context, external_config=external_config)
     write_outputs(ci_inputs=ci_inputs, outputs=outputs)
 
 
