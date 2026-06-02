@@ -154,7 +154,6 @@ artifact_groups = [
     "kfdtest",
     "opencl-runtime",
     "profiler-core",
-    "rocrtst",
     "rocjitsu"
 ]
 
