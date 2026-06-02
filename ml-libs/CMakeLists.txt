@@ -185,6 +185,10 @@ if(THEROCK_ENABLE_HIPDNN)
       therock-flatbuffers
       therock-nlohmann-json
     TEST_SUBPROJECTS
+      miopenprovider
+      hipblasltprovider
+      hipkernelprovider
+      hipdnn-integration-tests
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
