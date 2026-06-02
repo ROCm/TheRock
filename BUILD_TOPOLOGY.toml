@@ -595,6 +595,7 @@ artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
+split_databases = ["rocwmma"]
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
