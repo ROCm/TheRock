@@ -41,8 +41,19 @@ cmake -B build -GNinja \
   -DTHEROCK_BUILD_TESTING=ON
 ninja -C build therock-dist therock-archives
 
-# 2) Run a real ROCm library under the simulator.
-export THEROCK_BIN_DIR=$PWD/build/dist/rocm
+# 2) Unpack the per-component test archive into the dist.
+#    `therock-dist` merges _lib/_run/_dev/_doc/_dbg into build/dist/rocm/ but
+#    NOT _test - test drivers need bin/<comp>/CTestTestfile.cmake which only
+#    ships in the _test tarball.
+for tarball in build/artifacts/rand_test_*.tar.xz; do
+  tar -xf "$tarball" -C build/dist/rocm
+done
+
+# 3) Run a real ROCm library under the simulator. Follow the project-wide
+#    convention: THEROCK_BIN_DIR is `<rocm_root>/bin`; per-component drivers
+#    derive `<rocm_root>` via Path(THEROCK_BIN_DIR).parent, and so does
+#    simulator_runner.py when it locates librocjitsu_kmd.so + configs.
+export THEROCK_BIN_DIR=$PWD/build/dist/rocm/bin
 export AMDGPU_FAMILIES=gfx94X-dcgpu
 export TEST_COMPONENT=rocrand
 export TEST_TYPE=full
@@ -50,11 +61,11 @@ python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
     --component rocrand --filter-preset basic
 ```
 
-The wrapper composes:
+The wrapper composes (with `<root> = Path(THEROCK_BIN_DIR).parent`):
 
-- `LD_PRELOAD=$THEROCK_BIN_DIR/lib/librocjitsu_kmd.so`
-- `RJ_CONFIG=$THEROCK_BIN_DIR/share/rocjitsu/configs/amdgpu_cdna4_kmd.json`
-- `RJ_SCHEMA=$THEROCK_BIN_DIR/share/rocjitsu/schemas/simulation_config.fbs`
+- `LD_PRELOAD=<root>/lib/librocjitsu_kmd.so`
+- `RJ_CONFIG=<root>/share/rocjitsu/configs/amdgpu_cdna4_kmd.json`
+- `RJ_SCHEMA=<root>/share/rocjitsu/schemas/simulation_config.fbs`
 - `HSA_ENABLE_SDMA=1`
 - `GTEST_FILTER` from the chosen preset and the per-component skip list.
 

@@ -60,8 +60,15 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
-      # Layout used by simulator_runner.py to find rocjitsu pieces.
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm"
+      # Convention used by all per-component test drivers (test_runner.py,
+      # test_rocdecode.py, ...): THEROCK_BIN_DIR points at the `bin/` subdir of
+      # the populated ROCm install. Drivers derive the ROCm root via
+      # `Path(THEROCK_BIN_DIR).parent`, and simulator_runner.py follows the
+      # same rule when locating librocjitsu_kmd.so and the rocjitsu config /
+      # schema files.
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm/bin"
+      # Root of the ROCm install (for the Verify and Extract steps below).
+      THEROCK_ROCM_ROOT: "${{ github.workspace }}/build/dist/rocm"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -109,13 +116,38 @@ jobs:
         run: |
           cmake --build build --target therock-dist therock-archives -- -k 0
 
-      - name: Verify rocjitsu interposer + configs are present
+      - name: Unpack test artifacts into ROCm dist
+        # The `therock-dist` target merges `_lib`, `_run`, `_dev`, `_doc`,
+        # `_dbg` component flavors into build/dist/rocm/, but `_test` archives
+        # (which contain `bin/<component>/CTestTestfile.cmake` and the gtest
+        # binaries) are not merged. The per-component test drivers (e.g.
+        # test_rocrand.py) run `ctest --test-dir ${THEROCK_BIN_DIR}/<comp>`,
+        # so we need to extract the `_test` tarballs from build/artifacts/
+        # into the dist before invoking them. This mirrors how
+        # install_rocm_from_artifacts.py extracts archives on real-GPU
+        # runners (see _untar_files in build_tools/install_rocm_from_artifacts.py).
         run: |
           set -ex
-          ls -lh "$THEROCK_BIN_DIR/lib/librocjitsu_kmd.so"
-          ls -lh "$THEROCK_BIN_DIR/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
-          ls -lh "$THEROCK_BIN_DIR/share/rocjitsu/schemas/simulation_config.fbs"
-          ls -lh "$THEROCK_BIN_DIR/rocRAND" || true
+          shopt -s nullglob
+          extracted=0
+          for tarball in build/artifacts/rand_test_*.tar.xz; do
+            echo "Extracting $tarball -> $THEROCK_ROCM_ROOT"
+            tar -xf "$tarball" -C "$THEROCK_ROCM_ROOT"
+            extracted=$((extracted + 1))
+          done
+          if [ "$extracted" -eq 0 ]; then
+            echo "::error::No rand_test_*.tar.xz archives found in build/artifacts/"
+            ls -lh build/artifacts/ | head -50 || true
+            exit 1
+          fi
+
+      - name: Verify rocjitsu interposer + ctest layout are present
+        run: |
+          set -ex
+          ls -lh "$THEROCK_ROCM_ROOT/lib/librocjitsu_kmd.so"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/schemas/simulation_config.fbs"
+          ls -lh "$THEROCK_BIN_DIR/rocRAND/CTestTestfile.cmake"
 
       - name: Run rocrand under rocjitsu simulator
         id: rocrand_sim
@@ -139,10 +171,15 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
           echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
-          if [ -d build/dist/rocm/share/rocjitsu ]; then
+          if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### rocjitsu install" >> $GITHUB_STEP_SUMMARY
-            find build/dist/rocm/share/rocjitsu -maxdepth 3 -type f >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_ROCM_ROOT/share/rocjitsu" -maxdepth 3 -type f >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -d "$THEROCK_BIN_DIR/rocRAND" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocRAND test layout (first 30 entries)" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_BIN_DIR/rocRAND" -maxdepth 2 | head -30 >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload logs
