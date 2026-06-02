@@ -400,7 +400,11 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --rand --tests",
-        "timeout_minutes": 60,
+        # GHA step timeout: sized to allow nightly comprehensive runs (~2 hr).
+        # Per-test CTest TIMEOUT in rocm-libraries/projects/miopen/test/gtest/
+        # test_categories.yaml bounds individual tests (quick: 10 min,
+        # standard: 60 min, etc).
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
