@@ -93,6 +93,15 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   If any component needs to override the default TEST_DIR, it can use test_dir
 #   by specifying the path relative to ROCM_PATH.
 #
+# - test_dir_by_type: Optional dict mapping TEST_TYPE (quick/standard/
+#   comprehensive/full) -> path components relative to ROCM_PATH. When the
+#   current TEST_TYPE matches a key here, this takes precedence over the
+#   plain test_dir above. Used when a component installs its ctest
+#   fragments under multiple subdirectories and the routing depends on
+#   the test tier (e.g. rocwmma: quick/regression run from bin/rocwmma/
+#   regression to preserve the per-target emulation regression entries
+#   that legacy test_rocwmma.py used).
+#
 # - additional_env_paths: Additional paths to prepend to the existing PATH, LD_LIBRARY_PATH, etc.
 #   relative to ROCM_PATH
 
@@ -110,6 +119,25 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # rocwmma installs three independent CTestTestfile.cmake fragments:
+    #   bin/rocwmma/             - per-target plain runs + regression_tests
+    #   bin/rocwmma/smoke/       - per-target "<target> smoke" emulation
+    #   bin/rocwmma/regression/  - per-target "<target> regression" emulation
+    #                              + regression_tests
+    # Legacy test_rocwmma.py routed TEST_TYPE in {quick, regression} to
+    # the regression fragment so the per-target emulation regression runs
+    # (gemm/unit/dlrm) were exercised. Mirror that here so swapping to
+    # test_runner.py preserves coverage. Pairs with the rocm-libraries
+    # PR that tags the "<target> regression" entries with the `quick`
+    # label in bin/rocwmma/regression/CTestTestfile.cmake.
+    # Other TEST_TYPEs (standard/comprehensive/full) fall through to the
+    # default bin/rocwmma/ fragment, matching legacy behaviour.
+    "rocwmma": {
+        "test_dir_by_type": {
+            "quick": ["bin", "rocwmma", "regression"],
+            "regression": ["bin", "rocwmma", "regression"],
+        },
+    },
 }
 
 
@@ -121,14 +149,25 @@ def _prepend_env_paths(env, base_path, additional_paths_dict):
         env[env_key] = ":".join(filter(None, new_paths + [existing_path]))
 
 
-def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
-    """Apply component-specific overrides for test_dir and environment variables."""
+def apply_component_overrides(job_name, test_type, rocm_path, default_test_dir, env):
+    """Apply component-specific overrides for test_dir and environment variables.
+
+    Precedence for test_dir resolution (highest -> lowest):
+      1. test_dir_by_type[test_type] - TEST_TYPE-aware route (e.g. rocwmma
+         quick/regression -> bin/rocwmma/regression).
+      2. test_dir - fixed override applied regardless of TEST_TYPE
+         (e.g. rocprofiler-compute -> libexec/rocprofiler-compute).
+      3. default_test_dir - THEROCK_BIN_DIR/TEST_COMPONENT.
+    """
     overrides = COMPONENT_OVERRIDES.get(job_name)
     if not overrides:
         return default_test_dir
 
     test_dir = default_test_dir
-    if "test_dir" in overrides:
+    by_type = overrides.get("test_dir_by_type") or {}
+    if test_type and test_type in by_type:
+        test_dir = str(rocm_path.joinpath(*by_type[test_type]))
+    elif "test_dir" in overrides:
         test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
@@ -137,7 +176,11 @@ def apply_component_overrides(job_name, rocm_path, default_test_dir, env):
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR = apply_component_overrides(
-    test_component_job_name, ROCM_PATH, TEST_DIR, environ_vars
+    test_component_job_name,
+    (TEST_TYPE or "").lower(),
+    ROCM_PATH,
+    TEST_DIR,
+    environ_vars,
 )
 
 logging.basicConfig(level=logging.INFO)
