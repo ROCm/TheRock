@@ -133,6 +133,10 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # May12/PT + ROCm 7.13.0rc2: distributed/tensor/test_dtensor_ops
     # fails during module import before pytest -k can deselect a method.
     "distributed/tensor/test_dtensor_ops",
+    # Run 26828748341 shards 1/3 and 2/3:
+    # temporary Jun1/PT + Jun1/ROCm layer; this module imports a removed
+    # inductor scheduler helper before pytest -k can deselect tests.
+    "distributed/test_inductor_collectives",
 ]
 
 
