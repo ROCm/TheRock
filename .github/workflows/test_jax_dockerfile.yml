@@ -9,7 +9,7 @@ on:
       test_runs_on:
         required: true
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       image_name:
         required: true
         description: JAX docker image to run tests with

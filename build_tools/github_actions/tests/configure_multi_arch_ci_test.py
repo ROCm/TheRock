@@ -127,13 +127,13 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "LINUX_TEST_LABELS": "test:rocprim",
                 "WINDOWS_AMDGPU_FAMILIES": "",
                 "WINDOWS_TEST_LABELS": "",
-                "PREBUILT_STAGES": "foundation,compiler-runtime",
+                "PREBUILT_STAGES": "compiler-runtime,runtime-tests",
                 "BASELINE_RUN_ID": "12345",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
         self.assertEqual(inputs.linux_test_labels, ["test:rocprim"])
-        self.assertEqual(inputs.prebuilt_stages, "foundation,compiler-runtime")
+        self.assertEqual(inputs.prebuilt_stages, "compiler-runtime,runtime-tests")
         self.assertEqual(inputs.baseline_run_id, "12345")
 
     def test_pull_request_extracts_labels(self):
@@ -402,13 +402,13 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                prebuilt_stages="foundation,compiler-runtime",
+                prebuilt_stages="compiler-runtime,runtime-tests",
             ),
             git_context=cm.GitContext(),
         )
         self.assertEqual(
             sorted(result.build_rocm.prebuilt_stages),
-            ["compiler-runtime", "foundation"],
+            ["compiler-runtime", "runtime-tests"],
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
@@ -423,14 +423,14 @@ class TestDecideJobs(unittest.TestCase):
         decision = cm.BuildRocmDecision(
             action=cm.JobAction.RUN,
             stage_decisions={
-                "foundation": cm.JobAction.PREBUILT,
                 "compiler-runtime": cm.JobAction.PREBUILT,
                 "math-libs": cm.JobAction.RUN,
+                "profiler-apps": cm.JobAction.PREBUILT,
             },
         )
         self.assertEqual(
             sorted(decision.prebuilt_stages),
-            ["compiler-runtime", "foundation"],
+            ["compiler-runtime", "profiler-apps"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
 
@@ -1260,11 +1260,10 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         # Verify we have 3 labels for 1-gpu
         labels = gfx94x_linux["test-runs-on-labels"]
-        self.assertEqual(len(labels), 3)
+        self.assertEqual(len(labels), 2)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
-        self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
 
@@ -1310,7 +1309,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIsNotNone(builds.linux)
         # Check that the first label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+        self.assertEqual(
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
+        )
 
     def test_second_label_selected_when_random_medium(self):
         """When random() is in second range, second label should be selected."""
@@ -1330,7 +1331,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIsNotNone(builds.linux)
         # Check that the second label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+        self.assertEqual(
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+        )
 
     def test_third_label_selected_when_random_high(self):
         """When random() >= first two weights, third label should be selected."""
@@ -1350,7 +1353,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIsNotNone(builds.linux)
         # Check that the third label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
+        self.assertEqual(
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+        )
 
     def test_families_without_multi_label_use_primary_only(self):
         """Families without multi-label config should only use primary label."""
