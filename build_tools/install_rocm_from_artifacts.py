@@ -41,6 +41,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
+    [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
@@ -366,6 +367,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.kfdtest,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -471,6 +473,11 @@ def retrieve_artifacts_by_run_id(args):
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
             extra_artifacts.append("sysdeps-hwloc")
             extra_artifacts.append("sysdeps-libpciaccess")
+        if args.kfdtest:
+            extra_artifacts.append("kfdtest")
+            # kfdtest depends on llvm-dev
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -827,6 +834,13 @@ def main(argv):
         "--rocrtst",
         default=False,
         help="Include 'rocrtst' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--kfdtest",
+        default=False,
+        help="Include 'kfdtest' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
