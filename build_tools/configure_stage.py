@@ -312,10 +312,13 @@ def main(argv: List[str] = None):
 
     if args.list_projects:
         log("Available projects (artifact: subprojects -> cmake flag):")
-        # Load manifest if build_dir provided for accurate subproject list
-        manifest = None
+        # Load manifest (from build_dir if provided, otherwise repo root)
         if args.build_dir:
-            manifest = topology.load_subproject_manifest(args.build_dir)
+            manifest = topology.load_subproject_manifest(
+                args.build_dir / "artifact_subprojects.json"
+            )
+        else:
+            manifest = topology.load_subproject_manifest()
         for artifact in sorted(topology.artifacts.values(), key=lambda a: a.name):
             feature = topology.get_artifact_feature_name(artifact)
             # Get subprojects from manifest or empty list
