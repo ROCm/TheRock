@@ -15,7 +15,7 @@ if(THEROCK_ENABLE_ROCJITSU)
 
   therock_cmake_subproject_declare(rocjitsu
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/CMakeLists.txt"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     CMAKE_ARGS
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
