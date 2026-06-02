@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <ComponentRef Id="c_amdrocm_sparse_b_h.dll" />
+    <ComponentRef Id="c_amdrocm_sparse_b_hm" />
+    <ComponentRef Id="c_amdrocm_sparse_b_r.dll" />
+    <ComponentRef Id="c_amdrocm_sparse_b_rm" />
+    <ComponentRef Id="c_amdrocm_sparse_b_rc.exe" />
+    <ComponentRef Id="c_amdrocm_sparse_b_ri.exe" />
+</Include>

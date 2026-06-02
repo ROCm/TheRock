@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <ComponentRef Id="c_amdrocm_runtime_b_ac.dll" />
+    <ComponentRef Id="c_amdrocm_runtime_b_a7.dll" />
+    <ComponentRef Id="c_amdrocm_runtime_b_rk.dll" />
+    <ComponentRef Id="c_amdrocm_runtime_sdac_L.txt" />
+    <ComponentRef Id="c_amdrocm_runtime_sdac_R.md" />
+</Include>
