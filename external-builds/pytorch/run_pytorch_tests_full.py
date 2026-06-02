@@ -296,6 +296,12 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         help="Invert TheRock skip list: only run tests that are normally skipped.",
     )
     parser.add_argument(
+        "--no-module-excludes",
+        action="store_true",
+        default=False,
+        help="Do not apply EXCLUDED_TEST_MODULES. Use with --include to validate module-level excludes.",
+    )
+    parser.add_argument(
         "-k",
         default="",
         help="Override the pytest -k expression (bypasses TheRock skip-test generation).",
@@ -409,7 +415,11 @@ def build_run_test_cmd(
     if args.include:
         cmd.extend(["--include"] + args.include)
     test_dir = args.pytorch_dir / "test"
-    excludes = [m for m in EXCLUDED_TEST_MODULES if (test_dir / (m + ".py")).exists()]
+    excludes = []
+    if not args.no_module_excludes:
+        excludes = [
+            m for m in EXCLUDED_TEST_MODULES if (test_dir / (m + ".py")).exists()
+        ]
     if args.exclude:
         excludes.extend(args.exclude)
     if excludes:

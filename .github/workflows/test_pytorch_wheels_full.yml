@@ -49,6 +49,14 @@ on:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: ""
+      debug_skips:
+        description: Run only tests that are normally skipped by TheRock skip lists.
+        type: boolean
+        default: false
+      validate_module_excludes:
+        description: Do not apply EXCLUDED_TEST_MODULES. Use with tests_to_include to validate module-level excludes.
+        type: boolean
+        default: false
       device_query:
         description: >-
           GPU candidate-set selection (--device-query, stage 1). "unique": one
@@ -132,6 +140,14 @@ on:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: ""
+      debug_skips:
+        description: Run only tests that are normally skipped by TheRock skip lists.
+        type: boolean
+        default: false
+      validate_module_excludes:
+        description: Do not apply EXCLUDED_TEST_MODULES. Use with tests_to_include to validate module-level excludes.
+        type: boolean
+        default: false
       device_query:
         description: >-
           --device-query. "unique": one device per architecture; "all": every
@@ -344,7 +360,16 @@ jobs:
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         run: |
+          VALIDATION_ARGS=()
+          if [ "${{ inputs.debug_skips }}" = "true" ]; then
+            VALIDATION_ARGS+=(--debug)
+          fi
+          if [ "${{ inputs.validate_module_excludes }}" = "true" ]; then
+            VALIDATION_ARGS+=(--no-module-excludes)
+          fi
+
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            "${VALIDATION_ARGS[@]}" \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
             -- \
