@@ -64,6 +64,12 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     message(WARNING "Configuring amd-dbgapi with modified source directory: ${THEROCK_AMD_DBGAPI_SOURCE_DIR}")
   endif()
 
+  # Build a static library on Windows until there is ABI stability.
+  set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS)
+  if(WIN32)
+    set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
+  endif()
+
   therock_cmake_subproject_declare(amd-dbgapi
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_AMD_DBGAPI_SOURCE_DIR}"
@@ -72,6 +78,7 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       amd-llvm
     CMAKE_ARGS
       -DTHE_ROCK_BUILD=ON
+      ${EXTRA_DEBUG_TOOLS_CMAKE_ARGS}
     BUILD_DEPS
       ${THEROCK_BUNDLED_LIBBACKTRACE}
     RUNTIME_DEPS
@@ -96,10 +103,12 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
   therock_cmake_subproject_activate(amd-dbgapi)
 
   # Check that we built the one library we're supposed to build.
-  therock_test_validate_shared_lib(PATH amd-dbgapi/dist/lib
-    LIB_NAMES
-      librocm-dbgapi.so
-  )
+  if(NOT WIN32)
+    therock_test_validate_shared_lib(PATH amd-dbgapi/dist/lib
+      LIB_NAMES
+        librocm-dbgapi.so
+    )
+  endif()
 
   # The artifacts provided by amd-dbgapi.
   therock_provide_artifact(amd-dbgapi
