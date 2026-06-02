@@ -1,0 +1,14 @@
+[Unit]
+Description=HIP Remote Worker Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=@CMAKE_INSTALL_PREFIX@/bin/hip-worker
+Environment="HIP_VISIBLE_DEVICES=0"
+Environment="TF_WORKER_PORT=18515"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
