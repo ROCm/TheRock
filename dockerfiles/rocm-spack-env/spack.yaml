@@ -1,0 +1,99 @@
+# Spack environment for ROCm
+# Packages are added dynamically at build time via: spack list -t rocm
+
+spack:
+  packages:
+    all:
+      require:
+        - "%gcc"
+      target: [x86_64]
+      prefer:
+        - ~cuda
+        - +rocm
+        - amdgpu_target=gfx90a
+    opengl:
+      buildable: false
+  compilers:
+    - compiler:
+        spec: gcc@13
+        paths:
+          cc: /usr/bin/gcc
+          cxx: /usr/bin/g++
+          f77: /usr/bin/gfortran
+          fc: /usr/bin/gfortran
+        flags: {}
+        operating_system: ubuntu24.04
+        target: x86_64
+        modules: []
+        environment: {}
+        extra_rpaths: []
+
+  concretizer:
+    reuse: true
+
+  mirrors:
+    spack-public:
+      url: https://binaries.spack.io/releases/latest
+      signed: false
+    spack-source:
+      url: https://mirror.spack.io/
+      binary: false
+
+  config:
+    install_tree:
+      root: /home/spack/spack-install
+    build_stage: /home/spack/spack-stage
+    source_cache: /home/spack/spack-cache
+
+  view:
+    default:
+      root: /home/spack/spack-view
+      link: roots
+
+  definitions:
+  - rocm_specs:
+    - matrix:
+      - - amdsmi
+        - comgr
+        - composable-kernel
+        - hip
+        - hipblas
+        - hipblas-common
+        - hipblaslt
+        - hipcub
+        - hipdnn
+        - hipfft
+        - hipify-clang
+        - hiprand
+        - hipsolver
+        - hipsparse
+        - hipsparselt
+        - hsa-rocr-dev
+        - hsa-amd-aqlprofile
+        - llvm-amdgpu
+        - miopen-hip
+        - rccl
+        - rocblas
+        - rocdecode
+        - rocm-cmake
+        - rocm-core
+        - rocm-smi-lib
+        - rocfft
+        - rocminfo
+        - rocmlir
+        - rocprim
+        - rocprofiler-compute
+        - rocprofiler-dev
+        - rocprofiler-register
+        - rocprofiler-sdk
+        - rocprofiler-systems
+        - rocrand
+        - rocsolver
+        - rocsparse
+        - rocthrust
+        - roctracer-dev
+        - roctracer-dev-api
+      - - '@develop'
+
+  specs:
+  - $rocm_specs
