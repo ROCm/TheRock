@@ -106,6 +106,10 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
+  set(_rocr_optional_deps)
+  if(NOT WIN32)
+    list(APPEND _rocr_optional_deps rocprofiler-register)
+  endif()
 
   therock_cmake_subproject_declare(ROCR-Runtime
     USE_DIST_AMDGPU_TARGETS
@@ -120,10 +124,12 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       amd-llvm
       therock-simde
     RUNTIME_DEPS
-      rocprofiler-register
+      ${_rocr_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_NUMACTL}
+      ${THEROCK_BUNDLED_ZLIB}
+      ${THEROCK_BUNDLED_ZSTD}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
@@ -248,6 +254,14 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DROCR_DLL_LOAD=0"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
+    if(WIN32 AND THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)
+      list(APPEND HIP_CLR_CMAKE_ARGS
+        "-DROCCLR_USE_SHARED_HSA_RUNTIME=ON"
+      )
+      list(APPEND HIP_CLR_RUNTIME_DEPS
+        ROCR-Runtime
+      )
+    endif()
   else()
     # Non-Windows CLR options.
     list(APPEND HIP_CLR_RUNTIME_DEPS
@@ -496,6 +510,14 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "-DROCR_DLL_LOAD=OFF"
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
+    if(WIN32 AND THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)
+      list(APPEND OCL_CLR_CMAKE_ARGS
+        "-DROCCLR_USE_SHARED_HSA_RUNTIME=ON"
+      )
+      list(APPEND OCL_CLR_RUNTIME_DEPS
+        ROCR-Runtime
+      )
+    endif()
   else()
     # Non-Windows CLR options.
     list(APPEND OCL_CLR_RUNTIME_DEPS
