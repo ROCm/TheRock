@@ -425,7 +425,7 @@ test_matrix = {
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
         "job_name": "rocprofiler-sdk",
-        "fetch_artifact_args": "--tests",
+        "fetch_artifact_args": "--rocdecode --rocjpeg --tests",
         "timeout_minutes": 15,
         "additional_requirements_files": [
             "share/rocprofiler-sdk/tests/requirements.txt",
