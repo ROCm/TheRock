@@ -105,10 +105,22 @@ def get_stage_features(
 
 
 def get_project_features(
-    topology: BuildTopology, project_names: List[str], platform_name: str = ""
+    topology: BuildTopology,
+    project_names: List[str],
+    platform_name: str = "",
+    build_dir: Path = None,
 ) -> Set[str]:
-    """Resolve project names to CMake feature names using BUILD_TOPOLOGY.toml."""
-    return topology.resolve_projects_to_features(project_names, platform_name)
+    """Resolve project names to CMake feature names.
+
+    Args:
+        topology: BuildTopology instance
+        project_names: List of project/subproject names
+        platform_name: Optional platform name for filtering
+        build_dir: Optional CMake build directory for accurate manifest-based resolution
+    """
+    return topology.resolve_projects_to_features(
+        project_names, platform_name, build_dir
+    )
 
 
 def generate_cmake_args(
@@ -120,8 +132,21 @@ def generate_cmake_args(
     platform_name: str = platform_module.system().lower(),
     manylinux: bool = False,
     project_names: List[str] = None,
+    build_dir: Path = None,
 ) -> List[str]:
-    """Generate CMake arguments for building a specific stage or projects."""
+    """Generate CMake arguments for building a specific stage or projects.
+
+    Args:
+        stage_name: Name of the build stage
+        amdgpu_families: GPU families for shard-specific targets
+        dist_amdgpu_families: GPU families for dist targets
+        topology: BuildTopology instance
+        include_comments: Whether to include comments in output
+        platform_name: Platform name for filtering
+        manylinux: Whether to add manylinux Python executable args
+        project_names: Optional list of project names to enable
+        build_dir: Optional CMake build directory for accurate manifest-based resolution
+    """
     args = []
 
     if stage_name and project_names:
@@ -161,7 +186,7 @@ def generate_cmake_args(
     # --projects narrows down features; --stage alone enables all stage features
     if project_names:
         features = get_project_features(
-            topology, project_names, platform_name=platform_name
+            topology, project_names, platform_name=platform_name, build_dir=build_dir
         )
     elif stage_name:
         features = get_stage_features(topology, stage_name, platform_name=platform_name)
@@ -258,6 +283,13 @@ def main(argv: List[str] = None):
         action="store_true",
         help="List available projects/subprojects and their artifacts",
     )
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=None,
+        help="CMake build directory containing artifact_subprojects.json manifest. "
+        "If provided, uses accurate CMake-generated mappings for project resolution.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -280,9 +312,15 @@ def main(argv: List[str] = None):
 
     if args.list_projects:
         log("Available projects (artifact: subprojects -> cmake flag):")
+        # Load manifest if build_dir provided for accurate subproject list
+        manifest = None
+        if args.build_dir:
+            manifest = topology.load_subproject_manifest(args.build_dir)
         for artifact in sorted(topology.artifacts.values(), key=lambda a: a.name):
             feature = topology.get_artifact_feature_name(artifact)
-            subs = sorted(set(artifact.subprojects + artifact.split_databases))
+            # Get subprojects from manifest or empty list
+            subprojects = manifest.get(artifact.name, []) if manifest else []
+            subs = sorted(set(subprojects + artifact.split_databases))
             subs_str = f" [{', '.join(subs)}]" if subs else ""
             log(f"  {artifact.name}{subs_str} -> THEROCK_ENABLE_{feature}")
         return
@@ -294,7 +332,7 @@ def main(argv: List[str] = None):
 
     # Validate projects if provided
     if args.projects:
-        alias_map = topology.get_alias_to_artifact_map()
+        alias_map = topology.get_alias_to_artifact_map(args.build_dir)
         unknown = [p for p in args.projects if p.lower() not in alias_map]
         if unknown:
             parser.error(f"Unknown project(s): {', '.join(unknown)}")
@@ -309,6 +347,7 @@ def main(argv: List[str] = None):
         platform_name=args.platform,
         manylinux=args.manylinux,
         project_names=args.projects,
+        build_dir=args.build_dir,
     )
 
     # Filter out comments if not requested
