@@ -107,7 +107,7 @@ add_custom_target(
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
         # openpty() is in libutil on older systems
-        -Dc_link_args='-lutil'
+        -Dc_link_args=-lutil
         # Turn everything off (there's a LOT of libraries and tools) and
         # then enable libmount and its dependency libblkid
         -Dauto_features=disabled
@@ -121,8 +121,7 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}" --
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 )
 

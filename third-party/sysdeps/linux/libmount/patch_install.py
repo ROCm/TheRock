@@ -28,7 +28,6 @@ install_prefix = sys.argv[1]
 
 # Required environment variables.
 therock_source_dir = Path(get_env_or_exit("THEROCK_SOURCE_DIR"))
-python_exe = get_env_or_exit("Python3_EXECUTABLE")
 patchelf_exe = get_env_or_exit("PATCHELF")
 
 # Import common utilities from build_tools using THEROCK_SOURCE_DIR
