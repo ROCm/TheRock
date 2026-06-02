@@ -61,7 +61,7 @@ setup(
         platform_py_package: package_data_files,
     },
     install_requires=[
-        f"{dist_info.LIBRARIES_DIST_NAME}=={dist_info.__version__}",
+        f"rocm-sdk-libraries=={dist_info.__version__}",
     ],
     zip_safe=False,
     options={

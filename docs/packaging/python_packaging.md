@@ -8,7 +8,7 @@ alterations.
 
 ## General Design
 
-We generate three types of packages:
+We generate the following types of packages:
 
 - Selector package: The `rocm` package is built as an sdist so that it is
   evaluated at the point of install, allowing it to perform some selection logic
@@ -23,6 +23,15 @@ We generate three types of packages:
   symlinks (instead, only SONAME libraries are included, and any executable
   symlinks are emitted by dynamically compiling an executable that can execle
   a relative binary).
+- Device packages: When kpack artifact splitting is enabled
+  (`KPACK_SPLIT_ARTIFACTS` flag in `therock_manifest.json`), per-ISA device
+  wheels (`rocm-sdk-device-{target}`) are produced alongside an arch-neutral
+  `rocm-sdk-libraries` host wheel. Device wheels contain `.kpack` archives
+  and kernel databases (Tensile `.co`/`.dat`, MIOpen `.kdb`/`.db.txt`, etc.)
+  that overlay into the `rocm-sdk-libraries` platform directory in
+  site-packages. Each device wheel declares `Requires-Dist` on the matching
+  version of `rocm-sdk-libraries`. Users install only the device wheels for
+  their GPU target(s).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
   For any file already populated in a runtime package, it will include it as
   a relative symlink in the tarball. During extraction, file symlinks are
@@ -33,12 +42,20 @@ We generate three types of packages:
   file. The installed package is extended in response to requesting a path to it
   via the `rocm-sdk` tool.
 
-Runtime packages can either be target neutral or target specific. Target specific
-packages are suffixed with their target family and the setup files have special logic
-to determine what is correct to load based on the system. In the future, this
-will be re-arranged to have more of a thin structure where the host code is
-always emitted as target neutral and separate device code packages are loaded
-as needed.
+### Legacy vs kpack-split packaging modes
+
+The packaging pipeline supports two modes, selected automatically based on the
+`KPACK_SPLIT_ARTIFACTS` flag in the build's `therock_manifest.json`:
+
+- **Legacy mode** (flag absent or false): Runtime packages can be target neutral
+  or target specific. Target specific packages like `rocm-sdk-libraries-{family}`
+  are suffixed with their target family and contain both host code and embedded
+  device code.
+- **Kpack-split mode** (flag true): The `rocm-sdk-libraries` host wheel is
+  arch-neutral (no family suffix, no device code). Device code is distributed
+  via separate `rocm-sdk-device-{target}` wheels, one per GFX ISA target.
+  The devel package is also arch-neutral and excludes test binaries (which
+  require device code to run).
 
 It is expected that all packages are installed in the same site-lib, as they use
 relative symlinks and RPATHs that cross the top-level package boundary. The
@@ -127,6 +144,25 @@ ls ${PACKAGES_DIR}
 # rocm-7.12.0.dev0.tar.gz
 ```
 
+For kpack-split builds, use `artifact_manager.py` with `--amdgpu-targets` to
+fetch per-ISA artifacts:
+
+```bash
+python ./build_tools/artifact_manager.py fetch --stage all \
+    --output-dir=${ARTIFACTS_DIR} \
+    --run-id=${RUN_ID} --platform linux \
+    --amdgpu-families "gfx94X-dcgpu;gfx120X-all" \
+    --amdgpu-targets "gfx942,gfx1100,gfx1101,gfx1102,gfx1103,gfx1151,gfx1200,gfx1201"
+
+python ./build_tools/build_python_packages.py \
+    --artifact-dir=${ARTIFACTS_DIR}/artifacts \
+    --dest-dir=${PACKAGES_DIR}
+
+# Kpack-split output:
+# rocm_sdk_core-*.whl, rocm_sdk_libraries-*.whl (arch-neutral),
+# rocm_sdk_device_gfx942-*.whl, rocm_sdk_device_gfx1100-*.whl, ...
+```
+
 ### Installing Locally Built Packages
 
 To install locally built packages, you can use the
@@ -162,6 +198,77 @@ pip install rocm[libraries,devel] --pre \
 > with `--output-dir` instead of directly calling the indexer. This generates
 > the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
 > structure used by CI uploads.
+
+## rocm-profiler
+
+The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
+
+- ROCm Systems Profiler (rocprofiler-systems)
+- ROCm Compute Profiler (rocprofiler-compute)
+
+### Installation
+
+#### Using meta package
+
+The recommended way to install profiling tools is via the meta package:
+
+```bash
+pip install "rocm[profiler]"
+```
+
+This will install:
+
+- `rocm-sdk-core` (required runtime + SDK)
+- `rocm-profiler` (profiling tools)
+
+#### Direct installation
+
+Direct installation is not recommended for typical use:
+
+```bash
+pip install rocm-profiler
+```
+
+This may result in missing dependencies unless `rocm-sdk-core` is also installed.
+
+Always prefer:
+
+```bash
+pip install "rocm[profiler]"
+```
+
+### Package Layout
+
+ROCm Python packaging separates profiling functionality as follows:
+
+- `rocm-sdk-core`:
+
+  - `rocprofiler-sdk` libraries
+  - `rocprofv3`, `rocprof-attach`
+  - `roctx` API (user-facing annotation library)
+
+- `rocm-profiler`:
+
+  - `rocprof-compute`
+  - `rocprof-sys-*`
+  - profiler runtime libraries (from `rocprofiler-systems` and `rocprofiler-compute`)
+
+This separation allows you to install profiling tools only when needed.
+
+### Dependency Model
+
+The `rocm-profiler` package intentionally does **not** declare `install_requires`.
+
+Instead:
+
+- Dependencies are managed by the `rocm` meta package.
+- Packages are co-installed into the same `site-packages`.
+- Runtime dependencies are resolved using RPATH.
+
+> [!NOTE]
+> The `rocm` meta package requires device-family-specific components
+> (e.g. `gfx94X-dcgpu`). If these are not available in the selected
+> package index, installation may be incomplete.
 
 ## Using Packages from Frameworks
 

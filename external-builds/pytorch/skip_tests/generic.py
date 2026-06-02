@@ -48,6 +48,13 @@ skip_tests = {
             # NEW ERROR
             # RuntimeError: Error building extension 'dummy_allocator'
             "test_mempool_with_allocator",
+            # RuntimeError: Error building extension 'dummy_allocator_v3'
+            "test_tensor_delete_after_allocator_delete",
+            # RuntimeError: Error building extension 'dummy_allocator'
+            "test_deleted_mempool_not_used_on_oom",
+            # Same hipblas.h compilation error as test_mempool_with_allocator.
+            # See https://github.com/pytorch/pytorch/pull/173330
+            "test_mempool_expandable",
             # Change detector test (Cublaslt vs Cublas depending on gcn_arch and torch version)
             # Always skip as this test is very basic and needs manual intervention for new architectures
             # See
@@ -185,32 +192,6 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int64",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int8",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
-            "test_reference_numerics_large__refs_nn_functional_mish_cuda_float16",
-            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_large_nn_functional_mish_cuda_float16",
-            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_normal_special_airy_ai_cuda_uint16",
-            "test_reference_numerics_normal_special_airy_ai_cuda_uint32",
-            "test_reference_numerics_normal_special_airy_ai_cuda_uint64",
-            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_small_special_airy_ai_cuda_uint16",
-            "test_reference_numerics_small_special_airy_ai_cuda_uint32",
-            "test_reference_numerics_small_special_airy_ai_cuda_uint64",
-            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint64",
         ],
     },
     # Special notes for Windows:
