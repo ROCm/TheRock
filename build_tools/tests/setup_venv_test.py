@@ -144,7 +144,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
     def test_find_links_only(self, mock_run, mock_find_python):
-        """Passing just find_links uses it."""
+        """Passing just find_links uses --no-index to prevent PyPI fallback."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
@@ -153,6 +153,8 @@ class InstallPackagesTest(unittest.TestCase):
 
         cmd = mock_run.call_args[0][0]
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
+        self.assertIn("--no-index", cmd)
+        self.assertIn("--no-build-isolation", cmd)
         self.assertFalse(any("--index-url" in str(a) for a in cmd))
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
