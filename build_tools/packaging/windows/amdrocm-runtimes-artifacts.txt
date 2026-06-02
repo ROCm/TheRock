@@ -1,0 +1,39 @@
+# Explicit file list for the amdrocm-runtimes MSI installer.
+# Paths are relative to the dist root (build/dist/rocm/), using forward slashes.
+# Lines starting with '#' and blank lines are ignored.
+# Only files listed here will be included in the generated .wxs.
+
+bin/.hipVersion
+bin/AMD.ROCM.Comgr.MANIFEST
+bin/amd_comgr0702.dll
+bin/amdhip64_7.dll
+bin/fftw3.dll
+bin/fftw3f.dll
+bin/flatc.exe
+bin/hipInfo.exe
+bin/hipcc.bat
+bin/hipcc.exe
+bin/hipcc_cmake_linker_helper
+bin/hipconfig.bat
+bin/hipconfig.exe
+bin/hipdemangleatp
+bin/hiprtc-builtins0702.dll
+bin/hiprtc0702.dll
+bin/roc-obj
+bin/roc-obj-extract
+bin/roc-obj-extract.bat
+bin/roc-obj-ls
+bin/roc-obj-ls.bat
+bin/rocm_kpack.dll
+
+lib/.hipInfo
+lib/amd_comgr0702.lib
+lib/amdhip64.lib
+lib/fftw3.lib
+lib/fftw3f.lib
+lib/flatbuffers.lib
+lib/hiprtc-builtins.lib
+lib/hiprtc.lib
+lib/rocm-core.lib
+lib/rocm_kpack.lib
+lib/rocmmod
