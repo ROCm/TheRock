@@ -152,7 +152,6 @@ artifact_groups = [
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
-    "rocrtst",
     "rocjitsu"
 ]
 
