@@ -36,6 +36,25 @@ on:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
         type: string
         default: "release/2.7"
+      device_query:
+        description: >-
+          GPU candidate-set selection (--device-query, stage 1). "unique": one
+          device per architecture. "all": every device of each architecture.
+        type: choice
+        options:
+          - "unique"
+          - "all"
+        default: "unique"
+      gpu_policy:
+        description: >-
+          How many candidate GPUs are made visible (--gpu-policy, stage 2).
+          "single": one GPU visible at a time. "all": all candidate GPUs visible
+          at once.
+        type: choice
+        options:
+          - "single"
+          - "all"
+        default: "single"
       multi_arch:
         description: >-
           Install from a multi-arch index using device extras
@@ -63,6 +82,18 @@ on:
       pytorch_git_ref:
         type: string
         default: "release/2.7"
+      device_query:
+        description: >-
+          --device-query. "unique": one device per architecture; "all": every
+          device of each architecture.
+        type: string
+        default: "unique"
+      gpu_policy:
+        description: >-
+          --gpu-policy. "single": one GPU visible at a time; "all": all candidate
+          GPUs visible at once.
+        type: string
+        default: "single"
       multi_arch:
         description: >-
           Install from a multi-arch index using device extras
@@ -193,7 +224,10 @@ jobs:
 
       - name: Run PyTorch tests
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py -- \
+          python ./external-builds/pytorch/run_pytorch_tests.py \
+            --device-query "${{ inputs.device_query }}" \
+            --gpu-policy "${{ inputs.gpu_policy }}" \
+            -- \
             --continue-on-collection-errors \
             --import-mode=importlib \
             -v

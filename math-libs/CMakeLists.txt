@@ -122,6 +122,17 @@ if(THEROCK_ENABLE_PRIM)
     # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
     # that depend on rocPRIM
     # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
+    # amdsmi is Linux-only; benchmarks depend on primbench which requires amd_smi
+    if(WIN32)
+      set(_rocprim_benchmark_enable "OFF")
+      set(_rocprim_benchmark_deps)
+      set(_rocprim_benchmark_includes)
+    else()
+      set(_rocprim_benchmark_enable "ON")
+      set(_rocprim_benchmark_deps amdsmi)
+      set(_rocprim_benchmark_includes therock_rocprim_benchmark_deps.cmake)
+    endif()
+
     therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
@@ -131,13 +142,17 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_TEST=ON
+        -DBUILD_BENCHMARK=${_rocprim_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
+      CMAKE_INCLUDES
+        ${_rocprim_benchmark_includes}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
         rocm-cmake
         therock-googletest
         rocPRIM
+        ${_rocprim_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
     )

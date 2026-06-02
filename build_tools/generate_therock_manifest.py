@@ -172,13 +172,10 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
-def rocm_version_from_package_version(rocm_package_version: str) -> str:
+def rocm_version_from_package_version(rocm_package_version: str) -> str | None:
     match = re.match(r"^(\d+\.\d+\.\d+)", rocm_package_version)
     if not match:
-        raise ValueError(
-            f"Could not derive rocm_version from rocm_package_version: "
-            f"{rocm_package_version}"
-        )
+        return None
     return match.group(1)
 
 
@@ -307,6 +304,7 @@ def main():
     github_job = os.getenv("GITHUB_JOB")
     github_run_id = os.getenv("GITHUB_RUN_ID")
     git_available = has_git_metadata(repo_root)
+
     rocm_version = (
         rocm_version_from_package_version(args.rocm_package_version)
         if args.rocm_package_version
