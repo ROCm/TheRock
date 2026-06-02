@@ -60,21 +60,13 @@ EXTRAS_REQUIRE = {
     for pkg in dist_info.ALL_PACKAGES.values()
     if not pkg.required
 }
-# For target-specific packages with multiple available targets (e.g. device
-# packages in kpack-split mode), generate per-target extras so users can
-# explicitly request a specific ISA: pip install rocm[device-gfx942]
-# Also generate a device-all extra that installs all available device shards.
-for pkg in dist_info.ALL_PACKAGES.values():
-    if not pkg.is_target_specific or pkg.required:
-        continue
-    if len(dist_info.AVAILABLE_TARGET_FAMILIES) > 1:
-        all_requires = []
-        for tf in sorted(dist_info.AVAILABLE_TARGET_FAMILIES):
-            extra_name = f"{pkg.logical_name}-{tf}"
-            req = pkg.get_dist_package_require(target_family=tf)
-            EXTRAS_REQUIRE[extra_name] = [req]
-            all_requires.append(req)
-        EXTRAS_REQUIRE[f"{pkg.logical_name}-all"] = all_requires
+# Per-target extras for target-specific packages with multiple available
+# targets (e.g. device wheels in kpack-split mode): explicit pip install
+# rocm[device-gfx942] plus a device-all aggregate. Cross-platform multi-arch
+# builds attach PEP 508 sys_platform markers to platform-exclusive targets
+# so `pip install rocm[device-all]` only pulls device wheels published for
+# the user's OS.
+EXTRAS_REQUIRE.update(dist_info.build_per_target_extras())
 
 # Drop the generic 'device' extra when target resolution would silently fall
 # back to DEFAULT_TARGET_FAMILY - e.g. kpack-split CI installs on GPU-less

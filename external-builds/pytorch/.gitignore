@@ -4,3 +4,8 @@ src/
 /pytorch_vision
 /pytorch_audio
 /triton
+
+# Manifest files
+manifest.json
+pytorch_manifest.json
+manifests/
