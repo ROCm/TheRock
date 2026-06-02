@@ -166,10 +166,6 @@ class ROCmDevelTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
-                continue
 
             extra_setup = ""
             if (

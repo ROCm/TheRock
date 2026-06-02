@@ -3,15 +3,29 @@
 include = [
   "etc/**",
 ]
+# ocltst libs/dlls belong to ocl_test package
+exclude = [
+  "lib/*oclgl*",
+  "lib/*oclperf*",
+  "lib/*oclruntime*",
+  "bin/*oclgl*",
+  "bin/*oclperf*",
+  "bin/*oclruntime*",
+]
 [components.run."core/ocl-clr/stage"]
 include = [
-  "bin/**",
+  "bin/clinfo*",
 ]
 [components.dbg."core/ocl-clr/stage"]
 [components.dev."core/ocl-clr/stage"]
 [components.doc."core/ocl-clr/stage"]
 [components.test."core/ocl-clr/stage"]
 include = [
-  "tests/**",
-  "share/opencl/**",
+  "bin/ocltst*",
+  "bin/*oclgl*",
+  "bin/*oclperf*",
+  "bin/*oclruntime*",
+  "lib/*oclgl*",
+  "lib/*oclperf*",
+  "lib/*oclruntime*",
 ]
