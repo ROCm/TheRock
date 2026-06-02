@@ -84,6 +84,7 @@ PACKAGES_PER_PROJECT = {
     "typing-extensions": {"versions": ["latest"], "project": "torch"},
     "rocm-bootstrap": {"versions": ["latest"], "project": "torch"},
     "setuptools": {"versions": ["81.0.0"], "project": "rocm"},
+    "flydsl": {"versions": ["latest"], "project": "rocm"},
 }
 
 
