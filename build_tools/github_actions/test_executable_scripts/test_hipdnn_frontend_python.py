@@ -81,10 +81,11 @@ def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
 
 
 def install_wheel(python: Path, wheel_path: Path) -> None:
-    """Install the wheel and pytest into the virtual environment.
+    """Install the wheel and test dependencies into the virtual environment.
 
     Two calls: `--no-deps` is per-invocation, not per-requirement, so the
-    wheel install must be isolated from pytest's dependency resolution.
+    wheel install must be isolated from the test-dependency resolution.
+    numpy is required by the pytest suite for array construction.
     """
     subprocess.run(
         [str(python), "-m", "pip", "install", "--no-deps", str(wheel_path)],
@@ -92,7 +93,7 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
         timeout=_TIMEOUT_PIP_INSTALL,
     )
     subprocess.run(
-        [str(python), "-m", "pip", "install", "pytest>=7,<9"],
+        [str(python), "-m", "pip", "install", "pytest>=7,<9", "numpy"],
         check=True,
         timeout=_TIMEOUT_PIP_INSTALL,
     )
