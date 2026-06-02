@@ -1,0 +1,286 @@
+From 4586cf1f3cae878f384da6249dd0f68556bbdd87 Mon Sep 17 00:00:00 2001
+From: sdashmiz <shadi.dashmiz@amd.com>
+Date: Mon, 3 Nov 2025 11:27:58 -0500
+Subject: [PATCH] SWDEV-563278: Separate unbundling from LINK_BC_TO_BC
+
+Signed-off-by: sdashmiz <shadi.dashmiz@amd.com>
+Made-with: Cursor
+---
+ projects/clr/hipamd/src/hip_comgr_helper.cpp  |  17 +++
+ .../hip-tests/catch/unit/rtc/CMakeLists.txt   |  12 ++
+ .../unit/rtc/bitcodebundle/CMakeLists.txt     | 114 ++++++++++++++++++
+ .../unit/rtc/bitcodebundle/bitcodebundle.cc   |  60 +++++++++
+ .../catch/unit/rtc/bitcodebundle/saxpy.cpp    |   7 ++
+ 5 files changed, 210 insertions(+)
+ create mode 100644 projects/hip-tests/catch/unit/rtc/bitcodebundle/CMakeLists.txt
+ create mode 100644 projects/hip-tests/catch/unit/rtc/bitcodebundle/bitcodebundle.cc
+ create mode 100644 projects/hip-tests/catch/unit/rtc/bitcodebundle/saxpy.cpp
+
+diff --git a/projects/clr/hipamd/src/hip_comgr_helper.cpp b/projects/clr/hipamd/src/hip_comgr_helper.cpp
+index 6112a884eb..3e8caa61a9 100644
+--- a/projects/clr/hipamd/src/hip_comgr_helper.cpp
++++ b/projects/clr/hipamd/src/hip_comgr_helper.cpp
+@@ -1044,6 +1044,23 @@ bool LinkProgram::AddLinkerDataImpl(std::string_view link_data, hipJitInputType
+     }
+     llvm_code_object_view =
+         std::string_view(llvm_code_object_storage.data(), llvm_code_object_storage.size());
++  } else if (is_bundled_ && input_type == hipJitInputLLVMBundledBitcode) {
++    // Unbundle bundled BC using COMGR when runtime unbundler is disabled
++    if (!findIsa()) {
++      return false;
++    }
++    std::string bundle_entry_id = "hip-" + isa_;
++    const char* bundleEntryIDs[] = {bundle_entry_id.c_str()};
++    size_t bundleEntryIDsCount = 1;
++    if (!helpers::UnbundleUsingComgr(link_data, isa_, link_options_, build_log_,
++                                     llvm_code_object_storage, bundleEntryIDs,
++                                     bundleEntryIDsCount)) {
++      LogError("Error in hip Linker: Unable to unbundle LLVM Bundled Bitcode using COMGR");
++      return false;
++    }
++    llvm_code_object_view =
++        std::string_view(llvm_code_object_storage.data(), llvm_code_object_storage.size());
++    input_type = hipJitInputLLVMBitcode;
+   }
+ 
+   if ((data_kind_ = GetCOMGRDataKind(input_type)) == AMD_COMGR_DATA_KIND_UNDEF) {
+diff --git a/projects/hip-tests/catch/unit/rtc/CMakeLists.txt b/projects/hip-tests/catch/unit/rtc/CMakeLists.txt
+index e4447ff11d..58c185aff1 100644
+--- a/projects/hip-tests/catch/unit/rtc/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/rtc/CMakeLists.txt
+@@ -33,8 +33,13 @@ set(AMD_TEST_SRC
+     hiprtc_Bitcode_UndefinedFn.cc
+     hiprtc_bfloat16_HeaderTst.cc
+     hiprtc_fp8.cc
++    bitcodebundle/bitcodebundle.cc
+ )
+ 
++if(HIP_PLATFORM MATCHES "amd")
++  add_subdirectory(bitcodebundle)
++endif()
++
+ add_custom_target(copyRtcHeaders ALL
+   COMMAND ${CMAKE_COMMAND} -E copy
+   ${CMAKE_CURRENT_SOURCE_DIR}/saxpy.h
+@@ -52,6 +57,9 @@ file(GLOB INSTALL_HEADER_FILES "./headers/*")
+ set_property(GLOBAL APPEND PROPERTY G_INSTALL_HEADER_FILES ${INSTALL_HEADER_FILES})
+ set_property(GLOBAL APPEND PROPERTY G_INSTALL_CUSTOM_TARGETS ${CMAKE_CURRENT_BINARY_DIR}/saxpy.h)
+ set_property(GLOBAL APPEND PROPERTY G_INSTALL_CUSTOM_TARGETS ${CMAKE_CURRENT_BINARY_DIR}/RtcConfig.json)
++if(HIP_PLATFORM MATCHES "amd")
++  set_property(GLOBAL APPEND PROPERTY G_INSTALL_CUSTOM_TARGETS ${CMAKE_CURRENT_BINARY_DIR}/offload_bundle.hipfb)
++endif()
+ 
+ if(UNIX)
+   set(AMD_TEST_SRC ${AMD_TEST_SRC}
+@@ -85,3 +93,7 @@ elseif(HIP_PLATFORM MATCHES "amd")
+ endif()
+ 
+ add_dependencies(RTC copyRtcHeaders copyTstJson ChkPtrdiff_t_Exe)
++
++if(HIP_PLATFORM MATCHES "amd")
++  add_dependencies(RTC bundle_bitcode)
++endif()
+diff --git a/projects/hip-tests/catch/unit/rtc/bitcodebundle/CMakeLists.txt b/projects/hip-tests/catch/unit/rtc/bitcodebundle/CMakeLists.txt
+new file mode 100644
+index 0000000000..9e306e2534
+--- /dev/null
++++ b/projects/hip-tests/catch/unit/rtc/bitcodebundle/CMakeLists.txt
+@@ -0,0 +1,114 @@
++project(llvm_ir_to_exe)
++
++cmake_minimum_required(VERSION 3.10)
++
++if(UNIX)
++  if(NOT DEFINED ROCM_PATH)
++    if(DEFINED ENV{ROCM_PATH})
++      set(ROCM_PATH $ENV{ROCM_PATH} CACHE STRING "ROCM Path")
++    else()
++      set(ROCM_PATH "/opt/rocm" CACHE STRING "Default ROCM installation directory.")
++    endif()
++  endif()
++  if(NOT DEFINED HIP_PATH)
++  if(NOT DEFINED ENV{HIP_PATH})
++      set(HIP_PATH ${ROCM_PATH} CACHE PATH "Path to which HIP has been installed")
++  else()
++      set(HIP_PATH $ENV{HIP_PATH} CACHE PATH "Path to which HIP has been installed")
++  endif()
++  endif()
++  list(APPEND CMAKE_PREFIX_PATH ${ROCM_PATH})
++endif()
++
++
++# Find hip
++find_package(hip REQUIRED)
++
++
++# Get the actual LLVM bin directory from hipcc location
++get_filename_component(HIPCC_DIR ${HIP_HIPCC_EXECUTABLE} DIRECTORY)
++get_filename_component(HIP_ROOT_DIR ${HIPCC_DIR} DIRECTORY)
++
++find_program(CLANG_OFFLOAD_BUNDLER clang-offload-bundler
++  HINTS
++    "${HIP_ROOT_DIR}/llvm/bin"
++    "${ROCM_PATH}/llvm/bin"
++    "${ROCM_PATH}/bin"
++  REQUIRED)
++
++get_filename_component(LLVM_BIN_DIR ${CLANG_OFFLOAD_BUNDLER} DIRECTORY)
++
++set(CLANG   ${LLVM_BIN_DIR}/clang)
++set(LLVM_MC   ${LLVM_BIN_DIR}/llvm-mc)
++set(LLVM_AS ${LLVM_BIN_DIR}/llvm-as)
++set(LLVM_DIS ${LLVM_BIN_DIR}/llvm-dis)
++
++message(STATUS "Using LLVM tools from: ${LLVM_BIN_DIR}")
++
++set(SRCS ${CMAKE_CURRENT_SOURCE_DIR}/saxpy.cpp)
++set(DEVICE_HIPFB ${CMAKE_CURRENT_BINARY_DIR}/../offload_bundle.hipfb)
++
++
++# Append Current device arch from rocm_agent_enumerator
++# if rocm_agent_enumerator is not found, support --offload-arch
++# to pass arch use format like -DOFFLOAD_ARCH_STR="--offload-arch=gfx1032  --offload-arch=gfx1031"
++
++find_program(ARCH_PATH amdgpu-arch
++  HINTS
++    "${LLVM_BIN_DIR}"
++    "${ROCM_PATH}/llvm/bin"
++    "${ROCM_PATH}/bin")
++
++if(NOT DEFINED OFFLOAD_ARCH_STR
++   AND ARCH_PATH
++   AND HIP_PLATFORM STREQUAL "amd")
++    execute_process(COMMAND "${ARCH_PATH}"
++         OUTPUT_VARIABLE HIP_GPU_ARCH
++         RESULT_VARIABLE ROCM_AGENT_ENUM_RESULT
++         OUTPUT_STRIP_TRAILING_WHITESPACE)
++    if (NOT HIP_GPU_ARCH STREQUAL "")
++          string(REGEX REPLACE "\n" ";" HIP_GPU_ARCH_LIST "${HIP_GPU_ARCH}")
++          list(REMOVE_DUPLICATES  HIP_GPU_ARCH_LIST)
++          foreach(_hip_gpu_arch ${HIP_GPU_ARCH_LIST})
++              list(APPEND GPU_ARCH ${_hip_gpu_arch})
++          endforeach()
++    else()
++          message(STATUS "ROCm Agent Enumerator found no valid architectures")
++    endif()
++elseif(DEFINED OFFLOAD_ARCH_STR)
++    string(REPLACE "--offload-arch=" ""  HIP_GPU_ARCH_LIST ${OFFLOAD_ARCH_STR})
++    string(REGEX REPLACE " " ";" HIP_GPU_ARCH_LIST "${HIP_GPU_ARCH_LIST}")
++    foreach(_hip_gpu_arch ${HIP_GPU_ARCH_LIST})
++          list(APPEND GPU_ARCH ${_hip_gpu_arch})
++    endforeach()
++endif()
++
++
++list(JOIN GPU_ARCH "," OFFLOAD_ARCH)
++
++# Step 1: Generate bitcode for all GPU architectures
++add_custom_target(src_to_ir 
++  COMMAND ${HIP_HIPCC_EXECUTABLE} -c -emit-llvm  --cuda-device-only --offload-arch=${OFFLOAD_ARCH} ${SRCS}
++  COMMENT "Generating GPU bitcode for architectures: ${OFFLOAD_ARCH}")
++
++# Step 2: Build target and input lists for bundling
++foreach(ARCH ${GPU_ARCH})
++  list(APPEND TARGETS hip-amdgcn-amd-amdhsa--${ARCH})
++  list(APPEND INPUTS -input=${CMAKE_CURRENT_BINARY_DIR}/saxpy-hip-amdgcn-amd-amdhsa-${ARCH}.bc)
++endforeach()
++
++# Convert list to comma-separated string for bundler
++list(JOIN TARGETS "," TARGET_STR)
++
++# Step 3: Bundle all bitcode files into single .hipfb
++add_custom_target(bundle_bitcode ALL
++  DEPENDS src_to_ir
++  COMMAND ${CLANG_OFFLOAD_BUNDLER} 
++    -type=bc 
++    -targets=${TARGET_STR}
++    ${INPUTS}
++    -output=${DEVICE_HIPFB}
++  COMMENT "Bundling bitcode for targets: ${TARGET_STR}"
++  BYPRODUCTS ${DEVICE_HIPFB})
++
++message(STATUS "Will generate bundled bitcode for GPU architectures: ${GPU_ARCH}")
+\ No newline at end of file
+diff --git a/projects/hip-tests/catch/unit/rtc/bitcodebundle/bitcodebundle.cc b/projects/hip-tests/catch/unit/rtc/bitcodebundle/bitcodebundle.cc
+new file mode 100644
+index 0000000000..6b03118e6a
+--- /dev/null
++++ b/projects/hip-tests/catch/unit/rtc/bitcodebundle/bitcodebundle.cc
+@@ -0,0 +1,60 @@
++#include <hip/hiprtc.h>
++#include <hip/hip_runtime.h>
++
++#include <hip_test_common.hh>
++#include <hip_test_filesystem.hh>
++
++
++#include <cassert>
++#include <cstddef>
++#include <fstream>
++#include <memory>
++#include <iostream>
++#include <iterator>
++#include <vector>
++
++#pragma clang diagnostic ignored "-Wuninitialized"
++
++
++// Load pre-generated bundled bitcode file
++std::vector<char> loadBundledBitcodeFile(const std::string& filepath) {
++  std::ifstream in(filepath, std::ios::binary);
++  if (!in) {
++    throw std::runtime_error("Failed to open bundled bitcode file: " + filepath);
++  }
++  
++  std::vector<char> bundled_bc((std::istreambuf_iterator<char>(in)),
++                               std::istreambuf_iterator<char>());
++  in.close();
++  
++  if (bundled_bc.empty()) {
++    throw std::runtime_error("Bundled bitcode file is empty: " + filepath);
++  }
++  
++  return bundled_bc;
++}
++
++
++TEST_CASE("Unit_RTC_BUNDLE_FROM_FILE")  {
++  // Load pre-generated offload_bundle.hipfb from the build directory
++  std::string bundle_path = "offload_bundle.hipfb";
++  std::vector<char> bundled_bc = loadBundledBitcodeFile(bundle_path);
++  
++  hiprtcLinkState linkstate;
++  HIPRTC_CHECK(hiprtcLinkCreate(0, nullptr, nullptr, &linkstate));
++  HIPRTC_CHECK(hiprtcLinkAddData(linkstate, HIPRTC_JIT_INPUT_LLVM_BUNDLED_BITCODE,
++                                 bundled_bc.data(), bundled_bc.size(),
++                                 "offload_bundle", 0, nullptr, nullptr));
++  
++  void* finaldata;
++  size_t finalsize = 0;
++  HIPRTC_CHECK(hiprtcLinkComplete(linkstate, &finaldata, &finalsize));
++  
++  hipModule_t module;
++  hipFunction_t kernel;
++  HIP_CHECK(hipModuleLoadData(&module, finaldata));
++  HIP_CHECK(hipModuleGetFunction(&kernel, module, "saxpy"));
++
++  HIPRTC_CHECK(hiprtcLinkDestroy(linkstate));
++  HIP_CHECK(hipModuleUnload(module));
++}
+\ No newline at end of file
+diff --git a/projects/hip-tests/catch/unit/rtc/bitcodebundle/saxpy.cpp b/projects/hip-tests/catch/unit/rtc/bitcodebundle/saxpy.cpp
+new file mode 100644
+index 0000000000..a68389409d
+--- /dev/null
++++ b/projects/hip-tests/catch/unit/rtc/bitcodebundle/saxpy.cpp
+@@ -0,0 +1,7 @@
++
++
++extern "C"
++__global__
++void saxpy(float a, float* x, float* y, float* out, size_t n)
++{
++}
+-- 
+2.51.0
+
