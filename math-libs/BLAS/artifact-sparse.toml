@@ -1,0 +1,93 @@
+# rocSPARSE
+[components.lib."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+include = [
+  "lib/rocsparse/rocsparseio-info*",
+  "bin/rocsparseio-info.exe",
+]
+[components.run."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+include = [
+  "bin/rocsparse_mtx2csr",
+  "lib/rocsparse/rocsparseio-convert",
+  "bin/rocsparseio-convert.exe",
+]
+[components.dbg."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+[components.dev."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+[components.doc."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+[components.test."math-libs/BLAS/rocSPARSE/stage"]
+include = [
+  "bin/*_rtest.xml",
+  "bin/rocsparse-bench*",
+  "bin/rocsparse-test*",
+  "libexec/rocsparse/test/rocsparse_gentest.py",
+  "share/rocsparse/test/**",
+  "clients/matrices/**"
+]
+optional = true
+
+# hipSPARSE
+[components.lib."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+[components.run."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+include = [
+  "bin/hipsparse_mtx2csr",
+]
+[components.dbg."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+[components.dev."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+include = [
+  "**/*.cmake"
+]
+exclude = [
+  "share/hipsparse/test/**",
+]
+[components.doc."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+[components.test."math-libs/BLAS/hipSPARSE/stage"]
+include = [
+  "bin/*_rtest.xml",
+  "bin/hipsparse-bench*",
+  "bin/hipsparse-test*",
+  "libexec/hipsparse/test/hipsparse_gentest.py",
+  "share/hipsparse/test/**",
+  "clients/matrices/**"
+]
+optional = true
+
+# hipSPARSELt
+[components.lib."math-libs/BLAS/hipSPARSELt/stage"]
+include = [
+  "bin/hipsparselt/library/**",
+  "lib/hipsparselt/library/**",
+]
+[components.dbg."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+[components.dev."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+include = [
+  "**/*.cmake"
+]
+exclude = [
+  "bin/hipsparselt/CTest*",
+]
+[components.doc."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+[components.test."math-libs/BLAS/hipSPARSELt/stage"]
+include = [
+  # Clients benchmarks
+  "bin/hipsparselt-bench*",
+  # Clients tests
+  "bin/hipsparselt/**",
+  "bin/hipsparselt-test*",
+  "bin/hipsparselt_gtest.data",
+  "bin/hipsparselt_gentest.py",
+  "bin/hipsparselt_*.yaml",
+  # Clients samples (may want these in a samples component at some point).
+  "bin/example_*",
+]

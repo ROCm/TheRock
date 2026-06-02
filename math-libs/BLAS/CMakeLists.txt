@@ -319,7 +319,7 @@ if(THEROCK_ENABLE_SPARSE)
   )
   therock_cmake_subproject_provide_package(hipSPARSE hipsparse lib/cmake/hipsparse)
   therock_cmake_subproject_activate(hipSPARSE)
-  list(APPEND _blas_subproject_names hipSPARSE)
+  list(APPEND _sparse_subproject_names hipSPARSE)
 
   ##############################################################################
   # hipSPARSELt
@@ -370,8 +370,20 @@ if(THEROCK_ENABLE_SPARSE)
     )
     therock_cmake_subproject_provide_package(hipSPARSELt hipsparselt lib/cmake/hipsparselt)
     therock_cmake_subproject_activate(hipSPARSELt)
-    list(APPEND _blas_subproject_names hipSPARSELt)
+    list(APPEND _sparse_subproject_names hipSPARSELt)
   endif()
+
+  therock_provide_artifact(sparse
+    DESCRIPTOR artifact-sparse.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS ${_sparse_subproject_names}
+  )
 endif(THEROCK_ENABLE_SPARSE)
 
 
@@ -466,7 +478,18 @@ if(THEROCK_ENABLE_SOLVER)
   )
   therock_cmake_subproject_provide_package(hipSOLVER hipsolver lib/cmake/hipsolver)
   therock_cmake_subproject_activate(hipSOLVER)
-  list(APPEND _blas_subproject_names hipSOLVER)
+  list(APPEND _solver_subproject_names hipSOLVER)
+
+  therock_provide_artifact(solver
+    DESCRIPTOR artifact-solver.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      test
+    SUBPROJECT_DEPS ${_solver_subproject_names}
+  )
 endif(THEROCK_ENABLE_SOLVER)
 
 

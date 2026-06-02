@@ -1,0 +1,37 @@
+# rocSOLVER
+[components.lib."math-libs/BLAS/rocSOLVER/stage"]
+optional = true
+[components.dbg."math-libs/BLAS/rocSOLVER/stage"]
+optional = true
+[components.dev."math-libs/BLAS/rocSOLVER/stage"]
+optional = true
+[components.doc."math-libs/BLAS/rocSOLVER/stage"]
+optional = true
+[components.test."math-libs/BLAS/rocSOLVER/stage"]
+include = [
+  "bin/rocsolver-bench*",
+  "bin/rocsolver-test*",
+  "share/rocsolver/test/**",
+]
+optional = true
+
+# hipSOLVER
+[components.lib."math-libs/BLAS/hipSOLVER/stage"]
+exclude = [
+  "lib/libhipsolver_fortran.so*",
+]
+optional = true
+[components.dbg."math-libs/BLAS/hipSOLVER/stage"]
+optional = true
+[components.dev."math-libs/BLAS/hipSOLVER/stage"]
+optional = true
+[components.doc."math-libs/BLAS/hipSOLVER/stage"]
+optional = true
+[components.test."math-libs/BLAS/hipSOLVER/stage"]
+include = [
+  "bin/hipsolver-bench*",
+  "bin/hipsolver-test*",
+  "lib/libhipsolver_fortran.so*",
+  "share/hipsolver/test/**",
+]
+optional = true
