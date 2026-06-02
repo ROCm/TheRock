@@ -61,6 +61,13 @@ on:
         description: "Python version"
         type: string
         default: "3.12"
+      platform:
+        description: "Target platform: linux or windows"
+        type: choice
+        options:
+          - linux
+          - windows
+        default: "linux"
 
 permissions:
   contents: read
@@ -80,6 +87,7 @@ env:
   PYTORCH_GIT_REPO: ${{ inputs.pytorch_git_repo || 'pytorch/pytorch' }}
   TEST_CONFIGS: ${{ inputs.test_configs || 'default distributed inductor' }}
   PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
+  PLATFORM: ${{ inputs.platform || 'linux' }}
 
 jobs:
   resolve_torch_version:
@@ -99,16 +107,18 @@ jobs:
           fi
 
           pip install packaging
-          # --platform ensures this works even when the runner OS differs from
-          # the target (e.g. querying Linux packages from an ubuntu runner that
-          # might later be replaced by a Windows runner for cross-platform support).
-          # TODO: When adding Windows support, pass --platform win_amd64 for
-          # Windows targets or derive the platform from amdgpu_family/runner.
+          # Derive the pip platform tag from the PLATFORM env var so the
+          # same workflow can resolve both Linux and Windows wheels.
+          if [ "${PLATFORM}" = "windows" ]; then
+            PIP_PLATFORM="win_amd64"
+          else
+            PIP_PLATFORM="linux_x86_64"
+          fi
           TORCH_VERSION=$(pip index versions torch \
             --pre \
             --index-url "${INDEX_URL}" \
             --python-version "${PYTHON_VERSION}" \
-            --platform linux_x86_64 2>/dev/null \
+            --platform "${PIP_PLATFORM}" 2>/dev/null \
             | head -1 \
             | sed 's/torch (\(.*\))/\1/')
 
