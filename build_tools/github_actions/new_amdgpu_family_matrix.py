@@ -241,7 +241,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": {
-                        "test": "windows-gfx1151-gpu-rocm",
+                        "test": "windows-strix-halo-gpu-rocm-8gb",
                         # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                         "benchmark": "windows-gfx1151-gpu-rocm",
                     },
