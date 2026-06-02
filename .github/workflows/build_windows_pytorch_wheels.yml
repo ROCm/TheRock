@@ -122,6 +122,7 @@ jobs:
       contents: read
     env:
       CHECKOUT_ROOT: B:/src
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       OUTPUT_DIR: ${{ github.workspace }}/output
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
@@ -152,6 +153,7 @@ jobs:
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
       torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
+      triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
 
     defaults:
       run:
@@ -216,6 +218,9 @@ jobs:
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
             --repo-hashtag nightly
+          python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
@@ -262,6 +267,7 @@ jobs:
         id: build-pytorch-wheels
         # Using 'cmd' here is load bearing! There are configuration issues when
         # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
+        # Triton nightly-only; keep triton args inline in the build step below for #5110 checkout cleanup.
         shell: cmd
         run: |
           set "CACHE_FLAG="
@@ -275,7 +281,7 @@ jobs:
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
-            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ${{ inputs.pytorch_git_ref == 'nightly' && format('--triton-dir {0}/triton --build-triton', env.CHECKOUT_ROOT) || '' }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
@@ -310,7 +316,8 @@ jobs:
             --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
             --pytorch-dir "${CHECKOUT_ROOT}/torch" \
             --pytorch-audio-dir "${CHECKOUT_ROOT}/audio" \
-            --pytorch-vision-dir "${CHECKOUT_ROOT}/vision"
+            --pytorch-vision-dir "${CHECKOUT_ROOT}/vision" \
+            ${{ inputs.pytorch_git_ref == 'nightly' && format('--triton-dir {0}/triton', env.CHECKOUT_ROOT) || '' }}
 
       - name: Configure AWS Credentials
         if: always()
@@ -393,6 +400,7 @@ jobs:
       TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
       TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
+      TRITON_VERSION: "${{ needs.build_pytorch_wheels.outputs.triton_version }}"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -427,7 +435,8 @@ jobs:
             --exclude "*" \
             --include "torch-${TORCH_VERSION}-${CP_VERSION}-win_amd64.whl" \
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-win_amd64.whl" \
-            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-win_amd64.whl"
+            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-win_amd64.whl" \
+            --include "triton_windows-${TRITON_VERSION}-${CP_VERSION}-win_amd64.whl"
 
       - name: Install python deps for CI
         run: |
