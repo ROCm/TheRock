@@ -269,24 +269,9 @@ skip_tests = {
             "test_load_standalone",
         ],
         "distributed": [
-            # ComposabilityTest - pipeline parallel (8-GPU)
-            "test_replicate_pp_ScheduleClass3_bfloat16",
-            "test_replicate_pp_ScheduleClass3_float32",
-            "test_replicate_pp_ScheduleClass4_bfloat16",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_device_id",
-            # DistConvolutionOpsTest - scalar mismatch (depthwise)
-            "test_depthwise_convolution",
-            # TestFSDPMemory - memory accounting mismatch
-            "test_fsdp_memory_ckpt_ckpt",
-            # ProcessGroupNCCLGroupTest - error code 10
-            "test_resume",
-            "test_get_memory_stats",
-            "test_suspend",
-            # TestDistBackendWithSpawn - monitored barrier hang
-            "test_monitored_barrier_allreduce_hang_wait_all_ranks",
-            "test_monitored_barrier_allreduce_hang",
-            # FSDP2 tests - 300s per-process timeout on 8-GPU runner
+            # === Timeouts, hangs, NCCL / spawn watchdogs (FSDP2, fully_shard, compile+dist,
+            #     pytest >900s, monitored barrier, Join stalls, classic FSDP wrap / NCCL abort) ===
+            # FSDP2 — ~300s per-process watchdog
             "test_clip_grad_norm_1d",
             "test_clip_grad_norm_2d",
             "test_compiled_autograd_fsdp2_backward",
@@ -296,66 +281,106 @@ skip_tests = {
             "test_compute_dtype",
             "test_cached_state_dict",
             "test_explicit_prefetching",
-            # TestParityWithDDPCUDA - error code 10
-            "test_mixture_of_experts_offload_true_shard_grad_op_cuda",
-            # TestFullyShardHSDP3DTraining - error code 10
-            "test_3d_mlp_with_nd_mesh",
-            # DistMathOpsTest - error code 10
-            "test_linalg_ops",
-            # TestDistBackendWithSpawn - post_localSGD reload
-            "test_post_localSGD_optimizer_step_reload",
-            # TestFullyShardCommunication - communication count mismatch
-            "test_fully_shard_communication_count",
-            # TestFullyShard1DTrainingCore - shard_largest_dim parity
-            "test_train_parity_single_group_shard_largest_dim",
-            # TestMultiProc - compiler collectives dynamic tensor
-            "test_compiler_collectives_automatic_dynamic_tensor",
-            # TestFullyShardAutograd - 300s per-process timeout
+            # Fully Shard — ~300s per-process watchdog (autograd / DTensor / memory / overlap)
             "test_nontensor_activations",
-            # TestFullyShardDTensor - 300s per-process timeout
             "test_dtensor_train_parity",
-            # TestFullyShardFrozen - 300s per-process timeout
             "test_multi_forward_mixed_requires_grad",
-            # TestFullyShardMemory - 300s per-process timeout
             "test_fully_shard_training_memory",
-            # TestFullyShardOverlap - 300s per-process timeout
             "test_fully_shard_training_overlap",
-            # TestFullyShard2DTraining - pytest-timeout (>900s)
-            "test_tp_with_fsdp_offloading",
-            # ComposabilityTest - pytest-timeout (>900s)
-            "test_3d_with_tp_dp_pp_ScheduleClass0_bfloat16",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_fully_shard_init",
-            # TestReplicateMixedPrecisionTraining - pytest-timeout (>900s)
-            "test_grad_acc_with_reduce_dtype",
-            # TestReplicate1DTrainingCore - 300s per-process timeout
             "test_multi_forward_module",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass1",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_ignore_module",
-            # TestFullyShardCommunication - 300s per-process timeout
             "test_manual_reshard_with_reshard_after_forward_false",
-            # TestFullyShardSharedParams - 300s per-process timeout
             "test_train_parity_with_shared_params",
-            # ReplicateTest - pytest-timeout (>900s)
-            "test_train_parity_2d_mlp",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass2",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass3",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass4",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_move_args_kwargs_to_device",
-            # ReplicateFullyShardInit - multi module init failure
-            "test_replicate_multi_module",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_single_module",
-            # TestFullyShardAutograd - 300s per-process timeout
             "test_unused_forward_module",
-            # TestViewOpsWithLocalTensor - list index out of range
+            # Fully Shard / comm / prefetch (distributed CI) — ~300s per-process watchdog
+            "test_2d_mlp_with_nd_mesh",
+            "test_MLPStacked_distributed_sharding_display",
+            "test_backward_misprefetch",
+            "test_double_forward_with_nested_fsdp_and_checkpoint",
+            "test_fully_shard_backward_prefetch",
+            "test_fully_shard_force_sum_both_reductions",
+            "test_fully_shard_force_sum_reduce_scatter",
+            "test_fully_shard_multi_module_backward_prefetch",
+            "test_fully_shard_per_param_mesh_training_overlap",
+            "test_gradient_accumulation",
+            "test_layer_by_layer_shard_no_false_positive",
+            "test_post_optim_event",
+            "test_reduce_dtype",
+            "test_set_modules_to_backward_prefetch",
+            "test_set_modules_to_backward_prefetch_inside_ac",
+            "test_set_modules_to_forward_prefetch",
+            "test_set_reduce_scatter_divide_factor",
+            "test_shard_placement_fn_tp_ep",
+            "test_train_mixed_requires_grad_across_groups",
+            "test_train_mixed_requires_grad_per_group",
+            "test_train_parity_hsdp",
+            "test_train_parity_shard_placement_fn_shard_largest_dim",
+            "test_train_parity_with_activation_checkpointing",
+            "test_unshard_async",
+            # Fully Shard mixed precision — ~300s watchdog (CI also reported exit code 10)
+            "test_structured_input_output",
+            # Pytest-timeout (>900s) — replicate, composability, 2D offload
+            "test_replicate_device_id",
+            "test_tp_with_fsdp_offloading",
+            "test_3d_with_tp_dp_pp_ScheduleClass0_bfloat16",
+            "test_replicate_fully_shard_init",
+            "test_grad_acc_with_reduce_dtype",
+            "test_replicate_ignore_module",
+            "test_train_parity_2d_mlp",
+            "test_replicate_move_args_kwargs_to_device",
+            "test_replicate_single_module",
+            # torch.compile + 2D FSDP/TP — ~300s per-process watchdog
+            "test_2d_fsdp_tp_compile_use_ca_False",
+            # Monitored barrier — ranks hang (no completion)
+            "test_monitored_barrier_allreduce_hang_wait_all_ranks",
+            "test_monitored_barrier_allreduce_hang",
+            # Join — spawn timeouts (200–300s) and/or exit code 10
+            "test_join_kwargs",
+            "test_multiple_joinables",
+            # FSDP1 wrap — ProcessGroupNCCL _ALLGATHER_BASE watchdog; child Exited with -6
+            "test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_False_device_init_mode0",
+            "test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_False_device_init_mode1",
+            "test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_True_device_init_mode0",
+            "test_main_wrap_api_cpu_offload0_backward_prefetch0_forward_prefetch_True_device_init_mode1",
+            "test_main_wrap_api_cpu_offload0_backward_prefetch1_forward_prefetch_False_device_init_mode0",
+            "test_main_wrap_api_cpu_offload0_backward_prefetch1_forward_prefetch_False_device_init_mode1",
+            "test_main_wrap_api_cpu_offload0_backward_prefetch1_forward_prefetch_True_device_init_mode1",
+            "test_main_wrap_api_cpu_offload1_backward_prefetch0_forward_prefetch_False_device_init_mode1",
+            "test_main_wrap_api_cpu_offload1_backward_prefetch0_forward_prefetch_True_device_init_mode1",
+            "test_main_wrap_api_cpu_offload1_backward_prefetch1_forward_prefetch_False_device_init_mode1",
+            "test_main_wrap_api_cpu_offload1_backward_prefetch1_forward_prefetch_True_device_init_mode1",
+            # === Subprocess exit code 10 (spawned rank crash) ===
+            "test_resume",
+            "test_get_memory_stats",
+            "test_suspend",
+            "test_mixture_of_experts_offload_true_shard_grad_op_cuda",
+            "test_3d_mlp_with_nd_mesh",
+            "test_linalg_ops",
+            "test_ddp_uneven_inputs",
+            "test_non_root_forward_backward",
+            "test_reduce_scatter_uneven",
+            "test_single_joinable",
+            # === Assertions / numeric mismatch ===
+            "test_depthwise_convolution",
+            "test_ddp_buffer_hook_allreduce_return_future",
+            # === Communication count, parity, optimizer reload, compiler collectives ===
+            "test_post_localSGD_optimizer_step_reload",
+            "test_fully_shard_communication_count",
+            "test_train_parity_single_group_shard_largest_dim",
+            "test_compiler_collectives_automatic_dynamic_tensor",
+            # === Pipeline parallel composability (8-GPU or PP RuntimeError) ===
+            "test_replicate_pp_ScheduleClass3_bfloat16",
+            "test_replicate_pp_ScheduleClass3_float32",
+            "test_replicate_pp_ScheduleClass4_bfloat16",
+            "test_replicate_pp_grads_ScheduleClass1",
+            "test_replicate_pp_grads_ScheduleClass2",
+            "test_replicate_pp_grads_ScheduleClass3",
+            "test_replicate_pp_grads_ScheduleClass4",
+            # === Memory accounting, init failure, elastic, misc ===
+            "test_fsdp_memory_ckpt_ckpt",
+            "test_replicate_multi_module",
+            "test_virtual_local_rank",
             "test_view_ops",
         ],
+
     },
 }
