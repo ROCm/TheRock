@@ -21,10 +21,18 @@ on:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
-        description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
+        description: Base Python package index URL for torch wheels
         required: true
         type: string
         default: "https://rocm.nightlies.amd.com/v2-staging"
+      rocm_package_index_url:
+        description: Optional base Python package index URL for ROCm packages when different from package_index_url
+        type: string
+        default: ""
+      rocm_version:
+        description: Optional ROCm version to install before torch, e.g. "7.13.0rc2"
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -71,6 +79,12 @@ on:
       package_index_url:
         required: true
         type: string
+      rocm_package_index_url:
+        type: string
+        default: ""
+      rocm_version:
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -212,7 +226,31 @@ jobs:
       - name: Set up virtual environment
         timeout-minutes: 15
         run: |
-          if [ "${{ inputs.multi_arch }}" = "true" ]; then
+          if [ -n "${{ inputs.rocm_package_index_url }}" ] && [ -n "${{ inputs.rocm_version }}" ]; then
+            python build_tools/setup_venv.py ${VENV_DIR} \
+              --activate-in-future-github-actions-steps
+
+            VENV_PYTHON="${VENV_DIR}/bin/python"
+            if [ ! -x "${VENV_PYTHON}" ]; then
+              VENV_PYTHON="${VENV_DIR}/Scripts/python.exe"
+            fi
+
+            if [ "${{ inputs.multi_arch }}" = "true" ]; then
+              ROCM_EXTRA_INDEX_URL="${{ inputs.rocm_package_index_url }}"
+              "${VENV_PYTHON}" -m pip install "rocm[libraries,${{ steps.expand.outputs.device_extras }}]==${{ inputs.rocm_version }}" \
+                --index-url=${ROCM_EXTRA_INDEX_URL}
+              "${VENV_PYTHON}" -m pip install "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+                --index-url=${{ inputs.package_index_url }} \
+                --extra-index-url=${ROCM_EXTRA_INDEX_URL}
+            else
+              ROCM_EXTRA_INDEX_URL="${{ inputs.rocm_package_index_url }}/${{ inputs.amdgpu_family }}"
+              "${VENV_PYTHON}" -m pip install "rocm[libraries]==${{ inputs.rocm_version }}" \
+                --index-url=${ROCM_EXTRA_INDEX_URL}
+              "${VENV_PYTHON}" -m pip install torch==${{ inputs.torch_version }} \
+                --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }} \
+                --extra-index-url=${ROCM_EXTRA_INDEX_URL}
+            fi
+          elif [ "${{ inputs.multi_arch }}" = "true" ]; then
             python build_tools/setup_venv.py ${VENV_DIR} \
               --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
               --index-url=${{ inputs.package_index_url }} \
@@ -224,11 +262,18 @@ jobs:
               --index-subdir=${{ inputs.amdgpu_family }} \
               --activate-in-future-github-actions-steps
           fi
-
       - name: Install ROCm devel packages
         timeout-minutes: 15
         run: |
-          if [ "${{ inputs.multi_arch }}" = "true" ]; then
+          if [ -n "${{ inputs.rocm_package_index_url }}" ] && [ -n "${{ inputs.rocm_version }}" ]; then
+            if [ "${{ inputs.multi_arch }}" = "true" ]; then
+              pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]==${{ inputs.rocm_version }}" \
+                --index-url=${{ inputs.rocm_package_index_url }}
+            else
+              pip install "rocm[devel]==${{ inputs.rocm_version }}" \
+                --index-url=${{ inputs.rocm_package_index_url }}/${{ inputs.amdgpu_family }}
+            fi
+          elif [ "${{ inputs.multi_arch }}" = "true" ]; then
             pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
               --index-url=${{ inputs.package_index_url }}
           else
@@ -276,6 +321,16 @@ jobs:
           # instead of requiring gcc/build-essential.
           echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
           echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
+
+      - name: Install C++ build tools for PyTorch tests
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential
+
+      - name: Restrict distributed jobs to 4 GPUs
+        if: matrix.test_config == 'distributed'
+        run: |
+          echo "HIP_VISIBLE_DEVICES=0,1,2,3" >> "${GITHUB_ENV}"
 
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
