@@ -19,6 +19,7 @@ exclude = [
 optional = true
 [components.test."math-libs/BLAS/rocRoller/stage"]
 include = [
+  "bin/rocroller/**",
   "bin/rocroller-test*",
 ]
 optional = true
