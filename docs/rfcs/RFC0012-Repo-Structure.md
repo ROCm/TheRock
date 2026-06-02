@@ -80,6 +80,7 @@ rather than under a `<stream>/` prefix on the parent domain.
 | nightly   | `nightly.repo.amd.com`  | required at v2    |
 | rc        | `rc.repo.amd.com`       | required at v1    |
 | stable    | `stable.repo.amd.com`   | required at v1    |
+| weekly | `weekly .repo.amd.com`   | required at v2    |
 | ltsrc     | `ltsrc.repo.amd.com`    | future (reserved) |
 | lts       | `lts.repo.amd.com`      | future (reserved) |
 | archives  | `archives.repo.amd.com` | required at v2    |
@@ -436,7 +437,7 @@ stream-specific differences are:
   - **rpath** — rpath variant of standard packages.
 - **`ltsrc.repo.amd.com`** *(future; Retention: 2 years)* —
   release-candidate builds for the next LTS release; mirrors
-  `stable.repo.amd.com` layout.
+  `lts.repo.amd.com` layout.
 - **`lts.repo.amd.com`** *(future)* — long-term-support releases.
   Adds a `YYYYMM/` subfolder under each artifact type, otherwise
   mirrors the `stable` layout.
