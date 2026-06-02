@@ -16,9 +16,9 @@ status: draft
   `https://download.pytorch.org/whl/` naming convention).
 - **RFC0009** — native packaging conventions (source of the
   `amdrocm<major>-<project>` package-naming family referenced for extras).
-- **RFC0012** — end-user projects independent release lifecycle (defines
+- **RFC00XX** — end-user projects independent release lifecycle (defines
   the per-project release model for extras; this RFC defines where those
-  artifacts land on `repo.amd.com`).
+  artifacts land on `repo.amd.com`). Available as a PR at this stage.
 
 ## Overview
 
