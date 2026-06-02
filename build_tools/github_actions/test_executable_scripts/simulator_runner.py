@@ -68,16 +68,8 @@ def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
     """
     paths = {
         "preload": bin_dir / "lib" / "librocjitsu_kmd.so",
-        "config": bin_dir
-        / "share"
-        / "rocjitsu"
-        / "configs"
-        / "amdgpu_cdna4_kmd.json",
-        "schema": bin_dir
-        / "share"
-        / "rocjitsu"
-        / "schemas"
-        / "simulation_config.fbs",
+        "config": bin_dir / "share" / "rocjitsu" / "configs" / "amdgpu_cdna4_kmd.json",
+        "schema": bin_dir / "share" / "rocjitsu" / "schemas" / "simulation_config.fbs",
     }
     missing = [str(p) for p in paths.values() if not p.exists()]
     if missing:
@@ -95,9 +87,7 @@ def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
 def _load_filters(component: str, preset: str) -> tuple[list[str], list[str]]:
     """Return (allow_patterns, skip_patterns) for ``component`` and ``preset``."""
     if not FILTERS_PATH.exists():
-        raise FileNotFoundError(
-            f"Simulator filter config not found: {FILTERS_PATH}"
-        )
+        raise FileNotFoundError(f"Simulator filter config not found: {FILTERS_PATH}")
     with FILTERS_PATH.open() as fh:
         cfg = yaml.safe_load(fh) or {}
     comp_cfg = cfg.get(component)
@@ -202,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     cmd = [sys.executable, str(driver_script)]
-    logging.info("[simulator_runner] component=%s preset=%s", args.component, args.filter_preset)
+    logging.info(
+        "[simulator_runner] component=%s preset=%s", args.component, args.filter_preset
+    )
     logging.info("[simulator_runner] THEROCK_BIN_DIR=%s", bin_dir)
     logging.info("[simulator_runner] LD_PRELOAD=%s", env["LD_PRELOAD"])
     logging.info("[simulator_runner] RJ_CONFIG=%s", env["RJ_CONFIG"])

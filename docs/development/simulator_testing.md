@@ -18,14 +18,14 @@ exist for nightly use.
 
 ## What lives where
 
-| Path | Purpose |
-| --- | --- |
-| `build_tools/github_actions/test_executable_scripts/simulator_runner.py` | Wrapper that preloads the rocjitsu interposer and delegates to the existing per-component test driver. |
-| `build_tools/github_actions/test_executable_scripts/simulator_runner_filters.yaml` | GTest allow/skip patterns per component and preset. |
-| `build_tools/github_actions/fetch_test_configurations.py` | CI matrix; entry `rocrand-sim` plugs the runner into the standard test pipeline. |
-| `.github/workflows/test-simulator.yml` | Self-contained build + simulator-test workflow (gfx94X-dcgpu only today). |
-| `build_tools/install_rocm_from_artifacts.py` | `--rocjitsu` flag (added upstream in #5106) pulls the rocjitsu artifact into a dist for downstream test jobs. |
-| `emulation/CMakeLists.txt` + `emulation/artifact-rocjitsu.toml` | Where the rocjitsu artifact is built and packaged in TheRock. |
+| Path                                                                               | Purpose                                                                                                       |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `build_tools/github_actions/test_executable_scripts/simulator_runner.py`           | Wrapper that preloads the rocjitsu interposer and delegates to the existing per-component test driver.        |
+| `build_tools/github_actions/test_executable_scripts/simulator_runner_filters.yaml` | GTest allow/skip patterns per component and preset.                                                           |
+| `build_tools/github_actions/fetch_test_configurations.py`                          | CI matrix; entry `rocrand-sim` plugs the runner into the standard test pipeline.                              |
+| `.github/workflows/test-simulator.yml`                                             | Self-contained build + simulator-test workflow (gfx94X-dcgpu only today).                                     |
+| `build_tools/install_rocm_from_artifacts.py`                                       | `--rocjitsu` flag (added upstream in #5106) pulls the rocjitsu artifact into a dist for downstream test jobs. |
+| `emulation/CMakeLists.txt` + `emulation/artifact-rocjitsu.toml`                    | Where the rocjitsu artifact is built and packaged in TheRock.                                                 |
 
 ## Running locally
 
@@ -78,12 +78,12 @@ short comment explaining why the test cannot pass under the simulator yet.
 
 1. Add a driver (or reuse the existing one) under
    `build_tools/github_actions/test_executable_scripts/test_<comp>.py`.
-2. Map the component in `COMPONENT_DRIVERS` inside `simulator_runner.py`.
-3. Add a `<comp>:` entry with `presets:` and `skip:` to
+1. Map the component in `COMPONENT_DRIVERS` inside `simulator_runner.py`.
+1. Add a `<comp>:` entry with `presets:` and `skip:` to
    `simulator_runner_filters.yaml`.
-4. Add a `<comp>-sim` entry in `fetch_test_configurations.py` that points at
+1. Add a `<comp>-sim` entry in `fetch_test_configurations.py` that points at
    `simulator_runner.py --component <comp> --filter-preset basic`.
-5. Verify locally with the steps above, then add the matrix entry to whatever
+1. Verify locally with the steps above, then add the matrix entry to whatever
    workflow you want to wire it into (start by extending
    `test-simulator.yml`).
 
@@ -107,9 +107,9 @@ artifacts so failures can be triaged offline.
 Roll the framework forward conservatively:
 
 1. PR-1: `basic` preset stays as the only thing in CI, soft-fail.
-2. PR-2: bump `rocrand-sim` to `quick` once three consecutive PR-1 runs are
+1. PR-2: bump `rocrand-sim` to `quick` once three consecutive PR-1 runs are
    green, grow the skip list as needed, then promote to required.
-3. PR-3: add `hiprand-sim` reusing the same wrapper (`--component hiprand`).
+1. PR-3: add `hiprand-sim` reusing the same wrapper (`--component hiprand`).
 
 ## Known limitations
 
