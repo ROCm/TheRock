@@ -54,6 +54,7 @@ project wide:
   - `THEROCK_BUNDLED_LIBNL`
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
+  - `THEROCK_BUNDLED_TBB`
   - `THEROCK_BUNDLED_ZLIB`
   - `THEROCK_BUNDLED_ZSTD`
 - Sub-projects must arrange for any libraries that depend on these to add the
@@ -200,6 +201,17 @@ SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics
 - Canonical method: `find_package(SQLite3)`
 - Import library: `SQLite::SQLite3`
 - Alternatives: none
+
+## TBB
+
+oneAPI Threading Building Blocks. Optional sysdep; only bundled when
+`THEROCK_ENABLE_SYSDEPS_TBB=ON`.
+
+Supported sub-libraries: `tbb`, `tbbmalloc`, `tbbmalloc_proxy`.
+
+- Canonical method: `find_package(TBB CONFIG)`
+- Import libraries: `TBB::tbb`, `TBB::tbbmalloc`, `TBB::tbbmalloc_proxy`
+- Alternatives: `pkg_check_modules(TBB tbb)`
 
 ## zlib
 

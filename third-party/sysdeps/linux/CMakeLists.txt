@@ -131,6 +131,20 @@ if(THEROCK_ENABLE_SYSDEPS_LIBPCIACCESS)
   )
 endif()
 
+# Optional sysdep: TBB (Threading Building Blocks)
+if(THEROCK_ENABLE_SYSDEPS_TBB)
+  add_subdirectory(tbb)
+  therock_provide_artifact(sysdeps-tbb
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-tbb.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-tbb
+  )
+endif()
+
 # Optional sysdep: hwloc (depends on numactl and libpciaccess)
 if(THEROCK_ENABLE_SYSDEPS_HWLOC)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/hwloc" "${CMAKE_CURRENT_BINARY_DIR}/hwloc")
