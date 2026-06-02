@@ -20,7 +20,9 @@ class ParseAmdgpuTargetsCmakeTest(unittest.TestCase):
     def _parse(self, cmake_text: str) -> list[AmdgpuTargetInfo]:
         import tempfile
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".cmake", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", suffix=".cmake", delete=False
+        ) as f:
             f.write(textwrap.dedent(cmake_text))
             tmp_path = Path(f.name)
         try:

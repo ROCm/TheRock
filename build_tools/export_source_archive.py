@@ -106,7 +106,7 @@ class TarArchiveWriter(ArchiveWriter):
         self.archive.add(str(path), arcname, recursive=True)
 
     def add_text(self, text: str, arcname: str):
-        with tempfile.NamedTemporaryFile(mode="wt") as tf:
+        with tempfile.NamedTemporaryFile(encoding="utf-8", mode="wt") as tf:
             tf.write(text)
             self.archive.add(Path(tf.name), arcname)
 

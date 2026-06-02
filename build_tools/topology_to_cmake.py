@@ -404,7 +404,7 @@ def main():
         branch_config_output_path = script_dir / branch_config_output_path
     branch_config_output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         write_cmake_header(f)
         generate_validation_metadata(topology, f)
         generate_feature_declarations(topology, f)

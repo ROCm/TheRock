@@ -139,7 +139,7 @@ class HardwareDetector:
         """
         try:
             # Read /proc/cpuinfo
-            with open("/proc/cpuinfo", "r") as f:
+            with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
                 cpuinfo = f.read()
 
             # Extract model name
@@ -233,7 +233,7 @@ class HardwareDetector:
             # Get RAM size from /proc/meminfo
             ram_size_gb = 0
             try:
-                with open("/proc/meminfo", "r") as f:
+                with open("/proc/meminfo", "r", encoding="utf-8") as f:
                     meminfo = f.read()
                 mem_match = re.search(r"MemTotal:\s*(\d+)\s*kB", meminfo)
                 if mem_match:

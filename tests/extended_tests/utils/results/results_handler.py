@@ -125,7 +125,7 @@ class ResultsHandler:
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
 
             output_file = results_dir / f"results_{timestamp}.json"
-            with open(output_file, "w") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(results_data, f, indent=2)
 
             log.info(f"Results saved: {output_file}")

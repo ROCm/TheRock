@@ -269,7 +269,9 @@ def promote_targz_sdist(filename: pathlib.Path, prerelease_type: str) -> bool:
         targz.close()
         print(" ...done")
 
-        with open(tmp_path / f"{package_name}" / "PKG-INFO", "r") as info:
+        with open(
+            tmp_path / f"{package_name}" / "PKG-INFO", "r", encoding="utf-8"
+        ) as info:
             for line in info.readlines():
                 if line.startswith("Version"):
                     version = Version(line.removeprefix("Version:").strip())

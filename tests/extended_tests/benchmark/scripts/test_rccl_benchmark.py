@@ -36,7 +36,7 @@ class RCCLBenchmark(BenchmarkBase):
         """Run RCCL benchmarks and save output to log file."""
         # Load benchmark configuration
         config_file = self.script_dir.parent / "configs" / "rccl.json"
-        with open(config_file, "r") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             config_data = json.load(f)
 
         # Get configuration
@@ -58,7 +58,7 @@ class RCCLBenchmark(BenchmarkBase):
 
         log.info("Running RCCL Benchmarks")
 
-        with open(self.log_file, "w+") as f:
+        with open(self.log_file, "w+", encoding="utf-8") as f:
             for benchmark in benchmarks:
                 bench_binary = Path(self.therock_bin_dir) / benchmark
 
@@ -132,7 +132,7 @@ class RCCLBenchmark(BenchmarkBase):
         test_results = []
 
         try:
-            with open(self.log_file, "r") as log_fp:
+            with open(self.log_file, "r", encoding="utf-8") as log_fp:
                 content = log_fp.read()
             # Split by benchmark sections
             sections = content.split("=" * 80)

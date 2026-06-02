@@ -108,7 +108,7 @@ class SystemInfo:
 
         @property
         def is_WSL2(self):
-            with open("/proc/version", "r") as f:
+            with open("/proc/version", "r", encoding="utf-8") as f:
                 _f = f.read()
             return True if "microsoft-standard-WSL2" in _f else False
 
@@ -139,7 +139,7 @@ class SystemInfo:
             kernel = subprocess.check_output(["uname", "-r"], text=True).strip()
             kernel_version = kernel.split("-")[0]
 
-            with open("/etc/os-release") as f:
+            with open("/etc/os-release", encoding="utf-8") as f:
                 _f = f.read().splitlines()
                 for _line in _f:
                     _name_match = re.match(r'^NAME="?(.*?)"?$', _line)
@@ -314,7 +314,7 @@ class SystemInfo:
         elif self.is_linux:
             import re
 
-            with open("/proc/meminfo", "r") as f:
+            with open("/proc/meminfo", "r", encoding="utf-8") as f:
                 _f = f.read().splitlines()
                 for line in _f:
                     mem_tol = re.search(r"^MemTotal:\s+(\d+)\s+kB$", line)

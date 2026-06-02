@@ -112,7 +112,7 @@ def main() -> None:
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
-        with open(github_output, "a") as f:
+        with open(github_output, "a", encoding="utf-8") as f:
             f.write(f"matrix={matrix_json}\n")
     else:
         print(f"\nmatrix={matrix_json}")

@@ -104,7 +104,7 @@ compiler_fingerprint = compute_compiler_fingerprint()
 hash_commit_file = Path(f"{compiler_exe_path_hash_file}.tmp{os.getpid()}")
 hash_commit_file.parent.mkdir(parents=True, exist_ok=True)
 try:
-    hash_commit_file.write_text(compiler_fingerprint)
+    hash_commit_file.write_text(compiler_fingerprint, encoding="utf-8")
     os.rename(hash_commit_file, compiler_exe_path_hash_file)
 except OSError:
     # Ignore.

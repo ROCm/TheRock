@@ -91,7 +91,9 @@ def main(args):
     objects = get_objects(args.bucket, args.subdir)
     url = f"https://{args.bucket}.{args.endpoint}/{args.subdir}"
 
-    with sys.stdout if args.output == "-" else open(args.output, "w") as f:
+    with (
+        sys.stdout if args.output == "-" else open(args.output, "w", encoding="utf-8")
+    ) as f:
         f.write(
             textwrap.dedent(
                 """\

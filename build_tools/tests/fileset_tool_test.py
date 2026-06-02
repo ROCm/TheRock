@@ -46,7 +46,7 @@ def run_command(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
 
 def write_text(p: Path, text: str):
     p.parent.mkdir(exist_ok=True, parents=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
 
 
 def is_windows():

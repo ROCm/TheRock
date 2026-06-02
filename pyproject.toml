@@ -1,0 +1,29 @@
+# Ruff configuration for first-party TheRock Python (not submodules).
+# https://docs.astral.sh/ruff/
+
+[tool.ruff]
+extend-exclude = [
+    "base",
+    "comm-libs",
+    "compiler",
+    "core",
+    "dctools",
+    "debug-tools",
+    "examples",
+    "iree-libs",
+    "math-libs",
+    "media-libs",
+    "ml-libs",
+    "patches",
+    "profiler",
+    "rocm-libraries",
+    "rocm-systems",
+    "third-party",
+    "dockerfiles",
+]
+
+[tool.ruff.lint]
+# PLW1514: require explicit encoding for open() and pathlib text helpers.
+# Preview until the rule is stabilized; see https://docs.astral.sh/ruff/rules/unspecified-encoding/
+preview = true
+extend-select = ["PLW1514"]

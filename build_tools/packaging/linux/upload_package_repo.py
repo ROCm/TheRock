@@ -227,7 +227,7 @@ def generate_release_file_with_checksums(release_file, job_type, dists_dir):
         sha256_entries.append(f" {sha256_hash.hexdigest()} {file_size:16d} {rel_path}")
 
     # Write Release file
-    with open(release_file, "w") as f:
+    with open(release_file, "w", encoding="utf-8") as f:
         # Header fields
         f.write(
             f"""Origin: AMD ROCm
@@ -334,7 +334,7 @@ def regenerate_deb_metadata_from_s3(
                 f"Downloading existing Packages file from S3: s3://{bucket}/{packages_s3_key}"
             )
             s3.download_file(bucket, packages_s3_key, str(existing_packages))
-            with open(existing_packages, "r") as f:
+            with open(existing_packages, "r", encoding="utf-8") as f:
                 content = f.read()
                 pkg_count = content.count("\nPackage: ")
             print(f"✅ Downloaded existing Packages file ({pkg_count} packages)")
@@ -386,7 +386,7 @@ def regenerate_deb_metadata_from_s3(
             def parse_packages_file(filepath):
                 """Parse Packages file into dict keyed by Filename"""
                 packages = {}
-                with open(filepath, "r") as f:
+                with open(filepath, "r", encoding="utf-8") as f:
                     current_entry = []
                     current_filename = None
 
@@ -417,7 +417,7 @@ def regenerate_deb_metadata_from_s3(
             merged = old_packages.copy()
             merged.update(new_packages_dict)
 
-            with open(merged_packages, "w") as outfile:
+            with open(merged_packages, "w", encoding="utf-8") as outfile:
                 for filename in sorted(merged.keys()):
                     outfile.write(merged[filename])
                     outfile.write("\n")
@@ -511,7 +511,7 @@ def create_deb_repo(package_dir, job_type):
     run_command("gzip -9c Packages > Packages.gz", cwd=dists)
 
     release = os.path.join(package_dir, "dists", "stable", "Release")
-    with open(release, "w") as f:
+    with open(release, "w", encoding="utf-8") as f:
         f.write(
             f"""Origin: AMD ROCm
 Label: ROCm {job_type} Packages

@@ -133,7 +133,7 @@ def collect_def_exports(filename):
 
   syms = []
 
-  with open(filename, 'r') as f:
+  with open(filename, 'r', encoding='utf-8') as f:
     lines = f.readlines()
   lines.reverse()
 
@@ -392,7 +392,7 @@ def read_soname(f):
 def read_library_name(filename):
   """Read library name from .def file."""
 
-  with open(filename, 'r') as f:
+  with open(filename, 'r', encoding='utf-8') as f:
     for line in f.readlines():
       line = line.strip()
       m = re.match(r'^(?:LIBRARY|NAME)\s+([A-Za-z0-9_.\-]+)$', line)
@@ -511,7 +511,7 @@ Examples:
   if args.symbol_list is None:
     funs = None
   else:
-    with open(args.symbol_list, 'r') as f:
+    with open(args.symbol_list, 'r', encoding='utf-8') as f:
       funs = []
       for line in re.split(r'\r?\n', f.read()):
         line = re.sub(r'#.*', '', line)
@@ -669,16 +669,16 @@ Examples:
   lib_suffix = re.sub(r'[^a-zA-Z_0-9]+', '_', suffix)
 
   tramp_file = f'{suffix}.tramp.S'
-  with open(os.path.join(outdir, tramp_file), 'w') as f:
+  with open(os.path.join(outdir, tramp_file), 'w', encoding='utf-8') as f:
     if not quiet:
       print(f"Generating {tramp_file}...")
-    with open(target_dir + '/table.S.tpl', 'r') as t:
+    with open(target_dir + '/table.S.tpl', 'r', encoding='utf-8') as t:
       table_text = string.Template(t.read()).substitute(
         lib_suffix=lib_suffix,
         table_size=ptr_size*(len(funs) + 1))
     f.write(table_text)
 
-    with open(target_dir + '/trampoline.S.tpl', 'r') as t:
+    with open(target_dir + '/trampoline.S.tpl', 'r', encoding='utf-8') as t:
       tramp_tpl = string.Template(t.read())
 
     for i, name in enumerate(funs):
@@ -692,10 +692,10 @@ Examples:
   # Generate C code
 
   init_file = f'{suffix}.init.c'
-  with open(os.path.join(outdir, init_file), 'w') as f:
+  with open(os.path.join(outdir, init_file), 'w', encoding='utf-8') as f:
     if not quiet:
       print(f"Generating {init_file}...")
-    with open(os.path.join(root, 'arch/common/init.c.tpl'), 'r') as t:
+    with open(os.path.join(root, 'arch/common/init.c.tpl'), 'r', encoding='utf-8') as t:
       if funs:
         sym_names = ',\n  '.join(f'"{name}"' for name in funs) + ','
       else:

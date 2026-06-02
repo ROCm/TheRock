@@ -33,7 +33,7 @@ class ROCsolverBenchmark(BenchmarkBase):
         """Run ROCsolver benchmarks and save output to log file."""
         log.info("Running ROCsolver Benchmarks")
 
-        with open(self.log_file, "w+") as f:
+        with open(self.log_file, "w+", encoding="utf-8") as f:
             cmd = [
                 f"{self.therock_bin_dir}/rocsolver-bench",
                 "-f",
@@ -103,7 +103,7 @@ class ROCsolverBenchmark(BenchmarkBase):
         subtest_name = "rocsolver_gesvd_d_S_S_250_250"
 
         try:
-            with open(self.log_file, "r") as fp:
+            with open(self.log_file, "r", encoding="utf-8") as fp:
                 for line in fp:
                     # Check for GPU device lines
                     if re.search(device_pattern, line):

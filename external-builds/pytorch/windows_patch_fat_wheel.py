@@ -79,8 +79,8 @@ def process_wheel(
 
 
 def patch_init_py(init_py_path: Path):
-    lines = init_py_path.read_text().splitlines(keepends=True)
-    with open(init_py_path, "w") as out:
+    lines = init_py_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    with open(init_py_path, "w", encoding="utf-8") as out:
         for line in lines:
             if "for dll_path in dll_paths:" in line:
                 indent_count = len(line) - len(line.lstrip())

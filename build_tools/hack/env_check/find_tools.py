@@ -137,7 +137,9 @@ class FindPython(FindProgram):
         elif sys.prefix == sys.base_prefix:
             return False, "Global ENV"
         elif os.getenv("VIRTUAL_ENV") is not None:
-            with open(Path(f"{sys.prefix}/pyvenv.cfg").resolve(), "r") as file:
+            with open(
+                Path(f"{sys.prefix}/pyvenv.cfg").resolve(), "r", encoding="utf-8"
+            ) as file:
                 _conf = file.read()
             _env_type = "uv VENV" if "uv" in _conf else "Python VENV"
             return True, _env_type

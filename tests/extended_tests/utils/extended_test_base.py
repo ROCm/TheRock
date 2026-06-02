@@ -66,7 +66,7 @@ class ExtendedTestBase:
         config_file = self.script_dir.parent / "configs" / config_filename
 
         try:
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except FileNotFoundError:
             raise TestExecutionError(

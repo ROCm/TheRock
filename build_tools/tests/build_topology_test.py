@@ -30,7 +30,7 @@ class BuildTopologyTest(unittest.TestCase):
         """Set up test fixtures."""
         # Create a temporary file and close it immediately to avoid file locking on Windows
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
+            encoding="utf-8", mode="w", suffix=".toml", delete=False
         ) as temp_file:
             self.topology_path = temp_file.name
 
@@ -41,7 +41,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def write_topology(self, content: str):
         """Write topology content to temp file."""
-        with open(self.topology_path, "w") as f:
+        with open(self.topology_path, "w", encoding="utf-8") as f:
             f.write(textwrap.dedent(content))
 
     def test_empty_topology(self):

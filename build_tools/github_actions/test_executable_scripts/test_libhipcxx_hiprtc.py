@@ -31,7 +31,7 @@ def load_rocm_version() -> str:
     """Loads the rocm-version from the repository's version.json file."""
     version_file = THEROCK_DIR / "version.json"
     logging.info(f"Loading ROCm version from: {version_file}")
-    with open(version_file, "rt") as f:
+    with open(version_file, "rt", encoding="utf-8") as f:
         loaded_file = json.load(f)
         return loaded_file["rocm-version"]
 

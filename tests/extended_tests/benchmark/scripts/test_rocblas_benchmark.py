@@ -28,7 +28,7 @@ class ROCblasBenchmark(BenchmarkBase):
     def run_benchmarks(self) -> None:
         """Run ROCblas benchmarks and save output to log files."""
         config_file = self.script_dir.parent / "configs" / "rocblas.json"
-        with open(config_file) as f:
+        with open(config_file, encoding="utf-8") as f:
             config_data = json.load(f)
 
         benchmark_config = config_data.get("benchmark_config", {})
@@ -89,7 +89,7 @@ class ROCblasBenchmark(BenchmarkBase):
                 )
                 bench_config.update(overrides)
 
-            with open(log_file, "w+") as f:
+            with open(log_file, "w+", encoding="utf-8") as f:
                 precision_values = bench_config.get("precision", ["s"])
                 if not isinstance(precision_values, list):
                     precision_values = [precision_values]
@@ -315,7 +315,7 @@ class ROCblasBenchmark(BenchmarkBase):
             suite_table.title = f"ROCblas {suite_name} Benchmark Results"
 
             try:
-                with open(log_file, "r") as log_fp:
+                with open(log_file, "r", encoding="utf-8") as log_fp:
                     lines = log_fp.readlines()
 
                 # Parse line by line, looking for CSV header followed by data

@@ -22,6 +22,6 @@ def calculate_hash(file, hash_algorithm):
 
 
 def write_hash(hash_file, digest):
-    with open(hash_file, "wt") as f:
+    with open(hash_file, "wt", encoding="utf-8") as f:
         f.write(digest.hexdigest())
         f.write("\n")

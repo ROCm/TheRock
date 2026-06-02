@@ -38,7 +38,7 @@ def get_rocm_version():
     Reads version.json from repo root.
     Returns major.minor
     """
-    with open("version.json", "r") as f:
+    with open("version.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
     full_version = data["rocm-version"]

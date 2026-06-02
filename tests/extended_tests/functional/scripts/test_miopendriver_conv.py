@@ -121,7 +121,7 @@ class MIOpenDriverConvTest(FunctionalBase):
                 log.info(f"[{current_test}/{total_tests}] {test_case_name}: {status}")
 
         # Write all results to JSON file
-        with open(self.results_json, "w") as f:
+        with open(self.results_json, "w", encoding="utf-8") as f:
             json.dump(all_results, f, indent=2)
 
         log.info(f"{self.display_name} results saved to {self.results_json}")
@@ -136,7 +136,7 @@ class MIOpenDriverConvTest(FunctionalBase):
         log.info(f"Parsing {self.display_name} Results")
 
         try:
-            with open(self.results_json, "r") as f:
+            with open(self.results_json, "r", encoding="utf-8") as f:
                 json_results = json.load(f)
         except FileNotFoundError:
             raise TestExecutionError(

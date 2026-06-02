@@ -484,7 +484,7 @@ def _setup_common_build_env(
     if triton_dir:
         triton_env_file = triton_dir / "build_env.json"
         if triton_env_file.exists():
-            with open(triton_env_file, "r") as f:
+            with open(triton_env_file, "r", encoding="utf-8") as f:
                 addl_triton_env = json.load(f)
                 print(f"-- Additional triton build env vars: {addl_triton_env}")
             env.update(addl_triton_env)
