@@ -360,6 +360,12 @@ skip_tests = {
             "(TestOpSpecMesh and test_op_strategy_str_handles_all_specs_none)",
             "(TestNodeGroupNameResolution and test_ag_group_key_with_node_group_name)",
             "(SymmetricMemoryTest and test_pg_rendezvous_abort_after)",
+
+            # CI run 26794193808 distributed shards 2/3 and 3/3:
+            # Jun1/PT + ROCm 7.14 nightly is missing Kineto/NCCL
+            # annotation metadata on GPU kernels for both exporter paths.
+            "(CommTest and test_profiler_nccl_annotations_on_gpu_kernels_use_python_export_True)",
+            "(CommTest and test_profiler_nccl_annotations_on_gpu_kernels_use_python_export_False)",
         ],
     },
 }
