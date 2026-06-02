@@ -1,0 +1,157 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Build TheRock with the rocjitsu simulator enabled, then run a real ROCm
+# application (rocRAND today) end-to-end against the simulated AMD GPU.
+#
+# Phase 1 (PR-1) keeps the scope minimal:
+#   - One job, builds + tests in the same workflow run.
+#   - Targets gfx94X-dcgpu only (rocjitsu has CDNA3/CDNA4 topologies today).
+#   - Runs the rocrand `basic` preset (see simulator_runner_filters.yaml).
+#   - Soft-fail on the test step until the pass rate stabilizes.
+#
+# Note on runner choice:
+#   The plan called for `ubuntu-latest`, but a full TheRock build requires the
+#   manylinux build container and a runner with substantial CPU/disk. We use
+#   the same `azure-linux-scale-rocm` runner pool as build_portable_linux_artifacts.yml
+#   - those runners do not have AMD GPUs, so the "no physical GPU" intent of
+#   the plan is preserved (the simulator runs entirely on CPU).
+
+name: Test Simulator
+
+on:
+  pull_request:
+    paths:
+      - "compiler/amd-llvm/**"
+      - "rocm-systems/emulation/rocjitsu/**"
+      - "emulation/**"
+      - "build_tools/github_actions/test_executable_scripts/simulator_runner.py"
+      - "build_tools/github_actions/test_executable_scripts/simulator_runner_filters.yaml"
+      - "build_tools/github_actions/test_executable_scripts/test_rocrand.py"
+      - ".github/workflows/test-simulator.yml"
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        type: string
+        default: gfx94X-dcgpu
+      filter_preset:
+        description: 'simulator_runner preset (basic | quick | full)'
+        type: string
+        default: basic
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_test_simulator:
+    name: Build + rocrand-sim (${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 720 # 12 hour cap, matches build_portable_linux_artifacts.yml
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+      TEATIME_FORCE_INTERACTIVE: 0
+      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      # Layout used by simulator_runner.py to find rocjitsu pieces.
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+          # simulator_runner.py reads simulator_runner_filters.yaml.
+          pip install pyyaml
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-dev" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12
+
+      - name: Configure Projects
+        env:
+          amdgpu_families: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          package_version: ADHOCBUILD
+          extra_cmake_options: >-
+            -DTHEROCK_ENABLE_EMULATION=ON
+            -DTHEROCK_ENABLE_ROCJITSU=ON
+            -DTHEROCK_BUILD_TESTING=ON
+          BUILD_DIR: build
+        run: |
+          python3 build_tools/github_actions/build_configure.py --manylinux
+
+      - name: Build therock-dist and therock-archives
+        run: |
+          cmake --build build --target therock-dist therock-archives -- -k 0
+
+      - name: Verify rocjitsu interposer + configs are present
+        run: |
+          set -ex
+          ls -lh "$THEROCK_BIN_DIR/lib/librocjitsu_kmd.so"
+          ls -lh "$THEROCK_BIN_DIR/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          ls -lh "$THEROCK_BIN_DIR/share/rocjitsu/schemas/simulation_config.fbs"
+          ls -lh "$THEROCK_BIN_DIR/rocRAND" || true
+
+      - name: Run rocrand under rocjitsu simulator
+        id: rocrand_sim
+        continue-on-error: true
+        timeout-minutes: 60
+        env:
+          # Mirrors the matrix entry in fetch_test_configurations.py.
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          TEST_COMPONENT: rocrand
+          TEST_TYPE: full
+        run: |
+          python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
+            --component rocrand \
+            --filter-preset "${{ inputs.filter_preset || 'basic' }}"
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## Simulator test result: ${{ steps.rocrand_sim.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
+          if [ -d build/dist/rocm/share/rocjitsu ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocjitsu install" >> $GITHUB_STEP_SUMMARY
+            find build/dist/rocm/share/rocjitsu -maxdepth 3 -type f >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-simulator-logs-${{ github.run_attempt }}
+          path: |
+            build/logs/rocjitsu_*.log
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+          retention-days: 7
