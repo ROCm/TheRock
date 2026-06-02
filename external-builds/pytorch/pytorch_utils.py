@@ -437,3 +437,60 @@ def check_pytorch_source_version(pytorch_dir: Path, allow_mismatch: bool) -> Non
         f"PyTorch version check OK: source and wheel both "
         f"{installed_version.major}.{installed_version.minor}"
     )
+
+
+def resolve_torch_version(
+    index_url: str,
+    python_version: str = "",
+    platform: str = "linux_x86_64",
+    pre: bool = True,
+) -> str:
+    """Resolve the latest torch version from a package index.
+
+    Wraps ``pip index versions`` in a cross-platform way (no bash/sed).
+
+    Args:
+        index_url: Full package index URL including GPU family subdir.
+        python_version: Python version constraint (e.g. "3.12"). Empty = any.
+        platform: Pip platform tag (e.g. "linux_x86_64", "win_amd64").
+        pre: Include pre-release versions.
+
+    Returns:
+        Version string (e.g. "2.12.0a0+rocm7.13.0a20260413").
+
+    Raises:
+        RuntimeError: If pip fails or no version can be parsed.
+    """
+    cmd = [
+        sys.executable,
+        "-m",
+        "pip",
+        "index",
+        "versions",
+        "torch",
+        "--index-url",
+        index_url,
+        "--platform",
+        platform,
+    ]
+    if pre:
+        cmd.append("--pre")
+    if python_version:
+        cmd.extend(["--python-version", python_version])
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"pip index versions failed (exit {result.returncode}):\n{result.stderr}"
+        )
+
+    import re
+
+    for line in result.stdout.splitlines():
+        m = re.match(r"^torch\s+\((.+)\)", line)
+        if m:
+            return m.group(1)
+
+    raise RuntimeError(
+        f"Could not parse torch version from pip output:\n{result.stdout}"
+    )

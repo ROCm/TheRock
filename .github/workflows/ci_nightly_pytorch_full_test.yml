@@ -87,38 +87,37 @@ jobs:
     outputs:
       torch_version: ${{ steps.resolve.outputs.torch_version }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Resolve latest nightly torch version
         id: resolve
         run: |
-          INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
-
-          if [ -n "${TORCH_VERSION_INPUT}" ]; then
-            echo "torch_version=${TORCH_VERSION_INPUT}" >> "$GITHUB_OUTPUT"
-            echo "Using provided torch_version: ${TORCH_VERSION_INPUT}"
-            exit 0
-          fi
-
           pip install packaging
-          # --platform ensures this works even when the runner OS differs from
-          # the target (e.g. querying Linux packages from an ubuntu runner that
-          # might later be replaced by a Windows runner for cross-platform support).
-          # TODO: When adding Windows support, pass --platform win_amd64 for
-          # Windows targets or derive the platform from amdgpu_family/runner.
-          TORCH_VERSION=$(pip index versions torch \
-            --pre \
-            --index-url "${INDEX_URL}" \
-            --python-version "${PYTHON_VERSION}" \
-            --platform linux_x86_64 2>/dev/null \
-            | head -1 \
-            | sed 's/torch (\(.*\))/\1/')
 
-          if [ -z "${TORCH_VERSION}" ]; then
-            echo "::error::Failed to resolve torch version from ${INDEX_URL}"
-            exit 1
-          fi
+          python -c "
+          import os, sys
+          sys.path.insert(0, 'external-builds/pytorch')
+          from pytorch_utils import resolve_torch_version
 
-          echo "torch_version=${TORCH_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved torch_version: ${TORCH_VERSION}"
+          torch_version_input = os.environ.get('TORCH_VERSION_INPUT', '')
+          if torch_version_input:
+              version = torch_version_input
+              print(f'Using provided torch_version: {version}')
+          else:
+              index_url = os.environ['PACKAGE_INDEX_URL'] + '/' + os.environ['AMDGPU_FAMILY']
+              python_version = os.environ.get('PYTHON_VERSION', '')
+              platform = os.environ.get('PIP_PLATFORM', 'linux_x86_64')
+              version = resolve_torch_version(
+                  index_url=index_url,
+                  python_version=python_version,
+                  platform=platform,
+              )
+              print(f'Resolved torch_version: {version}')
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'torch_version={version}\n')
+          "
 
   run_full_tests:
     needs: resolve_torch_version
