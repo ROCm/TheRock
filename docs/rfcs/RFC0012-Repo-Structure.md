@@ -24,6 +24,7 @@ repo.amd.com's open source software release publications need standardization. I
 ## Definitions
 
 - Repository Streams
+  - dev - triggered by developers
   - nightly - nightly builds from the develop branch
   - rc - release candidate builds for the next stable release
   - stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
