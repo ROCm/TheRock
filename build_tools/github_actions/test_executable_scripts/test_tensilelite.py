@@ -10,14 +10,11 @@ Runs against installed artifacts from the hipBLASLt test component:
   share/hipblaslt/tensilelite/rocisa/       — rocisa Python package + _rocisa.abi3.so
   share/hipblaslt/tensilelite/rocisa_tests/ — rocisa pytest modules
 
-Test order: rocisa first (build dependency of TensileLite), then TensileLite
-unit tests. A rocisa failure means TensileLite tests will also fail.
+Test order (fail fast):
+- rocisa (build dependency of TensileLite)
+- TensileLite
 
-Usage (TheRock CI):
-    python test_tensilelite.py
-
-Usage (local, after install):
-    THEROCK_BIN_DIR=./build/bin python test_tensilelite.py
+Usage: python test_tensilelite.py
 """
 
 import logging
@@ -30,7 +27,9 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
+THEROCK_BIN_DIR = os.getenv(
+    "THEROCK_BIN_DIR", str(THEROCK_DIR / "build" / "bin")
+)
 
 rocm_path = Path(THEROCK_BIN_DIR).resolve().parent
 tensilelite_root = rocm_path / "share" / "hipblaslt" / "tensilelite"
