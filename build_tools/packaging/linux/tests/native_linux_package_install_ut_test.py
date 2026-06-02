@@ -12,7 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
@@ -784,9 +784,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.setup_deb_repository()."""
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", new_callable=mock_open)
+    @patch("native_linux_package_install_test.Path.write_text")
     def test_returns_true_when_apt_update_succeeds_no_gpg(
-        self, mock_file, mock_streaming
+        self, mock_write_text, mock_streaming
     ):
         # Test that setup_deb_repository writes repo entry (trusted=yes) and returns True when apt update returns 0.
         mock_streaming.return_value = 0
@@ -796,8 +796,8 @@ class SetupDebRepositoryTest(unittest.TestCase):
             gpg_key_url=None,
         )
         self.assertTrue(t.setup_deb_repository())
-        mock_file().write.assert_called_once()
-        written = mock_file().write.call_args[0][0]
+        mock_write_text.assert_called_once()
+        written = mock_write_text.call_args[0][0]
         self.assertIn("trusted=yes", written)
         self.assertIn("https://repo.example.com", written)
 
@@ -807,9 +807,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
         "setup_gpg_key",
         return_value=True,
     )
-    @patch("builtins.open", new_callable=mock_open)
+    @patch("native_linux_package_install_test.Path.write_text")
     def test_returns_true_with_gpg_when_apt_update_succeeds(
-        self, mock_file, mock_gpg, mock_streaming
+        self, mock_write_text, mock_gpg, mock_streaming
     ):
         # Test that with gpg_key_url, setup_gpg_key is called and repo entry uses signed-by.
         mock_streaming.return_value = 0
@@ -820,7 +820,7 @@ class SetupDebRepositoryTest(unittest.TestCase):
         )
         self.assertTrue(t.setup_deb_repository())
         mock_gpg.assert_called_once()
-        written = mock_file().write.call_args[0][0]
+        written = mock_write_text.call_args[0][0]
         self.assertIn("signed-by", written)
 
     @patch.object(
@@ -838,8 +838,11 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", side_effect=OSError("Permission denied"))
-    def test_returns_false_when_open_raises(self, mock_file, mock_streaming):
+    @patch(
+        "native_linux_package_install_test.Path.write_text",
+        side_effect=OSError("Permission denied"),
+    )
+    def test_returns_false_when_open_raises(self, mock_write_text, mock_streaming):
         # Test that setup_deb_repository returns False when writing sources list raises OSError.
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -849,8 +852,8 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", new_callable=mock_open)
-    def test_returns_false_when_apt_update_fails(self, mock_file, mock_streaming):
+    @patch("native_linux_package_install_test.Path.write_text")
+    def test_returns_false_when_apt_update_fails(self, mock_write_text, mock_streaming):
         # Test that setup_deb_repository returns False when apt update returns non-zero.
         mock_streaming.return_value = 1
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
@@ -861,8 +864,10 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", new_callable=mock_open)
-    def test_returns_false_when_apt_update_times_out(self, mock_file, mock_streaming):
+    @patch("native_linux_package_install_test.Path.write_text")
+    def test_returns_false_when_apt_update_times_out(
+        self, mock_write_text, mock_streaming
+    ):
         # Test that setup_deb_repository returns False when _run_streaming raises TimeoutExpired.
         import subprocess
 
@@ -880,9 +885,9 @@ class SetupSlesRepositoryTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test._run_streaming")
     @patch("native_linux_package_install_test.subprocess.run")
-    @patch("builtins.open", new_callable=mock_open)
+    @patch("native_linux_package_install_test.Path.write_text")
     def test_returns_true_when_refresh_succeeds(
-        self, mock_file, mock_run, mock_streaming
+        self, mock_write_text, mock_run, mock_streaming
     ):
         # Test that _setup_sles_repository writes repo file and returns True when zypper refresh returns 0.
         mock_streaming.return_value = 0
@@ -891,7 +896,7 @@ class SetupSlesRepositoryTest(unittest.TestCase):
             os_profile="sles16",
         )
         self.assertTrue(t._setup_sles_repository())
-        written = mock_file().write.call_args[0][0]
+        written = mock_write_text.call_args[0][0]
         self.assertIn("baseurl=https://repo.example.com", written)
         self.assertIn("sles16", t.os_profile)
 
@@ -900,8 +905,8 @@ class SetupDnfRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest._setup_dnf_repository()."""
 
     @patch("native_linux_package_install_test.subprocess.run")
-    @patch("builtins.open", new_callable=mock_open)
-    def test_returns_true_after_writing_repo_file(self, mock_file, mock_run):
+    @patch("native_linux_package_install_test.Path.write_text")
+    def test_returns_true_after_writing_repo_file(self, mock_write_text, mock_run):
         # Test that _setup_dnf_repository writes repo file and returns True (dnf clean may be mocked).
         mock_run.side_effect = None
         mock_run.return_value = MagicMock(returncode=0)
@@ -910,7 +915,7 @@ class SetupDnfRepositoryTest(unittest.TestCase):
             os_profile="rhel8",
         )
         self.assertTrue(t._setup_dnf_repository())
-        written = mock_file().write.call_args[0][0]
+        written = mock_write_text.call_args[0][0]
         self.assertIn("baseurl=https://repo.example.com", written)
 
 
@@ -1127,7 +1132,7 @@ class TestRdhcTest(unittest.TestCase):
             )
             self.assertTrue(t.test_rdhc())
             call_args = mock_run.call_args[0][0]
-            self.assertIn("rdhc.py", str(call_args[0]))
+            self.assertIn("rdhc.py", str(call_args[1]))
             self.assertIn("--rocm-install-prefix", call_args)
 
     @patch("native_linux_package_install_test.subprocess.run")
