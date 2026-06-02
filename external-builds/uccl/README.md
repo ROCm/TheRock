@@ -71,3 +71,45 @@ pip install --extra-index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu 
 Note the use of `--extra-index-url` instead of `--index-url` to
 accommodate resolution of non-ROCm dependences of UCCL to be satisfied
 by the default PyPI index.
+
+## Testing UCCL
+
+Tests are structured in two tiers, following the same pattern as
+`external-builds/pytorch/`.
+
+### Smoke tests
+
+Quick sanity checks that verify the UCCL wheel is installed correctly,
+GPU hardware is accessible, and the UCCL Python API is importable.
+
+```bash
+python run_uccl_smoke_tests.py -- --log-cli-level=INFO -v
+```
+
+### Intranode EP tests
+
+Runs the upstream `test_intranode.py` test via `torchrun` in standalone
+mode. This exercises Expert Parallelism dispatch, combine, and tuning
+kernels on a single node with multiple GPUs. Requires a UCCL source
+checkout for the test files.
+
+```bash
+# Checkout UCCL sources first
+python uccl_repo.py checkout
+
+# Run with all available GPUs (auto-detected)
+python run_uccl_tests.py
+
+# Or specify GPU count
+python run_uccl_tests.py --nproc-per-node 4
+
+# Dry-run to see the command without executing
+python run_uccl_tests.py --dry-run
+```
+
+### CI workflow
+
+The `test_uccl_wheels.yml` workflow runs both test tiers. It can be
+triggered manually via `workflow_dispatch` or called from other
+workflows via `workflow_call`. See the workflow file for the full list
+of inputs.

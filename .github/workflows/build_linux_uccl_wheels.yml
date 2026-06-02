@@ -1,0 +1,150 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Builds the UCCL wheel on a bare runner (no container) because UCCL's
+# upstream ./build.sh uses Docker-in-Docker. Uploads the resulting wheel
+# as a GitHub Actions artifact that subsequent jobs/workflows can download.
+#
+# This mirrors the pattern used by build_linux_jax_wheels.yml where the
+# JAX ci_build script also relies on Docker on the host.
+#
+# TODO: Publish to S3 for release pipelines (see release_portable_linux_jax_wheels.yml).
+
+name: Build Linux UCCL Wheels
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      build_runs_on:
+        required: true
+        type: string
+      package_index_url:
+        required: true
+        type: string
+      python_version:
+        required: true
+        type: string
+      uccl_git_ref:
+        type: string
+        default: "main"
+      pytorch_rocm_arch:
+        description: >
+          Explicit PYTORCH_ROCM_ARCH (e.g. "gfx942" or "gfx942,gfx950").
+          Leave empty to let build_prod_wheels.py derive it from amdgpu_family.
+        type: string
+        default: ""
+      artifact_name:
+        description: Name of the GHA artifact to upload the wheel under.
+        type: string
+        default: "uccl-wheel"
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+    outputs:
+      artifact_name:
+        description: Name of the uploaded UCCL wheel artifact.
+        value: ${{ jobs.build_wheel.outputs.artifact_name }}
+
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to build for
+        required: true
+        type: string
+        default: "gfx94X-dcgpu"
+      build_runs_on:
+        description: Runner label for the build (needs Docker on host, no GPU required)
+        required: true
+        type: string
+        default: "azure-linux-scale-rocm"
+      package_index_url:
+        description: Base Python package index URL (without GPU family subdir)
+        required: true
+        type: string
+        default: "https://rocm.prereleases.amd.com/whl"
+      python_version:
+        required: true
+        type: string
+        default: "3.12"
+      uccl_git_ref:
+        description: UCCL ref to checkout (e.g. "main")
+        type: string
+        default: "main"
+      pytorch_rocm_arch:
+        description: >
+          Explicit PYTORCH_ROCM_ARCH (e.g. "gfx942" or "gfx942,gfx950").
+          Leave empty to let build_prod_wheels.py derive it from amdgpu_family.
+        type: string
+        default: ""
+      artifact_name:
+        description: Name of the GHA artifact to upload the wheel under.
+        type: string
+        default: "uccl-wheel"
+
+permissions:
+  contents: read
+
+run-name: Build Linux UCCL Wheels (${{ inputs.amdgpu_family }}, py${{ inputs.python_version }}, ${{ inputs.uccl_git_ref }})
+
+jobs:
+  build_wheel:
+    name: Build UCCL | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }}
+    runs-on: ${{ inputs.build_runs_on }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      UCCL_GIT_REF: ${{ inputs.uccl_git_ref }}
+      PYTORCH_ROCM_ARCH: ${{ inputs.pytorch_rocm_arch }}
+    outputs:
+      artifact_name: ${{ inputs.artifact_name }}
+
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set git options
+        run: |
+          git config --global core.longpaths true
+
+      - name: Verify Docker is available
+        run: |
+          docker --version
+          docker info
+
+      - name: Checkout UCCL source
+        run: |
+          python external-builds/uccl/uccl_repo.py checkout \
+            --repo-hashtag ${UCCL_GIT_REF}
+
+      - name: Build UCCL wheel
+        run: |
+          python external-builds/uccl/build_prod_wheels.py \
+            --output-dir ${{ github.workspace }}/uccl-wheels \
+            --python-version ${PYTHON_VERSION} \
+            --index-url ${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}
+
+      - name: Upload UCCL wheel artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ github.workspace }}/uccl-wheels/uccl-*.whl
+          if-no-files-found: error
+          retention-days: 7
