@@ -1,0 +1,165 @@
+name: Logging Framework Demo
+
+# Demo workflow for TheRock standardized logging framework
+# Demonstrates core logging samples with timed operations and exception handling:
+# Core Samples:
+#   1. Package Installer (timed operations, structured data, exception logs)
+#   2. Build System (timed operations, structured data, exception logs)
+# Test Integration:
+#   3. rocROLLER GTest (Failure scenarios with exception logging)
+#   4. rocWMMA CTest (Failure scenarios with exception logging)
+on:
+  # Manual trigger
+  workflow_dispatch:
+  
+  # Auto-trigger on push
+  push:
+    branches:
+      - 'users/rponnuru/logging_poc_3'
+
+permissions:
+  contents: read
+
+jobs:
+  logging_demo:
+    name: Logging Framework Demo
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Display Demo Info
+        run: |
+          echo "=========================================="
+          echo "  TheRock Logging Framework Demo"
+          echo "=========================================="
+          echo ""
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo ""
+          echo "Demo Structure:"
+          echo "  Core: Package Installer + Build System (with timed ops & structured logs)"
+          echo "  Test Integration: rocROLLER GTest + rocWMMA CTest"
+          echo "  Focus: Timed operations, structured data, exception handling"
+          echo ""
+      
+      - name: 📋 Run Package Installer Demo
+        run: |
+          echo "::group::📦 Package Installer Demo"
+          echo "=========================================="
+          echo "  TheRock Unified Logging Framework"
+          echo "  Sample: Package Installer"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          python3 sample_package_installer.py
+          
+          echo ""
+          echo "✅ Package installer demo completed!"
+          echo "::endgroup::"
+      
+      - name: 🔨 Run Build System Demo
+        run: |
+          echo "::group::🔨 Build System Demo"
+          echo "=========================================="
+          echo "  TheRock Unified Logging Framework"
+          echo "  Sample: Build System"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          python3 sample_build_system.py
+          
+          echo ""
+          echo "✅ Build system demo completed!"
+          echo "::endgroup::"
+      
+      - name: 🧪 Run rocROLLER GTest Demo (Failure Case)
+        continue-on-error: true
+        run: |
+          echo "::group::🧪 rocROLLER GTest Demo - With Failures"
+          echo "=========================================="
+          echo "  Demonstrating Error Logging"
+          echo "  Scenario: 2 failures, 1 skip"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/github_actions/test_executable_scripts
+          python3 demo_test_rocroller.py || echo "⚠️  Expected failure for demo purposes"
+          
+          echo ""
+          echo "📊 This demonstrates how failures are logged"
+          echo "::endgroup::"
+        env:
+          TEST_TYPE: smoke
+          SHARD_INDEX: 1
+          TOTAL_SHARDS: 1
+          RUNNER_OS: Linux
+          DEMO_FAILURES: "3,7"
+          DEMO_SKIPS: "5"
+      
+      - name: 🔬 Run rocWMMA CTest Demo (Failure Case)
+        continue-on-error: true
+        run: |
+          echo "::group::🔬 rocWMMA CTest Demo - With Failures"
+          echo "=========================================="
+          echo "  Demonstrating Error Logging"
+          echo "  Scenario: 1 failure, 2 skips"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/github_actions/test_executable_scripts
+          python3 demo_test_rocwmma.py || echo "⚠️  Expected failure for demo purposes"
+          
+          echo ""
+          echo "📊 This demonstrates how CTest failures are logged"
+          echo "::endgroup::"
+        env:
+          TEST_TYPE: regression
+          SHARD_INDEX: 1
+          TOTAL_SHARDS: 1
+          AMDGPU_FAMILIES: gfx942
+          RUNNER_OS: Linux
+          DEMO_FAILURES: "4"
+          DEMO_SKIPS: "2,6"
+      
+      - name: ✅ Demo Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "  Demo Summary"
+          echo "=========================================="
+          echo ""
+          echo "Core Logging Samples:"
+          echo "  1. Package Installer (timed operations & structured logs)"
+          echo "  2. Build System (timed operations & exception handling)"
+          echo ""
+          echo "Test Framework Integration Demos:"
+          echo "  3. rocROLLER GTest (Failure Scenario with exception logs)"
+          echo "  4. rocWMMA CTest (Failure Scenario with exception logs)"
+          echo ""
+          echo "Status: ${{ job.status }}"
+          echo ""
+          echo "✅ Logging framework demo completed!"
+          echo ""
+          echo "Key Features Demonstrated:"
+          echo "  - Unified logging across all components"
+          echo "  - Structured logging with extra fields"
+          echo "  - Automatic timing with timed_operation context manager"
+          echo "  - Exception handling with log_exception"
+          echo "  - GTest/CTest integration and result parsing"
+          echo "  - Test sharding configuration"
+          echo "  - Test filtering (smoke/regression/full)"
+          echo "  - Failure logging scenarios with detailed exception traces"
+          echo "  - Performance metrics tracking with duration_ms"
+          echo ""
+
+
