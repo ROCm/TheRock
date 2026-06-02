@@ -846,6 +846,20 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--solver",
+        default=False,
+        help="Include 'solver' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--sparse",
+        default=False,
+        help="Include 'sparse' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
