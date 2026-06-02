@@ -84,35 +84,17 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ubuntu:24.04
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
-      - name: Install bootstrap packages
-        run: |
-          apt-get update
-          apt-get install -y git ca-certificates curl unzip
-
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: '3.12'
-
-      - name: Install AWS CLI
-        run: |
-          ./dockerfiles/install_awscli.sh
-
-      - name: Adjust git config
-        run: |
-          git config --global --add safe.directory $PWD
 
       - name: Generate manifest diff report
         id: gen-report
@@ -137,6 +119,6 @@ jobs:
         run: |
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family manifest-diff \
+            --subfolder manifest-diff \
             --report-path reports \
             --index-file-name index.html
