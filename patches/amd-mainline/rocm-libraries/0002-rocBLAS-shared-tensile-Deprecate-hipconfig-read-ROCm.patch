@@ -1,0 +1,119 @@
+From 365a36619c2ef4b59b83abade14f8f903bbea7be Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Sat, 9 May 2026 15:18:25 -0500
+Subject: [PATCH 2/2] [rocBLAS/shared-tensile] Deprecate hipconfig: read ROCm
+ version without hipconfig
+
+Replace hipconfig dependency in shared Tensile with alternatives:
+
+- TensileConfig.cmake: pass ROCM_VERSION=${hip_VERSION} (from
+  find_package(hip CONFIG)) into the Python env at build time
+- Common.py: read ROCM_VERSION env var first, then fall back to
+  $ROCM_PATH/.info/version, $HIP_PATH/.info/version, /opt/rocm/.info/version;
+  keep HipConfig path as final fallback for compatibility
+- ParseArguments.py: remove hipconfig from validateToolchain call;
+  HipClangVersion is now set from ROCM_VERSION in Common.py
+- Tensile.py: remove hipconfig from validateToolchain call
+
+hipconfig is deprecated in favor of amdclang++ directly.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ shared/tensile/Tensile/Common.py                 | 16 ++++++++++++++--
+ shared/tensile/Tensile/Tensile.py                |  3 ---
+ .../Tensile/TensileCreateLib/ParseArguments.py   |  2 --
+ shared/tensile/Tensile/cmake/TensileConfig.cmake |  2 +-
+ 4 files changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/shared/tensile/Tensile/Common.py b/shared/tensile/Tensile/Common.py
+index 55954296e9..221d5c7553 100644
+--- a/shared/tensile/Tensile/Common.py
++++ b/shared/tensile/Tensile/Common.py
+@@ -2394,12 +2394,24 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
+       printExit("Config file requires version=%s is not compatible with current Tensile version=%s" \
+           % (config["MinimumRequiredVersion"], __version__) )
+ 
+-  if "HipConfig" in config:
++  version_str = os.environ.get("ROCM_VERSION")
++  if not version_str:
++    for root in [os.environ.get("ROCM_PATH"), os.environ.get("HIP_PATH"), "/opt/rocm"]:
++      if root:
++        try:
++          version_str = open(os.path.join(root, ".info", "version")).read().strip()
++          break
++        except OSError:
++          continue
++  if version_str:
++    globalParameters["HipClangVersion"] = version_str
++    tPrint(1, f"# Found HIP version: {globalParameters['HipClangVersion']}")
++  elif "HipConfig" in config:
+     output = getVersion(config["HipConfig"], regex=r'(.+)')
+     globalParameters["HipClangVersion"] = output.strip()
+     tPrint(1, f"# Found HIP version: {globalParameters['HipClangVersion']}")
+   else:
+-    raise ValueError("HipConfig not specified in config, could not set HipClangVersion")
++    raise ValueError("HipConfig not specified in config and ROCM_VERSION not set, could not set HipClangVersion")
+ 
+   # User-specified global parameters
+   tPrint(3, "GlobalParameters:")
+diff --git a/shared/tensile/Tensile/Tensile.py b/shared/tensile/Tensile/Tensile.py
+index a6e16b2364..41f1f9d604 100644
+--- a/shared/tensile/Tensile/Tensile.py
++++ b/shared/tensile/Tensile/Tensile.py
+@@ -308,14 +308,12 @@ def Tensile(userArgs):
+         cCompiler,
+         assembler,
+         offloadBundler,
+-        hipconfig,
+         deviceEnumerator
+     ) = validateToolchain(
+         args.CxxCompiler,
+         args.CCompiler,
+         args.Assembler,
+         args.OffloadBundler,
+-        ToolchainDefaults.HIP_CONFIG,
+         ToolchainDefaults.DEVICE_ENUMERATOR
+     )
+     params = config.get("GlobalParameters", {})
+@@ -323,7 +321,6 @@ def Tensile(userArgs):
+     params["CCompiler"] = cCompiler
+     params["Assembler"] = assembler
+     params["OffloadBundler"] = offloadBundler
+-    params["HipConfig"] = hipconfig
+     params["ROCmAgentEnumeratorPath"] = deviceEnumerator
+     assignGlobalParameters(params, capabilitiesCache)
+ 
+diff --git a/shared/tensile/Tensile/TensileCreateLib/ParseArguments.py b/shared/tensile/Tensile/TensileCreateLib/ParseArguments.py
+index f19dab132c..c214f21b06 100644
+--- a/shared/tensile/Tensile/TensileCreateLib/ParseArguments.py
++++ b/shared/tensile/Tensile/TensileCreateLib/ParseArguments.py
+@@ -327,13 +327,11 @@ def parseArguments(input: Optional[List[str]] = None) -> Dict[str, Any]:
+         arguments["CCompiler"],
+         arguments["Assembler"],
+         arguments["OffloadBundler"],
+-        arguments["HipConfig"],
+     ) = validateToolchain(
+         arguments["CxxCompiler"],
+         arguments["CCompiler"],
+         arguments["Assembler"],
+         arguments["OffloadBundler"],
+-        ToolchainDefaults.HIP_CONFIG,
+     )
+     if args.NoEnumerate:
+         arguments["ROCmAgentEnumeratorPath"] = False
+diff --git a/shared/tensile/Tensile/cmake/TensileConfig.cmake b/shared/tensile/Tensile/cmake/TensileConfig.cmake
+index 0a078ab798..656ade2a36 100644
+--- a/shared/tensile/Tensile/cmake/TensileConfig.cmake
++++ b/shared/tensile/Tensile/cmake/TensileConfig.cmake
+@@ -232,7 +232,7 @@ function(TensileCreateLibraryFiles
+   endif()
+   set(ENV_PATH_ARG "PATH=${ESC_PATH}")
+   set(CommandLine
+-    "${CMAKE_COMMAND}" -E env "PATH=${ESC_PATH}" --
++    "${CMAKE_COMMAND}" -E env "PATH=${ESC_PATH}" "ROCM_VERSION=${hip_VERSION}" --
+     ${CommandLine})
+   message(STATUS "Tensile_CREATE_COMMAND: ${CommandLine}")
+ 
+-- 
+2.53.0
+

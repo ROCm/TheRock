@@ -1,0 +1,69 @@
+From 7172cf8fc9403f35f4409df7917407899bcf52f1 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Fri, 1 May 2026 10:37:47 -0500
+Subject: [PATCH 1/7] [hip-tests] Deprecate hipconfig: derive HIP version from
+ find_package(hip)
+
+Replace find_program(HIPCONFIG_EXEC hipconfig REQUIRED) and the
+execute_process(hipconfig --version) call with set(HIP_VERSION ${hip_VERSION}),
+which is already populated by the preceding find_package(hip REQUIRED) call.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ projects/hip-tests/catch/CMakeLists.txt | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/projects/hip-tests/catch/CMakeLists.txt b/projects/hip-tests/catch/CMakeLists.txt
+index 3847afd5de..6e3e4ee4f6 100644
+--- a/projects/hip-tests/catch/CMakeLists.txt
++++ b/projects/hip-tests/catch/CMakeLists.txt
+@@ -50,7 +50,8 @@ include_directories(${hip_INCLUDE_DIRS})
+ find_package(hiprtc)
+ find_package(Git)
+ find_package(Python 3 COMPONENTS Interpreter REQUIRED)
+-find_program(HIPCONFIG_EXEC hipconfig REQUIRED)
++# hipconfig is deprecated; HIP version is available directly from find_package(hip)
++set(HIP_VERSION ${hip_VERSION})
+ 
+ # hip root dir is 3 levels down the hip-config.cmake file path
+ set(HIP_PATH ${hip_DIR}/../../../)
+@@ -100,14 +101,6 @@ if(NOT HIP_PLATFORM STREQUAL "amd" AND NOT HIP_PLATFORM STREQUAL "nvidia")
+   message(FATAL_ERROR "Unexpected HIP_PLATFORM: " ${HIP_PLATFORM})
+ endif()
+ 
+-execute_process(COMMAND ${HIPCONFIG_EXEC} --version
+-                OUTPUT_VARIABLE HIP_VERSION
+-                RESULT_VARIABLE result
+-                OUTPUT_STRIP_TRAILING_WHITESPACE)
+-
+-if(result AND NOT result EQUAL 0)
+-  message(FATAL_ERROR "Failure trying to obtain HIP version via command: ${HIPCONFIG_EXEC} --version: ${result}")
+-endif()
+ 
+ if(NOT WIN32)
+   if(NOT BUILD_SHARED_LIBS)
+@@ -152,12 +145,19 @@ list(GET VERSION_LIST 1 HIP_VERSION_MINOR)
+ list(GET VERSION_LIST 2 HIP_VERSION_PATCH_GITHASH)
+ string(REPLACE "-" ";" VERSION_LIST ${HIP_VERSION_PATCH_GITHASH})
+ list(GET VERSION_LIST 0 HIP_VERSION_PATCH)
+-list(GET VERSION_LIST 1 HIP_VERSION_GITHASH)
++list(LENGTH VERSION_LIST _version_list_len)
++if(_version_list_len GREATER 1)
++  list(GET VERSION_LIST 1 HIP_VERSION_GITHASH)
++else()
++  set(HIP_VERSION_GITHASH "")
++endif()
+ 
+ if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
+   set(HIP_PACKAGING_VERSION_PATCH ${HIP_VERSION_PATCH}.$ENV{ROCM_LIBPATCH_VERSION})
+-else()
++elseif(HIP_VERSION_GITHASH)
+   set(HIP_PACKAGING_VERSION_PATCH ${HIP_VERSION_PATCH}-${HIP_VERSION_GITHASH})
++else()
++  set(HIP_PACKAGING_VERSION_PATCH ${HIP_VERSION_PATCH})
+ endif()
+ 
+ find_package(Catch2 3.8.1 QUIET)
+-- 
+2.53.0
+

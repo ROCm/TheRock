@@ -1,0 +1,33 @@
+From d46e25376bf6b1e19892870181b80cf754faf721 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Mon, 4 May 2026 14:23:32 -0500
+Subject: [PATCH] [hipcc] Add deprecation warning when --help/-h is passed
+
+hipcc is being deprecated in favor of calling amdclang++ directly.
+Emit a clear warning to stderr when users invoke --help or -h so they
+are aware and can migrate before hipcc is removed in a future release.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ amd/hipcc/src/hipBin_amd.h | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/amd/hipcc/src/hipBin_amd.h b/amd/hipcc/src/hipBin_amd.h
+index 60af1e69a45b..76b30b60e50f 100644
+--- a/amd/hipcc/src/hipBin_amd.h
++++ b/amd/hipcc/src/hipBin_amd.h
+@@ -588,6 +588,11 @@ void HipBinAmd::executeHipCCCmd(vector<string> argv) {
+       arg = "--cuda-device-only";
+     }
+ 
++    if (trimarg == "--help" || trimarg == "-h") {
++      std::cerr << "Warning: hipcc is deprecated and will be removed in a future release.\n"
++                << "  Please use amdclang++ directly instead.\n"
++                << "  See https://rocm.docs.amd.com/ for migration guidance.\n";
++    }
+     if (trimarg == "--version") {
+       printHipVersion = 1;
+     }
+-- 
+2.53.0
+
