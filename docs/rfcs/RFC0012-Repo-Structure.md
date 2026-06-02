@@ -267,7 +267,7 @@ stream-specific differences are:
   - **rpath** — rpath variant of standard packages.
 - **`ltsrc.repo.amd.com`** *(future; Retention: 2 years)* —
   release-candidate builds for the next LTS release; mirrors
-  `stable.repo.amd.com` layout.
+  `lts.repo.amd.com` layout.
 - **`lts.repo.amd.com`** *(future)* — long-term-support releases.
   Adds a `YYYYMM/` subfolder under each artifact type, otherwise
   mirrors the `stable` layout.
