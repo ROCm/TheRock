@@ -5,8 +5,16 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 import platform
+
+try:
+    from test_filter_utils import run_ctest
+
+    _has_test_filter_utils = True
+except ImportError:
+    _has_test_filter_utils = False
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -272,16 +280,30 @@ if AMDGPU_FAMILIES != "gfx950-dcgpu":
 
 ####################################################
 
-# If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
+
+if _has_test_filter_utils:
+    logging.info("Using ctest label-based filtering via test_filter_utils")
+    sys.exit(
+        run_ctest(
+            test_dir=str(Path(THEROCK_BIN_DIR) / "MIOpen"),
+            env=environ_vars,
+            cwd=str(THEROCK_DIR),
+            test_type=test_type,
+            amdgpu_families=AMDGPU_FAMILIES,
+            shard_index=int(SHARD_INDEX),
+            total_shards=int(TOTAL_SHARDS),
+        )
+    )
+
+# Fallback: use gtest filter when test_filter_utils is not available
+logging.info("test_filter_utils not available, falling back to gtest filter")
 if test_type == "quick":
     test_filter = "--gtest_filter=" + ":".join(quick_filter)
 else:
     test_filter = (
         "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
     )
-#############################################
 
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

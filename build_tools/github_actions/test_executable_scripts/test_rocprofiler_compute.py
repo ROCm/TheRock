@@ -5,7 +5,15 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
+
+try:
+    from test_filter_utils import run_ctest
+
+    _has_test_filter_utils = True
+except ImportError:
+    _has_test_filter_utils = False
 
 # Resolve paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -94,4 +102,26 @@ def execute_tests():
 
 if __name__ == "__main__":
     setup_env()
+
+    AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+    test_type = os.getenv("TEST_TYPE", "full")
+    shard_index = int(os.getenv("SHARD_INDEX", "1"))
+    total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
+
+    if _has_test_filter_utils:
+        logging.info("Using ctest label-based filtering via test_filter_utils")
+        sys.exit(
+            run_ctest(
+                test_dir=str(ROCPROFILER_COMPUTE_DIRECTORY),
+                env=environ_vars,
+                cwd=str(THEROCK_PATH),
+                test_type=test_type,
+                amdgpu_families=AMDGPU_FAMILIES,
+                shard_index=shard_index,
+                total_shards=total_shards,
+            )
+        )
+
+    # Fallback: use existing ctest logic when test_filter_utils is not available
+    logging.info("test_filter_utils not available, falling back to existing ctest logic")
     execute_tests()
