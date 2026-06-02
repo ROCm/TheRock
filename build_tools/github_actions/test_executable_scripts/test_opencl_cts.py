@@ -75,8 +75,8 @@ def find_test_executables():
         )
         sys.exit(1)
 
-    # test_bruteforce is disabled: it is prohibitively slow in CI.
-    DISABLED_TESTS = {"test_bruteforce"}
+    # test_bruteforce and conversions are disabled: they are prohibitively slow in CI, moving out of 3.5h timeout.
+    DISABLED_TESTS = {"test_bruteforce", "test_conversions"}
 
     test_executables = []
     for test_exe in CTS_BIN_DIR.rglob("test_*"):
