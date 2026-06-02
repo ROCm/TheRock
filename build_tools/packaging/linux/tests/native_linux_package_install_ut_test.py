@@ -97,6 +97,45 @@ class EnvHelperTest(unittest.TestCase):
             )
 
 
+class NormalizeTestTypeTest(unittest.TestCase):
+    """Tests for _normalize_test_type()."""
+
+    def test_empty_quick_and_standard_map_to_sanity(self):
+        for test_type in ("", None, "quick", "standard"):
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    native_linux_package_install_test._normalize_test_type(test_type),
+                    "sanity",
+                )
+
+    def test_comprehensive_and_full_map_to_full(self):
+        for test_type in ("comprehensive", "full"):
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    native_linux_package_install_test._normalize_test_type(test_type),
+                    "full",
+                )
+
+    def test_native_modes_are_accepted(self):
+        for test_type in ("install", "sanity", "full", "simulate"):
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    native_linux_package_install_test._normalize_test_type(test_type),
+                    test_type,
+                )
+
+    def test_strips_whitespace_and_lowercases(self):
+        self.assertEqual(
+            native_linux_package_install_test._normalize_test_type("  Quick  "),
+            "sanity",
+        )
+
+    def test_invalid_test_type_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            native_linux_package_install_test._normalize_test_type("standrd")
+        self.assertIn("Unsupported test_type", str(ctx.exception))
+
+
 class DerivePackageTypeTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest._derive_package_type()."""
 
@@ -476,6 +515,46 @@ class MainValidationTest(unittest.TestCase):
                 native_linux_package_install_test.main()
             self.assertEqual(cm.exception.code, 2)
 
+    def test_parse_cli_maps_quick_to_sanity(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "quick",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://repo_url.com",
+                "--gfx-arch",
+                "gfx94x",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "sanity")
+
+    def test_parse_cli_maps_comprehensive_to_full(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "comprehensive",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://repo_url.com",
+                "--gfx-arch",
+                "gfx94x",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "full")
+
+    def test_parse_cli_rejects_invalid_test_type(self):
+        with self.assertRaises(ValueError) as ctx:
+            native_linux_package_install_test.parse_cli_arguments(
+                ["--test-type", "standrd"],
+                raise_instead_of_exit=True,
+            )
+        self.assertIn("Unsupported test_type", str(ctx.exception))
+
 
 class ArgvFromCiEnvTest(unittest.TestCase):
     """Tests for _argv_from_ci_env() (CI workflow env → CLI argv)."""
@@ -496,6 +575,25 @@ class ArgvFromCiEnvTest(unittest.TestCase):
         self.assertEqual(argv[argv.index("--test-type") + 1], "install")
         self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
         self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
+
+    def test_ci_env_passes_shared_test_type_to_parser(self):
+        env = {
+            "TEST_TYPE": "comprehensive",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "comprehensive")
+        args = native_linux_package_install_test.parse_cli_arguments(
+            argv,
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "full")
 
     def test_returns_none_when_required_env_missing(self):
         with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
