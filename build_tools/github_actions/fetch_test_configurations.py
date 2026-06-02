@@ -220,7 +220,7 @@ test_matrix = {
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
-        "fetch_artifact_args": "--solver --tests",
+        "fetch_artifact_args": "--solver --blas --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipsolver.py')}",
         "platform": ["linux", "windows"],
@@ -231,7 +231,7 @@ test_matrix = {
     },
     "rocsolver": {
         "job_name": "rocsolver",
-        "fetch_artifact_args": "--solver --tests",
+        "fetch_artifact_args": "--solver --blas --tests",
         # Extended tests on math-ci take approx 5 hrs (as of May 5, 2026)
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
@@ -301,7 +301,7 @@ test_matrix = {
     # SPARSE tests
     "hipsparse": {
         "job_name": "hipsparse",
-        "fetch_artifact_args": "--sparse --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
@@ -312,7 +312,7 @@ test_matrix = {
     },
     "rocsparse": {
         "job_name": "rocsparse",
-        "fetch_artifact_args": "--sparse --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
@@ -323,7 +323,7 @@ test_matrix = {
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
-        "fetch_artifact_args": "--sparse --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
         # 60 min + 20% margin = 72 min
         "timeout_minutes": 72,
