@@ -40,7 +40,7 @@ on:
       package_index_url:
         description: "Base package index URL (without GPU family subdir)"
         type: string
-        default: "https://rocm.nightlies.amd.com/v2-staging"
+        default: "https://rocm.nightlies.amd.com/v2-staging/"
       torch_version:
         description: "Torch version to test (leave empty to auto-detect latest nightly)"
         type: string
@@ -74,7 +74,7 @@ env:
   AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
   TEST_RUNS_ON: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-core42-ossci-rocm' }}
   TEST_RUNS_ON_MULTI_GPU: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
-  PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
+  PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging/' }}
   TORCH_VERSION_INPUT: ${{ inputs.torch_version || '' }}
   PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref || 'nightly' }}
   PYTORCH_GIT_REPO: ${{ inputs.pytorch_git_repo || 'pytorch/pytorch' }}
@@ -90,7 +90,7 @@ jobs:
       - name: Resolve latest nightly torch version
         id: resolve
         run: |
-          INDEX_URL="${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}"
+          INDEX_URL="${PACKAGE_INDEX_URL%/}/${AMDGPU_FAMILY}"
 
           if [ -n "${TORCH_VERSION_INPUT}" ]; then
             echo "torch_version=${TORCH_VERSION_INPUT}" >> "$GITHUB_OUTPUT"
@@ -127,7 +127,7 @@ jobs:
       amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
       test_runs_on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-core42-ossci-rocm' }}
       test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
-      package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
+      package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging/' }}
       python_version: ${{ inputs.python_version || '3.12' }}
       torch_version: ${{ needs.resolve_torch_version.outputs.torch_version }}
       pytorch_git_repo: ${{ inputs.pytorch_git_repo || 'pytorch/pytorch' }}
