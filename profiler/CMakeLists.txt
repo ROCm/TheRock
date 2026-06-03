@@ -271,7 +271,9 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 ##############################################################################
 # rocprofiler-systems
 ##############################################################################
-if(THEROCK_ENABLE_ROCPROFSYS)
+# rocprofiler-systems requires GCC, but sanitizer builds use Clang.
+# Skip enabling rocprofiler-systems when building with sanitizers.
+if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
 
   therock_detect_python_versions(_rocprofsys_detected_python_executables _rocprofsys_detected_python_versions)
   if(NOT _rocprofsys_detected_python_versions OR NOT _rocprofsys_detected_python_executables)
@@ -315,8 +317,6 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
       -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
       "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
-    COMPILER_TOOLCHAIN
-      amd-hip
     INSTALL_RPATH_DIRS
       "lib"
       "lib/rocprofiler-systems"
@@ -405,4 +405,4 @@ if(THEROCK_ENABLE_ROCPROFSYS)
         rocprofiler-systems-examples
     )
   endif()
-endif(THEROCK_ENABLE_ROCPROFSYS)
+endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
