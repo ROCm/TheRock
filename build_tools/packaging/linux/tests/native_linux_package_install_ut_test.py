@@ -446,10 +446,10 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
 
 
 class NormalizeTargetListTest(unittest.TestCase):
-    """Tests for packaging_utils.normalize_target_list (build_package defaults)."""
+    """Tests for normalize_gfx_arch_list default behavior (preserve casing, no dedupe)."""
 
     def test_space_comma_and_semicolon_formats(self):
-        n = packaging_utils.normalize_target_list
+        n = packaging_utils.normalize_gfx_arch_list
         self.assertEqual(
             n(["gfx94X-dcgpu", "gfx120X-all"]),
             ["gfx94X-dcgpu", "gfx120X-all"],
@@ -469,7 +469,7 @@ class NormalizeTargetListTest(unittest.TestCase):
 
     def test_preserves_casing_without_dedupe(self):
         self.assertEqual(
-            packaging_utils.normalize_target_list(["gfx94X-dcgpu"]),
+            packaging_utils.normalize_gfx_arch_list(["gfx94X-dcgpu"]),
             ["gfx94X-dcgpu"],
         )
 

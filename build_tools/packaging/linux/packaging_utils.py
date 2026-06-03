@@ -37,44 +37,26 @@ def normalize_gfx_arch_list(
 
     Args:
         value: Architecture spec(s). None or blank yields [].
-        lowercase: Lower-case each token (install-test package names).
+        lowercase: Lower-case each token (e.g. for install-test package names).
         dedupe: Drop duplicates while preserving first-seen order.
 
     Returns:
         Flat list of non-empty architecture strings.
     """
     if value is None:
-        tokens: list[str] = []
+        raw: list[str] = []
     elif isinstance(value, str):
-        tokens = [value] if value.strip() else []
+        raw = [value]
     else:
-        tokens = [str(a) for a in value if a and str(a).strip()]
+        raw = [str(a) for a in value]
 
-    expanded: list[str] = []
-    for target in tokens:
-        for part in _GFX_ARCH_SPLIT_RE.split(target):
-            p = part.strip()
-            if p:
-                expanded.append(p)
-
-    if not lowercase and not dedupe:
-        return expanded
-
-    out: list[str] = []
-    seen: dict[str, None] = {}
-    for a in expanded:
-        k = a.lower() if lowercase else a
-        if dedupe:
-            if k in seen:
-                continue
-            seen[k] = None
-        out.append(k)
-    return out
-
-
-def normalize_target_list(targets: list[str]) -> list[str]:
-    """Normalize ``--target`` list for :mod:`build_package` (preserve casing)."""
-    return normalize_gfx_arch_list(targets)
+    tokens = [
+        tok.lower() if lowercase else tok
+        for item in raw
+        for tok in _GFX_ARCH_SPLIT_RE.split(item)
+        if tok
+    ]
+    return list(dict.fromkeys(tokens)) if dedupe else tokens
 
 
 # User inputs required for packaging
