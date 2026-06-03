@@ -78,6 +78,15 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
             link.symlink_to(target.name)
 
 
+def ensure_core_library_symlinks(core: PopulatedDistPackage) -> None:
+    """Recreate unversioned core library symlinks expected by dlopen()."""
+    core_lib_dir = core.platform_dir / "lib"
+
+    target = core_lib_dir / "libhsa-runtime64.so.1"
+    link = core_lib_dir / "libhsa-runtime64.so"
+    if target.exists() and not link.exists():
+        link.symlink_to(target.name)
+
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
@@ -137,6 +146,7 @@ def run(args: argparse.Namespace):
             ],
         ),
     )
+    ensure_core_library_symlinks(core)
 
     profiler_artifacts = params.filter_artifacts(
         profiler_artifact_filter,
