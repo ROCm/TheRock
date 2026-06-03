@@ -39,8 +39,12 @@ else()
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
-    # Use DWARF4 for ASAN builds - compatibility with dwz < 0.15 which doesn't support DWARF5.
-    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
+    # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
+    # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
+    # "Unknown debugging section .debug_str_offsets" even in version 0.16
+    # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
+    # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
+    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
         string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
     endif()
 
