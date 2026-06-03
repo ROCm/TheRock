@@ -41,12 +41,15 @@ cmake -B build -GNinja \
   -DTHEROCK_BUILD_TESTING=ON
 ninja -C build therock-dist therock-archives
 
-# 2) Unpack the per-component test archive into the dist.
-#    `therock-dist` merges _lib/_run/_dev/_doc/_dbg into build/dist/rocm/ but
-#    NOT _test - test drivers need bin/<comp>/CTestTestfile.cmake which only
-#    ships in the _test tarball.
-for tarball in build/artifacts/rand_test_*.tar.xz; do
-  tar -xf "$tarball" -C build/dist/rocm
+# 2) Make sure the rocRAND test layout is in the dist. therock-dist should
+#    already flatten the rand_test component into build/dist/rocm/bin/rocRAND
+#    via artifact-flatten, but merge defensively in case it does not. We use
+#    a `tar | tar` pipe (not rsync) because rsync is not always installed in
+#    the manylinux build container CI uses.
+for d in build/artifacts/rand_test build/artifacts/rand_test_*; do
+  [ -d "$d" ] && \
+    ( cd "$d" && tar --exclude=artifact_manifest.txt -cf - . ) \
+    | tar -C build/dist/rocm -xf -
 done
 
 # 3) Run a real ROCm library under the simulator. Follow the project-wide
