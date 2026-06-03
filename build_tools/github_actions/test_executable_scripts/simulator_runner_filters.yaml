@@ -17,10 +17,22 @@
 
 rocrand:
   presets:
-    # MVP starter set: only the lightweight create/destroy/seed sanity tests.
-    # Used by PR-1 to validate the framework end-to-end on the simulator.
+    # MVP starter set for PR-1: just enough to prove the framework end-to-end
+    # on the simulator without paying for parameterized RNG sweeps. Picked
+    # after Rocjitsu_003.txt showed that the original "*basic_tests*" pattern
+    # expands to 22 create/destroy cases over 14 RNG types in
+    # test_rocrand_basic plus the cpp_basic move-construction sweep, each of
+    # which triggers GPU init kernels and runs for several minutes under
+    # rocjitsu's CPU-only PDES.
+    #
+    # The first two are pure CPU and prove the rocRAND shared library loads
+    # cleanly when librocjitsu_kmd.so is in LD_PRELOAD. The third runs ONE
+    # create/destroy cycle for PHILOX4_32_10 (the lightest RNG in rng_types,
+    # index 0) to actually exercise the simulator's GPU init path.
     basic:
-      - "*basic_tests*"
+      - "rocrand_basic_tests.rocrand_get_version_test"
+      - "rocrand_basic_tests.rocrand_generator_test"
+      - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/0"
     # Mirror of QUICK_TESTS in test_rocrand.py. Promoted in PR-2 once `basic`
     # is stably green for a few runs.
     quick:

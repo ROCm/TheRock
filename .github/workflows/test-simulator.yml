@@ -182,13 +182,28 @@ jobs:
             find "$THEROCK_BIN_DIR/rocRAND" -maxdepth 2 | head -30 >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Collect ctest + rocjitsu logs
+        if: ${{ !cancelled() }}
+        # ctest runs with --test-dir <dist>/bin/rocRAND so its Testing/
+        # output lives there, not under build/. We also stash any
+        # rocjitsu_*.log files we can find - the interposer historically
+        # writes them next to the working directory of the test process.
+        run: |
+          set +e
+          mkdir -p test-logs
+          if [ -d "$THEROCK_BIN_DIR/rocRAND/Testing" ]; then
+            cp -r "$THEROCK_BIN_DIR/rocRAND/Testing" test-logs/ctest-Testing
+          fi
+          find . -maxdepth 4 -name 'rocjitsu_*.log' -exec cp {} test-logs/ \; 2>/dev/null
+          find "$THEROCK_ROCM_ROOT" -maxdepth 6 -name 'rocjitsu_*.log' \
+            -exec cp {} test-logs/ \; 2>/dev/null
+          ls -lh test-logs/ 2>&1 | head -40 || true
+
       - name: Upload logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-simulator-logs-${{ github.run_attempt }}
-          path: |
-            build/logs/rocjitsu_*.log
-            build/Testing/Temporary/LastTest.log
+          path: test-logs/
           if-no-files-found: warn
           retention-days: 7

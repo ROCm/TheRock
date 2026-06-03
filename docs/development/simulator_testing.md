@@ -77,13 +77,27 @@ behavioral differences are exclusively the result of running on the simulator.
 
 `simulator_runner_filters.yaml` keeps three presets per component:
 
-- `basic` - small allow-list intended for PR-time signal (~minutes).
+- `basic` - small allow-list intended for PR-time signal (~minutes). For
+  rocrand today this is two CPU-only tests (`rocrand_get_version_test`,
+  `rocrand_generator_test`) plus exactly one parameterized create/destroy
+  cycle for `PHILOX4_32_10` (the lightest RNG). When picking what goes here,
+  favor tests that exercise the simulator's GPU init path but avoid
+  parameterized sweeps - one rocrand `*basic_tests*` glob, for example,
+  expands to 22+ cases that each take minutes under PDES.
 - `quick` - the existing `QUICK_TESTS` set from the component's test driver,
   expected to take 30-90 min under emulation.
 - `full` - the entire ctest set; nightly only.
 
 Each component has a `skip` list of gtest patterns. Every entry should carry a
 short comment explaining why the test cannot pass under the simulator yet.
+
+### Per-test wall-clock cap
+
+`simulator_runner.py` exports `CTEST_TEST_TIMEOUT=600` (10 minutes per ctest
+case) by default. This caps any single test so a stall fails fast with a
+clear ctest log instead of consuming the whole workflow step budget. Override
+it for nightly `full` runs by setting `CTEST_TEST_TIMEOUT` in the environment
+before invoking `simulator_runner.py`.
 
 ## Adding a new component
 

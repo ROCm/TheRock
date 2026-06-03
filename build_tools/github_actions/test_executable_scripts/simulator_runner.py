@@ -62,6 +62,14 @@ COMPONENT_DRIVERS = {
     "hiprand": "test_hiprand.py",
 }
 
+# Per-test wall-clock cap (seconds) for ctest under the simulator. Bounds any
+# single test that wanders into a slow path so a stall fails fast instead of
+# eating the whole workflow step budget. Honored by ctest via the
+# CTEST_TEST_TIMEOUT env var. 10 min is generous for a single create/destroy
+# cycle under PDES while still cutting the 60-min step timeout we hit in
+# Rocjitsu_003.txt down to a clear per-test failure.
+DEFAULT_CTEST_TEST_TIMEOUT_SECONDS = 600
+
 
 def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
     """Locate the rocjitsu interposer, config and schema in a populated dist.
@@ -155,6 +163,12 @@ def _build_env(bin_dir: Path, gtest_filter: str) -> dict[str, str]:
     # the value used by rocjitsu's own ctest suite.
     env["HSA_ENABLE_SDMA"] = env.get("HSA_ENABLE_SDMA", "1")
     env["GTEST_FILTER"] = gtest_filter
+    # Bound any individual ctest case so a stalled test fails fast instead of
+    # consuming the whole workflow step budget. Respects an explicit caller
+    # override (e.g. nightly runs of the `full` preset may want longer).
+    env["CTEST_TEST_TIMEOUT"] = env.get(
+        "CTEST_TEST_TIMEOUT", str(DEFAULT_CTEST_TEST_TIMEOUT_SECONDS)
+    )
     return env
 
 
@@ -219,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.info("[simulator_runner] RJ_CONFIG=%s", env["RJ_CONFIG"])
     logging.info("[simulator_runner] RJ_SCHEMA=%s", env["RJ_SCHEMA"])
     logging.info("[simulator_runner] GTEST_FILTER=%s", gtest_filter)
+    logging.info("[simulator_runner] CTEST_TEST_TIMEOUT=%s", env["CTEST_TEST_TIMEOUT"])
     logging.info("[simulator_runner] exec: %s", shlex.join(cmd))
 
     # execvpe replaces this process so the driver inherits PID 1 in container
