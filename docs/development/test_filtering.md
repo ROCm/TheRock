@@ -6,7 +6,7 @@
 
 - <b>quick</b>: A "sanity check" to ensure the system is fundamentally working
 
-  - Runs on: pull requests (if ROCm non-component related change), push to main branch
+  - Runs on: pull requests (non-component changes), push to main branch, dev releases
   - Characteristics: Shallow validation, focus on critical paths, component runs properly
   - Execution time: < 5 min
   - Target: build system updates, CI system updates, non-component specific updates
@@ -16,7 +16,7 @@
 <br/>
 
 - <b>standard</b>: The core baseline tests that ensures the most important and most commonly used functionality of the system are working
-  - Runs on: pull requests, workflow dispatch, push to main branch (if ROCm component related change)
+  - Runs on: pull requests (component changes), push to main branch (component changes)
   - Characteristics: business-critical logic, covers functionality that would block users or cause major regressions, high signal-to-noise ratio
   - Execution time: < 30 min
   - Target: component-specific core updates, submodule bumps
@@ -24,18 +24,18 @@
 <br/>
 
 - <b>comprehensive</b>: Test set that builds on top of standard tests, extending deeper test coverage
-  - Runs on: nightly
+  - Runs on: nightly releases, scheduled CI
   - Characteristics: deeper validation of edge cases, more expensive scenarios, more combinations of tests
   - Execution time: < 2 hours
-  - Target: daily scheduled run, on-demand PR label
+  - Target: nightly release validation, daily scheduled run, on-demand PR label
 
 <br/>
 
 - <b>full</b>: Test set that provides the highest level of confidence, validating a system under all conditions and edge cases
-  - Runs on: weekly, pre-major release
+  - Runs on: prerelease builds, submodule updates, on-demand
   - Characteristics: exhaustive scenarios, extreme edge cases, aim to eliminate unknown risks
   - Execution time: 2+ hours
-  - Target: pre-release testing, weekly scheduled run, on-demand PR label
+  - Target: pre-release testing, submodule bumps, on-demand PR label (`test_filter:full`)
 
 ## Test filter implementation
 

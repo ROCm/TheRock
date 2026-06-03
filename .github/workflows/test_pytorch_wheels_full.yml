@@ -15,7 +15,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       test_runs_on_multi_gpu:
         description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-multi-gpu in amdgpu_family_matrix.py
         type: string
@@ -49,6 +49,36 @@ on:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: ""
+      device_query:
+        description: >-
+          GPU candidate-set selection (--device-query, stage 1). "unique": one
+          device per architecture. "all": every device of each architecture.
+          "auto": derive from the test config ("all" for distributed, "unique"
+          otherwise).
+        type: choice
+        options:
+          - "auto"
+          - "unique"
+          - "all"
+        default: "auto"
+      gpu_policy:
+        description: >-
+          How many candidate GPUs are made visible (--gpu-policy, stage 2).
+          "single": one GPU visible at a time. "all": all candidate GPUs visible
+          at once. "auto": derive from the test config ("all" for distributed,
+          "single" otherwise).
+        type: choice
+        options:
+          - "auto"
+          - "single"
+          - "all"
+        default: "auto"
+      multi_arch:
+        description: >-
+          Install from a multi-arch index using device extras
+          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -58,7 +88,7 @@ on:
       test_runs_on:
         required: false
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       test_runs_on_multi_gpu:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"
@@ -77,6 +107,12 @@ on:
       pytorch_git_repo:
         type: string
         default: "pytorch/pytorch"
+      multi_arch:
+        description: >-
+          Install from a multi-arch index using device extras
+          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -90,6 +126,18 @@ on:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: ""
+      device_query:
+        description: >-
+          --device-query. "unique": one device per architecture; "all": every
+          device of each architecture; "auto": derive from the test config.
+        type: string
+        default: "auto"
+      gpu_policy:
+        description: >-
+          --gpu-policy. "single": one GPU visible at a time; "all": all candidate
+          GPUs visible at once; "auto": derive from the test config.
+        type: string
+        default: "auto"
 
 permissions:
   contents: read
@@ -169,6 +217,17 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      # Multi-arch packages use pip extras (e.g. torch[device-gfx942]) to
+      # select GPU-specific device packages. Expand the family to get the
+      # comma-separated device extras string for pip install.
+      - name: Expand GPU family to device extras
+        if: ${{ inputs.multi_arch }}
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --output-mode=device-extras
+
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
@@ -187,17 +246,31 @@ jobs:
             --no-hipify
 
       - name: Set up virtual environment
+        timeout-minutes: 15
         run: |
-          python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages torch==${{ inputs.torch_version }} \
-            --index-url=${{ inputs.package_index_url }} \
-            --index-subdir=${{ inputs.amdgpu_family }} \
-            --activate-in-future-github-actions-steps
+          if [ "${{ inputs.multi_arch }}" = "true" ]; then
+            python build_tools/setup_venv.py ${VENV_DIR} \
+              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+              --index-url=${{ inputs.package_index_url }} \
+              --activate-in-future-github-actions-steps
+          else
+            python build_tools/setup_venv.py ${VENV_DIR} \
+              --packages torch==${{ inputs.torch_version }} \
+              --index-url=${{ inputs.package_index_url }} \
+              --index-subdir=${{ inputs.amdgpu_family }} \
+              --activate-in-future-github-actions-steps
+          fi
 
       - name: Install ROCm devel packages
+        timeout-minutes: 15
         run: |
-          pip install "rocm[devel]" \
-            --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+          if [ "${{ inputs.multi_arch }}" = "true" ]; then
+            pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
+              --index-url=${{ inputs.package_index_url }}
+          else
+            pip install "rocm[devel]" \
+              --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+          fi
 
       - name: Initialize ROCm SDK and configure environment
         run: |
@@ -260,10 +333,12 @@ jobs:
           ./build_tools/health_status.py
 
       - name: Run rocm-sdk sanity tests
+        timeout-minutes: 5
         run: |
           rocm-sdk test
 
       - name: Run PyTorch smoketests
+        timeout-minutes: 10
         run: |
           python ./external-builds/pytorch/run_pytorch_smoke_tests.py -- \
             --log-cli-level=INFO \
@@ -273,12 +348,14 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --device-query "${{ inputs.device_query }}" \
+            --gpu-policy "${{ inputs.gpu_policy }}" \
             -- \
             --continue-on-collection-errors
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-reports-${{ matrix.test_config }}-${{ matrix.shard }}-${{ matrix.num_shards }}
           path: external-builds/pytorch/pytorch/test/test-reports/

@@ -18,7 +18,10 @@ from pathlib import Path
 # Add build_tools/packaging/python to path so generate_local_index is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "python"))
 
-from generate_local_index import generate_simple_index, generate_multiarch_indexes
+from generate_local_index import (
+    generate_multiarch_indexes,
+    generate_simple_index,
+)
 
 
 class TestGenerateSimpleIndex(unittest.TestCase):

@@ -57,4 +57,4 @@ else:
 
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.check_call(cmd, cwd=THEROCK_DIR, env=environ_vars)
+subprocess.check_call(cmd, cwd=THEROCK_DIR, env=environ_vars, stderr=subprocess.STDOUT)

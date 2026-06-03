@@ -24,6 +24,8 @@ if(THEROCK_ENABLE_RAND)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+    TEST_SUBPROJECTS
+      hipRAND
   )
   therock_cmake_subproject_glob_c_sources(rocRAND
     SUBDIRS
@@ -54,6 +56,7 @@ if(THEROCK_ENABLE_RAND)
     RUNTIME_DEPS
       hip-clr
       rocRAND
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipRAND
     SUBDIRS
@@ -99,6 +102,10 @@ if(THEROCK_ENABLE_PRIM)
       rocm-cmake
     RUNTIME_DEPS
       hip-clr
+    TEST_SUBPROJECTS
+      hipCUB
+      rocThrust
+      rocSPARSE
   )
   therock_cmake_subproject_glob_c_sources(rocPRIM
     SUBDIRS
@@ -115,6 +122,17 @@ if(THEROCK_ENABLE_PRIM)
     # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
     # that depend on rocPRIM
     # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
+    # amdsmi is Linux-only; benchmarks depend on primbench which requires amd_smi
+    if(WIN32)
+      set(_rocprim_benchmark_enable "OFF")
+      set(_rocprim_benchmark_deps)
+      set(_rocprim_benchmark_includes)
+    else()
+      set(_rocprim_benchmark_enable "ON")
+      set(_rocprim_benchmark_deps amdsmi)
+      set(_rocprim_benchmark_includes therock_rocprim_benchmark_deps.cmake)
+    endif()
+
     therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
@@ -124,13 +142,17 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_TEST=ON
+        -DBUILD_BENCHMARK=${_rocprim_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
+      CMAKE_INCLUDES
+        ${_rocprim_benchmark_includes}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
         rocm-cmake
         therock-googletest
         rocPRIM
+        ${_rocprim_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
     )
@@ -177,11 +199,13 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
       rocPRIM
+      rocRAND
       therock-googletest
     RUNTIME_DEPS
       hip-clr
@@ -255,6 +279,8 @@ if(THEROCK_ENABLE_FFT)
     RUNTIME_DEPS
       hip-clr
       hipRAND
+    TEST_SUBPROJECTS
+      hipFFT
   )
   therock_cmake_subproject_glob_c_sources(rocFFT
     SUBDIRS
@@ -289,6 +315,7 @@ if(THEROCK_ENABLE_FFT)
     RUNTIME_DEPS
       hip-clr
       rocFFT
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipFFT
     SUBDIRS
@@ -356,6 +383,7 @@ if(THEROCK_ENABLE_ROCWMMA)
       hip-clr
       rocBLAS
       ${_rocwmma_optional_deps}
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
     SUBDIRS
@@ -390,10 +418,12 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     DEFAULT_GPU_TARGETS
       gfx942  # Fixes issue with empty target list for unsupported architectures.
     CMAKE_ARGS
+      -DLIBHIPCXX_COPY_TO_BUILD=ON
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_CXX_STANDARD=17
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
