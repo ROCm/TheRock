@@ -36,6 +36,11 @@ exclude = [
   # Python version and fail. They are distributed via the test component only.
   "lib/python*/**",
 ]
+# origami installs its license to share/doc/origami/. Without a doc component
+# entry for this stage dir, that file is claimed by NO component and the artifact
+# scanner fails ("unmatched"), which is what broke the rocm-sdk build on prior
+# attempts (#3820/#3237/#2813). The doc default glob (**/share/doc/**) claims it.
+[components.doc."math-libs/BLAS/origami/stage"]
 [components.test."math-libs/BLAS/origami/stage"]
 include = [
   "bin/origami-tests*",
