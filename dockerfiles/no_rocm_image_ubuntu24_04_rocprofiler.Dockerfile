@@ -8,6 +8,7 @@ FROM ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
 # and must be available at test build/run time. The corresponding published
 # image is:
 #   ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocprofiler:latest
-RUN sudo apt-get install -y --no-install-recommends \
+RUN sudo apt-get update -y \
+    && sudo apt-get install -y --no-install-recommends \
     libopenmpi-dev \
     openmpi-bin
