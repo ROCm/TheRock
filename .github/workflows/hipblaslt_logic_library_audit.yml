@@ -1,0 +1,112 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Validates hipBLASLt Tensile logic YAML under asm_full (statistics + rules).
+# Callable from rocm-libraries TheRock CI or run via workflow_dispatch.
+
+name: hipBLASLt Logic Library Audit
+
+on:
+  workflow_call:
+    inputs:
+      hipblaslt_path:
+        description: >-
+          hipBLASLt project root (projects/hipblaslt). Defaults to
+          $GITHUB_WORKSPACE/projects/hipblaslt when checked out at repo root.
+        type: string
+        default: ""
+      report_dir:
+        description: Directory for JSON/CSV/HTML reports.
+        type: string
+        default: ""
+      workers:
+        description: Parallel worker count (1-32).
+        type: string
+        default: "16"
+      therock_ref:
+        description: TheRock commit that contains the audit scripts.
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      hipblaslt_path:
+        type: string
+        default: ""
+      report_dir:
+        type: string
+        default: ""
+      workers:
+        type: string
+        default: "16"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: hipBLASLt Logic Library Audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Checkout TheRock (audit scripts)
+        if: github.repository != 'ROCm/TheRock'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ inputs.therock_ref != '' && inputs.therock_ref || github.event.repository.default_branch }}
+          path: TheRock
+          sparse-checkout: |
+            build_tools/hipblaslt_logic_library_audit
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve paths
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "${GITHUB_WORKSPACE}/build_tools/hipblaslt_logic_library_audit/run_audit.sh" ]]; then
+            audit_dir="${GITHUB_WORKSPACE}/build_tools/hipblaslt_logic_library_audit"
+          elif [[ -f "${GITHUB_WORKSPACE}/TheRock/build_tools/hipblaslt_logic_library_audit/run_audit.sh" ]]; then
+            audit_dir="${GITHUB_WORKSPACE}/TheRock/build_tools/hipblaslt_logic_library_audit"
+          else
+            echo "::error::hipblaslt_logic_library_audit scripts not found"
+            exit 1
+          fi
+          echo "audit_dir=${audit_dir}" >> "${GITHUB_OUTPUT}"
+
+          if [[ -n "${{ inputs.hipblaslt_path }}" ]]; then
+            hipblaslt="${{ inputs.hipblaslt_path }}"
+          elif [[ -d "${GITHUB_WORKSPACE}/projects/hipblaslt" ]]; then
+            hipblaslt="${GITHUB_WORKSPACE}/projects/hipblaslt"
+          else
+            echo "::error::projects/hipblaslt not found under workspace"
+            exit 1
+          fi
+          echo "hipblaslt_path=${hipblaslt}" >> "${GITHUB_OUTPUT}"
+
+          report_dir="${{ inputs.report_dir }}"
+          if [[ -z "${report_dir}" ]]; then
+            report_dir="${audit_dir}/reports"
+          fi
+          echo "report_dir=${report_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install --upgrade pip pyyaml
+
+      - name: Run hipBLASLt logic library audit
+        env:
+          HIPBLASLT_PATH: ${{ steps.paths.outputs.hipblaslt_path }}
+          REPORT_DIR: ${{ steps.paths.outputs.report_dir }}
+          WORKERS: ${{ inputs.workers }}
+        run: bash "${{ steps.paths.outputs.audit_dir }}/run_audit.sh"
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hipblaslt-logic-library-audit
+          path: ${{ steps.paths.outputs.report_dir }}
+          if-no-files-found: warn
