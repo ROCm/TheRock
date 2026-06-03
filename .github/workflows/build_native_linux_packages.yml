@@ -114,7 +114,7 @@ jobs:
 
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2 pyzstd
+          pip install pyelftools boto3 jinja2 pyzstd toml
 
       - name: Install System requirements
         run: |
