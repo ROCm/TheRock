@@ -28,7 +28,7 @@ if(NOT WIN32)
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
   )
-  install(FILES
+  install(DIRECTORY
     "${CMAKE_CURRENT_BINARY_DIR}/bin"
     "${CMAKE_CURRENT_BINARY_DIR}/llvm"
     "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
