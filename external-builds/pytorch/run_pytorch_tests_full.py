@@ -112,32 +112,7 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # modules that hang or crash the subprocess in ways that pytest-timeout
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
-EXCLUDED_TEST_MODULES: list[str] = [
-    # Apr20/PT + Apr20/ROCm control was green:
-    # https://github.com/ROCm/TheRock/actions/runs/25244506667
-    # Apr20/PT + May01/ROCm module-level blockers from run 25925372276
-    # shard 3/3, job 76205215147:
-    # https://github.com/ROCm/TheRock/actions/runs/25925372276/job/76205215147
-    # Keep at --exclude scope until narrowed; these fail before or outside
-    # reliable pytest -k filtering and also blocked later attribution reruns.
-    # distributed/test_device_mesh: DeviceMeshGetItem::test_flatten_mesh_3d
-    # rank error; excluded as a module to keep the shard moving.
-    "distributed/test_device_mesh",
-    # distributed/_composable/fsdp/test_fully_shard_comm:
-    # TestFullyShardCommunication::test_set_reduce_scatter_divide_factor
-    # 300s timeout; separated from test-level FSDP skips because the module
-    # blocks attribution progress before narrower skips can be validated.
-    "distributed/_composable/fsdp/test_fully_shard_comm",
-    # Run 26611796814 shard 3/3, job 78419139757:
-    # https://github.com/ROCm/TheRock/actions/runs/26611796814/job/78419139757
-    # May12/PT + ROCm 7.13.0rc2: distributed/tensor/test_dtensor_ops
-    # fails during module import before pytest -k can deselect a method.
-    "distributed/tensor/test_dtensor_ops",
-    # Run 26828748341 shards 1/3 and 2/3:
-    # temporary Jun1/PT + Jun1/ROCm layer; this module imports a removed
-    # inductor scheduler helper before pytest -k can deselect tests.
-    "distributed/test_inductor_collectives",
-]
+EXCLUDED_TEST_MODULES: list[str] = []
 
 
 def disable_distributed_stepcurrent_retries(pytorch_dir: Path) -> None:
