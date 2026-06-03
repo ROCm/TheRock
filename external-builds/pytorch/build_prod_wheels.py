@@ -1039,9 +1039,13 @@ def do_build_pytorch(
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
-    # Determine which install requirements to add.
+    # Determine which install requirements to add. Use PEP 440 arbitrary equality
+    # (===) on the rocm pin so that an index publishing both X and X+<local>
+    # silicon-rev variants of the rocm metapackage cannot silently substitute the
+    # local-segmented one at consumer install time (== matches both candidates
+    # and pip prefers the local-segmented one).
     install_requirements = [
-        f"rocm[libraries]=={get_rocm_sdk_version()}",
+        f"rocm[libraries]==={get_rocm_sdk_version()}",
     ]
     if triton_requirement:
         install_requirements.append(triton_requirement)

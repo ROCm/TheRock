@@ -94,7 +94,13 @@ class PackageEntry:
         return self.dist_package_template.format(**kwargs)
 
     def get_dist_package_require(self, target_family: str | None = None) -> str:
-        return self.get_dist_package_name(target_family) + f"=={__version__}"
+        # Use PEP 440 arbitrary equality (===) so a Python index that publishes
+        # both X and X+<local> silicon-rev variants of the same rocm-sdk-* package
+        # cannot satisfy this strict intra-package pin with a different local
+        # segment than the one that produced this metapackage. == would match
+        # both X and X+<local> candidates and pip prefers the local-segmented
+        # one, silently cross-stamping the install.
+        return self.get_dist_package_name(target_family) + f"==={__version__}"
 
     def get_py_package_name(self, target_family: str | None = None) -> str:
         dist_name = self.get_dist_package_name(target_family)
