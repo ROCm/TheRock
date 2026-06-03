@@ -3,17 +3,20 @@
 This is the home of the TheRock's build config for ROCm debug tools, which
 include ROCgdb, ROCdbgapi, and the ROCr debug agent.
 
-The source code for ROCdbgapi and the ROCr debug agent may eventually be
-migrated to the rocm-systems super-repo.
+The source code for these components is not hosted in TheRock itself. ROCdbgapi
+and the ROCr debug agent live in the rocm-systems super-repo, while ROCgdb
+lives in its own repository. TheRock references all of them via git submodule
+pointers; `debug-tools/rocgdb/source` is the submodule pointer to the ROCgdb
+sources, and the rocm-systems submodule provides the other two.
 
 ## Structure
 
-The debug tools are organized as follows:
+The submodule pointers to the debug tools sources are organized as follows:
 
 ```
-amd-dbgapi: The ROCdbgapi source code.
-rocgdb/source: The ROCgdb source code.
-rocr-debug-agent: The ROCr debug agent source code.
+debug-tools/rocgdb/source:                  Submodule pointer to the ROCgdb source code.
+rocm-systems/projects/rocdbgapi:            ROCdbgapi source code (via the rocm-systems submodule).
+rocm-systems/projects/rocr-debug-agent:     ROCr debug agent source code (via the rocm-systems submodule).
 ```
 
 ## Developer's Guide
