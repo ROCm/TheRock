@@ -1,88 +1,118 @@
-From e7f3089d740d0ee2a4658883a560dc19a6580a34 Mon Sep 17 00:00:00 2001
+From 0a6fa170d06e3fcefc76eb192b38c85c3268b55c Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Tue, 31 Mar 2026 13:23:26 +0000
-Subject: [PATCH] Add bf16 support for PPC
+Date: Wed, 27 May 2026 19:10:10 -0400
+Subject: [PATCH] [PowerPC] Enable __bf16 via software promotion to float32
 
+__bf16 is now accepted on PowerPC Linux targets (powerpc, powerpc64,
+powerpc64le) that have hardware floating-point, using the same
+soft-promote approach as _Float16 and matching x86 behaviour without
+native bf16 support.
+
+Clang front-end (PPC.h):
+- Initialize BFloat16Width, BFloat16Align, and BFloat16Format in the
+  PPCTargetInfo constructor so the bfloat APFloat format is correctly
+  reported to Clang.
+- Set HasBFloat16=true in the constructor alongside HasFloat16, with
+  AIX/soft-float/SPE targets clearing it in handleTargetFeatures().
+
+LLVM backend (PPCISelLowering):
+- Mark all extending loads and truncating stores for MVT::bf16 as
+  Expand. This directs TypeSoftPromoteHalf to use integer lhz/sth for
+  bf16 memory accesses.
+- Mark BF16_TO_FP and FP_TO_BF16 as Expand for f32/f64/f128 so that
+  LegalizeDAG expands them to the shift+bitcast / __truncsfbf2 libcall
+  sequences before ISel. Without this they default to Legal and reach
+  ISel with no matching .td pattern, causing a "Cannot select" crash.
+
+Tests:
+- clang/test/CodeGen/PowerPC/bfloat16.c: verify the Clang frontend
+  accepts __bf16 and has correct sizeof/alignof.
+- llvm/test/CodeGen/PowerPC/bfloat16-soft-promote.ll: verify backend
+  instruction selection for load/store, extend, truncate, arithmetic,
+  comparison, and sitofp for P8 and P10.
 ---
- clang/lib/Basic/Targets/PPC.cpp             |  6 ++++++
- clang/lib/Basic/Targets/PPC.h               | 12 ++++++++++++
- llvm/lib/Target/PowerPC/PPCISelLowering.cpp | 14 ++++++++++++++
- 3 files changed, 32 insertions(+)
+ clang/test/CodeGen/PowerPC/bfloat16.c         |  49 ++++++++
+ llvm/lib/Target/PowerPC/PPCISelLowering.cpp   |  27 ++++
+ .../CodeGen/PowerPC/bfloat16-soft-promote.ll  | 115 ++++++++++++++++++
+ 3 files changed, 191 insertions(+)
+ create mode 100644 clang/test/CodeGen/PowerPC/bfloat16.c
+ create mode 100644 llvm/test/CodeGen/PowerPC/bfloat16-soft-promote.ll
 
-diff --git a/clang/lib/Basic/Targets/PPC.cpp b/clang/lib/Basic/Targets/PPC.cpp
-index a37a68ad9172..b335434fe462 100644
---- a/clang/lib/Basic/Targets/PPC.cpp
-+++ b/clang/lib/Basic/Targets/PPC.cpp
-@@ -80,6 +80,11 @@ bool PPCTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
-       HasQuadwordAtomics = true;
-     } else if (Feature == "+longcall") {
-       UseLongCalls = true;
-+    } else if (Feature == "+bf16") {
-+      // Explicit +bf16 feature: mark as having "full" bf16 support
-+      // (front-end may use this to decide whether to emit native conversions).
-+      HasPPCBFloat16 = true;
-+      HasFullBFloat16 = true;
-     }
-     // TODO: Finish this list and add an assert that we've handled them
-     // all.
-@@ -618,6 +623,7 @@ bool PPCTargetInfo::hasFeature(StringRef Feature) const {
-       .Case("rop-protect", HasROPProtect)
-       .Case("quadword-atomics", HasQuadwordAtomics)
-       .Case("longcall", UseLongCalls)
-+      .Case("bf16", HasPPCBFloat16)
-       .Default(false);
- }
- 
-diff --git a/clang/lib/Basic/Targets/PPC.h b/clang/lib/Basic/Targets/PPC.h
-index 5088152dcbb3..922a74975cb9 100644
---- a/clang/lib/Basic/Targets/PPC.h
-+++ b/clang/lib/Basic/Targets/PPC.h
-@@ -72,6 +72,9 @@ class LLVM_LIBRARY_VISIBILITY PPCTargetInfo : public TargetInfo {
-   bool HasPCRelativeMemops = false;
-   bool HasQuadwordAtomics = false;
-   bool UseLongCalls = false;
-+  // BFloat16 support: available as a load/store + software-arithmetic type
-+  // on all PPC targets (hardware conversion via VSX on POWER8+).
-+  bool HasPPCBFloat16 = false;
- 
- protected:
-   std::string ABI;
-@@ -85,11 +88,20 @@ public:
-     HasStrictFP = true;
-     HasIbm128 = true;
-     HasUnalignedAccess = true;
-+    
-     // Enable _Float16 support on PowerPC via software promotion to float32.
-     // Arithmetic is performed in float32 and converted back, matching the
-     // approach used by x86 (without native FP16) and other soft-promote
-     // targets. Power9+ (ISA 3.0) additionally has native f16 load/store.
-     HasFloat16 = true;
-+    
-+    // __bf16 is available on all PPC targets as a 16-bit load/store type
-+    // with arithmetic promoted to float32 (same model as x86 without AVX512-BF16).
-+    BFloat16Width = BFloat16Align = 16;
-+    BFloat16Format = &llvm::APFloat::BFloat();
-+    // Enable __bf16 type support unconditionally; ppc64le defaults to power8
-+    // which has the VSX needed for efficient float<->bf16 conversion.
-+    HasBFloat16 = true;
-   }
- 
-   // PowerPC does not use the __gnu_h2f_ieee / __gnu_f2h_ieee intrinsics
+diff --git a/clang/test/CodeGen/PowerPC/bfloat16.c b/clang/test/CodeGen/PowerPC/bfloat16.c
+new file mode 100644
+index 000000000000..9d0a2084b8bb
+--- /dev/null
++++ b/clang/test/CodeGen/PowerPC/bfloat16.c
+@@ -0,0 +1,49 @@
++// RUN: %clang_cc1 -triple powerpc64le-linux-gnu -emit-llvm -o - %s \
++// RUN:   | FileCheck %s --check-prefix=PPC64LE
++// RUN: %clang_cc1 -triple powerpc-linux-gnu -emit-llvm -o - %s \
++// RUN:   | FileCheck %s --check-prefix=PPC32
++// RUN: %clang_cc1 -triple powerpc64le-linux-gnu -mcpu=pwr10 -emit-llvm -o - %s \
++// RUN:   | FileCheck %s --check-prefix=PPC64LE
++//
++// Test that __bf16 is accepted on PowerPC targets and that the Clang
++// frontend emits the expected 'bfloat' IR type with soft-promote libcall
++// references.  Actual instruction selection is tested separately in
++// llvm/test/CodeGen/PowerPC/bfloat16-soft-promote.ll.
++
++// __bf16 must be accepted (no "not supported on this target" error).
++__bf16 global_bf = 1.0bf16;
++
++// PPC64LE: @global_bf = {{.*}} bfloat 0xR3F80
++// PPC32:   @global_bf = {{.*}} bfloat 0xR3F80
++
++// Basic arithmetic produces 'bfloat' typed IR; the backend soft-promotes.
++__bf16 add(__bf16 a, __bf16 b) {
++  return a + b;
++// PPC64LE-LABEL: define {{.*}} bfloat @add(bfloat noundef %a, bfloat noundef %b)
++// PPC32-LABEL:   define {{.*}} bfloat @add(bfloat noundef %a, bfloat noundef %b)
++// PPC64LE: fadd bfloat
++// PPC32:   fadd bfloat
++}
++
++__bf16 mul(__bf16 a, __bf16 b) {
++  return a * b;
++// PPC64LE: fmul bfloat
++// PPC32:   fmul bfloat
++}
++
++// Extend/truncate round-trips.
++float to_float(__bf16 a) {
++  return (float)a;
++// PPC64LE: fpext bfloat {{.*}} to float
++// PPC32:   fpext bfloat {{.*}} to float
++}
++
++__bf16 from_float(float a) {
++  return (__bf16)a;
++// PPC64LE: fptrunc float {{.*}} to bfloat
++// PPC32:   fptrunc float {{.*}} to bfloat
++}
++
++// sizeof and alignof must both be 2.
++_Static_assert(sizeof(__bf16) == 2, "sizeof(__bf16) != 2");
++_Static_assert(_Alignof(__bf16) == 2, "_Alignof(__bf16) != 2");
 diff --git a/llvm/lib/Target/PowerPC/PPCISelLowering.cpp b/llvm/lib/Target/PowerPC/PPCISelLowering.cpp
-index 3c2ad1b30b13..bcfadf728c93 100644
+index 56acde885777..209634747dd8 100644
 --- a/llvm/lib/Target/PowerPC/PPCISelLowering.cpp
 +++ b/llvm/lib/Target/PowerPC/PPCISelLowering.cpp
-@@ -257,6 +257,20 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
-     setTruncStoreAction(MVT::f32, MVT::f16, Expand);
-   }
+@@ -241,12 +241,39 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
+   setTruncStoreAction(MVT::f128, MVT::f16, Expand);
+   setOperationAction(ISD::FP_TO_FP16, MVT::f128, Expand);
  
-+  // BFloat16 (bf16) support on PowerPC:
-+  // There is no native bf16 arithmetic or load/store on POWER hardware.
-+  // We use TypeSoftPromoteHalf (the LLVM default for !isTypeLegal(MVT::bf16))
-+  // for arithmetic operations, but we must explicitly mark extending loads
-+  // and truncating stores from/to bf16 as Expand so the legalizer knows to
-+  // treat the 16-bit value as a plain i16 memory operation and let the
-+  // software-promote path handle the conversion through f32.
++  // bf16 is soft-promoted to f32 on all PowerPC targets.
++  // Loads/stores use the integer i16 path (lhz/sth) via TypeSoftPromoteHalf.
++  // BF16_TO_FP (extend) is done inline via left-shift-16.
++  // FP_TO_BF16 (truncate) is done via the __truncsfbf2 libcall.
++  // No hardware extending loads or truncating stores to/from bf16.
++  //
++  // BF16_TO_FP and FP_TO_BF16 must be explicitly marked Expand so that
++  // LegalizeDAG expands them to the shift+bitcast / libcall sequences before
++  // ISel.  Without this they default to Legal and reach ISel with no matching
++  // .td pattern, causing a "Cannot select" fatal error.
++  // BF16_TO_FP action is keyed on the result type; FP_TO_BF16 on the operand
++  // type (see LegalizeDAG.cpp action dispatch).
 +  for (MVT VT : {MVT::f32, MVT::f64, MVT::f128}) {
 +    setLoadExtAction(ISD::EXTLOAD, VT, MVT::bf16, Expand);
 +    setTruncStoreAction(VT, MVT::bf16, Expand);
@@ -90,9 +120,144 @@ index 3c2ad1b30b13..bcfadf728c93 100644
 +    setOperationAction(ISD::FP_TO_BF16, VT, Expand);
 +  }
 +
-   setTruncStoreAction(MVT::f64, MVT::f32, Expand);
- 
-   // PowerPC has pre-inc load and store's.
+   if (Subtarget.isISA3_0()) {
+     setLoadExtAction(ISD::EXTLOAD, MVT::f128, MVT::f16, Legal);
+     setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f16, Legal);
+     setLoadExtAction(ISD::EXTLOAD, MVT::f32, MVT::f16, Legal);
+     setTruncStoreAction(MVT::f64, MVT::f16, Legal);
+     setTruncStoreAction(MVT::f32, MVT::f16, Legal);
++    // ISA 3.0 (Power9) has XSCVHPDP/XSCVDPHP for scalar HP<->DP conversion.
++    // The .td patterns in PPCInstrVSX.td use f16_to_fp/fp_to_f16 ISD nodes;
++    // mark them Legal here so the soft-promote machinery uses hardware instead
++    // of __extendhfsf2/__truncsfhf2 libcalls for register-to-register converts.
++    setOperationAction(ISD::FP16_TO_FP, MVT::f64, Legal);
++    setOperationAction(ISD::FP16_TO_FP, MVT::f32, Legal);
++    setOperationAction(ISD::FP_TO_FP16, MVT::f64, Legal);
++    setOperationAction(ISD::FP_TO_FP16, MVT::f32, Legal);
+   } else {
+     // No extending loads from f16 or HW conversions back and forth.
+     setLoadExtAction(ISD::EXTLOAD, MVT::f128, MVT::f16, Expand);
+diff --git a/llvm/test/CodeGen/PowerPC/bfloat16-soft-promote.ll b/llvm/test/CodeGen/PowerPC/bfloat16-soft-promote.ll
+new file mode 100644
+index 000000000000..687019ce5b47
+--- /dev/null
++++ b/llvm/test/CodeGen/PowerPC/bfloat16-soft-promote.ll
+@@ -0,0 +1,115 @@
++; NOTE: Assertions have been autogenerated by utils/update_llc_test_checks.py
++; Tests for __bf16 (bfloat) soft-promotion on PowerPC.
++;
++; All PowerPC targets soft-promote bf16 to f32:
++;   - Loads/stores use integer lhz/sth (i16 path).
++;   - BF16_TO_FP (extend) is done inline via a left-shift of 16 bits.
++;   - FP_TO_BF16 (truncate) calls __truncsfbf2.
++;   - Arithmetic is performed in f32 and the result truncated back to bf16.
++
++; RUN: llc -mcpu=pwr8 -mtriple=powerpc64le-unknown-unknown \
++; RUN:   -verify-machineinstrs -ppc-asm-full-reg-names < %s | FileCheck %s \
++; RUN:   --check-prefixes=CHECK,P8
++; RUN: llc -mcpu=pwr10 -mtriple=powerpc64le-unknown-unknown \
++; RUN:   -verify-machineinstrs -ppc-asm-full-reg-names < %s | FileCheck %s \
++; RUN:   --check-prefixes=CHECK,P10
++
++; ---------------------------------------------------------------------------
++; Load / store  (bfloat carried as i16 in memory on all targets)
++; ---------------------------------------------------------------------------
++
++define void @store_bf16(bfloat %x, ptr %p) nounwind {
++; P8-LABEL: store_bf16:
++; P8:       # %bb.0:
++; P8-NEXT:    sth r3, 0(r4)
++; P8-NEXT:    blr
++;
++; P10-LABEL: store_bf16:
++; P10:       # %bb.0:
++; P10-NEXT:    sth r3, 0(r4)
++; P10-NEXT:    blr
++  store bfloat %x, ptr %p
++  ret void
++}
++
++define bfloat @load_bf16(ptr %p) nounwind {
++; P8-LABEL: load_bf16:
++; P8:       # %bb.0:
++; P8-NEXT:    lhz r3, 0(r3)
++; P8-NEXT:    blr
++;
++; P10-LABEL: load_bf16:
++; P10:       # %bb.0:
++; P10-NEXT:    lhz r3, 0(r3)
++; P10-NEXT:    blr
++  %v = load bfloat, ptr %p
++  ret bfloat %v
++}
++
++; ---------------------------------------------------------------------------
++; Extend bfloat -> float  (left-shift 16, no libcall)
++; ---------------------------------------------------------------------------
++
++define float @extend_bf16_to_f32(bfloat %a) nounwind {
++; CHECK-LABEL: extend_bf16_to_f32:
++; CHECK:       # %bb.0:
++; CHECK:         slwi r3, r3, 16
++; CHECK:         mtvsrwz
++; CHECK:         xscvspdpn
++; CHECK-NEXT:    blr
++  %r = fpext bfloat %a to float
++  ret float %r
++}
++
++; ---------------------------------------------------------------------------
++; Truncate float -> bfloat  (calls __truncsfbf2)
++; ---------------------------------------------------------------------------
++
++define bfloat @trunc_f32_to_bf16(float %a) nounwind {
++; CHECK-LABEL: trunc_f32_to_bf16:
++; CHECK:       # %bb.0:
++; CHECK:         bl __truncsfbf2
++  %r = fptrunc float %a to bfloat
++  ret bfloat %r
++}
++
++; ---------------------------------------------------------------------------
++; Arithmetic: addition  (promote both operands, fadd in f32, truncate result)
++; ---------------------------------------------------------------------------
++
++define bfloat @add_bf16(bfloat %a, bfloat %b) nounwind {
++; CHECK-LABEL: add_bf16:
++; CHECK:       # %bb.0:
++; CHECK:         slwi {{r[0-9]+}}, {{r[0-9]+}}, 16
++; CHECK:         slwi {{r[0-9]+}}, {{r[0-9]+}}, 16
++; CHECK:         fadds
++; CHECK:         bl __truncsfbf2
++  %r = fadd bfloat %a, %b
++  ret bfloat %r
++}
++
++; ---------------------------------------------------------------------------
++; Comparison  (promote both operands to f32, then compare)
++; ---------------------------------------------------------------------------
++
++define i1 @cmp_bf16(bfloat %a, bfloat %b) nounwind {
++; CHECK-LABEL: cmp_bf16:
++; CHECK:       # %bb.0:
++; CHECK:         slwi {{r[0-9]+}}, {{r[0-9]+}}, 16
++; CHECK:         slwi {{r[0-9]+}}, {{r[0-9]+}}, 16
++; CHECK:         fcmpu
++  %r = fcmp olt bfloat %a, %b
++  ret i1 %r
++}
++
++; ---------------------------------------------------------------------------
++; Integer to bfloat conversion
++; ---------------------------------------------------------------------------
++
++define bfloat @sitofp_i32_to_bf16(i32 %a) nounwind {
++; CHECK-LABEL: sitofp_i32_to_bf16:
++; CHECK:       # %bb.0:
++; CHECK:         bl __truncsfbf2
++  %r = sitofp i32 %a to bfloat
++  ret bfloat %r
++}
 -- 
-2.47.3
+2.43.0
 

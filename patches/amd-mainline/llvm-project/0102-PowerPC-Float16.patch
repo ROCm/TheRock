@@ -1,35 +1,412 @@
-From 63e39ce93312181a6c91026ee1809596c9784c20 Mon Sep 17 00:00:00 2001
+From c87e4a018555e5a2c79cd76d82df3805a47ba231 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Mon, 30 Mar 2026 19:26:30 +0000
-Subject: [PATCH] Add _Float16 support for PPC
+Date: Wed, 27 May 2026 19:09:49 -0400
+Subject: [PATCH] [PowerPC] Enable _Float16 via software promotion to float32
 
+_Float16 is now accepted on PowerPC Linux targets (powerpc, powerpc64,
+powerpc64le) that have hardware floating-point. Arithmetic is performed
+in float32 and converted back, matching the approach used by AArch64
+and RISC-V.
+
+Clang front-end (PPC.h):
+- Set HasFloat16=true, HasFastHalfType=false, and HasBFloat16=true in
+  the PPCTargetInfo constructor so the defaults are correct before any
+  feature processing. AIX, soft-float, and SPE targets clear these flags
+  in handleTargetFeatures().
+- Override useFP16ConversionIntrinsics() to return false. This causes
+  Clang to use the LLVM 'half' IR type throughout codegen rather than
+  the i16 representation with __gnu_h2f_ieee/__gnu_f2h_ieee libcalls,
+  matching the approach used by AArch64 and RISC-V soft-promote targets.
+
+LLVM backend (PPCISelLowering):
+- On ISA 3.0 (Power9), mark FP16_TO_FP and FP_TO_FP16 as Legal for
+  f32 and f64. This activates the existing XSCVHPDP/XSCVDPHP .td
+  patterns for register-to-register f16<->fp conversions. Load/store
+  with LXSIHZX/STXSIHX was already wired up.
+- On sub-P9, TypeSoftPromoteHalf handles all f16 operations via
+  __extendhfsf2/__truncsfhf2 libcalls; lhz/sth for memory accesses.
+
+Tests:
+- clang/test/Sema/Float16.c, clang/test/SemaCXX/Float16.cpp: add
+  powerpc and powerpc64le triples to the -DHAVE passing list.
+- clang/test/CodeGen/PowerPC/Float16.c: verify the Clang frontend
+  emits 'half' IR type for _Float16 arithmetic on ppc64le.
+- llvm/test/CodeGen/PowerPC/float16-soft-promote.ll: CodeGen test
+  covering load/store, arithmetic, extend, truncate, extending load,
+  truncating store, comparison, and sitofp for P8 and P9.
 ---
- clang/lib/Basic/Targets/PPC.h | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+ clang/lib/Basic/Targets/PPC.cpp               |   7 +
+ clang/lib/Basic/Targets/PPC.h                 |  14 ++
+ clang/test/CodeGen/PowerPC/Float16.c          |  49 ++++
+ clang/test/Sema/Float16.c                     |   2 +
+ clang/test/SemaCXX/Float16.cpp                |   2 +
+ .../CodeGen/PowerPC/float16-soft-promote.ll   | 227 ++++++++++++++++++
+ 6 files changed, 301 insertions(+)
+ create mode 100644 clang/test/CodeGen/PowerPC/Float16.c
+ create mode 100644 llvm/test/CodeGen/PowerPC/float16-soft-promote.ll
 
+diff --git a/clang/lib/Basic/Targets/PPC.cpp b/clang/lib/Basic/Targets/PPC.cpp
+index c9a41df806af..7c3eedf76f8f 100644
+--- a/clang/lib/Basic/Targets/PPC.cpp
++++ b/clang/lib/Basic/Targets/PPC.cpp
+@@ -87,6 +87,13 @@ bool PPCTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
+     // all.
+   }
+ 
++  // _Float16 and __bf16 are enabled by default in the constructor. Disable
++  // them on AIX (ABI not yet defined), soft-float, and SPE targets.
++  if (getTriple().isOSAIX() || FloatABI == SoftFloat || HasSPE) {
++    HasFloat16 = false;
++    HasBFloat16 = false;
++  }
++
+   return true;
+ }
+ 
 diff --git a/clang/lib/Basic/Targets/PPC.h b/clang/lib/Basic/Targets/PPC.h
-index 664c9e15d8d1..5088152dcbb3 100644
+index a9f49aa3aebe..03fee64add1c 100644
 --- a/clang/lib/Basic/Targets/PPC.h
 +++ b/clang/lib/Basic/Targets/PPC.h
-@@ -85,8 +85,18 @@ public:
+@@ -83,11 +83,25 @@ public:
+     SuitableAlign = 128;
+     LongDoubleWidth = LongDoubleAlign = 128;
+     LongDoubleFormat = &llvm::APFloat::PPCDoubleDouble();
++    BFloat16Width = BFloat16Align = 16;
++    BFloat16Format = &llvm::APFloat::BFloat();
      HasStrictFP = true;
      HasIbm128 = true;
      HasUnalignedAccess = true;
-+    // Enable _Float16 support on PowerPC via software promotion to float32.
-+    // Arithmetic is performed in float32 and converted back, matching the
-+    // approach used by x86 (without native FP16) and other soft-promote
-+    // targets. Power9+ (ISA 3.0) additionally has native f16 load/store.
++    // _Float16 and __bf16 are supported on all PowerPC Linux targets via
++    // software promotion to float32, matching the approach used by AArch64 and
++    // RISC-V. AIX, soft-float, and SPE targets clear these flags in
++    // handleTargetFeatures() since their ABI has not yet been defined.
 +    HasFloat16 = true;
++    HasFastHalfType = false;
++    HasBFloat16 = true;
    }
  
-+  // PowerPC does not use the __gnu_h2f_ieee / __gnu_f2h_ieee intrinsics
-+  // for _Float16 <-> float conversions; the LLVM backend handles them
-+  // directly via TypeSoftPromoteHalf legalization.
++  // PowerPC uses the LLVM 'half' IR type for _Float16 throughout codegen;
++  // the backend soft-promotes via TypeSoftPromoteHalf.  Do not emit
++  // __gnu_h2f_ieee / __gnu_f2h_ieee conversion intrinsics.
 +  bool useFP16ConversionIntrinsics() const override { return false; }
 +
    // Set the language option for altivec based on our value.
    void adjust(DiagnosticsEngine &Diags, LangOptions &Opts,
                const TargetInfo *Aux) override;
+diff --git a/clang/test/CodeGen/PowerPC/Float16.c b/clang/test/CodeGen/PowerPC/Float16.c
+new file mode 100644
+index 000000000000..927a39bdbba0
+--- /dev/null
++++ b/clang/test/CodeGen/PowerPC/Float16.c
+@@ -0,0 +1,49 @@
++// RUN: %clang_cc1 -triple powerpc64le-linux-gnu -emit-llvm -o - %s \
++// RUN:   | FileCheck %s --check-prefix=PPC64LE
++// RUN: %clang_cc1 -triple powerpc-linux-gnu -emit-llvm -o - %s \
++// RUN:   | FileCheck %s --check-prefix=PPC32
++// RUN: %clang_cc1 -triple powerpc64le-linux-gnu -mcpu=pwr9 -emit-llvm -o - %s \
++// RUN:   | FileCheck %s --check-prefix=PPC64LE
++//
++// Test that _Float16 is accepted on PowerPC targets and that the Clang
++// frontend emits the expected 'half' IR type with soft-promote libcall
++// references.  Actual instruction selection is tested separately in
++// llvm/test/CodeGen/PowerPC/float16-soft-promote.ll.
++
++// _Float16 must be accepted (no "not supported on this target" error).
++_Float16 global_h = 1.0f16;
++
++// PPC64LE: @global_h = {{.*}} half 0xH3C00
++// PPC32:   @global_h = {{.*}} half 0xH3C00
++
++// Basic arithmetic produces 'half' typed IR; the backend soft-promotes.
++_Float16 add(_Float16 a, _Float16 b) {
++  return a + b;
++// PPC64LE-LABEL: define {{.*}} half @add(half noundef %a, half noundef %b)
++// PPC32-LABEL:   define {{.*}} half @add(half noundef %a, half noundef %b)
++// PPC64LE: fadd half
++// PPC32:   fadd half
++}
++
++_Float16 mul(_Float16 a, _Float16 b) {
++  return a * b;
++// PPC64LE: fmul half
++// PPC32:   fmul half
++}
++
++// Extend/truncate round-trips.
++float to_float(_Float16 a) {
++  return (float)a;
++// PPC64LE: fpext half {{.*}} to float
++// PPC32:   fpext half {{.*}} to float
++}
++
++_Float16 from_float(float a) {
++  return (_Float16)a;
++// PPC64LE: fptrunc float {{.*}} to half
++// PPC32:   fptrunc float {{.*}} to half
++}
++
++// sizeof must be 2 and _Alignof must be 2.
++_Static_assert(sizeof(_Float16) == 2, "sizeof(_Float16) != 2");
++_Static_assert(_Alignof(_Float16) == 2, "_Alignof(_Float16) != 2");
+diff --git a/clang/test/Sema/Float16.c b/clang/test/Sema/Float16.c
+index b104cf907b3e..978ac69371ad 100644
+--- a/clang/test/Sema/Float16.c
++++ b/clang/test/Sema/Float16.c
+@@ -6,6 +6,8 @@
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple aarch64-linux-gnu %s -DHAVE
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple riscv32 %s -DHAVE
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple riscv64 %s -DHAVE
++// RUN: %clang_cc1 -fsyntax-only -verify -triple powerpc-linux-gnu %s -DHAVE
++// RUN: %clang_cc1 -fsyntax-only -verify -triple powerpc64le-linux-gnu %s -DHAVE
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple s390x-ibm-zos %s
+ 
+ #ifndef HAVE
+diff --git a/clang/test/SemaCXX/Float16.cpp b/clang/test/SemaCXX/Float16.cpp
+index 9646a8d0c317..c6e365c25209 100644
+--- a/clang/test/SemaCXX/Float16.cpp
++++ b/clang/test/SemaCXX/Float16.cpp
+@@ -4,6 +4,8 @@
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple spir-unknown-unknown %s -DHAVE
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple armv7a-linux-gnu %s -DHAVE
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple aarch64-linux-gnu %s -DHAVE
++// RUN: %clang_cc1 -fsyntax-only -verify -triple powerpc-linux-gnu %s -DHAVE
++// RUN: %clang_cc1 -fsyntax-only -verify -triple powerpc64le-linux-gnu %s -DHAVE
+ // RUN: %clang_cc1 -fsyntax-only -verify -triple s390x-ibm-zos %s
+ #ifdef HAVE
+ // expected-no-diagnostics
+diff --git a/llvm/test/CodeGen/PowerPC/float16-soft-promote.ll b/llvm/test/CodeGen/PowerPC/float16-soft-promote.ll
+new file mode 100644
+index 000000000000..478dccc3adae
+--- /dev/null
++++ b/llvm/test/CodeGen/PowerPC/float16-soft-promote.ll
+@@ -0,0 +1,227 @@
++; NOTE: Assertions have been autogenerated by utils/update_llc_test_checks.py
++; Tests for _Float16 (half) soft-promotion on PowerPC.
++;
++; Sub-P9 (P8): all f16 arithmetic is promoted to f32 via __extendhfsf2 /
++; __truncsfhf2 libcalls.  Loads and stores use integer lhz/sth.
++;
++; P9 (ISA 3.0): load/store use LXSIHZX+XSCVHPDP / XSCVDPHP+STXSIHX.
++; Register-to-register FP16_TO_FP / FP_TO_FP16 also use hardware.
++
++; RUN: llc -mcpu=pwr8 -mtriple=powerpc64le-unknown-unknown \
++; RUN:   -verify-machineinstrs -ppc-asm-full-reg-names < %s | FileCheck %s \
++; RUN:   --check-prefixes=CHECK,P8
++; RUN: llc -mcpu=pwr9 -mtriple=powerpc64le-unknown-unknown \
++; RUN:   -verify-machineinstrs -ppc-asm-full-reg-names < %s | FileCheck %s \
++; RUN:   --check-prefixes=CHECK,P9
++
++; ---------------------------------------------------------------------------
++; Load / store  (half is carried as i16 in memory on both P8 and P9)
++; ---------------------------------------------------------------------------
++
++define void @store_f16(half %x, ptr %p) nounwind {
++; P8-LABEL: store_f16:
++; P8:       # %bb.0:
++; P8-NEXT:    sth r3, 0(r4)
++; P8-NEXT:    blr
++;
++; P9-LABEL: store_f16:
++; P9:       # %bb.0:
++; P9-NEXT:    sth r3, 0(r4)
++; P9-NEXT:    blr
++  store half %x, ptr %p
++  ret void
++}
++
++define half @load_f16(ptr %p) nounwind {
++; P8-LABEL: load_f16:
++; P8:       # %bb.0:
++; P8-NEXT:    lhz r3, 0(r3)
++; P8-NEXT:    blr
++;
++; P9-LABEL: load_f16:
++; P9:       # %bb.0:
++; P9-NEXT:    lhz r3, 0(r3)
++; P9-NEXT:    blr
++  %v = load half, ptr %p
++  ret half %v
++}
++
++; ---------------------------------------------------------------------------
++; Arithmetic: addition  (soft-promote to f32 on P8, same on P9)
++; ---------------------------------------------------------------------------
++
++define half @add_f16(half %a, half %b) nounwind {
++; P8-LABEL: add_f16:
++; P8:       # %bb.0:
++; P8-NEXT:    mflr r0
++; P8-NEXT:    std r0, 16(r1)
++; P8-NEXT:    stdu r1, -32(r1)
++; P8-NEXT:    mr r4, r3
++; P8-NEXT:    srwi r3, r3, 16
++; P8-NEXT:    bl __extendhfsf2
++; P8-NEXT:    fmr f2, f1
++; P8-NEXT:    mr r3, r4
++; P8-NEXT:    bl __extendhfsf2
++; P8-NEXT:    fadds f1, f1, f2
++; P8-NEXT:    bl __truncsfhf2
++; P8-NEXT:    addi r1, r1, 32
++; P8-NEXT:    ld r0, 16(r1)
++; P8-NEXT:    mtlr r0
++; P8-NEXT:    blr
++  %r = fadd half %a, %b
++  ret half %r
++}
++
++; ---------------------------------------------------------------------------
++; Extend f16 -> f32  (soft: libcall on P8, hardware XSCVHPDP on P9)
++; ---------------------------------------------------------------------------
++
++define float @extend_f16_to_f32(half %a) nounwind {
++; P8-LABEL: extend_f16_to_f32:
++; P8:       # %bb.0:
++; P8-NEXT:    mflr r0
++; P8-NEXT:    std r0, 16(r1)
++; P8-NEXT:    stdu r1, -32(r1)
++; P8-NEXT:    bl __extendhfsf2
++; P8-NEXT:    addi r1, r1, 32
++; P8-NEXT:    ld r0, 16(r1)
++; P8-NEXT:    mtlr r0
++; P8-NEXT:    blr
++;
++; P9-LABEL: extend_f16_to_f32:
++; P9:       # %bb.0:
++; P9-NEXT:    mtvsrwz v2, r3
++; P9-NEXT:    xscvhpdp f1, v2
++; P9-NEXT:    frsp f1, f1
++; P9-NEXT:    blr
++  %r = fpext half %a to float
++  ret float %r
++}
++
++; ---------------------------------------------------------------------------
++; Truncate f32 -> f16  (soft: libcall on P8, hardware XSCVDPHP on P9)
++; ---------------------------------------------------------------------------
++
++define half @trunc_f32_to_f16(float %a) nounwind {
++; P8-LABEL: trunc_f32_to_f16:
++; P8:       # %bb.0:
++; P8-NEXT:    mflr r0
++; P8-NEXT:    std r0, 16(r1)
++; P8-NEXT:    stdu r1, -32(r1)
++; P8-NEXT:    bl __truncsfhf2
++; P8-NEXT:    addi r1, r1, 32
++; P8-NEXT:    ld r0, 16(r1)
++; P8-NEXT:    mtlr r0
++; P8-NEXT:    blr
++;
++; P9-LABEL: trunc_f32_to_f16:
++; P9:       # %bb.0:
++; P9-NEXT:    xscvdphp v2, f1
++; P9-NEXT:    mfvsrwz r3, v2
++; P9-NEXT:    blr
++  %r = fptrunc float %a to half
++  ret half %r
++}
++
++; ---------------------------------------------------------------------------
++; Extend load: f16 mem -> f64  (LXSIHZX+XSCVHPDP on P9)
++; ---------------------------------------------------------------------------
++
++define double @extload_f16_to_f64(ptr %p) nounwind {
++; P8-LABEL: extload_f16_to_f64:
++; P8:       # %bb.0:
++; P8-NEXT:    mflr r0
++; P8-NEXT:    std r0, 16(r1)
++; P8-NEXT:    stdu r1, -32(r1)
++; P8-NEXT:    lhz r3, 0(r3)
++; P8-NEXT:    bl __extendhfsf2
++; P8-NEXT:    frsp f1, f1
++; P8-NEXT:    addi r1, r1, 32
++; P8-NEXT:    ld r0, 16(r1)
++; P8-NEXT:    mtlr r0
++; P8-NEXT:    blr
++;
++; P9-LABEL: extload_f16_to_f64:
++; P9:       # %bb.0:
++; P9-NEXT:    lxsihzx v2, 0, r3
++; P9-NEXT:    xscvhpdp f1, v2
++; P9-NEXT:    blr
++  %v = load half, ptr %p
++  %r = fpext half %v to double
++  ret double %r
++}
++
++; ---------------------------------------------------------------------------
++; Truncate store: f64 -> f16 mem  (XSCVDPHP+STXSIHX on P9)
++; ---------------------------------------------------------------------------
++
++define void @truncstore_f64_to_f16(double %v, ptr %p) nounwind {
++; P8-LABEL: truncstore_f64_to_f16:
++; P8:       # %bb.0:
++; P8-NEXT:    mflr r0
++; P8-NEXT:    std r0, 16(r1)
++; P8-NEXT:    stdu r1, -32(r1)
++; P8-NEXT:    frsp f1, f1
++; P8-NEXT:    bl __truncsfhf2
++; P8-NEXT:    sth r3, 0(r4)
++; P8-NEXT:    addi r1, r1, 32
++; P8-NEXT:    ld r0, 16(r1)
++; P8-NEXT:    mtlr r0
++; P8-NEXT:    blr
++;
++; P9-LABEL: truncstore_f64_to_f16:
++; P9:       # %bb.0:
++; P9-NEXT:    xscvdphp v2, f1
++; P9-NEXT:    stxsihx v2, 0, r3
++; P9-NEXT:    blr
++  %t = fptrunc double %v to half
++  store half %t, ptr %p
++  ret void
++}
++
++; ---------------------------------------------------------------------------
++; Comparison: result is i1, operands promoted to f32 first
++; ---------------------------------------------------------------------------
++
++define i1 @cmp_f16(half %a, half %b) nounwind {
++; P8-LABEL: cmp_f16:
++; P8:       # %bb.0:
++; P8-NEXT:    mflr r0
++; P8-NEXT:    std r0, 16(r1)
++; P8-NEXT:    stdu r1, -32(r1)
++; P8-NEXT:    mr r4, r3
++; P8-NEXT:    srwi r3, r3, 16
++; P8-NEXT:    bl __extendhfsf2
++; P8-NEXT:    fmr f2, f1
++; P8-NEXT:    mr r3, r4
++; P8-NEXT:    bl __extendhfsf2
++; P8-NEXT:    fcmpu cr0, f1, f2
++; P8-NEXT:    mfocrf r3, 128
++; P8-NEXT:    rlwinm r3, r3, 29, 31, 31
++; P8-NEXT:    addi r1, r1, 32
++; P8-NEXT:    ld r0, 16(r1)
++; P8-NEXT:    mtlr r0
++; P8-NEXT:    blr
++  %r = fcmp olt %a, %b
++  ret i1 %r
++}
++
++; ---------------------------------------------------------------------------
++; Integer to f16 conversion
++; ---------------------------------------------------------------------------
++
++define half @sitofp_i32_to_f16(i32 %a) nounwind {
++; P8-LABEL: sitofp_i32_to_f16:
++; P8:       # %bb.0:
++; P8-NEXT:    mflr r0
++; P8-NEXT:    std r0, 16(r1)
++; P8-NEXT:    stdu r1, -32(r1)
++; P8-NEXT:    bl __floatsisf
++; P8-NEXT:    bl __truncsfhf2
++; P8-NEXT:    addi r1, r1, 32
++; P8-NEXT:    ld r0, 16(r1)
++; P8-NEXT:    mtlr r0
++; P8-NEXT:    blr
++  %r = sitofp i32 %a to half
++  ret half %r
++}
 -- 
-2.47.3
+2.43.0
 
