@@ -42,6 +42,8 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
+    [--solver | --no-solver]
+    [--sparse | --no-sparse]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
@@ -367,6 +369,8 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems_examples,
             args.rocrtst,
             args.rocwmma,
+            args.solver,
+            args.sparse,
             args.libhipcxx,
         ]
     ):
@@ -377,6 +381,10 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("aqlprofile")
         if args.blas:
             extra_artifacts.append("blas")
+        if args.sparse:
+            extra_artifacts.append("sparse")
+        if args.solver:
+            extra_artifacts.append("solver")
         if args.debug_tools:
             extra_artifacts.append("amd-dbgapi")
             extra_artifacts.append("rocgdb")
@@ -834,6 +842,20 @@ def main(argv):
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--solver",
+        default=False,
+        help="Include 'solver' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--sparse",
+        default=False,
+        help="Include 'sparse' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
