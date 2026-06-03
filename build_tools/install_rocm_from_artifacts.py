@@ -129,6 +129,8 @@ import sys
 import tarfile
 from typing import Optional
 
+from expand_amdgpu_families import expand_family
+
 PLATFORM = platform.system().lower()
 s3_client = boto3.client(
     "s3",
@@ -311,8 +313,24 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+
+    # Handle AMDGPU targets: expand family names to individual targets if needed.
+    # This is critical for split/kpack builds where artifacts are per-target
+    # (e.g., rocblas_lib_gfx1100.tar.xz) rather than per-family
+    # (e.g., rocblas_lib_gfx110X-all.tar.xz).
     if args.amdgpu_targets:
+        # User explicitly provided targets - use them as-is
         argv.extend(["--amdgpu-targets", args.amdgpu_targets])
+    else:
+        # Try to expand the artifact_group (family) into individual targets
+        targets = expand_family(args.artifact_group, strict=False)
+        if targets:
+            targets_str = ",".join(targets)
+            log(
+                f"Expanded artifact group '{args.artifact_group}' to targets: {targets_str}"
+            )
+            argv.extend(["--amdgpu-targets", targets_str])
+
     if args.dry_run:
         argv.append("--dry-run")
     if args.run_github_repo:
