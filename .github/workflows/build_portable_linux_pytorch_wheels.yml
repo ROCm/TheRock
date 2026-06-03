@@ -39,6 +39,22 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
+      pytorch_git_repo:
+        description: "PyTorch git repo to checkout for raw refs. Options: pytorch/pytorch, ROCm/pytorch"
+        type: string
+        default: "pytorch/pytorch"
+      torchaudio_git_ref:
+        description: torchaudio ref to checkout when pytorch_git_ref is a raw ref/SHA
+        type: string
+        default: "nightly"
+      torchvision_git_ref:
+        description: torchvision ref to checkout when pytorch_git_ref is a raw ref/SHA
+        type: string
+        default: "nightly"
+      apex_git_ref:
+        description: apex ref to checkout when pytorch_git_ref is a raw ref/SHA
+        type: string
+        default: "master"
       cache_type:
         description: "Compiler cache type (sccache, ccache, or none)"
         required: false
@@ -102,6 +118,22 @@ on:
         required: true
         type: string
         default: "release/2.10"
+      pytorch_git_repo:
+        description: "PyTorch git repo to checkout for raw refs. Options: pytorch/pytorch, ROCm/pytorch"
+        type: string
+        default: "pytorch/pytorch"
+      torchaudio_git_ref:
+        description: torchaudio ref to checkout when pytorch_git_ref is a raw ref/SHA
+        type: string
+        default: "nightly"
+      torchvision_git_ref:
+        description: torchvision ref to checkout when pytorch_git_ref is a raw ref/SHA
+        type: string
+        default: "nightly"
+      apex_git_ref:
+        description: apex ref to checkout when pytorch_git_ref is a raw ref/SHA
+        type: string
+        default: "master"
       cache_type:
         description: "Compiler cache type"
         type: choice
@@ -197,12 +229,22 @@ jobs:
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        if: ${{ startsWith(inputs.pytorch_git_ref, 'release/') }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }}
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_apex_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout
+
+      # Checkout arbitrary/raw PyTorch refs where related_commits may not exist.
+      - name: Checkout PyTorch Source Repos from raw ref
+        if: ${{ inputs.pytorch_git_ref != 'nightly' && !startsWith(inputs.pytorch_git_ref, 'release/') }}
+        run: |
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git --repo-hashtag ${{ inputs.pytorch_git_ref }}
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag ${{ inputs.torchaudio_git_ref }}
+          ./external-builds/pytorch/pytorch_apex_repo.py checkout --repo-hashtag ${{ inputs.apex_git_ref }}
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag ${{ inputs.torchvision_git_ref }}
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
       # Note: determine_version.py sets optional_build_prod_arguments in
@@ -336,6 +378,7 @@ jobs:
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
+      pytorch_git_repo: ${{ inputs.pytorch_git_repo }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
 

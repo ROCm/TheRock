@@ -113,18 +113,36 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
-    "nn/test_convolution",  # hangs for 5+ hours, see run 53 shards 7 & 10
-    "inductor/test_max_autotune",
-    "inductor/test_torchinductor_opinfo_properties",
-    "inductor/test_compiled_autograd",
-    "distributed/_composable/fsdp/test_fully_shard_autograd",
-    "distributed/_composable/test_composability/test_2d_composability",
-    "distributed/_composable/test_composability/test_pp_composability",
-    "distributed/_composable/test_replicate",
-    "distributed/tensor/test_view_ops",
-    "dynamo/test_dynamic_shapes",
-    "functorch/test_control_flow",
+    # ROCm 0501/PT 0501 source-vs-wheel API drift: import-time failures before
+    # pytest -k filtering can skip individual tests.
+    "distributed/pipelining/test_schedule",
+    "distributed/test_device_mesh",
+    # CI run 25756405826: import/collection-time failures before pytest -k
+    # can isolate individual tests. DTensor ops xfail registration cannot find
+    # nn.functional.linear_cross_entropy OpInfo; overlap bucketing imports a
+    # missing torch._inductor.fx_passes.profile_guided_estimation module.
+    "distributed/tensor/test_dtensor_ops",
+    "distributed/test_overlap_bucketing_unit",
+    # 4-GPU validation (iter1-iter7): 12+ test-level failures across 6 distinct
+    # test classes (TestFullyShardCommunication, TestFullyShardPrefetch [whole class],
+    # TestFullyShardCollectiveOps, TestFullyShardMixedPrecisionCasts,
+    # TestFullyShardUnshardMultiProcess, TestFullyShardAllocFromPG).
+    # Most failures are 300s timeouts in patch_post_backward / barrier and SIGSEGV
+    # in mixed-precision casts. Module-level skip until upstream stack stabilizes.
+    "distributed/_composable/fsdp/test_fully_shard_comm",
 ]
+
+
+def disable_distributed_stepcurrent_retries(pytorch_dir: Path) -> None:
+    run_test_path = pytorch_dir / "test" / "run_test.py"
+    text = run_test_path.read_text()
+    old = '        and not is_cpp_test\n        and "-n" not in command\n'
+    new = '        and not is_cpp_test\n        and not is_distributed_test\n        and "-n" not in command\n'
+    if new in text:
+        return
+    if old not in text:
+        raise RuntimeError("Could not disable distributed stepcurrent retries")
+    run_test_path.write_text(text.replace(old, new, 1))
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
 # The inductor config requires TWO separate run_test.py invocations:
@@ -523,6 +541,8 @@ def main(argv: list[str]) -> int:
     check_pytorch_source_version(
         pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
     )
+    if args.test_config == "distributed":
+        disable_distributed_stepcurrent_retries(args.pytorch_dir)
 
     # Set HIP_VISIBLE_DEVICES BEFORE importing torch or running pytest. Once
     # torch.cuda is initialized, changing HIP_VISIBLE_DEVICES has no effect.
