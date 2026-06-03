@@ -219,6 +219,9 @@ jobs:
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
+          # Multi-package PyTorch builds can exceed the default 1h credential
+          # window; the role's MaxSessionDuration must be >= this value.
+          role-duration-seconds: 21600
 
       - name: Verify sccache
         if: ${{ inputs.cache_type == 'sccache' }}
