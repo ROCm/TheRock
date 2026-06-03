@@ -61,6 +61,10 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
+      run_simulator:
+        description: "Run the rocjitsu CPU-only simulator as a sibling job once compiler-runtime + math-libs finish. Only the Release pipeline sets this to true today."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -167,6 +171,26 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: simulator-test (generic, single job)
+  # Runs the rocjitsu CPU-only simulator against the just-built rocrand test
+  # binaries. Starts as soon as compiler-runtime + math-libs are uploaded
+  # (no waiting for the rest of the DAG). Gated by `run_simulator` so only
+  # the Release pipeline enables it today; PR CI keeps it off by default.
+  # ==========================================================================
+  simulator-test:
+    needs: [compiler-runtime, math-libs]
+    if: ${{ !cancelled() && !failure() && inputs.run_simulator && contains(inputs.dist_amdgpu_families, 'gfx94X-dcgpu') }}
+    uses: ./.github/workflows/test-simulator.yml
+    secrets: inherit
+    with:
+      artifact_run_id: ${{ github.run_id }}
+      amdgpu_families: gfx94X-dcgpu
+      filter_preset: basic
     permissions:
       contents: read
       id-token: write
