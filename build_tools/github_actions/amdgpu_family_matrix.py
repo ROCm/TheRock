@@ -154,11 +154,11 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.0,
+                    "weight": 1.0,
                 },  # cirrascale (4/29)
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 1.0,
+                    "weight": 0.0,
                 },  # core42 (25/29)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
