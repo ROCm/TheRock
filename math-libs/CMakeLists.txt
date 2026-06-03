@@ -418,6 +418,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     DEFAULT_GPU_TARGETS
       gfx942  # Fixes issue with empty target list for unsupported architectures.
     CMAKE_ARGS
+      -DLIBHIPCXX_COPY_TO_BUILD=ON
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
