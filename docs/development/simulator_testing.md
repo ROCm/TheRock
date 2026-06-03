@@ -46,9 +46,13 @@ ninja -C build therock-artifacts therock-dist
 
 # 2) Make sure the rocRAND test layout is in the dist. therock-dist should
 #    already flatten the rand_test component into build/dist/rocm/bin/rocRAND
-#    via artifact-flatten, but rsync defensively in case it does not:
+#    via artifact-flatten, but merge defensively in case it does not. We use
+#    a `tar | tar` pipe (not rsync) because rsync is not always installed in
+#    the manylinux build container CI uses.
 for d in build/artifacts/rand_test build/artifacts/rand_test_*; do
-  [ -d "$d" ] && rsync -a --exclude=artifact_manifest.txt "$d/" build/dist/rocm/
+  [ -d "$d" ] && \
+    ( cd "$d" && tar --exclude=artifact_manifest.txt -cf - . ) \
+    | tar -C build/dist/rocm -xf -
 done
 
 # 3) Run a real ROCm library under the simulator. Follow the project-wide

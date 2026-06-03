@@ -128,24 +128,29 @@ jobs:
         # component into build/dist/rocm/ alongside _lib/_run/_dev/_doc/_dbg
         # (see cmake/therock_artifacts.cmake, _flatten_command_list).
         # Historically (Rocjitsu_002/003) the dist only contained _lib/_run
-        # and bin/rocRAND/CTestTestfile.cmake was missing, so we rsync the
+        # and bin/rocRAND/CTestTestfile.cmake was missing, so we merge the
         # per-component test artifact directory into the dist as a no-op
         # safety net. If the flatten worked, this is a no-op. If it didn't,
         # this gives us the same outcome the old tar-extract step did.
+        #
+        # We use `tar | tar` instead of rsync because the manylinux build
+        # container does not ship rsync (Rocjitsu_004: "rsync: command not
+        # found"), whereas tar is universally available.
         run: |
           set -ex
           shopt -s nullglob
           # New layout: build/artifacts/rand_test[/ or _<arch>/] is a tree
           # rooted at the ROCm install prefix (e.g. bin/rocRAND/..., bin/test_*).
-          rsynced=0
+          merged=0
           for d in build/artifacts/rand_test build/artifacts/rand_test_*; do
             if [ -d "$d" ] && [ "$(basename "$d")" != "rand_test.fprint" ]; then
-              echo "Rsync $d/ -> $THEROCK_ROCM_ROOT/"
-              rsync -a --exclude=artifact_manifest.txt "$d/" "$THEROCK_ROCM_ROOT/"
-              rsynced=$((rsynced + 1))
+              echo "Merge $d/ -> $THEROCK_ROCM_ROOT/"
+              ( cd "$d" && tar --exclude=artifact_manifest.txt -cf - . ) \
+                | tar -C "$THEROCK_ROCM_ROOT" -xf -
+              merged=$((merged + 1))
             fi
           done
-          if [ "$rsynced" -eq 0 ]; then
+          if [ "$merged" -eq 0 ]; then
             echo "::warning::No rand_test artifact directory found under build/artifacts/"
             ls -lh build/artifacts/ 2>&1 | head -60 || true
           fi
