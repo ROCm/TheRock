@@ -23,8 +23,10 @@
 #   - workflow_dispatch with build_from_source=true: mode 2.
 #   - workflow_dispatch with source_run_id set: mode 1 pinned to that run.
 #   - workflow_dispatch with source_release set (and no source_run_id): mode 1
-#     against a release tag (default `dev-tarball`).
-#   - pull_request: mode 1 against the latest dev-tarball. PRs that need
+#     against that specific release version (e.g. `7.10.0a20251024`).
+#   - workflow_dispatch with both inputs empty: mode 1 against the latest
+#     nightly release (resolved automatically via S3).
+#   - pull_request: mode 1 against the latest nightly release. PRs that need
 #     mode 2 should be triggered manually via workflow_dispatch.
 #
 # Runner: `azure-linux-scale-rocm` runners do not have AMD GPUs (the simulator
@@ -56,9 +58,9 @@ on:
         type: string
         default: ""
       source_release:
-        description: "Mode 1: TheRock release tag to consume when source_run_id is empty (e.g. dev-tarball)."
+        description: "Mode 1: specific TheRock release version to consume when source_run_id is empty (e.g. 7.10.0a20251024). Leave empty to resolve the latest nightly release automatically."
         type: string
-        default: "dev-tarball"
+        default: ""
       build_from_source:
         description: "Mode 2: build from source instead of fetching artifacts (slow, ~4-5h)."
         type: boolean
@@ -114,8 +116,8 @@ jobs:
       - name: Resolve source artifacts
         id: resolve_source
         # Selects which source the artifacts come from.
-        # Priority: workflow_run.id > input source_run_id > input source_release.
-        # All three are mutually exclusive in practice.
+        # Priority: workflow_run.id > input source_run_id > input source_release
+        #           > latest nightly release (empty inputs / PR trigger).
         env:
           DISPATCH_RUN_ID: ${{ inputs.source_run_id }}
           DISPATCH_RELEASE: ${{ inputs.source_release }}
@@ -131,12 +133,19 @@ jobs:
             echo "source_kind=run_id" >> "$GITHUB_OUTPUT"
             echo "source_value=$DISPATCH_RUN_ID" >> "$GITHUB_OUTPUT"
             echo "Mode 1 source: dispatch run_id ($DISPATCH_RUN_ID)"
-          else
-            # Empty inputs (e.g. PR trigger) also fall here.
-            release="${DISPATCH_RELEASE:-dev-tarball}"
+          elif [ -n "$DISPATCH_RELEASE" ]; then
+            # User pinned a specific PEP 440 version (e.g. 7.10.0a20251024).
             echo "source_kind=release" >> "$GITHUB_OUTPUT"
-            echo "source_value=$release" >> "$GITHUB_OUTPUT"
-            echo "Mode 1 source: release ($release)"
+            echo "source_value=$DISPATCH_RELEASE" >> "$GITHUB_OUTPUT"
+            echo "Mode 1 source: release ($DISPATCH_RELEASE)"
+          else
+            # Empty inputs (PR trigger, or workflow_dispatch defaults) ->
+            # resolve the latest nightly release automatically. The literal
+            # string "dev-tarball" is NOT a valid --release value for
+            # install_rocm_from_artifacts.py; --latest-release is.
+            echo "source_kind=latest_release" >> "$GITHUB_OUTPUT"
+            echo "source_value=" >> "$GITHUB_OUTPUT"
+            echo "Mode 1 source: latest nightly release"
           fi
 
       - name: Install ROCm from artifacts
@@ -150,13 +159,35 @@ jobs:
           set -ex
           kind="${{ steps.resolve_source.outputs.source_kind }}"
           value="${{ steps.resolve_source.outputs.source_value }}"
-          source_flag="--run-id"
-          if [ "$kind" = "release" ]; then source_flag="--release"; fi
-          python build_tools/install_rocm_from_artifacts.py \
-            "$source_flag" "$value" \
-            --amdgpu-family "${AMDGPU_FAMILIES}" \
-            --output-dir "${THEROCK_ROCM_ROOT}" \
-            --rocjitsu --rand --tests
+          # POSIX-sh: dispatch to the right invocation per kind rather than
+          # building an arg array (default shell here is `sh -e`, not bash).
+          case "$kind" in
+            run_id)
+              python build_tools/install_rocm_from_artifacts.py \
+                --run-id "$value" \
+                --amdgpu-family "${AMDGPU_FAMILIES}" \
+                --output-dir "${THEROCK_ROCM_ROOT}" \
+                --rocjitsu --rand --tests
+              ;;
+            release)
+              python build_tools/install_rocm_from_artifacts.py \
+                --release "$value" \
+                --amdgpu-family "${AMDGPU_FAMILIES}" \
+                --output-dir "${THEROCK_ROCM_ROOT}" \
+                --rocjitsu --rand --tests
+              ;;
+            latest_release)
+              python build_tools/install_rocm_from_artifacts.py \
+                --latest-release \
+                --amdgpu-family "${AMDGPU_FAMILIES}" \
+                --output-dir "${THEROCK_ROCM_ROOT}" \
+                --rocjitsu --rand --tests
+              ;;
+            *)
+              echo "Unknown source_kind=$kind" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Skew guard - compare source SHAs
         # Best-effort warning: if the rocjitsu/simulator_runner sources on the
@@ -165,6 +196,11 @@ jobs:
         continue-on-error: true
         run: |
           set +e
+          # actions/checkout sets safe.directory only inside its own temp HOME,
+          # which is reaped before subsequent steps run. Re-add it here so
+          # `git rev-parse` / `git ls-tree` don't fail with "dubious ownership"
+          # when the checkout uid differs from the container's runtime uid.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
           echo "## Source vs artifact skew check"
           echo "Current HEAD: $(git rev-parse HEAD)"
           echo "Current rocm-systems submodule: $(git ls-tree HEAD rocm-systems | awk '{print $3}')"

@@ -45,11 +45,11 @@ helper assembles them into a working dist with a single command.
 ```bash
 # 1) Pull rocjitsu + rocRAND tests + base runtime layer into build/dist/rocm/.
 #    Pick ONE of:
-#      --run-id <CI_run_id>       (e.g. the run that produced the artifacts you want to test)
-#      --release dev-tarball       (latest dev tarball release)
-#      --release nightly-tarball   (latest nightly release)
+#      --run-id <CI_run_id>            (a specific TheRock CI run that produced the artifacts you want to test)
+#      --release <PEP-440-version>     (specific pinned version, e.g. 7.10.0a20251024)
+#      --latest-release                (resolve and use the latest nightly release from S3)
 python3 build_tools/install_rocm_from_artifacts.py \
-    --release dev-tarball \
+    --latest-release \
     --amdgpu-family gfx94X-dcgpu \
     --output-dir build/dist/rocm \
     --rocjitsu --rand --tests
@@ -236,10 +236,12 @@ Triggered by:
   paying for an LLVM rebuild.
 - **`workflow_dispatch`** with `source_run_id=<id>` pins to a specific TheRock
   CI run (useful for bisecting).
-- **`workflow_dispatch`** with `source_release=<tag>` (default `dev-tarball`)
-  consumes a release tag's artifacts.
+- **`workflow_dispatch`** with `source_release=<PEP-440-version>` pins to a
+  specific TheRock release (e.g. `7.10.0a20251024`). Leave this input empty
+  to fall back to the latest nightly release (resolved via S3).
 - **`pull_request`** when only the simulator framework files (or this
-  workflow itself) change. Defaults to the latest `dev-tarball`.
+  workflow itself) change. Defaults to the latest nightly release
+  (`--latest-release`).
 
 ### Mode 2: `build_and_test` (escape hatch, slow - ~4-5 h)
 
