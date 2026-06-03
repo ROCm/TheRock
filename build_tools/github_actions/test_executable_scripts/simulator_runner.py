@@ -8,7 +8,7 @@ Wraps an existing per-component test driver (e.g. ``test_rocrand.py``) so the
 tests execute against the rocjitsu simulator instead of a physical AMD GPU.
 
 The simulator runs entirely on CPU. We arrange three things before delegating
-to the existing test driver:
+to the existing test driver, then enforce two post-run guards:
 
 1. The rocjitsu KFD interposer is preloaded so the real HIP/HSA stack talks to
    the simulated driver.
@@ -16,7 +16,24 @@ to the existing test driver:
    that the interposer reads at process start.
 3. A ``GTEST_FILTER`` is composed from a preset (allow patterns) and a per-
    component skip-list (deny patterns), both defined in
-   ``simulator_runner_filters.yaml``.
+   ``simulator_runner_filters.yaml``. The preset also supplies a
+   ``ctest_regex`` to narrow which ctest binaries run, and a ``min_gtests``
+   lower bound for the post-run guards.
+
+Post-run guards (Rocjitsu_005 lesson):
+
+A. **No silent empty-set passes.** GoogleTest exits 0 when ``GTEST_FILTER``
+   matches nothing in a binary. ctest then counts the binary as Passed, and
+   the workflow shows green even though zero simulator coverage ran. After
+   the driver returns we scan
+   ``<bin_dir>/<ctest_dir>/Testing/Temporary/LastTest.log`` for the literal
+   ``did not match any test; no tests were run`` line in any binary that
+   matched ``ctest_regex`` (i.e. was in scope for this preset) and fail the
+   run if any are found.
+B. **Minimum coverage floor.** We sum the gtest counts reported by every
+   in-scope binary ("[==========] N tests from M test suites ran.") and fail
+   the run if the total is below the preset's ``min_gtests``. Set
+   ``SIMULATOR_RUNNER_SKIP_GUARDS=1`` to bypass A+B for debugging.
 
 Required env (set by the workflow):
 
@@ -38,8 +55,11 @@ Usage:
 import argparse
 import logging
 import os
+import re
 import shlex
+import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 try:
@@ -69,6 +89,38 @@ COMPONENT_DRIVERS = {
 # cycle under PDES while still cutting the 60-min step timeout we hit in
 # Rocjitsu_003.txt down to a clear per-test failure.
 DEFAULT_CTEST_TEST_TIMEOUT_SECONDS = 600
+
+# Default ctest -R regex when a preset does not declare one. ".*" matches
+# every ctest binary, preserving today's behavior for the `quick` and `full`
+# presets where we genuinely want every binary to run.
+DEFAULT_CTEST_REGEX = ".*"
+
+# Default min_gtests floor when a preset does not declare one. >=1 means
+# "at least one gtest must actually execute", which is the bare minimum
+# needed to catch the empty-set silent-pass failure mode.
+DEFAULT_MIN_GTESTS = 1
+
+# Sentinel substring GoogleTest prints when GTEST_FILTER matches nothing.
+# Stable across gtest versions (see googletest/src/gtest.cc).
+EMPTY_FILTER_SENTINEL = "did not match any test; no tests were run"
+
+
+@dataclass(frozen=True)
+class PresetConfig:
+    """Resolved view of one preset entry from simulator_runner_filters.yaml."""
+
+    allow: list[str]
+    skip: list[str]
+    ctest_regex: str
+    min_gtests: int
+
+
+@dataclass(frozen=True)
+class ComponentConfig:
+    """Resolved view of one component entry from simulator_runner_filters.yaml."""
+
+    ctest_dir: str
+    skip: list[str]
 
 
 def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
@@ -110,8 +162,13 @@ def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
     return paths
 
 
-def _load_filters(component: str, preset: str) -> tuple[list[str], list[str]]:
-    """Return (allow_patterns, skip_patterns) for ``component`` and ``preset``."""
+def _load_config(component: str, preset: str) -> tuple[ComponentConfig, PresetConfig]:
+    """Load and resolve component + preset config from the YAML file.
+
+    Supports both the modern mapping form (``preset: {allow: [...],
+    ctest_regex: ..., min_gtests: ...}``) and the legacy flat-list form
+    (``preset: [pattern1, pattern2]``) for back-compat with older entries.
+    """
     if not FILTERS_PATH.exists():
         raise FileNotFoundError(f"Simulator filter config not found: {FILTERS_PATH}")
     with FILTERS_PATH.open() as fh:
@@ -122,15 +179,45 @@ def _load_filters(component: str, preset: str) -> tuple[list[str], list[str]]:
             f"No entry for component '{component}' in {FILTERS_PATH}. "
             f"Known components: {sorted(cfg.keys())}"
         )
+
+    ctest_dir = comp_cfg.get("ctest_dir")
+    if not ctest_dir:
+        raise KeyError(
+            f"Component '{component}' in {FILTERS_PATH} is missing required "
+            f"key 'ctest_dir' (the dir under THEROCK_BIN_DIR holding "
+            f"CTestTestfile.cmake, e.g. 'rocRAND')."
+        )
+
     presets = comp_cfg.get("presets") or {}
     if preset not in presets:
         raise KeyError(
             f"Unknown preset '{preset}' for component '{component}'. "
             f"Known presets: {sorted(presets.keys())}"
         )
-    allow = list(presets[preset] or [])
+
     skip = list(comp_cfg.get("skip") or [])
-    return allow, skip
+
+    raw_preset = presets[preset]
+    if isinstance(raw_preset, list):
+        allow = list(raw_preset)
+        ctest_regex = DEFAULT_CTEST_REGEX
+        min_gtests = DEFAULT_MIN_GTESTS
+    elif isinstance(raw_preset, dict):
+        allow = list(raw_preset.get("allow") or [])
+        ctest_regex = raw_preset.get("ctest_regex") or DEFAULT_CTEST_REGEX
+        min_gtests = int(raw_preset.get("min_gtests") or DEFAULT_MIN_GTESTS)
+    else:
+        raise TypeError(
+            f"Preset '{preset}' for component '{component}' has unsupported "
+            f"type {type(raw_preset).__name__}; expected list or mapping."
+        )
+
+    return (
+        ComponentConfig(ctest_dir=ctest_dir, skip=skip),
+        PresetConfig(
+            allow=allow, skip=skip, ctest_regex=ctest_regex, min_gtests=min_gtests
+        ),
+    )
 
 
 def _compose_gtest_filter(allow: list[str], skip: list[str]) -> str:
@@ -146,7 +233,12 @@ def _compose_gtest_filter(allow: list[str], skip: list[str]) -> str:
     return f"{allow_part}:-{skip_part}"
 
 
-def _build_env(bin_dir: Path, gtest_filter: str) -> dict[str, str]:
+def _build_env(
+    bin_dir: Path,
+    gtest_filter: str,
+    ctest_dir: Path,
+    ctest_regex: str,
+) -> dict[str, str]:
     paths = _resolve_rocjitsu_paths(bin_dir)
     env = os.environ.copy()
     # Compose LD_PRELOAD so we don't drop an existing preload set by the user.
@@ -169,7 +261,200 @@ def _build_env(bin_dir: Path, gtest_filter: str) -> dict[str, str]:
     env["CTEST_TEST_TIMEOUT"] = env.get(
         "CTEST_TEST_TIMEOUT", str(DEFAULT_CTEST_TEST_TIMEOUT_SECONDS)
     )
+    # Knobs picked up by the wrapped driver (e.g. test_rocrand.py). All are
+    # opt-in: drivers fall back to their existing on-device behavior when the
+    # vars are unset, so the real-GPU lane is unaffected.
+    env["SIMULATOR_CTEST_DIR"] = str(ctest_dir)
+    env["SIMULATOR_CTEST_INCLUDE_REGEX"] = ctest_regex
+    # Guard 4: under the deterministic simulator, retrying a failing case
+    # cannot turn it green - it only hides real bugs. Tell the driver to drop
+    # --repeat. Drivers that don't honor this still work; the guard above is
+    # the primary defense.
+    env["SIMULATOR_NO_RETRY"] = env.get("SIMULATOR_NO_RETRY", "1")
     return env
+
+
+# --- Post-run guard parsing ---------------------------------------------------
+
+# Header line ctest writes per binary in Testing/Temporary/LastTest.log:
+#   "10/52 Testing: test_rocrand_host"
+# (The first number is the run order, second is the total. We only need the
+# binary name.)
+_TESTING_HEADER_RE = re.compile(r"^\s*(?:\d+/\d+)\s+Testing:\s+(?P<name>\S+)\s*$")
+
+# Footer-ish summary line GoogleTest prints when one or more tests actually
+# ran:
+#   "[==========] 3 tests from 2 test suites ran. (55 ms total)"
+# The "0 tests from 0 test suites ran" form ALSO matches this regex; the
+# guard differentiates by ALSO checking for EMPTY_FILTER_SENTINEL on the
+# same binary.
+_RAN_LINE_RE = re.compile(
+    r"^\[==========\]\s+(?P<n>\d+)\s+tests?\s+from\s+\d+\s+test\s+suites?\s+ran"
+)
+
+
+@dataclass(frozen=True)
+class BinaryResult:
+    """One ctest binary's run summary parsed from LastTest.log."""
+
+    name: str
+    gtests_run: int
+    empty_filter: bool
+
+
+def _parse_last_test_log(log_path: Path) -> list[BinaryResult]:
+    """Split LastTest.log into per-binary BinaryResult records.
+
+    Tolerates noise: anything between the "Testing: <name>" header and the
+    next header is attributed to <name>. Returns an empty list if the file
+    is missing or unreadable - callers decide whether that is fatal.
+    """
+    if not log_path.is_file():
+        return []
+    try:
+        text = log_path.read_text(errors="replace")
+    except OSError:
+        return []
+
+    results: list[BinaryResult] = []
+    current_name: str | None = None
+    current_gtests = 0
+    current_empty = False
+
+    def _flush() -> None:
+        if current_name is not None:
+            results.append(
+                BinaryResult(
+                    name=current_name,
+                    gtests_run=current_gtests,
+                    empty_filter=current_empty,
+                )
+            )
+
+    for line in text.splitlines():
+        header_m = _TESTING_HEADER_RE.match(line)
+        if header_m:
+            _flush()
+            current_name = header_m.group("name")
+            current_gtests = 0
+            current_empty = False
+            continue
+        if current_name is None:
+            continue
+        if EMPTY_FILTER_SENTINEL in line:
+            current_empty = True
+            continue
+        ran_m = _RAN_LINE_RE.match(line)
+        if ran_m:
+            # Multiple "ran." lines per binary should not happen (gtest_main
+            # prints it once); if it does, take the max so a retry doesn't
+            # zero us out.
+            current_gtests = max(current_gtests, int(ran_m.group("n")))
+            continue
+    _flush()
+    return results
+
+
+@dataclass(frozen=True)
+class GuardOutcome:
+    """Result of running the post-run guards over one component's LastTest.log."""
+
+    ok: bool
+    in_scope_count: int
+    in_scope_total_gtests: int
+    empty_filter_binaries: list[str]
+    messages: list[str]
+
+
+def _run_guards(
+    log_path: Path,
+    ctest_regex: str,
+    min_gtests: int,
+) -> GuardOutcome:
+    """Apply Guard A (no empty-set passes) and Guard B (min coverage floor).
+
+    Returns a GuardOutcome whose `messages` always includes a one-line human
+    summary suitable for the workflow step log; `ok` is False iff either
+    guard tripped.
+    """
+    results = _parse_last_test_log(log_path)
+    if not results:
+        return GuardOutcome(
+            ok=False,
+            in_scope_count=0,
+            in_scope_total_gtests=0,
+            empty_filter_binaries=[],
+            messages=[
+                f"::error::Could not parse ctest LastTest.log at {log_path}. "
+                f"This usually means ctest never ran any binaries; check the "
+                f"driver output above."
+            ],
+        )
+
+    try:
+        in_scope_re = re.compile(ctest_regex)
+    except re.error as e:
+        return GuardOutcome(
+            ok=False,
+            in_scope_count=0,
+            in_scope_total_gtests=0,
+            empty_filter_binaries=[],
+            messages=[
+                f"::error::Invalid ctest_regex {ctest_regex!r} in preset "
+                f"config: {e}"
+            ],
+        )
+
+    in_scope = [r for r in results if in_scope_re.search(r.name)]
+    in_scope_count = len(in_scope)
+    in_scope_total = sum(r.gtests_run for r in in_scope)
+    empty_in_scope = [r.name for r in in_scope if r.empty_filter]
+
+    messages: list[str] = []
+    ok = True
+
+    if in_scope_count == 0:
+        ok = False
+        messages.append(
+            f"::error::Preset's ctest_regex {ctest_regex!r} matched zero of "
+            f"the {len(results)} binaries ctest ran. Check the regex against "
+            f"the binary names in LastTest.log."
+        )
+
+    if empty_in_scope:
+        ok = False
+        messages.append(
+            f"::error::{len(empty_in_scope)} in-scope binary(ies) reported "
+            f"'{EMPTY_FILTER_SENTINEL}' - GTEST_FILTER matched nothing in "
+            f"them, so they passed without running any tests. Offenders: "
+            + ", ".join(empty_in_scope)
+        )
+
+    if in_scope_total < min_gtests:
+        ok = False
+        messages.append(
+            f"::error::Coverage floor not met: in-scope binaries ran "
+            f"{in_scope_total} gtest case(s), preset requires at least "
+            f"{min_gtests}. Either the filter is too narrow for this preset "
+            f"or the simulator skipped tests silently."
+        )
+
+    summary = (
+        f"[simulator_runner] guards: in_scope_binaries={in_scope_count}/"
+        f"{len(results)} gtests_ran={in_scope_total} "
+        f"min_required={min_gtests} empty_filter_in_scope={len(empty_in_scope)}"
+    )
+    messages.insert(0, summary)
+    return GuardOutcome(
+        ok=ok,
+        in_scope_count=in_scope_count,
+        in_scope_total_gtests=in_scope_total,
+        empty_filter_binaries=empty_in_scope,
+        messages=messages,
+    )
+
+
+# --- CLI / main ---------------------------------------------------------------
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -212,9 +497,15 @@ def main(argv: list[str] | None = None) -> int:
     bin_dir = Path(bin_dir_env).resolve()
 
     try:
-        allow, skip = _load_filters(args.component, args.filter_preset)
-        env = _build_env(bin_dir, _compose_gtest_filter(allow, skip))
-    except (FileNotFoundError, KeyError) as e:
+        comp_cfg, preset_cfg = _load_config(args.component, args.filter_preset)
+        ctest_dir = bin_dir / comp_cfg.ctest_dir
+        env = _build_env(
+            bin_dir,
+            _compose_gtest_filter(preset_cfg.allow, preset_cfg.skip),
+            ctest_dir,
+            preset_cfg.ctest_regex,
+        )
+    except (FileNotFoundError, KeyError, TypeError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     gtest_filter = env["GTEST_FILTER"]
@@ -234,16 +525,51 @@ def main(argv: list[str] | None = None) -> int:
     logging.info("[simulator_runner] RJ_SCHEMA=%s", env["RJ_SCHEMA"])
     logging.info("[simulator_runner] GTEST_FILTER=%s", gtest_filter)
     logging.info("[simulator_runner] CTEST_TEST_TIMEOUT=%s", env["CTEST_TEST_TIMEOUT"])
+    logging.info(
+        "[simulator_runner] SIMULATOR_CTEST_DIR=%s", env["SIMULATOR_CTEST_DIR"]
+    )
+    logging.info(
+        "[simulator_runner] SIMULATOR_CTEST_INCLUDE_REGEX=%s",
+        env["SIMULATOR_CTEST_INCLUDE_REGEX"],
+    )
+    logging.info("[simulator_runner] SIMULATOR_NO_RETRY=%s", env["SIMULATOR_NO_RETRY"])
+    logging.info(
+        "[simulator_runner] min_gtests=%d (preset=%s)",
+        preset_cfg.min_gtests,
+        args.filter_preset,
+    )
     logging.info("[simulator_runner] exec: %s", shlex.join(cmd))
 
-    # execvpe replaces this process so the driver inherits PID 1 in container
-    # use cases and signals propagate cleanly.
     try:
-        os.execvpe(cmd[0], cmd, env)
+        completed = subprocess.run(cmd, env=env, check=False)
     except OSError as e:
         print(f"ERROR: failed to exec driver: {e}", file=sys.stderr)
         return 2
-    return 0  # unreachable
+    driver_rc = completed.returncode
+    logging.info("[simulator_runner] driver exited with rc=%d", driver_rc)
+
+    if os.environ.get("SIMULATOR_RUNNER_SKIP_GUARDS") == "1":
+        logging.info(
+            "[simulator_runner] SIMULATOR_RUNNER_SKIP_GUARDS=1; skipping "
+            "post-run guards. Returning driver rc=%d.",
+            driver_rc,
+        )
+        return driver_rc
+
+    log_path = ctest_dir / "Testing" / "Temporary" / "LastTest.log"
+    guard = _run_guards(log_path, preset_cfg.ctest_regex, preset_cfg.min_gtests)
+    for msg in guard.messages:
+        # Emit to stderr so ::error:: lines surface in the GitHub Actions
+        # step annotation feed even when stdout is captured/redirected.
+        print(msg, file=sys.stderr)
+
+    if driver_rc != 0:
+        # A real test failure should win over a guard failure - surface it
+        # as-is so on-call sees the actual test error first.
+        return driver_rc
+    if not guard.ok:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

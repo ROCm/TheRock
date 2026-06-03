@@ -18,14 +18,14 @@ exist for nightly use.
 
 ## What lives where
 
-| Path                                                                               | Purpose                                                                                                       |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `build_tools/github_actions/test_executable_scripts/simulator_runner.py`           | Wrapper that preloads the rocjitsu interposer and delegates to the existing per-component test driver.        |
-| `build_tools/github_actions/test_executable_scripts/simulator_runner_filters.yaml` | GTest allow/skip patterns per component and preset.                                                           |
-| `build_tools/github_actions/fetch_test_configurations.py`                          | CI matrix; entry `rocrand-sim` plugs the runner into the standard test pipeline.                              |
+| Path                                                                               | Purpose                                                                                                                                                   |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_tools/github_actions/test_executable_scripts/simulator_runner.py`           | Wrapper that preloads the rocjitsu interposer and delegates to the existing per-component test driver.                                                    |
+| `build_tools/github_actions/test_executable_scripts/simulator_runner_filters.yaml` | GTest allow/skip patterns per component and preset.                                                                                                       |
+| `build_tools/github_actions/fetch_test_configurations.py`                          | CI matrix; entry `rocrand-sim` plugs the runner into the standard test pipeline.                                                                          |
 | `.github/workflows/test-simulator.yml`                                             | Dual-mode simulator test workflow: (1) consume prebuilt artifacts from a Multi-Arch Build (Linux) run, or (2) build from source. gfx94X-dcgpu only today. |
-| `build_tools/install_rocm_from_artifacts.py`                                       | `--rocjitsu` flag (added upstream in #5106) pulls the rocjitsu artifact into a dist for downstream test jobs. |
-| `emulation/CMakeLists.txt` + `emulation/artifact-rocjitsu.toml`                    | Where the rocjitsu artifact is built and packaged in TheRock.                                                 |
+| `build_tools/install_rocm_from_artifacts.py`                                       | `--rocjitsu` flag (added upstream in #5106) pulls the rocjitsu artifact into a dist for downstream test jobs.                                             |
+| `emulation/CMakeLists.txt` + `emulation/artifact-rocjitsu.toml`                    | Where the rocjitsu artifact is built and packaged in TheRock.                                                                                             |
 
 ## Running locally
 
@@ -111,9 +111,11 @@ The wrapper composes (with `<root> = Path(THEROCK_BIN_DIR).parent`):
 - `HSA_ENABLE_SDMA=1`
 - `GTEST_FILTER` from the chosen preset and the per-component skip list.
 
-It then `execvpe`s into the existing per-component driver (e.g.
+It then `subprocess.run`s the existing per-component driver (e.g.
 `test_rocrand.py`). The same driver is used by the real-GPU CI lane, so
 behavioral differences are exclusively the result of running on the simulator.
+After the driver returns, the wrapper runs the post-run guards (see below)
+and returns a non-zero exit code if the driver failed *or* a guard tripped.
 
 ## Filter presets
 
@@ -133,6 +135,58 @@ behavioral differences are exclusively the result of running on the simulator.
 Each component has a `skip` list of gtest patterns. Every entry should carry a
 short comment explaining why the test cannot pass under the simulator yet.
 
+### Preset schema
+
+Each preset is a mapping with three fields (a flat list of patterns is also
+accepted as a back-compat shorthand for `allow:` only):
+
+| Field         | Type        | Default | Purpose                                                                                                                                                                                          |
+| ------------- | ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `allow`       | list[str]   | -       | gtest filter globs joined with `:` to build the positive half of `GTEST_FILTER`.                                                                                                                 |
+| `ctest_regex` | str (regex) | `.*`    | `ctest -R <regex>` narrowing: only ctest binaries whose name matches are run. The same regex defines which binaries count as "in scope" for the post-run guards.                                 |
+| `min_gtests`  | int         | `1`     | Minimum total number of gtest cases the in-scope binaries must actually execute. The post-run guard fails the workflow step if the observed total is lower (catches over-narrow filter strings). |
+
+In addition, each component declares a top-level `ctest_dir:` (e.g.
+`rocRAND`) pointing to the directory under `THEROCK_BIN_DIR` that holds
+`CTestTestfile.cmake`. The wrapper uses it to locate
+`Testing/Temporary/LastTest.log` for the post-run guards.
+
+### Post-run guards
+
+`simulator_runner.py` parses `<ctest_dir>/Testing/Temporary/LastTest.log`
+after the driver returns and enforces two guards against silent green runs:
+
+1. **No empty-set passes.** GoogleTest exits 0 (and ctest reports `Passed`)
+   when `GTEST_FILTER` matches no tests inside a binary; it prints
+   `WARNING: filter "..." did not match any test; no tests were run`. We
+   grep `LastTest.log` for that sentinel and fail the step if **any** binary
+   matching `ctest_regex` produced it. Without this, a typo or stale filter
+   entry would produce a green CI run with zero simulator coverage (the
+   exact failure mode `Rocjitsu_005` documented).
+1. **Minimum coverage floor.** We sum the gtest counts reported by every
+   in-scope binary (`[==========] N tests from M test suites ran.`) and fail
+   if the total is below the preset's `min_gtests`.
+
+Both guards run after the driver finishes, regardless of whether the driver
+succeeded. A driver failure always wins (its exit code is propagated as-is);
+a guard failure produces a non-zero exit only when the driver succeeded.
+Bypass the guards with `SIMULATOR_RUNNER_SKIP_GUARDS=1` if you are bisecting
+the wrapper itself.
+
+### Driver-side knobs (`SIMULATOR_*` env vars)
+
+`simulator_runner.py` exports the following env vars consumed by the wrapped
+per-component driver. All are no-ops on the real-GPU CI lane where the vars
+are unset, so adding them does not change on-device behavior.
+
+| Env var                         | Set by       | Effect in `test_rocrand.py`                                                                      |
+| ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
+| `SIMULATOR_CTEST_DIR`           | wrapper      | Overrides the historical `<THEROCK_BIN_DIR>/rocRAND` ctest test-dir.                             |
+| `SIMULATOR_CTEST_INCLUDE_REGEX` | wrapper      | Adds `ctest -R <regex>` when non-empty and not `.*`.                                             |
+| `SIMULATOR_NO_RETRY`            | wrapper (=1) | Drops `ctest --repeat until-pass:3`. Retries on the deterministic simulator only hide real bugs. |
+
+### Per-test wall-clock cap
+
 ### Per-test wall-clock cap
 
 `simulator_runner.py` exports `CTEST_TEST_TIMEOUT=600` (10 minutes per ctest
@@ -144,14 +198,22 @@ before invoking `simulator_runner.py`.
 ## Adding a new component
 
 1. Add a driver (or reuse the existing one) under
-   `build_tools/github_actions/test_executable_scripts/test_<comp>.py`.
+   `build_tools/github_actions/test_executable_scripts/test_<comp>.py`. Have it
+   honor `SIMULATOR_CTEST_DIR`, `SIMULATOR_CTEST_INCLUDE_REGEX`, and
+   `SIMULATOR_NO_RETRY` if you want the post-run guards to be effective.
 1. Map the component in `COMPONENT_DRIVERS` inside `simulator_runner.py`.
-1. Add a `<comp>:` entry with `presets:` and `skip:` to
-   `simulator_runner_filters.yaml`.
+1. Add a `<comp>:` entry to `simulator_runner_filters.yaml` with:
+   - `ctest_dir:` pointing at the directory under `THEROCK_BIN_DIR` that
+     holds `CTestTestfile.cmake` for this component.
+   - `presets:` with `basic`/`quick`/`full` entries (each using the
+     `allow:` + `ctest_regex:` + `min_gtests:` schema above).
+   - `skip:` for the component-wide deny list.
 1. Add a `<comp>-sim` entry in `fetch_test_configurations.py` that points at
    `simulator_runner.py --component <comp> --filter-preset basic`.
-1. Verify locally with the steps above, then add the matrix entry to whatever
-   workflow you want to wire it into (start by extending
+1. Verify locally with the steps above. Confirm the post-run guard summary
+   line (`[simulator_runner] guards: in_scope_binaries=... gtests_ran=...`)
+   reports the gtest count you expected for the preset, then add the matrix
+   entry to whatever workflow you want to wire it into (start by extending
    `test-simulator.yml`).
 
 ## CI
@@ -192,7 +254,12 @@ Triggered only by **`workflow_dispatch`** with `build_from_source=true`.
 
 - The `Run rocrand under rocjitsu simulator` step is
   `continue-on-error: true` until the pass rate stabilizes, so a flaky test
-  does not block the workflow's success signal.
+  does not block the workflow's success signal. The post-run guards in
+  `simulator_runner.py` (see [Post-run guards](#post-run-guards) above)
+  still cause that step's outcome to flip to `failure` when empty-set silent
+  passes occur, so the `Report` step's `Simulator test result:` line
+  reflects guard failures even while `continue-on-error` keeps the job
+  green.
 - Both modes upload `test-logs/` (ctest output + any `rocjitsu_*.log`) as a
   workflow artifact for offline triage.
 - Mode 1 also includes a `Skew guard` step that logs the consumed artifact

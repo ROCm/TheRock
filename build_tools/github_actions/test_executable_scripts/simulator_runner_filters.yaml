@@ -4,8 +4,30 @@
 # Filter and skip-list config for simulator_runner.py.
 #
 # Per component:
-#   presets/<name>  Allow-list of gtest filter patterns. Joined with ':'.
+#   ctest_dir       Directory under THEROCK_BIN_DIR that contains the
+#                   component's CTestTestfile.cmake (e.g. "rocRAND" for
+#                   build/dist/rocm/bin/rocRAND). Used to locate
+#                   Testing/Temporary/LastTest.log for post-run guards.
+#   presets/<name>  Either a flat list of gtest filter globs (back-compat
+#                   shorthand for `allow:` only) or a mapping with:
+#                     allow:        list of gtest filter globs (joined with ':')
+#                     ctest_regex:  ctest -R regex narrowing which binaries
+#                                   run under this preset. Default: ".*".
+#                                   simulator_runner.py also uses this regex
+#                                   to decide which binaries are "in scope"
+#                                   for the post-run guards.
+#                     min_gtests:   lower bound on the total number of gtest
+#                                   cases the in-scope binaries must actually
+#                                   execute. The post-run guard fails if the
+#                                   sum across in-scope binaries is below this
+#                                   value. Default: 1.
 #   skip            Deny patterns appended after '-' in GTEST_FILTER.
+#
+# The guards protect against the silent-pass failure mode documented in
+# Rocjitsu_005: GoogleTest exits 0 when GTEST_FILTER matches nothing in a
+# binary, so a typo or stale filter entry would otherwise produce a green CI
+# run that exercised zero simulator coverage. See
+# docs/development/simulator_testing.md for the full guard contract.
 #
 # Each skip entry should carry a brief comment explaining why the test cannot
 # run under the simulator yet. As coverage expands the list should shrink.
@@ -16,6 +38,7 @@
 #     update one, mirror the change in the other.
 
 rocrand:
+  ctest_dir: rocRAND
   presets:
     # MVP starter set for PR-1: just enough to prove the framework end-to-end
     # on the simulator without paying for parameterized RNG sweeps. Picked
@@ -29,13 +52,26 @@ rocrand:
     # cleanly when librocjitsu_kmd.so is in LD_PRELOAD. The third runs ONE
     # create/destroy cycle for PHILOX4_32_10 (the lightest RNG in rng_types,
     # index 0) to actually exercise the simulator's GPU init path.
+    #
+    # ctest_regex narrows ctest to test_rocrand_basic only - the three gtests
+    # below all live in that one binary. Without it, ctest would run all 52
+    # rocRAND binaries, 51 of which would match zero gtests and silently
+    # "pass" (see Rocjitsu_005's LastTest.log).
     basic:
-      - "rocrand_basic_tests.rocrand_get_version_test"
-      - "rocrand_basic_tests.rocrand_generator_test"
-      - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/0"
+      allow:
+        - "rocrand_basic_tests.rocrand_get_version_test"
+        - "rocrand_basic_tests.rocrand_generator_test"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/0"
+      ctest_regex: "^test_rocrand_basic$"
+      min_gtests: 3
     # Mirror of QUICK_TESTS in test_rocrand.py. Promoted in PR-2 once `basic`
-    # is stably green for a few runs.
+    # is stably green for a few runs. ctest_regex left unset (defaults to ".*")
+    # so all 52 rocRAND binaries run; the per-binary filter then selects only
+    # quick gtests within each. The min_gtests floor only requires that >=1
+    # gtest actually executed somewhere - tighten this once `quick` is stable.
     quick:
+      min_gtests: 1
+      allow:
       - "*basic_tests*"
       - "*config_dispatch_tests.*"
       - "*cpp_utils_tests.*"
@@ -104,6 +140,8 @@ rocrand:
     # Run the entire rocRAND ctest set. Reserved for nightly once `quick` is
     # green and the skip-list has matured.
     full:
+      min_gtests: 1
+      allow:
       - "*"
   skip:
     # HIP graphs are not modeled by the rocjitsu interposer yet.
@@ -121,13 +159,22 @@ rocrand:
 
 # Placeholder for the PR-3 hipRAND integration. The hipRAND ctest suite is
 # small enough that the basic preset reuses everything; presets are kept
-# parallel to rocrand for consistency.
+# parallel to rocrand for consistency. ctest_dir / ctest_regex / min_gtests
+# values are best-guess placeholders that PR-3 must validate against an
+# actual hipRAND artifact layout before enabling this component in CI.
 hiprand:
+  ctest_dir: hipRAND
   presets:
     basic:
+      min_gtests: 1
+      allow:
       - "*api_tests*"
     quick:
+      min_gtests: 1
+      allow:
       - "*"
     full:
+      min_gtests: 1
+      allow:
       - "*"
   skip: []
