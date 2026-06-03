@@ -747,23 +747,30 @@ if(BUILD_TESTING)
       # The source of truth for the CI script is the one in amd-staging.
       set(TEST_ROCGDB_URL "https://raw.githubusercontent.com/ROCm/ROCgdb/amd-staging/.github/scripts/test_rocgdb.py")
 
+      # Use curl rather than file(DOWNLOAD): file(DOWNLOAD)'s STATUS is the
+      # libcurl transfer code, so HTTP 404/500 responses are reported as
+      # success and the error-page body is written to disk. curl --fail
+      # returns non-zero on HTTP >= 400, and verifies TLS by default.
+      find_program(CURL_EXECUTABLE curl REQUIRED)
       set(download_success FALSE)
       foreach(attempt RANGE 1 3)
         message(STATUS "Attempting to download test_rocgdb.py (attempt ${attempt}/3)")
-        file(DOWNLOAD
-          "${TEST_ROCGDB_URL}"
-          "${TEST_ROCGDB_SCRIPT}"
-          STATUS download_status
-          TIMEOUT 60
+        execute_process(
+          COMMAND "${CURL_EXECUTABLE}"
+            --fail --silent --show-error --location
+            --max-time 60
+            --output "${TEST_ROCGDB_SCRIPT}"
+            "${TEST_ROCGDB_URL}"
+          RESULT_VARIABLE curl_result
+          ERROR_VARIABLE  curl_error
         )
-        list(GET download_status 0 status_code)
-        if(status_code EQUAL 0)
+        if(curl_result EQUAL 0)
           set(download_success TRUE)
           message(STATUS "Successfully downloaded test_rocgdb.py to ${TEST_ROCGDB_SCRIPT}")
           break()
         else()
-          list(GET download_status 1 error_message)
-          message(WARNING "Download attempt ${attempt} failed: ${error_message}")
+          message(WARNING "Download attempt ${attempt} failed: ${curl_error}")
+          file(REMOVE "${TEST_ROCGDB_SCRIPT}")
         endif()
       endforeach()
 
