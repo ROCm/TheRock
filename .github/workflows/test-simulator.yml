@@ -1,52 +1,90 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 #
-# Build TheRock with the rocjitsu simulator enabled, then run a real ROCm
-# application (rocRAND today) end-to-end against the simulated AMD GPU.
+# Run a real ROCm application (rocRAND today) end-to-end against the rocjitsu
+# CPU-only simulator instead of physical AMD GPU hardware.
 #
-# Phase 1 (PR-1) keeps the scope minimal:
-#   - One job, builds + tests in the same workflow run.
-#   - Targets gfx94X-dcgpu only (rocjitsu has CDNA3/CDNA4 topologies today).
-#   - Runs the rocrand `basic` preset (see simulator_runner_filters.yaml).
-#   - Soft-fail on the test step until the pass rate stabilizes.
+# This workflow has TWO execution modes:
 #
-# Note on runner choice:
-#   The plan called for `ubuntu-latest`, but a full TheRock build requires the
-#   manylinux build container and a runner with substantial CPU/disk. We use
-#   the same `azure-linux-scale-rocm` runner pool as build_portable_linux_artifacts.yml
-#   - those runners do not have AMD GPUs, so the "no physical GPU" intent of
-#   the plan is preserved (the simulator runs entirely on CPU).
+#   1) Consume-artifacts mode (default, fast: ~10-15min):
+#      Downloads `--rocjitsu` + `--rand --tests` artifacts already produced by
+#      the `compiler-runtime` and `math-libs` stages of a prior TheRock build
+#      and runs the simulator against them. No LLVM rebuild.
+#
+#   2) Build-from-source mode (slow: ~4-5h):
+#      Falls back to the original behavior - fetch sources, configure, build
+#      `therock-artifacts therock-dist` from scratch. Use this when a PR
+#      changes rocjitsu C++ source or compiler/amd-llvm code that needs to be
+#      tested as-is (the prebuilt artifacts in mode 1 would be stale).
+#
+# Trigger -> mode selection:
+#   - workflow_run on "Multi-Arch Build (Linux)" completed: mode 1, consumes
+#     that workflow run's artifacts via github.event.workflow_run.id.
+#   - workflow_dispatch with build_from_source=true: mode 2.
+#   - workflow_dispatch with source_run_id set: mode 1 pinned to that run.
+#   - workflow_dispatch with source_release set (and no source_run_id): mode 1
+#     against a release tag (default `dev-tarball`).
+#   - pull_request: mode 1 against the latest dev-tarball. PRs that need
+#     mode 2 should be triggered manually via workflow_dispatch.
+#
+# Runner: `azure-linux-scale-rocm` runners do not have AMD GPUs (the simulator
+# runs entirely on CPU). Mode 1 still uses the manylinux build container only
+# so the python toolchain in install_rocm_from_artifacts.py has a consistent
+# environment.
 
 name: Test Simulator
 
 on:
+  # Mode 1 (automatic): triggered when the upstream multi-arch build finishes,
+  # so we consume artifacts from that exact run.
+  workflow_run:
+    workflows: ["Multi-Arch Build (Linux)"]
+    types: [completed]
+
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: "GPU family for rocrand test artifacts (rocjitsu currently supports gfx94X-dcgpu)"
+        type: string
+        default: gfx94X-dcgpu
+      filter_preset:
+        description: "simulator_runner preset (basic | quick | full)"
+        type: string
+        default: basic
+      source_run_id:
+        description: "Mode 1: TheRock CI run ID whose artifacts to consume. Empty -> use source_release."
+        type: string
+        default: ""
+      source_release:
+        description: "Mode 1: TheRock release tag to consume when source_run_id is empty (e.g. dev-tarball)."
+        type: string
+        default: "dev-tarball"
+      build_from_source:
+        description: "Mode 2: build from source instead of fetching artifacts (slow, ~4-5h)."
+        type: boolean
+        default: false
+
   pull_request:
     paths:
-      - "compiler/amd-llvm/**"
-      - "rocm-systems/emulation/rocjitsu/**"
-      - "emulation/**"
       - "build_tools/github_actions/test_executable_scripts/simulator_runner.py"
       - "build_tools/github_actions/test_executable_scripts/simulator_runner_filters.yaml"
       - "build_tools/github_actions/test_executable_scripts/test_rocrand.py"
       - ".github/workflows/test-simulator.yml"
-  workflow_dispatch:
-    inputs:
-      amdgpu_families:
-        type: string
-        default: gfx94X-dcgpu
-      filter_preset:
-        description: 'simulator_runner preset (basic | quick | full)'
-        type: string
-        default: basic
+      - "patches/amd-mainline/rocm-systems/**"
+      - "emulation/**"
 
 permissions:
   contents: read
 
 jobs:
-  build_and_test_simulator:
-    name: Build + rocrand-sim (${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+  # ============================================================================
+  # MODE 1: Consume pre-built artifacts and run the simulator (fast).
+  # ============================================================================
+  consume_and_test:
+    name: rocrand-sim (consume artifacts, ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    if: ${{ !inputs.build_from_source }}
     runs-on: azure-linux-scale-rocm
-    timeout-minutes: 720 # 12 hour cap, matches build_portable_linux_artifacts.yml
+    timeout-minutes: 90
     permissions:
       id-token: write
     container:
@@ -54,20 +92,14 @@ jobs:
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
-      CACHE_DIR: ${{ github.workspace }}/.container-cache
-      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
       TEATIME_FORCE_INTERACTIVE: 0
-      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
-      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       # Convention used by all per-component test drivers (test_runner.py,
-      # test_rocdecode.py, ...): THEROCK_BIN_DIR points at the `bin/` subdir of
-      # the populated ROCm install. Drivers derive the ROCm root via
+      # test_rocdecode.py, ...): THEROCK_BIN_DIR points at the `bin/` subdir
+      # of the populated ROCm install. Drivers derive the ROCm root via
       # `Path(THEROCK_BIN_DIR).parent`, and simulator_runner.py follows the
-      # same rule when locating librocjitsu_kmd.so and the rocjitsu config /
-      # schema files.
+      # same rule to locate librocjitsu_kmd.so and rocjitsu config/schema.
       THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm/bin"
-      # Root of the ROCm install (for the Verify and Extract steps below).
       THEROCK_ROCM_ROOT: "${{ github.workspace }}/build/dist/rocm"
     steps:
       - name: Checkout Repository
@@ -77,6 +109,173 @@ jobs:
         run: |
           pip install -r requirements.txt
           # simulator_runner.py reads simulator_runner_filters.yaml.
+          pip install pyyaml
+
+      - name: Resolve source artifacts
+        id: resolve_source
+        # Selects which source the artifacts come from.
+        # Priority: workflow_run.id > input source_run_id > input source_release.
+        # All three are mutually exclusive in practice.
+        env:
+          DISPATCH_RUN_ID: ${{ inputs.source_run_id }}
+          DISPATCH_RELEASE: ${{ inputs.source_release }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -ex
+          if [ -n "$WORKFLOW_RUN_ID" ]; then
+            echo "source_kind=run_id" >> "$GITHUB_OUTPUT"
+            echo "source_value=$WORKFLOW_RUN_ID" >> "$GITHUB_OUTPUT"
+            echo "Mode 1 source: workflow_run ($WORKFLOW_RUN_ID)"
+          elif [ -n "$DISPATCH_RUN_ID" ]; then
+            echo "source_kind=run_id" >> "$GITHUB_OUTPUT"
+            echo "source_value=$DISPATCH_RUN_ID" >> "$GITHUB_OUTPUT"
+            echo "Mode 1 source: dispatch run_id ($DISPATCH_RUN_ID)"
+          else
+            # Empty inputs (e.g. PR trigger) also fall here.
+            release="${DISPATCH_RELEASE:-dev-tarball}"
+            echo "source_kind=release" >> "$GITHUB_OUTPUT"
+            echo "source_value=$release" >> "$GITHUB_OUTPUT"
+            echo "Mode 1 source: release ($release)"
+          fi
+
+      - name: Install ROCm from artifacts
+        # Lays out everything the simulator needs under $THEROCK_ROCM_ROOT:
+        #   - lib/librocjitsu_kmd.so + share/rocjitsu/**       (from --rocjitsu)
+        #   - bin/rocRAND/CTestTestfile.cmake + test_*         (from --rand --tests)
+        #   - lib/libamdhip64.so*, libhsa-runtime64.so*, libamd_comgr.so*,
+        #     llvm/amdgcn/bitcode/*.bc                         (from the base layer)
+        # See [build_tools/install_rocm_from_artifacts.py](build_tools/install_rocm_from_artifacts.py).
+        run: |
+          set -ex
+          kind="${{ steps.resolve_source.outputs.source_kind }}"
+          value="${{ steps.resolve_source.outputs.source_value }}"
+          source_flag="--run-id"
+          if [ "$kind" = "release" ]; then source_flag="--release"; fi
+          python build_tools/install_rocm_from_artifacts.py \
+            "$source_flag" "$value" \
+            --amdgpu-family "${AMDGPU_FAMILIES}" \
+            --output-dir "${THEROCK_ROCM_ROOT}" \
+            --rocjitsu --rand --tests
+
+      - name: Skew guard - compare source SHAs
+        # Best-effort warning: if the rocjitsu/simulator_runner sources on the
+        # current checkout differ from the SHAs baked into the consumed
+        # artifacts, the test result may not reflect HEAD. Doesn't fail the run.
+        continue-on-error: true
+        run: |
+          set +e
+          echo "## Source vs artifact skew check"
+          echo "Current HEAD: $(git rev-parse HEAD)"
+          echo "Current rocm-systems submodule: $(git ls-tree HEAD rocm-systems | awk '{print $3}')"
+          manifest_dirs=$(find "${THEROCK_ROCM_ROOT}" -maxdepth 3 -name 'artifact_manifest.txt' 2>/dev/null | head -5)
+          if [ -n "$manifest_dirs" ]; then
+            echo ""
+            echo "Consumed artifact manifests:"
+            for m in $manifest_dirs; do
+              echo "--- $m ---"
+              head -20 "$m" 2>/dev/null || true
+            done
+          else
+            echo "(no artifact_manifest.txt found under ${THEROCK_ROCM_ROOT})"
+          fi
+
+      - name: Verify rocjitsu interposer + ctest layout are present
+        run: |
+          set -ex
+          ls -lh "$THEROCK_ROCM_ROOT/lib/librocjitsu_kmd.so"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/schemas/simulation_config.fbs"
+          ls -lh "$THEROCK_BIN_DIR/rocRAND/CTestTestfile.cmake"
+
+      - name: Run rocrand under rocjitsu simulator
+        id: rocrand_sim
+        continue-on-error: true
+        timeout-minutes: 60
+        env:
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          TEST_COMPONENT: rocrand
+          TEST_TYPE: full
+        run: |
+          python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
+            --component rocrand \
+            --filter-preset "${{ inputs.filter_preset || 'basic' }}"
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## Simulator test result: ${{ steps.rocrand_sim.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Mode: consume artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Source: ${{ steps.resolve_source.outputs.source_kind }}=${{ steps.resolve_source.outputs.source_value }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
+          if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocjitsu install" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_ROCM_ROOT/share/rocjitsu" -maxdepth 3 -type f >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -d "$THEROCK_BIN_DIR/rocRAND" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocRAND test layout (first 30 entries)" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_BIN_DIR/rocRAND" -maxdepth 2 | head -30 >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Collect ctest + rocjitsu logs
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          mkdir -p test-logs
+          if [ -d "$THEROCK_BIN_DIR/rocRAND/Testing" ]; then
+            cp -r "$THEROCK_BIN_DIR/rocRAND/Testing" test-logs/ctest-Testing
+          fi
+          find . -maxdepth 4 -name 'rocjitsu_*.log' -exec cp {} test-logs/ \; 2>/dev/null
+          find "$THEROCK_ROCM_ROOT" -maxdepth 6 -name 'rocjitsu_*.log' \
+            -exec cp {} test-logs/ \; 2>/dev/null
+          ls -lh test-logs/ 2>&1 | head -40 || true
+
+      - name: Upload logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-simulator-logs-consume-${{ github.run_attempt }}
+          path: test-logs/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ============================================================================
+  # MODE 2: Build TheRock from source (escape hatch for PRs that change
+  # rocjitsu C++ source or compiler internals). Triggered only via
+  # workflow_dispatch with build_from_source=true.
+  # ============================================================================
+  build_and_test:
+    name: rocrand-sim (build from source, ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_from_source }}
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 720
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEATIME_FORCE_INTERACTIVE: 0
+      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm/bin"
+      THEROCK_ROCM_ROOT: "${{ github.workspace }}/build/dist/rocm"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
           pip install pyyaml
 
       - name: Adjust git config
@@ -102,7 +301,7 @@ jobs:
 
       - name: Configure Projects
         env:
-          amdgpu_families: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ADHOCBUILD
           extra_cmake_options: >-
             -DTHEROCK_ENABLE_EMULATION=ON
@@ -112,28 +311,23 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
-      - name: Build therock-dist and therock-archives
+      - name: Build therock-artifacts and therock-dist
+        # Upstream removed `therock-archives` (#4771); the per-component
+        # directories under build/artifacts/ are produced by `therock-artifacts`
+        # and flattened into build/dist/rocm/ by `therock-dist`. The legacy
+        # tarball outputs are no longer the contract.
         run: |
-          cmake --build build --target therock-dist therock-archives -- -k 0
+          cmake --build build --target therock-artifacts therock-dist -- -k 0
 
       - name: Ensure rocRAND test artifact is materialized in dist
-        # therock-dist is supposed to flatten every artifact slice's _test
-        # component into build/dist/rocm/ alongside _lib/_run/_dev/_doc/_dbg
-        # (see cmake/therock_artifacts.cmake, _flatten_command_list).
-        # Historically (Rocjitsu_002/003) the dist only contained _lib/_run
-        # and bin/rocRAND/CTestTestfile.cmake was missing, so we merge the
-        # per-component test artifact directory into the dist as a no-op
-        # safety net. If the flatten worked, this is a no-op. If it didn't,
-        # this gives us the same outcome the old tar-extract step did.
-        #
-        # We use `tar | tar` instead of rsync because the manylinux build
-        # container does not ship rsync (Rocjitsu_004: "rsync: command not
-        # found"), whereas tar is universally available.
+        # Safety net: therock-dist *should* flatten _test for rand into
+        # build/dist/rocm/bin/rocRAND, but if the flatten pass missed it (or
+        # if the local cmake settings differ from CI's), merge the per-comp
+        # artifact directory into the dist with a tar|tar pipe. rsync is not
+        # available in the manylinux container.
         run: |
           set -ex
           shopt -s nullglob
-          # New layout: build/artifacts/rand_test[/ or _<arch>/] is a tree
-          # rooted at the ROCm install prefix (e.g. bin/rocRAND/..., bin/test_*).
           merged=0
           for d in build/artifacts/rand_test build/artifacts/rand_test_*; do
             if [ -d "$d" ] && [ "$(basename "$d")" != "rand_test.fprint" ]; then
@@ -161,8 +355,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 60
         env:
-          # Mirrors the matrix entry in fetch_test_configurations.py.
-          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_COMPONENT: rocrand
           TEST_TYPE: full
         run: |
@@ -176,6 +369,7 @@ jobs:
         run: |
           echo "## Simulator test result: ${{ steps.rocrand_sim.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Mode: build from source" >> $GITHUB_STEP_SUMMARY
           echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
           echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
           if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
@@ -191,10 +385,6 @@ jobs:
 
       - name: Collect ctest + rocjitsu logs
         if: ${{ !cancelled() }}
-        # ctest runs with --test-dir <dist>/bin/rocRAND so its Testing/
-        # output lives there, not under build/. We also stash any
-        # rocjitsu_*.log files we can find - the interposer historically
-        # writes them next to the working directory of the test process.
         run: |
           set +e
           mkdir -p test-logs
@@ -210,7 +400,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-simulator-logs-${{ github.run_attempt }}
+          name: test-simulator-logs-build-${{ github.run_attempt }}
           path: test-logs/
           if-no-files-found: warn
           retention-days: 7
