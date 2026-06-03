@@ -128,7 +128,7 @@ def upload_stage_logs(
         build_dir: Build directory containing logs/.
         output_root: Workflow output root for path computation.
         backend: Storage backend (S3 or local) to upload through.
-        stage_name: Build stage (e.g., 'foundation', 'math-libs').
+        stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs').
         amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
     """
     log_dir = build_dir / "logs"
@@ -204,7 +204,7 @@ def main(argv: list[str] | None = None):
         "--stage",
         type=str,
         required=True,
-        help="Build stage name (e.g., 'foundation', 'math-libs')",
+        help="Build stage name (e.g., 'compiler-runtime', 'math-libs')",
     )
     parser.add_argument(
         "--build-dir",
