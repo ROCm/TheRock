@@ -72,6 +72,7 @@ function(therock_sanitizer_configure
       # HOST_ASAN.
       string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
     endif()
+
     # Action at a distance: Signal that the sub-project should extend its build and install
     # RPATHs to include the clang resource dir.
     string(APPEND _stanza "set(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH ON)")
