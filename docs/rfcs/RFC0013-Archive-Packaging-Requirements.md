@@ -1,7 +1,7 @@
 ---
 author: Liam Berry (LiamfBerry), Saad Rahim (saadrahim)
 created: 2026-04-09
-modified: 2026-04-10
+modified: 2026-06-03
 status: draft
 ---
 
@@ -11,7 +11,7 @@ With the implementation of TheRock build system, a portable and system-agnostic 
 
 Our goals are to:
 
-1. **Provide a protable, zero-footprint SDK delivery mechansim** suitable for CI pipelines, offline deployments, and advanced users who manage their own SDK roots.
+1. **Provide a portable, zero-footprint SDK delivery mechanism** suitable for CI pipelines, offline deployments, and advanced users who manage their own SDK roots.
 1. **Ensure ZIP archive layout is consistent and predictable** relative to the MSI-installed directory tree.
 1. **Define ZIP as the authoritative upstream artifact** for Winget ingestion and internal automation hosted on `repo.amd.com`.
 1. **Preserve full SDK functionality** when the extracted directory is used directly as the SDK root, without ambient system configuration.
@@ -46,7 +46,7 @@ ZIP packages must provide a portable file-tree representation of a Windows ROCm 
 
 ZIP archives are intended for power users, CI pipelines, and offline deployments where MSI installation is unavailable or undesirable.
 
-ZIP packages will be offered as either a per GPU architecture famiily denoted by `gfx<...>` or contain all GPU families with no denotion is this is the default. Both package types will offer two variants: a full version containing all build artifacts and a cleaned version that has the intermediary build files and test files (including unit tests) removed; this will be denoted with `-lite-`, in the package name.
+ZIP packages will be offered as either a per GPU architecture target denoted by `gfx<target>` (e.g., `gfx1100`, `gfx1201`) or contain all GPU targets with no denotation as this is the default. Both package types will offer two variants: a full version containing all build artifacts and a cleaned version that has the intermediary build files and test files (including unit tests) removed; this will be denoted with `-lite-` in the package name.
 
 All ZIP packages will also have an external sha256 hash validation file for integrity verification. 
 
@@ -56,21 +56,23 @@ ZIP archives must follow the following naming convention:
 
 ```
 rocm-sdk-X.Y.Z.zip
-rocm-sdk-gfx<architecture family>-X.Y.Z.zip
+rocm-sdk-gfx<target>-X.Y.Z.zip
 ```
+
+Where `<target>` is an individual GPU target identifier (e.g., `gfx1100`, `gfx1201`) rather than a GPU family grouping, aligning with Python package and native Linux package distribution conventions.
 
 Additionally there will be two variant forms of these packages:
 
 ```
 rocm-sdk-lite-X.Y.Z.zip
-rocm-sdk-gfx<architecture family>-X.Y.Z.zip
+rocm-sdk-lite-gfx<target>-X.Y.Z.zip
 ```
 
 Packages will all be paired with equivalent hash validation files:
 
 ```
-rocm-sdk-gfx<...>-X.Y.Z.zip
-rocm-sdk-gfx<...>-X.Y.Z.zip.sha256
+rocm-sdk-gfx<target>-X.Y.Z.zip
+rocm-sdk-gfx<target>-X.Y.Z.zip.sha256
 ```
 
 ### Directory Layout
@@ -92,7 +94,7 @@ The extracted root of this directory serves as the SDK root for all tools and sc
 
 ### Behavioural Requirements
 
-ZIP packages must be eintriely passive with respect to the host system. A ZIP package:
+ZIP packages must be entirely passive with respect to the host system. A ZIP package:
 
 - Must not modify environment variables.
 - Must not append to or modify `PATH`.
@@ -111,18 +113,20 @@ Tools and scripts inside ZIP packages must function correctly when the extracted
 
 ### Distribution
 
-ZIP archives are hosted on the AMD Official Repository:
+ZIP archives are hosted on the AMD Official Repository under the structure defined by [RFC0012 Repo Structure](RFC0012-Repo-Structure.md):
 
 ```
-repo.amd.com/rocm-ecosystem/nightly/core/zip
+<stream>.repo.amd.com/rocm/core/zip/
 ```
+
+Where `<stream>` is one of `nightly`, `rc`, `stable`, or `lts` as defined by the repository stream model.
 
 This repository serves as the authoritative source for Winget manifest ingestion and internal automation pipelines that consume versioned SDK artifacts directly. ZIP artifacts hosted here must be versioned and integrity-checked.
 
-Additionally in repo.amd.com the zip archive will contain a `SHA256SUMS` file that contains hashes for all the provided packages.
+Additionally the ZIP archive directory will contain a `SHA256SUMS` file that contains hashes for all the provided packages.
 
 ```
-repo.amd.com/rocm-ecosystem/nightly/core/zip
+<stream>.repo.amd.com/rocm/core/zip/
   <specified ZIP packages>
   SHA256SUMS
 ```
@@ -135,7 +139,7 @@ TAR packages must provide a portable file-tree representation of a Linux ROCm in
 
 TAR archives are intended for power users, CI pipelines, and offline deployments where other installation methods are unavailable or undesirable.
 
-TAR packages will be offered as either a per GPU architecture famiily denoted by `gfx<...>` or contain all GPU families with no denotion is this is the default. Both package types will offer two variants: a full version containing all build artifacts and a cleaned version that has the intermediary build files and test files (including unit tests) removed; this will be denoted with `-lite-`.
+TAR packages will be offered as either a per GPU architecture target denoted by `gfx<target>` (e.g., `gfx1100`, `gfx1201`) or contain all GPU targets with no denotation as this is the default. Both package types will offer two variants: a full version containing all build artifacts and a cleaned version that has the intermediary build files and test files (including unit tests) removed; this will be denoted with `-lite-`.
 
 All TAR packages will also have an external sha256 hash validation file for integrity verification. 
 
@@ -145,21 +149,23 @@ TAR archives must follow the following naming convention:
 
 ```
 rocm-sdk-X.Y.Z.tar.gz
-rocm-sdk-gfx<architecture family>-X.Y.Z.tar.gz
+rocm-sdk-gfx<target>-X.Y.Z.tar.gz
 ```
+
+Where `<target>` is an individual GPU target identifier (e.g., `gfx1100`, `gfx1201`) rather than a GPU family grouping, aligning with Python package and native Linux package distribution conventions.
 
 Additionally there will be two variant forms of these packages:
 
 ```
 rocm-sdk-lite-X.Y.Z.tar.gz
-rocm-sdk-gfx<architecture family>-X.Y.Z.tar.gz
+rocm-sdk-lite-gfx<target>-X.Y.Z.tar.gz
 ```
 
 Packages will all be paired with equivalent hash validation files:
 
 ```
-rocm-sdk-gfx<...>-X.Y.Z.tar.gz
-rocm-sdk-gfx<...>-X.Y.Z.tar.gz.sha256
+rocm-sdk-gfx<target>-X.Y.Z.tar.gz
+rocm-sdk-gfx<target>-X.Y.Z.tar.gz.sha256
 ```
 
 ### Directory Layout
@@ -196,23 +202,25 @@ Tools and scripts inside TAR packages must function correctly when the extracted
 
 - Binaries in `bin\` must not assume a fixed installation prefix set at build time.
 - Path resolution within the SDK must be relative to the extracted root or dynamically resolved at runtime.
-- Scripts must use portable interpreters (e.g., /user/bin/env).
+- Scripts must use portable interpreters (e.g., /usr/bin/env).
 - Tools must remain suitable for CI, offline deployment, and advanced users operating without pre-configured environment variables.
 
 ### Distribution
 
-TAR archives are hosted on the AMD Official Repository:
+TAR archives are hosted on the AMD Official Repository under the structure defined by [RFC0012 Repo Structure](RFC0012-Repo-Structure.md):
 
 ```
-repo.amd.com/rocm-ecosystem/nightly/core/tar
+<stream>.repo.amd.com/rocm/core/tarball/
 ```
+
+Where `<stream>` is one of `nightly`, `rc`, `stable`, or `lts` as defined by the repository stream model.
 
 This repository serves as the authoritative source for internal automation pipelines that consume versioned SDK artifacts directly. TAR artifacts hosted here must be versioned and integrity-checked.
 
-Additionally in repo.amd.com the tar archive will contain a `SHA256SUMS` file that contains hashes for all the provided packages.
+Additionally the TAR archive directory will contain a `SHA256SUMS` file that contains hashes for all the provided packages.
 
 ```
-repo.amd.com/rocm-ecosystem/nightly/core/tar
+<stream>.repo.amd.com/rocm/core/tarball/
   <specified TAR packages>
   SHA256SUMS
 ```
