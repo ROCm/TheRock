@@ -1,0 +1,37 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# This script builds the upstream libhsakmt WSL rocdxg target from inside the
+# WSL-hosted top-level TheRock build. It is intentionally narrow and only stages
+# the upstream install tree back into this subproject's artifact directory.
+#
+# The GitHub Actions wsl-bash wrapper uses fail-fast shell settings, but this
+# generated script is launched later by CMake as a fresh bash process.
+set -euo pipefail
+
+rocdxg_source_dir="@THEROCK_WSL_ROCDXG_SOURCE_DIR@"
+win_sdk="@THEROCK_WSL_WIN_SDK@"
+build_root="@_build_root@"
+install_root="@_install_root@"
+stage_root="@_stage_root@"
+
+if [ ! -d "$rocdxg_source_dir" ]; then
+  echo "ROCDXG source directory not found: $rocdxg_source_dir"
+  exit 1
+fi
+
+if [ ! -d "$win_sdk" ]; then
+  echo "Windows SDK include path not found: $win_sdk"
+  exit 1
+fi
+
+mkdir -p "$build_root" "$install_root" "$stage_root"
+
+cmake -B "$build_root" -S "$rocdxg_source_dir" -G Ninja \
+  -DCMAKE_BUILD_TYPE="@CMAKE_BUILD_TYPE@" \
+  -DCMAKE_INSTALL_PREFIX="$install_root" \
+  -DWIN_SDK="$win_sdk"
+cmake --build "$build_root" --target rocdxg -- -k 0
+cmake --install "$build_root"
+
+cp -a "$install_root/." "$stage_root/"

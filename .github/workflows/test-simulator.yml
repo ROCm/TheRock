@@ -112,33 +112,42 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
-      - name: Build therock-dist and therock-archives
+      - name: Build therock-artifacts and therock-dist
+        # Upstream removed the `therock-archives` cmake target in #4771 and
+        # replaced it with `therock-artifacts`, which produces per-component
+        # *directories* under build/artifacts/ (e.g. build/artifacts/rand_test/)
+        # instead of *.tar.xz files. `artifact_manager.py push` is what now
+        # tarballs them for upload, which we deliberately do not invoke here.
+        # `therock-dist` then flattens everything into build/dist/rocm/.
+        # Mirrors .github/workflows/build_portable_linux_artifacts.yml.
         run: |
-          cmake --build build --target therock-dist therock-archives -- -k 0
+          cmake --build build --target therock-artifacts therock-dist -- -k 0
 
-      - name: Unpack test artifacts into ROCm dist
-        # The `therock-dist` target merges `_lib`, `_run`, `_dev`, `_doc`,
-        # `_dbg` component flavors into build/dist/rocm/, but `_test` archives
-        # (which contain `bin/<component>/CTestTestfile.cmake` and the gtest
-        # binaries) are not merged. The per-component test drivers (e.g.
-        # test_rocrand.py) run `ctest --test-dir ${THEROCK_BIN_DIR}/<comp>`,
-        # so we need to extract the `_test` tarballs from build/artifacts/
-        # into the dist before invoking them. This mirrors how
-        # install_rocm_from_artifacts.py extracts archives on real-GPU
-        # runners (see _untar_files in build_tools/install_rocm_from_artifacts.py).
+      - name: Ensure rocRAND test artifact is materialized in dist
+        # therock-dist is supposed to flatten every artifact slice's _test
+        # component into build/dist/rocm/ alongside _lib/_run/_dev/_doc/_dbg
+        # (see cmake/therock_artifacts.cmake, _flatten_command_list).
+        # Historically (Rocjitsu_002/003) the dist only contained _lib/_run
+        # and bin/rocRAND/CTestTestfile.cmake was missing, so we rsync the
+        # per-component test artifact directory into the dist as a no-op
+        # safety net. If the flatten worked, this is a no-op. If it didn't,
+        # this gives us the same outcome the old tar-extract step did.
         run: |
           set -ex
           shopt -s nullglob
-          extracted=0
-          for tarball in build/artifacts/rand_test_*.tar.xz; do
-            echo "Extracting $tarball -> $THEROCK_ROCM_ROOT"
-            tar -xf "$tarball" -C "$THEROCK_ROCM_ROOT"
-            extracted=$((extracted + 1))
+          # New layout: build/artifacts/rand_test[/ or _<arch>/] is a tree
+          # rooted at the ROCm install prefix (e.g. bin/rocRAND/..., bin/test_*).
+          rsynced=0
+          for d in build/artifacts/rand_test build/artifacts/rand_test_*; do
+            if [ -d "$d" ] && [ "$(basename "$d")" != "rand_test.fprint" ]; then
+              echo "Rsync $d/ -> $THEROCK_ROCM_ROOT/"
+              rsync -a --exclude=artifact_manifest.txt "$d/" "$THEROCK_ROCM_ROOT/"
+              rsynced=$((rsynced + 1))
+            fi
           done
-          if [ "$extracted" -eq 0 ]; then
-            echo "::error::No rand_test_*.tar.xz archives found in build/artifacts/"
-            ls -lh build/artifacts/ | head -50 || true
-            exit 1
+          if [ "$rsynced" -eq 0 ]; then
+            echo "::warning::No rand_test artifact directory found under build/artifacts/"
+            ls -lh build/artifacts/ 2>&1 | head -60 || true
           fi
 
       - name: Verify rocjitsu interposer + ctest layout are present

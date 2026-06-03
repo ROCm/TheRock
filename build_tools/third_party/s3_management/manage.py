@@ -111,6 +111,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "rocm_sdk_libraries",
     # ---- triton ----
     "triton",
+    "pytorch_triton_rocm",
     # ---- triton additional packages ----
     "Arpeggio",
     "caliper_reader",
