@@ -96,6 +96,7 @@ jobs:
     timeout-minutes: 90
     permissions:
       id-token: write
+      actions: read   # TIGHT-GATE: needed so the poll step below can read run jobs
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
       options: -v /runner/config:/home/awsconfig/
@@ -119,6 +120,53 @@ jobs:
           pip install -r requirements.txt
           # simulator_runner.py reads simulator_runner_filters.yaml.
           pip install pyyaml
+
+      # ===== TIGHT-GATE BEGIN =====
+      # Replaces the implicit GitHub-Actions matrix wait that we dropped
+      # from `needs:` in multi_arch_build_portable_linux.yml. Polls the GH
+      # jobs API for the `Stage - Math Libs (gfx94X-dcgpu)` leaf inside the
+      # calling run and blocks until it completes. No-op for manual
+      # dispatch against an already-completed `source_run_id` (the leaf is
+      # found completed on the first iteration).
+      # To revert: delete this entire BEGIN/END block AND restore
+      # `needs: [compiler-runtime, math-libs]` in
+      # multi_arch_build_portable_linux.yml.
+      - name: Wait for math-libs (gfx94X-dcgpu) shard
+        env:
+          RUN_ID: ${{ inputs.artifact_run_id || inputs.source_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_NAME: "Stage - Math Libs (gfx94X-dcgpu)"
+        run: |
+          set -eu
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::No RUN_ID to poll (neither artifact_run_id nor source_run_id set)" >&2
+            exit 1
+          fi
+          max_iter=120   # 120 * 30s = 60 min
+          for i in $(seq 1 $max_iter); do
+            row=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs" \
+              --paginate \
+              --jq "[.jobs[] | select(.name | contains(\"${TARGET_NAME}\"))] | first")
+            status=$(printf '%s' "$row" | jq -r '.status // "missing"')
+            conclusion=$(printf '%s' "$row" | jq -r '.conclusion // ""')
+            if [ "$status" = "completed" ]; then
+              case "$conclusion" in
+                success|skipped)
+                  echo "math-libs (gfx94X-dcgpu) leaf: ${conclusion} after ${i} polls"
+                  exit 0
+                  ;;
+                *)
+                  echo "::error::math-libs (gfx94X-dcgpu) leaf finished with conclusion=${conclusion}" >&2
+                  exit 1
+                  ;;
+              esac
+            fi
+            echo "(poll ${i}/${max_iter}) status=${status} conclusion=${conclusion}, sleeping 30s..."
+            sleep 30
+          done
+          echo "::error::Timeout (60min) waiting for ${TARGET_NAME} in run ${RUN_ID}" >&2
+          exit 1
+      # ===== TIGHT-GATE END =====
 
       - name: Resolve source run id
         id: resolve_source

@@ -183,7 +183,16 @@ jobs:
   # the Release pipeline enables it today; PR CI keeps it off by default.
   # ==========================================================================
   simulator-test:
-    needs: [compiler-runtime, math-libs]
+    # ===== TIGHT-GATE BEGIN =====
+    # `needs:` deliberately omits `math-libs` so this job starts as soon as
+    # compiler-runtime is done, instead of waiting for the slowest entry of
+    # the math-libs matrix. A polling step inside test-simulator.yml waits
+    # specifically for the `Stage - Math Libs (gfx94X-dcgpu)` leaf job
+    # before installing artifacts. To revert: restore `[compiler-runtime,
+    # math-libs]` here AND remove the matching TIGHT-GATE block in
+    # test-simulator.yml.
+    needs: compiler-runtime
+    # ===== TIGHT-GATE END =====
     if: ${{ !cancelled() && !failure() && inputs.run_simulator && contains(inputs.dist_amdgpu_families, 'gfx94X-dcgpu') }}
     uses: ./.github/workflows/test-simulator.yml
     secrets: inherit
