@@ -589,7 +589,8 @@
             "Name": "origami",
             "Components": [
               "lib",
-              "run"
+              "run",
+              "doc"
             ]
           },
           {
