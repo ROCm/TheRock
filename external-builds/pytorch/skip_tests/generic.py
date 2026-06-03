@@ -73,8 +73,8 @@ skip_tests = {
             #
             # Exception raised from ~CUDAGraph at /__w/TheRock/TheRock/external-builds/pytorch/pytorch/aten/src/ATen/hip/HIPGraph.cpp:320 (most recent call first):
             # frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x7f2316f1bdf0 in /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
-            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_allow_unused_input",
-            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
+            # -k matches all parameterless graphed-callable variants (incl. Windows 2.11 gfx1201).
+            "test_graph_make_graphed_callables_parameterless",
             # ----------------
             # maybe failing
             # ----------------
@@ -244,6 +244,23 @@ skip_tests = {
             # For Python 3.11, this fails with
             #   torch.AcceleratorError: HIP error: operation not permitted when stream is capturing
             "test_cuda_graph_tensor_item_not_allowed",
+            # CUDA graph optimization tests fail on Windows ROCm (capture/replay).
+            # Crash: Windows fatal exception 0xc0000374 during torch.cuda.CUDAGraph.replay()
+            # (heap corruption abort; process exits before pytest reports FAILED).
+            # -k matches test_graph_optims* and test_graph_rng* (optimizer / RNG in captured graphs).
+            "test_graph_optims",
+            "test_graph_rng",
+            # CUDA graph capture/replay/pool: crash (0xc0000374) or hang on Windows ROCm.
+            # Verified on gfx1201 with torch 2.9 and 2.11 (overlap from pytorch_2.9/2.11).
+            "test_graph_make_graphed_callables_same_pool",
+            "test_graph_grad_scaling",
+            "test_graph_scaling_fused_optimizers",
+            "test_graph_memory_stats",
+            "test_cuda_graph_raw_graph",
+            "test_graph_capture_reset_recapture",
+            "test_repeat_graph_capture_cublas_workspace_memory",
+            # Hang: test_mempool_emptycache_multithread blocks in threading.Thread.join().
+            "test_mempool_emptycache_multithread",
             # *** Test hang (see above) ***
             "test_graph_error",
             # This test conflicts with how our test script and runners are
@@ -273,6 +290,9 @@ skip_tests = {
             # AssertionError: False is not true
             # self.assertTrue(torch.allclose(x.grad.cpu(), xx.grad, rtol=rtol, atol=1e-3))
             "test_warp_softmax_64bit_indexing_cuda_float16",
+            # RuntimeError: input tensor has spatial dimension larger than the kernel capacity
+            # (upsample_nearest2d ROCm launch path on Windows).
+            "test_upsamplingNearest2d_launch_rocm",
         ],
         "torch": [
             # Large test that isn't very CI-friendly (takes 1-180 seconds depending on runner and torch version)
@@ -281,7 +301,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
+            "test_memory_format_operators_cuda",
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])

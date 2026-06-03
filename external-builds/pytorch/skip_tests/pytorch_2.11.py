@@ -4,6 +4,9 @@
 skip_tests = {
     "common": {
         "cuda": [
+            # passes on single run, crashes if run in a group
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_memory_compile_regions",
             # AssertionError: False is not true
             "test_memory_plots",
             # AssertionError: Booleans mismatch: False is not True
@@ -59,7 +62,31 @@ skip_tests = {
     #         "test_batch_vs_slicing_polygamma_polygamma_n_2_cuda_float16",
     #     ],
     # },
-    # "windows": {
-    #     empty for the moment
-    # },
+    "windows": {
+        "cuda": [
+            # Hangs/timeout on Windows ROCm 2.11: blocks in subprocess.wait()
+            # in test_cuda.py::test_fixed_cuda_assert_async.
+            "test_fixed_cuda_assert_async",
+            # RuntimeError: Kernel compilation failed (test_cuda.py::TestCompileKernel)
+            "test_compile_kernel_template",
+            # Windows fatal exception 0xc0000374 during graph replay.
+            "test_graph_capture_simple",
+            # CUDA graph memory pool / checkpoint: AssertionError scalars not equal on Windows.
+            #   test_graph_two_successive: Expected 2097152 but got 211812352.
+            "test_graph_checkpoint",
+            "test_graph_two_successive",
+            # AssertionError: allocation reused too soon (stream/allocator lifetime on Windows).
+            "test_record_stream",
+            # AssertionError: matmul memory accounting mismatch on Windows gfx1201 (Expected 430508032, got 239085568).
+            "test_matmul_memory_use",
+        ],
+        "nn": [
+            # Hang on Windows ROCm 2.11: runWithPytorchAPIUsageStderr subprocess never returns
+            # (test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float16).
+            "test_cross_entropy_loss_2d_out_of_bounds_class_index",
+            # AssertionError: Scalars are not close / tensor numeric mismatch on Windows.
+            # (-k matches parameterized CTCLoss variants.)
+            "test_CTCLoss_no_batch_dim_reduction",
+        ],
+    },
 }
