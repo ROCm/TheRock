@@ -86,7 +86,7 @@ def main(argv: list[str]):
 
     parsed_version = parse(args.rocm_version)
     version_suffix = derive_version_suffix(args.rocm_version)
-    rocm_sdk_version = f"=={parsed_version}"
+    rocm_sdk_version = f"==={parsed_version}"
     optional_build_prod_arguments = (
         f"--rocm-sdk-version {rocm_sdk_version} --version-suffix {version_suffix}"
     )
