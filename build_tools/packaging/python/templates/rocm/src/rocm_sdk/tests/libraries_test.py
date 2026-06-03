@@ -66,6 +66,12 @@ class ROCmLibrariesTest(unittest.TestCase):
                     # Though this is not needed for the amd-smi client.
                     continue
 
+                if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
+                    # Python C extensions use symbols resolved at import time,
+                    # not via dlopen — ctypes.CDLL fails across interpreter
+                    # versions (e.g. .abi3.so using PyType_FromMetaclass on <3.12).
+                    continue
+
                 extra_setup = ""
                 if (
                     "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
