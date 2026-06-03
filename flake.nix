@@ -120,6 +120,9 @@
                 if [ ! -d .ccache ]; then
                   printf "[shell_hook] Creating .ccache\n"
                   eval "$(python3 ./build_tools/setup_ccache.py)"
+                else
+                  printf "[shell_hook] Activating .ccache\n"
+                  export CCACHE_CONFIGPATH="$PWD"/.ccache/ccache.conf
                 fi
                 printf "[shell_hook] Helper commands available:\n"
                 compgen -c therock- | sed 's/^/\t/'
