@@ -159,10 +159,19 @@ GC_BASES = (0x1260, 0xA000, 0x1C000, 0x2402C00, 0, 0, 0, 0)
 MMHUB_BASES = (0x1A000, 0x2408800, 0, 0, 0, 0, 0, 0)
 OSSSYS_BASES = (0x10A0, 0x240A000, 0, 0, 0, 0, 0, 0)
 MES_SCHQ_VMID_MASK = 0xFF00
-MES_COMPUTE_HQD_MASKS = (0x0C, 0x0C, 0, 0, 0, 0, 0, 0)
+# All 8 queues allowed on every compute pipe (matches lite:: production
+# frame[5+i]=0xff). The old 0x0C (queues 2,3 only) excluded queue 0, so MES
+# rejected ADD_QUEUE for a legacy compute queue mapped at queue 0.
+MES_COMPUTE_HQD_MASKS = (0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)
 MES_GFX_HQD_MASKS = (0xFE, 0)
 MES_SDMA_HQD_MASKS = (0xFC, 0xFC)
-MES_AGGREGATED_DOORBELLS = (0x800, 0x802, 0x804, 0x806, 0x808)
+# MES aggregated-doorbell channels (lite:: kMesAggregatedDoorbellBase=0x80 + i*2).
+# These are the doorbell offsets MES uses to re-wake a descheduled/unmapped queue;
+# they must also be programmed into CP_MES_DOORBELL_CONTROL1..5 (see
+# configure_mes_doorbells). The old 0x800 base never matched the small doorbell
+# index range and the control regs were never programmed, so a queue stalled once
+# MES descheduled it at a quantum (~batch 32).
+MES_AGGREGATED_DOORBELLS = (0x80, 0x82, 0x84, 0x86, 0x88)
 
 # union MESAPI_SET_HW_RESOURCES dword positions under #pragma pack(push, 8).
 SET_HW_DW_VMID_MASK_MMHUB = 1
@@ -765,7 +774,7 @@ def main():
                 (1 << 10) |  # enable_reg_active_poll
                 (1 << 19)    # unmapped_doorbell_handling = 1
             )
-            pkt[SET_HW_DW_OVERSUBSCRIPTION_TIMER] = 0
+            pkt[SET_HW_DW_OVERSUBSCRIPTION_TIMER] = 50  # lite:: MesOversubscriptionTimer
 
             print(f"\n== MES SET_HW_RSRC at ring DW {set_hw_wptr}, status_fence=0x{fence_mc:x} ==")
             print(f"  sch_ctx=0x{sch_ctx_mc:x} query_status=0x{query_status_mc:x} flags=0x{pkt[SET_HW_DW_FLAGS]:x}")
@@ -953,7 +962,7 @@ def main():
                         (1 << 10) |
                         (1 << 19)
                     )
-                    pkt[SET_HW_DW_OVERSUBSCRIPTION_TIMER] = 0
+                    pkt[SET_HW_DW_OVERSUBSCRIPTION_TIMER] = 50  # lite:: MesOversubscriptionTimer
                     print(f"  SCHED SET_HW_RSRC sch_ctx=0x{sched_sch_ctx_mc:x} "
                           f"query=0x{sched_query_status_mc:x}")
                     sched_set_hw_done, sched_next_wptr = submit_api_and_poll(
@@ -1092,6 +1101,24 @@ def main():
         #     legacy queue may still need to sit in that mask — if MES rejects
         #     queue 0, retry comp_queue=2);
         #   - the gfx12 compute MQD layout matches build_sched_mqd().
+        #
+        # Program the MES aggregated-doorbell + unmapped-doorbell channels so MES
+        # can re-wake the queue after it deschedules it at a quantum (port of
+        # lite:: InitMesAggregatedDoorbells + EnableUnmappedDoorbellHandling). The
+        # probe previously set the doorbell values in the SET_HW_RSRC frame but
+        # never programmed these control regs, so the queue stalled at ~batch 32.
+        reg_cp_mes_doorbell_ctrl = (0x283C, 0x283D, 0x283E, 0x283F, 0x2840)  # B1
+        for i, db in enumerate(MES_AGGREGATED_DOORBELLS):
+            data = gc1_rd(reg_cp_mes_doorbell_ctrl[i])
+            data &= ~(0x0FFFFFFC | (1 << 30) | (1 << 31))
+            data |= (db << 2) | (1 << 30)  # offset<<2 | ENABLE
+            gc1_wr(reg_cp_mes_doorbell_ctrl[i], data)
+        gc0_wr(0x1E9F, 1 << 15)  # CP_HQD_GFX_CONTROL: DB_UPDATED_MSG_EN
+        ud = gc1_rd(0x0880)      # CP_UNMAPPED_DOORBELL
+        ud = (ud & ~0x00001F00) | (0xD << 8) | (1 << 0)  # proc_lsb=0xd | ENABLE
+        gc1_wr(0x0880, ud)
+        print("  programmed MES aggregated + unmapped doorbell control regs")
+
         comp_me, comp_pipe, comp_queue = 1, 0, 0
         comp_doorbell = 0x20  # DWORD index into BAR2 doorbell aperture
         comp_mqd_mc   = fb_base + COMPUTE_MQD_VRAM_OFF
@@ -1191,45 +1218,60 @@ def main():
               f"WPTR=0x{hqd_rd(regCP_HQD_PQ_WPTR_LO):08x}")
 
         if comp_mapped:
-            # PM4 NOP + WRITE_DATA on the MES-managed compute queue. Ring its
-            # doorbell and let MES schedule it; poll for the WRITE_DATA marker.
-            marker = 0xCAFE0001
-            pm4 = [
-                0xC0001000, 0x00000000,                       # NOP (2 dw)
-                0xC0033700,                                    # WRITE_DATA, count=3
-                0x00100500,                                    # DST_SEL=mem, WR_CONFIRM
-                comp_fence_mc & 0xFFFFFFFC,
-                (comp_fence_mc >> 32) & 0xFFFFFFFF,
-                marker,
-            ]
-            for i, word in enumerate(pm4):
-                vram_wr(COMPUTE_RING_VRAM_OFF + i * 4, word)
-            vram_wr64(COMPUTE_WPTR_VRAM_OFF, len(pm4))
-            bar2_wr64(comp_doorbell * 4, len(pm4))
-
-            print(f"\n== compute PM4 NOP+WRITE_DATA doorbell=0x{comp_doorbell:x} "
-                  f"wptr={len(pm4)} ==")
-            deadline = time.time() + 5
-            last = None
-            consumed = False
-            while time.time() < deadline:
-                fence_val = vram_rd(COMPUTE_FENCE_VRAM_OFF)
-                select_hqd(comp_me, comp_pipe, comp_queue)
-                rptr = hqd_rd(regCP_HQD_PQ_RPTR)
-                wptr = hqd_rd(regCP_HQD_PQ_WPTR_LO)
-                active = hqd_rd(regCP_HQD_ACTIVE)
-                snap = (fence_val, rptr, wptr, active)
-                if snap != last:
-                    print(f"  fence=0x{fence_val:08x} rptr=0x{rptr:x} "
-                          f"wptr=0x{wptr:x} active=0x{active:x}")
-                    last = snap
-                if fence_val == marker:
-                    print(f"  COMPUTE QUEUE WRITE_DATA via MES ✓")
-                    consumed = True
+            # Sustained doorbell-driven PM4 on the MES-managed compute queue: loop
+            # N NOP+WRITE_DATA batches, ringing only the queue doorbell each time
+            # (MES schedules; no host CP_HQD_PQ_WPTR poke). This is the direct test
+            # of the multi-dispatch ceiling — the hand-rolled direct-HQD path wedged
+            # after ~13 submits/process. Batches kept under one ring (no wrap) so
+            # this isolates the ceiling, not ring-wrap handling.
+            n_batches = int(os.environ.get("PHASE9_COMPUTE_BATCHES", "128"))
+            comp_ring_dw = RING_SIZE // 4
+            comp_wptr = 0
+            sustained = 0
+            print(f"\n== compute sustained-dispatch loop: {n_batches} doorbell-only "
+                  f"PM4 batches (ring={comp_ring_dw} dw) ==")
+            for b in range(n_batches):
+                marker = 0xCAFE0000 + (b & 0xFFFF)
+                vram_wr(COMPUTE_FENCE_VRAM_OFF, 0)
+                pm4 = [
+                    0xC0001000, 0x00000000,                    # NOP (2 dw)
+                    0xC0033700,                                 # WRITE_DATA, count=3
+                    0x00100500,                                 # DST_SEL=mem, WR_CONFIRM
+                    comp_fence_mc & 0xFFFFFFFC,
+                    (comp_fence_mc >> 32) & 0xFFFFFFFF,
+                    marker,
+                ]
+                start = comp_wptr % comp_ring_dw
+                if start + len(pm4) > comp_ring_dw:   # would straddle ring end -> stop
+                    print(f"  batch {b}: ring would wrap (start={start}); stopping "
+                          f"no-wrap loop")
                     break
-                time.sleep(0.05)
-            if not consumed:
-                print(f"  compute queue did not complete WRITE_DATA before timeout")
+                for i, word in enumerate(pm4):
+                    vram_wr(COMPUTE_RING_VRAM_OFF + (start + i) * 4, word)
+                comp_wptr += len(pm4)
+                vram_wr64(COMPUTE_WPTR_VRAM_OFF, comp_wptr)
+                bar2_wr64(comp_doorbell * 4, comp_wptr)
+                deadline = time.time() + 3
+                done = False
+                while time.time() < deadline:
+                    if vram_rd(COMPUTE_FENCE_VRAM_OFF) == marker:
+                        done = True
+                        break
+                    time.sleep(0.002)
+                if not done:
+                    select_hqd(comp_me, comp_pipe, comp_queue)
+                    print(f"  batch {b}: STALL marker=0x{marker:08x} wptr={comp_wptr} "
+                          f"rptr=0x{hqd_rd(regCP_HQD_PQ_RPTR):x} "
+                          f"active=0x{hqd_rd(regCP_HQD_ACTIVE):x}")
+                    break
+                sustained += 1
+                if b in (0, 12, 13, 31, 63, 127) or b == n_batches - 1:
+                    print(f"  batch {b}: WRITE_DATA via MES ✓ (marker=0x{marker:08x})")
+            print(f"\n  MES compute queue sustained {sustained}/{n_batches} "
+                  f"doorbell-driven PM4 batches")
+            if sustained > 13:
+                print(f"  *** MULTI-DISPATCH CEILING CLEARED via MES "
+                      f"(direct-HQD died at ~13; MES sustained {sustained}) ***")
 
     gc1_wr(regGRBM_GFX_CNTL, 0)
 
