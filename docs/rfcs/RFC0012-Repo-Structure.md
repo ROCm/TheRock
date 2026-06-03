@@ -161,15 +161,6 @@ Rules:
     which carry explicit version constraints. Mixing native packages
     across streams in a single dependency chain is **not** a supported
     workflow.
-  - **`rc` exception:** `rc` is **not** eligible for concurrent
-    installation. An `rc` stream must be the **only** active stream on
-    a system while it is enabled — `rc` packages may not be mixed with
-    `dev`, `nightly`, `stable`, `ltsrc`, or `lts` packages. This keeps QA
-    signal on `rc` clean (a bug seen on `rc` is attributable to `rc`
-    alone) and avoids release-candidate artifacts leaking into
-    production-flavored installs. The `amdrocm-repo` package must
-    enforce this by disabling all other stream repo files whenever
-    the `rc` repo is enabled.
 
 ## Repository Structure
 
