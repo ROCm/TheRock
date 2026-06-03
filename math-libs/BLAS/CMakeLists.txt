@@ -174,6 +174,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    origami
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
@@ -382,6 +383,7 @@ if(THEROCK_ENABLE_SPARSE)
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
+        origami
         rocm-cmake
         hipSPARSE
         rocSPARSE
@@ -389,6 +391,7 @@ if(THEROCK_ENABLE_SPARSE)
         therock-msgpack-cxx
       RUNTIME_DEPS
         hip-clr
+        origami
         therock-host-blas
         ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
