@@ -281,18 +281,18 @@ if(THEROCK_ENABLE_ROCGDB)
   #   - roccoremerge man page
   # set: -DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON
   # Note: upstream master will eventually include roccoremerge.
-  if(NOT DEFINED THEROCK_ROCGDB_UPSTREAM_BUILD)
-    set(THEROCK_ROCGDB_UPSTREAM_BUILD OFF)
-  endif()
+  option(THEROCK_ROCGDB_UPSTREAM_BUILD
+    "Build rocgdb against upstream GDB master (skips AMD-specific files like NOTICES.txt, roccoremerge)"
+    OFF)
 
   # When ON, download the test_rocgdb.py CI wrapper script from ROCm/ROCgdb
   # amd-staging if it is not already present in the rocgdb source tree, and
   # install it into tests/rocgdb. Required by TheRock CI when building a
   # rocgdb source tree that is not part of the branches exercised by CI.
   # Off by default to avoid a network fetch at configure time.
-  if(NOT DEFINED THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT)
-    set(THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT OFF)
-  endif()
+  option(THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
+    "Download test_rocgdb.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
+    OFF)
 
   therock_cmake_subproject_declare(rocgdb
     USE_DIST_AMDGPU_TARGETS
