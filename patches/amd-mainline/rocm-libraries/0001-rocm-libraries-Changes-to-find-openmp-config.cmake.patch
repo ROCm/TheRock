@@ -1,0 +1,254 @@
+From 6dec73e532d5e241810b4fdb7b4997a516ca6a10 Mon Sep 17 00:00:00 2001
+From: Ethan Stewart <ethan.stewart@amd.com>
+Date: Wed, 3 Jun 2026 18:30:40 +0000
+Subject: [PATCH] [rocm-libraries] - Changes to find openmp-config.cmake
+
+These are temporary to further patch testing in CI.
+OpenMP config will need more changes.
+---
+ projects/hipblaslt/CMakeLists.txt               | 10 +++++++++-
+ projects/hipblaslt/clients/CMakeLists.txt       |  8 ++++----
+ .../hipblaslt/tensilelite/client/CMakeLists.txt |  2 +-
+ .../hipblaslt/tensilelite/tests/CMakeLists.txt  |  2 +-
+ projects/rocblas/CMakeLists.txt                 |  3 +++
+ projects/rocblas/clients/CMakeLists.txt         |  6 ++++--
+ projects/rocwmma/CMakeLists.txt                 | 11 ++++++++---
+ shared/mxdatagenerator/CMakeLists.txt           | 17 +++++++++++++----
+ shared/rocroller/test/CMakeLists.txt            | 11 ++++++++++-
+ shared/rocroller/test/common/CMakeLists.txt     |  2 +-
+ 10 files changed, 54 insertions(+), 18 deletions(-)
+
+diff --git a/projects/hipblaslt/CMakeLists.txt b/projects/hipblaslt/CMakeLists.txt
+index 18ab1aac53..fd5e4513d2 100644
+--- a/projects/hipblaslt/CMakeLists.txt
++++ b/projects/hipblaslt/CMakeLists.txt
+@@ -160,7 +160,15 @@ if(HIPBLASLT_ENABLE_CLIENT)
+ endif()
+ 
+ if(HIPBLASLT_ENABLE_OPENMP)
+-    find_package(OpenMP REQUIRED)
++  find_package(OpenMP CONFIG PATHS "${HIP_CLANG_ROOT}/lib/cmake")
++  if(NOT OpenMP_FOUND OR NOT DEFINED openmp_LIB_DIR)
++     # Fall-back to module mode.
++     find_package(OpenMP MODULE REQUIRED)
++     set(OPENMP_LIB "OpenMP::OpenMP_CXX")
++  else()
++     set(OPENMP_LIB "OpenMP::omp")
++  endif()
++
+ endif()
+ 
+ if(HIPBLASLT_ENABLE_YAML)
+diff --git a/projects/hipblaslt/clients/CMakeLists.txt b/projects/hipblaslt/clients/CMakeLists.txt
+index 071a560e4d..fb774da45a 100755
+--- a/projects/hipblaslt/clients/CMakeLists.txt
++++ b/projects/hipblaslt/clients/CMakeLists.txt
+@@ -22,7 +22,7 @@ endif()
+ target_link_libraries(hipblaslt-clients-common
+     PUBLIC
+         roc::hipblaslt
+-        OpenMP::OpenMP_CXX
++        ${OPENMP_LIB}
+         ${LAPACK_LIBRARIES}
+     PRIVATE
+         hip::device
+@@ -50,13 +50,13 @@ target_link_libraries(hipblaslt-bench
+     PRIVATE
+         hip::device
+         hipblaslt::hipblaslt-clients-common
+-        OpenMP::OpenMP_CXX
++        ${OPENMP_LIB}
+ )
+ 
+ target_include_directories(hipblaslt-bench PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/bench/include")
+ 
+ if(HIPBLASLT_ENABLE_OPENMP)
+-    target_link_libraries(hipblaslt-bench PRIVATE OpenMP::OpenMP_CXX)
++    target_link_libraries(hipblaslt-bench PRIVATE ${OPENMP_LIB})
+ endif()
+ 
+ # `clients/common/CMakeLists.txt` itself only declares the mxdatagen helper
+@@ -112,7 +112,7 @@ if(BUILD_TESTING OR HIPBLASLT_BUILD_TESTING)
+             hip::device
+             hipblaslt::hipblaslt-clients-common
+             GTest::gtest
+-            OpenMP::OpenMP_CXX
++            ${OPENMP_LIB}
+             ${CMAKE_DL_LIBS}
+     )
+     target_compile_definitions(hipblaslt-test PRIVATE GOOGLE_TEST)
+diff --git a/projects/hipblaslt/tensilelite/client/CMakeLists.txt b/projects/hipblaslt/tensilelite/client/CMakeLists.txt
+index a158502fa7..c9499672bd 100644
+--- a/projects/hipblaslt/tensilelite/client/CMakeLists.txt
++++ b/projects/hipblaslt/tensilelite/client/CMakeLists.txt
+@@ -27,7 +27,7 @@ target_link_libraries(tensilelite-client-common
+         hip::host
+         tensilelite::tensilelite-host
+         rocisa::rocisa-cpp
+-        OpenMP::OpenMP_CXX
++        ${OPENMP_LIB}
+ )
+ if(amd_smi_FOUND)
+     target_link_libraries(tensilelite-client-common PUBLIC amd_smi)
+diff --git a/projects/hipblaslt/tensilelite/tests/CMakeLists.txt b/projects/hipblaslt/tensilelite/tests/CMakeLists.txt
+index 437ad69848..39c0e490c6 100644
+--- a/projects/hipblaslt/tensilelite/tests/CMakeLists.txt
++++ b/projects/hipblaslt/tensilelite/tests/CMakeLists.txt
+@@ -77,7 +77,7 @@ gtest_discover_tests(tensilelite-tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_
+ target_link_libraries(tensilelite-tests PUBLIC GTest::gtest)
+ 
+ if(HIPBLASLT_ENABLE_OPENMP)
+-    target_link_libraries(tensilelite-tests PRIVATE OpenMP::OpenMP_CXX)
++    target_link_libraries(tensilelite-tests PRIVATE ${OPENMP_LIB})
+ endif()
+ 
+ 
+diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
+index ef441b34ce..6425422493 100644
+--- a/projects/rocblas/CMakeLists.txt
++++ b/projects/rocblas/CMakeLists.txt
+@@ -236,7 +236,10 @@ message(STATUS "Using GPU_TARGETS: ${GPU_TARGETS}")
+ 
+ # Find HIP dependencies
+ if( CMAKE_CXX_COMPILER_ID MATCHES "Clang" )
++set(CMAKE_FIND_DEBUG_MODE TRUE)
++message("22222222222222222222222222")
+   find_package( hip REQUIRED CONFIG PATHS ${HIP_DIR} ${ROCM_PATH} /opt/rocm )
++set(CMAKE_FIND_DEBUG_MODE FALSE)
+ endif( )
+ 
+ 
+diff --git a/projects/rocblas/clients/CMakeLists.txt b/projects/rocblas/clients/CMakeLists.txt
+index 85472586ae..352140371f 100644
+--- a/projects/rocblas/clients/CMakeLists.txt
++++ b/projects/rocblas/clients/CMakeLists.txt
+@@ -112,11 +112,13 @@ endif()
+ 
+ set(THREADS_PREFER_PTHREAD_FLAG ON)
+ find_package(Threads REQUIRED)
+-
+ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
++set(CMAKE_FIND_DEBUG_MODE TRUE)
+   # Look for openmp config in ROCm install to populate openmp_LIB_DIR and openmp_LIB_INSTALL_DIR
+   find_package(OpenMP CONFIG PATHS "${HIP_CLANG_ROOT}/lib/cmake")
++set(CMAKE_FIND_DEBUG_MODE FALSE)
+ endif()
++#message(FATAL_ERROR "123${HIP_CLANG_ROOT}")
+ 
+ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET OpenMP::omp)
+   set( COMMON_LINK_LIBS "OpenMP::omp")
+@@ -474,4 +476,4 @@ if(CREATE_TEST_APP_LOCAL_DEPLOY AND WIN32)
+               COMPONENT clients)
+     endif()
+   endif()
+-endif()
+\ No newline at end of file
++endif()
+diff --git a/projects/rocwmma/CMakeLists.txt b/projects/rocwmma/CMakeLists.txt
+index 74efa6b196..87804d1c5c 100644
+--- a/projects/rocwmma/CMakeLists.txt
++++ b/projects/rocwmma/CMakeLists.txt
+@@ -160,13 +160,18 @@ else()
+   endif()
+ endif()
+ message(STATUS "GPU_TARGETS=${GPU_TARGETS}")
+-
+-find_package( hip REQUIRED )
++set(CMAKE_FIND_DEBUG_MODE TRUE)
++find_package( hip CONFIG REQUIRED )
++set(CMAKE_FIND_DEBUG_MODE FALSE)
+ find_package( hiprtc REQUIRED )
+-find_package( OpenMP CONFIG QUIET PATHS "${HIP_CLANG_ROOT}/lib/cmake" )
++#message(FATAL_ERROR ${HIP_CLANG_ROOT})
++find_package( OpenMP CONFIG PATHS "${HIP_CLANG_ROOT}/lib/cmake" )
+ if(NOT OpenMP_FOUND OR NOT DEFINED openmp_LIB_DIR)
+    # Fall-back to module mode.
+    find_package(OpenMP MODULE REQUIRED)
++ #  message(FATAL_ERROR "FALLBACK")
++else()
++#   message(FATAL_ERROR "FOUND WITH CONFIG")
+ endif()
+ 
+ if(TARGET OpenMP::omp)
+diff --git a/shared/mxdatagenerator/CMakeLists.txt b/shared/mxdatagenerator/CMakeLists.txt
+index 5b8efa52a3..07d1ee0f09 100644
+--- a/shared/mxdatagenerator/CMakeLists.txt
++++ b/shared/mxdatagenerator/CMakeLists.txt
+@@ -8,10 +8,19 @@ set(CMAKE_CXX_STANDARD 20)
+ include(GNUInstallDirs)
+ include(CMakePackageConfigHelpers)
+ 
+-find_package(OpenMP)
++#find_package(OpenMP)
++find_package(OpenMP CONFIG PATHS "${HIP_CLANG_ROOT}/lib/cmake")
++if(NOT OpenMP_FOUND OR NOT DEFINED openmp_LIB_DIR)
++   # Fall-back to module mode.
++   find_package(OpenMP MODULE REQUIRED)
++   set(OPENMP_LIB "OpenMP::OpenMP_CXX")
++else()
++   set(OPENMP_LIB "OpenMP::omp")
++endif()
++
+ add_library(mxDataGenerator INTERFACE)
+ add_library(roc::mxDataGenerator ALIAS mxDataGenerator)
+-target_link_libraries(mxDataGenerator INTERFACE OpenMP::OpenMP_CXX)
++target_link_libraries(mxDataGenerator INTERFACE ${OPENMP_LIB})
+ target_include_directories(mxDataGenerator
+     INTERFACE
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/include>
+@@ -133,7 +142,7 @@ if(MXDATAGENERATOR_BUILD_TESTING)
+       mxDataGeneratorTests PRIVATE
+       GTest::gtest_main
+       mxDataGenerator
+-      OpenMP::OpenMP_CXX
++      ${OPENMP_LIB}
+     )
+     include(GoogleTest)
+     gtest_discover_tests(mxDataGeneratorTests DISCOVERY_MODE PRE_TEST)
+@@ -158,7 +167,7 @@ if(MXDATAGENERATOR_BUILD_TESTING)
+           GTest::gtest_main
+           mxDataGenerator
+           hip::device
+-          OpenMP::OpenMP_CXX
++          ${OPENMP_LIB}
+         )
+         gtest_discover_tests(mxDataGeneratorGPUTests DISCOVERY_MODE PRE_TEST)
+     endif()
+diff --git a/shared/rocroller/test/CMakeLists.txt b/shared/rocroller/test/CMakeLists.txt
+index 6cf2053b36..1d3374b51d 100644
+--- a/shared/rocroller/test/CMakeLists.txt
++++ b/shared/rocroller/test/CMakeLists.txt
+@@ -92,7 +92,16 @@ endif()
+ 
+ find_package(BLAS REQUIRED)
+ find_package(cblas)
+-find_package(OpenMP REQUIRED)
++#find_package(OpenMP REQUIRED)
++
++find_package(OpenMP CONFIG PATHS "${HIP_CLANG_ROOT}/lib/cmake")
++if(NOT OpenMP_FOUND OR NOT DEFINED openmp_LIB_DIR)
++   # Fall-back to module mode.
++   find_package(OpenMP MODULE REQUIRED)
++   set(OPENMP_LIB "OpenMP::OpenMP_CXX")
++else()
++   set(OPENMP_LIB "OpenMP::omp")
++endif()
+ 
+ if(ROCROLLER_ENABLE_YAML_CPP)
+     target_compile_definitions(rocroller-tests PRIVATE ROCROLLER_TESTS_USE_YAML_CPP)
+diff --git a/shared/rocroller/test/common/CMakeLists.txt b/shared/rocroller/test/common/CMakeLists.txt
+index 1914a2933e..c7a56dfd43 100644
+--- a/shared/rocroller/test/common/CMakeLists.txt
++++ b/shared/rocroller/test/common/CMakeLists.txt
+@@ -9,7 +9,7 @@ target_link_libraries(common-test-utilities
+         roc::rocroller-interface
+         roc::mxDataGenerator
+         hip::host
+-        OpenMP::OpenMP_CXX
++        ${OPENMP_LIB}
+         ${CBLAS_LIBRARIES}
+ )
+ 
+-- 
+2.49.0
+
