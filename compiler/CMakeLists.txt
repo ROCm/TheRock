@@ -1,6 +1,19 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# We need to determine LLVM_HOST_TRIPLE to include this triple
+# in the RPATH when LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON. This path
+# needs to be registered with the subproject so it will be included
+# on dependent subprojects.
+# TODO: This needs guarded by something like THEROCK_ENABLE_PER_TARGET_DIR
+set(LLVM_MAIN_SRC_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm")
+include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake")
+get_host_triple(LLVM_HOST_TRIPLE)
+if(DEFINED LLVM_HOST_TRIPLE)
+  set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}")
+  set(THEROCK_LLVM_RPATH_WITH_TRIPLE "lib/llvm/lib/${THEROCK_LLVM_HOST_TRIPLE}")
+endif()
+
 if(THEROCK_ENABLE_COMPILER)
   if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
     set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
@@ -132,8 +145,10 @@ if(THEROCK_ENABLE_COMPILER)
     INSTALL_DESTINATION "lib/llvm"
     INTERFACE_LINK_DIRS
       "lib/llvm/lib"
+      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/llvm/lib"
+      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
   )
   # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
   if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
@@ -144,6 +159,7 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
   therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
+  therock_cmake_subproject_provide_package(amd-llvm OpenMP lib/llvm/lib/cmake/openmp)
   therock_cmake_subproject_activate(amd-llvm)
 
 
