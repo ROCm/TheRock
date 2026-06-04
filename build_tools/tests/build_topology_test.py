@@ -405,6 +405,173 @@ class BuildTopologyTest(unittest.TestCase):
         runtime_idx = build_order.index("runtime")
         self.assertLess(compiler_idx, runtime_idx)
 
+    def test_topology_reverse_indexes(self):
+        """Test reverse indexes across source sets, groups, artifacts, and stages."""
+        self.write_topology(
+            """
+            [source_sets.base]
+            description = "Base"
+            submodules = ["base"]
+
+            [source_sets.runtime]
+            description = "Runtime"
+            submodules = ["runtime"]
+
+            [source_sets.tests]
+            description = "Tests"
+            submodules = ["tests"]
+
+            [source_sets.unused]
+            description = "Unused"
+            submodules = ["unused"]
+
+            [build_stages.foundation]
+            description = "Foundation"
+            artifact_groups = ["base"]
+
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["hip", "rocrtst"]
+
+            [artifact_groups.base]
+            description = "Base"
+            type = "generic"
+            source_sets = ["base"]
+
+            [artifact_groups.hip]
+            description = "HIP"
+            type = "generic"
+            source_sets = ["runtime"]
+
+            [artifact_groups.rocrtst]
+            description = "Runtime tests"
+            type = "generic"
+            source_sets = ["runtime", "tests"]
+
+            [artifact_groups.future]
+            description = "Future group"
+            type = "generic"
+            source_sets = ["base"]
+
+            [artifacts.base-artifact]
+            artifact_group = "base"
+            type = "target-neutral"
+
+            [artifacts.hip-artifact]
+            artifact_group = "hip"
+            type = "target-neutral"
+
+            [artifacts.rocrtst-artifact]
+            artifact_group = "rocrtst"
+            type = "target-neutral"
+
+            [artifacts.future-artifact]
+            artifact_group = "future"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertEqual(
+            topology.get_source_set_to_artifact_groups(),
+            {
+                "base": ["base", "future"],
+                "runtime": ["hip", "rocrtst"],
+                "tests": ["rocrtst"],
+                "unused": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_artifact_group_to_artifacts(),
+            {
+                "base": ["base-artifact"],
+                "hip": ["hip-artifact"],
+                "rocrtst": ["rocrtst-artifact"],
+                "future": ["future-artifact"],
+            },
+        )
+        self.assertEqual(
+            topology.get_artifact_group_to_build_stages(),
+            {
+                "base": ["foundation"],
+                "hip": ["runtime"],
+                "rocrtst": ["runtime"],
+                "future": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_artifact_to_producer_stages(),
+            {
+                "base-artifact": ["foundation"],
+                "hip-artifact": ["runtime"],
+                "rocrtst-artifact": ["runtime"],
+                "future-artifact": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_stage_to_source_sets(),
+            {
+                "foundation": ["base"],
+                "runtime": ["runtime", "tests"],
+            },
+        )
+        self.assertEqual(
+            topology.get_source_set_to_stages(),
+            {
+                "base": ["foundation"],
+                "runtime": ["runtime"],
+                "tests": ["runtime"],
+                "unused": [],
+            },
+        )
+
+    def test_stage_source_set_indexes_filter_disabled_platforms(self):
+        """Test stage/source set indexes respect platform disabled source sets."""
+        self.write_topology(
+            """
+            [source_sets.common]
+            description = "Common"
+            submodules = ["common"]
+
+            [source_sets.windows-only]
+            description = "Windows-only"
+            submodules = ["windows-only"]
+            disable_platforms = ["linux"]
+
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+            source_sets = ["common", "windows-only"]
+
+            [artifacts.runtime-artifact]
+            artifact_group = "runtime"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertEqual(
+            topology.get_stage_to_source_sets(),
+            {"runtime": ["common", "windows-only"]},
+        )
+        self.assertEqual(
+            topology.get_stage_to_source_sets(platform="linux"),
+            {"runtime": ["common"]},
+        )
+        self.assertEqual(
+            topology.get_source_set_to_stages(platform="linux"),
+            {
+                "common": ["runtime"],
+                "windows-only": [],
+            },
+        )
+
     def test_get_dependency_graph(self):
         """Test generating dependency graph."""
         self.write_topology(

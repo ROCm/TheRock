@@ -4,8 +4,8 @@
 # Multi-Arch Build - Sharded Pipeline for Windows
 #
 # This workflow builds TheRock in stages:
-# 1. foundation (generic) - sysdeps, base
-# 2. compiler-runtime (generic) - compiler, runtimes
+# 1. compiler-runtime (generic) - sysdeps, base, compiler, runtimes
+# 2. runtime-tests (generic) - hip-tests (parallel to math-libs)
 # 3. math-libs (per-arch) - BLAS, FFT, etc.
 # 4. debug-tools (generic) - amd-dbgapi (rocgdb eventually).
 #
@@ -67,16 +67,16 @@ permissions:
 
 jobs:
   # ==========================================================================
-  # STAGE: foundation (generic)
+  # STAGE: compiler-runtime (generic)
   # ==========================================================================
-  foundation:
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'foundation') }}
+  compiler-runtime:
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
     with:
-      stage_name: foundation
-      stage_display_name: "Stage - Foundation"
-      timeout_minutes: 180  # 3 hours
+      stage_name: compiler-runtime
+      stage_display_name: "Stage - Compiler Runtime"
+      timeout_minutes: 480  # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
@@ -89,17 +89,17 @@ jobs:
       id-token: write
 
   # ==========================================================================
-  # STAGE: compiler-runtime (generic)
+  # STAGE: runtime-tests (generic, parallel to math-libs)
   # ==========================================================================
-  compiler-runtime:
-    needs: foundation
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
+  runtime-tests:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
     with:
-      stage_name: compiler-runtime
-      stage_display_name: "Stage - Compiler Runtime"
-      timeout_minutes: 480  # 8 hours (compiler is big)
+      stage_name: runtime-tests
+      stage_display_name: "Stage - Runtime Tests"
+      timeout_minutes: 120  # 2 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}

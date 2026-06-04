@@ -1142,7 +1142,7 @@ def main(argv: Optional[List[str]] = None):
         "--stage",
         type=str,
         required=True,
-        help="Build stage name(s), comma-separated (e.g., 'foundation,compiler-runtime')",
+        help="Build stage name(s), comma-separated (e.g., 'compiler-runtime,runtime-tests,math-libs')",
     )
     _add_target_args(copy_parser)
     copy_parser.add_argument(
