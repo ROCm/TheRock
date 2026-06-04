@@ -145,18 +145,19 @@ COMPONENT_OVERRIDES = {
     #   bin/rocwmma/smoke/       - per-target "<target> smoke" emulation
     #   bin/rocwmma/regression/  - per-target "<target> regression" emulation
     #                              + regression_tests
-    # Legacy test_rocwmma.py routed TEST_TYPE in {quick, regression} to
-    # the regression fragment so the per-target emulation regression runs
-    # (gemm/unit/dlrm) were exercised. Mirror that here so swapping to
-    # test_runner.py preserves coverage. Pairs with the rocm-libraries
-    # PR that tags the "<target> regression" entries with the `quick`
-    # label in bin/rocwmma/regression/CTestTestfile.cmake.
+    # Legacy test_rocwmma.py routed TEST_TYPE=quick (and the alias
+    # TEST_TYPE=regression, which the module-level validator now folds
+    # back to "quick") to the regression fragment so the per-target
+    # emulation regression runs (gemm/unit/dlrm) were exercised. Mirror
+    # that here so swapping to test_runner.py preserves coverage. Pairs
+    # with the rocm-libraries PR that tags the "<target> regression"
+    # entries with the `quick` label in bin/rocwmma/regression/
+    # CTestTestfile.cmake.
     # Other TEST_TYPEs (standard/comprehensive/full) fall through to the
     # default bin/rocwmma/ fragment, matching legacy behaviour.
     "rocwmma": {
         "test_dir_by_type": {
             "quick": ["bin", "rocwmma", "regression"],
-            "regression": ["bin", "rocwmma", "regression"],
         },
     },
     # rocroller's gtests link against shared libraries that live in the
