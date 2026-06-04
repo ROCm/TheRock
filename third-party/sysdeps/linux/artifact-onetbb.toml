@@ -1,0 +1,3 @@
+# oneTBB
+[components.lib."third-party/sysdeps/linux/onetbb/build/stage"]
+[components.dev."third-party/sysdeps/linux/onetbb/build/stage"]

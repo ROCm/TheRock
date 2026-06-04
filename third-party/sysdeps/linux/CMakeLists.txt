@@ -131,6 +131,20 @@ if(THEROCK_ENABLE_SYSDEPS_LIBPCIACCESS)
   )
 endif()
 
+# Optional sysdep: oneTBB
+if(THEROCK_ENABLE_SYSDEPS_ONETBB)
+  add_subdirectory(onetbb)
+  therock_provide_artifact(sysdeps-onetbb
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-onetbb.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-onetbb
+  )
+endif()
+
 # Optional sysdep: hwloc (depends on numactl and libpciaccess)
 if(THEROCK_ENABLE_SYSDEPS_HWLOC)
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/hwloc" "${CMAKE_CURRENT_BINARY_DIR}/hwloc")
