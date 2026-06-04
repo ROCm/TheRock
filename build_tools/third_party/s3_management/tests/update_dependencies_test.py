@@ -9,12 +9,23 @@ import pytest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from update_dependencies import is_wheel_allowed
+from update_dependencies import (
+    get_dependency_package_names,
+    get_project_paths,
+    is_wheel_allowed,
+    normalize_package_name,
+    resolve_target_prefixes,
+)
+
+
+class FakeBucket:
+    name = "test-bucket"
 
 
 # ---------------------------------------------------------------------------
 # Allowed wheels
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "pkg",
@@ -44,6 +55,7 @@ def test_allowed(pkg: str) -> None:
 # ---------------------------------------------------------------------------
 # Rejected platform tags
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "pkg",
@@ -79,6 +91,7 @@ def test_rejected_platform(pkg: str) -> None:
 # Rejected Python tags
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "pkg",
     [
@@ -103,6 +116,7 @@ def test_rejected_python(pkg: str) -> None:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "pkg",
     [
@@ -117,3 +131,67 @@ def test_rejected_python(pkg: str) -> None:
 )
 def test_rejected_non_wheel_or_malformed(pkg: str) -> None:
     assert not is_wheel_allowed(pkg), f"Expected rejected: {pkg}"
+
+
+# ---------------------------------------------------------------------------
+# Package/project helpers
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_package_name() -> None:
+    assert normalize_package_name("ml_dtypes") == "ml-dtypes"
+    assert normalize_package_name("typing_extensions") == "typing-extensions"
+    assert normalize_package_name("MarkupSafe") == "markupsafe"
+    assert normalize_package_name("foo.bar_baz") == "foo-bar-baz"
+
+
+def test_get_project_paths() -> None:
+    assert get_project_paths() == ["jax", "rocm", "torch"]
+
+
+def test_get_dependency_package_names() -> None:
+    assert "setuptools" in get_dependency_package_names("rocm")
+    assert "jinja2" in get_dependency_package_names("torch")
+    assert "ml_dtypes" in get_dependency_package_names("jax")
+
+
+# ---------------------------------------------------------------------------
+# Prefix resolution
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_target_prefixes_explicit_prefix() -> None:
+    assert resolve_target_prefixes(
+        bucket=FakeBucket(),
+        explicit_prefix="v4/whl/",
+    ) == ["v4/whl"]
+
+
+def test_resolve_target_prefixes_requires_prefix_or_auto_detect() -> None:
+    with pytest.raises(
+        RuntimeError,
+        match="Must provide either --prefix or --auto-detect-prefixes with --base-prefix",
+    ):
+        resolve_target_prefixes(bucket=FakeBucket())
+
+
+def test_resolve_target_prefixes_base_prefix_requires_auto_detect() -> None:
+    with pytest.raises(
+        RuntimeError,
+        match="--auto-detect-prefixes must be provided when using --base-prefix",
+    ):
+        resolve_target_prefixes(
+            bucket=FakeBucket(),
+            base_prefix="v2/",
+        )
+
+
+def test_resolve_target_prefixes_auto_detect_requires_base_prefix() -> None:
+    with pytest.raises(
+        RuntimeError,
+        match="--base-prefix must be provided when using --auto-detect-prefixes",
+    ):
+        resolve_target_prefixes(
+            bucket=FakeBucket(),
+            auto_detect_prefixes=True,
+        )
