@@ -435,6 +435,3 @@ def package_with_dpkg_build(pkg_dir):
     except subprocess.CalledProcessError as e:
         print(f"Error building deb package: {os.path.basename(pkg_dir)}: {e}")
         sys.exit(e.returncode)
-
-
-######################## RPM package creation ####################

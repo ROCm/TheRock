@@ -94,36 +94,7 @@ def is_key_defined(pkg_info, key):
             value = pkg_info[k]
 
     value = value.strip().lower()
-    if value in (
-        "1",
-        "true",
-        "t",
-        "yes",
-        "y",
-        "on",
-        "enable",
-        "enabled",
-        "found",
-    ):
-        return True
-    if value in (
-        "",
-        "0",
-        "false",
-        "f",
-        "no",
-        "n",
-        "off",
-        "disable",
-        "disabled",
-        "notfound",
-        "none",
-        "null",
-        "nil",
-        "undefined",
-        "n/a",
-    ):
-        return False
+    return value in ("1", "true", "t", "yes", "y", "on", "enable", "enabled", "found")
 
 
 def is_postinstallscripts_available(pkg_info):
@@ -296,7 +267,7 @@ def get_package_list(artifact_dir):
         if is_packaging_disabled(pkg_info):
             continue
 
-        # Metapackages don't need artifact lookup
+        # Metapackages do not need artifact lookup
         if is_meta_package(pkg_info):
             pkg_list.append(pkg_name)
             continue
@@ -417,7 +388,12 @@ def expand_metapackage_to_all_archs(pkg_name, gfxarch_list, config: PackageConfi
     """
     arch_specific_packages = []
 
-    for gfx_arch in gfxarch_list:
+    # Filter archs to only those with artifacts
+    filtered_archs = filter_archs_with_artifacts(
+        pkg_name, gfxarch_list, config.artifacts_dir
+    )
+
+    for gfx_arch in filtered_archs:
         # Create new config for each arch with versioned_pkg=True
         local_config = replace(config, versioned_pkg=True, gfx_arch=gfx_arch)
         # update_package_name will append version and gfx_arch
@@ -447,8 +423,13 @@ def expand_kpack_meta_dependencies(pkg_name, gfxarch_list, config: PackageConfig
     host_pkg = update_package_name(pkg_name, host_config)
     packages.append(host_pkg)
 
-    # Add all arch-specific (device) packages
-    for gfx_arch in gfxarch_list:
+    # Filter archs to only those with artifacts
+    filtered_archs = filter_archs_with_artifacts(
+        pkg_name, gfxarch_list, config.artifacts_dir
+    )
+
+    # Add arch-specific (device) packages only for available architectures
+    for gfx_arch in filtered_archs:
         arch_config = replace(config, versioned_pkg=True, gfx_arch=gfx_arch)
         arch_pkg = update_package_name(pkg_name, arch_config)
         packages.append(arch_pkg)
@@ -547,13 +528,11 @@ def process_main_dependencies_kpack(
             )
         else:
             # Arch-specific metapackage: depend on actual runtime packages
-            # Filter out dependencies that don't have artifacts for this architecture
             dep_list = pkg_info.get(field_key, [])
-            dep_list = [
-                dep
-                for dep in dep_list
-                if has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
-            ]
+            # Filter deps without artifacts
+            dep_list = filter_dependencies_by_artifacts(
+                dep_list, config.artifacts_dir, config.gfx_arch
+            )
     elif config.gfx_arch == GFX_META:
         # GFX_META for non-meta gfxarch packages: depend on host + all device packages
         dep_list = expand_kpack_meta_dependencies(pkg_name, config.gfxarch_list, config)
@@ -568,9 +547,12 @@ def process_main_dependencies_kpack(
                 get_package_info(dep, raise_if_missing=False) or {}, config.enable_kpack
             )
         ]
+        # Filter deps without artifacts
+        dep_list = filter_dependencies_by_artifacts(
+            dep_list, config.artifacts_dir, config.gfx_arch
+        )
     else:
         # Device package: depend on host package + gfxarch dependencies with arch suffix
-        # Filter out dependencies that don't have artifacts for this architecture
         dep_list = pkg_info.get(field_key, [])
         gfxarch_deps = [
             dep
@@ -578,8 +560,11 @@ def process_main_dependencies_kpack(
             if is_gfxarch_package(
                 get_package_info(dep, raise_if_missing=False) or {}, config.enable_kpack
             )
-            and has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
         ]
+        # Filter deps without artifacts
+        gfxarch_deps = filter_dependencies_by_artifacts(
+            gfxarch_deps, config.artifacts_dir, config.gfx_arch
+        )
         dep_list = [pkg_name] + gfxarch_deps
 
     if not dep_list:
@@ -683,15 +668,15 @@ def convert_to_versiondependency(
 def append_version_suffix(dep_string, config: PackageConfig):
     """Append a ROCm version suffix to dependency names that match known ROCm packages.
 
-    This function takes a comma‑separated dependency string,
+    This function takes a comma-separated dependency string,
     identifies which dependencies correspond to packages listed in `pkg_list`,
     and appends the appropriate ROCm version suffix based on the provided configuration.
 
     Parameters:
-    dep_string : A comma‑separated list of dependency package names.
+    dep_string : A comma-separated list of dependency package names.
     config : Configuration object containing ROCm version, suffix, and packaging type.
 
-    Returns: A comma‑separated string where matching dependencies include the version suffix,
+    Returns: A comma-separated string where matching dependencies include the version suffix,
     while all others remain unchanged.
     """
     print_function_name()
@@ -954,11 +939,11 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     if pkg_info is None:
         return False
 
-    # Non-gfxarch packages don't need arch-specific artifacts
+    # Non-gfxarch packages do not need arch-specific artifacts
     if not is_gfxarch_package(pkg_info, enable_kpack=True):
         return True
 
-    # Meta packages don't have their own artifacts
+    # Meta packages do not have their own artifacts
     if is_meta_package(pkg_info):
         return True
 
@@ -977,7 +962,7 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             artifact_suffix = gfx_arch
 
         # When checking for a specific gfx architecture (not host/meta),
-        # skip generic-only artifacts - they don't contribute to gfx-specific packages
+        # skip generic-only artifacts - they do not contribute to gfx-specific packages
         if gfx_arch not in (GFX_HOST, GFX_META) and artifact_suffix == "generic":
             continue
 
@@ -1013,92 +998,83 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     return False
 
 
-def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
-    """Determine the appropriate dependency list for multi-arch mode.
+def filter_archs_with_artifacts(
+    pkg_name: str, gfxarch_list, artifacts_dir: Path
+) -> list:
+    """Filter architecture list to only those with available artifacts.
+
+    This function prevents meta packages from depending on device packages that
+    do not exist because their artifacts were not built.
 
     Parameters:
-    pkg_info: Package details from JSON
-    dep_key: Dependency key ("DEBDepends" or "RPMRequires")
-    config: Configuration object containing package metadata
+    pkg_name: Package name to check (e.g., "amdrocm-ck")
+    gfxarch_list: Full list of architecture targets to filter
+    artifacts_dir: Directory where artifacts are stored
 
-    Returns: List of dependency package names
+    Returns: Filtered list of architectures that have artifacts available
+
+    Example:
+        Input:  ["gfx1100", "gfx1101", "gfx942"], pkg_name="amdrocm-ck"
+        Output: ["gfx1100", "gfx942"]  # if gfx1101 has no artifacts for ck
     """
-    pkg_name = pkg_info.get("Package")
-    is_meta = is_meta_package(pkg_info)
+    pkg_info = get_package_info(pkg_name, raise_if_missing=False)
+    if pkg_info is None:
+        return list(gfxarch_list)
 
-    if (
-        config.enable_kpack
-        and is_meta
-        and is_gfxarch_package(pkg_info, config.enable_kpack)
-    ):
-        # For gfxarch metapackages in multi-arch mode:
-        # - Generic variant depends on all arch-specific variants
-        # - Arch-specific variants depend on actual runtime packages
-        # Non-gfxarch metapackages (e.g., developer-tools) fall through to generic handling
-        if config.gfx_arch == GFX_GENERIC:
-            # Generic metapackage: depend on all arch-specific metapackages
-            return expand_metapackage_to_all_archs(
-                pkg_name, config.gfxarch_list, config
-            )
+    # Non-gfxarch packages do not have arch-specific variants
+    if not is_gfxarch_package(pkg_info, enable_kpack=True):
+        return list(gfxarch_list)
+
+    # Meta packages inherit from their dependencies, return all archs
+    if is_meta_package(pkg_info):
+        return list(gfxarch_list)
+
+    # Filter to only architectures with available artifacts
+    available = [
+        arch
+        for arch in gfxarch_list
+        if has_artifact_for_arch(pkg_name, artifacts_dir, arch)
+    ]
+
+    if len(available) < len(list(gfxarch_list)):
+        missing = set(gfxarch_list) - set(available)
+        print(f"WORKAROUND: {pkg_name} missing artifacts for: {sorted(missing)}")
+
+    return available
+
+
+def filter_dependencies_by_artifacts(
+    dep_list: list, artifacts_dir: Path, gfx_arch: str
+) -> list:
+    """Filter dependency list to exclude packages without artifacts.
+
+    Removes dependencies that do not have artifacts available for the specified
+    architecture. This prevents installation failures due to missing packages.
+
+    Parameters:
+    dep_list: List of dependency package names
+    artifacts_dir: Directory where artifacts are stored
+    gfx_arch: Target architecture to check
+
+    Returns: Filtered dependency list
+    """
+    filtered = []
+    for dep in dep_list:
+        dep_info = get_package_info(dep, raise_if_missing=False)
+        if dep_info is None:
+            # Unknown package, keep it (might be system package)
+            filtered.append(dep)
+            continue
+
+        # Non-gfxarch packages are always available
+        if not is_gfxarch_package(dep_info, enable_kpack=True):
+            filtered.append(dep)
+            continue
+
+        # Check if gfxarch package has artifacts
+        if has_artifact_for_arch(dep, artifacts_dir, gfx_arch):
+            filtered.append(dep)
         else:
-            # Arch-specific metapackage: depend on actual runtime packages
-            dep_list = pkg_info.get(dep_key, [])
+            print(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch})")
 
-            # Check if this is a non-gfxarch metapackage or a -devel metapackage
-            is_pkg_gfxarch = is_gfxarch_package(pkg_info, config.enable_kpack)
-
-            if not is_pkg_gfxarch or pkg_name.endswith("-devel"):
-                # For non-gfxarch metapackages (e.g., developer-tools) and
-                # -devel metapackages (even if gfxarch):
-                # Include all dependencies that exist in pkg_list (no arch filtering)
-                pkg_list, _ = get_package_list(config.artifacts_dir)
-                return [
-                    dep
-                    for dep in dep_list
-                    if not dep.startswith("amdrocm") or dep in pkg_list
-                ]
-            else:
-                # Gfxarch metapackages (non-devel): filter by artifacts
-                return [
-                    dep
-                    for dep in dep_list
-                    if has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
-                ]
-    elif config.enable_kpack and config.gfx_arch == GFX_GENERIC:
-        # Generic package in multi-arch mode:
-        # Only include non-gfxarch dependencies
-        # Gfxarch deps are pulled via the gfx-specific package
-        # Exception: non-gfxarch packages and -devel packages keep all dependencies
-        dep_list = pkg_info.get(dep_key, [])
-
-        # For non-gfxarch packages (e.g., developer-tools) and -devel packages,
-        # keep all dependencies but verify amdrocm* packages exist
-        is_pkg_gfxarch = is_gfxarch_package(pkg_info, config.enable_kpack)
-        if not is_pkg_gfxarch or pkg_name.endswith("-devel"):
-            pkg_list, _ = get_package_list(config.artifacts_dir)
-            return [
-                dep
-                for dep in dep_list
-                if not dep.startswith("amdrocm") or dep in pkg_list
-            ]
-
-        return [
-            dep
-            for dep in dep_list
-            if not is_gfxarch_package(get_package_info(dep) or {}, config.enable_kpack)
-        ]
-    elif config.enable_kpack and config.gfx_arch != GFX_GENERIC:
-        # Gfx-specific package in multi-arch mode:
-        # Depend on generic self + gfxarch dependencies with arch suffix
-        # Filter out dependencies that don't have artifacts for this architecture
-        dep_list = pkg_info.get(dep_key, [])
-        gfxarch_deps = [
-            dep
-            for dep in dep_list
-            if is_gfxarch_package(get_package_info(dep) or {}, config.enable_kpack)
-            and has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
-        ]
-        return [pkg_name] + gfxarch_deps
-    else:
-        # Single-arch mode: use full dependencies
-        return pkg_info.get(dep_key, [])
+    return filtered

@@ -149,11 +149,17 @@ def build_package_variants(pkg_name, config: PackageConfig) -> list:
 def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     """Build all variants for a gfxarch package in kpack mode (multi-arch).
 
-    Creates:
+    For regular gfxarch packages (Metapackage=False), creates:
     - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts
     - Device packages (e.g., amdrocm-fft8.2-gfx1100, amdrocm-fft8.2-gfx94x) - arch-specific artifacts
     - Meta package (e.g., amdrocm-fft8.2) - depends on host + all devices
     - Non-versioned package (e.g., amdrocm-fft) - user-facing, depends on meta
+
+    For gfxarch metapackages (Metapackage=True + Gfxarch=True), creates:
+    - Arch-specific meta packages (e.g., amdrocm-core8.2-gfx1100) - depends on actual packages
+    - Generic meta package (e.g., amdrocm-core8.2) - depends on all arch-specific metas
+    - Non-versioned package (e.g., amdrocm-core) - user-facing, depends on generic meta
+    (No host package - metapackages have no artifacts to split)
 
     This function builds packages sequentially but is parallel-ready. Each variant
     builder is independent (no shared state, no cleanup during build) and can be
@@ -167,21 +173,27 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
         List of built package filenames
     """
     built_packages = []
+    pkg_info = get_package_info(pkg_name)
+    is_meta = is_meta_package(pkg_info)
 
     # Host package (contains generic artifacts)
-    print(f"\n=== Building host variant for {pkg_name} ===")
-    pkg = build_host_package(pkg_name, config)
-    if pkg:
-        built_packages.extend(pkg)
+    # Skip for metapackages - they have no artifacts, only dependencies
+    if not is_meta:
+        print(f"\n=== Building host variant for {pkg_name} ===")
+        pkg = build_host_package(pkg_name, config)
+        if pkg:
+            built_packages.extend(pkg)
 
     # Device packages (one per architecture)
+    # For metapackages, these become arch-specific meta packages
     for device_arch in config.gfxarch_list:
         print(f"\n=== Building device variant for {pkg_name} ({device_arch}) ===")
         pkg = build_device_package(pkg_name, config, device_arch)
         if pkg:
             built_packages.extend(pkg)
 
-    # Meta package (depends on host + all devices)
+    # Meta package (depends on host + all devices for regular packages,
+    # or depends on all arch-specific metas for metapackages)
     print(f"\n=== Building meta variant for {pkg_name} ===")
     pkg = build_meta_package(pkg_name, config)
     if pkg:
