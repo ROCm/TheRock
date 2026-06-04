@@ -832,6 +832,7 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 
 > [!IMPORTANT]
 > The `jax` package itself is **not** published to the TheRock index.
+>
 > **For JAX 0.8.2 version:** install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`
 > from the GPU-family index, then install JAX from [PyPI](https://pypi.org/project/jax/)
 > with `pip install jax==0.8.2`.
