@@ -255,6 +255,11 @@ skip_tests = {
             #   AssertionError: Scalars are not equal!
             #   Expected 0 but got 2173342911312.
             "test_streams",
+            # https://github.com/ROCm/TheRock/issues/4958
+            # Windows fatal exception: access violation in amdhip64_7.dll
+            "test_graph_capture_reclaim_4_streams",
+            "test_garbage_collect_expandable",
+            "test_autocast_cache_leak",
         ],
         "nn": [
             # RuntimeError: miopenStatusUnknownError
