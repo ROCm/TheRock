@@ -79,13 +79,18 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
 
 
 def ensure_core_library_symlinks(core: PopulatedDistPackage) -> None:
-    """Recreate unversioned core library symlinks expected by dlopen()."""
+    """Recreate unversioned core library symlinks expected by dlopen().
+
+    TODO(#5562): Remove this function and its call site ensure_core_library_symlinks(core) in run()
+    once upstream RCCL stops using the unversioned libhsa-runtime64.so name in its dlopen() calls.
+    """
     core_lib_dir = core.platform_dir / "lib"
 
     target = core_lib_dir / "libhsa-runtime64.so.1"
     link = core_lib_dir / "libhsa-runtime64.so"
     if target.exists() and not link.exists():
         link.symlink_to(target.name)
+
 
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
