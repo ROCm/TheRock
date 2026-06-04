@@ -72,9 +72,7 @@ component_lookup_key = (
     or test_component_job_name
 )
 
-TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
-    component_lookup_key, component_lookup_key
-)
+TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(component_lookup_key, component_lookup_key)
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
