@@ -92,6 +92,13 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      # EMULATION-FLAG: only the compiler-runtime stage builds rocjitsu
+      # (per BUILD_TOPOLOGY.toml). Forward run_simulator so the per-stage
+      # workflow appends `-DTHEROCK_ENABLE_EMULATION=ON` to its cmake
+      # configure, unblocking `therock_provide_artifact(rocjitsu ...)`.
+      # Without this, rocjitsu silently fails its gate and no
+      # `rocjitsu_*.tar.zst` is produced for simulator-test to consume.
+      enable_emulation: ${{ inputs.run_simulator }}
     permissions:
       contents: read
       id-token: write
