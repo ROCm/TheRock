@@ -2,6 +2,7 @@
 [components.lib."comm-libs/rocshmem/stage"]
 include = [
   "lib/*.bc",
+  "lib/rocshmem/python/rocshmem4py/**",
 ]
 [components.run."comm-libs/rocshmem/stage"]
 include = [
