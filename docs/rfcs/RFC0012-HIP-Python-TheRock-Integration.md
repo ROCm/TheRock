@@ -1,5 +1,5 @@
 ---
-author(s): Dominic Etienne Charrier (AMD), Lalith Narasimhan (AMD)
+author: Dominic Etienne Charrier (domcharrier), Lalith Narasimhan (lnarasim-amd)
 created: 2026-06-03
 modified: 2026-06-03
 status: draft
