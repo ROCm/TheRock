@@ -1226,7 +1226,7 @@ class PerTargetExtrasTest(TmpDirTestCase):
         extras = dist_info.build_per_target_extras()
         req = extras["device-gfx942"][0]
         self.assertTrue(
-            req.startswith("rocm-sdk-device-gfx942==0.0.1.test"),
+            req.startswith("rocm-sdk-device-gfx942===0.0.1.test"),
             f"Unexpected Requires-Dist shape: {req}",
         )
 
