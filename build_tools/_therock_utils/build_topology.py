@@ -609,6 +609,19 @@ class BuildTopology:
                 else:
                     external_sources_by_path[source.path] = source_set.name
 
+        # Check for conflicting submodule ownership.
+        submodule_owner: Dict[str, str] = {}
+        for source_set in self.source_sets.values():
+            for submodule in source_set.submodules:
+                previous_source_set = submodule_owner.get(submodule.name)
+                if previous_source_set and previous_source_set != source_set.name:
+                    errors.append(
+                        f"Submodule '{submodule.name}' is used by both "
+                        f"source sets '{previous_source_set}' and '{source_set.name}'"
+                    )
+                else:
+                    submodule_owner[submodule.name] = source_set.name
+
         return errors
 
     def get_dependency_graph(self) -> Dict:
@@ -800,9 +813,59 @@ class BuildTopology:
                 stages_by_source_set.setdefault(source_set_name, []).append(stage_name)
         return stages_by_source_set
 
+    def get_submodule_to_source_set(self) -> Dict[str, str]:
+        """
+        Get a reverse index from submodule names to source set names.
+        """
+        mapping: Dict[str, str] = {}
+        for source_set in self.source_sets.values():
+            for submodule in source_set.submodules:
+                mapping[submodule.name] = source_set.name
+        return mapping
+
     def get_source_sets(self) -> List[SourceSet]:
         """Get all source sets."""
         return list(self.source_sets.values())
+
+    def get_source_set_for_submodule(
+        self, submodule_name: str, platform: Optional[str] = None
+    ) -> Optional[SourceSet]:
+        """
+        Return the first source set whose submodules include `submodule_name`.
+
+        Args:
+            submodule_name: Name of the git submodule.
+            platform: Optional platform filter.
+
+        Returns:
+            Matching SourceSet, or None if no match is found.
+        """
+        for source_set in self.source_sets.values():
+            if platform and platform in source_set.disable_platforms:
+                continue
+
+            for submodule in source_set.submodules:
+                if submodule.name == submodule_name:
+                    return source_set
+
+        return None
+
+    def get_source_sets_for_submodules(
+        self, submodule_names: List[str], platform: Optional[str] = None
+    ) -> List[SourceSet]:
+        """
+        Return deduplicated source sets for a list of submodule names.
+        """
+        source_sets_by_name: Dict[str, SourceSet] = {}
+
+        for submodule_name in submodule_names:
+            source_set = self.get_source_set_for_submodule(
+                submodule_name, platform=platform
+            )
+            if source_set and source_set.name not in source_sets_by_name:
+                source_sets_by_name[source_set.name] = source_set
+
+        return list(source_sets_by_name.values())
 
     def get_submodules_for_source_set(self, source_set_name: str) -> List[Submodule]:
         """
