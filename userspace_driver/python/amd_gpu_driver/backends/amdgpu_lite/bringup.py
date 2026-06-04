@@ -186,6 +186,13 @@ def full_gpu_bringup(
     flush_gpu_tlb(dev, gmc_config, vmid=0, hub="gfxhub")
     print("  GMC: GFXHUB GART enabled")
 
+    # --- macOS-proven cold-boot recipe (LITE_MES_RECIPE=1) ---
+    if os.environ.get("LITE_MES_RECIPE") == "1":
+        return _recipe_bringup(
+            dev, ip_result, nbio_config, gmc_config, fw_dir,
+            gart_handle, dummy_handle,
+        )
+
     # --- 5. PSP init + firmware loading ---
     print("\n[5/8] Initializing PSP (firmware)...")
     psp_config = None
@@ -285,6 +292,146 @@ def full_gpu_bringup(
         ih_config=ih_config,
         mes_ring=mes_ring,
         compute_queue=compute_queue,
+        gart_table_dma_handle=gart_handle,
+        dummy_page_dma_handle=dummy_handle,
+    )
+
+
+# gfx1201 GC BASE_IDX=1 register DWORD base (validated on this silicon; matches
+# the macOS phase-9 hardcode). IP discovery prints the discovered value for
+# cross-check in _recipe_bringup.
+_GC_B1_DW = 0xA000
+_REG_RLC_RLCS_BOOTLOAD_STATUS = 0x4e7c  # bit31 = BOOTLOAD_COMPLETE
+_REG_GFX_IMU_GFX_RESET_CTRL = 0x40bc    # == 0x7F when all 7 GFX blocks released
+_REG_GFX_IMU_CORE_CTRL = 0x40b6         # == 0x8 when IMU running
+_REG_RLC_CNTL = 0x4c00                  # == 0x1 when RLC enabled
+
+
+def _gc_b1_rd(dev: AmdgpuLiteDevice, dw_off: int) -> int:
+    return dev.read_reg32((_GC_B1_DW + dw_off) * 4)
+
+
+def _poll_bootload_complete(dev: AmdgpuLiteDevice, timeout_ms: int = 5000) -> int:
+    """Poll RLC_RLCS_BOOTLOAD_STATUS until bit31 set or timeout."""
+    import time
+    deadline = time.time() + timeout_ms / 1000.0
+    bl = 0
+    while time.time() < deadline:
+        bl = _gc_b1_rd(dev, _REG_RLC_RLCS_BOOTLOAD_STATUS)
+        if bl & 0x80000000:
+            break
+        time.sleep(0.01)
+    return bl
+
+
+def _gc_base_idx1(ip_result: IPDiscoveryResult) -> int | None:
+    """The discovered GC BASE_IDX=1 base (for cross-checking _GC_B1_DW)."""
+    from amd_gpu_driver.backends.windows.ip_discovery import HardwareID
+    for block in ip_result.ip_blocks:
+        if block.hw_id == HardwareID.GC and block.instance_number == 0:
+            if len(block.base_addresses) > 1:
+                return block.base_addresses[1]
+    return None
+
+
+def _recipe_bringup(
+    dev: AmdgpuLiteDevice,
+    ip_result: IPDiscoveryResult,
+    nbio_config: NBIOConfig,
+    gmc_config: GMCConfig,
+    fw_dir: str | Path,
+    gart_handle: int,
+    dummy_handle: int,
+) -> GPUContext:
+    """Cold-boot via the macOS gfx_bring_up order, gated by LITE_MES_RECIPE.
+
+    Sequence (all PSP before SMU mailbox, per gfx_bringup.py):
+      init_psp -> LOAD_TOC(SOS) -> LOAD_IP_FW(SMU) -> gfx slices (RLC_G last)
+      -> AUTOLOAD_RLC -> SMU SetDriverDramAddr + EnableAllSmuFeatures(0)
+      -> poll RLC_RLCS_BOOTLOAD_STATUS bit31.
+
+    LITE_STOP_AFTER={toc,autoload,smu,bootload,mes,queue} gates how far to go.
+    MES start / compute queue (milestone 4+) are added once bootload passes.
+    """
+    info = dev.info
+    assert info is not None
+    stop_after = os.environ.get("LITE_STOP_AFTER", "")
+
+    # The recipe's SMU step matches macOS: enable all features (non-fatal) and
+    # do NOT DisallowGfxOff. Respect explicit overrides.
+    os.environ.setdefault("AMDGPU_LITE_ENABLE_SMU_FEATURES", "1")
+    os.environ.setdefault("AMDGPU_LITE_DISALLOW_GFXOFF", "0")
+
+    print("\n[recipe 1/5] PSP init + LOAD_TOC/IP_FW + AUTOLOAD_RLC...")
+    psp_config = init_psp(
+        dev, ip_result,
+        fw_dir=str(fw_dir),
+        vram_mc_base=gmc_config.vram_start,
+        vram_base_offset=gmc_config.fb_offset,
+        vram_bar_phys_addr=info.bars[info.vram_bar_index].phys_addr,
+        nbio_config=nbio_config,
+    )
+    gc_disc = _gc_base_idx1(ip_result)
+    print(f"  bases: MP0[0]=0x{psp_config.mp0_base[0]:x} "
+          f"GC_B1(used)=0x{_GC_B1_DW:x} GC_B1(discovered)="
+          f"{'0x%x' % gc_disc if gc_disc is not None else 'n/a'}")
+
+    load_all_firmware(dev, psp_config)  # recipe path (LITE_MES_RECIPE=1)
+    if stop_after == "toc" or stop_after == "autoload":
+        print(f"  LITE_STOP_AFTER={stop_after}: stopping after PSP firmware phase")
+        return _recipe_context(dev, ip_result, nbio_config, gmc_config,
+                               psp_config, None, gart_handle, dummy_handle)
+
+    print("\n[recipe 2/5] SMU mailbox (SetDriverDramAddr + EnableAllSmuFeatures)...")
+    smu_config = None
+    try:
+        smu_config = init_smu(
+            dev, ip_result,
+            disable_gfxoff=False,
+            vram_mc_base=gmc_config.vram_start,
+        )
+        print(f"  MP1[0]=0x{smu_config.mp1_base[0]:x} {smu_config.messages.name}")
+    except Exception as e:
+        print(f"  SMU step failed (non-fatal): {e}")
+    if stop_after == "smu":
+        print("  LITE_STOP_AFTER=smu: stopping after SMU mailbox")
+        return _recipe_context(dev, ip_result, nbio_config, gmc_config,
+                               psp_config, smu_config, gart_handle, dummy_handle)
+
+    print("\n[recipe 3/5] Poll RLC_RLCS_BOOTLOAD_STATUS bit31...")
+    bl = _poll_bootload_complete(dev)
+    reset_ctrl = _gc_b1_rd(dev, _REG_GFX_IMU_GFX_RESET_CTRL)
+    core_ctrl = _gc_b1_rd(dev, _REG_GFX_IMU_CORE_CTRL)
+    rlc_cntl = _gc_b1_rd(dev, _REG_RLC_CNTL)
+    print(f"  BOOTLOAD_STATUS=0x{bl:08x} RESET_CTRL=0x{reset_ctrl:08x} "
+          f"CORE_CTRL=0x{core_ctrl:x} RLC_CNTL=0x{rlc_cntl:x}")
+    if bl & 0x80000000:
+        print("  PASS: BOOTLOAD_COMPLETE set -- RLC/IMU autoload succeeded")
+    else:
+        print("  FAIL: BOOTLOAD_COMPLETE not set within timeout")
+    if stop_after == "bootload" or not (bl & 0x80000000):
+        return _recipe_context(dev, ip_result, nbio_config, gmc_config,
+                               psp_config, smu_config, gart_handle, dummy_handle)
+
+    print("\n[recipe 4/5] MES start -- not yet ported (milestone 4).")
+    print("  Bootload complete; MES PSP-load + CP_MES_CNTL programming is the")
+    print("  next milestone (port of try_phase9_doorbell.py:649-704).")
+    return _recipe_context(dev, ip_result, nbio_config, gmc_config,
+                           psp_config, smu_config, gart_handle, dummy_handle)
+
+
+def _recipe_context(dev, ip_result, nbio_config, gmc_config, psp_config,
+                    smu_config, gart_handle, dummy_handle) -> GPUContext:
+    return GPUContext(
+        dev=dev,
+        ip_result=ip_result,
+        nbio_config=nbio_config,
+        gmc_config=gmc_config,
+        psp_config=psp_config,
+        smu_config=smu_config,
+        ih_config=None,
+        mes_ring=None,
+        compute_queue=None,
         gart_table_dma_handle=gart_handle,
         dummy_page_dma_handle=dummy_handle,
     )

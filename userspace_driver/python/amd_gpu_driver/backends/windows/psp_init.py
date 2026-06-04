@@ -1366,6 +1366,181 @@ def init_psp(
     return config
 
 
+# ============================================================================
+# macOS-proven gfx1201 cold-boot recipe (LITE_MES_RECIPE=1)
+#
+# Faithful transcription of backends/macos/gfx_bringup.py::gfx_bring_up, which
+# boots the gfx1201 MES on the SAME silicon. Differs from the legacy Windows
+# load_all_firmware path in four ways that all matter:
+#   1. TOC comes from the SOS container (PSP_TOC=4), not gc_*_toc.bin.
+#   2. LOAD_IP_FW uses the cmd-buffer ABI (use_cmd_buffer=True), not the
+#      legacy C2PMSG_36 16-byte frame.
+#   3. RS64 ucode offsets read the v2 gfx-header fields at +40/+48 directly
+#      (NOT common-header ucode_array_offset_bytes), and RLC_G is loaded LAST.
+#   4. RS64_MES(76)/RS64_MES_STACK(77) are part of the autoload batch; the
+#      uni_mes CP_MES(33/34/81/82) load is deferred to the post-bootload MES
+#      start step.
+# Extractor offsets mirror backends/macos/gfx_autoload.py exactly.
+# ============================================================================
+
+def _recipe_extract_rs64(blob: bytes) -> tuple[bytes, bytes]:
+    """gfx_firmware_header_v2_0 -> (ucode, data). Fields at +36/+40/+44/+48."""
+    u_sz, u_off, d_sz, d_off = struct.unpack_from("<IIII", blob, 36)
+    return blob[u_off:u_off + u_sz], blob[d_off:d_off + d_sz]
+
+
+def _recipe_extract_mes(blob: bytes) -> tuple[bytes, bytes]:
+    """mes_firmware_header_v1_0 -> (ucode, data). u_sz+36 u_off+40 d_sz+48 d_off+52."""
+    _uver, u_sz, u_off, _dver, d_sz, d_off = struct.unpack_from("<IIIIII", blob, 32)
+    return blob[u_off:u_off + u_sz], blob[d_off:d_off + d_sz]
+
+
+def _recipe_extract_imu(blob: bytes) -> tuple[bytes, bytes]:
+    """IMU iram+dram. Header offset fields ignored: iram at uoff, dram follows."""
+    uoff = _u32(blob, 24)
+    iram_sz = _u32(blob, 32)
+    dram_sz = _u32(blob, 40)
+    return (blob[uoff:uoff + iram_sz],
+            blob[uoff + iram_sz:uoff + iram_sz + dram_sz])
+
+
+def _recipe_extract_sdma(blob: bytes) -> bytes:
+    """sdma_firmware_header_v3_0 -- ucode_offset/size at +36/+40."""
+    u_off = _u32(blob, 36)
+    u_sz = _u32(blob, 40)
+    return blob[u_off:u_off + u_sz]
+
+
+def _recipe_extract_rlc_subs(blob: bytes) -> dict[int, bytes]:
+    """RLC main ucode + sub-fw keyed by SOC24_FIRMWARE_ID. Absolute offsets."""
+    uoff = _u32(blob, 24)
+    usz = _u32(blob, 20)
+    hver_min = struct.unpack_from("<H", blob, 10)[0]
+    out: dict[int, bytes] = {1: blob[uoff:uoff + usz]}  # 1 = RLC_G_UCODE
+    if hver_min >= 1:
+        srlg_sz, srlg_off = _u32(blob, 132), _u32(blob, 136)
+        srls_sz, srls_off = _u32(blob, 148), _u32(blob, 152)
+        if srlg_sz and srlg_off:
+            out[3] = blob[srlg_off:srlg_off + srlg_sz]   # 3 = RLCG_SCRATCH (SRLG)
+        if srls_sz and srls_off:
+            out[4] = blob[srls_off:srls_off + srls_sz]   # 4 = RLC_SRM_ARAM (SRLS)
+    if hver_min >= 2:
+        iram_sz, iram_off = _u32(blob, 156), _u32(blob, 160)
+        dram_sz, dram_off = _u32(blob, 164), _u32(blob, 168)
+        if iram_sz and iram_off:
+            out[7] = blob[iram_off:iram_off + iram_sz]   # 7 = RLX6_UCODE (IRAM)
+        if dram_sz and dram_off:
+            out[9] = blob[dram_off:dram_off + dram_sz]   # 9 = RLX6_DRAM_BOOT
+    return out
+
+
+def _toc_from_sos(config: PSPConfig) -> bytes:
+    """Extract the PSP_TOC (fw_type 4) component from the SOS container."""
+    mp0_version = config.ip_versions.get("mp0", "14_0_3")
+    sos_path = config.fw_dir / f"psp_{mp0_version}_sos.bin"
+    _header, components = _parse_psp_sos_firmware(sos_path)
+    toc = components.get(int(PSPFWType.PSP_TOC))
+    if not toc:
+        raise RuntimeError(
+            f"No PSP_TOC (fw_type 4) component in {sos_path.name} "
+            f"(found types {sorted(components)})"
+        )
+    return toc
+
+
+def load_all_firmware_recipe(dev: WindowsDevice, config: PSPConfig) -> None:
+    """macOS-proven gfx1201 autoload recipe (see header comment above)."""
+    verbose = os.environ.get("LITE_PSP_VERBOSE") == "1"
+    fw_dir = config.fw_dir
+    gc = config.ip_versions.get("gc", "12_0_1")
+    sdma_v = config.ip_versions.get("sdma", gc)
+    mp1 = config.ip_versions.get("mp1", "14_0_3")
+
+    # LOAD_IP_FW must use the cmd-buffer ABI (cmd[7/8/9/10]=addr_lo/hi/size/type),
+    # not the legacy C2PMSG_36 frame. On a VBIOS-POST'd GPU this is never set.
+    config.use_cmd_buffer = True
+
+    # 1. LOAD_TOC from the SOS container (NOT gc_*_toc.bin).
+    toc = _toc_from_sos(config)
+    load_toc_firmware(dev, config, toc)
+    print(f"  PSP[recipe]: LOAD_TOC OK ({len(toc)} bytes from SOS container)")
+
+    # 2. LOAD_IP_FW(SMU) first (must precede the other fw per tinygrad order).
+    smu_blob = _read_firmware(fw_dir / f"smu_{mp1}.bin")
+    sh = parse_firmware_header(smu_blob)
+    smu_payload = _slice(smu_blob, sh.ucode_array_offset_bytes, sh.ucode_size_bytes)
+    try:
+        load_ip_firmware(dev, config, int(GFXFWType.SMU), smu_payload)
+        print(f"  PSP[recipe]: SMU fw loaded ({len(smu_payload)} bytes)")
+    except RuntimeError as e:
+        # macOS loads SMU via PSP strict; if Navi48 rejects it here, log loudly
+        # but continue so we can see how far the rest of autoload gets.
+        print(f"  PSP[recipe]: WARNING SMU LOAD_IP_FW rejected - {e}")
+
+    # 3. Parse + load the gfx batch, RLC_G LAST.
+    imu_blob = _read_firmware(fw_dir / f"gc_{gc}_imu.bin")
+    rlc_blob = _read_firmware(fw_dir / f"gc_{gc}_rlc.bin")
+    pfp_blob = _read_firmware(fw_dir / f"gc_{gc}_pfp.bin")
+    me_blob = _read_firmware(fw_dir / f"gc_{gc}_me.bin")
+    mec_blob = _read_firmware(fw_dir / f"gc_{gc}_mec.bin")
+    mes_blob = _read_firmware(fw_dir / f"gc_{gc}_mes.bin")
+    sdma_blob = _optional_firmware(fw_dir / f"sdma_{sdma_v}.bin")
+
+    imu_i, imu_d = _recipe_extract_imu(imu_blob)
+    rlc = _recipe_extract_rlc_subs(rlc_blob)
+    pfp_u, pfp_d = _recipe_extract_rs64(pfp_blob)
+    me_u, me_d = _recipe_extract_rs64(me_blob)
+    mec_u, mec_d = _recipe_extract_rs64(mec_blob)
+    mes_u, mes_d = _recipe_extract_mes(mes_blob)
+
+    batch: list[tuple[str, GFXFWType, bytes]] = []
+    if sdma_blob is not None:
+        batch.append(("SDMA_TH0", GFXFWType.SDMA_UCODE_TH0,
+                      _recipe_extract_sdma(sdma_blob)))
+    batch += [
+        ("RLC_IRAM", GFXFWType.RLC_IRAM, rlc.get(7, b"")),
+        ("RLC_DRAM_BOOT", GFXFWType.RLC_DRAM_BOOT, rlc.get(9, b"")),
+        ("RLC_SRLG", GFXFWType.RLC_RESTORE_LIST_GPM_MEM, rlc.get(3, b"")),
+        ("RLC_SRLS", GFXFWType.RLC_RESTORE_LIST_SRM_MEM, rlc.get(4, b"")),
+        ("RS64_PFP", GFXFWType.RS64_PFP, pfp_u),
+        ("RS64_PFP_P0", GFXFWType.RS64_PFP_P0_STACK, pfp_d),
+        ("RS64_PFP_P1", GFXFWType.RS64_PFP_P1_STACK, pfp_d),
+        ("RS64_ME", GFXFWType.RS64_ME, me_u),
+        ("RS64_ME_P0", GFXFWType.RS64_ME_P0_STACK, me_d),
+        ("RS64_ME_P1", GFXFWType.RS64_ME_P1_STACK, me_d),
+        ("RS64_MEC", GFXFWType.RS64_MEC, mec_u),
+        ("RS64_MEC_P0", GFXFWType.RS64_MEC_P0_STACK, mec_d),
+        ("RS64_MEC_P1", GFXFWType.RS64_MEC_P1_STACK, mec_d),
+        ("RS64_MEC_P2", GFXFWType.RS64_MEC_P2_STACK, mec_d),
+        ("RS64_MEC_P3", GFXFWType.RS64_MEC_P3_STACK, mec_d),
+        ("RS64_MES", GFXFWType.RS64_MES, mes_u),
+        ("RS64_MES_STACK", GFXFWType.RS64_MES_STACK, mes_d),
+        ("IMU_I", GFXFWType.IMU_I, imu_i),
+        ("IMU_D", GFXFWType.IMU_D, imu_d),
+        ("RLC_G", GFXFWType.RLC_G, rlc.get(1, b"")),  # MUST be last
+    ]
+
+    failures: list[tuple[str, int, str]] = []
+    for label, fw_type, payload in batch:
+        if not payload:
+            print(f"  PSP[recipe]: {label:<16} empty payload, skipped")
+            continue
+        try:
+            load_ip_firmware(dev, config, int(fw_type), payload)
+            if verbose:
+                print(f"  PSP[recipe]: {label:<16} type={int(fw_type):<3} "
+                      f"size={len(payload):<7} OK")
+        except RuntimeError as e:
+            failures.append((label, int(fw_type), str(e)))
+            print(f"  PSP[recipe]: {label:<16} type={int(fw_type):<3} REJECTED - {e}")
+    if failures:
+        print(f"  PSP[recipe]: {len(failures)} fw type(s) rejected (non-fatal)")
+
+    # 4. AUTOLOAD_RLC -- PSP runs the full backdoor autoload internally.
+    trigger_rlc_autoload(dev, config)
+    print("  PSP[recipe]: AUTOLOAD_RLC triggered")
+
+
 def load_all_firmware(
     dev: WindowsDevice,
     config: PSPConfig,
@@ -1385,6 +1560,10 @@ def load_all_firmware(
         config: PSP config from init_psp().
         ip_version: IP version string for firmware file names.
     """
+    if os.environ.get("LITE_MES_RECIPE") == "1":
+        load_all_firmware_recipe(dev, config)
+        return
+
     fw_dir = config.fw_dir
     versions = config.ip_versions
     gc_version = versions.get("gc", "12_0_1")
