@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -334,6 +335,50 @@ def _gc_base_idx1(ip_result: IPDiscoveryResult) -> int | None:
     return None
 
 
+def _recipe_mes_start(dev, ip_result, psp_config, smu_config) -> None:
+    """Start the MES engine by reusing ring_init.init_gfx_for_compute.
+
+    init_gfx_for_compute does MEC RS64 enable + MES VRAM-backdoor firmware
+    staging (CP_MES_IC_BASE/MDBASE) + MES enable (CP_MES_CNTL) -- but only if
+    psp_config.ucode_start carries PFP/ME/MEC/MES/MES1 entry-point addresses.
+    The LITE_MES_RECIPE PSP path does not populate ucode_start (and the PSP
+    RS64_MES load was rejected), so fill it from the gfx firmware headers here.
+    init_gfx_for_compute's _rlc_backdoor_autoload is a no-op without
+    AMDGPU_LITE_RLC_BACKDOOR_AUTO=1, and _wait_rlc_autoload passes because our
+    PSP AUTOLOAD_RLC already set RLC_RLCS_BOOTLOAD_STATUS bit31.
+    """
+    import struct
+    from amd_gpu_driver.backends.windows.psp_init import _read_firmware
+
+    fw_dir = psp_config.fw_dir
+    gc = psp_config.ip_versions.get("gc", "12_0_1")
+
+    def _rs64_entry(name: str) -> int:
+        # gfx_firmware_header_v2_0: ucode_start_addr_lo/hi at +52/+56.
+        blob = _read_firmware(fw_dir / f"gc_{gc}_{name}.bin")
+        lo, hi = struct.unpack_from("<II", blob, 52)
+        return (hi << 32) | lo
+
+    def _mes_entry() -> int:
+        # mes_firmware_header_v1_0: ucode_start_addr_lo/hi at +56/+60.
+        blob = _read_firmware(fw_dir / f"gc_{gc}_uni_mes.bin")
+        lo, hi = struct.unpack_from("<II", blob, 56)
+        return (hi << 32) | lo
+
+    mes_entry = _mes_entry()
+    psp_config.ucode_start.update({
+        "PFP": _rs64_entry("pfp"),
+        "ME": _rs64_entry("me"),
+        "MEC": _rs64_entry("mec"),
+        "MES": mes_entry,
+        "MES1": mes_entry,
+    })
+    us = psp_config.ucode_start
+    print(f"  ucode_start: PFP=0x{us['PFP']:x} ME=0x{us['ME']:x} "
+          f"MEC=0x{us['MEC']:x} MES=0x{us['MES']:x}")
+    init_gfx_for_compute(dev, ip_result, psp_config, smu_config)
+
+
 def _recipe_bringup(
     dev: AmdgpuLiteDevice,
     ip_result: IPDiscoveryResult,
@@ -413,11 +458,85 @@ def _recipe_bringup(
         return _recipe_context(dev, ip_result, nbio_config, gmc_config,
                                psp_config, smu_config, gart_handle, dummy_handle)
 
-    print("\n[recipe 4/5] MES start -- not yet ported (milestone 4).")
-    print("  Bootload complete; MES PSP-load + CP_MES_CNTL programming is the")
-    print("  next milestone (port of try_phase9_doorbell.py:649-704).")
-    return _recipe_context(dev, ip_result, nbio_config, gmc_config,
-                           psp_config, smu_config, gart_handle, dummy_handle)
+    # --- [recipe 4/5] MES start: reuse ring_init's gfx-compute path ---
+    # init_gfx_for_compute does MEC config/enable + MES VRAM-backdoor fw staging
+    # (CP_MES_IC_BASE) + MES enable -- gated on psp_config.ucode_start, which our
+    # recipe did not populate. _recipe_mes_start fills it from the gfx fw headers
+    # then calls init_gfx_for_compute. Its _rlc_backdoor_autoload is a no-op
+    # (AMDGPU_LITE_RLC_BACKDOOR_AUTO unset) and _wait_rlc_autoload passes since our
+    # PSP AUTOLOAD already set bootload bit31.
+    print("\n[recipe 4/5] MES start (init_gfx_for_compute, ucode_start populated)...")
+    _recipe_mes_start(dev, ip_result, psp_config, smu_config)
+
+    hdr0 = _gc_b1_rd(dev, 0x280d)   # CP_MES_HEADER_DUMP
+    ip0 = _gc_b1_rd(dev, 0x2813)    # CP_MES_INSTR_PNTR
+    time.sleep(0.2)
+    hdr1 = _gc_b1_rd(dev, 0x280d)
+    ip1 = _gc_b1_rd(dev, 0x2813)
+    mes_cntl = _gc_b1_rd(dev, 0x2807)   # CP_MES_CNTL
+    mec_cntl = _gc_b1_rd(dev, 0x2904)   # CP_MEC_RS64_CNTL
+    print(f"  MES alive check: HEADER_DUMP 0x{hdr0:08x}->0x{hdr1:08x} "
+          f"INSTR_PNTR 0x{ip0:08x}->0x{ip1:08x} "
+          f"CP_MES_CNTL=0x{mes_cntl:08x} CP_MEC_RS64_CNTL=0x{mec_cntl:08x}")
+    mes_alive = (hdr0 != hdr1) or (ip1 != 0)
+    print(f"  MES {'RUNNING' if mes_alive else 'NOT visibly executing'}")
+    if stop_after == "mes":
+        print("  LITE_STOP_AFTER=mes: stopping after MES start")
+        return _recipe_context(dev, ip_result, nbio_config, gmc_config,
+                               psp_config, smu_config, gart_handle, dummy_handle)
+
+    # --- [recipe 5/5] MES rings + compute queue + NOP+fence dispatch ---
+    print("\n[recipe 5/5] MES rings + compute queue + NOP+fence...")
+    # H3 (kiq-activation-diff): ring_init enables the doorbell aperture +
+    # CP_MEC_DOORBELL_RANGE but does NOT program the GDC S2A doorbell monitor
+    # entries that the proven try_phase9 path uses (lines 635-641). Without S2A
+    # routing, a CPU write to the doorbell BAR may never reach the CP front-end,
+    # so the KIQ never fetches the SET_HW_RESOURCES frame -> "MES API opcode 0
+    # timed out". Program them here (NBIO BASE_IDX=2 = 0xD20) before the KIQ ring
+    # is built/rung. Toggle off with LITE_NO_S2A=1 for A/B comparison.
+    if os.environ.get("LITE_NO_S2A") != "1":
+        _NBIO_B2 = 0xD20
+        dev.write_reg32((_NBIO_B2 + 0x01cb) * 4, 0x30000007)  # S2A_DOORBELL_ENTRY_0_CTRL
+        dev.write_reg32((_NBIO_B2 + 0x01ce) * 4, 0x3000000D)  # S2A_DOORBELL_ENTRY_3_CTRL
+        e0 = dev.read_reg32((_NBIO_B2 + 0x01cb) * 4)
+        e3 = dev.read_reg32((_NBIO_B2 + 0x01ce) * 4)
+        print(f"  S2A doorbell entries: ENTRY_0=0x{e0:08x} ENTRY_3=0x{e3:08x}")
+    mes_ring = None
+    compute_queue = None
+    ih_config = None
+    try:
+        mes_ring = init_mes_for_compute(dev, ip_result, nbio_config)
+    except Exception as e:  # noqa: BLE001
+        print(f"  init_mes_for_compute failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return _recipe_context(dev, ip_result, nbio_config, gmc_config,
+                               psp_config, smu_config, gart_handle, dummy_handle)
+    # IH is not needed for the NOP-fence (wait_fence is a CPU memory poll); init
+    # it best-effort so a later interrupt-driven path has it.
+    try:
+        ih_config = init_ih(dev, ip_result, nbio_config)
+    except Exception as e:  # noqa: BLE001
+        print(f"  IH init skipped (non-fatal for NOP fence): {e}")
+    try:
+        compute_queue = init_compute_queue(
+            dev, ip_result, nbio_config, mes_ring=mes_ring)
+        ok = test_compute_nop_fence(compute_queue)
+        if ok:
+            print("  PASS: MILESTONE 4 -- MES-scheduled NOP+fence completed")
+        else:
+            print("  FAIL: NOP+fence did not complete (fence never reached seq)")
+    except Exception as e:  # noqa: BLE001
+        print(f"  compute queue / dispatch failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+    return GPUContext(
+        dev=dev, ip_result=ip_result, nbio_config=nbio_config,
+        gmc_config=gmc_config, psp_config=psp_config, smu_config=smu_config,
+        ih_config=ih_config, mes_ring=mes_ring, compute_queue=compute_queue,
+        gart_table_dma_handle=gart_handle, dummy_page_dma_handle=dummy_handle,
+    )
 
 
 def _recipe_context(dev, ip_result, nbio_config, gmc_config, psp_config,
