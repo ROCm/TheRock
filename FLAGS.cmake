@@ -22,16 +22,6 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
-  NAME HIP_KERNEL_PROVIDER_ENABLE
-  DEFAULT_VALUE OFF
-  DESCRIPTION "Enable hip-kernel-provider plugin"
-  CMAKE_VARS
-    HIP_KERNEL_PROVIDER_ENABLE=ON
-  SUB_PROJECTS
-    hipkernelprovider
-)
-
-therock_declare_flag(
   NAME HIPDNN_ENABLE_SDPA
   DEFAULT_VALUE OFF
   DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
