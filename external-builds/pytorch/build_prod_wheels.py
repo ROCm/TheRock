@@ -475,9 +475,7 @@ def _setup_common_build_env(
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
 
-    # GLOO enabled for only Linux
-    if not is_windows:
-        env["USE_GLOO"] = "ON"
+    env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
