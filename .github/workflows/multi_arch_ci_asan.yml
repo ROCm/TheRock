@@ -79,6 +79,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # TIGHT-GATE: cascaded for test-simulator.yml poll step (see
+      # multi_arch_build_portable_linux.yml simulator-test job).
+      actions: read
 
   ci_summary:
     name: CI Summary

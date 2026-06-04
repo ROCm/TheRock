@@ -203,6 +203,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # TIGHT-GATE: cascaded so test-simulator.yml's consume_and_test poll
+      # step can read run jobs via `gh api`. Reusable-workflow perms must be
+      # >= each called workflow's job perms.
+      actions: read
 
   # ==========================================================================
   # STAGE: comm-libs (generic, single job parallel to math-libs)

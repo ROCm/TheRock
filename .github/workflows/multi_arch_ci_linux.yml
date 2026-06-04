@@ -108,6 +108,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # TIGHT-GATE: cascaded for test-simulator.yml poll step (see
+      # multi_arch_build_portable_linux.yml simulator-test job).
+      actions: read
 
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
