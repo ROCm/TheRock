@@ -64,7 +64,9 @@ on:
       run_simulator:
         description: "Run the rocjitsu CPU-only simulator as a sibling job once compiler-runtime + math-libs finish. Only the Release pipeline sets this to true today."
         type: boolean
-        default: false
+        # EXPERIMENTAL: defaulted true so PR CI also exercises simulator-test.
+        # Revert to `false` to restore the original Release-only behaviour.
+        default: true
 
 permissions:
   contents: read
