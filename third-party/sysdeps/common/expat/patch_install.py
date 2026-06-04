@@ -12,6 +12,7 @@ build_tools_path = Path(__file__).resolve().parent.parent.parent / "build_tools"
 sys.path.insert(0, str(build_tools_path))
 from patch_linux_so import update_library_links, relativize_pc_file
 
+
 # Fetch an environment variable or exit if it is not found.
 def get_env_or_exit(var_name):
     value = os.environ.get(var_name)
