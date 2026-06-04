@@ -441,6 +441,12 @@ approach and the alternative is documented only for context.
 > roadmap](#current-status-and-roadmap)); refreshing the public docs (built from
 > the generated `*.pyi` stubs) is part of this integration effort.
 
+- [HIP Python installation guide (ROCm 6.2.4)](https://rocm.docs.amd.com/projects/hip-python/en/docs-6.2.4/user_guide/0_install.html) -
+  the **last RTD build that correctly rendered the Python API indices**, which
+  documents the **old, public
+  versions of the bindings** (the three-package layout, `MAJOR.MINOR.PATCH.CODEGEN.RELEASE`
+  version scheme, TestPyPI distribution). It does **not** describe the current
+  multi-package set discussed in this RFC (hence "outdated" above)
 - [HIP Python user guide](https://rocm.docs.amd.com/projects/hip-python/en/latest/user_guide/1_usage.html)
   (outdated)
 - [ROCm programming guide](https://rocm.docs.amd.com/en/latest/how-to/programming_guide.html)
