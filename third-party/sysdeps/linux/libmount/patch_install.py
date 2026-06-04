@@ -53,7 +53,7 @@ if platform.system() == "Linux":
                 [
                     patchelf_exe,
                     "--set-rpath",
-                    "$ORIGIN:$ORIGIN/rocm_sysdeps/lib",
+                    "$ORIGIN",
                     str(lib_path),
                 ],
                 check=True,

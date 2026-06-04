@@ -9,6 +9,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_subproject_fetch(therock-libmount-sources
       SOURCE_DIR "${_source_dir}"
       URL "https://github.com/util-linux/util-linux/archive/refs/tags/v2.42.1.tar.gz"
+      URL_HASH "SHA256=138a3bd9049afa5eeeea73f1e9c0ed7bddf3e55ba4ec29924965a932ec738f01"
 
       TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
@@ -66,7 +67,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(LIBMOUNT_BUILD)
+project(LIBMOUNT_BUILD VERSION "2.42.1")
 
 if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
