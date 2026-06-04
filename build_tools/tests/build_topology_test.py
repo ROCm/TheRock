@@ -46,12 +46,10 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_empty_topology(self):
         """Test parsing an empty topology file."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [metadata]
             version = "1.0"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         self.assertEqual(len(topology.get_build_stages()), 0)
@@ -60,8 +58,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_parse_build_stages(self):
         """Test parsing build stages."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.foundation]
             description = "Foundation stage"
             artifact_groups = ["base", "sysdeps"]
@@ -70,8 +67,7 @@ class BuildTopologyTest(unittest.TestCase):
             description = "Compiler stage"
             artifact_groups = ["llvm"]
             type = "per-arch"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         stages = topology.get_build_stages()
@@ -89,15 +85,13 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_parse_external_git_sources(self):
         """Test parsing external git sources in source sets."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.optional-hrx]
             description = "Optional HRX"
             external_git_sources = [
               { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "optional-sources/hrx" },
             ]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         source_set = topology.source_sets["optional-hrx"]
@@ -112,8 +106,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_get_source_set_for_submodule(self):
         """Test looking up the owning source set for a submodule."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
             submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
@@ -121,8 +114,7 @@ class BuildTopologyTest(unittest.TestCase):
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -136,11 +128,9 @@ class BuildTopologyTest(unittest.TestCase):
         )
         self.assertIsNone(topology.get_source_set_for_submodule("unknown-submodule"))
 
-
     def test_get_source_sets_for_submodules(self):
         """Test batch lookup of source sets from submodule names."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
             submodules = ["llvm-project", "HIPIFY"]
@@ -152,8 +142,7 @@ class BuildTopologyTest(unittest.TestCase):
             [source_sets.tests]
             description = "Tests"
             submodules = ["tests"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -168,15 +157,13 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_validate_external_git_source_path(self):
         """Test validation rejects external sources outside optional-sources."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.optional-hrx]
             description = "Optional HRX"
             external_git_sources = [
               { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "rocm-systems/hrx" },
             ]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         errors = topology.validate_topology()
@@ -185,8 +172,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_validate_conflicting_submodule_ownership(self):
         """Test validation rejects submodules owned by multiple source sets."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.set1]
             description = "Set 1"
             submodules = ["shared-submodule"]
@@ -194,8 +180,7 @@ class BuildTopologyTest(unittest.TestCase):
             [source_sets.set2]
             description = "Set 2"
             submodules = ["shared-submodule"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         errors = topology.validate_topology()
@@ -206,8 +191,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_parse_artifact_groups(self):
         """Test parsing artifact groups."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [artifact_groups.base]
             description = "Base infrastructure"
             type = "generic"
@@ -216,8 +200,7 @@ class BuildTopologyTest(unittest.TestCase):
             description = "Runtime components"
             type = "generic"
             artifact_group_deps = ["base"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         groups = topology.get_artifact_groups()
@@ -235,8 +218,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_parse_artifacts(self):
         """Test parsing artifacts."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [artifacts.rocm-core]
             artifact_group = "base"
             type = "target-neutral"
@@ -246,8 +228,7 @@ class BuildTopologyTest(unittest.TestCase):
             type = "target-specific"
             artifact_deps = ["rocm-core"]
             platform = "linux"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         artifacts = topology.get_artifacts()
@@ -269,8 +250,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_get_artifacts_in_group(self):
         """Test getting artifacts belonging to a group."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [artifacts.artifact1]
             artifact_group = "group1"
             type = "target-neutral"
@@ -282,8 +262,7 @@ class BuildTopologyTest(unittest.TestCase):
             [artifacts.artifact3]
             artifact_group = "group2"
             type = "target-neutral"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -298,8 +277,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_get_produced_artifacts(self):
         """Test getting artifacts produced by a build stage."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.stage1]
             description = "Stage 1"
             artifact_groups = ["group1", "group2"]
@@ -327,8 +305,7 @@ class BuildTopologyTest(unittest.TestCase):
             [artifacts.artifact4]
             artifact_group = "group3"
             type = "target-neutral"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         produced = topology.get_produced_artifacts("stage1")
@@ -341,8 +318,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_get_inbound_artifacts(self):
         """Test getting inbound artifacts for a build stage."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.stage1]
             description = "Stage 1"
             artifact_groups = ["group1"]
@@ -368,8 +344,7 @@ class BuildTopologyTest(unittest.TestCase):
             artifact_group = "group2"
             type = "target-neutral"
             artifact_deps = ["artifact1"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -384,8 +359,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_validate_missing_references(self):
         """Test validation catches missing references."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.stage1]
             description = "Stage with missing group"
             artifact_groups = ["missing_group"]
@@ -399,8 +373,7 @@ class BuildTopologyTest(unittest.TestCase):
             artifact_group = "missing_artifact_group"
             type = "target-neutral"
             artifact_deps = ["missing_artifact"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         errors = topology.validate_topology()
@@ -413,8 +386,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_validate_circular_dependencies(self):
         """Test validation catches circular dependencies."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [artifact_groups.group1]
             description = "Group 1"
             type = "generic"
@@ -429,8 +401,7 @@ class BuildTopologyTest(unittest.TestCase):
             description = "Group 3"
             type = "generic"
             artifact_group_deps = ["group1"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         errors = topology.validate_topology()
@@ -440,8 +411,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_get_build_order(self):
         """Test getting the build order based on dependencies."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.foundation]
             description = "Foundation"
             artifact_groups = ["base"]
@@ -467,8 +437,7 @@ class BuildTopologyTest(unittest.TestCase):
             description = "HIP"
             type = "generic"
             artifact_group_deps = ["llvm"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         build_order = topology.get_build_order()
@@ -484,8 +453,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_topology_reverse_indexes(self):
         """Test reverse indexes across source sets, groups, artifacts, and stages."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.base]
             description = "Base"
             submodules = ["base"]
@@ -545,8 +513,7 @@ class BuildTopologyTest(unittest.TestCase):
             [artifacts.future-artifact]
             artifact_group = "future"
             type = "target-neutral"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -614,8 +581,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_stage_source_set_indexes_filter_disabled_platforms(self):
         """Test stage/source set indexes respect platform disabled source sets."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.common]
             description = "Common"
             submodules = ["common"]
@@ -637,8 +603,7 @@ class BuildTopologyTest(unittest.TestCase):
             [artifacts.runtime-artifact]
             artifact_group = "runtime"
             type = "target-neutral"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -660,8 +625,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_get_dependency_graph(self):
         """Test generating dependency graph."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.stage1]
             description = "Stage 1"
             artifact_groups = ["group1"]
@@ -673,8 +637,7 @@ class BuildTopologyTest(unittest.TestCase):
             [artifacts.artifact1]
             artifact_group = "group1"
             type = "target-neutral"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
         graph = topology.get_dependency_graph()
@@ -696,13 +659,11 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_invalid_stage_name(self):
         """Test handling of invalid stage name."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.stage1]
             description = "Stage 1"
             artifact_groups = []
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -713,8 +674,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_diamond_dependency_pattern(self):
         """Test diamond dependency pattern doesn't cause redundant processing."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.stage1]
             description = "Stage 1"
             artifact_groups = ["group1"]
@@ -756,8 +716,7 @@ class BuildTopologyTest(unittest.TestCase):
             artifact_group = "group2"
             type = "target-neutral"
             artifact_deps = ["B", "C"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -776,8 +735,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_group_dependencies_include_transitive_artifact_dependencies(self):
         """Test group deps include the artifact deps of artifacts they pull in."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.producer]
             description = "Producer"
             artifact_groups = ["base"]
@@ -812,8 +770,7 @@ class BuildTopologyTest(unittest.TestCase):
             [artifacts.leaf-artifact]
             artifact_group = "leaf"
             type = "target-neutral"
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
@@ -824,8 +781,7 @@ class BuildTopologyTest(unittest.TestCase):
 
     def test_complex_dependency_chain(self):
         """Test complex dependency chain resolution."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [build_stages.foundation]
             artifact_groups = ["base"]
             description = "Foundation"
@@ -879,8 +835,7 @@ class BuildTopologyTest(unittest.TestCase):
             artifact_group = "math"
             type = "target-neutral"
             artifact_deps = ["hip-artifact"]
-        """
-        )
+        """)
 
         topology = BuildTopology(self.topology_path)
 
