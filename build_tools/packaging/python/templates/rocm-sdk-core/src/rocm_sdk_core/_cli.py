@@ -97,27 +97,11 @@ is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
 
 
-def _clear_stale_host_rocm_env() -> None:
-    """Drop HIP_PATH/ROCM_PATH when the core wheel ships lib/llvm/bin.
-
-    Console scripts may execute from the devel tree, but clang lives under core.
-    Until llvm patches 0006/0007 are in hipcc.exe (e.g. prebuilt compiler
-    artifacts), clearing both env vars avoids stale SDK/tarball paths on runners.
-    """
-    core_path = _get_core_module_path()
-    if (core_path / "lib" / "llvm" / "bin").exists():
-        os.environ.pop("ROCM_PATH", None)
-        os.environ.pop("HIP_PATH", None)
-
-
 def _exec(relpath: str, expand_devel=True):
     # Default is True because most CLI tools are compiler/build tools that
     # need the devel files. System info tools (amd-smi, rocminfo, etc.)
     # override with expand_devel=False to avoid the expansion cost.
-    if relpath in ("bin/hipcc", "bin/hipconfig"):
-        _clear_stale_host_rocm_env()
-    module_path = _get_module_path(expand_devel)
-    full_path = module_path / (relpath + exe_suffix)
+    full_path = _get_module_path(expand_devel) / (relpath + exe_suffix)
     if is_windows:
         # https://bugs.python.org/issue19124
         # prevent execution from occuring in the backround
