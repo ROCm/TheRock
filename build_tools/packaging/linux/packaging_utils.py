@@ -154,20 +154,6 @@ def is_meta_package(pkg_info):
     return is_key_defined(pkg_info, "Metapackage")
 
 
-def is_composite_package(pkg_info):
-    """
-    Verifies whether composite key is enabled for a package.
-
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-
-    Returns:
-    bool: True if composite key is defined, False otherwise.
-    """
-
-    return is_key_defined(pkg_info, "composite")
-
-
 def is_rpm_stripping_disabled(pkg_info):
     """
     Verifies whether Disable_RPM_STRIP key is enabled for a package.
@@ -334,31 +320,6 @@ def remove_dir(dir_name):
         print(f"Removed directory: {dir_path}")
     else:
         print(f"Directory does not exist: {dir_path}")
-
-
-def version_to_str(version_str):
-    """Convert a ROCm version string to a numeric representation.
-
-    This function transforms a ROCm version from its dotted format
-    (e.g., "7.1.0") into a numeric string (e.g., "70100")
-    Ex : 7.10.0 -> 71000
-         10.1.0 - > 100100
-         7.1 -> 70100
-         7.1.1.1 -> 70101
-
-    Parameters:
-    version_str: ROCm version separated by dots
-
-    Returns: Numeric string
-    """
-
-    parts = version_str.split(".")
-    # Ensure we have exactly 3 parts: major, minor, patch
-    while len(parts) < 3:
-        parts.append("0")  # Default missing parts to "0"
-    major, minor, patch = parts[:3]  # Ignore extra parts
-
-    return f"{int(major):01d}{int(minor):02d}{int(patch):02d}"
 
 
 def update_package_name(pkg_name, config: PackageConfig):
