@@ -1926,6 +1926,18 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "sysdeps-tbb",
+        "Artifact_Subdir": [
+          {
+            "Name": "tbb",
+            "Components": [
+              "lib",
+              "dev"
+            ]
+          }
+        ]
       }
 
     ],
