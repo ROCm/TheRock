@@ -3,7 +3,6 @@ author(s): Dominic Etienne Charrier (AMD), Lalith Narasimhan (AMD)
 created: 2026-06-03
 modified: 2026-06-03
 status: draft
-discussion: [TBD - Add GitHub issue/PR link]
 ---
 
 # HIP Python Integration into TheRock
