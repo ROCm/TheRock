@@ -111,6 +111,8 @@ on:
           - ccache
         default: none
 
+run-name: Build Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.amdgpu_family }})
+
 jobs:
   build_pytorch_wheels:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
@@ -207,13 +209,16 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
@@ -223,15 +228,18 @@ jobs:
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --gitrepo-origin https://github.com/ROCm/pytorch.git \
-              --repo-hashtag ${{ inputs.pytorch_git_ref }}
+              --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+              --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
-              --require-related-commit
+              --require-related-commit \
+              --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
-              --require-related-commit
+              --require-related-commit \
+              --no-commit-hipify
 
       # Note: determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
@@ -243,7 +251,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -312,7 +320,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -337,15 +345,6 @@ jobs:
             --amdgpu-family "${{ inputs.amdgpu_family }}" \
             --python-version "${{ inputs.python_version }}" \
             --pytorch-git-ref "${{ inputs.pytorch_git_ref }}"
-
-      - name: (Re-)Generate Python package release index for staging
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variables to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
-        shell: cmd
-        run: |
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
   generate_target_to_run:
     name: Generate target_to_run
@@ -409,7 +408,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -439,11 +438,3 @@ jobs:
       - name: Install python deps for CI
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
-
-      - name: (Re-)Generate Python package release index
-        if: ${{ env.upload == 'true' }}
-        env:
-          # Environment variables to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}

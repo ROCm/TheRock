@@ -154,20 +154,6 @@ def is_meta_package(pkg_info):
     return is_key_defined(pkg_info, "Metapackage")
 
 
-def is_composite_package(pkg_info):
-    """
-    Verifies whether composite key is enabled for a package.
-
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-
-    Returns:
-    bool: True if composite key is defined, False otherwise.
-    """
-
-    return is_key_defined(pkg_info, "composite")
-
-
 def is_rpm_stripping_disabled(pkg_info):
     """
     Verifies whether Disable_RPM_STRIP key is enabled for a package.
@@ -223,8 +209,16 @@ def is_gfxarch_package(pkg_info, enable_kpack=False):
     """
     if enable_kpack:
         pkgname = pkg_info.get("Package", "")
-        if pkgname.endswith("-devel"):
+        # Only non-metapackage -devel should be non-gfxarch
+        # Metapackages like amdrocm-core-devel should create arch-specific variants
+        if pkgname.endswith("-devel") and not is_meta_package(pkg_info):
             return False
+
+        # Override RCCL Gfxarch behavior in kpack mode
+        # When --enable-kpack is used, RCCL should look for architecture-specific artifacts
+        # instead of generic artifacts to ensure GPU-specific kernel support (e.g., gfx1201)
+        if pkgname in ["amdrocm-rccl", "amdrocm-rccl-test"]:
+            return True
 
     return is_key_defined(pkg_info, "Gfxarch")
 
@@ -263,13 +257,27 @@ def get_package_list(artifact_dir):
     skipped_list  : list of package names excluded due to missing artifacts
     """
     pkg_list = []
-    skipped = []
+    skipped_list = []
+    artifact_path = Path(artifact_dir)
     data = read_package_json_file()
 
     try:
-        dir_entries = os.listdir(artifact_dir)
+        artifact_dirs = {path.name for path in artifact_path.iterdir() if path.is_dir()}
     except FileNotFoundError:
-        sys.exit(f"{artifact_dir}: Artifactory directory does not exist, Exiting")
+        sys.exit(f"{artifact_dir}: Artifactory directory does not exist, exiting")
+
+    # Create a prefix index for O(1) artifact lookup
+    prefix_index = {}
+    # Component suffixes from artifact.toml [components.{suffix}.*] definitions
+    # See docs/development/artifacts.md for artifact naming conventions
+    SUFFIX_MARKERS = ["_dbg_", "_dev_", "_doc_", "_lib_", "_run_", "_test_"]
+
+    for dirname in artifact_dirs:
+        for marker in SUFFIX_MARKERS:
+            if marker in dirname:
+                prefix = dirname.split(marker, 1)[0]
+                prefix_index[prefix] = True
+                break  # stop after first matching marker
 
     for pkg_info in data:
         pkg_name = pkg_info["Package"]
@@ -277,36 +285,23 @@ def get_package_list(artifact_dir):
         if is_packaging_disabled(pkg_info):
             continue
 
-        # metapackages don't need artifact lookup
+        # Metapackages don't need artifact lookup
         if is_meta_package(pkg_info):
             pkg_list.append(pkg_name)
             continue
 
-        artifactory_list = pkg_info.get("Artifactory", [])
-        artifact_found = False
-
-        for artifactory in artifactory_list:
-            artifact_name = artifactory.get("Artifact")
-            if not artifact_name:
-                continue
-
-            # Look for directories starting with the artifact name
-            for entry in dir_entries:
-                path = Path(artifact_dir) / entry
-
-                if entry.startswith(artifact_name) and path.is_dir():
-                    artifact_found = True
-                    break
-
-            if artifact_found:
-                break
+        # Check if any artifact matches a known prefix
+        artifact_found = any(
+            (artifact := art.get("Artifact")) and prefix_index.get(artifact)
+            for art in pkg_info.get("Artifactory", [])
+        )
 
         if artifact_found:
             pkg_list.append(pkg_name)
         else:
-            skipped.append(pkg_name)
+            skipped_list.append(pkg_name)
 
-    return pkg_list, skipped
+    return pkg_list, skipped_list
 
 
 def remove_dir(dir_name):
@@ -325,31 +320,6 @@ def remove_dir(dir_name):
         print(f"Removed directory: {dir_path}")
     else:
         print(f"Directory does not exist: {dir_path}")
-
-
-def version_to_str(version_str):
-    """Convert a ROCm version string to a numeric representation.
-
-    This function transforms a ROCm version from its dotted format
-    (e.g., "7.1.0") into a numeric string (e.g., "70100")
-    Ex : 7.10.0 -> 71000
-         10.1.0 - > 100100
-         7.1 -> 70100
-         7.1.1.1 -> 70101
-
-    Parameters:
-    version_str: ROCm version separated by dots
-
-    Returns: Numeric string
-    """
-
-    parts = version_str.split(".")
-    # Ensure we have exactly 3 parts: major, minor, patch
-    while len(parts) < 3:
-        parts.append("0")  # Default missing parts to "0"
-    major, minor, patch = parts[:3]  # Ignore extra parts
-
-    return f"{int(major):01d}{int(minor):02d}{int(patch):02d}"
 
 
 def update_package_name(pkg_name, config: PackageConfig):
@@ -779,7 +749,18 @@ def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
         deps = append_version_suffix(", ".join(dep_list), config)
     elif config.enable_kpack and is_meta and config.gfx_arch != GFX_GENERIC:
         # Arch-specific metapackage: preserve architecture for gfxarch dependencies
-        deps = convert_to_versiondependency(dep_list, config, preserve_arch=True)
+        # For -devel metapackages: mix arch-specific (gfxarch) and generic (non-gfxarch)
+        result_deps = []
+        for dep in dep_list:
+            dep_info = get_package_info(dep)
+            # Only gfxarch dependencies get arch suffix, others stay generic
+            preserve = dep_info and is_gfxarch_package(dep_info, config.enable_kpack)
+            versioned = convert_to_versiondependency(
+                [dep], config, preserve_arch=preserve
+            )
+            result_deps.append(versioned)
+
+        deps = ", ".join(result_deps)
         deps = append_version_suffix(deps, config)
     elif config.enable_kpack and not is_meta and config.gfx_arch != GFX_GENERIC:
         # Gfx-specific non-meta package:
@@ -846,14 +827,33 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
             continue
 
         for subdir in artifact["Artifact_Subdir"]:
+            artifact_subdir = subdir["Name"]
             component_list = subdir["Components"]
             for component in component_list:
                 source_dir = (
                     Path(artifacts_dir)
                     / f"{artifact_prefix}_{component}_{artifact_suffix}"
                 )
-                if source_dir.exists():
-                    return True
+                if not source_dir.exists():
+                    continue
+
+                # Check if the required subdirectory exists in the manifest
+                manifest_file = source_dir / "artifact_manifest.txt"
+                if not manifest_file.exists():
+                    continue
+
+                try:
+                    with manifest_file.open("r", encoding="utf-8") as file:
+                        for line in file:
+                            match_found = (
+                                isinstance(artifact_subdir, str)
+                                and (artifact_subdir.lower() + "/") in line.lower()
+                            )
+                            if match_found and line.strip():
+                                # Found at least one required subdirectory in the manifest
+                                return True
+                except OSError:
+                    continue
 
     return False
 
@@ -871,10 +871,15 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
     pkg_name = pkg_info.get("Package")
     is_meta = is_meta_package(pkg_info)
 
-    if config.enable_kpack and is_meta:
-        # For metapackages in multi-arch mode:
+    if (
+        config.enable_kpack
+        and is_meta
+        and is_gfxarch_package(pkg_info, config.enable_kpack)
+    ):
+        # For gfxarch metapackages in multi-arch mode:
         # - Generic variant depends on all arch-specific variants
         # - Arch-specific variants depend on actual runtime packages
+        # Non-gfxarch metapackages (e.g., developer-tools) fall through to generic handling
         if config.gfx_arch == GFX_GENERIC:
             # Generic metapackage: depend on all arch-specific metapackages
             return expand_metapackage_to_all_archs(
@@ -882,18 +887,46 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
             )
         else:
             # Arch-specific metapackage: depend on actual runtime packages
-            # Filter out dependencies that don't have artifacts for this architecture
             dep_list = pkg_info.get(dep_key, [])
-            return [
-                dep
-                for dep in dep_list
-                if has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
-            ]
+
+            # Check if this is a non-gfxarch metapackage or a -devel metapackage
+            is_pkg_gfxarch = is_gfxarch_package(pkg_info, config.enable_kpack)
+
+            if not is_pkg_gfxarch or pkg_name.endswith("-devel"):
+                # For non-gfxarch metapackages (e.g., developer-tools) and
+                # -devel metapackages (even if gfxarch):
+                # Include all dependencies that exist in pkg_list (no arch filtering)
+                pkg_list, _ = get_package_list(config.artifacts_dir)
+                return [
+                    dep
+                    for dep in dep_list
+                    if not dep.startswith("amdrocm") or dep in pkg_list
+                ]
+            else:
+                # Gfxarch metapackages (non-devel): filter by artifacts
+                return [
+                    dep
+                    for dep in dep_list
+                    if has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
+                ]
     elif config.enable_kpack and config.gfx_arch == GFX_GENERIC:
         # Generic package in multi-arch mode:
         # Only include non-gfxarch dependencies
         # Gfxarch deps are pulled via the gfx-specific package
+        # Exception: non-gfxarch packages and -devel packages keep all dependencies
         dep_list = pkg_info.get(dep_key, [])
+
+        # For non-gfxarch packages (e.g., developer-tools) and -devel packages,
+        # keep all dependencies but verify amdrocm* packages exist
+        is_pkg_gfxarch = is_gfxarch_package(pkg_info, config.enable_kpack)
+        if not is_pkg_gfxarch or pkg_name.endswith("-devel"):
+            pkg_list, _ = get_package_list(config.artifacts_dir)
+            return [
+                dep
+                for dep in dep_list
+                if not dep.startswith("amdrocm") or dep in pkg_list
+            ]
+
         return [
             dep
             for dep in dep_list

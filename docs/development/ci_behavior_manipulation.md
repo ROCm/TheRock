@@ -3,9 +3,7 @@
 TheRock has two CI pipelines:
 
 - **CI** ([`ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/ci.yml)): single-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
-- **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)): multi-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
-
-<!-- TODO(#3399): link to configure_multi_arch_ci.py when it lands -->
+- **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)): multi-arch builds, configured by [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py)
 
 Both read GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
 
@@ -33,16 +31,16 @@ CI runs on pull requests if modified files pass the filters in
 
 The following labels may be added to a pull request to modify CI behavior:
 
-| Label or group          | Description                                                                                                                               |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci:skip`               | Skip all builds and tests                                                                                                                 |
-| `ci:run-all-archs`      | Build and test all possible architectures                                                                                                 |
-| `ci:run-multi-arch`     | (DEPRECATED) Opt in to running multi-arch CI on this PR                                                                                   |
-| `ci:run-non-multi-arch` | Opt in to running non-multi-arch CI on this PR                                                                                            |
-| `gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                        |
-| `test:...`              | Run full tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`)                                                  |
-| `test_runner:...`       | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                     |
-| `test_filter:...`       | Set the test filter explicitly (e.g. `test_filter:comprehensive`). See [test_filtering.md](./test_filtering.md) for allowed test filters. |
+| Label or group          | Description                                                                                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci:skip`               | Skip all builds and tests                                                                                                                                                                         |
+| `ci:run-all-archs`      | Build and test all possible architectures                                                                                                                                                         |
+| `ci:run-multi-arch`     | (DEPRECATED) Opt in to running multi-arch CI on this PR                                                                                                                                           |
+| `ci:run-non-multi-arch` | Opt in to running non-multi-arch CI on this PR                                                                                                                                                    |
+| `gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                                                                                |
+| `test:...`              | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Sets test level to `full` unless overridden by `test_filter:`. Multiple `test:` labels can be combined.      |
+| `test_runner:...`       | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
+| `test_filter:...`       | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
 
 ### Push
 
@@ -80,14 +78,14 @@ workflow supports skipping individual build stages by copying their artifacts
 from a previous workflow run. This will be used in a few scenarios. For example:
 
 - Changes to the rocm-libraries project will use prebuilt artifacts for
-  `foundation,compiler-runtime`
+  `compiler-runtime`
 - Changes to just test scripts or python packages will use prebuilt artifacts for
   all stages
 
 Two workflow inputs control this:
 
 - **`prebuilt_stages`**: Comma-separated list of stage names to skip
-  (e.g. `foundation,compiler-runtime`). Artifacts for these stages are copied
+  (e.g. `compiler-runtime,runtime-tests,math-libs`). Artifacts for these stages are copied
   from the baseline run instead of being built. Applied to both Linux and
   Windows; stages not present on a platform are ignored.
 - **`baseline_run_id`**: The workflow run ID to copy prebuilt artifacts from.
@@ -115,6 +113,6 @@ be computed based on dependencies and a special "all" option may be available.
 For now, these are the common configurations used for testing:
 
 ```
-foundation,compiler-runtime
-foundation,compiler-runtime,math-libs,comm-libs,debug-tools,dctools-core,profiler-apps,media-libs
+compiler-runtime
+compiler-runtime,runtime-tests,math-libs,comm-libs,debug-tools,dctools-core,profiler-apps,media-libs
 ```

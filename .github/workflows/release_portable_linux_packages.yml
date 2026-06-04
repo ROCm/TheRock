@@ -65,7 +65,7 @@ on:
 permissions:
   contents: read
 
-run-name: Release portable Linux packages (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})
+run-name: Release portable Linux packages (${{ inputs.release_type || 'nightly' }}, ${{ inputs.families || 'default' }})
 
 jobs:
   setup_metadata:
@@ -75,8 +75,8 @@ jobs:
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
-      rpm_version: ${{ steps.rocm_native_package_version.outputs.rocm_rpm_package_version }}
-      deb_version: ${{ steps.rocm_native_package_version.outputs.rocm_deb_package_version }}
+      rpm_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      deb_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
@@ -101,22 +101,6 @@ jobs:
           python ./build_tools/compute_rocm_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }}
-
-      - name: Compute native package version
-        id: rocm_native_package_version
-        run: |
-          # Compute rpm package version
-          # This sets the 'rocm_rpm_package_version' output
-          python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ env.release_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }} \
-            --package-type="rpm"
-          # Compute debian package version
-          # This sets the 'rocm_deb_package_version' output
-          python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ env.release_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }} \
-            --package-type="deb"
 
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
@@ -230,7 +214,9 @@ jobs:
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
           package_version: ${{ needs.setup_metadata.outputs.version }}
-          extra_cmake_options: ''
+          # TODO: Use cmake_preset: linux-release-package once this workflow is
+          # wired to the release preset.
+          extra_cmake_options: '-DTHEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS=ON'
           cmake_preset: ''
         run: |
           python3 ./build_tools/github_actions/build_configure.py \
@@ -239,7 +225,7 @@ jobs:
 
       - name: Build Projects
         run: |
-          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist
+          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-artifacts therock-dist
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
@@ -270,10 +256,18 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
+
+      - name: Push artifacts
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+        run: |
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
+            --build-dir ${{ env.OUTPUT_DIR }}/build \
+            --stage all
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
@@ -294,15 +288,6 @@ jobs:
           --include "*.whl" \
           --include "*.tar.gz"
 
-      - name: (Re-)Generate Python package release index for staging
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variable to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
-
       ## TODO: Restrict uploading to the non-staging S3 directory until ROCm sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -314,22 +299,9 @@ jobs:
           --include "*.whl" \
           --include "*.tar.gz"
 
-      - name: (Re-)Generate release index pages
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variable to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py  ${{ env.CUSTOM_PREFIX }}
-          python ./build_tools/index_generation_s3_tar.py \
-            --bucket ${{ env.S3_BUCKET_TAR }} \
-            --directory ${{ env.S3_SUBDIR_TAR }} \
-            --upload
-
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: release_portable_linux_pytorch_wheels.yml
           inputs: |
@@ -349,10 +321,9 @@ jobs:
 
       - name: Trigger release JAX wheels
         if: ${{ github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: release_portable_linux_jax_wheels.yml
-          ref: ${{ inputs.ref || github.ref_name }}
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
@@ -367,7 +338,7 @@ jobs:
 
       - name: Trigger build native rpm package
         if: ${{ github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: build_native_linux_packages.yml
           inputs: |
@@ -381,7 +352,7 @@ jobs:
 
       - name: Trigger build native debian package
         if: ${{ github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: build_native_linux_packages.yml
           inputs: |

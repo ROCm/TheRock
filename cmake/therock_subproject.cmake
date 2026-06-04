@@ -341,7 +341,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;TEST_SUBPROJECTS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -513,6 +513,8 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
+    # Optional override for test dependencies (subproject names to test when this changes).
+    THEROCK_TEST_SUBPROJECTS "${ARG_TEST_SUBPROJECTS}"
     # Include dirs that this project compiles with.
     THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
     # Include dirs that are advertised to dependents.
@@ -818,6 +820,14 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_PKG_CONFIG_DIRS \"@_private_pkg_config_dirs@\")\n")
 
   string(APPEND _init_contents "${_compiler_toolchain_init_contents}")
+
+  # Enable reproducible builds on Windows. /Brepro makes the linker (both
+  # MSVC link.exe and lld-link) zero out timestamps in PE headers, producing
+  # deterministic output.
+  if(WIN32)
+    string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
+  endif()
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
@@ -1138,6 +1148,7 @@ function(therock_cmake_subproject_build_test target_name)
 
   get_target_property(_binary_dir "${target_name}" THEROCK_BINARY_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
   get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
 
@@ -1185,15 +1196,20 @@ function(therock_cmake_subproject_build_test target_name)
     message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
   endif()
 
-  set(_build_test_commands)
+  # Generate a runner script that executes all test commands independently,
+  # so a failure in one does not prevent the others from running.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
+  set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
+  set(_runner_content "set(_any_failed FALSE)\n\n")
+
   foreach(_command_index RANGE 1 ${_command_count})
+    # Use numbered labels/files only when there are multiple commands;
+    # a single command gets the plain name without a suffix.
     set(_log_file "${target_name}_build_test.log")
     set(_log_label "${target_name} build-test")
-    if(_command_index GREATER 1)
-      math(EXPR _log_suffix "${_command_index} - 1")
-      set(_log_file "${target_name}_build_test_${_log_suffix}.log")
-      set(_log_label "${target_name} build-test ${_log_suffix}")
+    if(_command_count GREATER 1)
+      set(_log_file "${target_name}_build_test_${_command_index}.log")
+      set(_log_label "${target_name} build-test ${_command_index}")
     endif()
     therock_subproject_log_command(_test_log_prefix
       LOG_FILE "${_log_file}"
@@ -1202,20 +1218,64 @@ function(therock_cmake_subproject_build_test target_name)
     )
 
     set(_test_command_var "_test_command_${_command_index}")
-    list(APPEND _build_test_commands
-      COMMAND
-        ${_test_log_prefix}
-        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-        ${${_test_command_var}}
+    set(_full_cmd
+      ${_test_log_prefix}
+      "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+      ${${_test_command_var}}
     )
+
+    # Serialize the command list into a quoted string for the script.
+    set(_cmd_str "")
+    foreach(_arg IN LISTS _full_cmd)
+      string(APPEND _cmd_str " \"${_arg}\"")
+    endforeach()
+
+    if(_command_index GREATER 1)
+      string(APPEND _runner_content "message(STATUS \"\")\n")
+    endif()
+    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
+    string(APPEND _runner_content "message(STATUS \"Running: ${_log_label}\")\n")
+    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
+    string(APPEND _runner_content "execute_process(\n")
+    string(APPEND _runner_content "  COMMAND${_cmd_str}\n")
+    string(APPEND _runner_content "  WORKING_DIRECTORY \"${_binary_dir}\"\n")
+    string(APPEND _runner_content "  RESULT_VARIABLE _rc${_command_index}\n")
+    string(APPEND _runner_content ")\n")
+    string(APPEND _runner_content "if(_rc${_command_index})\n")
+    string(APPEND _runner_content "  set(_any_failed TRUE)\n")
+    string(APPEND _runner_content "endif()\n\n")
   endforeach()
+
+  string(APPEND _runner_content "message(STATUS \"\")\n")
+  string(APPEND _runner_content "message(STATUS \"========================================\")\n")
+  string(APPEND _runner_content "message(STATUS \"BUILD TEST SUMMARY for ${target_name}\")\n")
+  string(APPEND _runner_content "message(STATUS \"========================================\")\n")
+  foreach(_command_index RANGE 1 ${_command_count})
+    set(_log_label "${target_name} build-test")
+    if(_command_count GREATER 1)
+      set(_log_label "${target_name} build-test ${_command_index}")
+    endif()
+    string(APPEND _runner_content "if(_rc${_command_index})\n")
+    string(APPEND _runner_content "  message(STATUS \"  ${_log_label}: FAILED (exit code \${_rc${_command_index}})\")\n")
+    string(APPEND _runner_content "else()\n")
+    string(APPEND _runner_content "  message(STATUS \"  ${_log_label}: PASSED\")\n")
+    string(APPEND _runner_content "endif()\n")
+  endforeach()
+  string(APPEND _runner_content "message(STATUS \"========================================\")\n")
+  string(APPEND _runner_content "if(_any_failed)\n")
+  string(APPEND _runner_content "  message(FATAL_ERROR \"One or more build test commands failed for ${target_name}\")\n")
+  string(APPEND _runner_content "else()\n")
+  string(APPEND _runner_content "  message(STATUS \"All build tests passed for ${target_name}\")\n")
+  string(APPEND _runner_content "endif()\n")
+
+  file(GENERATE OUTPUT "${_runner_script}" CONTENT "${_runner_content}")
 
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
   set(_build_test_stamp_file "${_stamp_dir}/build-test.stamp")
 
   add_custom_command(
     OUTPUT "${_build_test_stamp_file}"
-    ${_build_test_commands}
+    COMMAND "${CMAKE_COMMAND}" -P "${_runner_script}"
     COMMAND "${CMAKE_COMMAND}" -E touch "${_build_test_stamp_file}"
     WORKING_DIRECTORY "${_binary_dir}"
     COMMENT "Running build tests for sub-project ${target_name}"
@@ -1501,13 +1561,24 @@ function(_therock_cmake_subproject_absolutize list_var relative_to)
   set("${list_var}" "${_abs_dirs}" PARENT_SCOPE)
 endfunction()
 
+# Filters a list of AMDGPU targets against the project's EXCLUDE_TARGET_PROJECTS
+# entries from therock_add_amdgpu_target. Silent — callable before the subproject
+# target exists (e.g. to decide whether to declare it at all). For the warning
+# variant used during subproject activation, see _therock_filter_project_gpu_targets.
+function(therock_filter_amdgpu_targets out_var project_name)
+  set(_filtered ${ARGN})
+  get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name}")
+  list(REMOVE_ITEM _filtered ${_excludes})
+  set("${out_var}" "${_filtered}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
   get_target_property(_gpu_targets "${target_name}" THEROCK_AMDGPU_TARGETS)
   set(_filtered ${_gpu_targets})
   if(_excludes)
-    foreach(exclude in ${_excludes})
+    foreach(exclude IN LISTS _excludes)
       if("${exclude}" IN_LIST _filtered)
         message(WARNING
           "Excluding support for ${exclude} in ${target_name} because it was "
@@ -1680,6 +1751,15 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@AMD_LLVM_C_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
+    # Explicitly set clang's resource directory using the toolchain path rather
+    # than letting clang auto-detect it. On Windows CI, B:\ is a volume mount
+    # to C:\{GUID}\ and clang resolves its binary path through the mount when
+    # computing the resource dir. This embeds the GUID in include paths, which
+    # defeats ccache. Passing -resource-dir with the unresolved path avoids this.
+    string(APPEND _toolchain_contents "file(GLOB _therock_clang_resource_dirs \"@_amd_llvm_dist_dir@/lib/llvm/lib/clang/*\")\n")
+    string(APPEND _toolchain_contents "list(GET _therock_clang_resource_dirs 0 _therock_clang_resource_dir)\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
     therock_sanitizer_configure(

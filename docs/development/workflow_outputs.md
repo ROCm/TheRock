@@ -47,7 +47,7 @@ There are two CI pipeline architectures with different log layouts:
 - **Single-stage CI** (`ci.yml`) — one monolithic build per artifact group.
   Logs from all subprojects land in a single flat directory.
 - **Multi-arch CI** (`multi_arch_ci.yml`) — the build is split into stages
-  (foundation, compiler-runtime, math-libs, etc.). Each stage runs as a
+  (compiler-runtime, runtime-tests, math-libs, etc.). Each stage runs as a
   separate job and uploads its own logs, organized by stage name and GPU family.
 
 `artifact_group` is the CI matrix variant, composed of a target family plus an
@@ -97,7 +97,7 @@ The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
 #### Multi-arch CI layout
 
 Logs are organized by stage, with a subdirectory per GPU family for per-arch
-stages. Generic stages (foundation, compiler-runtime) have no family
+stages. Generic stages (compiler-runtime, runtime-tests, profiler-apps) have no family
 subdirectory. Per-arch stages (e.g., math-libs) fan out across GPU
 families in parallel, producing identically-named log files (e.g.,
 `rocBLAS_build.log`) that are kept separate by the family subdirectory.
@@ -119,6 +119,23 @@ families in parallel, producing identically-named log files (e.g.,
         {subproject}_install.log
         ninja_logs.tar.gz
 
+    packages/deb/                               (APT repository)
+        pool/main/
+            *.deb
+        dists/stable/
+            Release
+            main/binary-amd64/
+                Packages
+                Packages.gz
+
+    packages/rpm/                               (DNF/Zypper repository)
+        x86_64/
+            *.rpm
+            repodata/
+                repomd.xml
+                primary.xml.gz
+                ...
+
     python/
         *.whl                                   (generic wheels, e.g., rocm_sdk_core)
         {amdgpu_family}/
@@ -131,20 +148,19 @@ families in parallel, producing identically-named log files (e.g.,
         therock-dist-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
 ```
 
-Example for a run with foundation + math-libs stages:
+Example for a run with compiler-runtime + runtime-tests + math-libs stages:
 
 ```
 12345-linux/
-    logs/foundation/
-        rocm-cmake_build.log
-        rocm-cmake_configure.log
-        rocm-cmake_install.log
-        ninja_logs.tar.gz
-
     logs/compiler-runtime/
         amd-llvm_build.log
         amd-llvm_configure.log
         amd-llvm_install.log
+        ninja_logs.tar.gz
+
+    logs/runtime-tests/
+        hip-tests_build.log
+        rocrtst_build.log
         ninja_logs.tar.gz
 
     logs/math-libs/gfx1151/
@@ -225,12 +241,18 @@ root.artifact(filename="blas_lib_gfx94X.tar.xz")
 root.artifact_index()
 root.log_dir(artifact_group="gfx94X-dcgpu")
 root.log_stage_dir(stage_name="math-libs", amdgpu_family="gfx1151")
-root.log_stage_dir(stage_name="foundation")  # generic stage, no family
+root.log_stage_dir(stage_name="compiler-runtime")  # generic stage, no family
 root.log_file(artifact_group="gfx94X-dcgpu", filename="build.log")
 root.log_index(artifact_group="gfx94X-dcgpu")
 root.build_observability(artifact_group="gfx94X-dcgpu")
 root.manifest_dir(artifact_group="gfx94X-dcgpu")
 root.manifest(artifact_group="gfx94X-dcgpu")
+root.native_linux_packages(
+    pkg_type="deb"
+)  # {run_id}-linux/packages/deb — APT repo root
+root.native_linux_packages(
+    pkg_type="rpm"
+)  # {run_id}-linux/packages/rpm — DNF/Zypper repo root
 root.python_packages(artifact_group="gfx110X-all")
 root.tarballs()
 ```
@@ -272,14 +294,15 @@ To add a new output type:
 
 ### Upload scripts
 
-| File                                                                                       | Uses                                                                      |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests    |
-| [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs         |
-| [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                      |
-| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index       |
-| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests             |
-| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend) |
+| File                                                                                       | Uses                                                                          |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests        |
+| [`upload_package_repo.py`](/build_tools/packaging/linux/upload_package_repo.py)            | `WorkflowOutputRoot.native_linux_packages()` for deb/rpm package repositories |
+| [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs             |
+| [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                          |
+| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index           |
+| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests                 |
+| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend)     |
 
 ### Download scripts
 
