@@ -30,6 +30,7 @@ therock_provide_artifact(sysdeps
     lib
     run
   SUBPROJECT_DEPS
+    therock-binutils
     therock-bzip2
     therock-elfutils
     therock-libbacktrace

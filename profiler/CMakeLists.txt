@@ -299,8 +299,15 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
   # When binutils is bundled, use its libiberty; otherwise let rocprofiler-systems build its own.
   if(THEROCK_BUNDLED_BINUTILS)
     set(_rocprofsys_build_libiberty OFF)
+    # rocprofiler-systems' FindLibIberty.cmake uses LibIberty_ROOT_DIR to locate the
+    # library and headers. Point it at the bundled sysdep prefix inside the merged dist
+    # tree so find_library/find_path resolve correctly without a system libiberty.
+    set(_rocprofsys_libiberty_root
+      "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems/dist/rocm/lib/rocm_sysdeps"
+    )
   else()
     set(_rocprofsys_build_libiberty ON)
+    set(_rocprofsys_libiberty_root "")
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-systems
@@ -312,6 +319,7 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       -DHIP_PLATFORM=amd
       -DROCPROFSYS_BUILD_TBB=ON
       -DROCPROFSYS_BUILD_LIBIBERTY="${_rocprofsys_build_libiberty}"
+      "-DLibIberty_ROOT_DIR=${_rocprofsys_libiberty_root}"
       -DROCPROFSYS_BUILD_BOOST=ON
       -DROCPROFSYS_BUILD_DYNINST=ON
       -DROCPROFSYS_BUILD_FOR_THEROCK=ON
