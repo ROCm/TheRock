@@ -12,7 +12,7 @@ Example usage:
   The following string is appended to the file specified in the "GITHUB_ENV"
   environment variable:
 
-    optional_build_prod_arguments=--rocm-sdk-version ==7.0.0 --version-suffix +rocm7.0.0
+    optional_build_prod_arguments=--rocm-sdk-version ===7.0.0 --version-suffix +rocm7.0.0
 
 Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 `--no-write-env-file`.

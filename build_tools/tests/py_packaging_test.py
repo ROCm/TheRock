@@ -1216,7 +1216,7 @@ class PerTargetExtrasTest(TmpDirTestCase):
                 )
 
     def test_requires_dist_pins_version_and_uses_target_in_name(self):
-        """Requires-Dist strings start with 'rocm-sdk-device-{target}==<ver>',
+        """Requires-Dist strings start with 'rocm-sdk-device-{target}===<ver>',
         matching the canonical PackageEntry.get_dist_package_require() shape.
         """
         dist_info = self._make_dist_info(
