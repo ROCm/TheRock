@@ -40,7 +40,8 @@ class StageImpactTest(unittest.TestCase):
 
     def test_rocm_libraries_maps_to_math_libs(self):
         """A rocm-libraries submodule change should impact math-libs."""
-        self.write_topology("""
+        self.write_topology(
+            """
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
@@ -58,7 +59,8 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.prim]
             artifact_group = "math-libs"
             type = "target-specific"
-            """)
+            """
+        )
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["rocm-libraries"], topology=topology)
@@ -72,7 +74,8 @@ class StageImpactTest(unittest.TestCase):
 
     def test_llvm_project_maps_to_compiler_runtime(self):
         """An llvm-project submodule change should impact compiler-runtime."""
-        self.write_topology("""
+        self.write_topology(
+            """
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
             submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
@@ -89,7 +92,8 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.amd-llvm]
             artifact_group = "compiler"
             type = "target-neutral"
-            """)
+            """
+        )
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["llvm-project"], topology=topology)
@@ -103,11 +107,13 @@ class StageImpactTest(unittest.TestCase):
 
     def test_unknown_input_forces_full_fallback(self):
         """Unknown input should force a conservative full-CI fallback."""
-        self.write_topology("""
+        self.write_topology(
+            """
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
-            """)
+            """
+        )
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["some-random-dir"], topology=topology)
@@ -119,11 +125,13 @@ class StageImpactTest(unittest.TestCase):
 
     def test_topology_file_change_forces_full_fallback(self):
         """A BUILD_TOPOLOGY.toml change should force full CI fallback."""
-        self.write_topology("""
+        self.write_topology(
+            """
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
-            """)
+            """
+        )
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["BUILD_TOPOLOGY.toml"], topology=topology)
@@ -134,11 +142,13 @@ class StageImpactTest(unittest.TestCase):
 
     def test_build_tools_change_forces_full_fallback(self):
         """A build_tools change should force full CI fallback."""
-        self.write_topology("""
+        self.write_topology(
+            """
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
-            """)
+            """
+        )
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
@@ -151,7 +161,8 @@ class StageImpactTest(unittest.TestCase):
 
     def test_multiple_inputs_deduplicate_impacted_stages(self):
         """Multiple changed inputs should union their impacted stages without duplicates."""
-        self.write_topology("""
+        self.write_topology(
+            """
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
             submodules = ["llvm-project"]
@@ -186,7 +197,8 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.prim]
             artifact_group = "math-libs"
             type = "target-specific"
-            """)
+            """
+        )
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
@@ -202,7 +214,8 @@ class StageImpactTest(unittest.TestCase):
 
     def test_platform_disabled_source_set_is_ignored(self):
         """Source sets disabled for the target platform should not contribute."""
-        self.write_topology("""
+        self.write_topology(
+            """
             [source_sets.common]
             description = "Common"
             submodules = ["common"]
@@ -224,7 +237,8 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.runtime-artifact]
             artifact_group = "runtime"
             type = "target-neutral"
-            """)
+            """
+        )
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
