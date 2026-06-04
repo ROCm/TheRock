@@ -150,6 +150,7 @@ The redistributable installers include:
 | File name                   | Friendly name                            |
 | :-------------------------- | :--------------------------------------- |
 | amdrocm-runtimes.msi        | ROCm Runtime Redistributable             |
+| amdrocm-compat.msi          | ROCm System32 Compatibility Libraries    |
 | amdrocm-core.msi            | ROCm Core Runtime Redistributable        |
 | amdrocm-core-devel.msi      | ROCm Core SDK Development                |
 | amdrocm-developer-tools.msi | ROCm Core Developer Tools                |
@@ -174,60 +175,71 @@ Process-wide `PATH` modifications must not be used for DLL discovery. `PATH`-bas
 
 New installations must not place core ROCm runtime DLLs into `System32`. Legacy driver-installed runtime DLLs in `System32` that conflict with the new Windows packaging model must be detected and handled by the appropriate runtime installer. At a minimum, the Windows runtime package must handle cleanup of legacy `amdhip64` and `amd_comgr` placements when present, while preserving installer robustness if files are locked or permissions are insufficient.
 
-> **Exception (HIP 6 and HIP 7):** `amdrocm-runtimes.msi` is a scoped exception to the "no DLLs in `System32`" rule above. HIP 6 and HIP 7 runtime DLLs are installed into both the package installation root and `C:\Windows\System32` to preserve compatibility with applications that resolve HIP and comgr DLLs from the legacy driver-managed location. HIP 6 and HIP 7 will remain in `System32` until each release line reaches end-of-life — the future release of HIP 8 will not trigger their removal. HIP 8, when released, will not be installed into `System32`. See [amdrocm-runtimes.msi Additional Install Requirements](#amdrocm-runtimesmsi-additional-install-requirements) for the full model, dual-folder installation rules, frozen unversioned `amdhip64.dll`, and planned HIP 8 behavior.
+> **Exception (HIP 6 and HIP 7):** The dedicated `amdrocm-compat.msi` package is a scoped exception to the "no DLLs in `System32`" rule above. It installs HIP 6 and HIP 7 compatibility DLLs into `C:\Windows\System32` to preserve compatibility with applications that resolve HIP and comgr DLLs from the legacy driver-managed location. `amdrocm-compat.msi` is a single, system-wide package — it is not versioned by ROCm `major.minor`, is not installed side by side with itself, and always upgrades in place to the latest version installed on the system. HIP 6 and HIP 7 entries will remain in `System32` until each release line reaches end-of-life — the future release of HIP 8 will not trigger their removal. HIP 8, when released, will not be installed into `System32`. See [amdrocm-compat.msi: System32 Compatibility Libraries](#amdrocm-compatmsi-system32-compatibility-libraries) for the full model, frozen unversioned `amdhip64.dll`, and planned HIP 8 behavior.
 
-### amdrocm-runtimes.msi Additional Install Requirements
+### amdrocm-compat.msi: System32 Compatibility Libraries
 
-The `amdrocm-runtimes.msi` package has additional install requirements that exist to provide a transition path away from driver-shipped HIP and comgr runtime DLLs. These requirements are a deliberate, scoped exception to the general rule defined in [Decouple User Space from Adrenaline Driver](#decouple-user-space-from-adrenaline-driver) that new installations must not place ROCm runtime DLLs into `System32`. The exception applies to the HIP 6 and HIP 7 release lines. HIP 8 is a future release and is not yet available; when it ships, it will not be installed into `System32`, and its release will not remove HIP 6 or HIP 7 from `System32` — each line will be removed only when it reaches end-of-life.
+`System32` placement of HIP and comgr DLLs is delivered by a dedicated MSI, `amdrocm-compat.msi`, separate from `amdrocm-runtimes.msi` and from every other ROCm package. It exists solely to provide a transition path for applications that resolve HIP and comgr DLLs from the legacy driver-managed `System32` location. This is a deliberate, scoped exception to the general rule defined in [Decouple User Space from Adrenaline Driver](#decouple-user-space-from-adrenaline-driver) that new installations must not place ROCm runtime DLLs into `System32`.
+
+The exception applies to the HIP 6 and HIP 7 release lines. HIP 8 is a future release and is not yet available; when it ships, it will not be installed into `System32`, and its release will not remove HIP 6 or HIP 7 from `System32` — each line will be removed only when it reaches end-of-life.
+
+> **Note (implementation flexibility):** This RFC defines `amdrocm-compat.msi` as a distinct package because it is the cleanest way to satisfy the single-version-system-wide, always-latest, no-side-by-side, and EOL-driven cleanup behaviors below — none of which apply to any other ROCm package. An alternative implementation that delivers the same `System32` payload from `amdrocm-runtimes.msi` is also acceptable, provided every requirement in this section is met in full: the `System32` payload must remain single-version system-wide and always-latest even when multiple `major.minor` ROCm releases are installed side by side, its lifecycle must be decoupled from any specific `major.minor` runtime install or uninstall, and uninstalling a particular `major.minor` runtime must not remove the `System32` payload while another HIP release line is still supported. Folding the compatibility payload into the `major.minor`-versioned `amdrocm-runtimes.msi` is meaningfully more complex because Windows Installer naturally scopes payload lifecycle to the product code, so the implementation must explicitly override that behavior. A separate `amdrocm-compat.msi` is the recommended path.
+
+#### Package Identity and Versioning
+
+`amdrocm-compat.msi` is distinct from the `major.minor`-versioned ROCm packages defined elsewhere in this RFC and does not follow the [Directory Layout](#directory-layout) install root or the [Installation Logic and Version Handling](#installation-logic-and-version-handling) side-by-side rules.
+
+- **Single version, system-wide.** Only one version of `amdrocm-compat.msi` may exist on a system at any time. It is not versioned by ROCm `major.minor` and is not eligible for side-by-side installation with itself. The installer must enforce this directly: it uses a stable, version-independent `UpgradeCode` so that Windows Installer treats every release as an upgrade of the same product, and any attempt to install a second copy alongside an existing one must either upgrade in place or fail with a clear diagnostic — it must never result in two copies coexisting.
+- **Always latest.** The installed copy of `amdrocm-compat.msi` always represents the latest version of the compatibility payload available on the system. Newer releases of `amdrocm-compat.msi` upgrade the existing install in place. Older releases must detect a newer installed copy and abort rather than downgrading.
+- **Single source of `System32` payload.** No other Windows ROCm package writes HIP or comgr DLLs to `System32`. `amdrocm-runtimes.msi` and all other `amdrocm-*` packages install exclusively under the package installation root defined in [Directory Layout](#directory-layout).
+- **Independently installable and removable.** `amdrocm-compat.msi` can be installed without any other ROCm package present, and it can be removed without affecting any side-by-side `major.minor` ROCm installation.
 
 #### Transition Model
 
-The transition requires coordinated changes across the Adrenaline driver and `amdrocm-runtimes.msi`:
+The transition requires coordinated changes across the Adrenaline driver and `amdrocm-compat.msi`:
 
 - The Adrenaline driver must stop shipping HIP and comgr runtime DLLs, with the sole exception of the OpenCL-specific comgr DLL (`amd_comgr_opencl.dll`, see [OpenCL Changes](#opencl-changes)).
-- The Adrenaline driver must bundle and invoke `amdrocm-runtimes.msi` as part of driver installation so that existing applications that resolve HIP and comgr DLLs from `System32` continue to function without modification.
-- `amdrocm-runtimes.msi` becomes the single source of truth for HIP and comgr runtime DLL placement on Windows systems that previously relied on the driver for these components.
-
-#### Dual-Folder Installation
-
-For HIP 6 and HIP 7, `amdrocm-runtimes.msi` must install the runtime DLLs into two locations on the target system:
-
-1. The package installation root under `C:\Program Files\AMD\ROCm\Core-X.Y\bin`, consistent with the [Directory Layout](#directory-layout) defined for all other ROCm runtime components.
-2. `C:\Windows\System32`, to preserve compatibility with existing applications that resolve HIP and comgr DLLs from the legacy driver-managed location.
-
-Both copies must be byte-identical and must originate from the same MSI payload so that there is no possibility of version drift between the two locations on a given install. The `Program Files` copy is the authoritative artifact for SDK discovery (registry, `ROCM_PATH`, application-local redistribution); the `System32` copy exists solely to satisfy legacy loader behavior.
+- The Adrenaline driver must bundle and invoke `amdrocm-compat.msi` as part of driver installation so that existing applications that resolve HIP and comgr DLLs from `System32` continue to function without modification.
+- `amdrocm-compat.msi` becomes the single source of truth for HIP and comgr DLL placement under `System32` on Windows systems that previously relied on the driver for these components.
 
 #### System32 Placement Rules
 
-`amdrocm-runtimes.msi` must install the following into `C:\Windows\System32` (in addition to the `Program Files` copy described above):
+`amdrocm-compat.msi` must install the following into `C:\Windows\System32`:
 
-- **The HIP 6 runtime DLL**, named `amdhip64_6.dll` per the [Versioned DLL Naming](#versioned-dll-naming) convention.
-- **The HIP 7 runtime DLL, installed under both names**: the versioned name `amdhip64_7.dll`, and the unversioned name `amdhip64.dll`. Both names refer to the same HIP 7 runtime binary — they are byte-identical copies of the same file, not a forwarder or thin shim. The unversioned name preserves compatibility with applications that were built against the pre-versioned HIP runtime contract previously shipped by the Adrenaline driver; the versioned name allows HIP 7-aware loaders to resolve by exact ABI and allows the HIP 6 and HIP 7 binaries to coexist in `System32` without conflict, since the PE loader resolves by basename.
+- **The HIP 6 compatibility DLL**, named `amdhip64_6.dll` per the [Versioned DLL Naming](#versioned-dll-naming) convention.
+- **The HIP 7 compatibility DLL, installed under both names**: the versioned name `amdhip64_7.dll`, and the unversioned name `amdhip64.dll`. Both names refer to the same HIP 7 binary — they are byte-identical copies of the same file, not a forwarder or thin shim. The unversioned name preserves compatibility with applications that were built against the pre-versioned HIP runtime contract previously shipped by the Adrenaline driver; the versioned name allows HIP 7-aware loaders to resolve by exact ABI and allows the HIP 6 and HIP 7 binaries to coexist in `System32` without conflict, since the PE loader resolves by basename.
+- **The HIP 6 and HIP 7 comgr DLLs** required by the corresponding HIP runtime entries.
 
 The unversioned `amdhip64.dll` in `System32` is treated as a frozen compatibility surface for the lifetime of HIP 7:
 
-- It is permanently frozen at the HIP version 7 ABI. Its content tracks `amdhip64_7.dll` and is not advanced by any HIP 7 patch or minor release to a higher ABI.
-- HIP 7 runtimes installed via `amdrocm-runtimes.msi` must not overwrite it with a higher-versioned ABI, and must not remove it during servicing.
+- It is permanently frozen at the HIP version 7 ABI. Its content tracks `amdhip64_7.dll` and is not advanced by any release of `amdrocm-compat.msi` to a higher ABI.
+- Newer releases of `amdrocm-compat.msi` must not overwrite the unversioned `amdhip64.dll` with a higher-versioned ABI, and must not remove it during servicing prior to HIP 7 end-of-life.
 - Applications built against newer HIP ABIs must link against the versioned DLL name (for example `amdhip64_8.dll`) and must not depend on the unversioned name.
 
 #### Interaction with Legacy Cleanup
 
 The legacy cleanup behavior defined in [Decouple User Space from Adrenaline Driver](#decouple-user-space-from-adrenaline-driver) must be reconciled with the transition rules above:
 
-- During servicing of the HIP 6 and HIP 7 lines, `amdrocm-runtimes.msi` must not remove the versioned HIP runtime DLLs or the unversioned `amdhip64.dll` it installs into `System32`.
-- Legacy driver-installed `amdhip64.dll` and `amd_comgr*.dll` files present in `System32` from prior driver releases must be replaced by the files owned by `amdrocm-runtimes.msi` during the transition install, so that ownership and update responsibility transfer cleanly to the MSI.
-- Future Windows ROCm runtime packages outside the `amdrocm-runtimes.msi` HIP 6 / HIP 7 path must continue to follow the default rule and must not place runtime DLLs into `System32`.
+- During servicing of the HIP 6 and HIP 7 lines, `amdrocm-compat.msi` must not remove the versioned HIP DLLs or the unversioned `amdhip64.dll` it installs into `System32`.
+- Legacy driver-installed `amdhip64.dll` and `amd_comgr*.dll` files present in `System32` from prior driver releases must be replaced by the files owned by `amdrocm-compat.msi` during the transition install, so that ownership and update responsibility transfer cleanly to the MSI.
+- Any package other than `amdrocm-compat.msi` must continue to follow the default rule and must not place runtime DLLs into `System32`.
+
+#### Lifecycle and EOL Removal
+
+Because `amdrocm-compat.msi` is a single, latest-only package, lifecycle behavior is defined per HIP release line rather than per MSI version:
+
+- Adding support for a new HIP line is delivered by a newer release of `amdrocm-compat.msi` that supersedes the previously installed copy in place.
+- A HIP line's `System32` payload (for example, `amdhip64_7.dll` and, where applicable, the unversioned `amdhip64.dll`) is removed only when that HIP line reaches end-of-life. EOL removal is delivered by a future release of `amdrocm-compat.msi` whose payload no longer contains the EOL'd binaries.
+- Uninstalling `amdrocm-compat.msi` removes all `System32` payload owned by the currently installed copy. Uninstalling `amdrocm-compat.msi` must not affect any `major.minor` ROCm installation under `C:\Program Files\AMD\ROCm`.
 
 #### HIP 8 and Beyond (Future)
 
 HIP 8 is a future ROCm release and is not available today. The behavior described in this subsection is the planned model for HIP 8 and later release lines; specific timelines and exact behavior will be confirmed in a future RFC revision once HIP 8 enters active development.
 
-The `System32` placement requirements in this section apply only to the HIP 6 and HIP 7 release lines.
-
 When HIP 8 ships:
 
-- `amdrocm-runtimes.msi` will stop installing HIP runtime DLLs into `C:\Windows\System32`. HIP 8 runtime DLLs will be installed exclusively under the package installation root defined in [Directory Layout](#directory-layout).
-- HIP 8 will not produce or update an unversioned `amdhip64.dll` in `System32`. The unversioned `amdhip64.dll` will remain frozen at the HIP 7 ABI and continue to be serviced through the HIP 7 line only.
+- HIP 8 will not be added to the `amdrocm-compat.msi` payload. HIP 8 runtime DLLs will be installed exclusively under the package installation root defined in [Directory Layout](#directory-layout), through `amdrocm-runtimes.msi` and the other `major.minor`-versioned ROCm packages.
+- `amdrocm-compat.msi` will not produce or update an unversioned `amdhip64.dll` in `System32` at a HIP 8 ABI. The unversioned `amdhip64.dll` will remain frozen at the HIP 7 ABI and continue to be serviced through the HIP 7 line only.
 - **The release of HIP 8 will not remove HIP 6 or HIP 7 from `System32`.** HIP 6 and HIP 7 binaries will remain in `System32` until each line reaches end-of-life; removal is tied to EOL of that line, not to the release of any newer HIP version. This allows HIP 6, HIP 7, and HIP 8 to be present simultaneously on the same system without one breaking the others' compatibility surface.
 - HIP 7 servicing will not be extended to GPU architectures introduced after HIP 8 ships. Newer GPU architectures will be supported only by HIP 8 and later; applications that need to target post-HIP-8 architectures will need to move off the unversioned `amdhip64.dll` and the `amdhip64_7.dll` entry point.
 - Applications targeting HIP 8 and above will be required to use a secure DLL load mechanism to resolve the HIP runtime rather than relying on `System32` placement or `PATH`-based lookup. The specific mechanism is to be determined following stakeholder consultation and will be defined in a future RFC revision; candidate approaches include registry-based SDK discovery, application-local deployment, and explicit fully-qualified load paths derived from the installation root.
@@ -266,6 +278,7 @@ The following meta packages aggregate fine-grained packages into user-facing ins
 | File Name                     | Friendly Name                            | Included Packages                                                                                                                                                                                                                                                                                                 | Description                                 |
 | :---------------------------- | :--------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------ |
 | `amdrocm-runtimes.msi`        | ROCm Runtime Redistributable             | amdrocm-runtime, amdrocm-sysdeps                                                                                                                                                                                                                                                                                  | Run pre-built ROCm projects                 |
+| `amdrocm-compat.msi`          | ROCm System32 Compatibility Libraries    | HIP 6 and HIP 7 compatibility DLLs (`amdhip64_6.dll`, `amdhip64_7.dll`, unversioned `amdhip64.dll`, and corresponding comgr DLLs)                                                                                                                                                                                 | Legacy `System32` resolution for pre-existing applications. Single, latest-only, not versioned by `major.minor`. See [amdrocm-compat.msi: System32 Compatibility Libraries](#amdrocm-compatmsi-system32-compatibility-libraries) |
 | `amdrocm-core.msi`            | ROCm Core Runtime Redistributable        | amdrocm-base, amdrocm-sysdeps, amdrocm-llvm, amdrocm-runtime, amdrocm-debugger, amdrocm-blas, amdrocm-rand, amdrocm-fft, amdrocm-solver, amdrocm-sparse, amdrocm-ck, amdrocm-dnn, amdrocm-rccl, amdrocm-rocshmem, amdrocm-amdsmi, amdrocm-hipify, amdrocm-decode, amdrocm-jpeg                                    | Run ROCm projects                           |
 | `amdrocm-core-devel.msi`      | ROCm Core SDK Development                | amdrocm-core + amdrocm-runtime-devel, amdrocm-llvm-devel, amdrocm-fft-devel, amdrocm-blas-devel, amdrocm-sparse-devel, amdrocm-solver-devel, amdrocm-rand-devel, amdrocm-ccl-devel, amdrocm-opencl-devel, amdrocm-rccl-devel, amdrocm-rocshmem-devel, amdrocm-dnn-devel, amdrocm-decode-devel, amdrocm-jpeg-devel | Build software with ROCm Core               |
 | `amdrocm-developer-tools.msi` | ROCm Core Developer Tools                | amdrocm-base, amdrocm-amdsmi, amdrocm-profiler-base, amdrocm-profiler                                                                                                                                                                                                                                             | Debug and optimize ROCm projects            |
