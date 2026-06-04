@@ -35,6 +35,30 @@ therock_declare_flag(
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
+# Enabled on this integration branch to exercise the SDPA-bwd / AITER-ASM path
+# in hip-kernel-provider. HIP_KERNEL_PROVIDER_ENABLE builds the provider;
+# HIPDNN_ENABLE_SDPA is its prerequisite (the provider's ASM SDPA engine is
+# gated on hipDNN being built with SDPA). Both forward into ml-libs subprojects.
+therock_declare_flag(
+  NAME HIP_KERNEL_PROVIDER_ENABLE
+  DEFAULT_VALUE ON
+  DESCRIPTION "Enable hip-kernel-provider plugin"
+  CMAKE_VARS
+    HIP_KERNEL_PROVIDER_ENABLE=ON
+  SUB_PROJECTS
+    hipkernelprovider
+)
+
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_SDPA
+  DEFAULT_VALUE ON
+  DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
+  CMAKE_VARS
+    HIPDNN_ENABLE_SDPA=ON
+  SUB_PROJECTS
+    hipDNN
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
