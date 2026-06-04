@@ -352,6 +352,8 @@ def resolve_sources(
 
     # Resolve pytorch first — other repos depend on it for pin files.
     pytorch_config = REPOS["pytorch"]
+    # TODO: Add an explicit PyTorch repo selector so direct workflow dispatch
+    # can resolve non-nightly refs from either ROCm/pytorch or pytorch/pytorch.
     pytorch_repo = (
         pytorch_config.nightly_repo if nightly else pytorch_config.stable_repo
     )

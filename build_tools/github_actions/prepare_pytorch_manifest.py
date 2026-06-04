@@ -37,6 +37,10 @@ GENERATOR_SCRIPT = (
 )
 
 
+def _split_words(value: str) -> list[str]:
+    return value.replace(";", " ").split() if value else []
+
+
 def run_manifest_generator(generator_args: list[str]) -> None:
     command = [sys.executable, str(GENERATOR_SCRIPT), "--upload", *generator_args]
     subprocess.check_call(command)
@@ -49,7 +53,28 @@ def parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         default="",
         help="Already-uploaded manifest URL to pass through.",
     )
-    return parser.parse_known_args(argv)
+    parser.add_argument(
+        "--pytorch-git-refs",
+        default="",
+        help=("PyTorch ref for this manifest. Required unless --manifest-url is set."),
+    )
+    args, generator_args = parser.parse_known_args(argv)
+
+    # This singular wrapper forwards most generator arguments unchanged, but it
+    # must prepare exactly one manifest URL. Validate --pytorch-git-refs here
+    # before forwarding it so an empty direct run does not expand to the
+    # generator's full default ref set.
+    refs = _split_words(args.pytorch_git_refs)
+    if len(refs) > 1:
+        parser.error(
+            "This workflow prepares one manifest; pass exactly one PyTorch ref"
+        )
+    if not args.manifest_url and not refs:
+        parser.error("--pytorch-git-refs is required unless --manifest-url is set")
+    if args.pytorch_git_refs:
+        generator_args.extend(["--pytorch-git-refs", args.pytorch_git_refs])
+
+    return args, generator_args
 
 
 def main(argv: list[str]) -> None:

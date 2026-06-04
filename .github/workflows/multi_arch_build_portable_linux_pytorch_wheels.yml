@@ -35,9 +35,11 @@ on:
         type: string
         required: true
       pytorch_git_ref:
-        description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
+        description: >-
+          PyTorch ref to checkout and build. Typically "nightly" or
+          "release/X.Y". Required unless manifest_url is set.
         type: string
-        required: true
+        default: ""
       manifest_url:
         description: >-
           Optional explicit URL to a pre-generated PyTorch manifest. If empty,
@@ -82,9 +84,11 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.12").
+        description: >-
+          PyTorch ref to checkout and build. Typically "nightly" or
+          "release/X.Y". Required unless manifest_url is set.
         type: string
-        default: "release/2.12"
+        default: ""
       manifest_url:
         description: >-
           Optional explicit URL to a pre-generated PyTorch manifest. If empty,
@@ -120,14 +124,14 @@ on:
           - ccache
         default: none
 
-run-name: Build Multi-Arch Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
+run-name: "Build Multi-Arch Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref || 'manifest URL' }})"
 
 permissions:
   contents: read
 
 jobs:
   prepare_pytorch_manifest:
-    name: Prepare Manifest | torch ${{ inputs.pytorch_git_ref }}
+    name: "Prepare Manifest | torch ${{ inputs.pytorch_git_ref || 'manifest URL' }}"
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     permissions:
       id-token: write
@@ -167,7 +171,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python build_tools/github_actions/prepare_pytorch_manifests.py \
+          python build_tools/github_actions/prepare_pytorch_manifest.py \
             --manifest-url "${{ inputs.manifest_url }}" \
             --rocm-version "${{ inputs.rocm_version }}" \
             --run-id "${{ github.run_id }}" \
@@ -179,7 +183,7 @@ jobs:
             --therock-branch "${{ inputs.ref || github.ref_name }}"
 
   build_pytorch_wheels:
-    name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
+    name: "Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref || 'manifest URL' }}"
     needs: [prepare_pytorch_manifest]
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     permissions:
