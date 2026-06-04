@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import json
 import glob
 import toml
@@ -200,9 +201,15 @@ def detailed_component_analysis_csv(output_file='artifact_package_coverage.csv')
         # Print some examples of missing packages
         missing_rows = [row for row in csv_rows if row['Status'] == 'MISSING']
         if missing_rows:
-            print(f"\nFirst 10 missing packages:")
-            for row in missing_rows[:10]:
+            print(f"\nMissing packages:")
+            for row in missing_rows:
                 print(f"  - {row['Artifact']}: {row['Component']}")
+
+        # return error if packages are missing
+        if missing > 0:
+            print(f"Failed missing {missing} packages")
+            sys.exit(1)
+
     else:
         print("No data to write to CSV")
 

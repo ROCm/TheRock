@@ -134,6 +134,11 @@ jobs:
             --artifact-group=${{ inputs.artifact_group }} \
             --output-dir=${{ env.ARTIFACTS_DIR }}
 
+      - name: Artifacts Check Test
+        id: check-artifacts
+        run: |
+          python ./build_tools/tests/artifacts_pkg_checker_csv.py
+
       - name: Build Packages
         id: build-packages
         run: |
@@ -153,11 +158,6 @@ jobs:
             --test-type simulate \
             --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --pkg-type ${{ inputs.native_package_type }}
-
-      - name: Artifacts Check Test
-        id: check-artifacts 
-        run: |
-          python ./build_tools/tests/artifacts_pkg_checker_csv.py
 
       - name: Configure AWS Credentials
         if: ${{ !inputs.skip_package_upload }}
