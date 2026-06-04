@@ -22,16 +22,6 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
-  NAME HIP_KERNEL_PROVIDER_ENABLE
-  DEFAULT_VALUE OFF
-  DESCRIPTION "Enable hip-kernel-provider plugin"
-  CMAKE_VARS
-    HIP_KERNEL_PROVIDER_ENABLE=ON
-  SUB_PROJECTS
-    hipkernelprovider
-)
-
-therock_declare_flag(
   NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
   DESCRIPTION "Stamp library git revisions into generated version metadata"
