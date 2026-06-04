@@ -6,7 +6,7 @@ import argparse
 import subprocess
 import tempfile
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 
 THEROCK_REPO = "ROCm/TheRock"
@@ -140,7 +140,7 @@ def update_ref_in_file(file_path, new_sha):
 
                 # Replace the existing ref line, preserving indentation and removing old comment
                 indent = lines[ref_line_index][: lines[ref_line_index].find("ref:")]
-                date = datetime.utcnow().strftime("%Y-%m-%d")
+                date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 updated_lines.append(f"{indent}ref: {new_sha} # {date} commit\n")
 
                 # Skip past all lines we've already handled
@@ -175,12 +175,12 @@ def update_ci_env_file(file_path, new_sha):
 
         if in_therock_ref and stripped.startswith("value:"):
             indent = line[: line.find("value:")]
-            date = datetime.utcnow().strftime("%Y-%m-%d")
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             updated_lines.append(f'{indent}value: "{new_sha}" # {date} commit\n')
             in_therock_ref = False
             continue
 
-        if in_therock_ref and not stripped.startswith("description:"):
+        if in_therock_ref and stripped and not stripped.startswith("description:"):
             in_therock_ref = False
 
         updated_lines.append(line)
