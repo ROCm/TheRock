@@ -138,7 +138,7 @@ class WorkflowOutputRoot:
         per-arch stages (e.g., math-libs) get a subdirectory per family.
 
         Args:
-            stage_name: Build stage (e.g., 'foundation', 'math-libs')
+            stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs')
             amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
         """
         if amdgpu_family:

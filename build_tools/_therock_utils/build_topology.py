@@ -686,6 +686,120 @@ class BuildTopology:
 
         return order
 
+    def get_source_set_to_artifact_groups(self) -> Dict[str, List[str]]:
+        """
+        Get a reverse index from source set names to artifact group names.
+
+        Returns:
+            Dictionary mapping source set names to artifact group names that
+            reference them. Known source sets with no artifact group references
+            are included with an empty list.
+        """
+        artifact_groups_by_source_set = {
+            source_set_name: [] for source_set_name in self.source_sets
+        }
+        for group in self.artifact_groups.values():
+            for source_set_name in group.source_sets:
+                artifact_groups_by_source_set.setdefault(source_set_name, []).append(
+                    group.name
+                )
+        return artifact_groups_by_source_set
+
+    def get_artifact_group_to_artifacts(self) -> Dict[str, List[str]]:
+        """
+        Get an index from artifact group names to artifact names.
+
+        Returns:
+            Dictionary mapping artifact group names to artifact names in that
+            group. Known artifact groups with no artifacts are included with an
+            empty list.
+        """
+        artifacts_by_group = {group_name: [] for group_name in self.artifact_groups}
+        for artifact in self.artifacts.values():
+            artifacts_by_group.setdefault(artifact.artifact_group, []).append(
+                artifact.name
+            )
+        return artifacts_by_group
+
+    def get_artifact_group_to_build_stages(self) -> Dict[str, List[str]]:
+        """
+        Get a reverse index from artifact group names to producer build stages.
+
+        Returns:
+            Dictionary mapping artifact group names to build stage names that
+            list the group. Known artifact groups with no producing stage are
+            included with an empty list.
+        """
+        stages_by_group = {group_name: [] for group_name in self.artifact_groups}
+        for stage in self.build_stages.values():
+            for group_name in stage.artifact_groups:
+                stages_by_group.setdefault(group_name, []).append(stage.name)
+        return stages_by_group
+
+    def get_artifact_to_producer_stages(self) -> Dict[str, List[str]]:
+        """
+        Get an index from artifact names to producer build stages.
+
+        Returns:
+            Dictionary mapping artifact names to build stage names that produce
+            their artifact group. Artifacts in unmapped groups are included with
+            an empty list.
+        """
+        stages_by_group = self.get_artifact_group_to_build_stages()
+        return {
+            artifact.name: list(stages_by_group.get(artifact.artifact_group, []))
+            for artifact in self.artifacts.values()
+        }
+
+    def get_stage_to_source_sets(
+        self, platform: Optional[str] = None
+    ) -> Dict[str, List[str]]:
+        """
+        Get an index from build stages to source set names.
+
+        Args:
+            platform: Current platform (e.g., "linux", "windows"). If provided,
+                source_sets with this platform in disable_platforms are skipped.
+
+        Returns:
+            Dictionary mapping build stage names to source set names used by the
+            stage's artifact groups.
+        """
+        return {
+            stage_name: [
+                source_set.name
+                for source_set in self.get_source_sets_for_stage(
+                    stage_name, platform=platform
+                )
+            ]
+            for stage_name in self.build_stages
+        }
+
+    def get_source_set_to_stages(
+        self, platform: Optional[str] = None
+    ) -> Dict[str, List[str]]:
+        """
+        Get a reverse index from source set names to build stages.
+
+        Args:
+            platform: Current platform (e.g., "linux", "windows"). If provided,
+                source_sets with this platform in disable_platforms are skipped.
+
+        Returns:
+            Dictionary mapping source set names to build stage names that use
+            them through artifact groups. Known source sets with no build stage
+            usage are included with an empty list.
+        """
+        stages_by_source_set = {
+            source_set_name: [] for source_set_name in self.source_sets
+        }
+        for stage_name, source_set_names in self.get_stage_to_source_sets(
+            platform=platform
+        ).items():
+            for source_set_name in source_set_names:
+                stages_by_source_set.setdefault(source_set_name, []).append(stage_name)
+        return stages_by_source_set
+
     def get_source_sets(self) -> List[SourceSet]:
         """Get all source sets."""
         return list(self.source_sets.values())

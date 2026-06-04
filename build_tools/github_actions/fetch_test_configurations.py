@@ -172,7 +172,7 @@ test_matrix = {
         "job_name": "rocroller",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocroller.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 5,
@@ -192,6 +192,16 @@ test_matrix = {
                 "gfx1152",
                 "gfx1153",
             ],
+        },
+    },
+    "tensilelite": {
+        "job_name": "tensilelite",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_tensilelite.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
     "hipblas": {
@@ -400,7 +410,11 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --rand --tests",
-        "timeout_minutes": 60,
+        # GHA step timeout: sized to allow nightly comprehensive runs (~2 hr).
+        # Per-test CTest TIMEOUT in rocm-libraries/projects/miopen/test/gtest/
+        # test_categories.yaml bounds individual tests (quick: 10 min,
+        # standard: 60 min, etc).
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -508,18 +522,17 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # Disabled until rocm-libraries bump that has hip-kernel-provider passing
-    # "hipkernelprovider": {
-    #     "job_name": "hipkernelprovider",
-    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
-    #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
-    #     "platform": ["linux", "windows"],
-    #     "total_shards_dict": {
-    #         "linux": 1,
-    #         "windows": 1,
-    #     },
-    # },
+    "hipkernelprovider": {
+        "job_name": "hipkernelprovider",
+        "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
