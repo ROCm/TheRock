@@ -140,6 +140,16 @@ COMPUTE_RPTR_VRAM_OFF = 0x18C0000
 COMPUTE_WPTR_VRAM_OFF = 0x18C1000
 COMPUTE_FENCE_VRAM_OFF = 0x18D0000
 
+# IH (interrupt handler) ring -- port of amdgpu ih_v7_0 to fix the multi-dispatch
+# ceiling (#21): without a drained IH ring, MES/CP completion IVs back up and the
+# MES stops servicing the queue after ~14 shader dispatches. Placed above the
+# lite:: (fb+0x1800000..0x1925000) and phase-9 (top 0x18D0000) regions, within
+# the 256MB BAR0.
+IH_RING_VRAM_OFF = 0x1A00000   # 256 KB ring (RB_SIZE=16 => 4<<16)
+IH_WPTR_VRAM_OFF = 0x1A40000   # 4 KB wptr-writeback page
+IH_RING_SIZE     = 0x40000     # 256 KB
+IH_PTR_MASK      = IH_RING_SIZE - 1   # 0x3FFFF (byte granularity)
+
 MQD_SIZE  = 0x1000
 RING_SIZE = 0x1000
 MES_EOP_SIZE = 0x1000
@@ -238,6 +248,22 @@ def main():
 
     def rd(base, off): return c.mmio_read32(_MMIO_BAR, (base + off) * 4)
     def wr(base, off, v): c.mmio_write32(_MMIO_BAR, (base + off) * 4, v & 0xFFFFFFFF)
+    # Windowed access for NBIO BASE_IDX=5 regs beyond the 512KB BAR5 (port of
+    # amdgpu_device_indirect_rreg/wreg). The value written to the INDEX reg is the
+    # target reg's RAW BYTE offset (full_dword<<2). Two candidate index/data pairs:
+    # PCIE_INDEX2/DATA2 (dword 0x0e/0x0f) per amdgpu, and the macOS-proven SMN pair
+    # (dword 0x18/0x19 = byte 0x60/0x64). idx_dword selects the pair.
+    def wr_ind(full_dword_off, val, idx_dword=0x0e):
+        byte_off = (full_dword_off << 2) & 0xFFFFFFFF
+        c.mmio_write32(_MMIO_BAR, idx_dword * 4, byte_off)
+        c.mmio_read32(_MMIO_BAR, idx_dword * 4)
+        c.mmio_write32(_MMIO_BAR, (idx_dword + 1) * 4, val & 0xFFFFFFFF)
+        c.mmio_read32(_MMIO_BAR, (idx_dword + 1) * 4)
+    def rd_ind(full_dword_off, idx_dword=0x0e):
+        byte_off = (full_dword_off << 2) & 0xFFFFFFFF
+        c.mmio_write32(_MMIO_BAR, idx_dword * 4, byte_off)
+        c.mmio_read32(_MMIO_BAR, idx_dword * 4)
+        return c.mmio_read32(_MMIO_BAR, (idx_dword + 1) * 4)
     def gc1_rd(o): return rd(GC_B1, o)
     def gc1_wr(o, v): wr(GC_B1, o, v)
     def gc0_rd(o): return rd(GC_B0, o)
@@ -266,8 +292,12 @@ def main():
 
         # cgcg_en=1, cgls_en=1, cgls_rep_compansat_delay=0xf,
         # cgcg_gfx_idle_threshold=0x36.
+        # DIAG: PHASE9_NO_CGCG=1 leaves cgcg_en/cgls_en=0 to test whether RLC
+        # clock-gating of the idle compute block causes the ~500ms time-based
+        # multi-dispatch drop.
         v = gc1_rd(regRLC_CGCG_CGLS_CTRL) & ~0x07FFFFFF
-        v |= (1 << 0) | (1 << 1) | (0xf << 2) | (0x36 << 8)
+        if os.environ.get("PHASE9_NO_CGCG") != "1":
+            v |= (1 << 0) | (1 << 1) | (0xf << 2) | (0x36 << 8)
         gc1_wr(regRLC_CGCG_CGLS_CTRL, v)
 
         # poll_frequency=0x100, idle_poll_count=0x90.
@@ -278,9 +308,24 @@ def main():
         gc0_wr(regCP_INT_CNTL, v)
 
         # Clear all gfx CG overrides (allow clock gating); perfmon_clock_state=1.
-        v = gc1_rd(regRLC_CGTT_MGCG_OVERRIDE) & ~0x73E
+        # DIAG: PHASE9_NO_CGCG=1 SETS the override bits instead (force clocks on,
+        # MGCG gating disabled).
+        if os.environ.get("PHASE9_NO_CGCG") == "1":
+            v = gc1_rd(regRLC_CGTT_MGCG_OVERRIDE) | 0x73E
+        else:
+            v = gc1_rd(regRLC_CGTT_MGCG_OVERRIDE) & ~0x73E
         v |= (1 << 10)
         gc1_wr(regRLC_CGTT_MGCG_OVERRIDE, v)
+
+        # DIAG: PHASE9_NO_PG=1 disables GFX power gating (RLC_PG_CNTL=0) so the
+        # idle compute block isn't power-gated (losing HQD context) -- testing
+        # the ~500ms time-based multi-dispatch drop. configure_clockgating only
+        # touches CLOCK gating; PG is separate.
+        if os.environ.get("PHASE9_NO_PG") == "1":
+            regRLC_PG_CNTL = 0x4c43  # B1
+            pg = gc1_rd(regRLC_PG_CNTL)
+            gc1_wr(regRLC_PG_CNTL, 0)
+            print(f"GFX PG disabled (RLC_PG_CNTL 0x{pg:08x} -> 0x{gc1_rd(regRLC_PG_CNTL):08x})")
 
         # Exit RLC safe mode (message=0, cmd=1).
         gc1_wr(regRLC_SAFE_MODE, (1 << 0))
@@ -330,9 +375,19 @@ def main():
             configure_clockgating()
         if os.environ.get("PHASE9_SKIP_SH_MEM") != "1":
             configure_scratch_aperture()
+        # DIAG: PHASE9_NO_GFXOFF=1 sends SMU DisallowGfxOff (0x29) so the GPU
+        # cannot enter the GFXOFF deep-idle state -- testing the ~500ms
+        # time-based multi-dispatch drop (the bring-up never disallows GFXOFF).
+        if os.environ.get("PHASE9_NO_GFXOFF") == "1":
+            from amd_gpu_driver.backends.macos.smu import smu_send
+            try:
+                rc = smu_send(c, 0x29)  # PPSMC_MSG_DisallowGfxOff
+                print(f"DisallowGfxOff sent -> response=0x{rc:08x}")
+            except Exception as e:
+                print(f"DisallowGfxOff failed: {e}")
 
     fb_base = (c.mmio_read32(_MMIO_BAR, (0x1A000 + 0x0554) * 4) & 0xFFFFFF) << 24
-    bar0_cpu, _ = c.map_bar(0)
+    bar0_cpu, bar0_size = c.map_bar(0)
 
     # Map BAR2 (doorbell aperture).
     try:
@@ -367,6 +422,79 @@ def main():
 
     def vram_wr64(off, val):
         (ctypes.c_uint64 * 1).from_address(bar0_cpu + off)[0] = val & 0xFFFFFFFFFFFFFFFF
+
+    def configure_ih_ring():
+        # Port of amdgpu ih_v7_0 IH-ring init for the macOS physical-FB model.
+        # MC_SPACE=4 (PSP-load path): the IH block resolves IH_RB_BASE through the
+        # GPU MC / MMHUB SYSTEM_APERTURE -- the same physical fb_base+offset >>8
+        # addressing CP_HQD_PQ_BASE already uses, so no VMID0 page table is needed.
+        # IH_RB_CNTL = 0x40330121 verbatim from the live amdgpu capture on this
+        # gfx1201 (MC_SPACE=4, RB_SIZE=16/256KB, WPTR_WRITEBACK/OVERFLOW/INTR/SNOOP/
+        # REARM/ENABLE). The ring is a back-pressuring producer/consumer ring, so it
+        # MUST be drained (advance IH_RB_RPTR toward IH_RB_WPTR) or it fills after
+        # ~a dozen completions and wedges the MES/CP completion path (#21). For the
+        # HIP unit test the drainer runs as a separate process (ih_drainer.py) since
+        # the dispatch loop lives in ROCr, not here.
+        IH = 0x10a0  # OSSSYS base (dword)
+        IH_RB_CNTL, IH_RB_RPTR, IH_RB_WPTR = 0x80, 0x81, 0x82
+        IH_RB_BASE, IH_RB_BASE_HI = 0x83, 0x84
+        IH_RB_WPTR_ADDR_HI, IH_RB_WPTR_ADDR_LO = 0x85, 0x86
+        IH_CNTL2 = 0xc1
+        assert bar0_size >= IH_WPTR_VRAM_OFF + 0x1000, (
+            f"BAR0 map 0x{bar0_size:x} too small for IH ring")
+        ih_gpu  = fb_base + IH_RING_VRAM_OFF
+        ih_wptr = fb_base + IH_WPTR_VRAM_OFF
+        print(f"\n== IH ring init (port of ih_v7_0) ==")
+        print(f"  ring @ fb+0x{IH_RING_VRAM_OFF:x} mc=0x{ih_gpu:x} (256KB); "
+              f"wptrWB @ fb+0x{IH_WPTR_VRAM_OFF:x} mc=0x{ih_wptr:x}")
+        for i in range(0, IH_RING_SIZE, 4):
+            vram_wr(IH_RING_VRAM_OFF + i, 0)
+        for i in range(0, 0x1000, 4):
+            vram_wr(IH_WPTR_VRAM_OFF + i, 0)
+        wr(IH, IH_RB_CNTL, 0)          # disable before reprogramming
+        wr(IH, IH_RB_RPTR, 0)
+        wr(IH, IH_RB_WPTR, 0)
+        base_shifted = ih_gpu >> 8
+        wr(IH, IH_RB_BASE, base_shifted & 0xFFFFFFFF)
+        wr(IH, IH_RB_BASE_HI, (base_shifted >> 32) & 0xFF)
+        wr(IH, IH_RB_WPTR_ADDR_LO, ih_wptr & 0xFFFFFFFF)
+        wr(IH, IH_RB_WPTR_ADDR_HI, (ih_wptr >> 32) & 0xFFFFFFFF)
+        wr(IH, IH_CNTL2, 0x108)
+        wr(IH, IH_RB_CNTL, 0x40330121)  # enable (verbatim live amdgpu value)
+        print(f"  IH_RB_CNTL=0x{rd(IH, IH_RB_CNTL):08x} (wrote 0x40330121) "
+              f"IH_RB_BASE=0x{rd(IH, IH_RB_BASE):08x} (mc>>8=0x{base_shifted:08x})")
+
+        # --- NBIO interrupt transport (port of nbio_v7_11_ih_control) ---
+        # BIF_BX1_INTERRUPT_CNTL/CNTL2 are BASE_IDX=5 (beyond BAR5) -> windowed.
+        # amdgpu live target: INTERRUPT_CNTL=0x00010000. Probe both index/data
+        # pairs to find which the DEXT honors, then write via that pair.
+        BIF_CNTL  = NBIO_B5 + 0x8e11
+        BIF_CNTL2 = NBIO_B5 + 0x8e12
+        a = rd_ind(BIF_CNTL, 0x0e)
+        b = rd_ind(BIF_CNTL, 0x18)
+        print(f"  probe BIF_BX1_INTERRUPT_CNTL: via0x0e=0x{a:08x} via0x18=0x{b:08x} (amdgpu=0x00010000)")
+        idx = 0x0e if a not in (0, 0xffffffff) else (0x18 if b not in (0, 0xffffffff) else None)
+        if idx is None:
+            print("  WARNING: neither index/data pair reached BIF_BX1_INTERRUPT_CNTL; IH transport NOT enabled")
+        else:
+            # dummy-read page (VRAM, just above wptr-WB)
+            IH_DUMMY_VRAM_OFF = 0x1A41000
+            for i in range(0, 0x1000, 4):
+                vram_wr(IH_DUMMY_VRAM_OFF + i, 0)
+            ih_dummy_mc = fb_base + IH_DUMMY_VRAM_OFF
+            wr_ind(BIF_CNTL2, (ih_dummy_mc >> 8) & 0xFFFFFFFF, idx)
+            cntl = rd_ind(BIF_CNTL, idx) & ~((1 << 0) | (1 << 3))  # DUMMY_RD_OVERRIDE=0, NONSNOOP=0
+            wr_ind(BIF_CNTL, cntl, idx)
+            print(f"  NBIO(idx0x{idx:x}) INTERRUPT_CNTL=0x{rd_ind(BIF_CNTL, idx):08x} "
+                  f"CNTL2=0x{rd_ind(BIF_CNTL2, idx):08x} (dummy_mc=0x{ih_dummy_mc:x})")
+        # OSSSYS storm + flood enables (osssys_7_0_0; reachable directly via wr).
+        IH_STORM_CLIENT_LIST_CNTL, IH_INT_FLOOD_CNTL = 0x00aa, 0x00d5
+        wr(IH, IH_STORM_CLIENT_LIST_CNTL, rd(IH, IH_STORM_CLIENT_LIST_CNTL) | (1 << 18))
+        wr(IH, IH_INT_FLOOD_CNTL, rd(IH, IH_INT_FLOOD_CNTL) | (1 << 3))
+        print(f"  STORM=0x{rd(IH, IH_STORM_CLIENT_LIST_CNTL):08x} FLOOD=0x{rd(IH, IH_INT_FLOOD_CNTL):08x}")
+
+    if os.environ.get("PHASE9_IH_RING") == "1":
+        configure_ih_ring()
 
     def select_hqd(me, pipe, queue=0, vmid=0):
         gc1_wr(regGRBM_GFX_CNTL,
