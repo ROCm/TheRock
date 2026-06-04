@@ -28,7 +28,22 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
-TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+# Normalize + validate TEST_TYPE once at module load so all downstream
+# consumers (apply_component_overrides at import time, main() at run
+# time) see the same lower-cased, validated value. `or "quick"` covers
+# both unset env var and explicitly-empty env var (which is what
+# GitHub Actions inputs default to when the workflow input is left
+# blank). Invalid values fall back to "quick" with an error.
+_raw_test_type = os.getenv("TEST_TYPE") or "quick"
+TEST_TYPE = _raw_test_type.lower()
+if TEST_TYPE not in VALID_TEST_CATEGORIES:
+    print(
+        f"ERROR: Invalid TEST_TYPE '{_raw_test_type}'. "
+        f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
+        f"Falling back to 'quick'.",
+        file=sys.stderr,
+    )
+    TEST_TYPE = "quick"
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # Map job names to actual test directory names
@@ -215,7 +230,7 @@ def apply_component_overrides(
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR = apply_component_overrides(
     test_component_job_name,
-    (TEST_TYPE or "").lower(),
+    TEST_TYPE,
     ROCM_PATH,
     THEROCK_DIR,
     TEST_DIR,
@@ -379,15 +394,8 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
 
 
 def main():
-    category = TEST_TYPE.lower() if TEST_TYPE else "quick"
-    if category not in VALID_TEST_CATEGORIES:
-        print(
-            f"ERROR: Invalid TEST_TYPE '{TEST_TYPE}'. "
-            f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
-            f"Falling back to 'quick'.",
-            file=sys.stderr,
-        )
-        category = "quick"
+    # TEST_TYPE was normalized + validated at module load.
+    category = TEST_TYPE
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
