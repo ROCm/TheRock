@@ -133,8 +133,9 @@ jobs:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
-      # Use architecture-specific artifact group for fetching per-arch artifacts
-      artifact_group: ${{ matrix.family_info.amdgpu_family }}
+      # Use architecture-specific artifact group, appending build variant suffix when present
+      # (e.g. "gfx94X-dcgpu-asan" for ASAN builds) so that tests can detect the build variant.
+      artifact_group: ${{ matrix.family_info.amdgpu_family }}${{ fromJSON(inputs.build_config).build_variant_suffix != '' && format('-{0}', fromJSON(inputs.build_config).build_variant_suffix) || '' }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}

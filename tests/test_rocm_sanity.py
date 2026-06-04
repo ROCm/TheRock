@@ -207,6 +207,17 @@ class TestROCmSanity:
                     "amdsmitstReadWrite.TestPciReadWrite",
                 ]
             },
+            "gfx94X-dcgpu": {
+                # TODO(#5252): Re-enable once amdsmi tests are fixed for gfx94X-dcgpu
+                # TestIdInfoRead: amdsmi_get_gpu_asic_info returns AMDSMI_STATUS_NOT_SUPPORTED
+                "linux": [
+                    "amdsmitstReadOnly.TestIdInfoRead",
+                ],
+                # TestHWTopologyRead: heap-use-after-free detected by ASAN
+                "linux-asan": [
+                    "amdsmitstReadOnly.TestHWTopologyRead",
+                ],
+            },
             "gfx110X-all": {
                 # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx110X-all
                 "linux": [
@@ -216,12 +227,13 @@ class TestROCmSanity:
         }
 
         platform_key = "windows" if is_windows() else "linux"
-        if (
-            AMDGPU_FAMILIES in TESTS_TO_IGNORE
-            and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
-        ):
-            ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
-            exclude_tests.extend(ignored_tests)
+        asan_platform_key = f"{platform_key}-asan" if is_asan() else None
+        if AMDGPU_FAMILIES in TESTS_TO_IGNORE:
+            family_ignores = TESTS_TO_IGNORE[AMDGPU_FAMILIES]
+            if platform_key in family_ignores:
+                exclude_tests.extend(family_ignores[platform_key])
+            if asan_platform_key and asan_platform_key in family_ignores:
+                exclude_tests.extend(family_ignores[asan_platform_key])
 
         gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
         cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]
