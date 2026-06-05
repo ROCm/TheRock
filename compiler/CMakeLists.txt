@@ -15,15 +15,14 @@ if(THEROCK_ENABLE_COMPILER)
     include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake")
     get_host_triple(LLVM_HOST_TRIPLE)
     if(DEFINED LLVM_HOST_TRIPLE)
-      #set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}")
-      set(THEROCK_LLVM_HOST_TRIPLE "amdgcn-amd-amdhsa")
+      set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}-test")
       set(THEROCK_LLVM_RPATH_WITH_TRIPLE "lib/llvm/lib/${THEROCK_LLVM_HOST_TRIPLE}")
     endif()
   else()
     message(STATUS "Warning: ${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake Not found!")
   endif()
   message(STATUS "!!!THEROCK_LLVM_RPATH_WITH_TRIPLE: ${THEROCK_LLVM_RPATH_WITH_TRIPLE}")
-  message(STATUS "!!!LLVM_HOST_TRIPLE: ${LLVM_HOSTTRIPLE}")
+  message(STATUS "!!!LLVM_HOST_TRIPLE: ${LLVM_HOST_TRIPLE}")
   ##############################################################################
   # amd-llvm
   # Everything built as part of LLVM installs to lib/llvm
