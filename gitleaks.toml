@@ -43,7 +43,6 @@ stopwords = [
 ]
 regexes = [
   '''(?i)example[_-]?key''',
-  '''(?i)dummy|sample|placeholder|fake''',
   '''0{8,}|x{8,}|deadbeef''',
 ]
 
