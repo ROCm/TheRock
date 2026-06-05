@@ -45,6 +45,10 @@ from github_actions_api import gha_set_output
 logger = logging.getLogger(__name__)
 
 
+def _build_s3_url(bucket: str, relative_path: str, filename: str) -> str:
+    return f"https://{bucket}.s3.amazonaws.com/{relative_path}/{filename}"
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Upload tarballs to S3")
     parser.add_argument(
@@ -101,28 +105,22 @@ def main(argv: list[str]) -> int:
     count = backend.upload_directory(tarballs_dir, dest, include=["*.tar.gz"])
 
     logger.info("Uploaded %d files", count)
-    tarball_urls: dict[str, str] = {}
 
-    for f in tarball_files:
-        name = f.name
-        url = f"https://{dest.bucket}.s3.amazonaws.com/{dest.relative_path}/{name}"
+    shared_tarball_url: str | None = None
 
-        if name.startswith(f"therock-dist-{args.platform}-multiarch-"):
-            tarball_urls["multiarch"] = url
-        else:
-            family_and_version = name[
-                len(f"therock-dist-{args.platform}-") : -len(".tar.gz")
-            ]
+    if len(tarball_files) == 1:
+        shared_tarball_url = _build_s3_url(
+            dest.bucket,
+            dest.relative_path,
+            tarball_files[0].name,
+        )
 
-            # Future-proof shared tarball naming discussed in #4438:
-            # therock-dist-linux-<version>.tar.gz
-            if "-" not in family_and_version:
-                tarball_urls["multiarch"] = url
-            else:
-                family = family_and_version.rsplit("-", 1)[0]
-                tarball_urls[family] = url
+    if not shared_tarball_url:
+        raise ValueError(
+            "No shared tarball URL was produced; check tarball naming and upload logic"
+        )
 
-    gha_set_output({"tarball_urls": json.dumps(tarball_urls)})
+    gha_set_output({"tarball_urls": json.dumps({"multiarch": shared_tarball_url})})
     return 0
 
 
