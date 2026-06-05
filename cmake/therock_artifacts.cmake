@@ -290,7 +290,7 @@ function(therock_provide_artifact slice_name)
       add_custom_command(
         OUTPUT "${_flatten_stamp}"
         COMMENT "Flatten split artifacts for ${slice_name} to dist/${ARG_DISTRIBUTION}"
-        COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten-split
+        COMMAND ${_fileset_tool_command} artifact-flatten-split
           -o "${_dist_dir}"
           --artifacts-dir "${THEROCK_BINARY_DIR}/artifacts"
           ${_artifact_prefixes}
