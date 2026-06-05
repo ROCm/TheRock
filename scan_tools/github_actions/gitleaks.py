@@ -34,6 +34,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -477,6 +478,17 @@ def _run_gitleaks(
     return leaks_found
 
 
+def _md_code_fence(content: str) -> str:
+    """Return a backtick fence longer than any backtick run in `content`.
+
+    CommonMark ends a fenced block at the first line whose backtick run is
+    at least as long as the opener, so a report containing ``` would
+    otherwise truncate its own code block.
+    """
+    longest = max((len(m) for m in re.findall(r"`+", content)), default=0)
+    return "`" * max(3, longest + 1)
+
+
 def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
     """Surface each non-SARIF report in the workflow run.
 
@@ -507,7 +519,10 @@ def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
         print(f"::group::Gitleaks report: {path}")
         print(content)
         print("::endgroup::")
-        summary_chunks.append(f"### Gitleaks report: `{path}`\n\n```\n{content}\n```")
+        fence = _md_code_fence(content)
+        summary_chunks.append(
+            f"### Gitleaks report: `{path}`\n\n{fence}\n{content}\n{fence}"
+        )
     if summary_chunks:
         gha_append_step_summary("\n\n".join(summary_chunks))
 

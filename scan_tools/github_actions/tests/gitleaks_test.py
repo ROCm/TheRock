@@ -15,6 +15,7 @@ from gitleaks import (
     _LEAK_SECURITY_SEVERITY_HIGH,
     _determine_log_opts,
     _enrich_sarif_with_security_severity,
+    _md_code_fence,
     _parse_report_formats,
     _resolve_config_path,
 )
@@ -233,6 +234,32 @@ class ResolveConfigPathTest(unittest.TestCase):
         with self.assertRaises(FileNotFoundError) as ctx:
             _resolve_config_path()
         self.assertIn(_CONFIG_PATH, str(ctx.exception))
+
+
+class MdCodeFenceTest(unittest.TestCase):
+    """Tests for `_md_code_fence`."""
+
+    def test_default_three_backticks_when_no_backticks(self):
+        self.assertEqual(_md_code_fence("plain,csv,content"), "```")
+
+    def test_three_backticks_when_content_has_short_runs(self):
+        self.assertEqual(_md_code_fence("a `b` c"), "```")
+
+    def test_grows_beyond_triple_backtick_run(self):
+        self.assertEqual(_md_code_fence("before ``` after"), "````")
+
+    def test_grows_to_longest_run(self):
+        self.assertEqual(_md_code_fence("x ````` y"), "``````")
+
+    def test_fence_actually_wraps_content(self):
+        content = "with ``` inside"
+        fence = _md_code_fence(content)
+        block = f"{fence}\n{content}\n{fence}"
+        # The closing fence must be on its own line and not appear within
+        # the content, so the block is unambiguous.
+        self.assertNotIn(fence, content)
+        self.assertTrue(block.startswith(fence + "\n"))
+        self.assertTrue(block.endswith("\n" + fence))
 
 
 if __name__ == "__main__":
