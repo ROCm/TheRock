@@ -496,11 +496,21 @@ def _recipe_bringup(
     # is built/rung. Toggle off with LITE_NO_S2A=1 for A/B comparison.
     if os.environ.get("LITE_NO_S2A") != "1":
         _NBIO_B2 = 0xD20
-        dev.write_reg32((_NBIO_B2 + 0x01cb) * 4, 0x30000007)  # S2A_DOORBELL_ENTRY_0_CTRL
-        dev.write_reg32((_NBIO_B2 + 0x01ce) * 4, 0x3000000D)  # S2A_DOORBELL_ENTRY_3_CTRL
+        # RCC_DOORBELL_APER_EN routes doorbell-BAR writes to the GC doorbell
+        # monitor. ring_init never enables it (grep: absent from the python
+        # backend AND the amdgpu_lite kernel module), so without it the KIQ
+        # doorbell never reaches the CP -> SET_HW_RESOURCES / the PM4 NOP are
+        # never fetched (KIQ NOP test: CONSUMED=False despite CP_HQD_ACTIVE=1).
+        # try_phase9 enables it at line 626. APER_EN + S2A entries together are
+        # the proven doorbell delivery setup (CP_MEC_DOORBELL_RANGE is done by
+        # init_gfx_for_compute). Disable for A/B with LITE_NO_S2A=1.
+        dev.write_reg32((_NBIO_B2 + 0x00c0) * 4, 1)            # RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
+        dev.write_reg32((_NBIO_B2 + 0x01cb) * 4, 0x30000007)  # GDC_S2A0_S2A_DOORBELL_ENTRY_0_CTRL
+        dev.write_reg32((_NBIO_B2 + 0x01ce) * 4, 0x3000000D)  # GDC_S2A0_S2A_DOORBELL_ENTRY_3_CTRL
+        aper = dev.read_reg32((_NBIO_B2 + 0x00c0) * 4)
         e0 = dev.read_reg32((_NBIO_B2 + 0x01cb) * 4)
         e3 = dev.read_reg32((_NBIO_B2 + 0x01ce) * 4)
-        print(f"  S2A doorbell entries: ENTRY_0=0x{e0:08x} ENTRY_3=0x{e3:08x}")
+        print(f"  doorbell: APER_EN=0x{aper:x} S2A_ENTRY_0=0x{e0:08x} S2A_ENTRY_3=0x{e3:08x}")
     mes_ring = None
     compute_queue = None
     ih_config = None

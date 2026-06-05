@@ -1110,6 +1110,51 @@ def _mes_ring_as_compute_config(config: MESRingConfig) -> ComputeQueueConfig:
     return queue
 
 
+def _kiq_nop_diagnostic(dev: WindowsDevice, config: MESRingConfig,
+                        timeout_s: float = 3.0) -> bool:
+    """Diagnostic (LITE_KIQ_NOP_TEST=1): does the KIQ HQD drain a PM4 NOP?
+
+    Ports the proven try_phase9_doorbell.py:824-863 consumption test. Confirms
+    CP_HQD_ACTIVE, submits one PM4 TYPE-3 NOP via the KIQ doorbell, and polls
+    CP_HQD_PQ_RPTR + the rptr-report page for advancement. Non-gating: prints
+    the result and advances config.wptr so the subsequent SET_HW_RESOURCES send
+    continues past the NOP. NOP-consumed + SET_HW_RSRC-timeout => MES-side gap;
+    NOP-not-consumed => doorbell/HQD never reaches the CP.
+    """
+    import struct
+    view = _mes_ring_as_compute_config(config)
+    view.wptr = config.wptr
+    grbm_select(dev, config.gc_base, view.me, view.pipe, view.queue)
+    active = _gc_reg(dev, config.gc_base, regCP_HQD_ACTIVE, base_idx=0)
+    rptr0 = _gc_reg(dev, config.gc_base, regCP_HQD_PQ_RPTR, base_idx=0)
+    grbm_deselect(dev, config.gc_base)
+    report0 = ctypes.c_uint32.from_address(config.rptr_cpu_addr).value
+    print(f"  KIQ NOP test: pre CP_HQD_ACTIVE=0x{active:x} "
+          f"rptr_reg={rptr0} rptr_report={report0} "
+          f"doorbell_idx=0x{config.doorbell_index:x}")
+
+    submit_compute_packets(view, struct.pack("<II", 0xC0001000, 0))
+    config.wptr = view.wptr
+    target = view.wptr
+
+    rptr = rptr0
+    report = report0
+    deadline = time.monotonic() + timeout_s
+    consumed = False
+    while time.monotonic() < deadline:
+        grbm_select(dev, config.gc_base, view.me, view.pipe, view.queue)
+        rptr = _gc_reg(dev, config.gc_base, regCP_HQD_PQ_RPTR, base_idx=0)
+        grbm_deselect(dev, config.gc_base)
+        report = ctypes.c_uint32.from_address(config.rptr_cpu_addr).value
+        if rptr >= target or report >= target:
+            consumed = True
+            break
+        time.sleep(0.01)
+    print(f"  KIQ NOP test: post rptr_reg={rptr} rptr_report={report} "
+          f"target={target} -> CONSUMED={consumed}")
+    return consumed
+
+
 def _init_mes_ring(
     dev: WindowsDevice,
     config: MESRingConfig,
@@ -1172,6 +1217,8 @@ def _init_mes_ring(
         _activate_compute_queue_mmio(dev, queue_view)
         config.ready = True
     config.wptr = 0
+    if direct_activate and os.environ.get("LITE_KIQ_NOP_TEST") == "1":
+        _kiq_nop_diagnostic(dev, config)
 
 
 def _submit_mes_api_packet(
