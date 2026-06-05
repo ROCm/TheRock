@@ -1,38 +1,4 @@
 #!/usr/bin/env python3
-"""Full artifact file-accounting audit across every artifact-*.toml descriptor.
-
-For each artifact descriptor in the repo, scan its component stage basedirs under a
-build root and report any staged file that is **not claimed by exactly one
-component** -- i.e. the exact check that `fileset_tool.py`'s
-`ComponentScanner.verify()` performs but which is currently DISABLED in the normal
-artifact build (see the commented-out `scanner.verify()` in fileset_tool.py).
-
-Why this exists
----------------
-Because verify() is off, an unclaimed staged file is **silently dropped** from all
-artifacts instead of erroring -- it then resurfaces much later as a mysterious
-rocm-sdk test/packaging failure. That is what caused origami to be reverted three
-times (#2813/#3237/#3820): origami installed `share/doc/origami/LICENSE.md` but its
-descriptor had no `doc` component, so the license was claimed by nobody. This tool
-catches that class of bug for ANY subproject, up front, with a precise message.
-
-Usage
------
-    # Audit the whole repo's descriptors against a completed build tree:
-    python build_tools/audit_artifact_accounting.py --root-dir /path/to/TheRock/build
-
-    # Audit specific descriptors:
-    python build_tools/audit_artifact_accounting.py --root-dir BUILD \
-        math-libs/BLAS/artifact-blas.toml
-
-    # Exit non-zero on any unaccounted file (for CI):
-    python build_tools/audit_artifact_accounting.py --root-dir BUILD --strict
-
-Descriptors whose stage basedirs were not built (e.g. components disabled in this
-configuration) are reported as SKIPPED rather than failed, so it works on partial
-builds. In CI, run it after a full build to get repo-wide accounting.
-"""
-
 import argparse
 import sys
 from pathlib import Path
@@ -55,14 +21,13 @@ def discover_descriptors(repo: Path) -> list[Path]:
 
 
 def audit_descriptor(toml: Path, root: Path):
-    """Return (artifact_name, undeclared_relpaths, scanned_basedirs, missing_basedirs, error)."""
     name = toml.stem
     if name.startswith("artifact-"):
         name = name[len("artifact-") :]
     try:
         ad = ab.ArtifactDescriptor.load_toml_file(toml, artifact_name=name)
         scanner = ab.ComponentScanner(root, ad)
-    except Exception as e:  # malformed descriptor / scan error
+    except Exception as e:
         return name, [], [], [], f"{type(e).__name__}: {e}"
 
     missing = sorted(getattr(scanner, "missing_basedirs", []) or [])
@@ -72,8 +37,6 @@ def audit_descriptor(toml: Path, root: Path):
         all_bd = []
     scanned = [bd for bd in all_bd if bd not in missing]
 
-    # Replicate verify()'s "undeclared unmatched" check exactly: an unmatched file
-    # is a problem unless the descriptor allow-lists it via options.unmatched_exclude.
     undeclared = []
     try:
         for relpath, direntry in scanner.unmatched_files:

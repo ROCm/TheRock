@@ -1,19 +1,3 @@
-"""Full artifact file-accounting test.
-
-Asserts that, across EVERY artifact-*.toml descriptor, every staged file is claimed
-by exactly one component -- the check that `fileset_tool.py`'s `ComponentScanner.verify()`
-performs but which is currently disabled in the normal artifact build. Unaccounted
-files are otherwise silently dropped from artifacts and resurface as mysterious
-rocm-sdk failures (this is what got origami reverted 3x: an unclaimed
-share/doc/origami/LICENSE.md with no `doc` component entry).
-
-Runs against a completed build tree pointed to by THEROCK_BINARY_DIR (the same root
-the build passes to `fileset_tool.py artifact --root-dir`). Skips if unset so it is
-safe in environments without a build. Intended to run as a post-build CI gate.
-
-    THEROCK_BINARY_DIR=/path/to/TheRock/build python -m pytest tests/test_artifact_accounting.py -v
-"""
-
 import os
 import sys
 from pathlib import Path
@@ -48,7 +32,7 @@ def test_all_staged_files_are_accounted():
         name, undeclared, scanned, missing, error = audit.audit_descriptor(toml, root)
         assert error is None, f"{toml}: descriptor error: {error}"
         if not scanned:
-            continue  # subproject not built in this configuration
+            continue
         audited += 1
         if undeclared:
             failures[str(toml.relative_to(_REPO))] = undeclared
