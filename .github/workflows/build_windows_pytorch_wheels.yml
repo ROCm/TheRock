@@ -209,13 +209,16 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag nightly
+            --repo-hashtag nightly \
+            --no-commit-hipify
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
@@ -225,15 +228,18 @@ jobs:
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --gitrepo-origin https://github.com/ROCm/pytorch.git \
-              --repo-hashtag ${{ inputs.pytorch_git_ref }}
+              --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+              --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
-              --require-related-commit
+              --require-related-commit \
+              --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
-              --require-related-commit
+              --require-related-commit \
+              --no-commit-hipify
 
       # Note: determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
