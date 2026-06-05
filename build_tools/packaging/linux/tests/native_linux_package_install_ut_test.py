@@ -978,7 +978,24 @@ class RunTestsTestTypeTest(unittest.TestCase):
 
 
 class RunBasicVerificationTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest.run_basic_verification()."""
+    """Tests for NativeLinuxPackageInstallTest.run_basic_verification().
+
+    run_basic_verification() now invokes the post-install transitive dependency
+    check (Step 2). These tests target component/rocminfo verification only, so the
+    dependency walk is disabled via NATIVE_LINUX_SKIP_DEP_VERIFY to avoid consuming
+    the mocked subprocess side effects.
+    """
+
+    def setUp(self):
+        self._dep_env = patch.dict(
+            os.environ,
+            {native_linux_package_install_test.ENV_NATIVE_LINUX_SKIP_DEP_VERIFY: "1"},
+            clear=False,
+        )
+        self._dep_env.start()
+
+    def tearDown(self):
+        self._dep_env.stop()
 
     def test_returns_false_when_install_prefix_does_not_exist(self):
         # Test that run_basic_verification returns False when install_prefix path does not exist.
@@ -1554,6 +1571,376 @@ class RunStreamingTest(unittest.TestCase):
         with self.assertRaises(sp.TimeoutExpired):
             native_linux_package_install_test._run_streaming(["slow-cmd"], 30)
         mock_proc.kill.assert_called_once()
+
+
+class DebPkgNameFromDepTokenTest(unittest.TestCase):
+    """Tests for _deb_pkg_name_from_dep_token()."""
+
+    def test_plain_name_returned_as_is(self):
+        # Test that a plain package name is returned unchanged.
+        self.assertEqual(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token("libfoo"),
+            "libfoo",
+        )
+
+    def test_strips_version_constraint(self):
+        # Test that a trailing version constraint in parentheses is stripped.
+        self.assertEqual(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token(
+                "libfoo (>= 1.2.3)"
+            ),
+            "libfoo",
+        )
+
+    def test_strips_known_arch_qualifier(self):
+        # Test that a known architecture qualifier (e.g. :amd64) is stripped.
+        self.assertEqual(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token(
+                "libfoo:amd64"
+            ),
+            "libfoo",
+        )
+
+    def test_strips_surrounding_quotes(self):
+        # Test that surrounding single or double quotes are stripped.
+        self.assertEqual(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token('"libfoo"'),
+            "libfoo",
+        )
+
+    def test_substvar_returns_none(self):
+        # Test that a dpkg substvar token (e.g. ${shlibs:Depends}) returns None.
+        self.assertIsNone(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token(
+                "${shlibs:Depends}"
+            )
+        )
+
+    def test_file_path_returns_none(self):
+        # Test that a token starting with '/' (file path) returns None.
+        self.assertIsNone(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token(
+                "/usr/bin/foo"
+            )
+        )
+
+    def test_empty_token_returns_none(self):
+        # Test that an empty or whitespace-only token returns None.
+        self.assertIsNone(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token("   ")
+        )
+
+    def test_unknown_qualifier_kept(self):
+        # Test that an unknown qualifier (e.g. :any) is not treated as an arch and is kept.
+        self.assertEqual(
+            native_linux_package_install_test._deb_pkg_name_from_dep_token(
+                "libfoo:any"
+            ),
+            "libfoo:any",
+        )
+
+
+class ParseDebianDepFieldTest(unittest.TestCase):
+    """Tests for _parse_debian_dep_field()."""
+
+    def test_empty_field_returns_empty_list(self):
+        # Test that an empty Depends field parses to an empty list of groups.
+        self.assertEqual(
+            native_linux_package_install_test._parse_debian_dep_field(""), []
+        )
+
+    def test_comma_separates_and_groups(self):
+        # Test that commas split into separate AND groups (each a single-name frozenset).
+        result = native_linux_package_install_test._parse_debian_dep_field(
+            "liba, libb (>= 1.0), libc"
+        )
+        self.assertEqual(
+            result,
+            [frozenset({"liba"}), frozenset({"libb"}), frozenset({"libc"})],
+        )
+
+    def test_pipe_creates_or_group(self):
+        # Test that '|' within one AND term produces a single OR-group frozenset.
+        result = native_linux_package_install_test._parse_debian_dep_field(
+            "liba | libb"
+        )
+        self.assertEqual(result, [frozenset({"liba", "libb"})])
+
+    def test_mixed_and_or(self):
+        # Test a mixed expression: comma-separated AND groups, one containing an OR alternative.
+        result = native_linux_package_install_test._parse_debian_dep_field(
+            "liba, libb | libc (>= 2.0)"
+        )
+        self.assertEqual(
+            result,
+            [frozenset({"liba"}), frozenset({"libb", "libc"})],
+        )
+
+    def test_substvars_dropped(self):
+        # Test that substvar-only OR-groups are dropped (no resolvable package names).
+        result = native_linux_package_install_test._parse_debian_dep_field(
+            "liba, ${shlibs:Depends}"
+        )
+        self.assertEqual(result, [frozenset({"liba"})])
+
+
+class AptCacheShowFirstStanzaTest(unittest.TestCase):
+    """Tests for _apt_cache_show_first_stanza()."""
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_parses_first_stanza_and_merges_continuations(self, mock_run):
+        # Test that only the first stanza is parsed and folded continuation lines are merged.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                "Package: libfoo\n"
+                "Depends: liba,\n"
+                " libb\n"
+                "\n"
+                "Package: other\n"
+                "Depends: zzz\n"
+            ),
+        )
+        stanza = native_linux_package_install_test._apt_cache_show_first_stanza(
+            "libfoo"
+        )
+        self.assertEqual(stanza.get("package"), "libfoo")
+        # Folded continuation lines are concatenated verbatim (no inserted space);
+        # the dependency-field parser later splits on commas regardless of spacing.
+        self.assertEqual(stanza.get("depends"), "liba,libb")
+        self.assertNotIn("zzz", stanza.get("depends", ""))
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_empty_when_command_fails(self, mock_run):
+        # Test that a non-zero apt-cache return code yields an empty dict.
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        self.assertEqual(
+            native_linux_package_install_test._apt_cache_show_first_stanza("libfoo"),
+            {},
+        )
+
+
+class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
+    """Tests for verify_debian_transitive_dependencies()."""
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_apt_get_check_failure_returns_false(self, mock_run):
+        # Test that a failing 'apt-get check' short-circuits to a failure result.
+        mock_run.return_value = MagicMock(
+            returncode=100, stdout="", stderr="broken deps"
+        )
+        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
+            ["amdrocm-gfx94x"]
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("apt-get check failed" in e for e in errs))
+
+    @patch("native_linux_package_install_test._apt_cache_show_first_stanza")
+    @patch("native_linux_package_install_test._deb_is_pkg_installed")
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_happy_path_no_dependencies(self, mock_run, mock_installed, mock_stanza):
+        # Test that an installed root with no Depends/Pre-Depends passes.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_installed.return_value = True
+        mock_stanza.return_value = {}  # no depends fields
+        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
+            ["amdrocm-gfx94x"]
+        )
+        self.assertTrue(ok)
+        self.assertEqual(errs, [])
+
+    @patch("native_linux_package_install_test._deb_is_pkg_installed")
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_root_not_installed_returns_false(self, mock_run, mock_installed):
+        # Test that a root package missing from dpkg yields a failure.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_installed.return_value = False
+        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
+            ["amdrocm-gfx94x"]
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("not installed" in e for e in errs))
+
+    @patch("native_linux_package_install_test._deb_pick_installed_rep")
+    @patch("native_linux_package_install_test._apt_cache_show_first_stanza")
+    @patch("native_linux_package_install_test._deb_is_pkg_installed")
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_unsatisfied_dependency_group_returns_false(
+        self, mock_run, mock_installed, mock_stanza, mock_pick
+    ):
+        # Test that an unsatisfied Depends OR-group (no installed alternative) fails.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_installed.return_value = True
+        mock_stanza.return_value = {"depends": "libmissing"}
+        mock_pick.return_value = None
+        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
+            ["amdrocm-gfx94x"]
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("unsatisfied dependency group" in e for e in errs))
+
+    @patch("native_linux_package_install_test._deb_is_pkg_installed")
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_max_closure_exceeded_returns_false(self, mock_run, mock_installed):
+        # Test that exceeding max_closure aborts the walk with an error.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_installed.return_value = True
+        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
+            ["amdrocm-gfx94x"], max_closure=0
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("exceeded max steps" in e for e in errs))
+
+
+class RpmRequireTokenClassificationTest(unittest.TestCase):
+    """Tests for _rpm_require_token_is_file_or_rpmlib()."""
+
+    def test_file_path_is_skipped(self):
+        # Test that an absolute file-path requirement is classified as skippable.
+        self.assertTrue(
+            native_linux_package_install_test._rpm_require_token_is_file_or_rpmlib(
+                "/usr/lib/libc.so.6"
+            )
+        )
+
+    def test_rpmlib_is_skipped(self):
+        # Test that an rpmlib(...) requirement is classified as skippable.
+        self.assertTrue(
+            native_linux_package_install_test._rpm_require_token_is_file_or_rpmlib(
+                "rpmlib(CompressedFileNames)"
+            )
+        )
+
+    def test_config_is_skipped(self):
+        # Test that a config(...) requirement is classified as skippable.
+        self.assertTrue(
+            native_linux_package_install_test._rpm_require_token_is_file_or_rpmlib(
+                "config(foo)"
+            )
+        )
+
+    def test_empty_is_skipped(self):
+        # Test that an empty requirement token is classified as skippable.
+        self.assertTrue(
+            native_linux_package_install_test._rpm_require_token_is_file_or_rpmlib("")
+        )
+
+    def test_normal_name_not_skipped(self):
+        # Test that a normal capability/package name is not skippable.
+        self.assertFalse(
+            native_linux_package_install_test._rpm_require_token_is_file_or_rpmlib(
+                "libstdc++"
+            )
+        )
+
+
+class VerifyRpmTransitiveDependenciesTest(unittest.TestCase):
+    """Tests for verify_rpm_transitive_dependencies()."""
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_root_not_installed_returns_false(self, mock_run):
+        # Test that a root package not installed (rpm -q non-zero) yields a failure.
+        mock_run.return_value = MagicMock(
+            returncode=1, stdout="", stderr="package amdrocm-gfx94x is not installed"
+        )
+        ok, errs = native_linux_package_install_test.verify_rpm_transitive_dependencies(
+            ["amdrocm-gfx94x"]
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("root package not installed" in e for e in errs))
+
+    @patch("native_linux_package_install_test._rpm_requires_tokens")
+    @patch("native_linux_package_install_test._rpm_name_from_installed_nevra")
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_happy_path_no_requires(self, mock_run, mock_name, mock_requires):
+        # Test that an installed root with no (non-file) requires passes.
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="amdrocm-gfx94x-1.0-1.x86_64\n", stderr=""
+        )
+        mock_name.return_value = "amdrocm-gfx94x"
+        mock_requires.return_value = []
+        ok, errs = native_linux_package_install_test.verify_rpm_transitive_dependencies(
+            ["amdrocm-gfx94x"]
+        )
+        self.assertTrue(ok)
+        self.assertEqual(errs, [])
+
+    @patch("native_linux_package_install_test._rpm_whatprovides_nevras")
+    @patch("native_linux_package_install_test._rpm_requires_tokens")
+    @patch("native_linux_package_install_test._rpm_name_from_installed_nevra")
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_unprovided_requirement_returns_false(
+        self, mock_run, mock_name, mock_requires, mock_provides
+    ):
+        # Test that a requirement with no providing package yields a failure.
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="amdrocm-gfx94x-1.0-1.x86_64\n", stderr=""
+        )
+        mock_name.return_value = "amdrocm-gfx94x"
+        mock_requires.return_value = ["libmissing.so.1"]
+        mock_provides.return_value = []
+        ok, errs = native_linux_package_install_test.verify_rpm_transitive_dependencies(
+            ["amdrocm-gfx94x"]
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("no installed package provides" in e for e in errs))
+
+
+class VerifyTransitiveDependenciesInstalledTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest._verify_transitive_dependencies_installed()."""
+
+    def test_skipped_when_env_set(self):
+        # Test that the skip env var short-circuits to success without invoking verifiers.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        with patch.dict(
+            os.environ,
+            {native_linux_package_install_test.ENV_NATIVE_LINUX_SKIP_DEP_VERIFY: "1"},
+            clear=False,
+        ):
+            ok, errs = t._verify_transitive_dependencies_installed()
+        self.assertTrue(ok)
+        self.assertEqual(errs, [])
+
+    @patch(
+        "native_linux_package_install_test.verify_debian_transitive_dependencies",
+        return_value=(True, []),
+    )
+    def test_routes_to_debian_for_deb(self, mock_deb):
+        # Test that a deb profile routes to the Debian verifier with the package names.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        with patch.dict(
+            os.environ,
+            {native_linux_package_install_test.ENV_NATIVE_LINUX_SKIP_DEP_VERIFY: ""},
+            clear=False,
+        ):
+            ok, _ = t._verify_transitive_dependencies_installed()
+        self.assertTrue(ok)
+        mock_deb.assert_called_once_with(t.package_names)
+
+    @patch(
+        "native_linux_package_install_test.verify_rpm_transitive_dependencies",
+        return_value=(True, []),
+    )
+    def test_routes_to_rpm_for_rpm(self, mock_rpm):
+        # Test that an rpm profile routes to the RPM verifier with the package names.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="rhel8",
+        )
+        with patch.dict(
+            os.environ,
+            {native_linux_package_install_test.ENV_NATIVE_LINUX_SKIP_DEP_VERIFY: ""},
+            clear=False,
+        ):
+            ok, _ = t._verify_transitive_dependencies_installed()
+        self.assertTrue(ok)
+        mock_rpm.assert_called_once_with(t.package_names)
 
 
 if __name__ == "__main__":
