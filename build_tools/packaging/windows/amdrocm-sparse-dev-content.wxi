@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Directory Id="amdrocm_sparse_dev_b" Name="bin">
-      <Directory Id="amdrocm_sparse_dev_bh" Name="bin\hipsparse">
+      <Directory Id="amdrocm_sparse_dev_bh" Name="hipsparse">
         <Component Id="c_amdrocm_sparse_dev_bh_C.cmake" Guid="*">
           <File Id="f_amdrocm_sparse_dev_bh_C.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/bin/hipsparse/CTestTestfile.cmake" KeyPath="yes" />
         </Component>
       </Directory>
     </Directory>
     <Directory Id="amdrocm_sparse_dev_i" Name="include">
-      <Directory Id="amdrocm_sparse_dev_ih" Name="include\hipsparse">
+      <Directory Id="amdrocm_sparse_dev_ih" Name="hipsparse">
         <Component Id="c_amdrocm_sparse_dev_ih_ha.h" Guid="*">
           <File Id="f_amdrocm_sparse_dev_ih_ha.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-auxiliary.h" KeyPath="yes" />
         </Component>
@@ -36,8 +36,8 @@
         <Component Id="c_amdrocm_sparse_dev_ih_h.h" Guid="*">
           <File Id="f_amdrocm_sparse_dev_ih_h.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse.h" KeyPath="yes" />
         </Component>
-        <Directory Id="amdrocm_sparse_dev_ihi" Name="include\hipsparse\internal">
-          <Directory Id="amdrocm_sparse_dev_ihic" Name="include\hipsparse\internal\conversion">
+        <Directory Id="amdrocm_sparse_dev_ihi" Name="internal">
+          <Directory Id="amdrocm_sparse_dev_ihic" Name="conversion">
             <Component Id="c_amdrocm_sparse_dev_ihic_hb.h" Guid="*">
               <File Id="f_amdrocm_sparse_dev_ihic_hb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_bsr2csr.h" KeyPath="yes" />
             </Component>

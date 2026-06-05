@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Directory Id="amdrocm_fft_dev_i" Name="include">
-      <Directory Id="amdrocm_fft_dev_ih" Name="include\hipfft">
+      <Directory Id="amdrocm_fft_dev_ih" Name="hipfft">
         <Component Id="c_amdrocm_fft_dev_ih_he.h" Guid="*">
           <File Id="f_amdrocm_fft_dev_ih_he.h" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/include/hipfft/hipfft-export.h" KeyPath="yes" />
         </Component>
@@ -32,8 +32,8 @@
       <Component Id="c_amdrocm_fft_dev_l_hi.lib" Guid="*">
         <File Id="f_amdrocm_fft_dev_l_hi.lib" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/lib/hipfftw.lib" KeyPath="yes" />
       </Component>
-      <Directory Id="amdrocm_fft_dev_lc" Name="lib\cmake">
-        <Directory Id="amdrocm_fft_dev_lch" Name="lib\cmake\hipfft">
+      <Directory Id="amdrocm_fft_dev_lc" Name="cmake">
+        <Directory Id="amdrocm_fft_dev_lch" Name="hipfft">
           <Component Id="c_amdrocm_fft_dev_lch_hcv.cmake" Guid="*">
             <File Id="f_amdrocm_fft_dev_lch_hcv.cmake" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/lib/cmake/hipfft/hipfft-config-version.cmake" KeyPath="yes" />
           </Component>

@@ -3,12 +3,16 @@
 xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
 xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 <?include common.wxi ?>
-<Package Name="amdrocm-blas-dev" Version="1.0.0.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="663981CF-ED4A-47DE-B918-9D4345B92D76" Scope="perMachine">
+<Package Name="amdrocm-blas-dev" Version="$(var.ProductVersion).0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="663981CF-ED4A-47DE-B918-9D4345B92D76" Scope="perMachine">
   <MediaTemplate EmbedCab="yes" />
   <StandardDirectory Id="ProgramFiles64Folder">
-    <Directory Id="INSTALLFOLDER" Name="AMD\$(var.ProductName)\$(var.ProductVersion)">
+    <Directory Id="AMDDir" Name="AMD">
+      <Directory Id="ProductDir" Name="$(var.ProductName)">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductVersion)">
     <?include amdrocm-blas-dev-content.wxi ?>
 
+        </Directory>
+      </Directory>
     </Directory>
   </StandardDirectory>
   <Feature Id="amdrocm_blas_dev_files" Title="ROCm BLAS Dev" Level="1" Display="expand">

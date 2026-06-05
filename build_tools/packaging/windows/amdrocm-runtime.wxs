@@ -4,11 +4,15 @@ xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
 xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 <?include common.wxi ?>
 <Package Name="amdrocm-runtime" Version="1.0.0.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="037E1A5A-9216-467B-BCD2-877F573D72CE" Scope="perMachine">
+  <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
   <MediaTemplate EmbedCab="yes" />
   <StandardDirectory Id="ProgramFiles64Folder">
-    <Directory Id="INSTALLFOLDER" Name="AMD\$(var.ProductName)\$(var.ProductVersion)">
-    <?include amdrocm-runtime-content.wxi ?>
-
+    <Directory Id="AMDFOLDER" Name="AMD">
+      <Directory Id="ROCMFOLDER" Name="$(var.ProductName)">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductVersion)">
+          <?include amdrocm-runtime-content.wxi ?>
+        </Directory>
+      </Directory>
     </Directory>
   </StandardDirectory>
   <Feature Id="amdrocm_runtime_files" Title="ROCm Runtime" Level="1" Display="expand">

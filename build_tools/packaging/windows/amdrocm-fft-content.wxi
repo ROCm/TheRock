@@ -15,13 +15,13 @@
       </Component>
     </Directory>
     <Directory Id="amdrocm_fft_s" Name="share">
-      <Directory Id="amdrocm_fft_sd" Name="share\doc">
-        <Directory Id="amdrocm_fft_sdh" Name="share\doc\hipfft">
+      <Directory Id="amdrocm_fft_sd" Name="doc">
+        <Directory Id="amdrocm_fft_sdh" Name="hipfft">
           <Component Id="c_amdrocm_fft_sdh_L.md" Guid="*">
             <File Id="f_amdrocm_fft_sdh_L.md" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/share/doc/hipfft/LICENSE.md" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_fft_sdr" Name="share\doc\rocfft">
+        <Directory Id="amdrocm_fft_sdr" Name="rocfft">
           <Component Id="c_amdrocm_fft_sdr_L.md" Guid="*">
             <File Id="f_amdrocm_fft_sdr_L.md" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/share/doc/rocfft/LICENSE.md" KeyPath="yes" />
           </Component>

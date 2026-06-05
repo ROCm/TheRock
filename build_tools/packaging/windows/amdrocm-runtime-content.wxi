@@ -12,8 +12,8 @@
       </Component>
     </Directory>
     <Directory Id="amdrocm_runtime_s" Name="share">
-      <Directory Id="amdrocm_runtime_sd" Name="share\doc">
-        <Directory Id="amdrocm_runtime_sdac" Name="share\doc\amd_comgr">
+      <Directory Id="amdrocm_runtime_sd" Name="doc">
+        <Directory Id="amdrocm_runtime_sdac" Name="amd_comgr">
           <Component Id="c_amdrocm_runtime_sdac_L.txt" Guid="*">
             <File Id="f_amdrocm_runtime_sdac_L.txt" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/share/doc/amd_comgr/LICENSE.txt" KeyPath="yes" />
           </Component>
