@@ -19,6 +19,7 @@ exclude = [
 optional = true
 [components.test."math-libs/BLAS/rocRoller/stage"]
 include = [
+  "bin/rocroller/**",
   "bin/rocroller-test*",
 ]
 optional = true
@@ -47,6 +48,8 @@ include = [
   "bin/hipblas_gtest.data",
   "bin/hipblas_v2-test*",
   "bin/hipblas_v2_gtest.data",
+  # Clients tests outputs
+  "bin/hipblas/**",
 ]
 
 # hipBLASLt
@@ -82,6 +85,8 @@ include = [
   "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
+  # TensileLite Python test artifacts
+  "share/hipblaslt/tensilelite/**",
 ]
 
 # rocBLAS
@@ -175,6 +180,7 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
+  "bin/rocsparse/**",
   "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
@@ -201,11 +207,13 @@ include = [
 ]
 exclude = [
   "share/hipsparse/test/**",
+  "bin/hipsparse/**",
 ]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
+  "bin/hipsparse/**",
   "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",

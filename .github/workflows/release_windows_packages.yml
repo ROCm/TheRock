@@ -238,11 +238,8 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-dist
-
-      - name: Build therock-archives
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives
+      - name: Build therock-artifacts and therock-dist
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-artifacts therock-dist
 
       - name: Compress dist folder
         run: |
@@ -276,11 +273,19 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
           special-characters-workaround: true
+
+      - name: Push artifacts
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+        run: |
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
+            --build-dir ${{ env.BUILD_DIR }} \
+            --stage all
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
@@ -301,15 +306,6 @@ jobs:
           --include "*.whl" \
           --include "*.tar.gz"
 
-      - name: (Re-)Generate Python package release index for staging
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variable to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
-
       ## TODO: Restrict uploading to the non-staging S3 directory until sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -321,18 +317,9 @@ jobs:
           --include "*.whl" \
           --include "*.tar.gz"
 
-      - name: (Re-)Generate release index pages
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variable to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py  ${{ env.CUSTOM_PREFIX }}
-
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: release_windows_pytorch_wheels.yml
           inputs: |
