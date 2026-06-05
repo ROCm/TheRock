@@ -34,19 +34,6 @@ paths = [
 ]
 
 [[allowlists]]
-description = "Dummy secret values (matched against the secret itself)"
-# Default regexTarget = "secret". Keep this list focused on literal
-# placeholder values that may legitimately appear as a token.
-stopwords = [
-  "your-token-here",
-  "REPLACE_ME",
-]
-regexes = [
-  '''(?i)example[_-]?key''',
-  '''0{8,}|x{8,}|deadbeef''',
-]
-
-[[allowlists]]
 description = "Test fixtures using well-known dummy variable names"
 # The "tell" here is the variable name on the same line, not the value
 # (the value is a random-looking string by design). Match against the
