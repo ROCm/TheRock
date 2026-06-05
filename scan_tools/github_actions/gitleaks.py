@@ -393,12 +393,26 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
         )
         return
 
+    # Atomic write: serialize to a temp file in the same directory, then
+    # os.replace() it into place. A failed or partial write can never
+    # truncate the original SARIF, so the upload step never sees a corrupt
+    # file.
+    tmp_path: Path | None = None
     try:
-        with open(sarif_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=sarif_path.parent,
+            prefix=f"{sarif_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp:
+            tmp_path = Path(tmp.name)
+            json.dump(data, tmp, indent=2)
+        os.replace(tmp_path, sarif_path)
     except OSError as exc:
-        # Opening in "w" truncates, so a partial write leaves a corrupt
-        # SARIF; fail loud rather than let the upload step push garbage.
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
         raise RuntimeError(
             f"Failed to write enriched SARIF to '{sarif_path}': {exc}"
         ) from exc
