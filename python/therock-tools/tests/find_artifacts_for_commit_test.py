@@ -9,12 +9,12 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from find_artifacts_for_commit import (
+from therock_tools.find_artifacts_for_commit import (
     ArtifactRunInfo,
     find_artifacts_for_commit,
 )
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from github_actions.github_actions_api import (
+from therock_tools.workflow_outputs import WorkflowOutputRoot
+from therock_tools.github_api import (
     GitHubAPIError,
     is_authenticated_github_api_available,
 )
@@ -73,7 +73,10 @@ class FindArtifactsForCommitTest(unittest.TestCase):
     """Tests for find_artifacts_for_commit() with real GitHub API calls."""
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_therock_main_commit(self, mock_check):
         """Known main commit returns ArtifactRunInfo with correct metadata."""
         results = find_artifacts_for_commit(
@@ -99,7 +102,10 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         mock_check.assert_called()
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_therock_fork_commit(self, mock_check):
         """Fork commit returns ArtifactRunInfo with external bucket."""
         results = find_artifacts_for_commit(
@@ -118,7 +124,8 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch(
-        "find_artifacts_for_commit.check_if_artifacts_exist", return_value=False
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=False,
     )
     def test_commit_with_runs_but_no_artifacts(self, mock_check):
         """Commit with workflow runs but no S3 artifacts returns empty list."""
@@ -134,7 +141,10 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         mock_check.assert_called()
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_platform_windows(self, mock_check):
         """Check that we can find artifacts for Windows as well as Linux."""
         results = find_artifacts_for_commit(
@@ -151,7 +161,10 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         self.assertIn("windows", info.s3_path)
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_rocm_libraries_commit(self, mock_check):
         """rocm-libraries commit uses therock-ci.yml and external bucket."""
         results = find_artifacts_for_commit(
@@ -177,7 +190,10 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         mock_check.assert_called()
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_multi_arch_ci_commit(self, mock_check):
         """multi_arch_ci.yml commit returns ArtifactRunInfo with correct metadata."""
         results = find_artifacts_for_commit(
@@ -203,7 +219,10 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         mock_check.assert_called()
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_multi_arch_ci_default_workflow(self, mock_check):
         """multi_arch_ci.yml is the default workflow_file_name."""
         results = find_artifacts_for_commit(
@@ -226,7 +245,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "find_artifacts_for_commit.gha_query_workflow_runs_for_commit",
+            "therock_tools.find_artifacts_for_commit.gha_query_workflow_runs_for_commit",
             side_effect=rate_limit_error,
         ):
             with self.assertRaises(GitHubAPIError) as ctx:
@@ -243,7 +262,10 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
     """Tests for multi-group behavior of find_artifacts_for_commit()."""
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_multiple_groups_all_found(self, mock_check):
         """All requested groups are returned when all have artifacts."""
         results = find_artifacts_for_commit(
@@ -261,7 +283,7 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
         self.assertEqual(results[0].workflow_run_id, results[1].workflow_run_id)
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch("therock_tools.find_artifacts_for_commit.check_if_artifacts_exist")
     def test_multiple_groups_partial(self, mock_check):
         """Only groups with artifacts are returned (partial result)."""
 
@@ -282,7 +304,10 @@ class FindArtifactsForCommitMultiGroupTest(unittest.TestCase):
         self.assertEqual(results[0].artifact_group, "gfx110X-all")
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
     def test_multiple_groups_preserves_requested_order(self, mock_check):
         """Results are returned in the same order as requested."""
         results = find_artifacts_for_commit(
@@ -326,9 +351,13 @@ class FindArtifactsCrossRunTest(unittest.TestCase):
         "html_url": "https://github.com/ROCm/TheRock/actions/runs/99999999901",
     }
 
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
-    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("therock_tools.find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run"
+    )
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.gha_query_workflow_runs_for_commit"
+    )
     def test_accumulates_groups_across_runs(
         self, mock_query_runs, mock_from_wfr, mock_check
     ):
@@ -365,9 +394,13 @@ class FindArtifactsCrossRunTest(unittest.TestCase):
         self.assertEqual(results[0].workflow_run_id, str(self.FAKE_RUN_OLDER["id"]))
         self.assertEqual(results[1].workflow_run_id, str(self.FAKE_RUN_NEWER["id"]))
 
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
-    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    @mock.patch("therock_tools.find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run"
+    )
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.gha_query_workflow_runs_for_commit"
+    )
     def test_newer_run_takes_priority(self, mock_query_runs, mock_from_wfr, mock_check):
         """When multiple retriggered runs have the same group, the newer wins."""
         mock_query_runs.return_value = [self.FAKE_RUN_NEWER, self.FAKE_RUN_OLDER]

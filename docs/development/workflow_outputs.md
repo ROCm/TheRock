@@ -207,7 +207,7 @@ staging directory). Backend-agnostic — usable for CI run outputs, release
 artifacts, or any S3 path.
 
 ```python
-from _therock_utils.storage_location import StorageLocation
+from therock_tools.storage_location import StorageLocation
 
 loc = StorageLocation(
     bucket="therock-ci-artifacts", relative_path="12345-linux/file.tar.xz"
@@ -222,7 +222,7 @@ loc.local_path(Path("/tmp/staging"))  # Path("/tmp/staging/12345-linux/file.tar.
 A frozen dataclass that computes `StorageLocation` for every output type.
 
 ```python
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 # Inside a CI workflow (env vars provide bucket info, no API call)
 root = WorkflowOutputRoot.from_workflow_run(run_id="12345", platform="linux")
@@ -270,7 +270,7 @@ An abstract base class for uploading files to S3 or a local directory.
 Use `create_storage_backend()` to get the right implementation.
 
 ```python
-from _therock_utils.storage_backend import create_storage_backend
+from therock_tools.storage_backend import create_storage_backend
 
 backend = create_storage_backend()  # S3 (default)
 backend = create_storage_backend(staging_dir=Path("/tmp/out"))  # local directory

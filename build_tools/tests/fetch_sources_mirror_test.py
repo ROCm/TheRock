@@ -27,7 +27,7 @@ from fetch_sources import (
     _update_one_submodule,
     _update_submodules_with_reference,
 )
-from _therock_utils.build_topology import ExternalGitSource
+from therock_tools.build_topology import ExternalGitSource
 from _therock_utils.git_mirrors import MIRROR_DIR_ENV
 
 

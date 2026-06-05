@@ -18,7 +18,7 @@ import sys
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifacts import ArtifactCatalog
+from therock_tools.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
 
 
@@ -544,7 +544,7 @@ class DevicePackagingTest(TmpDirTestCase):
         sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
         from build_python_packages import device_artifact_filter
 
-        from _therock_utils.artifacts import ArtifactName
+        from therock_tools.artifacts import ArtifactName
 
         # Should match per-ISA lib artifact.
         an_gfx942 = ArtifactName("blas", "lib", "gfx942")

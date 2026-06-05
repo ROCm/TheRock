@@ -51,7 +51,7 @@ import sys
 import tarfile
 import tempfile
 
-from _therock_utils.pattern_match import PatternMatcher
+from therock_tools.pattern_match import PatternMatcher
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 

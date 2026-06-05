@@ -9,8 +9,8 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from find_latest_artifacts import find_latest_artifacts
-from github_actions.github_actions_api import (
+from therock_tools.find_latest_artifacts import find_latest_artifacts
+from therock_tools.github_api import (
     GitHubAPIError,
     is_authenticated_github_api_available,
 )
@@ -58,8 +58,11 @@ class FindLatestArtifactsTest(unittest.TestCase):
     """Tests for find_latest_artifacts() with real GitHub API calls."""
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
+    @mock.patch("therock_tools.find_latest_artifacts.gha_query_recent_branch_commits")
     def test_returns_first_commit_with_artifacts(self, mock_commits, mock_check):
         """Returns the first commit that has artifacts."""
         mock_commits.return_value = [
@@ -79,8 +82,8 @@ class FindLatestArtifactsTest(unittest.TestCase):
         self.assertEqual(results[0].git_commit_sha, TEST_THEROCK_COMMIT_NEWER)
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    @mock.patch("therock_tools.find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch("therock_tools.find_latest_artifacts.gha_query_recent_branch_commits")
     def test_skips_commits_missing_artifacts(self, mock_commits, mock_check):
         """Skips commits whose artifacts are missing (e.g. flaky build)."""
         mock_commits.return_value = [
@@ -107,9 +110,10 @@ class FindLatestArtifactsTest(unittest.TestCase):
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch(
-        "find_artifacts_for_commit.check_if_artifacts_exist", return_value=False
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=False,
     )
-    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    @mock.patch("therock_tools.find_latest_artifacts.gha_query_recent_branch_commits")
     def test_returns_none_when_all_artifacts_missing(self, mock_commits, mock_check):
         """Returns None when no commits have artifacts available."""
         mock_commits.return_value = [
@@ -134,7 +138,7 @@ class FindLatestArtifactsTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "find_latest_artifacts.gha_query_recent_branch_commits",
+            "therock_tools.find_latest_artifacts.gha_query_recent_branch_commits",
             side_effect=rate_limit_error,
         ):
             with self.assertRaises(GitHubAPIError) as ctx:
@@ -150,8 +154,11 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
     """Tests for multi-group behavior of find_latest_artifacts()."""
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    @mock.patch(
+        "therock_tools.find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
+    @mock.patch("therock_tools.find_latest_artifacts.gha_query_recent_branch_commits")
     def test_multiple_groups_all_found(self, mock_commits, mock_check):
         """Returns results when all requested groups have artifacts."""
         mock_commits.return_value = [
@@ -174,8 +181,8 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
         self.assertEqual(results[0].git_commit_sha, results[1].git_commit_sha)
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    @mock.patch("therock_tools.find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch("therock_tools.find_latest_artifacts.gha_query_recent_branch_commits")
     def test_skips_commit_with_partial_groups(self, mock_commits, mock_check):
         """Skips a commit where only some groups have artifacts, returns next."""
         mock_commits.return_value = [
@@ -206,8 +213,8 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
         self.assertEqual(results[1].git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
 
     @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    @mock.patch("therock_tools.find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch("therock_tools.find_latest_artifacts.gha_query_recent_branch_commits")
     def test_returns_none_when_no_commit_has_all_groups(self, mock_commits, mock_check):
         """Returns None when no single commit has all requested groups."""
         mock_commits.return_value = [

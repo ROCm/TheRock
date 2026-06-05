@@ -119,7 +119,7 @@ import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
 from datetime import datetime
-from fetch_artifacts import main as fetch_artifacts_main
+from therock_tools.fetch_artifacts import main as fetch_artifacts_main
 from pathlib import Path
 import platform
 import re

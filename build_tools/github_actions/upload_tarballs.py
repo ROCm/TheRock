@@ -37,8 +37,8 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.storage_backend import create_storage_backend
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_backend import create_storage_backend
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 logger = logging.getLogger(__name__)
 

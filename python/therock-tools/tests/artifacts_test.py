@@ -11,8 +11,8 @@ import sys
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifacts import ArtifactName
-import _therock_utils.artifact_builder as builder
+from therock_tools.artifacts import ArtifactName
+import therock_tools.artifact_builder as builder
 
 
 class TmpDirTestCase(unittest.TestCase):
@@ -317,7 +317,7 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         (stage_dir / "random.txt").write_text("text")
 
         # Use PatternMatcher to verify all files match
-        from _therock_utils.pattern_match import PatternMatcher
+        from therock_tools.pattern_match import PatternMatcher
 
         pm = PatternMatcher(
             includes=[p.glob for p in bd.predicate.includes],

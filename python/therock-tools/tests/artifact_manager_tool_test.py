@@ -19,8 +19,8 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.artifact_backend import ArtifactBackend, LocalDirectoryBackend
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 # Minimal topology TOML for testing push/fetch behavior.
 # Defines two stages: upstream-stage produces artifacts, downstream-stage consumes them.
@@ -250,11 +250,11 @@ class ArtifactManagerTestBase(unittest.TestCase):
 class TestPushFailureExitCode(ArtifactManagerTestBase):
     """Tests that push command exits with non-zero code on upload failures."""
 
-    @mock.patch("artifact_manager._delay_for_retry")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager.create_backend_from_env")
     def test_push_fails_when_all_uploads_fail(self, mock_backend_factory, mock_delay):
         """Test that push exits with code 1 when all uploads fail."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         failing_backend = FailingBackend(fail_uploads_after=0)
         mock_backend_factory.return_value = failing_backend
@@ -281,11 +281,11 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
         self.assertEqual(ctx.exception.code, 1)
         mock_backend_factory.assert_called_once()
 
-    @mock.patch("artifact_manager._delay_for_retry")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager.create_backend_from_env")
     def test_push_fails_when_some_uploads_fail(self, mock_backend_factory, mock_delay):
         """Test that push exits with code 1 when some (but not all) uploads fail."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         failing_backend = FailingBackend(
             fail_uploads_after=1, staging_dir=self.staging_dir
@@ -317,7 +317,7 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
 
     def test_push_succeeds_when_all_uploads_succeed(self):
         """Test that push exits normally (no exception) when all uploads succeed."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
 
@@ -359,10 +359,10 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
 class TestPushCompressionFailure(ArtifactManagerTestBase):
     """Tests that push command handles compression failures correctly."""
 
-    @mock.patch("artifact_manager.compress_artifact")
+    @mock.patch("therock_tools.artifact_manager.compress_artifact")
     def test_push_fails_when_compression_fails(self, mock_compress):
         """Test that push exits with code 1 when compression fails."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         mock_compress.return_value = None
 
@@ -394,7 +394,7 @@ class TestPushStageAll(ArtifactManagerTestBase):
 
     def test_push_all_stages_uploads_all_produced_artifacts(self):
         """Test that --stage all pushes artifacts from every stage."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
         self._create_fake_precompressed_artifact("second-artifact", "lib", "generic")
@@ -437,11 +437,11 @@ class TestPushStageAll(ArtifactManagerTestBase):
 class TestFetchFailureExitCode(ArtifactManagerTestBase):
     """Tests that fetch command exits with non-zero code on download failures."""
 
-    @mock.patch("artifact_manager._delay_for_retry")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager.create_backend_from_env")
     def test_fetch_fails_when_download_fails(self, mock_backend_factory, mock_delay):
         """Test that fetch exits with code 1 when download fails."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
@@ -470,10 +470,10 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
         self.assertEqual(ctx.exception.code, 1)
         mock_backend_factory.assert_called_once()
 
-    @mock.patch("artifact_manager.extract_artifact")
+    @mock.patch("therock_tools.artifact_manager.extract_artifact")
     def test_fetch_fails_when_extraction_fails(self, mock_extract):
         """Test that fetch exits with code 1 when extraction fails."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
@@ -507,7 +507,7 @@ class TestFetchStageAll(ArtifactManagerTestBase):
 
     def test_fetch_all_fetches_every_artifact(self):
         """Test that --stage all fetches artifacts from every stage."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("second-artifact", "lib", "generic")
@@ -519,7 +519,9 @@ class TestFetchStageAll(ArtifactManagerTestBase):
             extract_calls.append(request)
             return request.output_dir
 
-        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact", mock_extract
+        ):
             argv = [
                 "fetch",
                 "--stage",
@@ -552,7 +554,7 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_amdgpu_targets_finds_individual_target_archives(self):
         """Test that --amdgpu-targets matches individual-target split archives."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         # Stage a generic artifact and a per-target artifact
         self._create_staged_artifact("test-artifact", "lib", "generic")
@@ -564,7 +566,9 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
             extract_calls.append(request)
             return request.output_dir
 
-        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact", mock_extract
+        ):
             argv = [
                 "fetch",
                 "--stage",
@@ -598,7 +602,7 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_amdgpu_targets_skips_other_targets(self):
         """Test that --amdgpu-targets doesn't fetch archives for other targets."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         # Stage artifacts for two different targets
         self._create_staged_artifact("test-artifact", "lib", "generic")
@@ -611,7 +615,9 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
             extract_calls.append(request)
             return request.output_dir
 
-        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact", mock_extract
+        ):
             argv = [
                 "fetch",
                 "--stage",
@@ -640,7 +646,7 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_families_and_targets_is_inclusive(self):
         """Test that --amdgpu-families and --amdgpu-targets together fetch both."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         # Stage family-named and target-named artifacts
         self._create_staged_artifact("test-artifact", "lib", "generic")
@@ -653,7 +659,9 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
             extract_calls.append(request)
             return request.output_dir
 
-        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact", mock_extract
+        ):
             argv = [
                 "fetch",
                 "--stage",
@@ -692,7 +700,7 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_semicolon_separated_families(self):
         """Test that --amdgpu-families accepts semicolon-separated values."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         # Stage artifacts for two families plus generic
         self._create_staged_artifact("test-artifact", "lib", "generic")
@@ -705,7 +713,9 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
             extract_calls.append(request)
             return request.output_dir
 
-        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact", mock_extract
+        ):
             argv = [
                 "fetch",
                 "--stage",
@@ -746,7 +756,7 @@ class TestFetchFlatten(ArtifactManagerTestBase):
 
     def test_fetch_flatten_merges_artifacts_into_single_directory(self):
         """Test that fetch --flatten merges all artifacts into a single directory."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         # Create two staged artifacts
         self._create_staged_artifact("test-artifact", "lib", "generic")
@@ -760,7 +770,9 @@ class TestFetchFlatten(ArtifactManagerTestBase):
             # Return success
             return request.output_dir
 
-        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact", mock_extract
+        ):
             argv = [
                 "fetch",
                 "--stage",
@@ -797,7 +809,7 @@ class TestFetchFlatten(ArtifactManagerTestBase):
 
     def test_fetch_without_flatten_creates_artifact_subdirectories(self):
         """Test that fetch without --flatten creates separate artifact subdirectories."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
@@ -817,7 +829,9 @@ class TestFetchFlatten(ArtifactManagerTestBase):
             "local",
         ]
 
-        with mock.patch("artifact_manager.extract_artifact") as mock_extract:
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact"
+        ) as mock_extract:
             # Make extract_artifact return success
             mock_extract.return_value = (
                 self.output_dir / "artifacts" / "test-artifact_lib_generic"
@@ -842,7 +856,7 @@ class TestFetchFlatten(ArtifactManagerTestBase):
 
     def test_flatten_and_bootstrap_are_mutually_exclusive(self):
         """Test that --flatten and --bootstrap cannot be used together."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
@@ -883,7 +897,7 @@ class TestFetchDownloadCache(ArtifactManagerTestBase):
         reached, so the failing backend won't cause errors. If the cache
         check is removed, the second fetch hits the FailingBackend and fails.
         """
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
@@ -913,7 +927,9 @@ class TestFetchDownloadCache(ArtifactManagerTestBase):
         ]
 
         # First fetch — downloads to cache
-        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+        with mock.patch(
+            "therock_tools.artifact_manager.extract_artifact", mock_extract
+        ):
             artifact_manager.main(base_argv)
 
         first_cached = list(cache_dir.glob("*.tar.zst"))
@@ -935,9 +951,9 @@ class TestFetchDownloadCache(ArtifactManagerTestBase):
         second_argv[idx] = str(second_output)
 
         with (
-            mock.patch("artifact_manager.extract_artifact", mock_extract),
+            mock.patch("therock_tools.artifact_manager.extract_artifact", mock_extract),
             mock.patch(
-                "artifact_manager.create_backend_from_env",
+                "therock_tools.artifact_manager.create_backend_from_env",
                 return_value=failing_backend,
             ),
         ):
@@ -958,7 +974,7 @@ class TestCopy(ArtifactManagerTestBase):
         self, extra_argv=None, source_run_id="source-run", dest_run_id="dest-run"
     ):
         """Run the copy command with standard arguments."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         argv = [
             "copy",
@@ -980,7 +996,7 @@ class TestCopy(ArtifactManagerTestBase):
 
         artifact_manager.main(argv)
 
-    @mock.patch("artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
     def test_copy_transfers_artifacts_between_runs(self, mock_delay):
         """Test that copy moves produced artifacts from source to dest run."""
         self._create_source_artifact("test-artifact", "lib", "generic")
@@ -998,7 +1014,7 @@ class TestCopy(ArtifactManagerTestBase):
             dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
         )
 
-    @mock.patch("artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
     def test_copy_transfers_sha256sum_files(self, mock_delay):
         """Test that copy also transfers sha256sum files (best-effort)."""
         self._create_source_artifact("test-artifact", "lib", "generic")
@@ -1029,7 +1045,7 @@ class TestCopy(ArtifactManagerTestBase):
             ).exists()
         )
 
-    @mock.patch("artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
     def test_copy_multiple_components(self, mock_delay):
         """Test that copy handles multiple components of the same artifact."""
         self._create_source_artifact("test-artifact", "lib", "generic")
@@ -1050,7 +1066,7 @@ class TestCopy(ArtifactManagerTestBase):
                 f"Component {comp} should be copied",
             )
 
-    @mock.patch("artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
     def test_copy_only_copies_produced_artifacts(self, mock_delay):
         """Test that copy only copies artifacts produced by the specified stage."""
         # Stage artifacts for both upstream and downstream stages
@@ -1074,7 +1090,7 @@ class TestCopy(ArtifactManagerTestBase):
             dest_backend.artifact_exists("downstream-artifact_lib_generic.tar.zst")
         )
 
-    @mock.patch("artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
     def test_copy_dry_run_does_not_copy(self, mock_delay):
         """Test that --dry-run lists artifacts without copying."""
         self._create_source_artifact("test-artifact", "lib", "generic")
@@ -1091,14 +1107,14 @@ class TestCopy(ArtifactManagerTestBase):
             dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
         )
 
-    @mock.patch("artifact_manager._delay_for_retry")
-    @mock.patch("artifact_manager._create_source_backend")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager._create_source_backend")
+    @mock.patch("therock_tools.artifact_manager.create_backend_from_env")
     def test_copy_fails_when_copy_fails(
         self, mock_dest_factory, mock_source_factory, mock_delay
     ):
         """Test that copy exits with code 1 when artifact copy fails."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         # Source backend has the artifact
         source_backend = LocalDirectoryBackend(
@@ -1140,7 +1156,7 @@ class TestCopy(ArtifactManagerTestBase):
 
     def test_copy_invalid_stage_exits_with_error(self):
         """Test that copy exits with code 1 for invalid stage name."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         argv = [
             "copy",
@@ -1165,7 +1181,7 @@ class TestCopy(ArtifactManagerTestBase):
 
     def test_copy_missing_source_run_id_exits_with_error(self):
         """Test that copy exits with code 2 (argparse) when --source-run-id is missing."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         argv = [
             "copy",
@@ -1184,10 +1200,10 @@ class TestCopy(ArtifactManagerTestBase):
 
         self.assertEqual(ctx.exception.code, 2)
 
-    @mock.patch("artifact_manager._delay_for_retry")
+    @mock.patch("therock_tools.artifact_manager._delay_for_retry")
     def test_copy_multiple_stages(self, mock_delay):
         """Test that copy with comma-separated stages copies artifacts from all stages."""
-        import artifact_manager
+        import therock_tools.artifact_manager as artifact_manager
 
         self._create_source_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact(
@@ -1231,7 +1247,7 @@ class ParseTargetFamiliesTest(unittest.TestCase):
 
     def setUp(self):
         # Import here so sys.path is already set up.
-        import artifact_manager as am
+        import therock_tools.artifact_manager as am
 
         self.am = am
 

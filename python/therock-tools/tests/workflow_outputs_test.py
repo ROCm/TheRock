@@ -9,8 +9,8 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from _therock_utils.storage_location import StorageLocation
+from therock_tools.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_location import StorageLocation
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +283,7 @@ class TestWorkflowOutputRootForLocal(unittest.TestCase):
 class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
     """Test from_workflow_run() with mocked _retrieve_bucket_info."""
 
-    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    @mock.patch("therock_tools.workflow_outputs._retrieve_bucket_info")
     def test_basic_does_not_trigger_api(self, mock_retrieve):
         """By default, run_id is NOT passed as workflow_run_id."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
@@ -299,7 +299,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             release_type=None,
         )
 
-    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    @mock.patch("therock_tools.workflow_outputs._retrieve_bucket_info")
     def test_lookup_workflow_run_triggers_api(self, mock_retrieve):
         """With lookup_workflow_run=True, run_id IS passed as workflow_run_id."""
         mock_retrieve.return_value = ("Fork-Repo/", "therock-ci-artifacts-external")
@@ -318,7 +318,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             release_type=None,
         )
 
-    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    @mock.patch("therock_tools.workflow_outputs._retrieve_bucket_info")
     def test_with_workflow_run_dict(self, mock_retrieve):
         """When workflow_run is provided, it's passed through (no API call)."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
@@ -335,7 +335,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             release_type=None,
         )
 
-    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    @mock.patch("therock_tools.workflow_outputs._retrieve_bucket_info")
     def test_lookup_ignored_when_workflow_run_provided(self, mock_retrieve):
         """lookup_workflow_run is irrelevant when workflow_run is provided."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")

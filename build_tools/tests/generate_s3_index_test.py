@@ -15,7 +15,7 @@ from pathlib import Path
 # Add build_tools to path so _therock_utils and generate_s3_index are importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.storage_backend import LocalStorageBackend
+from therock_tools.storage_backend import LocalStorageBackend
 import generate_s3_index
 
 

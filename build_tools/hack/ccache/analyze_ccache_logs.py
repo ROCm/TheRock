@@ -33,7 +33,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 # Hardcoded for convenience in this debugging script. For production code,
-# use _therock_utils.s3_buckets and _therock_utils.workflow_outputs instead.
+# use therock_tools.s3_buckets and therock_tools.workflow_outputs instead.
 S3_BASE = "https://therock-ci-artifacts.s3.amazonaws.com"
 
 

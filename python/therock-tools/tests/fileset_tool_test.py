@@ -12,9 +12,11 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-from _therock_utils.hash_util import calculate_hash
+from therock_tools.hash_util import calculate_hash
 
-FILESET_TOOL = Path(__file__).parent.parent / "fileset_tool.py"
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = PACKAGE_ROOT / "src"
+FILESET_TOOL_COMMAND = [sys.executable, "-m", "therock_tools.fileset_tool"]
 
 ARTIFACT_DESCRIPTOR_1 = r"""
 [options]
@@ -30,18 +32,29 @@ include = [
 """
 
 
-def capture(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
+def subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.fspath(SRC_DIR)
+    if existing_pythonpath:
+        env["PYTHONPATH"] += os.pathsep + existing_pythonpath
+    return env
+
+
+def capture(args: list[str | Path], cwd: Path = PACKAGE_ROOT) -> str:
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     return subprocess.check_output(
-        args, cwd=str(cwd), stdin=subprocess.DEVNULL
+        args, cwd=str(cwd), env=subprocess_env(), stdin=subprocess.DEVNULL
     ).decode()
 
 
-def run_command(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+def run_command(args: list[str | Path], cwd: Path = PACKAGE_ROOT):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    return subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+    return subprocess.check_call(
+        args, cwd=str(cwd), env=subprocess_env(), stdin=subprocess.DEVNULL
+    )
 
 
 def write_text(p: Path, text: str):
@@ -112,8 +125,7 @@ class FilesetToolTest(unittest.TestCase):
 
         run_command(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact",
                 "--descriptor",
                 descriptor_file,
@@ -153,8 +165,7 @@ class FilesetToolTest(unittest.TestCase):
         # Archive it.
         run_command(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact-archive",
                 artifact_dir,
                 "-o",
@@ -172,8 +183,7 @@ class FilesetToolTest(unittest.TestCase):
         # Flatten the raw directory and verify.
         run_command(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact-flatten",
                 artifact_dir,
                 "-o",
@@ -194,8 +204,7 @@ class FilesetToolTest(unittest.TestCase):
         # Flatten the archive file and verify.
         flatten_output = capture(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact-flatten",
                 artifact_archive,
                 "--verbose",
@@ -247,8 +256,7 @@ class FilesetToolTest(unittest.TestCase):
         # Create artifact
         run_command(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact",
                 "--descriptor",
                 descriptor_file,
@@ -264,8 +272,7 @@ class FilesetToolTest(unittest.TestCase):
         # Archive it
         run_command(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact-archive",
                 artifact_dir,
                 "-o",
@@ -276,8 +283,7 @@ class FilesetToolTest(unittest.TestCase):
         # Flatten from archive
         run_command(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact-flatten",
                 artifact_archive,
                 "-o",
@@ -325,8 +331,7 @@ class FilesetToolTest(unittest.TestCase):
         # Run artifact-flatten-split with verbose to capture discovered dirs.
         output = capture(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact-flatten-split",
                 "miopen_lib",
                 "miopen_dev",
@@ -367,8 +372,7 @@ class FilesetToolTest(unittest.TestCase):
         # Should not fail, just warn.
         output = capture(
             [
-                sys.executable,
-                FILESET_TOOL,
+                *FILESET_TOOL_COMMAND,
                 "artifact-flatten-split",
                 "nonexistent_prefix",
                 "--artifacts-dir",

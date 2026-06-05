@@ -49,9 +49,9 @@ import sys
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.storage_backend import StorageBackend, create_storage_backend
+from therock_tools.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_location import StorageLocation
+from therock_tools.storage_backend import StorageBackend, create_storage_backend
 from generate_local_index import generate_multiarch_indexes
 from github_actions_api import (
     gha_append_step_summary,

@@ -10,9 +10,9 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.storage_backend import (
+from therock_tools.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_location import StorageLocation
+from therock_tools.storage_backend import (
     LocalStorageBackend,
     S3StorageBackend,
     StorageBackend,
@@ -444,7 +444,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         source = Path("/tmp/data.json")
         dest = StorageLocation("bucket", "run-1/data.json")
 
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+        with mock.patch("therock_tools.storage_backend.time.sleep"):
             backend.upload_file(source, dest)
 
         self.assertEqual(mock_client.upload_file.call_count, 2)
@@ -458,7 +458,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         source = Path("/tmp/data.json")
         dest = StorageLocation("bucket", "run-1/data.json")
 
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+        with mock.patch("therock_tools.storage_backend.time.sleep"):
             with self.assertRaises(RuntimeError) as ctx:
                 backend.upload_file(source, dest)
 
@@ -520,7 +520,7 @@ class TestS3StorageBackendCopyFile(unittest.TestCase):
         source = StorageLocation("src", "a.whl")
         dest = StorageLocation("dst", "b.whl")
 
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+        with mock.patch("therock_tools.storage_backend.time.sleep"):
             backend.copy_file(source, dest)
 
         self.assertEqual(mock_client.copy.call_count, 2)
@@ -599,7 +599,7 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
         ]
 
         with mock.patch(
-            "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
+            "therock_tools.storage_backend.concurrent.futures.ThreadPoolExecutor"
         ) as mock_pool:
             count = backend.upload_files(files)
 
@@ -618,7 +618,7 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
         ]
 
         with mock.patch(
-            "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
+            "therock_tools.storage_backend.concurrent.futures.ThreadPoolExecutor"
         ) as mock_pool:
             count = backend.upload_files(files)
 
@@ -645,7 +645,7 @@ class TestS3StorageBackendUploadFiles(unittest.TestCase):
             (Path("/tmp/bad.log"), StorageLocation("bucket", "run-1/bad.log")),
         ]
 
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+        with mock.patch("therock_tools.storage_backend.time.sleep"):
             with self.assertRaises(RuntimeError) as ctx:
                 backend.upload_files(files)
 
@@ -1022,7 +1022,7 @@ class TestS3StorageBackendCopyFiles(unittest.TestCase):
         ]
 
         with mock.patch(
-            "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
+            "therock_tools.storage_backend.concurrent.futures.ThreadPoolExecutor"
         ) as mock_pool:
             count = backend.copy_files(files)
 
@@ -1072,7 +1072,7 @@ class TestS3StorageBackendCopyFiles(unittest.TestCase):
             ),
         ]
 
-        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+        with mock.patch("therock_tools.storage_backend.time.sleep"):
             with self.assertRaises(RuntimeError) as ctx:
                 backend.copy_files(files)
 

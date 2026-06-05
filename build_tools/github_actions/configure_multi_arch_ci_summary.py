@@ -14,7 +14,7 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 # Hardcoded for now — prebuilt artifacts are always fetched from ROCm/TheRock
 # workflow runs. TODO(#3399): when baseline_run_id carries a repo qualifier,

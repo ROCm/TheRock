@@ -48,8 +48,8 @@ if str(_THIS_DIR) not in sys.path:
 if str(_BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_location import StorageLocation
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 
 def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):

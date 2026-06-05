@@ -26,8 +26,8 @@ import json
 from pathlib import Path
 import sys
 
-from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
-from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
+from therock_tools.artifacts import ArtifactCatalog, ArtifactName
+from therock_tools.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
 
 

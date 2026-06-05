@@ -15,7 +15,7 @@ from github_actions.publish_rocm_to_release_buckets import main
 class TestPublishRocmToReleaseBuckets(unittest.TestCase):
     """Tests for the main() CLI entry point."""
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.copy_directory")
     def test_dev_linux_copies_tarballs_and_python(self, mock_copy):
         mock_copy.return_value = 2
         main(
@@ -48,7 +48,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         _, python_dest_release = mock_copy.call_args_list[2].args
         self.assertEqual(python_dest_release.relative_path, "v3/whl")
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.copy_directory")
     def test_nightly_windows_copies_to_correct_buckets(self, mock_copy):
         mock_copy.return_value = 1
         main(
@@ -73,7 +73,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_source.relative_path, "99-windows/python")
         self.assertEqual(python_dest.bucket, "therock-nightly-python")
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.copy_directory")
     def test_kpack_split_uses_v4_whl_directly(self, mock_copy):
         mock_copy.return_value = 2
         main(
@@ -96,7 +96,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         _, python_dest = mock_copy.call_args_list[1].args
         self.assertEqual(python_dest.relative_path, "v4/whl")
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.copy_directory")
     def test_dev_linux_copies_native_packages(self, mock_copy):
         mock_copy.return_value = 2
         main(
@@ -126,7 +126,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(rpm_dest.bucket, "therock-dev-packages")
         self.assertRegex(rpm_dest.relative_path, r"^v4/rpm/\d{8}-123$")
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.copy_directory")
     def test_windows_skips_native_packages(self, mock_copy):
         mock_copy.return_value = 1
         main(
@@ -143,7 +143,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         # Only tarballs + python x2 (3 calls) — native packages skipped for windows
         self.assertEqual(mock_copy.call_count, 3)
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):
         mock_copy.return_value = 0
         with self.assertRaises(FileNotFoundError):

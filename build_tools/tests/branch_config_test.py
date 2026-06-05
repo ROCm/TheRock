@@ -19,7 +19,7 @@ from _therock_utils.branch_config import (
     get_source_sets_for_artifact_groups,
     load_branch_config,
 )
-from _therock_utils.build_topology import BuildTopology
+from therock_tools.build_topology import BuildTopology
 from topology_to_cmake import generate_branch_config_flags
 
 

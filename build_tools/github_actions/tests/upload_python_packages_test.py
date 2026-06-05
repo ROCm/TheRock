@@ -18,8 +18,8 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 # Add github_actions to path so upload_python_packages is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from _therock_utils.storage_backend import LocalStorageBackend
+from therock_tools.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_backend import LocalStorageBackend
 import upload_python_packages
 
 

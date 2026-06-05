@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import platform
 
-from _therock_utils.pattern_match import PatternMatcher, MatchPredicate
+from .pattern_match import MatchPredicate, PatternMatcher
 
 
 class ComponentDefaults:

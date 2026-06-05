@@ -11,7 +11,7 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.s3_buckets import (
+from therock_tools.s3_buckets import (
     get_artifacts_bucket_config,
     get_artifacts_bucket_config_for_workflow_run,
     get_release_bucket_config,
@@ -127,7 +127,7 @@ class TestGetArtifactsBucketConfigForWorkflowRun(unittest.TestCase):
 
     def setUp(self):
         self.api_patcher = mock.patch(
-            "github_actions.github_actions_api.gha_query_workflow_run_by_id"
+            "therock_tools.github_api.gha_query_workflow_run_by_id"
         )
         self.mock_api = self.api_patcher.start()
 

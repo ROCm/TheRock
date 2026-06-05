@@ -30,7 +30,7 @@ import re
 from pathlib import Path, PurePosixPath
 
 from .archive_util import open_archive_for_read
-from .pattern_match import PatternMatcher, MatchPredicate
+from .pattern_match import MatchPredicate, PatternMatcher
 
 
 class ArtifactName:

@@ -48,6 +48,12 @@ jobs:
         python -m pytest -vv \
           --cov --cov-report=term-missing --cov-report=html
 
+    - name: Test therock-tools
+      working-directory: python/therock-tools
+      run: |
+        python -m pytest -vv \
+          --cov --cov-report=term-missing --cov-report=html
+
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require
     #       a download step to view).
     #       We could also use https://about.codecov.io/ instead of custom infra.
@@ -56,7 +62,9 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: coverage-report-${{ matrix.runs-on }}
-        path: build/coverage-html/
+        path: |
+          build/coverage-html/
+          build/therock-tools-coverage-html/
 
   unit_tests_summary:
     name: Unit Tests Summary

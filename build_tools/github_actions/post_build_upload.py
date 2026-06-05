@@ -39,8 +39,8 @@ PLATFORM = platform.system().lower()
 
 # Add build_tools to path for _therock_utils imports.
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from _therock_utils.storage_backend import StorageBackend, create_storage_backend
+from therock_tools.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_backend import StorageBackend, create_storage_backend
 
 
 def log(*args):

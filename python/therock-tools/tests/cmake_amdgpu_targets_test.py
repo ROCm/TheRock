@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.cmake_amdgpu_targets import (
+from therock_tools.cmake_amdgpu_targets import (
     AmdgpuTargetInfo,
     build_family_to_targets,
     parse_amdgpu_targets_cmake,

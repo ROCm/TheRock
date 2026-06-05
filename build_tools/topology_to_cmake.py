@@ -46,7 +46,7 @@ from typing import TextIO
 sys.path.insert(0, str(Path(__file__).parent))
 
 from _therock_utils.branch_config import BranchConfig, load_branch_config
-from _therock_utils.build_topology import BuildTopology, Artifact
+from therock_tools.build_topology import BuildTopology, Artifact
 
 
 def write_cmake_header(f: TextIO):

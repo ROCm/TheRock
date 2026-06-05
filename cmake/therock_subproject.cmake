@@ -880,7 +880,12 @@ function(therock_cmake_subproject_activate target_name)
     message(STATUS "  PROJECT SPECIFIC CMAKE_BUILD_TYPE=${_cmake_build_type}")
   endif()
 
-  set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  set(_therock_tools_src_dir "${THEROCK_SOURCE_DIR}/python/therock-tools/src")
+  set(_fileset_tool "${_therock_tools_src_dir}/therock_tools/fileset_tool.py")
+  set(_fileset_tool_command
+    "${CMAKE_COMMAND}" -E env "PYTHONPATH=${_therock_tools_src_dir}"
+    "${Python3_EXECUTABLE}" -m therock_tools.fileset_tool
+  )
   list(APPEND _fprint_files "${_fileset_tool}")
   _therock_cmake_subproject_get_stage_dirs(
     _dist_source_dirs "${target_name}" ${_runtime_deps})
@@ -909,7 +914,7 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND ${_fileset_tool_command} copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       DEPENDS
         "${_prebuilt_file}"

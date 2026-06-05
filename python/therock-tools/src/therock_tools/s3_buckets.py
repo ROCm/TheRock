@@ -156,9 +156,9 @@ def _is_current_run_pr_from_fork() -> bool:
     if not os.environ.get("GITHUB_EVENT_PATH"):
         return False
 
-    # Deferred import: github_actions is optional in some environments; only
-    # needed when resolving fork state from the on-disk event payload.
-    from github_actions.github_actions_api import gha_load_github_event
+    # Deferred import: only needed when resolving fork state from the on-disk
+    # GitHub event payload.
+    from .github_api import gha_load_github_event
 
     event = gha_load_github_event()
 
@@ -197,10 +197,8 @@ def get_artifacts_bucket_config_for_workflow_run(
         _log(f"  release_type: {release_type}")
 
     # Fetch workflow_run from API if not provided but workflow_run_id is set.
-    # Deferred import: github_actions is an optional dependency not available in
-    # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
-        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+        from .github_api import gha_query_workflow_run_by_id
 
         workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
 

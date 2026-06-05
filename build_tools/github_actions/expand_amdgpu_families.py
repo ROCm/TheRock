@@ -5,7 +5,7 @@
 """Expand a list of AMD GPU families to their constituent gfx targets.
 
 Reads `cmake/therock_amdgpu_targets.cmake` (the authoritative source of
-truth) via `_therock_utils.cmake_amdgpu_targets` and prints the union
+truth) via `therock_tools.cmake_amdgpu_targets` and prints the union
 of gfx targets for the requested families as a comma-separated string.
 
 Used by CI workflows that need build-side gfx targets (e.g.
@@ -38,7 +38,7 @@ from pathlib import Path
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
-from _therock_utils.cmake_amdgpu_targets import (
+from therock_tools.cmake_amdgpu_targets import (
     amdgpu_family_map,
     expand_families,
 )
