@@ -9,8 +9,9 @@
 #   - Builds directly against the shared TheRock multiarch tarball
 #     passed in via inputs.tar_url.
 #
-# Triggered via workflow_dispatch from
-# multi_arch_release_linux.yml's build_jax_wheels job.
+# Triggered via workflow_dispatch from the multi-arch release graph.
+# For scheduled releases, the entry point runs in ROCm/rockrel and
+# forwards here through a stub workflow.
 #
 # Can also be run manually via workflow_dispatch.
 #
@@ -25,13 +26,6 @@ name: Multi-Arch Release Linux JAX Wheels
 on:
   workflow_call:
     inputs:
-      amdgpu_families:
-        description: >-
-          Informational only. JAX builds currently consume the shared
-          multiarch TheRock tarball and do not build per-family variants.
-        type: string
-        required: false
-        default: "multiarch"
       release_type:
         description: 'Release type: "dev", "nightly", or "prerelease".'
         type: string
@@ -54,13 +48,6 @@ on:
         default: ""
   workflow_dispatch:
     inputs:
-      amdgpu_families:
-        description: >-
-          Informational only. JAX builds currently consume the shared
-          multiarch TheRock tarball and do not build per-family variants.
-        type: string
-        default: "multiarch"
-        required: false
       release_type:
         description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
         type: string
@@ -86,7 +73,7 @@ permissions:
   contents: read
   id-token: write
 
-run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, multiarch)
 
 jobs:
   build_jax_wheels:
