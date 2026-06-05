@@ -58,7 +58,7 @@ def audit_descriptor(toml: Path, root: Path):
     """Return (artifact_name, undeclared_relpaths, scanned_basedirs, missing_basedirs, error)."""
     name = toml.stem
     if name.startswith("artifact-"):
-        name = name[len("artifact-"):]
+        name = name[len("artifact-") :]
     try:
         ad = ab.ArtifactDescriptor.load_toml_file(toml, artifact_name=name)
         scanner = ab.ComponentScanner(root, ad)
@@ -85,16 +85,35 @@ def audit_descriptor(toml: Path, root: Path):
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root-dir", required=True, type=Path,
-                    help="Build root the descriptor basedirs are relative to (THEROCK_BINARY_DIR).")
-    ap.add_argument("--repo", type=Path, default=_HERE.parent,
-                    help="Repo root to discover artifact-*.toml under (default: TheRock root).")
-    ap.add_argument("descriptors", nargs="*", type=Path,
-                    help="Specific descriptor files to audit (default: discover all).")
-    ap.add_argument("--strict", action="store_true",
-                    help="Exit non-zero if any unaccounted file is found.")
-    ap.add_argument("--quiet", action="store_true", help="Only print problems + summary.")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--root-dir",
+        required=True,
+        type=Path,
+        help="Build root the descriptor basedirs are relative to (THEROCK_BINARY_DIR).",
+    )
+    ap.add_argument(
+        "--repo",
+        type=Path,
+        default=_HERE.parent,
+        help="Repo root to discover artifact-*.toml under (default: TheRock root).",
+    )
+    ap.add_argument(
+        "descriptors",
+        nargs="*",
+        type=Path,
+        help="Specific descriptor files to audit (default: discover all).",
+    )
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if any unaccounted file is found.",
+    )
+    ap.add_argument(
+        "--quiet", action="store_true", help="Only print problems + summary."
+    )
     args = ap.parse_args(argv)
 
     root: Path = args.root_dir
@@ -109,7 +128,11 @@ def main(argv=None) -> int:
 
     for toml in descriptors:
         name, undeclared, scanned, missing, error = audit_descriptor(toml, root)
-        rel = toml.relative_to(args.repo) if str(toml).startswith(str(args.repo)) else toml
+        rel = (
+            toml.relative_to(args.repo)
+            if str(toml).startswith(str(args.repo))
+            else toml
+        )
         if error:
             errored += 1
             print(f"[ERROR ] {rel}: {error}")
@@ -130,12 +153,20 @@ def main(argv=None) -> int:
             print(f"[ok    ] {rel}  ({len(scanned)} stage dir(s) accounted)")
 
     print()
-    print(f"=== artifact accounting: {audited} audited, {skipped} skipped (not built), "
-          f"{errored} descriptor error(s), {total_undeclared} unaccounted file(s) ===")
+    print(
+        f"=== artifact accounting: {audited} audited, {skipped} skipped (not built), "
+        f"{errored} descriptor error(s), {total_undeclared} unaccounted file(s) ==="
+    )
     if problems:
-        print("UNACCOUNTED FILES are silently dropped from artifacts (verify() is disabled in")
-        print("the build) and resurface as rocm-sdk failures. Fix by adding the right component")
-        print("entry to the descriptor (e.g. a [components.doc.\"<stage>\"] for share/doc files),")
+        print(
+            "UNACCOUNTED FILES are silently dropped from artifacts (verify() is disabled in"
+        )
+        print(
+            "the build) and resurface as rocm-sdk failures. Fix by adding the right component"
+        )
+        print(
+            'entry to the descriptor (e.g. a [components.doc."<stage>"] for share/doc files),'
+        )
         print("or allow-list via options.unmatched_exclude if intentional.")
     if args.strict and (total_undeclared or errored):
         return 1
