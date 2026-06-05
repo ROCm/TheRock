@@ -90,7 +90,7 @@ jobs:
   # MODE 1: Consume pre-built artifacts and run the simulator (fast).
   # ============================================================================
   consume_and_test:
-    name: rocrand-sim (consume artifacts, ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    name: rocrand-sim (consume artifacts, gfx94X-dcgpu)
     if: ${{ !inputs.build_from_source }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 90
@@ -261,7 +261,7 @@ jobs:
   # workflow_dispatch with build_from_source=true.
   # ============================================================================
   build_and_test:
-    name: rocrand-sim (build from source, ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    name: rocrand-sim (build from source, gfx94X-dcgpu)
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_from_source }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 720
