@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <ComponentRef Id="c_amdrocm_llvm_llab_a.bc" />
-    <ComponentRef Id="c_amdrocm_llvm_llab_h.bc" />
     <ComponentRef Id="c_amdrocm_llvm_llab_o.bc" />
     <ComponentRef Id="c_amdrocm_llvm_llab_oav4.bc" />
     <ComponentRef Id="c_amdrocm_llvm_llab_oav5.bc" />
     <ComponentRef Id="c_amdrocm_llvm_llab_oav6.bc" />
-    <ComponentRef Id="c_amdrocm_llvm_llab_ocrso.bc" />
-    <ComponentRef Id="c_amdrocm_llvm_llab_occorosqon.bc" />
-    <ComponentRef Id="c_amdrocm_llvm_llab_odoo.bc" />
-    <ComponentRef Id="c_amdrocm_llvm_llab_ocdaopon.bc" />
     <ComponentRef Id="c_amdrocm_llvm_llab_ofoo.bc" />
     <ComponentRef Id="c_amdrocm_llvm_llab_ocfionon.bc" />
     <ComponentRef Id="c_amdrocm_llvm_llab_oiv11g.bc" />

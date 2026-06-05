@@ -986,7 +986,6 @@
     <ComponentRef Id="c_amdrocm_ck_ictcn_nt.hpp" />
     <ComponentRef Id="c_amdrocm_ck_ictcn_n.hpp" />
     <ComponentRef Id="c_amdrocm_ck_ictcn_pf.hpp" />
-    <ComponentRef Id="c_amdrocm_ck_ictcn_pkfp.hpp" />
     <ComponentRef Id="c_amdrocm_ck_ictcn_pi.hpp" />
     <ComponentRef Id="c_amdrocm_ck_ictcn_tc.hpp" />
     <ComponentRef Id="c_amdrocm_ck_ictcn_vt.hpp" />

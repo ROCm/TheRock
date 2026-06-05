@@ -3066,9 +3066,6 @@
             <Component Id="c_amdrocm_ck_ictcn_pf.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_pf.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_fp4.hpp" KeyPath="yes" />
             </Component>
-            <Component Id="c_amdrocm_ck_ictcn_pkfp.hpp" Guid="*">
-              <File Id="f_amdrocm_ck_ictcn_pkfp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_fp6.hpp" KeyPath="yes" />
-            </Component>
             <Component Id="c_amdrocm_ck_ictcn_pi.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_pi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_int4.hpp" KeyPath="yes" />
             </Component>

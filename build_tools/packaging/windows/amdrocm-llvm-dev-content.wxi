@@ -1090,9 +1090,6 @@
               <Component Id="c_amdrocm_llvm_dev_llictp_E.h" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_llictp_E.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/EnumSizeCheck.h" KeyPath="yes" />
               </Component>
-              <Component Id="c_amdrocm_llvm_dev_llictp_F.h" Guid="*">
-                <File Id="f_amdrocm_llvm_dev_llictp_F.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/FasterStringFindCheck.h" KeyPath="yes" />
-              </Component>
               <Component Id="c_amdrocm_llvm_dev_llictp_Fo.h" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_llictp_Fo.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/ForRangeCopyCheck.h" KeyPath="yes" />
               </Component>
@@ -2188,94 +2185,6 @@
                   </Component>
                 </Directory>
               </Directory>
-              <Directory Id="amdrocm_llvm_dev_llicAS" Name="lib\llvm\include\clang\Analysis\Scalable">
-                <Component Id="c_amdrocm_llvm_dev_llicAS_A.h" Guid="*">
-                  <File Id="f_amdrocm_llvm_dev_llicAS_A.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/ASTEntityMapping.h" KeyPath="yes" />
-                </Component>
-                <Directory Id="amdrocm_llvm_dev_llicASA" Name="lib\llvm\include\clang\Analysis\Scalable\Analyses">
-                  <Directory Id="amdrocm_llvm_dev_llicASAU" Name="lib\llvm\include\clang\Analysis\Scalable\Analyses\UnsafeBufferUsage">
-                    <Component Id="c_amdrocm_llvm_dev_llicASAU_U.h" Guid="*">
-                      <File Id="f_amdrocm_llvm_dev_llicASAU_U.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsage.h" KeyPath="yes" />
-                    </Component>
-                    <Component Id="c_amdrocm_llvm_dev_llicASAU_Un.h" Guid="*">
-                      <File Id="f_amdrocm_llvm_dev_llicASAU_Un.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsageBuilder.h" KeyPath="yes" />
-                    </Component>
-                  </Directory>
-                </Directory>
-                <Directory Id="amdrocm_llvm_dev_llicASE" Name="lib\llvm\include\clang\Analysis\Scalable\EntityLinker">
-                  <Component Id="c_amdrocm_llvm_dev_llicASE_E.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASE_E.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntityLinker.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASE_En.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASE_En.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntitySummaryEncoding.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASE_L.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASE_L.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummary.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASE_LU.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASE_LU.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummaryEncoding.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASE_T.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASE_T.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/TUSummaryEncoding.h" KeyPath="yes" />
-                  </Component>
-                </Directory>
-                <Directory Id="amdrocm_llvm_dev_llicASM" Name="lib\llvm\include\clang\Analysis\Scalable\Model">
-                  <Component Id="c_amdrocm_llvm_dev_llicASM_B.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASM_B.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/BuildNamespace.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASM_E.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASM_E.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityId.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASM_En.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASM_En.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityIdTable.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASM_Ent.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASM_Ent.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityLinkage.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASM_Enti.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASM_Enti.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityName.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASM_P.def" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASM_P.def" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/PrivateFieldNames.def" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASM_S.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASM_S.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/SummaryName.h" KeyPath="yes" />
-                  </Component>
-                </Directory>
-                <Directory Id="amdrocm_llvm_dev_llicASS" Name="lib\llvm\include\clang\Analysis\Scalable\Serialization">
-                  <Component Id="c_amdrocm_llvm_dev_llicASS_J.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASS_J.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Serialization/JSONFormat.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASS_S.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASS_S.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormat.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicASS_Se.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicASS_Se.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormatRegistry.h" KeyPath="yes" />
-                  </Component>
-                </Directory>
-                <Directory Id="amdrocm_llvm_dev_lillinclAnScSu" Name="lib\llvm\include\clang\Analysis\Scalable\Support">
-                  <Component Id="c_amdrocm_llvm_dev_lillinclAnScSu_F.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_lillinclAnScSu_F.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Support/FormatProviders.h" KeyPath="yes" />
-                  </Component>
-                </Directory>
-                <Directory Id="amdrocm_llvm_dev_llicAST" Name="lib\llvm\include\clang\Analysis\Scalable\TUSummary">
-                  <Component Id="c_amdrocm_llvm_dev_llicAST_E.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicAST_E.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/EntitySummary.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicAST_Ex.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicAST_Ex.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/ExtractorRegistry.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicAST_T.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicAST_T.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummary.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicAST_TU.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicAST_TU.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryBuilder.h" KeyPath="yes" />
-                  </Component>
-                  <Component Id="c_amdrocm_llvm_dev_llicAST_TUS.h" Guid="*">
-                    <File Id="f_amdrocm_llvm_dev_llicAST_TUS.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryExtractor.h" KeyPath="yes" />
-                  </Component>
-                </Directory>
-              </Directory>
               <Directory Id="amdrocm_llvm_dev_lillinclAnSu" Name="lib\llvm\include\clang\Analysis\Support">
                 <Component Id="c_amdrocm_llvm_dev_lillinclAnSu_B.h" Guid="*">
                   <File Id="f_amdrocm_llvm_dev_lillinclAnSu_B.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Support/BumpVector.h" KeyPath="yes" />
@@ -2418,9 +2327,6 @@
               <Component Id="c_amdrocm_llvm_dev_llicB_Bu.inc" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_llicB_Bu.inc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Builtins.inc" KeyPath="yes" />
               </Component>
-              <Component Id="c_amdrocm_llvm_dev_llicB_Bui.def" Guid="*">
-                <File Id="f_amdrocm_llvm_dev_llicB_Bui.def" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64.def" KeyPath="yes" />
-              </Component>
               <Component Id="c_amdrocm_llvm_dev_llicB_Buil.def" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_llicB_Buil.def" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge.def" KeyPath="yes" />
               </Component>
@@ -2474,9 +2380,6 @@
               </Component>
               <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsSPI.inc" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsSPI.inc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsSPIRVVK.inc" KeyPath="yes" />
-              </Component>
-              <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsS.def" Guid="*">
-                <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsS.def" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsSystemZ.def" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsV.def" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsV.def" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsVE.def" KeyPath="yes" />
@@ -5637,9 +5540,6 @@
               <Component Id="c_amdrocm_llvm_dev_lillinllCo_At.h" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_lillinllCo_At.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/AtomicExpand.h" KeyPath="yes" />
               </Component>
-              <Component Id="c_amdrocm_llvm_dev_lillinllCo_Ato.h" Guid="*">
-                <File Id="f_amdrocm_llvm_dev_lillinllCo_Ato.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/AtomicExpandUtils.h" KeyPath="yes" />
-              </Component>
               <Component Id="c_amdrocm_llvm_dev_lillinllCo_B.h" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_lillinllCo_B.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/BasicBlockMatchingAndInference.h" KeyPath="yes" />
               </Component>
@@ -5738,9 +5638,6 @@
               </Component>
               <Component Id="c_amdrocm_llvm_dev_lillinllCo_Exp.h" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_lillinllCo_Exp.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandIRInsts.h" KeyPath="yes" />
-              </Component>
-              <Component Id="c_amdrocm_llvm_dev_lillinllCo_Expa.h" Guid="*">
-                <File Id="f_amdrocm_llvm_dev_lillinllCo_Expa.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandMemCmp.h" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_llvm_dev_lillinllCo_Expan.h" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_lillinllCo_Expan.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandPostRAPseudos.h" KeyPath="yes" />
@@ -7473,12 +7370,6 @@
               </Component>
               <Component Id="c_amdrocm_llvm_dev_libllvincllvDeb_D.h" Guid="*">
                 <File Id="f_amdrocm_llvm_dev_libllvincllvDeb_D.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/Debuginfod/Debuginfod.h" KeyPath="yes" />
-              </Component>
-              <Component Id="c_amdrocm_llvm_dev_libllvincllvDeb_H.h" Guid="*">
-                <File Id="f_amdrocm_llvm_dev_libllvincllvDeb_H.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/Debuginfod/HTTPClient.h" KeyPath="yes" />
-              </Component>
-              <Component Id="c_amdrocm_llvm_dev_libllvincllvDeb_HT.h" Guid="*">
-                <File Id="f_amdrocm_llvm_dev_libllvincllvDeb_HT.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/include/llvm/Debuginfod/HTTPServer.h" KeyPath="yes" />
               </Component>
             </Directory>
             <Directory Id="amdrocm_llvm_dev_libllvincllvDem" Name="lib\llvm\include\llvm\Demangle">

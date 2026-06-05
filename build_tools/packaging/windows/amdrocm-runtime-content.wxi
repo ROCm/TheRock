@@ -2,7 +2,7 @@
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Directory Id="amdrocm_runtime_b" Name="bin">
       <Component Id="c_amdrocm_runtime_b_ac.dll" Guid="*">
-        <File Id="f_amdrocm_runtime_b_ac.dll" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/bin/amd_comgr0713.dll" KeyPath="yes" />
+        <File Id="f_amdrocm_runtime_b_ac.dll" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/bin/amd_comgr0714.dll" KeyPath="yes" />
       </Component>
       <Component Id="c_amdrocm_runtime_b_a7.dll" Guid="*">
         <File Id="f_amdrocm_runtime_b_a7.dll" Source="$(var.BuildRoot)/core/clr/dist/bin/amdhip64_7.dll" KeyPath="yes" />

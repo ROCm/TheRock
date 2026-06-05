@@ -7,9 +7,6 @@
             <Component Id="c_amdrocm_llvm_llab_a.bc" Guid="*">
               <File Id="f_amdrocm_llvm_llab_a.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/asanrtl.bc" KeyPath="yes" />
             </Component>
-            <Component Id="c_amdrocm_llvm_llab_h.bc" Guid="*">
-              <File Id="f_amdrocm_llvm_llab_h.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc" Name="hip.bc" KeyPath="yes" />
-            </Component>
             <Component Id="c_amdrocm_llvm_llab_o.bc" Guid="*">
               <File Id="f_amdrocm_llvm_llab_o.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/ockl.bc" KeyPath="yes" />
             </Component>
@@ -21,18 +18,6 @@
             </Component>
             <Component Id="c_amdrocm_llvm_llab_oav6.bc" Guid="*">
               <File Id="f_amdrocm_llvm_llab_oav6.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_abi_version_600.bc" KeyPath="yes" />
-            </Component>
-            <Component Id="c_amdrocm_llvm_llab_ocrso.bc" Guid="*">
-              <File Id="f_amdrocm_llvm_llab_ocrso.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc" Name="oclc_correctly_rounded_sqrt_off.bc" KeyPath="yes" />
-            </Component>
-            <Component Id="c_amdrocm_llvm_llab_occorosqon.bc" Guid="*">
-              <File Id="f_amdrocm_llvm_llab_occorosqon.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc" Name="oclc_correctly_rounded_sqrt_on.bc" KeyPath="yes" />
-            </Component>
-            <Component Id="c_amdrocm_llvm_llab_odoo.bc" Guid="*">
-              <File Id="f_amdrocm_llvm_llab_odoo.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc" Name="oclc_daz_opt_off.bc" KeyPath="yes" />
-            </Component>
-            <Component Id="c_amdrocm_llvm_llab_ocdaopon.bc" Guid="*">
-              <File Id="f_amdrocm_llvm_llab_ocdaopon.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_llvm_llab_ofoo.bc" Guid="*">
               <File Id="f_amdrocm_llvm_llab_ofoo.bc" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_finite_only_off.bc" KeyPath="yes" />
