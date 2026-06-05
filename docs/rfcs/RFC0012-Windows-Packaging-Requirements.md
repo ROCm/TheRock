@@ -261,9 +261,17 @@ This aligns with the top-ranked DLL resolution strategies: versioned filenames p
 
 ### OpenCL Changes
 
-OpenCL will largely in part be sustained and no changes are expected to be implemented. Installing, upgrading, or uninstalling the ROCm SDK must have no effect on an OpenCL environment.
+OpenCL on Windows will largely be sustained as-is, and no functional changes to the OpenCL runtime are expected as part of this packaging work. Installing, upgrading, or uninstalling the ROCm SDK must have no effect on an existing OpenCL environment.
 
-Additionally, `amd_comgr_3.dll` will be renamed to `amd_comgr_opencl.dll` to better reflect its use case and so that it can be shipped alongside the driver version 26.30 in Q3.
+#### Distribution Model
+
+On Windows, OpenCL is delivered through the Adrenaline driver release and is **not** a standalone TheRock deliverable. While all build, CI, and validation flows for OpenCL run through TheRock, the Windows product delivery model is unchanged: OpenCL ships with the driver, not as a separate ROCm SDK artifact.
+
+As a result, Windows OpenCL user-space binaries and test assets (for example `amdocl64.dll`, `ocltst`, and OpenCL-CTS) must not be included in TheRock release deliverables — tarballs, Python packages, or native packages. TheRock may continue to build and test OpenCL and the OpenCL ICD (`ocl`, `ocl-icd`) for CI and validation coverage, but those artifacts must be filtered out of release packaging. This mirrors the existing handling of test-only artifacts, which are already excluded from Python packages and are planned to be excluded from tarballs. The mechanism for separating CI-only builds from release packaging (for example, CMake presets or a dedicated build flag) is tracked separately and governs which components are produced for release versus testing.
+
+#### comgr DLL Naming
+
+`amd_comgr_3.dll` will be renamed to `amd_comgr_opencl.dll` to better reflect its use case and so that it can be shipped alongside the Adrenaline driver (version 26.30, planned for Q3). This OpenCL-specific comgr DLL is independent of the `amd_comgr.dll` that is built and shipped by TheRock and used by the HIP runtime; the rename applies only to the driver-distributed OpenCL copy and does not affect the comgr DLL packaged with the ROCm SDK.
 
 ### Package Naming
 
