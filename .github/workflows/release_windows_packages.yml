@@ -249,7 +249,7 @@ jobs:
 
       - name: Build ROCm MSI Packages
         shell: cmd
-        run: ./build_tools/packaging/windows/build-all.bat "${{ env.BUILD_DIR }}/dist/rocm"
+        run: .\build_tools\packaging\windows\build-all.bat "${{ env.BUILD_DIR }}\dist\rocm" /no_pause
 
       - name: Compress dist folder
         run: |
