@@ -3,7 +3,7 @@
 #
 # Weekly gitleaks scan: runs on a fixed cadence and pushes
 # SARIF findings to the repository's code-scanning Security tab.
-name: Gitleaks_main
+name: Gitleaks main
 
 on:
   # Run every Saturday at 10:00 UTC.

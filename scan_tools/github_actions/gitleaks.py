@@ -175,7 +175,13 @@ def _ensure_gitleaks() -> Path:
         raise RuntimeError(
             f"gitleaks at {binary} failed to execute after install: {exc}"
         ) from exc
-    log.info("Installed gitleaks %s at %s", result.stdout.strip(), binary)
+    installed_version = result.stdout.strip().lstrip("v")
+    if installed_version != _GITLEAKS_VERSION:
+        raise RuntimeError(
+            f"gitleaks at {binary} reports version {installed_version!r}, "
+            f"expected {_GITLEAKS_VERSION!r}"
+        )
+    log.info("Installed gitleaks %s at %s", installed_version, binary)
     return binary
 
 
