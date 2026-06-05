@@ -223,6 +223,11 @@ Note: `libmount` links `libblkid` transitively, so consumers that only use
 - Import library: `PkgConfig::LIBBLKID`
 - Alternatives: none
 
+## oneTBB
+
+- Canonical method: `find_package(TBB CONFIG)`
+- Import libraries: `TBB::tbb`, `TBB::tbbmalloc`, `TBB::tbbmalloc_proxy`
+
 ## zlib
 
 - Canonical method: `find_package(ZLIB)`
