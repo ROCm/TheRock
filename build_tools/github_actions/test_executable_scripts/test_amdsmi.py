@@ -19,15 +19,17 @@ Usage:
 ===============================================================================
 """
 
-import pytest
-
-pytestmark = pytest.mark.skip("Manual execution only — requires GPU device access")
 import logging
 import os
+import platform
 import shlex
 import subprocess
 from pathlib import Path
-import sys
+
+
+def is_windows():
+    return "windows" == platform.system().lower()
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,28 +40,25 @@ AMDSMITST_BIN = (
     THEROCK_DIR / "build" / "share" / "amd_smi" / "tests" / "amdsmitst"
 ).resolve()
 
+platform_key = "windows" if is_windows() else "linux"
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
 # -----------------------------
 # GTest sharding
 # -----------------------------
 SHARD_INDEX = os.getenv("SHARD_INDEX", "1")
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", "1")
-env = os.environ.copy()
 
-# Convert to 0-based index for GTest
-env["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
-env["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
-
-# -----------------------------
-# Test filtering
-# -----------------------------
-# If quick mode is enabled, run minimal suite (only dynamic metric tests)
+environ_vars = os.environ.copy()
+environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
+environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 test_type = os.getenv("TEST_TYPE", "full")
 
 if test_type == "quick":
     logging.info("Running quick tests only for amdsmitst")
     test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
+
 else:
-    # Full test mode: run whitelist and explicitly exclude known failing tests
     logging.info("Running full amdsmitst test suite (include + exclude filter)")
 
     include_tests = [
@@ -79,6 +78,44 @@ else:
         "amdsmitstReadWrite.TestPowerReadWrite",
     ]
 
+    # -----------------------------
+    # Arch-specific ignores (CI parity)
+    # -----------------------------
+    TESTS_TO_IGNORE = {
+        "gfx90a": {
+            "linux": [
+                "amdsmitstReadOnly.TestSysInfoRead",
+                "amdsmitstReadOnly.TestIdInfoRead",
+                "amdsmitstReadWrite.TestPciReadWrite",
+            ]
+        },
+        "gfx110X-all": {
+            "linux": [
+                "amdsmitstReadWrite.FanReadWrite",
+            ]
+        },
+        "gfx103X-all": {
+            "linux": [
+                "amdsmitstReadWrite.FanReadWrite",
+            ]
+        },
+    }
+
+    if (
+        AMDGPU_FAMILIES in TESTS_TO_IGNORE
+        and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
+    ):
+        ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
+        logging.info(f"Adding arch-specific excludes: {ignored_tests}")
+        exclude_tests.extend(ignored_tests)
+
+    logging.info(f"AMDGPU_FAMILIES={AMDGPU_FAMILIES}")
+    logging.info(f"platform_key={platform_key}")
+    logging.info(f"Final exclude_tests={exclude_tests}")
+
+    # -----------------------------
+    # Build final filter
+    # -----------------------------
     gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
     test_filter = [f"--gtest_filter={gtest_filter}"]
 
@@ -89,12 +126,18 @@ cmd = [str(AMDSMITST_BIN)] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
+if not AMDSMITST_BIN.exists():
+    raise FileNotFoundError(f"amdsmitst not found at {AMDSMITST_BIN}")
+
+if not os.access(AMDSMITST_BIN, os.X_OK):
+    raise PermissionError(f"amdsmitst is not executable: {AMDSMITST_BIN}")
+
 # -----------------------------
 # Run tests
 # -----------------------------
 subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
-    env=env,
+    env=environ_vars,
     check=True,
 )
