@@ -164,11 +164,7 @@ def _resolve_rocjitsu_paths(bin_dir: Path, amdgpu_family: str) -> dict[str, Path
     rocm_root = bin_dir.parent
     paths = {
         "preload": rocm_root / "lib" / "librocjitsu_kmd.so",
-        "config": rocm_root
-        / "share"
-        / "rocjitsu"
-        / "configs"
-        / kmd_config_name,
+        "config": rocm_root / "share" / "rocjitsu" / "configs" / kmd_config_name,
         "schema": rocm_root
         / "share"
         / "rocjitsu"
