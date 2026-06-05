@@ -192,13 +192,31 @@ jobs:
   # the Release pipeline enables it today; PR CI keeps it off by default.
   # ==========================================================================
   simulator-test:
+    # Make the run-graph label per matrix entry show the family cleanly
+    # (e.g. "simulator-test (gfx94X-dcgpu)"). Without this, GitHub auto-
+    # derives the label from `matrix.family_info` (an object) and produces
+    # an ugly stringified form for both running and skipped entries.
+    name: simulator-test (${{ matrix.family_info.amdgpu_family }})
     needs: [compiler-runtime, math-libs]
-    if: ${{ !cancelled() && !failure() && inputs.run_simulator && contains(inputs.dist_amdgpu_families, 'gfx94X-dcgpu') }}
+    # Fan out across the same families math-libs builds for, but only invoke
+    # for families rocjitsu can simulate today (cdna3 + cdna4 KMD configs;
+    # see FAMILY_TO_KMD_CONFIG in
+    # build_tools/github_actions/test_executable_scripts/simulator_runner.py).
+    # Update both this whitelist AND FAMILY_TO_KMD_CONFIG when rocjitsu adds
+    # support for a new family.
+    if: >-
+      ${{ !cancelled() && !failure() && inputs.run_simulator
+          && (matrix.family_info.amdgpu_family == 'gfx94X-dcgpu'
+              || matrix.family_info.amdgpu_family == 'gfx950-dcgpu') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     uses: ./.github/workflows/test-simulator.yml
     secrets: inherit
     with:
       artifact_run_id: ${{ github.run_id }}
-      amdgpu_families: gfx94X-dcgpu
+      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       filter_preset: quick
     permissions:
       contents: read
