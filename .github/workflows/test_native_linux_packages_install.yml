@@ -34,7 +34,7 @@ on:
         type: string
         default: "/opt/rocm/core"
       test_type:
-        description: "Test type: quick, standard, comprehensive, full, install, or sanity. CI test types are mapped to native install test modes."
+        description: "Test type: sanity (install + basic verification), full (install + basic + rdhc). If not set, script default is used."
         required: false
         type: string
         default: ""
@@ -83,7 +83,7 @@ on:
         default: "/opt/rocm/core"
         required: false
       test_type:
-        description: "Test type: quick, standard, comprehensive, full, install, or sanity (optional; leave empty for sanity)"
+        description: "Test type: sanity or full (optional; leave empty for script default)"
         type: string
         default: ""
       repository:
@@ -145,7 +145,7 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       GFX_ARCH: ${{ needs.prepare_install_context.outputs.gfx_arch }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
-      TEST_TYPE: ${{ inputs.test_type }}
+      TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -159,8 +159,8 @@ jobs:
               ca-certificates \
               gpg \
               lsb-release
-            if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
-              echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod, apt-utils"
               apt install -y pciutils kmod apt-utils
             fi
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
@@ -173,8 +173,8 @@ jobs:
               gpg2 \
               lsb-release \
               update-alternatives
-            if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
-              echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full on SLES (e.g. rdhc): pciutils, kmod"
               zypper install -y pciutils kmod
             fi
           else
@@ -185,8 +185,8 @@ jobs:
               ca-certificates \
               gnupg2 \
               dnf-plugins-core
-            if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
-              echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"
+            if [ "$TEST_TYPE" = "full" ]; then
+              echo "Extra OS packages for --test-type full (e.g. rdhc): pciutils, kmod"
               dnf install -y --allowerasing pciutils kmod
             fi
           fi

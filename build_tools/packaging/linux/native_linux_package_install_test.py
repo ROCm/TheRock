@@ -8,7 +8,6 @@ Full installation and simulate-install test script for ROCm native packages.
 Test modes (--test-type):
 - sanity: Basic test. Repo-based install plus basic verification only
   (steps 1 and 2).
-- quick / standard: CI aliases for sanity.
 - full: Full test. Repo-based install plus basic verification plus full
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
@@ -17,9 +16,6 @@ Test modes (--test-type):
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
-- comprehensive: CI alias for full.
-- install: Repo-based install only (step 1). No rocminfo or component checks.
-  Used by release workflows that dispatch install tests off the critical path.
 - simulate: Dry-run only. Simulated install of local .deb or .rpm files
   (apt install --simulate or rpm -Uvh --test --nodeps). No repo setup or
   actual install. Requires --packages-dir.
@@ -55,49 +51,43 @@ Example invocations:
 
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
-         --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-         --gfx-arch gfx94x \\
-         --release-type nightly
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x \\
+ --release-type nightly
 
  # Prerelease DEB with GPG verification
  python3 native_linux_package_install_test.py \\
-         --os-profile ubuntu2404 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
-         --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --release-type prerelease \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
  python3 native_linux_package_install_test.py \\
-         --os-profile rhel8 \\
-         --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
-         --gfx-arch gfx94x \\
-         --release-type nightly
+ --os-profile rhel8 \\
+ --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
+ --gfx-arch gfx94x \\
+ --release-type nightly
 
  # Prerelease RPM (SLES 16)
  python3 native_linux_package_install_test.py \\
-         --os-profile sles16 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
-         --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --os-profile sles16 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+ --release-type prerelease \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
-         --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
-         --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
-
- # --test-type install: repo install only (no verification)
- python3 native_linux_package_install_test.py --test-type install \\
-         --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-         --gfx-arch gfx94x --release-type nightly
+ --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Simulate install (dry-run) from local .deb or .rpm directory
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -151,32 +141,6 @@ INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
 RDHC_TIMEOUT_SEC = 30
 VERIFY_MIN_COMPONENTS = 2
-_TEST_TYPE_MAP = {
-    "": "sanity",
-    "quick": "sanity",
-    "standard": "sanity",
-    "comprehensive": "full",
-    "full": "full",
-    "install": "install",
-    "sanity": "sanity",
-    "simulate": "simulate",
-}
-
-
-def _normalize_test_type(test_type: str | None) -> str:
-    """Map shared CI test types to native package install test modes.
-
-    quick/standard/empty -> sanity, comprehensive/full -> full.
-    Native modes (install/sanity/full/simulate) are also accepted directly.
-    """
-    normalized = (test_type or "").strip().lower()
-    try:
-        return _TEST_TYPE_MAP[normalized]
-    except KeyError as e:
-        valid = ", ".join(sorted(k or "<empty>" for k in _TEST_TYPE_MAP))
-        raise ValueError(
-            f"Unsupported test_type {test_type!r}. Expected one of: {valid}."
-        ) from e
 
 
 def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
@@ -952,11 +916,6 @@ Examples:
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type install: install only
- python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
- --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
- --gfx-arch gfx94x --release-type dev --install-prefix /opt/rocm/core
-
  # Simulate install (dry-run) from local packages
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
@@ -1008,8 +967,9 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--test-type",
         type=str,
+        choices=["sanity", "full", "simulate"],
         default="sanity",
-        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
+        help="Test type: 'sanity' = basic test only; 'full' = basic + full test; 'simulate' = simulated install only (requires --packages-dir).",
     )
     parser.add_argument(
         "--packages-dir",
@@ -1041,17 +1001,11 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
                 parser.error(str(e))
         return
     if not args.os_profile:
-        parser.error(
-            "--os-profile is required when --test-type is 'install', 'sanity', or 'full'"
-        )
+        parser.error("--os-profile is required when --test-type is 'sanity' or 'full'")
     if not args.repo_url:
-        parser.error(
-            "--repo-url is required when --test-type is 'install', 'sanity', or 'full'"
-        )
+        parser.error("--repo-url is required when --test-type is 'sanity' or 'full'")
     if not args.gfx_arch:
-        parser.error(
-            "--gfx-arch is required when --test-type is 'install', 'sanity', or 'full'"
-        )
+        parser.error("--gfx-arch is required when --test-type is 'sanity' or 'full'")
 
 
 def parse_cli_arguments(
@@ -1072,10 +1026,6 @@ def parse_cli_arguments(
 
         parser.error = _raise  # type: ignore[method-assign]
     args = parser.parse_args(argv)
-    try:
-        args.test_type = _normalize_test_type(args.test_type)
-    except ValueError as e:
-        parser.error(str(e))
     _validate_cli_args(parser, args)
     return args
 
@@ -1137,12 +1087,6 @@ def run_tests(args: Namespace) -> int:
         if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             return 1
-        if args.test_type == "install":
-            print("\n" + "=" * 80)
-            print("[PASS] INSTALLATION TEST PASSED")
-            print("(install: repo setup and package install completed)")
-            print("=" * 80 + "\n")
-            return 0
         if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
             return 1
