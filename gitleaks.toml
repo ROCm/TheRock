@@ -26,7 +26,9 @@ useDefault = true
 # surrounding syntax, not the value itself.
 
 [[allowlists]]
-description = "Structurally non-sensitive paths"
+# Allowlist by location only where a real first-party secret structurally
+# can't live: vendored third-party trees and dependency lock files.
+description = "Vendored and generated paths"
 paths = [
   '''third-party/''',
   '''third_party/''',
