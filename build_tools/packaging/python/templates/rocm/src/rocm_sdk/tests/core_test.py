@@ -127,11 +127,6 @@ class ROCmCoreTest(unittest.TestCase):
                 cmd = [sys.executable, "-c", command, str(so_path)]
                 subprocess.check_call(cmd)
 
-    @unittest.skipIf(
-        is_windows,
-        "hipcc --help fails when runners have stale ROCM_PATH/HIP_PATH; "
-        "see docs/hipcc-rocm-path-windows-ci-fix.md",
-    )
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
             script_path = utils.find_console_script(script_name)

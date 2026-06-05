@@ -213,16 +213,9 @@ jobs:
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
-          # Windows: skip testConsoleScripts (hipcc --help) when runners have stale
-          # ROCM_PATH/HIP_PATH; other SDK checks still run. See docs/hipcc-rocm-path-windows-ci-fix.md
           if [[ "${{ inputs.test_runs_on }}" == *windows* ]]; then
-            echo "::warning::Skipping testConsoleScripts on Windows (hipcc --help / ROCM_PATH)"
-            python -m unittest \
-              rocm_sdk.tests.base_test \
-              rocm_sdk.tests.core_test \
-              rocm_sdk.tests.libraries_test \
-              -k 'not testConsoleScripts' \
-              -v
+            echo "::warning::Skipping testConsoleScripts on Windows (CI workaround)"
+            python build_tools/github_actions/run_rocm_sdk_test.py --skip-console-scripts
           else
             rocm-sdk test
           fi
