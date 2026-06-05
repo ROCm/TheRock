@@ -6,7 +6,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
 
-    therock_subproject_fetch(therock-libmount-sources
+    therock_subproject_fetch(therock-util-linux-sources
       SOURCE_DIR "${_source_dir}"
       # Originally downloaded from https://github.com/util-linux/util-linux/archive/refs/tags/v2.42.1.tar.gz
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/util-linux-2.42.1.tar.gz"
@@ -19,7 +19,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
-    therock_cmake_subproject_declare(therock-libmount
+    therock_cmake_subproject_declare(therock-util-linux
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -44,8 +44,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
-    therock_cmake_subproject_provide_package(therock-libmount libmount lib/rocm_sysdeps/lib/cmake/libmount)
-    therock_cmake_subproject_activate(therock-libmount)
+    therock_cmake_subproject_provide_package(therock-util-linux util-linux lib/rocm_sysdeps/lib/cmake/util-linux)
+    therock_cmake_subproject_activate(therock-util-linux)
 
     # Validate the libraries produced by util-linux (libmount + libblkid).
     therock_test_validate_shared_lib(
@@ -54,12 +54,12 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     # Test key headers
-    set(LIBMOUNT_HEADERS "libmount/libmount.h" "blkid/blkid.h")
-    foreach(libmount_header ${LIBMOUNT_HEADERS})
-      string(REPLACE "/" "_" header_test_name "${libmount_header}")
+    set(UTIL_LINUX_HEADERS "libmount/libmount.h" "blkid/blkid.h")
+    foreach(util_linux_header ${UTIL_LINUX_HEADERS})
+      string(REPLACE "/" "_" header_test_name "${util_linux_header}")
       add_test(
-        NAME libmount_header_test:${header_test_name}
-        COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/include/${libmount_header}"
+        NAME util_linux_header_test:${header_test_name}
+        COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/include/${util_linux_header}"
       )
     endforeach()
 
@@ -68,7 +68,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(LIBMOUNT_BUILD VERSION "2.42.1")
+project(UTIL_LINUX_BUILD VERSION "2.42.1")
 
 if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
@@ -128,9 +128,9 @@ add_custom_target(
 )
 
 configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/libmount-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/libmount-config.cmake
+  ${CMAKE_CURRENT_SOURCE_DIR}/util-linux-config.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/util-linux-config.cmake
   @ONLY
 )
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libmount-config.cmake" DESTINATION lib/cmake/libmount)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/util-linux-config.cmake" DESTINATION lib/cmake/util-linux)

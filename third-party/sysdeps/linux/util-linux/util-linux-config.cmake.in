@@ -6,22 +6,25 @@ if(_IMPORT_PREFIX STREQUAL "/")
   set(_IMPORT_PREFIX "")
 endif()
 
+# These libraries are in util-linux, which is a collection of
+# Linux utilities and libraries.
+
 # libblkid (libmount depends on it)
-if(NOT TARGET libmount::libblkid)
-  add_library(libmount::libblkid SHARED IMPORTED)
-  set_target_properties(libmount::libblkid PROPERTIES
+if(NOT TARGET util-linux::libblkid)
+  add_library(util-linux::libblkid SHARED IMPORTED)
+  set_target_properties(util-linux::libblkid PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
     IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libblkid.so"
   )
 endif()
 
 # libmount (depends on libblkid)
-if(NOT TARGET libmount::libmount)
-  add_library(libmount::libmount SHARED IMPORTED)
-  set_target_properties(libmount::libmount PROPERTIES
+if(NOT TARGET util-linux::libmount)
+  add_library(util-linux::libmount SHARED IMPORTED)
+  set_target_properties(util-linux::libmount PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
     IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libmount.so"
-    INTERFACE_LINK_LIBRARIES "libmount::libblkid"
+    INTERFACE_LINK_LIBRARIES "util-linux::libblkid"
   )
 endif()
 

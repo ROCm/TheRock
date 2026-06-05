@@ -146,16 +146,16 @@ if(THEROCK_ENABLE_SYSDEPS_HWLOC)
   )
 endif()
 
-# Optional sysdep: libmount
-if(THEROCK_ENABLE_SYSDEPS_LIBMOUNT)
-  add_subdirectory(libmount)
-  therock_provide_artifact(sysdeps-libmount
+# Optional sysdep: util-linux (for libmount, etc.)
+if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
+  add_subdirectory(util-linux)
+  therock_provide_artifact(sysdeps-util-linux
     TARGET_NEUTRAL
-    DESCRIPTOR artifact-libmount.toml
+    DESCRIPTOR artifact-util-linux.toml
     COMPONENTS
       dev
       lib
     SUBPROJECT_DEPS
-      therock-libmount
+      therock-util-linux
   )
 endif()
