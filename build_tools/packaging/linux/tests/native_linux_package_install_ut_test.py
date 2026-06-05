@@ -1729,8 +1729,10 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
         mock_run.return_value = MagicMock(
             returncode=100, stdout="", stderr="broken deps"
         )
-        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
-            ["amdrocm-gfx94x"]
+        ok, errs = (
+            native_linux_package_install_test.verify_debian_transitive_dependencies(
+                ["amdrocm-gfx94x"]
+            )
         )
         self.assertFalse(ok)
         self.assertTrue(any("apt-get check failed" in e for e in errs))
@@ -1743,8 +1745,10 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         mock_installed.return_value = True
         mock_stanza.return_value = {}  # no depends fields
-        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
-            ["amdrocm-gfx94x"]
+        ok, errs = (
+            native_linux_package_install_test.verify_debian_transitive_dependencies(
+                ["amdrocm-gfx94x"]
+            )
         )
         self.assertTrue(ok)
         self.assertEqual(errs, [])
@@ -1755,8 +1759,10 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
         # Test that a root package missing from dpkg yields a failure.
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         mock_installed.return_value = False
-        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
-            ["amdrocm-gfx94x"]
+        ok, errs = (
+            native_linux_package_install_test.verify_debian_transitive_dependencies(
+                ["amdrocm-gfx94x"]
+            )
         )
         self.assertFalse(ok)
         self.assertTrue(any("not installed" in e for e in errs))
@@ -1773,8 +1779,10 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
         mock_installed.return_value = True
         mock_stanza.return_value = {"depends": "libmissing"}
         mock_pick.return_value = None
-        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
-            ["amdrocm-gfx94x"]
+        ok, errs = (
+            native_linux_package_install_test.verify_debian_transitive_dependencies(
+                ["amdrocm-gfx94x"]
+            )
         )
         self.assertFalse(ok)
         self.assertTrue(any("unsatisfied dependency group" in e for e in errs))
@@ -1785,8 +1793,10 @@ class VerifyDebianTransitiveDependenciesTest(unittest.TestCase):
         # Test that exceeding max_closure aborts the walk with an error.
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         mock_installed.return_value = True
-        ok, errs = native_linux_package_install_test.verify_debian_transitive_dependencies(
-            ["amdrocm-gfx94x"], max_closure=0
+        ok, errs = (
+            native_linux_package_install_test.verify_debian_transitive_dependencies(
+                ["amdrocm-gfx94x"], max_closure=0
+            )
         )
         self.assertFalse(ok)
         self.assertTrue(any("exceeded max steps" in e for e in errs))
