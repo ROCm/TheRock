@@ -507,10 +507,22 @@ def _recipe_bringup(
         dev.write_reg32((_NBIO_B2 + 0x00c0) * 4, 1)            # RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
         dev.write_reg32((_NBIO_B2 + 0x01cb) * 4, 0x30000007)  # GDC_S2A0_S2A_DOORBELL_ENTRY_0_CTRL
         dev.write_reg32((_NBIO_B2 + 0x01ce) * 4, 0x3000000D)  # GDC_S2A0_S2A_DOORBELL_ENTRY_3_CTRL
+        # Doorbell selfring GPA aperture (nbio_v7_11_enable_doorbell_selfring_aperture).
+        # The amdgpu_lite kernel module only classifies the doorbell BAR; it never
+        # programs this aperture, so the GPU does not recognize CPU writes to the
+        # doorbell BAR as doorbells -> KIQ doorbell never reaches the CP. PF1 regs
+        # at NBIO BASE_IDX=2 (=0xD20): BASE_LOW=0xf4 BASE_HIGH=0xf3 CNTL=0xf5;
+        # CNTL = APER_EN(bit0) | APER_MODE(bit1) = 0x3; base = doorbell BAR phys.
+        _db_base = dev.info.bars[dev.info.doorbell_bar_index].phys_addr
+        dev.write_reg32((_NBIO_B2 + 0x00f4) * 4, _db_base & 0xFFFFFFFF)          # SELFRING_GPA_APER_BASE_LOW
+        dev.write_reg32((_NBIO_B2 + 0x00f3) * 4, (_db_base >> 32) & 0xFFFFFFFF)  # SELFRING_GPA_APER_BASE_HIGH
+        dev.write_reg32((_NBIO_B2 + 0x00f5) * 4, 0x3)                            # SELFRING_GPA_APER_CNTL: EN|MODE
         aper = dev.read_reg32((_NBIO_B2 + 0x00c0) * 4)
         e0 = dev.read_reg32((_NBIO_B2 + 0x01cb) * 4)
         e3 = dev.read_reg32((_NBIO_B2 + 0x01ce) * 4)
+        sr_cntl = dev.read_reg32((_NBIO_B2 + 0x00f5) * 4)
         print(f"  doorbell: APER_EN=0x{aper:x} S2A_ENTRY_0=0x{e0:08x} S2A_ENTRY_3=0x{e3:08x}")
+        print(f"  doorbell selfring: base=0x{_db_base:x} CNTL=0x{sr_cntl:x}")
     mes_ring = None
     compute_queue = None
     ih_config = None
