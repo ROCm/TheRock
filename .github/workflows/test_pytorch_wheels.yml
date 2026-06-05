@@ -210,15 +210,18 @@ jobs:
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           pip freeze
 
+      # Until staging wheels include core_test.py with the Windows skipIf, overlay
+      # the checkout template so `rocm-sdk test` skips testConsoleScripts on Windows.
+      - name: Sync rocm_sdk core tests from branch
+        if: ${{ contains(inputs.test_runs_on, 'windows') }}
+        run: |
+          INSTALLED="$(python -c "import rocm_sdk.tests.core_test as m; print(m.__file__)")"
+          cp "build_tools/packaging/python/templates/rocm/src/rocm_sdk/tests/core_test.py" "$INSTALLED"
+
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
-          if [[ "${{ inputs.test_runs_on }}" == *windows* ]]; then
-            echo "::warning::Skipping testConsoleScripts on Windows (CI workaround)"
-            python build_tools/github_actions/run_rocm_sdk_test.py --skip-console-scripts
-          else
-            rocm-sdk test
-          fi
+          rocm-sdk test
 
       - name: Run PyTorch smoketests
         timeout-minutes: 10
