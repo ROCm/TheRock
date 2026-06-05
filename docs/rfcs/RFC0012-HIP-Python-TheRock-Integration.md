@@ -1,7 +1,7 @@
 ---
-author: Dominic Etienne Charrier (domcharrier), Lalith Narasimhan (lnarasim-amd)
+author: Dominic Etienne Charrier (domcharrier), Lalith Narasimhan (lnarasim-amd), Greg Rogers (gregrodgers), Phani Vaddadi (phaniamd), Saad Rahim (saadrahim)
 created: 2026-06-03
-modified: 2026-06-03
+modified: 2026-06-05
 status: draft
 ---
 
@@ -39,9 +39,10 @@ the HIP Python owner need to make together.
 > cutting-edge set discussed in this RFC** - the multi-package split, the
 > super-build, the loader, and the TheRock-aligned generator work - currently
 > lives **privately inside the AMD-AIOSS org** and is shared only via internal
-> preview resources. Making it public is part of this integration effort and is
-> tied to the [generator licensing
-> decision](#open-questions--decisions-to-make).
+> preview resources. Making it public is part of this integration effort; the
+> current recommendation is to **open-source the generator and bundle it with
+> `hip-python` (and Numba HIP) into a `rocm-bindings` monorepo** - see the
+> [open-sourcing / monorepo decision](#open-questions--decisions-to-make).
 
 ### Track record: continuous releases prove the approach is robust
 
@@ -101,7 +102,15 @@ metapackage of versioned subpackages, and Python gets new hardware features from
 day 0. SemiAnalysis flagged this as a strategic gap for AMD, recommending AMD
 "invest heavily in Python interfaces at every layer of the ROCm stack, and not
 just in ... Kernel Authoring DSLs"
-([SemiAnalysis, Apr 2025](https://newsletter.semianalysis.com/i/174558631/summary-of-recommendations-to-amd)).
+([SemiAnalysis, Apr 2025](https://newsletter.semianalysis.com/i/174558631/summary-of-recommendations-to-amd)).[^semianalysis]
+
+[^semianalysis]: A *full* analysis would have turned up that this particular
+    "strategic gap" was already partly filled: HIP Python has shipped Pythonic
+    bindings for ROCm continuously since **2023** (see
+    [Track record](#track-record-continuous-releases-prove-the-approach-is-robust))
+    - in particular, it was shipping math-library bindings *before* NVIDIA's
+    `nvmath-python`, whose first beta (v0.1.0) only appeared in
+    [June 2024](https://pypi.org/project/nvmath-python/#history).
 
 HIP Python is the ROCm-side answer: standalone, Cython-based Python equivalents
 for each layer of the stack. A separate `hip-python-interop` package sits on top
@@ -333,20 +342,23 @@ wheel build, so docs can be produced as a lightweight CI step.
 1. **Final package naming and contents** - the layout in this RFC is a starting
    proposal and is expected to be negotiated; the super-build makes re-slicing
    packages cheap (no recompile).
-1. **Generator licensing: open-source vs closed-source** - a decision is needed on
-   whether the interface generator (the ~29k-line pipeline and its ~190-test
-   parkour, currently developed inside the **AMD-AIOSS** org) should be
-   **open-sourced** alongside TheRock or **kept private** as AMD IP. This is a
-   genuine strategic question: the generator is a non-trivial, hardened asset, and
-   it must be decided whether it is IP worth keeping private. **This decision
-   directly constrains the code-generation model above.** If the generator stays
-   closed-source, fully-automatic regeneration inside public TheRock CI (Option A)
-   becomes impractical - public CI would need access to a private tool - which
-   tips the balance toward the **developer-triggered** model (Option B), where a
-   maintainer with access regenerates the bindings at release prep and commits the
-   (open) generated sources. If the generator is open-sourced, both models remain
-   on the table. Note that the *generated bindings* can be open-source regardless
-   of where the generator lives.
+1. **Generator open-sourcing and monorepo bundling** *(updated)* - the interface
+   generator ("InterfaceGen", the ~29k-line pipeline and its ~190-test parkour)
+   currently lives privately inside the **AMD-AIOSS** org. The earlier position
+   (notably from the compiler team) was to keep it closed as AMD IP; that view has
+   since changed: with what is now possible via **agentic coding**, the generator
+   is **no longer a meaningful moat**, and the current **recommendation is to
+   open-source it** so that **external contributors can file PRs directly against
+   the code generator**. The proposal is therefore to **bundle InterfaceGen
+   together with `hip-python` into a single monorepo** (working name
+   **`rocm-bindings`**), and - on the compiler team's recommendation - to **also
+   bundle [Numba HIP](https://github.com/ROCm/numba-hip)** into it. Decisions to
+   confirm with the maintainers: (a) open-source the generator; (b) the monorepo
+   layout and name (`rocm-bindings`); (c) whether Numba HIP joins the same repo.
+   Note this **relaxes** the constraint on the code-generation model above:
+   open-sourcing keeps the fully-automatic Option A on the table (the generator
+   can run in public CI); a closed-source generator would otherwise force the
+   developer-triggered Option B.
 
 ## Alternatives considered
 
@@ -361,9 +373,9 @@ possible:
 - No manual step and no separate API freeze.
 - Trade-off: codegen (libclang parse + emit) runs as part of every build, and a
   header change can change the public Python API without an explicit gate.
-- **Requires the generator to run in public TheRock CI** - only viable if the
-  generator is open-sourced (see the licensing decision in [Open
-  questions](#open-questions--decisions-to-make)).
+- **Requires the generator to run in public TheRock CI** - viable under the
+  current recommendation to **open-source the generator** (see the open-sourcing /
+  monorepo decision in [Open questions](#open-questions--decisions-to-make)).
 
 ### Option B - developer-triggered (regenerate at release prep)
 
@@ -374,9 +386,9 @@ possible:
 - Trade-off: an explicit human/release step, but a controlled and reviewable API
   surface.
 - **Compatible with a closed-source generator**: only the (open) generated sources
-  are committed, so this model is the natural fit if the generator is kept private
-  inside AMD-AIOSS (see the licensing decision in [Open
-  questions](#open-questions--decisions-to-make)).
+  are committed. This is the fallback model if the generator is *not* open-sourced;
+  with the current recommendation to open-source it (see [Open
+  questions](#open-questions--decisions-to-make)), Option B is no longer forced.
 
 ### Packaging: per-wheel build vs super-build + staging
 
@@ -406,10 +418,15 @@ approach and the alternative is documented only for context.
 
 - The generator can target other languages; a draft Fortran recipe already
   regenerates hipFORT-style modules from ROCm headers (~100k generated lines).
-- **Numba HIP integration** - bring [Numba HIP](https://github.com/ROCm/numba-hip)
-  (the AMD GPU backend for Numba) into the same TheRock-aligned packaging and CI
-  story, so the JIT/kernel-authoring layer ships and versions alongside the HIP
-  Python bindings it already builds on.
+- **`rocm-bindings` monorepo** - open-source the InterfaceGen generator and bundle
+  it with `hip-python` in one repo, so external contributors can PR against the
+  generator and bindings together (see [Open
+  questions](#open-questions--decisions-to-make)).
+- **Numba HIP integration** - on the compiler team's recommendation, bring
+  [Numba HIP](https://github.com/ROCm/numba-hip) (the AMD GPU backend for Numba)
+  into the same `rocm-bindings` monorepo and TheRock-aligned packaging/CI story, so
+  the JIT/kernel-authoring layer ships and versions alongside the HIP Python
+  bindings it already builds on.
 - Vision: agent-assisted, automatic multi-language code generation for every
   TheRock release.
 
@@ -464,3 +481,8 @@ approach and the alternative is documented only for context.
 ## Revision history
 
 - 2026-06-03: Initial draft (Dominic Etienne Charrier, Lalith Narasimhan)
+- 2026-06-05: Recommend open-sourcing the InterfaceGen generator and bundling it
+  with `hip-python` (and Numba HIP) into a `rocm-bindings` monorepo; add Greg
+  Rogers, Phani Vaddadi, and Saad Rahim as co-authors
+- 2026-06-05: Add footnote on the SemiAnalysis "strategic gap" noting HIP Python
+  has shipped ROCm math-library bindings since 2023, predating `nvmath-python`
