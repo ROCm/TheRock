@@ -26,13 +26,10 @@ useDefault = true
 # surrounding syntax, not the value itself.
 
 [[allowlists]]
-# Scan everything by default; allowlist by signal (dummy values, variable
-# names) in the blocks below rather than by location. Only paths that
-# structurally cannot hold a real first-party secret are excluded here:
-# vendored third-party trees and dependency lock files (integrity digests).
-description = "Vendored and generated paths that can't hold first-party secrets"
+description = "Structurally non-sensitive paths"
 paths = [
   '''third-party/''',
+  '''third_party/''',
   '''.*\.lock$''',
 ]
 
