@@ -19,17 +19,22 @@ def prepend_env_path(env: dict, var_name: str, new_path: str):
 
 def build_rocm_loader_env(artifacts_path: Path) -> dict:
     """Return a copy of os.environ with the ROCm shared-library loader path
-    prepended to the platform-appropriate variable.
+    prepended to the platform-appropriate variable and ROCM_PATH set.
 
     Linux prepends ``<artifacts_path>/lib`` to ``LD_LIBRARY_PATH``.
     Windows prepends ``<artifacts_path>/bin`` to ``PATH`` (ROCm DLLs live in
     ``bin/`` on Windows).
+
+    ROCM_PATH is set to ``artifacts_path`` so loaders that resolve the runtime
+    from ROCM_PATH (e.g. the hipDNN wheel registering ROCM_PATH/bin via
+    os.add_dll_directory on Windows) find the merged artifact tree.
     """
     env = os.environ.copy()
     if platform.system() == "Windows":
         prepend_env_path(env, "PATH", str(artifacts_path / "bin"))
     else:
         prepend_env_path(env, "LD_LIBRARY_PATH", str(artifacts_path / "lib"))
+    env["ROCM_PATH"] = str(artifacts_path)
     return env
 
 
