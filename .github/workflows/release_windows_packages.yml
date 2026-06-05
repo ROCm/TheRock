@@ -315,6 +315,11 @@ jobs:
           --exclude "*" \
           --include "*.whl" \
           --include "*.tar.gz"
+          aws s3 cp "${{ env.BUILD_DIR }}/dist/rocm/" \
+            "s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/msi/" \
+          --recursive --no-follow-symlinks \
+          --exclude "*" \
+          --include "*.msi"
 
       ## TODO: Restrict uploading to the non-staging S3 directory until sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
@@ -326,6 +331,11 @@ jobs:
           --exclude "*" \
           --include "*.whl" \
           --include "*.tar.gz"
+          aws s3 cp "${{ env.BUILD_DIR }}/dist/rocm/" \
+            "s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/msi/" \
+          --recursive --no-follow-symlinks \
+          --exclude "*" \
+          --include "*.msi"
 
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
