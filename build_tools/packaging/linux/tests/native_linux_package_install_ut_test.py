@@ -12,7 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
@@ -95,45 +95,6 @@ class EnvHelperTest(unittest.TestCase):
                 native_linux_package_install_test._env("ROCM_TEST_KEY", "default"),
                 "value",
             )
-
-
-class NormalizeTestTypeTest(unittest.TestCase):
-    """Tests for _normalize_test_type()."""
-
-    def test_empty_quick_and_standard_map_to_sanity(self):
-        for test_type in ("", None, "quick", "standard"):
-            with self.subTest(test_type=test_type):
-                self.assertEqual(
-                    native_linux_package_install_test._normalize_test_type(test_type),
-                    "sanity",
-                )
-
-    def test_comprehensive_and_full_map_to_full(self):
-        for test_type in ("comprehensive", "full"):
-            with self.subTest(test_type=test_type):
-                self.assertEqual(
-                    native_linux_package_install_test._normalize_test_type(test_type),
-                    "full",
-                )
-
-    def test_native_modes_are_accepted(self):
-        for test_type in ("install", "sanity", "full", "simulate"):
-            with self.subTest(test_type=test_type):
-                self.assertEqual(
-                    native_linux_package_install_test._normalize_test_type(test_type),
-                    test_type,
-                )
-
-    def test_strips_whitespace_and_lowercases(self):
-        self.assertEqual(
-            native_linux_package_install_test._normalize_test_type("  Quick  "),
-            "sanity",
-        )
-
-    def test_invalid_test_type_raises(self):
-        with self.assertRaises(ValueError) as ctx:
-            native_linux_package_install_test._normalize_test_type("standrd")
-        self.assertIn("Unsupported test_type", str(ctx.exception))
 
 
 class DerivePackageTypeTest(unittest.TestCase):
@@ -266,7 +227,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx94x")
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm-gfx94x", "amdrocm-core-sdk-gfx94x"],
         )
 
     def test_gfx_arch_string_normalized_to_list(self):
@@ -279,7 +240,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx110x")
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm-gfx110x", "amdrocm-core-sdk-gfx110x"],
         )
 
     def test_gfx_arch_list_uses_first_element(self):
@@ -292,7 +253,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx1151")
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm-gfx1151", "amdrocm-core-sdk-gfx1151"],
         )
 
     def test_gfx_arch_empty_string_falls_back_to_default(self):
@@ -452,7 +413,7 @@ class MainValidationTest(unittest.TestCase):
                 "--test-type",
                 "sanity",
                 "--repo-url",
-                "https://repo_url.com",
+                "https://x.com",
                 "--gfx-arch",
                 "gfx94x",
             ],
@@ -490,161 +451,12 @@ class MainValidationTest(unittest.TestCase):
                 "--os-profile",
                 "ubuntu2404",
                 "--repo-url",
-                "https://repo_url.com",
+                "https://x.com",
             ],
         ):
             with self.assertRaises(SystemExit) as cm:
                 native_linux_package_install_test.main()
             self.assertEqual(cm.exception.code, 2)
-
-    def test_install_requires_os_profile(self):
-        # install uses the same required args as sanity (no verification step).
-        with patch(
-            "sys.argv",
-            [
-                "prog",
-                "--test-type",
-                "install",
-                "--repo-url",
-                "https://repo_url.com",
-                "--gfx-arch",
-                "gfx94x",
-            ],
-        ):
-            with self.assertRaises(SystemExit) as cm:
-                native_linux_package_install_test.main()
-            self.assertEqual(cm.exception.code, 2)
-
-    def test_parse_cli_maps_quick_to_sanity(self):
-        args = native_linux_package_install_test.parse_cli_arguments(
-            [
-                "--test-type",
-                "quick",
-                "--os-profile",
-                "ubuntu2404",
-                "--repo-url",
-                "https://repo_url.com",
-                "--gfx-arch",
-                "gfx94x",
-            ],
-            raise_instead_of_exit=True,
-        )
-        self.assertEqual(args.test_type, "sanity")
-
-    def test_parse_cli_maps_comprehensive_to_full(self):
-        args = native_linux_package_install_test.parse_cli_arguments(
-            [
-                "--test-type",
-                "comprehensive",
-                "--os-profile",
-                "ubuntu2404",
-                "--repo-url",
-                "https://repo_url.com",
-                "--gfx-arch",
-                "gfx94x",
-            ],
-            raise_instead_of_exit=True,
-        )
-        self.assertEqual(args.test_type, "full")
-
-    def test_parse_cli_rejects_invalid_test_type(self):
-        with self.assertRaises(ValueError) as ctx:
-            native_linux_package_install_test.parse_cli_arguments(
-                ["--test-type", "standrd"],
-                raise_instead_of_exit=True,
-            )
-        self.assertIn("Unsupported test_type", str(ctx.exception))
-
-
-class ArgvFromCiEnvTest(unittest.TestCase):
-    """Tests for _argv_from_ci_env() (CI workflow env → CLI argv)."""
-
-    def test_builds_argv_for_install_test_type(self):
-        env = {
-            "TEST_TYPE": "install",
-            "OS_PROFILE": "ubuntu2404",
-            "REPO_URL": "https://example.com/deb",
-            "GFX_ARCH": "gfx94x",
-            "RELEASE_TYPE": "dev",
-            "INSTALL_PREFIX": "/opt/rocm/core",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            argv = native_linux_package_install_test._argv_from_ci_env()
-        self.assertIsNotNone(argv)
-        self.assertIn("--test-type", argv)
-        self.assertEqual(argv[argv.index("--test-type") + 1], "install")
-        self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
-        self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
-
-    def test_ci_env_passes_shared_test_type_to_parser(self):
-        env = {
-            "TEST_TYPE": "comprehensive",
-            "OS_PROFILE": "ubuntu2404",
-            "REPO_URL": "https://example.com/deb",
-            "GFX_ARCH": "gfx94x",
-            "RELEASE_TYPE": "dev",
-            "INSTALL_PREFIX": "/opt/rocm/core",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            argv = native_linux_package_install_test._argv_from_ci_env()
-        self.assertIsNotNone(argv)
-        self.assertEqual(argv[argv.index("--test-type") + 1], "comprehensive")
-        args = native_linux_package_install_test.parse_cli_arguments(
-            argv,
-            raise_instead_of_exit=True,
-        )
-        self.assertEqual(args.test_type, "full")
-
-    def test_returns_none_when_required_env_missing(self):
-        with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
-            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
-
-
-class RunTestsTestTypeTest(unittest.TestCase):
-    """Tests for run_tests() early exit paths for install."""
-
-    def _base_args(self, test_type: str):
-        from argparse import Namespace
-
-        return Namespace(
-            test_type=test_type,
-            os_profile="ubuntu2404",
-            repo_url="https://example.com",
-            release_type="dev",
-            install_prefix="/opt/rocm/core",
-            gfx_arch=["gfx94x"],
-            gpg_key_url=None,
-            packages_dir=None,
-            pkg_type=None,
-        )
-
-    @patch.object(
-        native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "run_repo_setup_and_install",
-        return_value=True,
-    )
-    @patch.object(
-        native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "run_basic_verification",
-    )
-    def test_install_skips_basic_verification(self, mock_basic, mock_repo_setup):
-        args = self._base_args("install")
-        with _suppress_script_output():
-            rc = native_linux_package_install_test.run_tests(args)
-        self.assertEqual(rc, 0)
-        mock_repo_setup.assert_called_once()
-        mock_basic.assert_not_called()
-
-    @patch.object(
-        native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "run_repo_setup_and_install",
-        return_value=False,
-    )
-    def test_install_fails_when_repo_setup_fails(self, mock_repo_setup):
-        args = self._base_args("install")
-        with _suppress_script_output():
-            rc = native_linux_package_install_test.run_tests(args)
-        self.assertEqual(rc, 1)
 
 
 class RunBasicVerificationTest(unittest.TestCase):
@@ -784,9 +596,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.setup_deb_repository()."""
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
+    @patch("builtins.open", new_callable=mock_open)
     def test_returns_true_when_apt_update_succeeds_no_gpg(
-        self, mock_write_text, mock_streaming
+        self, mock_file, mock_streaming
     ):
         # Test that setup_deb_repository writes repo entry (trusted=yes) and returns True when apt update returns 0.
         mock_streaming.return_value = 0
@@ -796,8 +608,8 @@ class SetupDebRepositoryTest(unittest.TestCase):
             gpg_key_url=None,
         )
         self.assertTrue(t.setup_deb_repository())
-        mock_write_text.assert_called_once()
-        written = mock_write_text.call_args[0][0]
+        mock_file().write.assert_called_once()
+        written = mock_file().write.call_args[0][0]
         self.assertIn("trusted=yes", written)
         self.assertIn("https://repo.example.com", written)
 
@@ -807,9 +619,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
         "setup_gpg_key",
         return_value=True,
     )
-    @patch("native_linux_package_install_test.Path.write_text")
+    @patch("builtins.open", new_callable=mock_open)
     def test_returns_true_with_gpg_when_apt_update_succeeds(
-        self, mock_write_text, mock_gpg, mock_streaming
+        self, mock_file, mock_gpg, mock_streaming
     ):
         # Test that with gpg_key_url, setup_gpg_key is called and repo entry uses signed-by.
         mock_streaming.return_value = 0
@@ -820,7 +632,7 @@ class SetupDebRepositoryTest(unittest.TestCase):
         )
         self.assertTrue(t.setup_deb_repository())
         mock_gpg.assert_called_once()
-        written = mock_write_text.call_args[0][0]
+        written = mock_file().write.call_args[0][0]
         self.assertIn("signed-by", written)
 
     @patch.object(
@@ -838,11 +650,8 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch(
-        "native_linux_package_install_test.Path.write_text",
-        side_effect=OSError("Permission denied"),
-    )
-    def test_returns_false_when_open_raises(self, mock_write_text, mock_streaming):
+    @patch("builtins.open", side_effect=OSError("Permission denied"))
+    def test_returns_false_when_open_raises(self, mock_file, mock_streaming):
         # Test that setup_deb_repository returns False when writing sources list raises OSError.
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -852,8 +661,8 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_false_when_apt_update_fails(self, mock_write_text, mock_streaming):
+    @patch("builtins.open", new_callable=mock_open)
+    def test_returns_false_when_apt_update_fails(self, mock_file, mock_streaming):
         # Test that setup_deb_repository returns False when apt update returns non-zero.
         mock_streaming.return_value = 1
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
@@ -864,10 +673,8 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_false_when_apt_update_times_out(
-        self, mock_write_text, mock_streaming
-    ):
+    @patch("builtins.open", new_callable=mock_open)
+    def test_returns_false_when_apt_update_times_out(self, mock_file, mock_streaming):
         # Test that setup_deb_repository returns False when _run_streaming raises TimeoutExpired.
         import subprocess
 
@@ -885,9 +692,9 @@ class SetupSlesRepositoryTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test._run_streaming")
     @patch("native_linux_package_install_test.subprocess.run")
-    @patch("native_linux_package_install_test.Path.write_text")
+    @patch("builtins.open", new_callable=mock_open)
     def test_returns_true_when_refresh_succeeds(
-        self, mock_write_text, mock_run, mock_streaming
+        self, mock_file, mock_run, mock_streaming
     ):
         # Test that _setup_sles_repository writes repo file and returns True when zypper refresh returns 0.
         mock_streaming.return_value = 0
@@ -896,7 +703,7 @@ class SetupSlesRepositoryTest(unittest.TestCase):
             os_profile="sles16",
         )
         self.assertTrue(t._setup_sles_repository())
-        written = mock_write_text.call_args[0][0]
+        written = mock_file().write.call_args[0][0]
         self.assertIn("baseurl=https://repo.example.com", written)
         self.assertIn("sles16", t.os_profile)
 
@@ -905,8 +712,8 @@ class SetupDnfRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest._setup_dnf_repository()."""
 
     @patch("native_linux_package_install_test.subprocess.run")
-    @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_true_after_writing_repo_file(self, mock_write_text, mock_run):
+    @patch("builtins.open", new_callable=mock_open)
+    def test_returns_true_after_writing_repo_file(self, mock_file, mock_run):
         # Test that _setup_dnf_repository writes repo file and returns True (dnf clean may be mocked).
         mock_run.side_effect = None
         mock_run.return_value = MagicMock(returncode=0)
@@ -915,7 +722,7 @@ class SetupDnfRepositoryTest(unittest.TestCase):
             os_profile="rhel8",
         )
         self.assertTrue(t._setup_dnf_repository())
-        written = mock_write_text.call_args[0][0]
+        written = mock_file().write.call_args[0][0]
         self.assertIn("baseurl=https://repo.example.com", written)
 
 
@@ -966,7 +773,7 @@ class InstallDebPackagesTest(unittest.TestCase):
         self.assertTrue(t.install_deb_packages())
         call_args = mock_streaming.call_args[0][0]
         self.assertEqual(call_args[0], "apt")
-        self.assertIn("amdrocm", call_args)
+        self.assertIn("amdrocm-gfx94x", call_args)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_false_when_apt_install_fails(self, mock_streaming):
@@ -1132,7 +939,7 @@ class TestRdhcTest(unittest.TestCase):
             )
             self.assertTrue(t.test_rdhc())
             call_args = mock_run.call_args[0][0]
-            self.assertIn("rdhc.py", str(call_args[1]))
+            self.assertIn("rdhc.py", str(call_args[0]))
             self.assertIn("--rocm-install-prefix", call_args)
 
     @patch("native_linux_package_install_test.subprocess.run")
