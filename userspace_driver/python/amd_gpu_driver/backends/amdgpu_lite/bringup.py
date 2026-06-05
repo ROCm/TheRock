@@ -584,6 +584,24 @@ def _recipe_bringup(
             ok = test_compute_nop_fence(compute_queue)
             print("  PASS: DIRECT-MEC NOP+fence completed" if ok
                   else "  FAIL: direct-queue NOP+fence did not complete")
+            # Multi-dispatch (#21): N more back-to-back NOP-fences on the same
+            # queue. Tinygrad has no ceiling, so a ceiling here = our setup bug
+            # (NO_UPDATE_RPTR / ring-wrap / wptr -- try LITE_HQD_TG_PARITY=1).
+            n = int(os.environ.get("LITE_MULTI_DISPATCH", "0") or "0")
+            if ok and n > 0:
+                print(f"  [#21] multi-dispatch: {n} more NOP-fences...")
+                done, ceiling = 1, None
+                for seq in range(2, 2 + n):
+                    if test_compute_nop_fence(compute_queue, fence_seq=seq):
+                        done += 1
+                    else:
+                        ceiling = done + 1
+                        break
+                if ceiling is None:
+                    print(f"  [#21] PASS: sustained {done} dispatches, no ceiling")
+                else:
+                    print(f"  [#21] CEILING at dispatch {ceiling} "
+                          f"(fence_seq={ceiling} timed out)")
         except Exception as e:  # noqa: BLE001
             print(f"  direct compute queue / dispatch failed: {e}")
             import traceback
