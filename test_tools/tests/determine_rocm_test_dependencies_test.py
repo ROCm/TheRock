@@ -41,6 +41,16 @@ class TestDetermineRocmTestDependencies(unittest.TestCase):
         )
         self.assertEqual(result.stdout.strip(), "*")
 
+    def test_empty_changed_projects_flag_outputs_wildcard(self):
+        """Empty --changed-projects flag outputs '*' for all tests."""
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--changed-projects"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "*")
+
 
 if __name__ == "__main__":
     unittest.main()

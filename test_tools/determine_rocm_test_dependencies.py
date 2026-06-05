@@ -5,7 +5,7 @@
 Compute subproject test dependencies by parsing CMakeLists.txt files.
 
 Example:
-$ python build_tools/determine_rocm_test_dependencies.py --projects rocSPARSE
+$ python test_tools/determine_rocm_test_dependencies.py --changed-projects rocSPARSE
 ["hipsparse", "rocsparse"]
 """
 
@@ -110,16 +110,9 @@ def main():
         "--therock-dir", type=str, default=".", help="TheRock directory"
     )
     parser.add_argument(
-        "--changed",
-        type=str,
-        nargs="+",
-        metavar="SUBPROJECT",
-        help="Changed subproject(s)",
-    )
-    parser.add_argument(
         "--changed-projects",
         type=str,
-        nargs="+",
+        nargs="*",
         metavar="PROJECT",
         help="Project(s) to test. Accepts 'rocblas' or 'projects/rocblas' format.",
     )
@@ -152,8 +145,8 @@ def main():
         print(json.dumps(result, indent=2))
         return
 
-    # Get projects from args, normalize path format (projects/rocblas -> rocblas)
-    changed = args.changed or args.changed_projects
+    # Normalize path format (projects/rocblas -> rocblas)
+    changed = args.changed_projects
     if changed:
         changed = [Path(p).name for p in changed]
 
