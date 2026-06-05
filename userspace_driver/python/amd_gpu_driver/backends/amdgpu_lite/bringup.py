@@ -312,6 +312,24 @@ def _gc_b1_rd(dev: AmdgpuLiteDevice, dw_off: int) -> int:
     return dev.read_reg32((_GC_B1_DW + dw_off) * 4)
 
 
+def _gc_b1_wr(dev: AmdgpuLiteDevice, dw_off: int, val: int) -> None:
+    dev.write_reg32((_GC_B1_DW + dw_off) * 4, val & 0xFFFFFFFF)
+
+
+def _mes_pipe_liveness(dev: AmdgpuLiteDevice, pipe: int) -> tuple[int, int]:
+    """Read CP_MES_INSTR_PNTR + HEADER_DUMP for a specific MES pipe.
+
+    Selects me=3 (MES), the given pipe via GRBM_GFX_CNTL, reads, deselects.
+    Used to tell whether the KIQ pipe (pipe 1) is actually executing vs only
+    pipe 0 (HEADER_DUMP read without a pipe-select is ambiguous).
+    """
+    _gc_b1_wr(dev, 0x0900, (3 << 2) | (pipe & 0x3))  # GRBM_GFX_CNTL me=3,pipe
+    ip = _gc_b1_rd(dev, 0x2813)   # CP_MES_INSTR_PNTR
+    hdr = _gc_b1_rd(dev, 0x280d)  # CP_MES_HEADER_DUMP
+    _gc_b1_wr(dev, 0x0900, 0)
+    return ip, hdr
+
+
 def _poll_bootload_complete(dev: AmdgpuLiteDevice, timeout_ms: int = 5000) -> int:
     """Poll RLC_RLCS_BOOTLOAD_STATUS until bit31 set or timeout."""
     import time
@@ -374,8 +392,8 @@ def _recipe_mes_start(dev, ip_result, psp_config, smu_config) -> None:
         "MES1": mes_entry,
     })
     us = psp_config.ucode_start
-    print(f"  ucode_start: PFP=0x{us['PFP']:x} ME=0x{us['ME']:x} "
-          f"MEC=0x{us['MEC']:x} MES=0x{us['MES']:x}")
+    print(f"  ucode_start keys={sorted(us.keys())} "
+          f"MES=0x{us['MES']:x} MES1=0x{us.get('MES1', 0):x}")
     init_gfx_for_compute(dev, ip_result, psp_config, smu_config)
 
 
@@ -480,6 +498,17 @@ def _recipe_bringup(
           f"CP_MES_CNTL=0x{mes_cntl:08x} CP_MEC_RS64_CNTL=0x{mec_cntl:08x}")
     mes_alive = (hdr0 != hdr1) or (ip1 != 0)
     print(f"  MES {'RUNNING' if mes_alive else 'NOT visibly executing'}")
+    # Per-pipe liveness: is the KIQ pipe (pipe 1) actually executing, or only
+    # pipe 0? (the KIQ runs on me=3,pipe=1; if pipe 1 is dead the KIQ never
+    # services its ring even with an active HQD + delivered doorbell.)
+    for _p in (0, 1):
+        _ipa, _ha = _mes_pipe_liveness(dev, _p)
+        time.sleep(0.05)
+        _ipb, _hb = _mes_pipe_liveness(dev, _p)
+        _live = (_ipa != _ipb) or (_ha != _hb) or (_ipb != 0)
+        print(f"  MES pipe {_p}: INSTR_PNTR 0x{_ipa:08x}->0x{_ipb:08x} "
+              f"HEADER_DUMP 0x{_ha:08x}->0x{_hb:08x} "
+              f"-> {'LIVE' if _live else 'DEAD'}")
     if stop_after == "mes":
         print("  LITE_STOP_AFTER=mes: stopping after MES start")
         return _recipe_context(dev, ip_result, nbio_config, gmc_config,
