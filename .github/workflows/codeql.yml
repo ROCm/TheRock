@@ -6,8 +6,11 @@ name: CodeQL
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  pull_request:  
+    branches: [main]  
+    paths:  
+      - '**.py'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 concurrency:
