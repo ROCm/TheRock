@@ -1378,9 +1378,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIsNotNone(builds.linux)
         # Check that the third label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
-        )
+        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_families_without_multi_label_use_primary_only(self):
         """Families without multi-label config should only use primary label."""
