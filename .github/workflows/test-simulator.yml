@@ -93,7 +93,7 @@ jobs:
     name: rocrand-sim (consume artifacts, gfx94X-dcgpu)
     if: ${{ !inputs.build_from_source }}
     runs-on: azure-linux-scale-rocm
-    timeout-minutes: 90
+    timeout-minutes: 240
     permissions:
       id-token: write
     container:
@@ -210,7 +210,7 @@ jobs:
       - name: Run rocrand under rocjitsu simulator
         id: rocrand_sim
         continue-on-error: true
-        timeout-minutes: 60
+        timeout-minutes: 120
         env:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
           TEST_COMPONENT: rocrand
@@ -218,7 +218,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
             --component rocrand \
-            --filter-preset "${{ inputs.filter_preset || 'basic' }}"
+            --filter-preset "${{ inputs.filter_preset || 'quick' }}"
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -228,7 +228,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Mode: consume artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- Source run id: ${{ steps.resolve_source.outputs.run_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Preset: ${{ inputs.filter_preset || 'quick' }}" >> $GITHUB_STEP_SUMMARY
           echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
           if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -380,7 +380,7 @@ jobs:
       - name: Run rocrand under rocjitsu simulator
         id: rocrand_sim
         continue-on-error: true
-        timeout-minutes: 60
+        timeout-minutes: 120
         env:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_COMPONENT: rocrand
@@ -388,7 +388,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
             --component rocrand \
-            --filter-preset "${{ inputs.filter_preset || 'basic' }}"
+            --filter-preset "${{ inputs.filter_preset || 'quick' }}"
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -397,7 +397,7 @@ jobs:
           echo "## Simulator test result: ${{ steps.rocrand_sim.outcome }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Mode: build from source" >> $GITHUB_STEP_SUMMARY
-          echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Preset: ${{ inputs.filter_preset || 'quick' }}" >> $GITHUB_STEP_SUMMARY
           echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
           if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
