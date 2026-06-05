@@ -504,25 +504,37 @@ def _recipe_bringup(
         # try_phase9 enables it at line 626. APER_EN + S2A entries together are
         # the proven doorbell delivery setup (CP_MEC_DOORBELL_RANGE is done by
         # init_gfx_for_compute). Disable for A/B with LITE_NO_S2A=1.
-        dev.write_reg32((_NBIO_B2 + 0x00c0) * 4, 1)            # RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
-        dev.write_reg32((_NBIO_B2 + 0x01cb) * 4, 0x30000007)  # GDC_S2A0_S2A_DOORBELL_ENTRY_0_CTRL
-        dev.write_reg32((_NBIO_B2 + 0x01ce) * 4, 0x3000000D)  # GDC_S2A0_S2A_DOORBELL_ENTRY_3_CTRL
-        # Doorbell selfring GPA aperture (nbio_v7_11_enable_doorbell_selfring_aperture).
-        # The amdgpu_lite kernel module only classifies the doorbell BAR; it never
-        # programs this aperture, so the GPU does not recognize CPU writes to the
-        # doorbell BAR as doorbells -> KIQ doorbell never reaches the CP. PF1 regs
-        # at NBIO BASE_IDX=2 (=0xD20): BASE_LOW=0xf4 BASE_HIGH=0xf3 CNTL=0xf5;
-        # CNTL = APER_EN(bit0) | APER_MODE(bit1) = 0x3; base = doorbell BAR phys.
+        # GDC S2A doorbell routing entries. VERIFIED against stock amdgpu live on
+        # this gfx1201 (dri/1/amdgpu_regs): entries 0-4 are programmed; try_phase9
+        # only set 0 and 3. Entry 1 has awaddr_31_28=0 so it routes LOW doorbell
+        # addresses (the KIQ doorbell lands at byte 0x60) -- without it the KIQ
+        # doorbell never reaches the CP (NOP CONSUMED=False). Program all 5 to the
+        # golden values; read pre-write to learn the Linux VBIOS POST state.
+        _S2A = [
+            (0x01cb, 0x30000007),  # ENTRY_0
+            (0x01cc, 0x00057801),  # ENTRY_1 (awaddr_31_28=0: low addrs)
+            (0x01cd, 0x3051001d),  # ENTRY_2
+            (0x01ce, 0x3000000d),  # ENTRY_3
+            (0x01cf, 0x40118809),  # ENTRY_4
+        ]
+        _pre = [dev.read_reg32((_NBIO_B2 + off) * 4) for off, _ in _S2A]
+        print("  S2A pre-write:  " + " ".join(
+            f"E{i}=0x{v:08x}" for i, v in enumerate(_pre)))
+        for off, val in _S2A:
+            dev.write_reg32((_NBIO_B2 + off) * 4, val)
+        dev.write_reg32((_NBIO_B2 + 0x00c0) * 4, 1)  # RCC_DOORBELL_APER_EN
+        # Doorbell selfring GPA aperture (nbio_v7_11_enable_doorbell_selfring_aperture):
+        # PF1 regs at NBIO BASE_IDX=2: BASE_LOW=0xf4 BASE_HIGH=0xf3 CNTL=0xf5;
+        # CNTL = EN|MODE = 0x3; base = doorbell BAR phys.
         _db_base = dev.info.bars[dev.info.doorbell_bar_index].phys_addr
-        dev.write_reg32((_NBIO_B2 + 0x00f4) * 4, _db_base & 0xFFFFFFFF)          # SELFRING_GPA_APER_BASE_LOW
-        dev.write_reg32((_NBIO_B2 + 0x00f3) * 4, (_db_base >> 32) & 0xFFFFFFFF)  # SELFRING_GPA_APER_BASE_HIGH
-        dev.write_reg32((_NBIO_B2 + 0x00f5) * 4, 0x3)                            # SELFRING_GPA_APER_CNTL: EN|MODE
+        dev.write_reg32((_NBIO_B2 + 0x00f4) * 4, _db_base & 0xFFFFFFFF)
+        dev.write_reg32((_NBIO_B2 + 0x00f3) * 4, (_db_base >> 32) & 0xFFFFFFFF)
+        dev.write_reg32((_NBIO_B2 + 0x00f5) * 4, 0x3)
+        _post = [dev.read_reg32((_NBIO_B2 + off) * 4) for off, _ in _S2A]
         aper = dev.read_reg32((_NBIO_B2 + 0x00c0) * 4)
-        e0 = dev.read_reg32((_NBIO_B2 + 0x01cb) * 4)
-        e3 = dev.read_reg32((_NBIO_B2 + 0x01ce) * 4)
-        sr_cntl = dev.read_reg32((_NBIO_B2 + 0x00f5) * 4)
-        print(f"  doorbell: APER_EN=0x{aper:x} S2A_ENTRY_0=0x{e0:08x} S2A_ENTRY_3=0x{e3:08x}")
-        print(f"  doorbell selfring: base=0x{_db_base:x} CNTL=0x{sr_cntl:x}")
+        print("  S2A post-write: " + " ".join(
+            f"E{i}=0x{v:08x}" for i, v in enumerate(_post)))
+        print(f"  doorbell: APER_EN=0x{aper:x} selfring base=0x{_db_base:x} CNTL=0x3")
     mes_ring = None
     compute_queue = None
     ih_config = None
