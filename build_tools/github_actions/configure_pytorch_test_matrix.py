@@ -2,12 +2,20 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Configure quick PyTorch wheel test jobs for multi-arch build workflows."""
+"""Configure PyTorch wheel test jobs for multi-arch build workflows.
+
+TODO(#5110): Extract the AMDGPU family -> test runner policy once JAX needs
+the same flow. Standalone workflow_dispatch runs can keep using raw family
+inputs, while coordinated CI/release runs should be able to pass the
+per-family test policy produced by configure_multi_arch_ci.py. That shared
+policy should also support named defaults such as "release" and "presubmit",
+plus explicit opt-in/opt-out family lists.
+"""
 
 import argparse
 import json
+import platform as platform_module
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -21,28 +29,12 @@ SKIP_TEST_VALUES = {"none", "skip", "false", "off", "0"}
 AUTO_TEST_VALUES = {"", "auto", "built"}
 
 
-@dataclass(frozen=True)
-class PyTorchTestMatrixEntry:
-    amdgpu_family: str
-    test_runs_on: str
-    package_index_url: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "amdgpu_family": self.amdgpu_family,
-            "test_runs_on": self.test_runs_on,
-            "package_index_url": self.package_index_url,
-        }
-
-
 def split_families(value: str) -> list[str]:
     return [item.strip() for item in value.replace(";", " ").split() if item.strip()]
 
 
-def find_amdgpu_family(
-    *, requested_family: str, platform: str
-) -> tuple[str, str, dict[str, object]]:
-    """Return test family, canonical matrix family, and platform info."""
+def find_amdgpu_family(*, requested_family: str, platform: str) -> tuple[str, str, str]:
+    """Return test family, canonical matrix family, and runner label."""
     requested_lower = requested_family.lower()
     matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
     for key, info_for_key in matrix.items():
@@ -50,18 +42,13 @@ def find_amdgpu_family(
         if not platform_info:
             continue
 
-        family = platform_info.get("family")
-        if not isinstance(family, str):
-            continue
-
+        family = platform_info["family"]
         fetch_targets = platform_info.get("fetch-gfx-targets", [])
-        if not isinstance(fetch_targets, list):
-            fetch_targets = []
 
         if requested_lower == key.lower() or requested_lower == family.lower():
-            return family, family, platform_info
+            return family, family, platform_info["test-runs-on"]
         if requested_family in fetch_targets:
-            return requested_family, family, platform_info
+            return requested_family, family, platform_info["test-runs-on"]
 
     raise ValueError(
         f"No {platform} AMDGPU family entry found for {requested_family!r}"
@@ -72,17 +59,11 @@ def build_test_matrix(
     *,
     amdgpu_families: list[str],
     platform: str,
-    package_index_url: str,
 ) -> dict[str, list[dict[str, str]]]:
-    if not amdgpu_families:
-        return {"include": []}
-    if not package_index_url:
-        raise ValueError("--package-index-url is required when tests are enabled")
-
     include: list[dict[str, str]] = []
     seen_families: set[str] = set()
     for requested_family in amdgpu_families:
-        test_family, matrix_family, platform_info = find_amdgpu_family(
+        test_family, matrix_family, test_runs_on = find_amdgpu_family(
             requested_family=requested_family,
             platform=platform,
         )
@@ -90,20 +71,11 @@ def build_test_matrix(
             continue
         seen_families.add(test_family)
 
-        test_runs_on = platform_info.get("test-runs-on")
         if not test_runs_on:
             print(f"Skipping {matrix_family}: no {platform} test runner is configured")
             continue
-        if not isinstance(test_runs_on, str):
-            raise ValueError(f"{matrix_family}: test-runs-on must be a string")
 
-        include.append(
-            PyTorchTestMatrixEntry(
-                amdgpu_family=test_family,
-                test_runs_on=test_runs_on,
-                package_index_url=package_index_url,
-            ).to_dict()
-        )
+        include.append({"amdgpu_family": test_family, "test_runs_on": test_runs_on})
 
     return {"include": include}
 
@@ -114,7 +86,7 @@ def resolve_requested_test_families(
     """Return the AMDGPU families to test.
 
     Empty/auto/built test input means "test all built families". Explicit
-    none/skip disables quick tests.
+    none/skip disables tests.
     """
     build_families = split_families(build_amdgpu_families)
     test_value = test_amdgpu_families.strip()
@@ -136,7 +108,7 @@ def emit_outputs(matrix: dict[str, list[dict[str, str]]]) -> None:
     )
 
 
-def create_parser() -> argparse.ArgumentParser:
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--build-amdgpu-families",
@@ -147,40 +119,26 @@ def create_parser() -> argparse.ArgumentParser:
         "--test-amdgpu-families",
         default="",
         help=(
-            "Semicolon- or space-separated AMDGPU families to quick-test. "
+            "Semicolon- or space-separated AMDGPU families to test. "
             "Use 'auto' or leave empty to test built families. Use 'none' "
-            "to skip quick tests."
+            "to skip tests."
         ),
     )
     parser.add_argument(
         "--platform",
         choices=["linux", "windows"],
-        required=True,
-        help="Test platform.",
+        default=platform_module.system().lower(),
+        help="Test platform (default: current system).",
     )
-    parser.add_argument(
-        "--package-index-url",
-        default="",
-        help="Package index URL for tests.",
-    )
-    return parser
-
-
-def main(argv: list[str]) -> None:
-    parser = create_parser()
     args = parser.parse_args(argv)
     test_amdgpu_families = resolve_requested_test_families(
         build_amdgpu_families=args.build_amdgpu_families,
         test_amdgpu_families=args.test_amdgpu_families,
     )
-    try:
-        matrix = build_test_matrix(
-            amdgpu_families=test_amdgpu_families,
-            platform=args.platform,
-            package_index_url=args.package_index_url,
-        )
-    except ValueError as e:
-        parser.error(str(e))
+    matrix = build_test_matrix(
+        amdgpu_families=test_amdgpu_families,
+        platform=args.platform,
+    )
     emit_outputs(matrix)
 
 

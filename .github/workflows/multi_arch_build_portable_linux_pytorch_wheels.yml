@@ -64,9 +64,9 @@ on:
         default: "none"
       test_amdgpu_families:
         description: >-
-          Semicolon-separated AMD GPU families to run quick tests for after a
+          Semicolon-separated AMD GPU families to run tests for after a
           successful build. Use 'auto' to test built families, or 'none' to
-          skip quick tests.
+          skip tests.
         type: string
         default: "auto"
   workflow_dispatch:
@@ -116,9 +116,9 @@ on:
         default: none
       test_amdgpu_families:
         description: >-
-          Semicolon-separated AMD GPU families to run quick tests for after a
+          Semicolon-separated AMD GPU families to run tests for after a
           successful build. Use 'auto' to test built families, or 'none' to
-          skip quick tests.
+          skip tests.
         type: string
         default: "auto"
 
@@ -386,8 +386,7 @@ jobs:
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
-            --platform linux \
-            --package-index-url "${{ needs.build_pytorch_wheels.outputs.package_index_url }}"
+            --platform linux
 
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
@@ -406,7 +405,7 @@ jobs:
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
-      package_index_url: ${{ matrix.package_index_url }}
+      package_index_url: ${{ needs.build_pytorch_wheels.outputs.package_index_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
       # TODO(#5110): pass manifest_url here and let test_pytorch_wheels.yml use
