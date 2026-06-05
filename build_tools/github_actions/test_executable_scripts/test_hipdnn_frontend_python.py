@@ -15,12 +15,13 @@ Requires a GPU and OUTPUT_ARTIFACTS_DIR pointing at the merged artifact tree.
 
 import logging
 import os
+import platform
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from libhipcxx_utils import prepare_rocm_test_env
+from libhipcxx_utils import add_windows_dll_search_dirs, build_rocm_loader_env
 
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -134,9 +135,10 @@ if __name__ == "__main__":
     )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
+    env = build_rocm_loader_env(artifacts_path)
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        env = prepare_rocm_test_env(artifacts_path, shim_dir=tmp_path / "dll_shim")
         wheel_dir = tmp_path / "wheels"
         wheel_dir.mkdir()
         venv_dir = tmp_path / "venv"
@@ -152,6 +154,11 @@ if __name__ == "__main__":
 
         install_wheel(python, wheel_path)
         logging.info("Wheel installed successfully")
+
+        if platform.system() == "Windows":
+            add_windows_dll_search_dirs(
+                env, [artifacts_path / "bin"], tmp_path / "dll_shim"
+            )
 
         run_pytests(python, tests_dir, env)
 
