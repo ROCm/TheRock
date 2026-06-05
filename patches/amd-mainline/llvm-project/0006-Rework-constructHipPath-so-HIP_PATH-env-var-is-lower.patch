@@ -1,0 +1,57 @@
+From 767cd4083eaacf7a6da1f8ca62966766767cfd41 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Tue, 5 Aug 2025 12:40:12 -0700
+Subject: [PATCH 6/8] Rework constructHipPath so HIP_PATH env var is lower
+ priority.
+
+---
+ amd/hipcc/src/hipBin_base.h | 28 +++++++++++++++++++++++-----
+ 1 file changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/amd/hipcc/src/hipBin_base.h b/amd/hipcc/src/hipBin_base.h
+index ea37e6fd12fc..4aa7431fdba6 100644
+--- a/amd/hipcc/src/hipBin_base.h
++++ b/amd/hipcc/src/hipBin_base.h
+@@ -320,16 +320,34 @@ void HipBinBase::readEnvVariables() {
+ 
+ // constructs the HIP path
+ void HipBinBase::constructHipPath() {
+-  // we need to use --hip-path option
++  // The --hip-path argument option takes precedence over all other settings.
+   string hip_path_name = gethip_pathOption();
+   if (!hip_path_name.empty()) {
+     variables_.hipPathEnv_ = hip_path_name;
+-  } else if (envVariables_.hipPathEnv_.empty()) {
+-    fs::path full_path(hipcc::utils::getSelfPath());
+-    variables_.hipPathEnv_ = (full_path.parent_path()).string();
+-  } else {
++    return;
++  }
++
++  fs::path full_path(hipcc::utils::getSelfPath());
++  fs::path parent_path = full_path.parent_path();
++
++  // Next, check for `../lib/llvm/bin/`, the standard ROCm install structure.
++  fs::path llvm_path = parent_path / "lib" / "llvm" / "bin";
++  if (fs::exists(llvm_path)) {
++    variables_.hipPathEnv_ = parent_path.string();
++    return;
++  }
++
++  // Otherwise, check the HIP_PATH environment variable from the HIP SDK.
++  // Normally an environment variable setting could take precedence over an
++  // implicit path, but this environment variable is set by system-wide installs
++  // and self-contained builds/installs should not be reading that global state.
++  if (!envVariables_.hipPathEnv_.empty()) {
+     variables_.hipPathEnv_ = envVariables_.hipPathEnv_;
++    return;
+   }
++
++  // Finally, fallback to the parent path (the standard ROCm install structure).
++  variables_.hipPathEnv_ = parent_path.string();
+ }
+ 
+ 
+-- 
+2.48.1
+
