@@ -33,33 +33,6 @@ def build_rocm_loader_env(artifacts_path: Path) -> dict:
     return env
 
 
-def add_windows_dll_search_dirs(
-    env: dict, dll_dirs: list[Path], shim_dir: Path
-) -> None:
-    """Register ROCm DLL directories for a subprocess Python interpreter.
-
-    CPython >= 3.8 loads extension modules with LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
-    which excludes PATH. A .pyd that links ROCm runtime DLLs therefore cannot
-    resolve them from a PATH entry (what build_rocm_loader_env prepends), and the
-    import fails with a DLL-load error. A sitecustomize.py placed on PYTHONPATH is
-    imported at interpreter startup, before any test code imports the extension,
-    and registers the dirs via os.add_dll_directory (the supported replacement for
-    PATH-based search).
-
-    Windows-only. ``shim_dir`` is a writable scratch directory for the shim.
-    """
-    present = [d for d in dll_dirs if d.is_dir()]
-    shim_dir.mkdir(parents=True, exist_ok=True)
-    lines = ["import os"]
-    lines += [f"os.add_dll_directory({str(d)!r})" for d in present]
-    (shim_dir / "sitecustomize.py").write_text("\n".join(lines) + "\n")
-
-    existing = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        f"{shim_dir}{os.pathsep}{existing}" if existing else str(shim_dir)
-    )
-
-
 def get_gpu_architecture_portable(therock_build_dir):
     """
     Executes rocm_agent_enumerator for Linux and offload-arch for Windows and returns last line of the output.

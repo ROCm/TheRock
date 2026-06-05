@@ -21,7 +21,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from libhipcxx_utils import add_windows_dll_search_dirs, build_rocm_loader_env
+from libhipcxx_utils import build_rocm_loader_env
 
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -156,9 +156,11 @@ if __name__ == "__main__":
         logging.info("Wheel installed successfully")
 
         if platform.system() == "Windows":
-            add_windows_dll_search_dirs(
-                env, [artifacts_path / "bin"], tmp_path / "dll_shim"
-            )
+            # The installed hipdnn_frontend wheel reads HIPDNN_DLL_DIRECTORIES at
+            # import and registers each dir via os.add_dll_directory, so the
+            # extension resolves ROCm DLLs from the raw artifact tree (PATH is
+            # ignored for extension-module dependent DLLs on CPython >= 3.8).
+            env["HIPDNN_DLL_DIRECTORIES"] = str(artifacts_path / "bin")
 
         run_pytests(python, tests_dir, env)
 
