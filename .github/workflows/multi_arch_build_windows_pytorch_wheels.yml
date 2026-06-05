@@ -32,6 +32,13 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated AMD GPU families to run tests for (e.g.
+          'gfx120X-all'). Use 'auto' to test built families, or 'none' to skip
+          tests.
+        type: string
+        default: "auto"
       python_version:
         description: Python version to build wheels for.
         type: string
@@ -64,13 +71,6 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "none"
-      test_amdgpu_families:
-        description: >-
-          Semicolon-separated AMD GPU families to run tests for after a
-          successful build. Use 'auto' to test built families, or 'none' to
-          skip tests.
-        type: string
-        default: "auto"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -80,6 +80,13 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated AMD GPU families to run tests for (e.g.
+          'gfx120X-all'). Use 'auto' to test built families, or 'none' to skip
+          tests.
+        type: string
+        default: "auto"
       python_version:
         description: Python version to build wheels for (for example, "3.12").
         type: string
@@ -116,13 +123,6 @@ on:
           - sccache
           - ccache
         default: none
-      test_amdgpu_families:
-        description: >-
-          Semicolon-separated AMD GPU families to run tests for after a
-          successful build. Use 'auto' to test built families, or 'none' to
-          skip tests.
-        type: string
-        default: "auto"
 
 run-name: Build Multi-Arch Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -408,7 +408,6 @@ jobs:
 
   configure_pytorch_tests:
     name: Configure PyTorch Tests
-    needs: [build_pytorch_wheels]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
