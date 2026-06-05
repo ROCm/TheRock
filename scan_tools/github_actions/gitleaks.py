@@ -57,18 +57,16 @@ from github_actions.github_actions_api import (  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-# Mapping of the gitleaks `--report-format` values we expose to the file
-# extension we use for the on-disk artifact. Keep this list in sync with
-# the `report_formats` input documented in `.github/workflows/gitleaks.yml`.
+# Keep in sync with the `report_formats` input in
+# `.github/workflows/gitleaks.yml`.
 _SUPPORTED_FORMATS: dict[str, str] = {
     "sarif": "sarif",
     "json": "json",
     "csv": "csv",
     "junit": "xml",
 }
-# Gitleaks release mirrored to the rocm-third-party-deps S3 bucket (see
-# docs/development/git_chores.md "Updating a third-party mirror") so the
-# CI runner doesn't depend on github.com/gitleaks/gitleaks being reachable.
+# Mirrored to the rocm-third-party-deps S3 bucket (see
+# docs/development/git_chores.md) so CI doesn't depend on github.com.
 _GITLEAKS_VERSION = "8.30.1"
 _GITLEAKS_TARBALL_URL = (
     "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/"
@@ -77,22 +75,15 @@ _GITLEAKS_TARBALL_URL = (
 _GITLEAKS_TARBALL_SHA256 = (
     "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
 )
-# Repository-root config path. Hardcoded (no input override): every
-# caller of this script points at the same file, so exposing a path
-# input just invited drift between callers. A missing file gracefully
-# falls back to gitleaks's built-in default rules so the workflow keeps
-# working in fresh checkouts before a config has been committed.
+# Hardcoded (no input override) so every caller uses the same file and
+# can't drift. Missing is a hard error (see `_resolve_config_path`).
 _CONFIG_PATH = "gitleaks.toml"
-# `gitleaks detect --exit-code N` makes the binary exit with N when it
-# finds leaks. We pin this to 1 so we can tell "clean run" (rc=0) apart
-# from "leaks found" (rc=1) and from "gitleaks itself errored" (rc>1).
+# Pin --exit-code to 1 so we can tell clean (0) from leaks (1) from a
+# gitleaks error (>1).
 _LEAK_EXIT_CODE = 1
 _LEAK_SECURITY_SEVERITY_HIGH = "8.5"
 
-# Canonical "null" SHA-1 used by GitHub (and git itself) to signal "no
-# previous commit" in push payloads for newly created refs. Forty zeros.
-# Cf. pre-commit's `Z40`:
-# https://github.com/pre-commit/pre-commit/blob/main/pre_commit/commands/hook_impl.py
+# Null SHA-1 git uses for "no previous commit" (a newly created ref).
 Z40 = "0" * 40
 
 
@@ -151,8 +142,7 @@ def _ensure_gitleaks() -> Path:
                 f"(downloaded from {_GITLEAKS_TARBALL_URL})"
             )
         with tarfile.open(tarball_path, mode="r:gz") as tar:
-            # `filter='data'` rejects unsafe member metadata (absolute
-            # paths, traversal, special files)
+            # filter="data" rejects unsafe members (traversal, abs paths, devices).
             member = tar.getmember("gitleaks")
             tar.extract(member, path=install_dir, filter="data")
     finally:
