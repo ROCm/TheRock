@@ -3,21 +3,6 @@
 # SPDX-License-Identifier: MIT
 """Run gitleaks against the current repository checkout.
 
-* Download + cache the gitleaks binary from TheRock's third-party S3
-  mirror, verify its SHA-256, and smoke-test it before scanning.
-* Resolve the config at `_CONFIG_PATH`; hard-fail if it is missing.
-* Derive `--log-opts` from the GitHub Actions event so `scan_mode=changed`
-  scans only new commits and `scan_mode=all` scans the full history. A
-  malformed `GITHUB_EVENT_PATH` is a hard error.
-* Run `gitleaks detect` once per requested report format (gitleaks emits
-  one report per invocation; see https://github.com/gitleaks/gitleaks/pull/1232).
-* Write `sarif_path` and `non_sarif_paths` to `$GITHUB_OUTPUT` and echo
-  each non-SARIF report into the job log and `$GITHUB_STEP_SUMMARY`.
-* Post-process SARIF: set `result.level = "error"` and
-  `result.properties.security-severity = _LEAK_SECURITY_SEVERITY_HIGH`
-  so findings land in the GitHub Security tab's High tier (gitleaks
-  leaves both fields unset, defaulting to Medium).
-
 Exit codes:
 
 * `0` - no leaks, clean run.
@@ -102,17 +87,6 @@ def _sha256_of(path: Path) -> str:
 
 
 def _ensure_gitleaks() -> Path:
-    """Return the path to a verified gitleaks binary, downloading it if needed.
-
-    The binary is installed under `$RUNNER_TEMP` on a GitHub Actions
-    runner (the system temp dir otherwise). That directory is per-job
-    storage which GitHub wipes between runs, so each scan job
-    re-downloads; the in-job existence check just avoids redundant work
-    within a single `python gitleaks.py` invocation. The downloaded
-    tarball is checked against `_GITLEAKS_TARBALL_SHA256` before
-    extraction; a mismatch raises `RuntimeError` and the partial
-    download is discarded.
-    """
     install_root = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
     install_dir = install_root / f"gitleaks-{_GITLEAKS_VERSION}"
     binary = install_dir / "gitleaks"
@@ -177,11 +151,6 @@ def _ensure_gitleaks() -> Path:
 
 
 def _parse_report_formats(raw: str) -> list[_ReportTarget]:
-    """Parse a comma-separated `report_formats` value into report targets.
-
-    Whitespace is trimmed, duplicates collapse to the first occurrence,
-    and unknown formats raise :class:`ValueError`.
-    """
     targets: list[_ReportTarget] = []
     seen: set[str] = set()
     for raw_fmt in raw.split(","):
@@ -205,7 +174,6 @@ def _parse_report_formats(raw: str) -> list[_ReportTarget]:
 
 
 def _resolve_config_path() -> str:
-    """Return `_CONFIG_PATH` if it exists, else hard-fail."""
     if not Path(_CONFIG_PATH).is_file():
         raise FileNotFoundError(
             f"gitleaks config not found at '{_CONFIG_PATH}'. "
@@ -216,14 +184,7 @@ def _resolve_config_path() -> str:
 
 
 def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) -> str:
-    """Build the `--log-opts` value for `gitleaks detect`.
-
-    Returns an empty string to indicate "scan the entire history" (i.e.
-    don't pass `--log-opts` at all). Raises `ValueError` for event types
-    we don't know how to derive a diff range from (including local runs
-    without `$GITHUB_EVENT_NAME`); the caller should pass `--scan-mode all`
-    for those instead of silently scanning something unexpected.
-    """
+    """Build the `--log-opts` value for `gitleaks detect`."""
     if scan_mode == "all":
         return ""
 
@@ -286,28 +247,8 @@ def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) 
 def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     """Mark every gitleaks SARIF result as High severity for code scanning.
 
-    Gitleaks's native SARIF formatter leaves `result.level` unset
-    (defaults to SARIF's `warning` -> GitHub's Medium tier) and does
-    not emit `properties.security-severity`. Every gitleaks hit is a
-    leaked secret -- there's no useful low/medium tier for that -- so
-    we backfill both fields uniformly:
-
-    * `level = "error"` (so SARIF viewers that don't read
-      `security-severity` still treat the finding as high priority).
-    * `properties.security-severity = _LEAK_SECURITY_SEVERITY_HIGH`
-      (places the finding in GitHub code scanning's *High* tier and
-      makes it filterable in the Security tab's severity dropdown the
-      same way CodeQL alerts are).
-
     Pre-existing values for either field are preserved verbatim (so a
     future gitleaks version that emits them natively keeps control).
-
-    The caller is responsible for ensuring 'sarif_path' exists before
-    invoking this helper; we deliberately do NOT guard against a missing
-    file so a stray call site can't silently turn a scanner failure into
-    a quiet no-op. A missing file raises 'FileNotFoundError'; a
-    malformed or empty SARIF raises 'ValueError'; a failed write-back
-    raises 'RuntimeError'.
     """
     try:
         with open(sarif_path, encoding="utf-8") as f:
@@ -469,33 +410,13 @@ def _run_gitleaks(
 
 
 def _md_code_fence(content: str) -> str:
-    """Return a backtick fence longer than any backtick run in `content`.
-
-    CommonMark ends a fenced block at the first line whose backtick run is
-    at least as long as the opener, so a report containing ``` would
-    otherwise truncate its own code block.
-    """
+    """Return a backtick fence longer than any backtick run in `content`."""
     longest = max((len(m) for m in re.findall(r"`+", content)), default=0)
     return "`" * max(3, longest + 1)
 
 
 def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
-    """Surface each non-SARIF report in the workflow run.
-
-    Writes each report's content to two places so PR reviewers don't
-    have to download the `gitleaks-report` artifact, unzip it, and open
-    the file locally:
-
-    1. stdout, wrapped in `::group::`/`::endgroup::` workflow
-       commands so the live job log stays scannable.
-    2. `$GITHUB_STEP_SUMMARY` via `gha_append_step_summary` so the
-       report is one click away from the run page.
-
-    A successful scan always writes every requested report (`_run_gitleaks`
-    enforces this), so a missing file here only happens on the error-cleanup
-    path, where gitleaks aborted before producing that format. There we skip
-    with a warning rather than mask the original failure with a secondary one.
-    """
+    """Surface each non-SARIF report in the workflow run."""
     summary_chunks: list[str] = []
     for target in non_sarif:
         path = target.path
@@ -590,8 +511,6 @@ def main(argv: list[str]) -> int:
         ", ".join(f"{t.fmt}->{t.path}" for t in targets),
     )
 
-    # Emit step outputs up-front so the workflow's upload steps know
-    # which paths to look at even if gitleaks fails partway through.
     sarif_target = next((t for t in targets if t.fmt == "sarif"), None)
     non_sarif = [t for t in targets if t.fmt != "sarif"]
     gha_set_output(
