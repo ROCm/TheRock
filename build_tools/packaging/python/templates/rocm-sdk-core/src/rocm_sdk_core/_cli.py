@@ -97,17 +97,34 @@ is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
 
 
-def _clear_stale_host_rocm_env() -> None:
-    """Drop HIP_PATH/ROCM_PATH when the core wheel ships lib/llvm/bin.
+def _wheel_has_bundled_llvm() -> bool:
+    return (_get_core_module_path() / "lib" / "llvm" / "bin").exists()
 
-    Console scripts may execute from the devel tree, but clang lives under core.
-    Until llvm patches 0006/0007 are in hipcc.exe (e.g. prebuilt compiler
-    artifacts), clearing both env vars avoids stale SDK/tarball paths on runners.
+
+def _prepare_hip_tool_launch(relpath: str) -> tuple[Path, list[str]]:
+    """Launch hipcc/hipconfig against the core wheel tree.
+
+    Clang/LLVM live under core even when console scripts expand devel. Stale
+    host ROCM_PATH/HIP_PATH on Windows runners must not override the wheel;
+    --rocm-path/--hip-path take precedence in hipcc even without llvm 0006/0007.
     """
     core_path = _get_core_module_path()
-    if (core_path / "lib" / "llvm" / "bin").exists():
-        os.environ.pop("ROCM_PATH", None)
-        os.environ.pop("HIP_PATH", None)
+    full_path = core_path / (relpath + exe_suffix)
+    argv = [str(full_path), *sys.argv[1:]]
+
+    if not _wheel_has_bundled_llvm():
+        return full_path, argv
+
+    os.environ.pop("ROCM_PATH", None)
+    os.environ.pop("HIP_PATH", None)
+
+    extra: list[str] = []
+    if not any(arg.startswith("--rocm-path=") for arg in sys.argv[1:]):
+        extra.append(f"--rocm-path={core_path}")
+    if not any(arg.startswith("--hip-path=") for arg in sys.argv[1:]):
+        extra.append(f"--hip-path={core_path}")
+    argv = [str(full_path), *extra, *sys.argv[1:]]
+    return full_path, argv
 
 
 def _exec(relpath: str, expand_devel=True):
@@ -115,14 +132,16 @@ def _exec(relpath: str, expand_devel=True):
     # need the devel files. System info tools (amd-smi, rocminfo, etc.)
     # override with expand_devel=False to avoid the expansion cost.
     if relpath in ("bin/hipcc", "bin/hipconfig"):
-        _clear_stale_host_rocm_env()
-    module_path = _get_module_path(expand_devel)
-    full_path = module_path / (relpath + exe_suffix)
+        full_path, argv = _prepare_hip_tool_launch(relpath)
+    else:
+        module_path = _get_module_path(expand_devel)
+        full_path = module_path / (relpath + exe_suffix)
+        argv = [str(full_path), *sys.argv[1:]]
     if is_windows:
         # https://bugs.python.org/issue19124
         # prevent execution from occuring in the backround
-        os._exit(os.spawnv(os.P_WAIT, full_path, [str(full_path)] + sys.argv[1:]))
-    os.execv(full_path, [str(full_path)] + sys.argv[1:])
+        os._exit(os.spawnv(os.P_WAIT, full_path, argv))
+    os.execv(full_path, argv)
 
 
 def amdclang():
