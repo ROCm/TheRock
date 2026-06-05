@@ -91,7 +91,18 @@ jobs:
   # ============================================================================
   consume_and_test:
     name: rocrand-sim (consume artifacts, ${{ inputs.amdgpu_families }})
-    if: ${{ !inputs.build_from_source }}
+    # Skip families rocjitsu can't simulate yet. The caller in
+    # multi_arch_build_portable_linux.yml fans out across every family
+    # math-libs builds for; this whitelist is what restricts execution
+    # to rocjitsu-supported families (cdna3 + cdna4 KMD configs today;
+    # see FAMILY_TO_KMD_CONFIG in
+    # build_tools/github_actions/test_executable_scripts/simulator_runner.py).
+    # Update both this whitelist AND FAMILY_TO_KMD_CONFIG when rocjitsu
+    # adds support for a new family.
+    if: >-
+      ${{ !inputs.build_from_source
+          && (inputs.amdgpu_families == 'gfx94X-dcgpu'
+              || inputs.amdgpu_families == 'gfx950-dcgpu') }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 240
     permissions:

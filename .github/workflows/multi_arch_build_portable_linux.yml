@@ -198,16 +198,16 @@ jobs:
     # an ugly stringified form for both running and skipped entries.
     name: simulator-test (${{ matrix.family_info.amdgpu_family }})
     needs: [compiler-runtime, math-libs]
-    # Fan out across the same families math-libs builds for, but only invoke
-    # for families rocjitsu can simulate today (cdna3 + cdna4 KMD configs;
+    # Fan out across the same families math-libs builds for. Per-family
+    # rocjitsu-support whitelisting (cdna3 + cdna4 KMD configs today;
     # see FAMILY_TO_KMD_CONFIG in
-    # build_tools/github_actions/test_executable_scripts/simulator_runner.py).
-    # Update both this whitelist AND FAMILY_TO_KMD_CONFIG when rocjitsu adds
-    # support for a new family.
-    if: >-
-      ${{ !cancelled() && !failure() && inputs.run_simulator
-          && (matrix.family_info.amdgpu_family == 'gfx94X-dcgpu'
-              || matrix.family_info.amdgpu_family == 'gfx950-dcgpu') }}
+    # build_tools/github_actions/test_executable_scripts/simulator_runner.py)
+    # lives in the leaf workflow's job-level `if:` because job-level `if:`
+    # in this caller cannot reference the `matrix` context (actionlint /
+    # GitHub context-availability restriction). For non-supported families
+    # the leaf's `consume_and_test` skips itself and the matrix entry
+    # shows as a skipped check in the UI.
+    if: ${{ !cancelled() && !failure() && inputs.run_simulator }}
     strategy:
       fail-fast: false
       matrix:
