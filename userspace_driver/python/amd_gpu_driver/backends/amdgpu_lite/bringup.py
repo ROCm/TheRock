@@ -564,6 +564,37 @@ def _recipe_bringup(
         print("  S2A post-write: " + " ".join(
             f"E{i}=0x{v:08x}" for i, v in enumerate(_post)))
         print(f"  doorbell: APER_EN=0x{aper:x} selfring base=0x{_db_base:x} CNTL=0x3")
+    # --- DIRECT MEC compute HQD path (LITE_DIRECT_QUEUE=1, Tinygrad-modeled) ---
+    # Skip the MES KIQ entirely (the #17 blocker). Tinygrad dispatches on gfx1201
+    # via a direct me=1 MEC HQD with NO MES servicing; our init_compute_queue
+    # (use_mes=False) -> _activate_compute_queue_mmio is structurally the same. The
+    # MEC is already enabled by init_gfx_for_compute (milestone 4) and the doorbell
+    # fabric programmed above is exactly what Tinygrad's doorbell_enable does.
+    if os.environ.get("LITE_DIRECT_QUEUE") == "1":
+        print("\n[recipe 5/5] DIRECT MEC compute queue (no MES KIQ)...")
+        ih_config = None
+        try:
+            ih_config = init_ih(dev, ip_result, nbio_config)
+        except Exception as e:  # noqa: BLE001
+            print(f"  IH init skipped (non-fatal): {e}")
+        compute_queue = None
+        try:
+            compute_queue = init_compute_queue(
+                dev, ip_result, nbio_config, use_mes=False)
+            ok = test_compute_nop_fence(compute_queue)
+            print("  PASS: DIRECT-MEC NOP+fence completed" if ok
+                  else "  FAIL: direct-queue NOP+fence did not complete")
+        except Exception as e:  # noqa: BLE001
+            print(f"  direct compute queue / dispatch failed: {e}")
+            import traceback
+            traceback.print_exc()
+        return GPUContext(
+            dev=dev, ip_result=ip_result, nbio_config=nbio_config,
+            gmc_config=gmc_config, psp_config=psp_config, smu_config=smu_config,
+            ih_config=ih_config, mes_ring=None, compute_queue=compute_queue,
+            gart_table_dma_handle=gart_handle, dummy_page_dma_handle=dummy_handle,
+        )
+
     mes_ring = None
     compute_queue = None
     ih_config = None

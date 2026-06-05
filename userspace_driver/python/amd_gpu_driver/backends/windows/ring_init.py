@@ -845,8 +845,12 @@ def _init_compute_mqd(config: ComputeQueueConfig) -> None:
     pq_control |= (5 & 0x3F) << PQ_CONTROL__RPTR_BLOCK_SIZE__SHIFT
     pq_control |= PQ_CONTROL__PQ_EMPTY
     pq_control |= 3 << PQ_CONTROL__MIN_AVAIL_SIZE__SHIFT
-    pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
-    pq_control |= PQ_CONTROL__UNORD_DISPATCH
+    # LITE_HQD_TG_PARITY: Tinygrad's non-AQL PQ_CONTROL sets only rptr_block_size
+    # + queue_size; NO_UPDATE_RPTR (suppresses rptr writeback) is the prime
+    # multi-dispatch-ceiling suspect, so drop it + UNORD_DISPATCH under parity.
+    if os.environ.get("LITE_HQD_TG_PARITY") != "1":
+        pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
+        pq_control |= PQ_CONTROL__UNORD_DISPATCH
     pq_control |= PQ_CONTROL__PRIV_STATE
     pq_control |= PQ_CONTROL__KMD_QUEUE
     if config.aql:
@@ -921,7 +925,11 @@ def _activate_compute_queue_mmio(
 
     # MQD control. The direct lite queue follows the macOS path and leaves
     # this register clear while the MQD image carries its persistent bits.
-    _gc_wreg(dev, gc_base, regCP_MQD_CONTROL, 0, base_idx=0)
+    # LITE_HQD_TG_PARITY: match Tinygrad, which puts PRIV_STATE (bit8) in
+    # CP_MQD_CONTROL rather than only in the MQD image. Default 0 (legacy).
+    _gc_wreg(dev, gc_base, regCP_MQD_CONTROL,
+             0x100 if os.environ.get("LITE_HQD_TG_PARITY") == "1" else 0,
+             base_idx=0)
 
     # Ring buffer base (address >> 8)
     pq_base = config.ring_bus_addr >> 8
@@ -943,8 +951,12 @@ def _activate_compute_queue_mmio(
     pq_control |= (5 & 0x3F) << PQ_CONTROL__RPTR_BLOCK_SIZE__SHIFT
     pq_control |= PQ_CONTROL__PQ_EMPTY
     pq_control |= 3 << PQ_CONTROL__MIN_AVAIL_SIZE__SHIFT
-    pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
-    pq_control |= PQ_CONTROL__UNORD_DISPATCH
+    # LITE_HQD_TG_PARITY: Tinygrad's non-AQL PQ_CONTROL sets only rptr_block_size
+    # + queue_size; NO_UPDATE_RPTR (suppresses rptr writeback) is the prime
+    # multi-dispatch-ceiling suspect, so drop it + UNORD_DISPATCH under parity.
+    if os.environ.get("LITE_HQD_TG_PARITY") != "1":
+        pq_control |= PQ_CONTROL__NO_UPDATE_RPTR
+        pq_control |= PQ_CONTROL__UNORD_DISPATCH
     pq_control |= PQ_CONTROL__PRIV_STATE
     pq_control |= PQ_CONTROL__KMD_QUEUE
     if config.aql:
@@ -995,6 +1007,15 @@ def _activate_compute_queue_mmio(
              (eop_base >> 32) & 0xFFFFFFFF, base_idx=0)
     _gc_wreg(dev, gc_base, regCP_HQD_EOP_CONTROL,
              int(math.log2(EOP_BUFFER_SIZE // 4)) - 1, base_idx=0)
+
+    # Flush HDP so the CPU-written MQD/ring in VRAM is visible to the CP before
+    # the HQD goes active (Tinygrad flushes around activation; ip.py:344).
+    if getattr(config, "nbio_config", None) is not None:
+        try:
+            from amd_gpu_driver.backends.windows.nbio_init import hdp_flush
+            hdp_flush(dev, config.nbio_config)
+        except Exception:
+            pass
 
     # Activate the queue
     _gc_wreg(dev, gc_base, regCP_HQD_ACTIVE, 1, base_idx=0)
