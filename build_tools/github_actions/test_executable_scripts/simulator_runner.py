@@ -104,6 +104,19 @@ DEFAULT_MIN_GTESTS = 1
 # Stable across gtest versions (see googletest/src/gtest.cc).
 EMPTY_FILTER_SENTINEL = "did not match any test; no tests were run"
 
+# Map AMDGPU_FAMILIES value -> the rocjitsu KMD config JSON shipped under
+# <root>/share/rocjitsu/configs/. rocjitsu's install rule (rocm-systems
+# emulation/rocjitsu/CMakeLists.txt) copies the whole `configs/` directory
+# wholesale, so both files are present in every dist; we only need to pick
+# the right one at runtime based on the family the caller is testing.
+# Keep this in sync with the matching case statement in the workflow's
+# "Verify rocjitsu interposer + ctest layout are present" step in
+# .github/workflows/test-simulator.yml.
+FAMILY_TO_KMD_CONFIG = {
+    "gfx94X-dcgpu": "amdgpu_cdna3_kmd.json",
+    "gfx950-dcgpu": "amdgpu_cdna4_kmd.json",
+}
+
 
 @dataclass(frozen=True)
 class PresetConfig:
@@ -123,7 +136,7 @@ class ComponentConfig:
     skip: list[str]
 
 
-def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
+def _resolve_rocjitsu_paths(bin_dir: Path, amdgpu_family: str) -> dict[str, Path]:
     """Locate the rocjitsu interposer, config and schema in a populated dist.
 
     ``bin_dir`` is the ``bin/`` directory of the unified ROCm install (the
@@ -132,9 +145,22 @@ def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
     everything relative to the ROCm root (``bin_dir.parent``)::
 
         <root>/lib/librocjitsu_kmd.so
-        <root>/share/rocjitsu/configs/amdgpu_cdna4_kmd.json
+        <root>/share/rocjitsu/configs/amdgpu_<cdna3|cdna4>_kmd.json
         <root>/share/rocjitsu/schemas/simulation_config.fbs
+
+    The exact KMD config filename is picked from ``amdgpu_family`` via
+    ``FAMILY_TO_KMD_CONFIG`` (gfx94X-dcgpu -> cdna3, gfx950-dcgpu -> cdna4).
+    Unknown families raise ``KeyError`` rather than silently falling back,
+    so a misconfigured caller cannot quietly exercise the wrong KMD config.
     """
+    try:
+        kmd_config_name = FAMILY_TO_KMD_CONFIG[amdgpu_family]
+    except KeyError as e:
+        raise KeyError(
+            f"AMDGPU_FAMILIES={amdgpu_family!r} has no rocjitsu KMD config "
+            f"mapping. Supported families: "
+            f"{sorted(FAMILY_TO_KMD_CONFIG.keys())}."
+        ) from e
     rocm_root = bin_dir.parent
     paths = {
         "preload": rocm_root / "lib" / "librocjitsu_kmd.so",
@@ -142,7 +168,7 @@ def _resolve_rocjitsu_paths(bin_dir: Path) -> dict[str, Path]:
         / "share"
         / "rocjitsu"
         / "configs"
-        / "amdgpu_cdna4_kmd.json",
+        / kmd_config_name,
         "schema": rocm_root
         / "share"
         / "rocjitsu"
@@ -238,8 +264,9 @@ def _build_env(
     gtest_filter: str,
     ctest_dir: Path,
     ctest_regex: str,
+    amdgpu_family: str,
 ) -> dict[str, str]:
-    paths = _resolve_rocjitsu_paths(bin_dir)
+    paths = _resolve_rocjitsu_paths(bin_dir, amdgpu_family)
     env = os.environ.copy()
     # Compose LD_PRELOAD so we don't drop an existing preload set by the user.
     existing_preload = env.get("LD_PRELOAD", "").strip()
@@ -496,6 +523,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     bin_dir = Path(bin_dir_env).resolve()
 
+    amdgpu_family = (os.environ.get("AMDGPU_FAMILIES") or "").strip()
+    if not amdgpu_family:
+        print(
+            "ERROR: AMDGPU_FAMILIES is not set. The simulator runner needs it "
+            "to pick the rocjitsu KMD config under "
+            "<rocm_root>/share/rocjitsu/configs/. Supported values: "
+            f"{sorted(FAMILY_TO_KMD_CONFIG.keys())}.",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
         comp_cfg, preset_cfg = _load_config(args.component, args.filter_preset)
         ctest_dir = bin_dir / comp_cfg.ctest_dir
@@ -504,6 +542,7 @@ def main(argv: list[str] | None = None) -> int:
             _compose_gtest_filter(preset_cfg.allow, preset_cfg.skip),
             ctest_dir,
             preset_cfg.ctest_regex,
+            amdgpu_family,
         )
     except (FileNotFoundError, KeyError, TypeError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -520,6 +559,7 @@ def main(argv: list[str] | None = None) -> int:
         "[simulator_runner] component=%s preset=%s", args.component, args.filter_preset
     )
     logging.info("[simulator_runner] THEROCK_BIN_DIR=%s", bin_dir)
+    logging.info("[simulator_runner] AMDGPU_FAMILIES=%s", amdgpu_family)
     logging.info("[simulator_runner] LD_PRELOAD=%s", env["LD_PRELOAD"])
     logging.info("[simulator_runner] RJ_CONFIG=%s", env["RJ_CONFIG"])
     logging.info("[simulator_runner] RJ_SCHEMA=%s", env["RJ_SCHEMA"])

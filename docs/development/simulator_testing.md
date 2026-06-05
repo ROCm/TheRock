@@ -107,7 +107,7 @@ python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
 The wrapper composes (with `<root> = Path(THEROCK_BIN_DIR).parent`):
 
 - `LD_PRELOAD=<root>/lib/librocjitsu_kmd.so`
-- `RJ_CONFIG=<root>/share/rocjitsu/configs/amdgpu_cdna4_kmd.json`
+- `RJ_CONFIG=<root>/share/rocjitsu/configs/amdgpu_<cdna3|cdna4>_kmd.json` (picked from `AMDGPU_FAMILIES`)
 - `RJ_SCHEMA=<root>/share/rocjitsu/schemas/simulation_config.fbs`
 - `HSA_ENABLE_SDMA=1`
 - `GTEST_FILTER` from the chosen preset and the per-component skip list.

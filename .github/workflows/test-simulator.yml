@@ -195,7 +195,15 @@ jobs:
         run: |
           set -ex
           ls -lh "$THEROCK_ROCM_ROOT/lib/librocjitsu_kmd.so"
-          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          # Pick the rocjitsu KMD config by AMDGPU_FAMILIES. Keep in sync with
+          # FAMILY_TO_KMD_CONFIG in
+          # build_tools/github_actions/test_executable_scripts/simulator_runner.py.
+          case "${AMDGPU_FAMILIES}" in
+            gfx94X-dcgpu) kmd_cfg="amdgpu_cdna3_kmd.json" ;;
+            gfx950-dcgpu) kmd_cfg="amdgpu_cdna4_kmd.json" ;;
+            *) echo "::error::Unsupported AMDGPU_FAMILIES=${AMDGPU_FAMILIES}; rocjitsu supports gfx94X-dcgpu (cdna3) and gfx950-dcgpu (cdna4)." >&2; exit 1 ;;
+          esac
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/${kmd_cfg}"
           ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/schemas/simulation_config.fbs"
           ls -lh "$THEROCK_BIN_DIR/rocRAND/CTestTestfile.cmake"
 
@@ -357,7 +365,15 @@ jobs:
         run: |
           set -ex
           ls -lh "$THEROCK_ROCM_ROOT/lib/librocjitsu_kmd.so"
-          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          # Pick the rocjitsu KMD config by AMDGPU_FAMILIES. Keep in sync with
+          # FAMILY_TO_KMD_CONFIG in
+          # build_tools/github_actions/test_executable_scripts/simulator_runner.py.
+          case "${AMDGPU_FAMILIES}" in
+            gfx94X-dcgpu) kmd_cfg="amdgpu_cdna3_kmd.json" ;;
+            gfx950-dcgpu) kmd_cfg="amdgpu_cdna4_kmd.json" ;;
+            *) echo "::error::Unsupported AMDGPU_FAMILIES=${AMDGPU_FAMILIES}; rocjitsu supports gfx94X-dcgpu (cdna3) and gfx950-dcgpu (cdna4)." >&2; exit 1 ;;
+          esac
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/${kmd_cfg}"
           ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/schemas/simulation_config.fbs"
           ls -lh "$THEROCK_BIN_DIR/rocRAND/CTestTestfile.cmake"
 
