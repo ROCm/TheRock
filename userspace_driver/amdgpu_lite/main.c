@@ -91,6 +91,8 @@ static long amdgpu_lite_ioctl(struct file *filp, unsigned int cmd,
 		return amdgpu_lite_ioctl_unmap_gpu(fpriv, arg);
 	case AMDGPU_LITE_IOC_SETUP_IRQ:
 		return amdgpu_lite_ioctl_setup_irq(fpriv, arg);
+	case AMDGPU_LITE_IOC_RING_DOORBELL:
+		return amdgpu_lite_ioctl_ring_doorbell(ldev, arg);
 	default:
 		return -ENOTTY;
 	}

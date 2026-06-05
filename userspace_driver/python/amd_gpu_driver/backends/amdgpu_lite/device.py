@@ -29,8 +29,10 @@ from amd_gpu_driver.ioctl import helpers
 from amd_gpu_driver.ioctl.amdgpu_lite import (
     AMDGPU_LITE_IOC_GET_INFO,
     AMDGPU_LITE_IOC_MAP_BAR,
+    AMDGPU_LITE_IOC_RING_DOORBELL,
     amdgpu_lite_get_info,
     amdgpu_lite_map_bar,
+    amdgpu_lite_ring_doorbell,
 )
 
 DEVICE_PATH_PATTERN = "/dev/amdgpu_lite*"
@@ -228,6 +230,16 @@ class AmdgpuLiteDevice(DeviceBackend):
         if mmio == 0:
             raise RuntimeError("MMIO BAR not mapped")
         ctypes.c_uint32.from_address(mmio + byte_offset).value = value & 0xFFFFFFFF
+
+    def ring_doorbell_kernel(self, byte_offset: int, value: int) -> None:
+        """Ring a doorbell from KERNEL space (AMDGPU_LITE_IOC_RING_DOORBELL).
+
+        Writes the 64-bit `value` to the doorbell BAR at `byte_offset` via the
+        kernel module's writeq, bypassing the userspace doorbell mmap. Diagnostic
+        for whether the userspace doorbell-write path actually reaches the GPU.
+        """
+        req = amdgpu_lite_ring_doorbell(byte_offset=byte_offset, value=value)
+        helpers.ioctl(self._fd, AMDGPU_LITE_IOC_RING_DOORBELL, req, "RING_DOORBELL")
 
     def read_reg_indirect(self, address: int) -> int:
         """Read a register via the NBIF PCIE_INDEX2/DATA2 aperture."""

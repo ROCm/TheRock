@@ -232,6 +232,26 @@ int amdgpu_lite_pci_setup(struct amdgpu_lite_device *ldev)
 		}
 	}
 
+	/* Map the first page of the doorbell BAR for kernel-side doorbell
+	 * rings (AMDGPU_LITE_IOC_RING_DOORBELL). Diagnostic: test whether the
+	 * userspace doorbell-mmap write is why the CP never fetches the ring.
+	 * cleanup() iounmaps any BAR with a non-NULL kaddr. */
+	if (ldev->doorbell_bar_idx != ldev->mmio_bar_idx &&
+	    ldev->doorbell_bar_idx < ldev->num_bars) {
+		struct amdgpu_lite_bar *db =
+			&ldev->bars[ldev->doorbell_bar_idx];
+
+		db->kaddr = pci_iomap(pdev, db->bar_index, 0x1000);
+		if (!db->kaddr)
+			dev_warn(&pdev->dev,
+				 "amdgpu_lite: failed to iomap doorbell BAR%u\n",
+				 db->bar_index);
+		else
+			dev_info(&pdev->dev,
+				 "amdgpu_lite: doorbell BAR%u kernel-mapped (first 4KB)\n",
+				 db->bar_index);
+	}
+
 	detect_vram_size(ldev);
 
 	return 0;
@@ -258,6 +278,29 @@ void amdgpu_lite_pci_cleanup(struct amdgpu_lite_device *ldev)
 
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
+}
+
+/* ======================================================================
+ * RING_DOORBELL ioctl (diagnostic: kernel-side doorbell write)
+ * ====================================================================== */
+
+long amdgpu_lite_ioctl_ring_doorbell(struct amdgpu_lite_device *ldev,
+				     unsigned long arg)
+{
+	struct amdgpu_lite_ring_doorbell req;
+	struct amdgpu_lite_bar *db = &ldev->bars[ldev->doorbell_bar_idx];
+
+	if (copy_from_user(&req, (void __user *)arg, sizeof(req)))
+		return -EFAULT;
+	if (!db->kaddr)
+		return -ENODEV;
+	/* Only the first 4KB of the doorbell BAR is kernel-mapped. */
+	if (req.byte_offset + sizeof(u64) > 0x1000)
+		return -EINVAL;
+
+	writeq(req.value, db->kaddr + req.byte_offset);
+	wmb();
+	return 0;
 }
 
 /* ======================================================================

@@ -138,6 +138,13 @@ class amdgpu_lite_setup_irq(ctypes.Structure):
     ]
 
 
+class amdgpu_lite_ring_doorbell(ctypes.Structure):
+    _fields_ = [
+        ("byte_offset", ctypes.c_uint64),
+        ("value", ctypes.c_uint64),
+    ]
+
+
 # --- Ioctl numbers ---
 
 
@@ -162,3 +169,4 @@ AMDGPU_LITE_IOC_FREE_VRAM = _lite_iow(0x21, amdgpu_lite_free_vram)
 AMDGPU_LITE_IOC_MAP_GPU = _lite_iowr(0x30, amdgpu_lite_map_gpu)
 AMDGPU_LITE_IOC_UNMAP_GPU = _lite_iow(0x31, amdgpu_lite_unmap_gpu)
 AMDGPU_LITE_IOC_SETUP_IRQ = _lite_iowr(0x40, amdgpu_lite_setup_irq)
+AMDGPU_LITE_IOC_RING_DOORBELL = _lite_iow(0x50, amdgpu_lite_ring_doorbell)

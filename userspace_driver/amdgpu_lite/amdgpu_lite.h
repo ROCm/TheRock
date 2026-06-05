@@ -163,6 +163,19 @@ struct amdgpu_lite_setup_irq {
 };
 
 /* ======================================================================
+ * RING_DOORBELL - kernel-side doorbell write (diagnostic)
+ *
+ * Writes `value` (64-bit) to the doorbell BAR at `byte_offset` from KERNEL
+ * space. Used to test whether the userspace doorbell-mmap write path is the
+ * reason the CP never fetches the KIQ ring.
+ * ====================================================================== */
+
+struct amdgpu_lite_ring_doorbell {
+	__u64 byte_offset;      /* offset into the doorbell BAR (doorbell_index*4) */
+	__u64 value;            /* 64-bit value to write (the wptr) */
+};
+
+/* ======================================================================
  * Ioctl numbers - type 'L' for Lite
  * ====================================================================== */
 
@@ -186,6 +199,8 @@ struct amdgpu_lite_setup_irq {
 					  struct amdgpu_lite_unmap_gpu)
 #define AMDGPU_LITE_IOC_SETUP_IRQ   _IOWR(AMDGPU_LITE_IOC_MAGIC, 0x40, \
 					   struct amdgpu_lite_setup_irq)
+#define AMDGPU_LITE_IOC_RING_DOORBELL _IOW(AMDGPU_LITE_IOC_MAGIC, 0x50, \
+					   struct amdgpu_lite_ring_doorbell)
 
 /* ======================================================================
  * Mmap offset encoding
@@ -330,6 +345,8 @@ long amdgpu_lite_ioctl_get_info(struct amdgpu_lite_device *ldev,
 				unsigned long arg);
 long amdgpu_lite_ioctl_map_bar(struct amdgpu_lite_device *ldev,
 			       unsigned long arg);
+long amdgpu_lite_ioctl_ring_doorbell(struct amdgpu_lite_device *ldev,
+				     unsigned long arg);
 int amdgpu_lite_mmap_bar(struct amdgpu_lite_device *ldev,
 			 struct vm_area_struct *vma);
 

@@ -1062,8 +1062,15 @@ def submit_compute_packets(
         finally:
             grbm_deselect(config.dev, config.gc_base)
 
-    # Ring the doorbell (64-bit write to doorbell BAR)
-    if config.doorbell_cpu_addr != 0:
+    # Ring the doorbell (64-bit write to doorbell BAR).
+    # LITE_KERNEL_DOORBELL=1: ring from KERNEL space via the amdgpu_lite ioctl
+    # (writeq) instead of the userspace doorbell mmap -- diagnostic to test
+    # whether the userspace doorbell write path reaches the GPU at all.
+    if (os.environ.get("LITE_KERNEL_DOORBELL") == "1"
+            and config.dev is not None
+            and hasattr(config.dev, "ring_doorbell_kernel")):
+        config.dev.ring_doorbell_kernel(config.doorbell_index * 4, config.wptr)
+    elif config.doorbell_cpu_addr != 0:
         ctypes.c_uint64.from_address(config.doorbell_cpu_addr).value = config.wptr
 
 
