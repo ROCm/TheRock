@@ -25,10 +25,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PACK_WHEEL_SCRIPT = SCRIPT_DIR / "hipdnn" / "pack_frontend_wheel.py"
 
 # build_tools/ on sys.path so we can reuse the shared venv helpers instead of
-# re-implementing platform-specific python-exe discovery here.
+# re-implementing platform-specific python-exe discovery here. SCRIPT_DIR too,
+# for the shared ROCm loader-env helper that sits beside this test.
 _BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+sys.path.insert(0, str(SCRIPT_DIR))
 from setup_venv import create_venv, find_venv_python_exe  # noqa: E402
+from libhipcxx_utils import build_rocm_loader_env  # noqa: E402
 
 _HIPDNN_SHARE_RELPATH = Path("share/hipdnn")
 _HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "tests" / "python"
@@ -132,7 +135,13 @@ if __name__ == "__main__":
     )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
-    env = os.environ.copy()
+    # Linux: prepend <artifacts>/lib to LD_LIBRARY_PATH. The installed wheel
+    # loader does not preload on Linux; once the dynamic loader finds libhipdnn,
+    # RPATH/ldconfig pull the transitive ROCm deps, so LD_LIBRARY_PATH is enough.
+    # Windows: PATH is ignored for extension-module dependent DLLs, so the wheel
+    # loader registers ROCM_PATH/bin via os.add_dll_directory instead.
+    env = build_rocm_loader_env(artifacts_path)
+    env["ROCM_PATH"] = str(artifacts_path)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -151,15 +160,6 @@ if __name__ == "__main__":
 
         install_wheel(python, wheel_path)
         logging.info("Wheel installed successfully")
-
-        # The installed hipdnn_frontend wheel locates the ROCm runtime from
-        # ROCM_PATH when rocm_sdk is not installed (the case here: the wheel is
-        # installed --no-deps into a clean venv). On Windows it registers
-        # ROCM_PATH/bin via os.add_dll_directory (PATH is ignored for
-        # extension-module dependent DLLs on CPython >= 3.8); on Linux it
-        # ctypes-preloads libhipdnn from ROCM_PATH/lib. Point it at the merged
-        # artifact tree.
-        env["ROCM_PATH"] = str(artifacts_path)
 
         run_pytests(python, tests_dir, env)
 
