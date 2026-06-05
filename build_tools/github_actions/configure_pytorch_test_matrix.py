@@ -25,12 +25,8 @@ from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_typ
 from github_actions.github_actions_api import gha_set_output
 
 
-SKIP_TEST_VALUES = {"none", "skip", "false", "off", "0"}
-AUTO_TEST_VALUES = {"", "auto", "built"}
-
-
 def split_families(value: str) -> list[str]:
-    return [item.strip() for item in value.replace(";", " ").split() if item.strip()]
+    return [f.strip() for f in value.split(";") if f.strip()]
 
 
 def find_amdgpu_family(*, requested_family: str, platform: str) -> tuple[str, str, str]:
@@ -60,6 +56,7 @@ def build_test_matrix(
     amdgpu_families: list[str],
     platform: str,
 ) -> dict[str, list[dict[str, str]]]:
+    print(f"Requested {platform} AMDGPU families: {amdgpu_families}")
     include: list[dict[str, str]] = []
     seen_families: set[str] = set()
     for requested_family in amdgpu_families:
@@ -75,34 +72,15 @@ def build_test_matrix(
             print(f"Skipping {matrix_family}: no {platform} test runner is configured")
             continue
 
+        print(f"Including {test_family}: testing on {test_runs_on}")
         include.append({"amdgpu_family": test_family, "test_runs_on": test_runs_on})
 
     return {"include": include}
 
 
-def resolve_requested_test_families(
-    *, build_amdgpu_families: str, test_amdgpu_families: str
-) -> list[str]:
-    """Return the AMDGPU families to test.
-
-    Empty/auto/built test input means "test all built families". Explicit
-    none/skip disables tests.
-    """
-    build_families = split_families(build_amdgpu_families)
-    test_value = test_amdgpu_families.strip()
-    test_value_lower = test_value.lower()
-    if test_value_lower in SKIP_TEST_VALUES:
-        return []
-    if test_value_lower in AUTO_TEST_VALUES:
-        return build_families
-    return split_families(test_amdgpu_families)
-
-
 def emit_outputs(matrix: dict[str, list[dict[str, str]]]) -> None:
-    include = matrix["include"]
     gha_set_output(
         {
-            "enabled": str(bool(include)).lower(),
             "matrix": json.dumps(matrix, separators=(",", ":")),
         }
     )
@@ -113,15 +91,14 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--build-amdgpu-families",
         required=True,
-        help="Semicolon- or space-separated AMDGPU families that were built.",
+        help="Semicolon-separated AMDGPU families that were built.",
     )
     parser.add_argument(
         "--test-amdgpu-families",
         default="",
         help=(
-            "Semicolon- or space-separated AMDGPU families to test. "
-            "Use 'auto' or leave empty to test built families. Use 'none' "
-            "to skip tests."
+            "Semicolon-separated AMDGPU families to test. Use 'auto' or leave "
+            "empty to test built families. Use 'none' to skip tests."
         ),
     )
     parser.add_argument(
@@ -131,10 +108,16 @@ def main(argv: list[str]) -> None:
         help="Test platform (default: current system).",
     )
     args = parser.parse_args(argv)
-    test_amdgpu_families = resolve_requested_test_families(
-        build_amdgpu_families=args.build_amdgpu_families,
-        test_amdgpu_families=args.test_amdgpu_families,
-    )
+
+    built_families = split_families(args.build_amdgpu_families)
+    test_families_arg = args.test_amdgpu_families.strip().lower()
+    if test_families_arg in ("", "auto", "built"):
+        test_amdgpu_families = built_families
+    elif test_families_arg in ("none", "skip"):
+        test_amdgpu_families = []
+    else:
+        test_amdgpu_families = split_families(args.test_amdgpu_families)
+
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
         platform=args.platform,
