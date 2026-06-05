@@ -121,9 +121,7 @@ def find_test_executables():
                     text=True,
                 )
                 all_subtests = [
-                    line.strip()
-                    for line in result.stdout.splitlines()
-                    if line.strip()
+                    line.strip() for line in result.stdout.splitlines() if line.strip()
                 ]
                 subtests = [s for s in all_subtests if s not in disabled]
                 logging.info(
