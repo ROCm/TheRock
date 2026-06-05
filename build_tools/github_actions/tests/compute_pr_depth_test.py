@@ -14,8 +14,6 @@ class ComputeFetchDepthTest(unittest.TestCase):
     """Tests for compute_pr_depth.compute_fetch_depth."""
 
     def test_pull_request_returns_commits_plus_one(self):
-        # +1 covers the PR merge-base so downstream tooling can diff against
-        # the base commit, not just the PR's own commits.
         self.assertEqual(
             compute_pr_depth.compute_fetch_depth({"pull_request": {"commits": 3}}),
             "4",
