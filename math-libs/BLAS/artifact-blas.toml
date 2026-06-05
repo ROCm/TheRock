@@ -178,6 +178,7 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
+  "bin/rocsparse/**",
   "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
@@ -204,11 +205,13 @@ include = [
 ]
 exclude = [
   "share/hipsparse/test/**",
+  "bin/hipsparse/**",
 ]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
+  "bin/hipsparse/**",
   "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
