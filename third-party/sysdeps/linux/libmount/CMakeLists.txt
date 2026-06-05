@@ -8,7 +8,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-libmount-sources
       SOURCE_DIR "${_source_dir}"
-      URL "https://github.com/util-linux/util-linux/archive/refs/tags/v2.42.1.tar.gz"
+      # Originally downloaded from https://github.com/util-linux/util-linux/archive/refs/tags/v2.42.1.tar.gz
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/util-linux-2.42.1.tar.gz"
       URL_HASH "SHA256=138a3bd9049afa5eeeea73f1e9c0ed7bddf3e55ba4ec29924965a932ec738f01"
 
       TOUCH "${_download_stamp}"
