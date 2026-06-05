@@ -28,7 +28,6 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
-    [--fusilliprovider | --no-fusilliprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
     [--hipkernelprovider | --no-hipkernelprovider]
     [--prim | --no-prim]
@@ -40,6 +39,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
+    [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
@@ -352,8 +352,6 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn_samples,
             args.miopen,
             args.miopenprovider,
-            args.fusilliprovider,
-            args.iree_compiler,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
@@ -366,6 +364,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_compute,
             args.rocprofiler_sdk,
             args.rocprofiler_systems,
+            args.rocprofiler_systems_examples,
             args.rocrtst,
             args.rocwmma,
             args.libhipcxx,
@@ -398,6 +397,13 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.hipdnn_integration_tests:
             extra_artifacts.append("hipdnn-integration-tests")
+            # The main test binary `hipdnn_integration_tests` is in the artifact's
+            # _run component (per ml-libs/artifact-hipdnn-integration-tests.toml).
+            # Provider cross-provider integration suites (e.g. miopenprovider's
+            # external-integration-check) invoke it with --test-article and
+            # --test-engine; without _run, ctest finds the entry but errors with
+            # "Unable to find executable: ../hipdnn_integration_tests".
+            argv.append("hipdnn-integration-tests_run")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
@@ -410,10 +416,6 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
             extra_artifacts.append("hipkernelprovider")
-        if args.fusilliprovider:
-            extra_artifacts.append("fusilliprovider")
-        if args.iree_compiler:
-            extra_artifacts.append("iree-compiler")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -458,6 +460,12 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
+            if args.tests:
+                # Tests need version.h for rocprofiler-sdk version detection.
+                argv.append("rocprofiler-sdk_dev")
+        if args.rocprofiler_systems_examples:
+            # Only a _test artifact is produced
+            argv.append("rocprofiler-systems-examples_test")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
@@ -732,20 +740,6 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--fusilliprovider",
-        default=False,
-        help="Include 'fusilliprovider' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--iree-compiler",
-        default=False,
-        help="Include 'iree-compiler' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
         "--rocdecode",
         default=False,
         help="Include 'rocdecode' artifacts",
@@ -819,6 +813,13 @@ def main(argv):
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocprofiler-systems-examples",
+        default=False,
+        help="Include 'rocprofiler-systems-examples' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

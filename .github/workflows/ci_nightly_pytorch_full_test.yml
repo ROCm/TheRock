@@ -32,7 +32,7 @@ on:
       test_runs_on:
         description: Runner label for single-GPU test configs
         type: string
-        default: "linux-gfx942-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
       test_runs_on_multi_gpu:
         description: Runner label for multi-GPU test configs (e.g. distributed)
         type: string
@@ -72,7 +72,7 @@ run-name: >-
 
 env:
   AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-  TEST_RUNS_ON: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
+  TEST_RUNS_ON: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-core42-ossci-rocm' }}
   TEST_RUNS_ON_MULTI_GPU: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
   PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
   TORCH_VERSION_INPUT: ${{ inputs.torch_version || '' }}
@@ -125,7 +125,7 @@ jobs:
     uses: ./.github/workflows/test_pytorch_wheels_full.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-      test_runs_on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ossci-rocm' }}
+      test_runs_on: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-core42-ossci-rocm' }}
       test_runs_on_multi_gpu: ${{ inputs.test_runs_on_multi_gpu || 'linux-gfx942-8gpu-ossci-rocm' }}
       package_index_url: ${{ inputs.package_index_url || 'https://rocm.nightlies.amd.com/v2-staging' }}
       python_version: ${{ inputs.python_version || '3.12' }}

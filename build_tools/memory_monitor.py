@@ -7,7 +7,11 @@ Usage:
     python build_tools/memory_monitor.py -- cmake --build build
 
 Output:
-    [09:00:03Z] Mem: 24.5/32.0GB (77%) [WARNING] | CPU: 85% | Jobs: ~14/16 | Disk: 150GB free
+    [09:00:03Z] Mem: 24.5/32.0GB (77%) [WARNING] | CPU: 85% | Load: 14/16 | Disk: 150GB free
+               Top: clang:foo.cpp(12.3%m,95%c), ninja:rocblas(8.1%m,50%c), link:libhip.so(5.2%m,0%c)
+
+When memory or CPU exceeds 75%, top processes are shown with memory and CPU percentages.
+Load shows system load average vs CPU count; when overloaded shows multiplier (e.g., "2.5x overload").
 """
 
 import argparse
@@ -20,9 +24,26 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import psutil
+
+
+def is_in_container() -> bool:
+    """Detect if we're running inside a container."""
+    # Check for Docker
+    if Path("/.dockerenv").exists():
+        return True
+    # Check for container cgroup
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text()
+        if "docker" in cgroup or "kubepods" in cgroup or "containerd" in cgroup:
+            return True
+    except (OSError, IOError):
+        pass
+    return False
+
 
 # Constants
 GB = 1024**3
@@ -91,6 +112,103 @@ def get_thread_info() -> dict:
     return info
 
 
+def get_top_processes(top_n: int = 4) -> list[dict]:
+    """Get top processes by memory and CPU usage.
+
+    Returns a list of dicts with process info, sorted by memory usage descending.
+    """
+    processes = []
+    for proc in psutil.process_iter(
+        ["pid", "name", "memory_percent", "cpu_percent", "cmdline"]
+    ):
+        try:
+            pinfo = proc.info
+            # Skip processes with negligible resource usage
+            mem_pct = pinfo.get("memory_percent") or 0
+            cpu_pct = pinfo.get("cpu_percent") or 0
+            if mem_pct < 0.1 and cpu_pct < 1.0:
+                continue
+
+            # Extract a useful command name from cmdline
+            cmdline = pinfo.get("cmdline") or []
+            name = pinfo.get("name") or "unknown"
+
+            # Try to get a meaningful command description
+            cmd_desc = _extract_command_description(name, cmdline)
+
+            processes.append(
+                {
+                    "pid": pinfo["pid"],
+                    "name": name,
+                    "cmd": cmd_desc,
+                    "mem_pct": mem_pct,
+                    "cpu_pct": cpu_pct,
+                }
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+    # Sort by memory usage descending
+    processes.sort(key=lambda p: p["mem_pct"], reverse=True)
+    return processes[:top_n]
+
+
+def _extract_command_description(name: str, cmdline: list[str]) -> str:
+    """Extract a useful short description from command line arguments.
+
+    Prioritizes showing the actual build target or script being run.
+    """
+    if not cmdline:
+        return name
+
+    # For common build tools, try to extract the target
+    cmd_str = " ".join(cmdline)
+
+    # Ninja: look for the target
+    if "ninja" in name.lower() or "ninja" in cmd_str.lower():
+        for i, arg in enumerate(cmdline):
+            if arg == "-C" and i + 1 < len(cmdline):
+                # Skip -C path, look for target after
+                continue
+            if not arg.startswith("-") and i > 0:
+                return f"ninja:{arg}"
+        return "ninja"
+
+    # CMake: show the build directory or command
+    if "cmake" in name.lower():
+        for i, arg in enumerate(cmdline):
+            if arg == "--build" and i + 1 < len(cmdline):
+                return f"cmake:build"
+        return "cmake"
+
+    # Clang/compiler: show the source file being compiled
+    if any(comp in name.lower() for comp in ["clang", "gcc", "cc", "c++"]):
+        for arg in cmdline:
+            if arg.endswith((".cpp", ".c", ".cc", ".cxx")):
+                # Get just the filename
+                return f"{name}:{arg.split('/')[-1]}"
+        return name
+
+    # ld/linker: indicate linking
+    if name in ("ld", "ld.lld", "lld", "gold"):
+        for arg in cmdline:
+            if arg == "-o" or arg.startswith("-o"):
+                continue
+            if not arg.startswith("-") and "/" in arg:
+                return f"link:{arg.split('/')[-1]}"
+        return "linking"
+
+    # Python scripts
+    if "python" in name.lower():
+        for arg in cmdline:
+            if arg.endswith(".py"):
+                return f"py:{arg.split('/')[-1]}"
+        return "python"
+
+    # Default: return the process name
+    return name
+
+
 class ResourceMonitor:
     """Monitors system resources in a background thread."""
 
@@ -130,6 +248,9 @@ class ResourceMonitor:
         thread_info = get_thread_info()
         stats.update(thread_info)
 
+        # Top processes
+        stats["top_procs"] = get_top_processes(top_n=4)
+
         # GPU memory
         if self.monitor_gpu:
             stats["gpus"] = get_gpu_memory()
@@ -141,7 +262,7 @@ class ResourceMonitor:
         return stats
 
     def _format_stats(self, stats: dict) -> str:
-        """Format stats as a single line."""
+        """Format stats as a single line with optional top processes on next line."""
         parts = []
 
         # Memory
@@ -158,12 +279,11 @@ class ResourceMonitor:
         if stats["swap_used_gb"] > 0.1:
             parts.append(f"Swap: {stats['swap_used_gb']:.1f}GB")
 
-        # CPU
+        # CPU as cores in use (more intuitive than percentage)
+        cpu_count = stats.get("cpu_count", 1)
         if "cpu_percent" in stats and stats["cpu_percent"] > 0:
-            parts.append(f"CPU: {stats['cpu_percent']:.0f}%")
-        if "load_1m" in stats:
-            cpu_count = stats.get("cpu_count", 1)
-            parts.append(f"Jobs: ~{stats['load_1m']:.0f}/{cpu_count}")
+            cores_in_use = (stats["cpu_percent"] / 100) * cpu_count
+            parts.append(f"CPU: {cores_in_use:.0f}/{cpu_count} cores")
 
         # GPU
         for gpu in stats.get("gpus", []):
@@ -176,7 +296,33 @@ class ResourceMonitor:
         if storage:
             parts.append(f"Disk: {storage['free_gb']:.0f}GB free")
 
-        return " | ".join(parts)
+        main_line = " | ".join(parts)
+
+        # Always show top process, more when resources are high
+        top_procs = stats.get("top_procs", [])
+        in_container = is_in_container()
+        if top_procs:
+            # Show more processes when memory or CPU is high
+            show_count = (
+                4
+                if (
+                    stats["mem_percent"] >= WARN_PERCENT
+                    or stats.get("cpu_percent", 0) >= WARN_PERCENT
+                )
+                else 1
+            )
+            proc_strs = []
+            for p in top_procs[:show_count]:
+                # Convert raw cpu_percent (can exceed 100% on multi-core) to cores
+                cores_used = p["cpu_pct"] / 100
+                proc_strs.append(
+                    f"{p['cmd']}({p['mem_pct']:.1f}% mem, {cores_used:.1f} CPUs)"
+                )
+            # Clarify scope when in container (process list is container-local)
+            prefix = "Container top" if in_container else "Top"
+            main_line += f"\n           {prefix}: {', '.join(proc_strs)}"
+
+        return main_line
 
     def _log_stats(self, stats: dict) -> None:
         """Print resource stats to stdout."""
@@ -227,8 +373,17 @@ class ResourceMonitor:
         max_swap = max(s["swap_percent"] for s in samples)
 
         # CPU stats
-        max_load = max((s.get("load_1m", 0) for s in samples), default=0)
+        cpu_count = samples[0].get("cpu_count", 1) if samples else 1
         avg_cpu = sum(s.get("cpu_percent", 0) for s in samples) / len(samples)
+
+        # Aggregate top processes across all samples
+        proc_mem_totals: dict[str, list[float]] = {}
+        proc_cpu_totals: dict[str, list[float]] = {}
+        for s in samples:
+            for p in s.get("top_procs", []):
+                cmd = p["cmd"]
+                proc_mem_totals.setdefault(cmd, []).append(p["mem_pct"])
+                proc_cpu_totals.setdefault(cmd, []).append(p["cpu_pct"])
 
         print("\n" + "=" * 70)
         print(f"Resource Summary - {self.phase}")
@@ -239,7 +394,39 @@ class ResourceMonitor:
         )
         if max_swap > 1:
             print(f"Swap:         {max_swap:.0f}% peak")
-        print(f"CPU:          {avg_cpu:.0f}% avg")
+        avg_cores = (avg_cpu / 100) * cpu_count
+        max_cores = (max(s.get("cpu_percent", 0) for s in samples) / 100) * cpu_count
+        print(
+            f"CPU:          {avg_cores:.0f}/{cpu_count} cores avg, {max_cores:.0f} peak"
+        )
+
+        # Top memory consumers (by peak memory usage)
+        if proc_mem_totals:
+            top_mem_procs = sorted(
+                [(cmd, max(mems)) for cmd, mems in proc_mem_totals.items()],
+                key=lambda x: x[1],
+                reverse=True,
+            )[:4]
+            if top_mem_procs and top_mem_procs[0][1] > 1.0:
+                print(
+                    "Top memory:   "
+                    + ", ".join(f"{cmd}({pct:.1f}%)" for cmd, pct in top_mem_procs)
+                )
+
+        # Top CPU consumers (by average CPU usage, shown as cores)
+        if proc_cpu_totals:
+            top_cpu_procs = sorted(
+                [(cmd, sum(cpus) / len(cpus)) for cmd, cpus in proc_cpu_totals.items()],
+                key=lambda x: x[1],
+                reverse=True,
+            )[:4]
+            if top_cpu_procs and top_cpu_procs[0][1] > 10.0:
+                print(
+                    "Top CPU:      "
+                    + ", ".join(
+                        f"{cmd}({pct / 100:.1f} cores)" for cmd, pct in top_cpu_procs
+                    )
+                )
 
         # GPU summary
         gpu_maxes = {}
