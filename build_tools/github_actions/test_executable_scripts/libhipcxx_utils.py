@@ -33,7 +33,9 @@ def build_rocm_loader_env(artifacts_path: Path) -> dict:
     return env
 
 
-def _register_windows_dll_dirs(env: dict, dll_dirs: list[Path], shim_dir: Path) -> None:
+def add_windows_dll_search_dirs(
+    env: dict, dll_dirs: list[Path], shim_dir: Path
+) -> None:
     """Register ROCm DLL directories for a subprocess Python interpreter.
 
     CPython >= 3.8 loads extension modules with LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
@@ -43,6 +45,8 @@ def _register_windows_dll_dirs(env: dict, dll_dirs: list[Path], shim_dir: Path) 
     imported at interpreter startup, before any test code imports the extension,
     and registers the dirs via os.add_dll_directory (the supported replacement for
     PATH-based search).
+
+    Windows-only. ``shim_dir`` is a writable scratch directory for the shim.
     """
     present = [d for d in dll_dirs if d.is_dir()]
     shim_dir.mkdir(parents=True, exist_ok=True)
@@ -54,23 +58,6 @@ def _register_windows_dll_dirs(env: dict, dll_dirs: list[Path], shim_dir: Path) 
     env["PYTHONPATH"] = (
         f"{shim_dir}{os.pathsep}{existing}" if existing else str(shim_dir)
     )
-
-
-def prepare_rocm_test_env(artifacts_path: Path, shim_dir: Path = None) -> dict:
-    """Return an env for a subprocess that imports ROCm Python extension modules.
-
-    Wraps build_rocm_loader_env. On Windows it additionally registers the ROCm
-    ``bin/`` directory for the subprocess interpreter's extension-module loader,
-    because LOAD_LIBRARY_SEARCH_DEFAULT_DIRS ignores PATH. ``shim_dir`` is a
-    writable scratch directory used to emit the sitecustomize.py shim; it is
-    required on Windows and ignored on Linux.
-    """
-    env = build_rocm_loader_env(artifacts_path)
-    if platform.system() == "Windows":
-        if shim_dir is None:
-            raise ValueError("shim_dir is required on Windows")
-        _register_windows_dll_dirs(env, [artifacts_path / "bin"], shim_dir)
-    return env
 
 
 def get_gpu_architecture_portable(therock_build_dir):
