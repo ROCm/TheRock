@@ -507,7 +507,7 @@ def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
         print(f"::group::Gitleaks report: {path}")
         print(content)
         print("::endgroup::")
-        summary_chunks.append(f"### Gitleaks report: `{path}`\n\n'`\n{content}\n'`")
+        summary_chunks.append(f"### Gitleaks report: `{path}`\n\n```\n{content}\n```")
     if summary_chunks:
         gha_append_step_summary("\n\n".join(summary_chunks))
 
