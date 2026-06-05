@@ -78,16 +78,12 @@ endif()
 include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
 therock_get_meson_compiler_env(_meson_cc _meson_cxx)
 
-set(patch_source_commands)
-list(APPEND patch_source_commands   COMMAND
-    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
-
 add_custom_target(
   meson_build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 
   COMMAND
-    ${patch_source_commands}
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
