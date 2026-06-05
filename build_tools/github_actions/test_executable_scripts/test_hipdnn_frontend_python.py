@@ -15,13 +15,10 @@ Requires a GPU and OUTPUT_ARTIFACTS_DIR pointing at the merged artifact tree.
 
 import logging
 import os
-import platform
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-
-from libhipcxx_utils import build_rocm_loader_env
 
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -135,7 +132,7 @@ if __name__ == "__main__":
     )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
-    env = build_rocm_loader_env(artifacts_path)
+    env = os.environ.copy()
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -155,12 +152,14 @@ if __name__ == "__main__":
         install_wheel(python, wheel_path)
         logging.info("Wheel installed successfully")
 
-        if platform.system() == "Windows":
-            # The installed hipdnn_frontend wheel reads HIPDNN_DLL_DIRECTORIES at
-            # import and registers each dir via os.add_dll_directory, so the
-            # extension resolves ROCm DLLs from the raw artifact tree (PATH is
-            # ignored for extension-module dependent DLLs on CPython >= 3.8).
-            env["HIPDNN_DLL_DIRECTORIES"] = str(artifacts_path / "bin")
+        # The installed hipdnn_frontend wheel locates the ROCm runtime from
+        # ROCM_PATH when rocm_sdk is not installed (the case here: the wheel is
+        # installed --no-deps into a clean venv). On Windows it registers
+        # ROCM_PATH/bin via os.add_dll_directory (PATH is ignored for
+        # extension-module dependent DLLs on CPython >= 3.8); on Linux it
+        # ctypes-preloads libhipdnn from ROCM_PATH/lib. Point it at the merged
+        # artifact tree.
+        env["ROCM_PATH"] = str(artifacts_path)
 
         run_pytests(python, tests_dir, env)
 
