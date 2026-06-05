@@ -49,6 +49,7 @@ endif()
 # via THEROCK_NO_INSTALL_RPATH target property, performs default installation
 # RPATH assignment.
 function(_therock_post_process_rpath_target target)
+  message("!!!THEROCK_PRIVATE_INSTALL_RPATH_DIRS: ${THEROCK_PRIVATE_INSTALL_RPATH_DIRS}")
   if(THEROCK_PRIVATE_BUILD_RPATH_DIRS)
     message(STATUS "Add build RPATH ${THEROCK_PRIVATE_BUILD_RPATH_DIRS} on ${target}")
     set_property(TARGET "${target}" APPEND PROPERTY BUILD_RPATH "${THEROCK_PRIVATE_BUILD_RPATH_DIRS}")
