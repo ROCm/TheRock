@@ -315,7 +315,8 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     invoking this helper; we deliberately do NOT guard against a missing
     file so a stray call site can't silently turn a scanner failure into
     a quiet no-op. A missing file raises 'FileNotFoundError'; a
-    malformed or empty SARIF raises 'ValueError'.
+    malformed or empty SARIF raises 'ValueError'; a failed write-back
+    raises 'RuntimeError'.
     """
     try:
         with open(sarif_path, encoding="utf-8") as f:
@@ -396,8 +397,11 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
         with open(sarif_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
     except OSError as exc:
-        log.warning("Failed to write enriched SARIF to %s: %s", sarif_path, exc)
-        return
+        # Opening in "w" truncates, so a partial write leaves a corrupt
+        # SARIF; fail loud rather than let the upload step push garbage.
+        raise RuntimeError(
+            f"Failed to write enriched SARIF to '{sarif_path}': {exc}"
+        ) from exc
 
     log.info(
         "SARIF severity enrichment: set level=error on %d result(s) and "
