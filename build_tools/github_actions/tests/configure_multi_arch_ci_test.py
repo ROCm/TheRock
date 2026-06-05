@@ -1370,8 +1370,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
-        with patch("random.random", return_value=0.5):
+        with patch("random.random", return_value=0.9):
             builds = cm.expand_build_configs(
                 targets, ci_inputs, test_type="quick", git_context=cm.GitContext()
             )
@@ -1380,7 +1379,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         # Check that the third label was selected
         gfx94x_info = builds.linux.per_family_info[0]
         self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm"
         )
 
     def test_families_without_multi_label_use_primary_only(self):
