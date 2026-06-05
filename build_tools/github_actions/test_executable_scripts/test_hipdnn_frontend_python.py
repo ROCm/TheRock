@@ -15,6 +15,7 @@ Requires a GPU and OUTPUT_ARTIFACTS_DIR pointing at the merged artifact tree.
 
 import logging
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -99,6 +100,31 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
     )
 
 
+def add_windows_dll_search_dirs(
+    env: dict, dll_dirs: list[Path], shim_dir: Path
+) -> None:
+    """Register ROCm DLL directories for the pytest interpreter on Windows.
+
+    CPython >= 3.8 loads extension modules with LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+    which excludes PATH. The hipdnn_frontend_python .pyd links hipdnn_backend.dll
+    and the ROCm runtime DLLs, so prepending bin/ to PATH (what build_rocm_loader_env
+    does for the Linux .so loader) does not let Windows resolve them, and the
+    extension import fails with a masked DLL-load error. A sitecustomize.py placed
+    on PYTHONPATH is imported at interpreter startup, before conftest imports the
+    extension, and registers the dirs via os.add_dll_directory.
+    """
+    present = [d for d in dll_dirs if d.is_dir()]
+    shim_dir.mkdir(parents=True, exist_ok=True)
+    lines = ["import os"]
+    lines += [f"os.add_dll_directory({str(d)!r})" for d in present]
+    (shim_dir / "sitecustomize.py").write_text("\n".join(lines) + "\n")
+
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        f"{shim_dir}{os.pathsep}{existing}" if existing else str(shim_dir)
+    )
+
+
 def run_pytests(python: Path, tests_dir: Path, env: dict) -> None:
     """Run the upstream hipDNN Python test suite."""
     # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
@@ -153,6 +179,11 @@ if __name__ == "__main__":
 
         install_wheel(python, wheel_path)
         logging.info("Wheel installed successfully")
+
+        if platform.system() == "Windows":
+            add_windows_dll_search_dirs(
+                env, [artifacts_path / "bin"], tmp_path / "dll_shim"
+            )
 
         run_pytests(python, tests_dir, env)
 
