@@ -665,9 +665,16 @@ def _alloc_queue_buffer(
     if hasattr(dev, "read_vram") and hasattr(dev, "alloc_memory"):
         from amd_gpu_driver.backends.base import MemoryLocation
 
-        handle = dev.alloc_memory(size, MemoryLocation.VRAM)
+        # LITE_QUEUE_GTT=1: allocate from GTT (GART-mapped GPUVM address) instead
+        # of raw VRAM MC. Stock amdgpu puts its MES KIQ ring/MQD/rptr in GTT
+        # (GART VAs ~0x40xxxx); the CP appears to require a GART-mapped GPUVM
+        # address to fetch the queue ring -- raw VRAM MC (which worked for the
+        # PSP-driven bootload) is not CP-fetchable. Test of the HQD-diff finding.
+        loc = (MemoryLocation.GTT if os.environ.get("LITE_QUEUE_GTT") == "1"
+               else MemoryLocation.VRAM)
+        handle = dev.alloc_memory(size, loc)
         if handle.cpu_addr == 0:
-            raise RuntimeError("Queue VRAM allocation is not CPU mapped")
+            raise RuntimeError(f"Queue {loc.value} allocation is not CPU mapped")
         ctypes.memset(handle.cpu_addr, 0, handle.size)
         config.memory_handles.append(handle)
         return handle.cpu_addr, handle.gpu_addr, 0
@@ -1039,7 +1046,12 @@ def submit_compute_packets(
         from amd_gpu_driver.backends.windows.nbio_init import hdp_flush
         hdp_flush(config.dev, config.nbio_config)
 
-    if config.dev is not None:
+    # LITE_NO_MMIO_WPTR=1: skip the direct CP_HQD_PQ_WPTR MMIO write. Stock
+    # amdgpu rings a MES-firmware-owned queue with WDOORBELL64 ONLY (mes_v12_0.c)
+    # -- it never MMIO-writes the wptr of a MES-managed queue. Doing so here
+    # (under grbm_select me=3) may corrupt the MES KIQ wptr state so the doorbell
+    # never takes effect. Test of the HQD-diff submit-path difference.
+    if config.dev is not None and os.environ.get("LITE_NO_MMIO_WPTR") != "1":
         grbm_select(
             config.dev, config.gc_base, config.me, config.pipe, config.queue)
         try:
