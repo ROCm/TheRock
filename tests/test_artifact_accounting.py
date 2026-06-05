@@ -34,8 +34,9 @@ def _build_root() -> Path | None:
     return None
 
 
-@pytest.mark.skipif(_build_root() is None,
-                    reason="THEROCK_BINARY_DIR not set / not a build tree")
+@pytest.mark.skipif(
+    _build_root() is None, reason="THEROCK_BINARY_DIR not set / not a build tree"
+)
 def test_all_staged_files_are_accounted():
     root = _build_root()
     descriptors = audit.discover_descriptors(_REPO)
@@ -57,7 +58,7 @@ def test_all_staged_files_are_accounted():
         lines = [
             "Unaccounted staged files (claimed by no artifact component; would be",
             "silently dropped and break the rocm-sdk build). Add the right component",
-            "entry to the descriptor (e.g. [components.doc.\"<stage>\"] for share/doc),",
+            'entry to the descriptor (e.g. [components.doc."<stage>"] for share/doc),',
             "or allow-list via options.unmatched_exclude:",
         ]
         for desc, files in sorted(failures.items()):
