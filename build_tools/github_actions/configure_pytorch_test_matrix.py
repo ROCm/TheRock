@@ -81,6 +81,7 @@ def build_test_matrix(
 def emit_outputs(matrix: dict[str, list[dict[str, str]]]) -> None:
     gha_set_output(
         {
+            "enabled": str(bool(matrix["include"])).lower(),
             "matrix": json.dumps(matrix, separators=(",", ":")),
         }
     )

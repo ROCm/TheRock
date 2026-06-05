@@ -110,6 +110,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             )
 
         outputs = gha_set_output.call_args.args[0]
+        self.assertEqual(outputs["enabled"], "true")
         matrix = json.loads(outputs["matrix"])
         self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha0")
 
@@ -146,6 +147,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             )
 
         outputs = gha_set_output.call_args.args[0]
+        self.assertEqual(outputs["enabled"], "false")
         self.assertEqual(json.loads(outputs["matrix"]), {"include": []})
 
     def test_real_family_matrix_resolves_gfx950(self) -> None:

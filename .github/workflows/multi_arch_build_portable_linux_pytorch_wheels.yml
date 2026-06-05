@@ -370,6 +370,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
     steps:
       - name: Checkout
@@ -388,6 +389,7 @@ jobs:
 
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
+    if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests]
     permissions:
       contents: read
