@@ -343,31 +343,22 @@ def gha_set_output(vars: Mapping[str, str | Path]):
     """Sets values in a step's output parameters.
 
     This appends to the file located at the $GITHUB_OUTPUT environment variable.
-    Multi-line values are written using the heredoc form required by GitHub
-    Actions (see "Multiline strings" in the workflow-commands reference).
 
     See
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-output-parameter
-      * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#multiline-strings
       * https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
     """
-    _log(
-        f"Setting github output:\n{json.dumps({k: str(v) for k, v in vars.items()}, indent=2)}"
-    )
+    _log(f"Setting github output:\n{json.dumps(vars, indent=2)}")
 
     step_output_file = os.getenv("GITHUB_OUTPUT")
     if not step_output_file:
         _log("  Warning: GITHUB_OUTPUT env var not set, can't set github outputs")
         return
 
-    with open(step_output_file, "a", encoding="utf-8") as f:
+    with open(step_output_file, "a") as f:
         for k, v in vars.items():
-            value = "" if v is None else str(v)
-            if "\n" in value:
-                f.write(f"{k}<<EOF\n{value}\nEOF\n")
-            else:
-                print(f"OUTPUT {k}={value}")
-                f.write(f"{k}={value}\n")
+            print(f"OUTPUT {k}={str(v)}")
+            f.write(f"{k}={str(v)}\n")
 
 
 def gha_append_step_summary(summary: str):
@@ -392,47 +383,18 @@ def gha_append_step_summary(summary: str):
 
 
 def gha_load_github_event() -> dict[str, Any]:
-    """Loads the JSON event payload pointed to by $GITHUB_EVENT_PATH.
+    """Load the GitHub Actions workflow event JSON from disk.
 
-    Returns an empty dict when the env var is unset, which lets scripts
-    be invoked locally for development without faking a payload.
+    Reads the path from :envvar:`GITHUB_EVENT_PATH`. GitHub writes that file
+    as UTF-8. On Windows the process default encoding is often not UTF-8, so
+    the file must be opened with ``encoding="utf-8"``.
 
-    Raises:
-        FileNotFoundError: $GITHUB_EVENT_PATH is set but the file
-            doesn't exist (CI misconfiguration).
-        ValueError: the file contains invalid JSON, or the top-level
-            payload is not a JSON object.
-        RuntimeError: the file exists but couldn't be read (permissions,
-            disk error, etc.).
-
-    See: https://docs.github.com/en/actions/reference/variables-reference#default-environment-variables
-         https://docs.github.com/en/webhooks/webhook-events-and-payloads
+    Returns:
+        Parsed JSON object (GitHub webhook payloads are JSON objects).
     """
-    raw = os.getenv("GITHUB_EVENT_PATH", "")
-    if not raw:
-        return {}
-    event_path = Path(raw)
-    if not event_path.is_file():
-        raise FileNotFoundError(
-            f"GITHUB_EVENT_PATH is set to '{event_path}' but no such file exists"
-        )
-    try:
-        with open(event_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"GITHUB_EVENT_PATH '{event_path}' contains invalid JSON: {exc}"
-        ) from exc
-    except OSError as exc:
-        raise RuntimeError(
-            f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}"
-        ) from exc
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"GITHUB_EVENT_PATH '{event_path}' must contain a JSON object, "
-            f"got {type(data).__name__}"
-        )
-    return data
+    path = os.environ["GITHUB_EVENT_PATH"]
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
