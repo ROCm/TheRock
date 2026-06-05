@@ -393,10 +393,6 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
         )
         return
 
-    # Atomic write: serialize to a temp file in the same directory, then
-    # os.replace() it into place. A failed or partial write can never
-    # truncate the original SARIF, so the upload step never sees a corrupt
-    # file.
     tmp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -465,15 +461,14 @@ def _run_gitleaks(
         if rc == 0 or rc == _LEAK_EXIT_CODE:
             if rc == _LEAK_EXIT_CODE:
                 leaks_found = True
-            # Post-process SARIF reports to align with the GitHub
-            # Security tab's severity tiers (gitleaks leaves both
-            # `level` and `security-severity` unset by default).
+            if not tgt.path.is_file():
+                raise RuntimeError(
+                    f"gitleaks exited {rc} but did not write the expected "
+                    f"{tgt.fmt} report at '{tgt.path}'."
+                )
+            # Align SARIF with the GitHub Security tab's severity tiers
+            # (gitleaks leaves `level` and `security-severity` unset).
             if tgt.fmt == "sarif":
-                if not tgt.path.is_file():
-                    raise RuntimeError(
-                        f"gitleaks exited {rc} but did not write the "
-                        f"expected SARIF report at '{tgt.path}'."
-                    )
                 _enrich_sarif_with_security_severity(tgt.path)
             continue
         raise RuntimeError(
@@ -494,9 +489,10 @@ def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
     2. `$GITHUB_STEP_SUMMARY` via `gha_append_step_summary` so the
        report is one click away from the run page.
 
-    Missing files are skipped with a warning rather than failing the
-    job; they typically mean gitleaks exited before producing that
-    format.
+    A successful scan always writes every requested report (`_run_gitleaks`
+    enforces this), so a missing file here only happens on the error-cleanup
+    path, where gitleaks aborted before producing that format. There we skip
+    with a warning rather than mask the original failure with a secondary one.
     """
     summary_chunks: list[str] = []
     for target in non_sarif:
