@@ -27,7 +27,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         "-DPATCHELF=${PATCHELF}"
-        "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
       INSTALL_DESTINATION
         lib/rocm_sysdeps
       INTERFACE_LINK_DIRS
@@ -93,8 +92,6 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}"
       --
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
 

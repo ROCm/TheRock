@@ -6,8 +6,6 @@ set -e
 
 PREFIX="${1:?Expected install prefix argument}"
 PATCHELF="${PATCHELF:-patchelf}"
-THEROCK_SOURCE_DIR="${THEROCK_SOURCE_DIR:?THEROCK_SOURCE_DIR not defined}"
-Python3_EXECUTABLE="${Python3_EXECUTABLE:?Python3_EXECUTABLE not defined}"
 
 echo "Patching binutils install..."
 
@@ -20,18 +18,16 @@ fi
 # We don't want library descriptors or binaries.
 rm -f $PREFIX/lib/*.la
 
-# Remove shared libraries that are not consumed downstream.
-# libiberty.so is created below. We run configure with --disable-shared,
-# so no shared libraries are built, but if that changes in the future,
-# make sure to delete any unneeded .so files, for example
-# rm -f "$PREFIX/lib"/libbfd*.so*
-
-# Create libiberty.so from the PIC-compiled libiberty.a so that downstream
-# consumers can dynamically link against it (required for GPL/LGPL compliance
-# in an MIT-licensed project).
+# Create libiberty.so from the PIC-compiled libiberty.a.
+# libiberty is GPL-licensed so it must be dynamically linked (not statically) in
+# this MIT-licensed project. The SONAME must be set so that binaries linking
+# against libiberty.so embed only the SONAME ("libiberty.so") in DT_NEEDED rather
+# than the absolute build-tree path, allowing the runtime linker to resolve it via
+# RPATH at the installed location.
 if [ -f "$PREFIX/lib/libiberty.a" ]; then
   echo "Creating libiberty.so from libiberty.a..."
   cc -shared \
+     -Wl,-soname,libiberty.so \
      -Wl,--whole-archive "$PREFIX/lib/libiberty.a" \
      -Wl,--no-whole-archive \
      -o "$PREFIX/lib/libiberty.so"
