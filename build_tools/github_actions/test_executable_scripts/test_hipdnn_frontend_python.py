@@ -135,13 +135,13 @@ if __name__ == "__main__":
     )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
-    # Linux: prepend <artifacts>/lib to LD_LIBRARY_PATH. The installed wheel
-    # loader does not preload on Linux; once the dynamic loader finds libhipdnn,
-    # RPATH/ldconfig pull the transitive ROCm deps, so LD_LIBRARY_PATH is enough.
+    # Linux: <artifacts>/lib on LD_LIBRARY_PATH. The installed wheel loader does
+    # not preload on Linux; once the dynamic loader finds libhipdnn, RPATH/ldconfig
+    # pull the transitive ROCm deps, so LD_LIBRARY_PATH is enough.
     # Windows: PATH is ignored for extension-module dependent DLLs, so the wheel
-    # loader registers ROCM_PATH/bin via os.add_dll_directory instead.
+    # loader registers ROCM_PATH/bin via os.add_dll_directory; ROCM_PATH is set by
+    # the helper.
     env = build_rocm_loader_env(artifacts_path)
-    env["ROCM_PATH"] = str(artifacts_path)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
