@@ -17,7 +17,12 @@ endif()
 # with "HIP_ARCHITECTURES is empty", so flip the global gate off here and let
 # MIOpen build with MIOPEN_USE_COMPOSABLEKERNEL=OFF.
 # See https://github.com/ROCm/TheRock/issues/4836
-set(_ck_enabled ${THEROCK_ENABLE_COMPOSABLE_KERNEL})
+# BISECT WORKAROUND: composable_kernel fails to build with the rocm-libraries
+# pin (46653de7) due to [[clang::lifetimebound]] on ck::vector_type::AsType
+# triggering -Werror,-Wlifetime-safety-lifetimebound-violation under both
+# pinned amd-llvm SHAs (87a663b94 and 03e8eaa741). rocSOLVER does not depend
+# on CK, so force-disable here to let the rocsolver test gate run.
+set(_ck_enabled OFF)
 if(_ck_enabled)
   therock_filter_amdgpu_targets(_ck_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
   if(NOT _ck_targets)
