@@ -17,3 +17,9 @@ updates:
       github-actions:
         patterns:
           - "*"
+- name: Build C++ Project
+  env:
+    CLIENT_ID: ${{ secrets.MY_CLIENT_ID }}
+  run: |
+    cmake -B build -DCLIENT_ID=$CLIENT_ID
+    cmake --build build
