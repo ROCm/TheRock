@@ -38,17 +38,18 @@ if(THEROCK_ENABLE_COMPILER)
       message(STATUS "!!!Grepping for clang target")
       execute_process(
         COMMAND ${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang --version | grep -oP '(?<=Target: ).*'
+        ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
         OUTPUT_VARIABLE LLVM_HOST_TRIPLE
         OUTPUT_STRIP_TRAILING_WHITESPACE
       )
       message(STATUS "!! Execute process returned: ${LLVM_HOST_TRIPLE}")
-      if(DEFINED LLVM_HOST_TRIPLE and NOT LLVM_HOST_TRIPLE STREQUAL "")
+      if(DEFINED LLVM_HOST_TRIPLE and NOT "${LLVM_HOST_TRIPLE}" STREQUAL "")
         set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}")
         set(THEROCK_LLVM_RPATH_WITH_TRIPLE "lib/llvm/lib/${THEROCK_LLVM_HOST_TRIPLE}")
       endif()
     endif()
   else()
-	  message(STATUS "!! CMAKE_BINARY_DIR NOT FOUND")
+     message(STATUS "!! CMAKE_BINARY_DIR NOT FOUND")
   endif()
   message(STATUS "!!!THEROCK_LLVM_RPATH_WITH_TRIPLE: ${THEROCK_LLVM_RPATH_WITH_TRIPLE}")
   message(STATUS "!!!LLVM_HOST_TRIPLE: ${LLVM_HOST_TRIPLE}")
