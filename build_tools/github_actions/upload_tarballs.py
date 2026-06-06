@@ -108,12 +108,14 @@ def main(argv: list[str]) -> int:
 
     shared_tarball_url: str | None = None
 
-    if len(tarball_files) == 1:
-        shared_tarball_url = _build_s3_url(
-            dest.bucket,
-            dest.relative_path,
-            tarball_files[0].name,
-        )
+    for f in tarball_files:
+        if f.name.startswith(f"therock-dist-{args.platform}-multiarch-"):
+            shared_tarball_url = _build_s3_url(
+                dest.bucket,
+                dest.relative_path,
+                f.name,
+            )
+            break
 
     if not shared_tarball_url:
         raise ValueError(
