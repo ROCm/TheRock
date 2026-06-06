@@ -25,3 +25,25 @@ block(SCOPE_FOR VARIABLES)
   set(ENV{PATH} "${new_path}")
   message(STATUS "Augmented toolchain PATH=$ENV{PATH}")
 endblock()
+
+# Tensile source kernels require explicit xnack qualifiers for CDNA targets.
+# See pre_hook_rocBLAS.cmake for full explanation.
+# hipSPARSELt uses TensileLite with the same target restrictions as hipBLASLt:
+# gfx942:xnack+ and gfx950:xnack+ only; gfx90a accepts both xnack variants.
+if(NOT THEROCK_SANITIZER)
+  set(_tensile_xnack_targets)
+  foreach(_t IN LISTS GPU_TARGETS)
+    if("${_t}" STREQUAL "gfx90a")
+      list(APPEND _tensile_xnack_targets "${_t}:xnack-" "${_t}:xnack+")
+    elseif("${_t}" STREQUAL "gfx942" OR "${_t}" STREQUAL "gfx950")
+      list(APPEND _tensile_xnack_targets "${_t}:xnack+")
+    else()
+      list(APPEND _tensile_xnack_targets "${_t}")
+    endif()
+  endforeach()
+  if(NOT "${_tensile_xnack_targets}" STREQUAL "${GPU_TARGETS}")
+    message(STATUS "hipSPARSELt: expanding Tensile GPU targets with xnack variants: ${_tensile_xnack_targets}")
+    set(GPU_TARGETS "${_tensile_xnack_targets}" CACHE STRING "GPU targets" FORCE)
+    set(AMDGPU_TARGETS "${_tensile_xnack_targets}" CACHE STRING "AMDGPU targets" FORCE)
+  endif()
+endif()
