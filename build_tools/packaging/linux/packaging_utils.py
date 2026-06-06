@@ -23,7 +23,7 @@ GFX_META = "gfx_meta"
 _GFX_ARCH_SPLIT_RE = re.compile(r"[,;\s]+")
 
 
-def normalize_gfx_arch_list(
+def normalize_target_list(
     value: str | list[str] | None,
     *,
     lowercase: bool = False,

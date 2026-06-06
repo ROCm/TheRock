@@ -144,7 +144,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from packaging_utils import normalize_gfx_arch_list
+from packaging_utils import normalize_target_list
 
 
 def _env(key: str, default: str) -> str:
@@ -385,7 +385,7 @@ class NativeLinuxPackageInstallTest:
         self.repo_url = repo_url.rstrip("/")
         self.release_type = release_type.lower()
         self.install_prefix = install_prefix
-        self.gfx_arch_list = normalize_gfx_arch_list(
+        self.gfx_arch_list = normalize_target_list(
             gfx_arch, lowercase=True, dedupe=True
         )
         self.rocm_version_major_minor = self._major_minor_rocm_version_from_input(
@@ -1264,7 +1264,7 @@ def run_tests(args: Namespace) -> int:
     print(f"Release Type: {args.release_type}")
     print(f"Repository URL: {args.repo_url}")
     # Preview package-name rules before NativeLinuxPackageInstallTest is constructed.
-    _norm = normalize_gfx_arch_list(args.gfx_arch, lowercase=True, dedupe=True)
+    _norm = normalize_target_list(args.gfx_arch, lowercase=True, dedupe=True)
     if _norm:
         if args.rocm_version:
             print(
