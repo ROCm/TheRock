@@ -63,6 +63,23 @@ EndeavourOS, and similar derivatives.
 sudo pacman -S cmake ninja patchelf ccache base-devel
 ```
 
+#### GPU permissions
+
+After installing, ensure your user has access to the GPU by adding yourself to
+the `video` and `render` groups (required for ROCm to access the GPU at
+runtime). This matches the [upstream ROCm prerequisite][rocm-prereqs]:
+
+```bash
+sudo usermod -a -G video,render $LOGNAME
+# Log out and back in (or reboot) for the group change to take effect.
+groups  # verify 'video' and 'render' appear in the output
+```
+
+On Arch, these groups are typically created by the `amdgpu` kernel module but
+users are **not** added automatically. Without this step, ROCm will fail at
+runtime with permission errors (e.g., `hsaKinit` returning
+`HSA_STATUS_ERROR_NOT_INITIALIZED` or `HIP` returning `hipErrorNoDevice`).
+
 Arch provides `patchelf` via `pacman`. **Verify that the installed version
 includes the PHDR fix** (see [patchelf section](#patchelf) above) — without it,
 builds that invoke `patchelf` on split ELF binaries will produce corrupt output:
@@ -283,3 +300,4 @@ cmake -B build -GNinja \
 See the top-level `CMakeLists.txt` for the full list of `THEROCK_ENABLE_*` options.
 
 [dockerfile]: ../dockerfiles/build_manylinux_x86_64.Dockerfile
+[rocm-prereqs]: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html
