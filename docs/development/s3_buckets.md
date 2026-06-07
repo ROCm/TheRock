@@ -11,7 +11,7 @@ and explains the authentication needed to upload to them.
   - [CI buckets](#ci-buckets): `therock-ci-artifacts`, `therock-ci-artifacts-external`
   - [Release buckets](#release-buckets): `therock-{dev,nightly,prerelease,release}-{artifacts,packages,python,tarball}`
   - [Build system buckets](#build-system-buckets): `rocm-third-party-deps`
-  - [Cache buckets](#cache-buckets): `therock-*-pytorch-sccache`
+  - [Cache buckets](#cache-buckets): `therock-pytorch-sccache-*`
   - [Legacy buckets](#legacy-buckets): `therock-artifacts`, `therock-artifacts-external`
 
 ## Authentication
@@ -120,12 +120,20 @@ We mirror third-party dependency files into S3 for use by the build system.
 
 ### Cache buckets
 
+Unlike the other buckets on this page, the PyTorch sccache buckets live in a
+separate AWS account (`324352301041`) in region `us-east-1`. The IAM role names
+are identical to the artifact-pipeline roles but resolve to a different account
+ID; the corresponding role ARNs are
+`arn:aws:iam::324352301041:role/therock-{ci,dev,nightly,prerelease}`. OIDC trust
+for `therock-{dev,nightly}` also covers `repo:ROCm/rockrel:*` so reusable
+workflow invocations from `rockrel` can assume the role.
+
 | Bucket                               | Contents                   | IAM role             |
 | ------------------------------------ | -------------------------- | -------------------- |
-| `therock-ci-pytorch-sccache`         | PyTorch CI sccache         | `therock-ci`         |
-| `therock-dev-pytorch-sccache`        | PyTorch dev sccache        | `therock-dev`        |
-| `therock-nightly-pytorch-sccache`    | PyTorch nightly sccache    | `therock-nightly`    |
-| `therock-prerelease-pytorch-sccache` | PyTorch prerelease sccache | `therock-prerelease` |
+| `therock-pytorch-sccache-ci`         | PyTorch CI sccache         | `therock-ci`         |
+| `therock-pytorch-sccache-dev`        | PyTorch dev sccache        | `therock-dev`        |
+| `therock-pytorch-sccache-nightly`    | PyTorch nightly sccache    | `therock-nightly`    |
+| `therock-pytorch-sccache-prerelease` | PyTorch prerelease sccache | `therock-prerelease` |
 
 ### Legacy buckets
 
