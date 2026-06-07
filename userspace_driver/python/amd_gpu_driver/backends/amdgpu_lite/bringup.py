@@ -636,6 +636,24 @@ def _recipe_bringup(
         ok = test_compute_nop_fence(compute_queue)
         if ok:
             print("  PASS: MILESTONE 4 -- MES-scheduled NOP+fence completed")
+            # Multi-dispatch (#21) on the MES-mapped queue: does the ~14
+            # ceiling reappear now the KIQ services its ring? (direct: none)
+            n = int(os.environ.get("LITE_MULTI_DISPATCH", "0") or "0")
+            if n > 0:
+                print(f"  [#21] MES multi-dispatch: {n} more NOP-fences...")
+                done, ceiling = 1, None
+                for seq in range(2, 2 + n):
+                    if test_compute_nop_fence(compute_queue, fence_seq=seq):
+                        done += 1
+                    else:
+                        ceiling = done + 1
+                        break
+                if ceiling is None:
+                    print(f"  [#21] PASS: sustained {done} MES dispatches, "
+                          "no ceiling")
+                else:
+                    print(f"  [#21] CEILING at dispatch {ceiling} "
+                          f"(fence_seq={ceiling} timed out)")
         else:
             print("  FAIL: NOP+fence did not complete (fence never reached seq)")
     except Exception as e:  # noqa: BLE001

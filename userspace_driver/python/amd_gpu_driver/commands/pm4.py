@@ -52,6 +52,28 @@ CP_COHER_CNTL_TC_WB_ACTION = 1 << 18
 CP_COHER_CNTL_SH_KCACHE_ACTION = 1 << 27
 CP_COHER_CNTL_SH_ICACHE_ACTION = 1 << 29
 
+# GFX10+/GFX12 ACQUIRE_MEM GCR_CNTL bit positions (amdgpu nvd.h; correct
+# for gfx1201 per tinygrad). On gfx12 the cache ops live here, not in
+# CP_COHER_CNTL, and ACQUIRE_MEM carries a 7th GCR_CNTL dword.
+ACQUIRE_MEM_GCR_CNTL_GLI_INV = 1 << 0   # instruction cache invalidate
+ACQUIRE_MEM_GCR_CNTL_GLM_WB = 1 << 4
+ACQUIRE_MEM_GCR_CNTL_GLM_INV = 1 << 5
+ACQUIRE_MEM_GCR_CNTL_GLK_WB = 1 << 6
+ACQUIRE_MEM_GCR_CNTL_GLK_INV = 1 << 7
+ACQUIRE_MEM_GCR_CNTL_GLV_INV = 1 << 8
+ACQUIRE_MEM_GCR_CNTL_GL1_INV = 1 << 9
+ACQUIRE_MEM_GCR_CNTL_GL2_INV = 1 << 14
+ACQUIRE_MEM_GCR_CNTL_GL2_WB = 1 << 15
+# Full pre-dispatch invalidate (incl. icache) == 0xC3F1
+ACQUIRE_MEM_GCR_CNTL_FULL_INVALIDATE = (
+    ACQUIRE_MEM_GCR_CNTL_GLI_INV
+    | ACQUIRE_MEM_GCR_CNTL_GLM_WB | ACQUIRE_MEM_GCR_CNTL_GLM_INV
+    | ACQUIRE_MEM_GCR_CNTL_GLK_WB | ACQUIRE_MEM_GCR_CNTL_GLK_INV
+    | ACQUIRE_MEM_GCR_CNTL_GLV_INV
+    | ACQUIRE_MEM_GCR_CNTL_GL1_INV
+    | ACQUIRE_MEM_GCR_CNTL_GL2_WB | ACQUIRE_MEM_GCR_CNTL_GL2_INV
+)
+
 # RELEASE_MEM cache flush flags (GFX9 and earlier)
 EOP_TC_WB_ACTION_EN = 1 << 15
 EOP_TC_NC_ACTION_EN = 1 << 19
@@ -119,25 +141,32 @@ class PM4PacketBuilder:
 
     def acquire_mem(
         self,
-        coher_cntl: int = (
-            CP_COHER_CNTL_TC_ACTION
-            | CP_COHER_CNTL_TC_WB_ACTION
-            | CP_COHER_CNTL_SH_KCACHE_ACTION
-            | CP_COHER_CNTL_SH_ICACHE_ACTION
-        ),
-        coher_size: int = 0xFFFFFFFF,
+        coher_cntl: int = 0,
+        coher_size: int = 0xFFFFFFFFFFFFFFFF,
         coher_base: int = 0,
-        poll_interval: int = 10,
+        poll_interval: int = 0,
+        gcr_cntl: int | None = None,
     ) -> PM4PacketBuilder:
-        """ACQUIRE_MEM: invalidate/flush caches before dispatch."""
+        """ACQUIRE_MEM (gfx10+/gfx12 GCR form): invalidate caches.
+
+        gfx12 needs a 7-dword body -- CP_COHER_CNTL(=0), COHER_SIZE lo/hi,
+        COHER_BASE lo/hi, POLL_INTERVAL, GCR_CNTL. Cache ops (icache
+        GLI_INV etc.) live in the trailing GCR_CNTL dword, NOT in the gfx9
+        CP_COHER_CNTL. The old 6-dword gfx9 form on gfx12 corrupts the PM4
+        stream / skips icache invalidation and hangs DISPATCH_DIRECT.
+        coher_cntl is accepted for back-compat but ignored (=0 on gfx10+).
+        """
+        if gcr_cntl is None:
+            gcr_cntl = ACQUIRE_MEM_GCR_CNTL_FULL_INVALIDATE
         self._pkt3(
             PACKET3_ACQUIRE_MEM,
-            coher_cntl,
-            coher_size,
-            coher_size >> 32 if coher_size > 0xFFFFFFFF else 0,
-            coher_base,
-            coher_base >> 32 if coher_base > 0xFFFFFFFF else 0,
-            poll_interval,
+            0,                                  # CP_COHER_CNTL = 0 (gfx10+)
+            coher_size & 0xFFFFFFFF,            # COHER_SIZE lo
+            (coher_size >> 32) & 0xFFFFFFFF,    # COHER_SIZE hi
+            coher_base & 0xFFFFFFFF,            # COHER_BASE lo
+            (coher_base >> 32) & 0xFFFFFFFF,    # COHER_BASE hi
+            poll_interval,                      # POLL_INTERVAL
+            gcr_cntl,                           # GCR_CNTL (gfx10+ cache ops)
         )
         return self
 

@@ -36,7 +36,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amd_gpu_driver.backends.windows.device import WindowsDevice
+if TYPE_CHECKING:
+    from amd_gpu_driver.backends.windows.device import WindowsDevice
 from amd_gpu_driver.backends.windows.ip_discovery import (
     IPDiscoveryResult,
     parse_ip_discovery,
@@ -334,6 +335,7 @@ def full_gpu_bringup(
 
     # --- 1. Open device ---
     print("\n[1/8] Opening device...")
+    from amd_gpu_driver.backends.windows.device import WindowsDevice
     dev = WindowsDevice()
     dev.open(device_index)
     print(f"  Device: {dev.name}")
