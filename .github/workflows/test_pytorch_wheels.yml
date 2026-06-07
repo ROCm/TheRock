@@ -172,14 +172,16 @@ jobs:
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY or apply any patches, so we skip those steps to save time.
+      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
+      # steps to save time.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/pytorch/pytorch.git \
             --repo-hashtag nightly \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
@@ -187,7 +189,8 @@ jobs:
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15
