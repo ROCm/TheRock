@@ -132,10 +132,7 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
-      # 0 = no idle shutdown: keep the sccache server alive for the whole
-      # build so --show-stats reflects the full run (a >10min single compile
-      # would otherwise idle-out the server mid-build and reset the counters).
-      SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_IDLE_TIMEOUT: "0" # never idle-out; keeps stats accurate on long builds
       SCCACHE_LOG: warn
     steps:
       - name: Checkout
