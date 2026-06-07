@@ -45,6 +45,10 @@ from amd_gpu_driver.backends.macos.psp_cmd import (
     GFX_FW_TYPE_RS64_MEC_P3_STACK,
     GFX_FW_TYPE_RS64_MES,
     GFX_FW_TYPE_RS64_MES_STACK,
+    GFX_FW_TYPE_CP_MES,
+    GFX_FW_TYPE_MES_STACK,
+    GFX_FW_TYPE_CP_MES_KIQ,
+    GFX_FW_TYPE_MES_KIQ_STACK,
     GFX_FW_TYPE_RS64_PFP,
     GFX_FW_TYPE_RS64_PFP_P0_STACK,
     GFX_FW_TYPE_RS64_PFP_P1_STACK,
@@ -264,7 +268,7 @@ def psp_load_gfx_and_autoload(client, driver, mp0_base_dw: int,
     pfp_blob  = _read("gc_12_0_1_pfp.bin")
     me_blob   = _read("gc_12_0_1_me.bin")
     mec_blob  = _read("gc_12_0_1_mec.bin")
-    mes_blob  = _read("gc_12_0_1_mes.bin")
+    mes_blob  = _read("gc_12_0_1_uni_mes.bin")  # gfx12: CP_MES/CP_MES_KIQ, not RS64_MES(76)
     sdma_blob = _read("sdma_7_0_1.bin")
 
     imu_iram, imu_dram = _extract_imu(imu_blob)
@@ -293,8 +297,10 @@ def psp_load_gfx_and_autoload(client, driver, mp0_base_dw: int,
     items.append((mec_d, GFX_FW_TYPE_RS64_MEC_P1_STACK, "RS64_MEC_P1"))
     items.append((mec_d, GFX_FW_TYPE_RS64_MEC_P2_STACK, "RS64_MEC_P2"))
     items.append((mec_d, GFX_FW_TYPE_RS64_MEC_P3_STACK, "RS64_MEC_P3"))
-    items.append((mes_u, GFX_FW_TYPE_RS64_MES,          "RS64_MES"))
-    items.append((mes_d, GFX_FW_TYPE_RS64_MES_STACK,    "RS64_MES_STACK"))
+    items.append((mes_u, GFX_FW_TYPE_CP_MES,            "CP_MES"))
+    items.append((mes_d, GFX_FW_TYPE_MES_STACK,         "MES_STACK"))
+    items.append((mes_u, GFX_FW_TYPE_CP_MES_KIQ,        "CP_MES_KIQ"))
+    items.append((mes_d, GFX_FW_TYPE_MES_KIQ_STACK,     "MES_KIQ_STACK"))
     items.append((imu_iram, GFX_FW_TYPE_IMU_I, "IMU_I"))
     items.append((imu_dram, GFX_FW_TYPE_IMU_D, "IMU_D"))
     results = []

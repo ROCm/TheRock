@@ -71,6 +71,10 @@ from .psp_cmd import (
     GFX_FW_TYPE_RS64_MEC_P3_STACK,
     GFX_FW_TYPE_RS64_MES,
     GFX_FW_TYPE_RS64_MES_STACK,
+    GFX_FW_TYPE_CP_MES,
+    GFX_FW_TYPE_MES_STACK,
+    GFX_FW_TYPE_CP_MES_KIQ,
+    GFX_FW_TYPE_MES_KIQ_STACK,
     GFX_FW_TYPE_RS64_PFP,
     GFX_FW_TYPE_RS64_PFP_P0_STACK,
     GFX_FW_TYPE_RS64_PFP_P1_STACK,
@@ -161,7 +165,10 @@ def _load_all_gfx_firmware(client, driver, ring: PSPRing, ctx,
     pfp_blob  = _read("gc_12_0_1_pfp.bin")
     me_blob   = _read("gc_12_0_1_me.bin")
     mec_blob  = _read("gc_12_0_1_mec.bin")
-    mes_blob  = _read("gc_12_0_1_mes.bin")
+    # gfx12 MES loads as CP_MES(33)/MES_STACK(34) + CP_MES_KIQ(81)/MES_KIQ_STACK
+    # (82) from the unified uni_mes image (amdgpu_psp.c:2666/2672). RS64_MES(76)
+    # is the gfx11/SOC21 type the gfx12 SOS rejects (status 0xFFFF0006).
+    mes_blob  = _read("gc_12_0_1_uni_mes.bin")
     sdma_blob = _read("sdma_7_0_1.bin")
 
     imu_iram, imu_dram = _extract_imu(imu_blob)
@@ -189,8 +196,10 @@ def _load_all_gfx_firmware(client, driver, ring: PSPRing, ctx,
         ("RS64_MEC_P1_STACK", GFX_FW_TYPE_RS64_MEC_P1_STACK,        mec_d),
         ("RS64_MEC_P2_STACK", GFX_FW_TYPE_RS64_MEC_P2_STACK,        mec_d),
         ("RS64_MEC_P3_STACK", GFX_FW_TYPE_RS64_MEC_P3_STACK,        mec_d),
-        ("RS64_MES",          GFX_FW_TYPE_RS64_MES,                 mes_u),
-        ("RS64_MES_STACK",    GFX_FW_TYPE_RS64_MES_STACK,           mes_d),
+        ("CP_MES",            GFX_FW_TYPE_CP_MES,                   mes_u),
+        ("MES_STACK",         GFX_FW_TYPE_MES_STACK,                mes_d),
+        ("CP_MES_KIQ",        GFX_FW_TYPE_CP_MES_KIQ,               mes_u),
+        ("MES_KIQ_STACK",     GFX_FW_TYPE_MES_KIQ_STACK,            mes_d),
         ("IMU_I",             GFX_FW_TYPE_IMU_I,                    imu_iram),
         ("IMU_D",             GFX_FW_TYPE_IMU_D,                    imu_dram),
         # RLC_G must be LAST — triggers the auto-autoload path on Linux.
