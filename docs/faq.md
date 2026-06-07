@@ -34,6 +34,64 @@ file.
 
 For hardware-specific notes and tuning guidance, see the [System optimization pages](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/index.html)
 
+### How do I determine my GPU family for `THEROCK_AMDGPU_FAMILIES`?
+
+TheRock requires you to specify your GPU family at build time via the
+`THEROCK_AMDGPU_FAMILIES` CMake variable (e.g., `gfx1100`, `gfx1030`). If you
+don't already have ROCm installed, you can determine your GPU family using
+standard Linux tools:
+
+**Option 1: Using `lspci` (recommended)**
+
+```bash
+lspci | grep -i 'vga\|display'
+# Example output:
+# 03:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI]
+#   Navi 23 [Radeon RX 6600/6600 XT/6600M] (rev c7)
+```
+
+Then look up your GPU model in the [SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
+list to find the corresponding family. For example:
+
+- **Radeon RX 6600 / 6600 XT** → `gfx1032` (RDNA 2)
+- **Radeon RX 6800 / 6800 XT** → `gfx1030` (RDNA 2)
+- **Radeon RX 7900 XTX** → `gfx1100` (RDNA 3)
+
+**Option 2: Using the kernel driver**
+
+```bash
+cat /sys/class/drm/card*/device/gpu_busy_percent 2>/dev/null
+# If this returns a value, your GPU is recognized by the kernel.
+# Then check the PCI ID:
+cat /sys/class/drm/card0/device/uevent | grep MODALIAS
+# The PCI ID (e.g., pci:v00001002d000073FF...) can be looked up in AMD documentation.
+```
+
+**Option 3: After installing ROCm (if available)**
+
+If you already have ROCm or TheRock installed, use `rocminfo`:
+
+```bash
+rocminfo | grep -i 'Name\|gfx'
+# Look for lines like:
+#   Name:                    gfx1032
+#   Marketing Name:          AMD Radeon RX 6600 XT
+```
+
+**Common GPU families:**
+
+| GPU Series                   | Family    | Architecture |
+| ---------------------------- | --------- | ------------ |
+| Radeon RX 7900 XTX/XT        | `gfx1100` | RDNA 3       |
+| Radeon RX 7600/7700 XT       | `gfx1101` | RDNA 3       |
+| Radeon RX 6800/6800 XT       | `gfx1030` | RDNA 2       |
+| Radeon RX 6700 XT            | `gfx1031` | RDNA 2       |
+| Radeon RX 6600/6600 XT       | `gfx1032` | RDNA 2       |
+| Radeon RX 760M (Strix Point) | `gfx1151` | RDNA 3.5     |
+
+For the complete list of supported families and their GPU models, see
+[therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake).
+
 ## gfx1151 (Strix Halo) specific questions
 
 Strix Halo specific notes and optimization guidance information are collected on
