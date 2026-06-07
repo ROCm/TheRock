@@ -109,13 +109,31 @@ def main(argv: list[str]) -> int:
     shared_tarball_url: str | None = None
 
     for f in tarball_files:
-        if f.name.startswith(f"therock-dist-{args.platform}-multiarch-"):
+        name = f.name
+
+        if name.startswith(f"therock-dist-{args.platform}-multiarch-"):
             shared_tarball_url = _build_s3_url(
                 dest.bucket,
                 dest.relative_path,
-                f.name,
+                name,
             )
             break
+
+        prefix = f"therock-dist-{args.platform}-"
+        suffix = ".tar.gz"
+
+        if name.startswith(prefix) and name.endswith(suffix):
+            stem = name[len(prefix) : -len(suffix)]
+
+            # Future RFC #4438:
+            # therock-dist-linux-<version>.tar.gz
+            if "-" not in stem:
+                shared_tarball_url = _build_s3_url(
+                    dest.bucket,
+                    dest.relative_path,
+                    name,
+                )
+                break
 
     if not shared_tarball_url:
         raise ValueError(
