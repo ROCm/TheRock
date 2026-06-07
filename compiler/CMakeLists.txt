@@ -36,14 +36,18 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "!!!CMAKE_BNARY_DIR compiler path: ${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin")
     if(EXISTS "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang" AND NOT DEFINED LLVM_HOST_TRIPLE)
       message(STATUS "!!!Grepping for clang target")
+      set(LLVM_HOST_TRIPLE "")
       execute_process(
-        COMMAND ${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang --version | grep -oP '(?<=Target: ).*'
-        ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
+	"${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang"
+        --print-target-triple
         OUTPUT_VARIABLE LLVM_HOST_TRIPLE
         OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY
       )
       message(STATUS "!! Execute process returned: ${LLVM_HOST_TRIPLE}")
-      if(DEFINED LLVM_HOST_TRIPLE and NOT "${LLVM_HOST_TRIPLE}" STREQUAL "")
+      if(LLVM_HOST_TRIPLE)
         set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}")
         set(THEROCK_LLVM_RPATH_WITH_TRIPLE "lib/llvm/lib/${THEROCK_LLVM_HOST_TRIPLE}")
       endif()
