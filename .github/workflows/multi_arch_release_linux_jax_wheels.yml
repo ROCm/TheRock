@@ -73,7 +73,7 @@ permissions:
   contents: read
   id-token: write
 
-run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, multiarch)
+run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
 
 jobs:
   build_jax_wheels:
