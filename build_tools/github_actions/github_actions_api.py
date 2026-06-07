@@ -480,30 +480,73 @@ def gha_query_workflow_runs_for_commit(
     return runs
 
 
+def gha_query_last_successful_workflow_runs(
+    github_repository: str = "ROCm/TheRock",
+    workflow_name: str = "multi_arch_ci.yml",
+    branch: str = "main",
+    max_runs: int = 20,
+) -> list[dict]:
+    """Gets recent successful workflow runs for a workflow on a branch.
+
+    Uses the GitHub REST API endpoint:
+    /actions/workflows/{workflow}/runs?status=success&branch={branch}
+
+    Results are returned most-recent-first.
+
+    Args:
+        github_repository: Repository in "owner/repo" format
+            (e.g. "ROCm/TheRock").
+        workflow_name: Workflow filename
+            (e.g. "multi_arch_ci.yml").
+        branch: Branch name to filter by.
+        max_runs: Maximum number of successful workflow runs to return.
+
+    Returns:
+        List of successful workflow run metadata dicts ordered most-recent-first.
+        Returns an empty list if no successful runs are found.
+    """
+    if max_runs < 1:
+        raise ValueError("max_runs must be at least 1")
+
+    url = (
+        f"https://api.github.com/repos/{github_repository}"
+        f"/actions/workflows/{workflow_name}/runs"
+        f"?status=success&branch={branch}&per_page={min(max_runs, 100)}"
+        f"&sort=created&direction=desc"
+    )
+    response = gha_send_request(url)
+    return (response.get("workflow_runs") or [])[:max_runs]
+
+
 def gha_query_last_successful_workflow_run(
     github_repository: str = "ROCm/TheRock",
     workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
 ) -> dict | None:
-    """Find the last successful run of a specific workflow on the specified branch.
+    """Gets the most recent successful workflow run for a workflow on a branch.
+
+    This is a convenience wrapper around
+    ``gha_query_last_successful_workflow_runs()`` that returns only the newest
+    successful workflow run.
 
     Args:
-        github_repository: Repository in format "owner/repo"
-        workflow_name: Name of the workflow file (e.g., "ci_nightly.yml")
-        branch: Branch to filter by (defaults to "main")
+        github_repository: Repository in "owner/repo" format
+            (e.g. "ROCm/TheRock").
+        workflow_name: Workflow filename
+            (e.g. "multi_arch_ci.yml").
+        branch: Branch name to filter by.
 
     Returns:
-        The full workflow run object of the most recent successful run on the specified branch,
-        or None if no successful runs are found.
+        Workflow run metadata dict for the most recent successful workflow run,
+        or ``None`` if no successful runs are found.
     """
-    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100&sort=created&direction=desc"
-    response = gha_send_request(url)
-
-    # Return the first (most recent) successful run
-    if response and response.get("workflow_runs"):
-        return response["workflow_runs"][0]
-    return None
+    runs = gha_query_last_successful_workflow_runs(
+        github_repository=github_repository,
+        workflow_name=workflow_name,
+        branch=branch,
+        max_runs=1,
+    )
+    return runs[0] if runs else None
 
 
 def gha_query_recent_branch_commits(
