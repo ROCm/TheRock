@@ -1483,7 +1483,6 @@ def load_all_firmware_recipe(dev: WindowsDevice, config: PSPConfig) -> None:
     pfp_blob = _read_firmware(fw_dir / f"gc_{gc}_pfp.bin")
     me_blob = _read_firmware(fw_dir / f"gc_{gc}_me.bin")
     mec_blob = _read_firmware(fw_dir / f"gc_{gc}_mec.bin")
-    mes_blob = _read_firmware(fw_dir / f"gc_{gc}_mes.bin")
     sdma_blob = _optional_firmware(fw_dir / f"sdma_{sdma_v}.bin")
 
     imu_i, imu_d = _recipe_extract_imu(imu_blob)
@@ -1491,7 +1490,12 @@ def load_all_firmware_recipe(dev: WindowsDevice, config: PSPConfig) -> None:
     pfp_u, pfp_d = _recipe_extract_rs64(pfp_blob)
     me_u, me_d = _recipe_extract_rs64(me_blob)
     mec_u, mec_d = _recipe_extract_rs64(mec_blob)
-    mes_u, mes_d = _recipe_extract_mes(mes_blob)
+    # gfx12 MES loads as CP_MES(33)/MES_STACK(34) [sched] + CP_MES_KIQ(81)/
+    # MES_KIQ_STACK(82) [KIQ] from the unified uni_mes image (amdgpu_psp.c:
+    # 2666/2672, enable_uni_mes). RS64_MES(76) is the SOC21/gfx11 type and the
+    # gfx12 SOS rejects it with status 0xFFFF0006 (#17 root cause).
+    uni_mes_blob = _read_firmware(fw_dir / f"gc_{gc}_uni_mes.bin")
+    uni_u, uni_d = _recipe_extract_mes(uni_mes_blob)
 
     batch: list[tuple[str, GFXFWType, bytes]] = []
     if sdma_blob is not None:
@@ -1513,8 +1517,10 @@ def load_all_firmware_recipe(dev: WindowsDevice, config: PSPConfig) -> None:
         ("RS64_MEC_P1", GFXFWType.RS64_MEC_P1_STACK, mec_d),
         ("RS64_MEC_P2", GFXFWType.RS64_MEC_P2_STACK, mec_d),
         ("RS64_MEC_P3", GFXFWType.RS64_MEC_P3_STACK, mec_d),
-        ("RS64_MES", GFXFWType.RS64_MES, mes_u),
-        ("RS64_MES_STACK", GFXFWType.RS64_MES_STACK, mes_d),
+        ("CP_MES", GFXFWType.CP_MES, uni_u),
+        ("MES_STACK", GFXFWType.MES_STACK, uni_d),
+        ("CP_MES_KIQ", GFXFWType.CP_MES_KIQ, uni_u),
+        ("MES_KIQ_STACK", GFXFWType.MES_KIQ_STACK, uni_d),
         ("IMU_I", GFXFWType.IMU_I, imu_i),
         ("IMU_D", GFXFWType.IMU_D, imu_d),
         ("RLC_G", GFXFWType.RLC_G, rlc.get(1, b"")),  # MUST be last
@@ -1535,6 +1541,13 @@ def load_all_firmware_recipe(dev: WindowsDevice, config: PSPConfig) -> None:
             print(f"  PSP[recipe]: {label:<16} type={int(fw_type):<3} REJECTED - {e}")
     if failures:
         print(f"  PSP[recipe]: {len(failures)} fw type(s) rejected (non-fatal)")
+
+    # If the CP_MES/CP_MES_KIQ PSP load succeeded, skip the post-bootload manual
+    # VRAM IC_BASE staging (which only reaches the MES reset stub and stalls --
+    # #17) and enable the PSP-loaded image directly, like amdgpu.
+    mes_failed = any(lbl.startswith("CP_MES") for lbl, _t, _e in failures)
+    setattr(config, "mes_psp_loaded", not mes_failed)
+    print(f"  PSP[recipe]: mes_psp_loaded={not mes_failed}")
 
     # 4. AUTOLOAD_RLC -- PSP runs the full backdoor autoload internally.
     trigger_rlc_autoload(dev, config)

@@ -2419,8 +2419,12 @@ def init_gfx_for_compute(
     mec_cntl = _gc_reg(dev, gc_base, regCP_MEC_RS64_CNTL, base_idx=1)
     print(f"  GFX: MEC enabled (CP_MEC_RS64_CNTL=0x{mec_cntl:08X})")
     if ucode_start:
-        if not getattr(psp_config, "rlc_backdoor_autoloaded", False):
+        if (not getattr(psp_config, "rlc_backdoor_autoloaded", False)
+                and not getattr(psp_config, "mes_psp_loaded", False)):
             _program_mes_ucode_buffers(dev, gc_base, psp_config)
+        elif getattr(psp_config, "mes_psp_loaded", False):
+            print("  GFX: MES PSP-loaded (CP_MES/CP_MES_KIQ) -- "
+                  "skipping manual IC_BASE staging (#17)")
         _enable_mes_from_ucode(dev, gc_base, ucode_start)
     return gc_base
 
