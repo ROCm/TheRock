@@ -278,6 +278,8 @@ skip_tests = {
             # AssertionError: False is not true
             # self.assertTrue(torch.allclose(x.grad.cpu(), xx.grad, rtol=rtol, atol=1e-3))
             "test_warp_softmax_64bit_indexing_cuda_float16",
+            # RuntimeError: input tensor has spatial dimension larger than the kernel capacity
+            "test_upsamplingNearest2d_launch_rocm",
         ],
         "torch": [
             # Large test that isn't very CI-friendly (takes 1-180 seconds depending on runner and torch version)
@@ -286,7 +288,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
+            "test_memory_format_operators_cuda",
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])
