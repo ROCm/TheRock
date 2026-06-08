@@ -125,6 +125,11 @@ class BuildCtestCommandTest(unittest.TestCase):
         self.assertIn("-V", cmd)
         self.assertIn("--tests-information", cmd)
 
+    def test_no_tests_is_error(self):
+        # Fail (non-zero) when the label selection matches no tests.
+        cmd = self._build("quick", "", set())
+        self.assertIn("--no-tests=error", cmd)
+
     def test_category_exclude_label_applied(self):
         exclude_labels = {"quick_exclude", "standard_exclude"}
         cmd = self._build("quick", "", set(), exclude_labels)
