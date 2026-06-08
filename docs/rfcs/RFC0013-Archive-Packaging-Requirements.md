@@ -1,34 +1,31 @@
 ---
 author: Liam Berry (LiamfBerry), Saad Rahim (saadrahim)
 created: 2026-04-09
-modified: 2026-06-03
+modified: 2026-06-08
 status: draft
 ---
 
 # ROCm SDK Archive Packaging for Windows and Linux
 
-With the implementation of TheRock build system, a portable and system-agnostic delivery mechanism is required for the ROCm SDK on Windows to complement MSI-based installation and an equivalent system is required for Linux. This RFC defines the layout, behavioural, and distribution requirements for ZIP and TAR archive packages that deliver the ROCm SDK on Windows and Linux, respectively, aligned with TheRock.
+With the implementation of TheRock build system, a portable and system-agnostic delivery mechanism is required for the ROCm SDK to complement platform-native installation (MSI on Windows). This RFC defines the layout, behavioural, and distribution requirements for the archive packages that deliver the ROCm SDK: ZIP archives on Windows and TAR archives on Linux.
+
+Both archive formats are archives of the same SDK file-tree. The requirements below are therefore defined once as a shared contract, with a final section calling out the few genuinely platform-specific differences.
 
 Our goals are to:
 
-1. **Provide a portable, zero-footprint SDK delivery mechanism** suitable for CI pipelines, offline deployments, and advanced users who manage their own SDK roots.
-1. **Ensure ZIP archive layout is consistent and predictable** relative to the MSI-installed directory tree.
-1. **Define ZIP as the authoritative upstream artifact** for Winget ingestion and internal automation hosted on `repo.amd.com`.
+1. **Provide a portable, self-contained SDK delivery mechanism** that leaves no trace on the host outside the extracted directory — suitable for CI pipelines, offline deployments, and advanced users who manage their own SDK roots.
+1. **Ensure archive layout is consistent and predictable** relative to the platform-native installed directory tree.
+1. **Define the archive as the authoritative upstream artifact** for downstream automation hosted on `repo.amd.com`.
 1. **Preserve full SDK functionality** when the extracted directory is used directly as the SDK root, without ambient system configuration.
-1. **Ensure TAR archive layout is consistent and predictable**
 
 ## Scope
 
 ### In Scope
 
-- ZIP archive layout and naming conventions for ROCm Windows packages built with TheRock.
-- Behavioral constraints on ZIP packages with respect to the host system.
-- SDK root portability requirements for tools and scripts contained within ZIP archives.
-- Distribution hosting on repo.amd.com for Winget ingestion and internal automation.
-- TAR archive layout and naming conventions for ROCm Linux packages built with TheRock.
-- Behavioral constraints on TAR packages with respect to the host system.
-- SDK root portability requirements for tools and scripts contained within TAR archives.
-- Distribution hosting on repo.amd.com for TAR packages.
+- Archive layout and naming conventions for ROCm packages built with TheRock (ZIP on Windows, TAR on Linux).
+- Behavioral constraints on archive packages with respect to the host system.
+- SDK root portability requirements for tools and scripts contained within archives.
+- Distribution hosting on repo.amd.com for downstream automation.
 
 ### Out of Scope
 
@@ -38,190 +35,134 @@ Our goals are to:
 - Windows display driver packaging.
 - WSL and WSL2 package requirements.
 
-## ZIP Package Requirements
+## Archive Contract
+
+The following requirements apply to both ZIP and TAR archives. Platform-specific differences are listed in [Platform Specifics](#platform-specifics).
 
 ### Package Format
 
-ZIP packages must provide a portable file-tree representation of a Windows ROCm installation. The extracted layout must be identical to what a corresponding MSI installation produces at its versioned install root, ensuring interoperability between the two delivery mechanisms.
+Archives must provide a portable file-tree representation of a ROCm installation. The extracted layout must mirror the platform-native installed layout as closely as practical, ensuring interoperability between the two delivery mechanisms.
 
-ZIP archives are intended for power users, CI pipelines, and offline deployments where MSI installation is unavailable or undesirable.
+Archives are intended for power users, CI pipelines, and offline deployments where platform-native installation is unavailable or undesirable.
 
-ZIP packages will be offered as either a per GPU architecture target denoted by `gfx<target>` (e.g., `gfx1100`, `gfx1201`) or contain all GPU targets with no denotation as this is the default. Both package types will offer two variants: a full version containing all build artifacts and a cleaned version that has the intermediary build files and test files (including unit tests) removed; this will be denoted with `-lite-` in the package name.
+### Package Types and Variants
 
-All ZIP packages will also have an external sha256 hash validation file for integrity verification. 
+Archives are offered along two axes:
+
+- **Target scope** — either a single GPU target denoted by `gfx<target>` (e.g., `gfx1100`, `gfx1201`), or all GPU targets with no denotation (the default).
+- **Content variant** — either a *full* package containing all build artifacts, or a *lite* package with intermediary build files and test files (including unit tests) removed, denoted by `lite` in the package name.
 
 ### Naming Convention
 
-ZIP archives must follow the following naming convention:
+Archives must follow this naming convention, where `<os>` and `<ext>` are platform-specific (see [Platform Specifics](#platform-specifics)):
 
 ```
-rocm-sdk-X.Y.Z.zip
-rocm-sdk-gfx<target>-X.Y.Z.zip
+rocm-sdk-X.Y.Z-<os>.<ext>
+rocm-sdk-gfx<target>-X.Y.Z-<os>.<ext>
+rocm-sdk-lite-X.Y.Z-<os>.<ext>
+rocm-sdk-lite-gfx<target>-X.Y.Z-<os>.<ext>
 ```
 
 Where `<target>` is an individual GPU target identifier (e.g., `gfx1100`, `gfx1201`) rather than a GPU family grouping, aligning with Python package and native Linux package distribution conventions.
 
-Additionally there will be two variant forms of these packages:
+The `<os>` and `<ext>` tags describe two different things and are both required:
+
+- **`<ext>`** is the container format — how the file is packed (`zip` vs `tar.gz`). A consumer needs it to know whether to unzip or untar the file.
+- **`<os>`** is the platform the SDK inside was built for. It is explicit metadata about the payload, not the container.
+
+These are independent: ZIP and TAR formats both work on either operating system, so the extension alone cannot tell you which platform an archive targets. By convention TheRock pairs `windows` with `zip` and `linux` with `tar.gz` (see [Platform Specifics](#platform-specifics)), but the explicit `<os>` tag means consumers can identify the target platform directly rather than inferring it from that pairing. The `<os>` field is also where the host CPU architecture is recorded when needed (below).
+
+The host CPU architecture is part of this model but defaults to `x86_64` when omitted, which is the only architecture currently distributed. When non-x86 host builds are distributed (see [issue #5518](https://github.com/ROCm/TheRock/issues/5518)), only those archives carry an explicit architecture suffix, leaving x86_64 names unchanged:
 
 ```
-rocm-sdk-lite-X.Y.Z.zip
-rocm-sdk-lite-gfx<target>-X.Y.Z.zip
+rocm-sdk-gfx<target>-X.Y.Z-linux.tar.gz            # x86_64 host (implicit)
+rocm-sdk-gfx<target>-X.Y.Z-linux_ppc64le.tar.gz    # non-x86 host (explicit)
 ```
 
-Packages will all be paired with equivalent hash validation files:
+Each archive is paired with an equivalent hash validation file (see [Integrity](#integrity)):
 
 ```
-rocm-sdk-gfx<target>-X.Y.Z.zip
-rocm-sdk-gfx<target>-X.Y.Z.zip.sha256
+rocm-sdk-gfx<target>-X.Y.Z-<os>.<ext>
+rocm-sdk-gfx<target>-X.Y.Z-<os>.<ext>.sha256
 ```
+
+> Note: This per-target scheme is the intended convergence point for ROCm archive naming and supersedes the existing nightly `therock-dist-*` tarball naming (which currently groups by GPU family, e.g. `therock-dist-linux-gfx110X-all`, via `build_tools/build_tarballs.py`). Aligning the existing tarball pipeline to this convention is tracked separately.
 
 ### Directory Layout
 
-The top-level directory inside the archive must be versioned to prevent extraction collisions when multiple versions are present on the same system:
+Archives do not contain a wrapping top-level directory. The SDK file-tree sits at the archive root, so extracting an archive directly yields the SDK root:
 
 ```
-rocm-sdk-X.Y.Z.zip
-  rocm-sdk-X.Y\
-      bin\
-      lib\
-      include\
-      share\
-      tools\
-      version.txt
+rocm-sdk-X.Y.Z-<os>.<ext>
+  bin/
+  lib/
+  include/
+  share/
+  tools/
+  version.txt
 ```
 
-The extracted root of this directory serves as the SDK root for all tools and scripts contained within the archive.
+This preserves the "extract and point at it" pattern: the extracted contents are the SDK root for all tools and scripts in the archive, with no dynamically-named subfolder to navigate into.
+
+The version is carried in the archive filename rather than an inner directory. When extracting multiple versions side by side, the caller is responsible for choosing distinct destination directories (e.g., `tar -C <dir>` or extracting into a named folder).
 
 ### Behavioural Requirements
 
-ZIP packages must be entirely passive with respect to the host system. A ZIP package:
+Extraction is the only action an archive performs. Unpacking an archive must not imply any system integration: all configuration of the host environment is the responsibility of the caller, whether that is the user, a CI script, or a higher-level installer such as the MSI package.
 
-- Must not modify environment variables.
-- Must not append to or modify `PATH`.
-- Must not create, modify, or delete registry entries.
-- Must not execute installation logic, pre/post-install scripts, or elevation prompts.
+Concretely, an archive does not:
 
-All system integration, including environment configuration, `PATH` management, and registry entries, is the responsibility of the caller; whether that is the user, a CI script, or a higher-level installer such as the MSI package.
+- Modify environment variables or `PATH`.
+- Run installation logic, pre/post-install scripts, or elevation prompts.
+
+Platform-specific passivity and safety constraints (registry entries, shell configuration files, path traversal, symlink containment) are listed in [Platform Specifics](#platform-specifics).
 
 ### SDK Root Portability
 
-Tools and scripts inside ZIP packages must function correctly when the extracted directory is used directly as the SDK root, without any ambient system configuration. Specifically:
+Tools and scripts inside archives must function correctly when the extracted directory is used directly as the SDK root, without any ambient system configuration. Specifically:
 
-- Binaries in `bin\` must not assume a fixed installation prefix set at build time.
+- Binaries in `bin/` must not assume a fixed installation prefix set at build time.
 - Path resolution within the SDK must be relative to the extracted root or dynamically resolved at runtime.
 - Tools must remain suitable for CI, offline deployment, and advanced users operating without `ROCM_PATH` or `PATH` pre-configured by the environment.
 
-### Distribution
+### Integrity
 
-ZIP archives are hosted on the AMD Official Repository under the structure defined by [RFC0012 Repo Structure](RFC0012-Repo-Structure.md):
-
-```
-<stream>.repo.amd.com/rocm/core/zip/
-```
-
-Where `<stream>` is one of `nightly`, `rc`, `stable`, or `lts` as defined by the repository stream model.
-
-This repository serves as the authoritative source for Winget manifest ingestion and internal automation pipelines that consume versioned SDK artifacts directly. ZIP artifacts hosted here must be versioned and integrity-checked.
-
-Additionally the ZIP archive directory will contain a `SHA256SUMS` file that contains hashes for all the provided packages.
-
-```
-<stream>.repo.amd.com/rocm/core/zip/
-  <specified ZIP packages>
-  SHA256SUMS
-```
-
-## TAR Package Requirements
-
-### Package Format
-
-TAR packages must provide a portable file-tree representation of a Linux ROCm installation. The extracted layout must be identical to what a standard installation produces at its versioned install root, ensuring interoperability between the two delivery mechanisms.
-
-TAR archives are intended for power users, CI pipelines, and offline deployments where other installation methods are unavailable or undesirable.
-
-TAR packages will be offered as either a per GPU architecture target denoted by `gfx<target>` (e.g., `gfx1100`, `gfx1201`) or contain all GPU targets with no denotation as this is the default. Both package types will offer two variants: a full version containing all build artifacts and a cleaned version that has the intermediary build files and test files (including unit tests) removed; this will be denoted with `-lite-`.
-
-All TAR packages will also have an external sha256 hash validation file for integrity verification. 
-
-### Naming Convention
-
-TAR archives must follow the following naming convention:
-
-```
-rocm-sdk-X.Y.Z.tar.gz
-rocm-sdk-gfx<target>-X.Y.Z.tar.gz
-```
-
-Where `<target>` is an individual GPU target identifier (e.g., `gfx1100`, `gfx1201`) rather than a GPU family grouping, aligning with Python package and native Linux package distribution conventions.
-
-Additionally there will be two variant forms of these packages:
-
-```
-rocm-sdk-lite-X.Y.Z.tar.gz
-rocm-sdk-lite-gfx<target>-X.Y.Z.tar.gz
-```
-
-Packages will all be paired with equivalent hash validation files:
-
-```
-rocm-sdk-gfx<target>-X.Y.Z.tar.gz
-rocm-sdk-gfx<target>-X.Y.Z.tar.gz.sha256
-```
-
-### Directory Layout
-
-The top-level directory inside the archive must be versioned to prevent extraction collisions when multiple versions are present on the same system:
-
-```
-rocm-sdk-X.Y.Z.tar.gz
-  rocm-sdk-X.Y\
-      bin\
-      lib\
-      include\
-      share\
-      tools\
-      version.txt
-```
-
-The extracted root of this directory serves as the SDK root for all tools and scripts contained within the archive.
-
-### Behavioural Requirements
-
-TAR packages must be entirely passive with respect to the host system. A TAR package:
-
-- Must not modify environment variables.
-- Must not append to or modify shell configuration files (.bashrc, .zshrc).
-- Must not execute installation logic, pre/post-install scripts, or elevation prompts.
-- Must not contain absolute paths.
-- Must not contain path traversal entries (`../`).
-- Ensure symlinks do not resolve outside the archive root.
-
-### SDK Root Portability
-
-Tools and scripts inside TAR packages must function correctly when the extracted directory is used directly as the SDK root, without any ambient system configuration. Specifically:
-
-- Binaries in `bin\` must not assume a fixed installation prefix set at build time.
-- Path resolution within the SDK must be relative to the extracted root or dynamically resolved at runtime.
-- Scripts must use portable interpreters (e.g., /usr/bin/env).
-- Tools must remain suitable for CI, offline deployment, and advanced users operating without pre-configured environment variables.
+Every archive is accompanied by an external `.sha256` file containing the archive's SHA-256 digest in coreutils format (`<hex>␣␣<filename>`), verifiable with `sha256sum -c` on Linux or `Get-FileHash` on Windows.
 
 ### Distribution
 
-TAR archives are hosted on the AMD Official Repository under the structure defined by [RFC0012 Repo Structure](RFC0012-Repo-Structure.md):
+Archives are hosted on the AMD Official Repository under the structure defined by [RFC0012 Repo Structure](RFC0012-Repo-Structure.md):
 
 ```
-<stream>.repo.amd.com/rocm/core/tarball/
+<stream>.repo.amd.com/rocm/core/<format-dir>/
+  <archive packages>
+  <per-archive .sha256 files>
 ```
 
-Where `<stream>` is one of `nightly`, `rc`, `stable`, or `lts` as defined by the repository stream model.
+Where `<stream>` is one of the canonical streams `dev`, `nightly`, `rc`, or `stable` (with `ltsrc` and `lts` reserved for future long-term-support use), as defined by the repository stream model, and `<format-dir>` is the platform-specific directory (see [Platform Specifics](#platform-specifics)). Artifacts hosted here must be versioned and integrity-checked. This repository serves as the authoritative source for downstream automation pipelines (for example, Winget manifest ingestion on Windows).
 
-This repository serves as the authoritative source for internal automation pipelines that consume versioned SDK artifacts directly. TAR artifacts hosted here must be versioned and integrity-checked.
+## Platform Specifics
 
-Additionally the TAR archive directory will contain a `SHA256SUMS` file that contains hashes for all the provided packages.
+The archive formats differ only in the following respects:
 
-```
-<stream>.repo.amd.com/rocm/core/tarball/
-  <specified TAR packages>
-  SHA256SUMS
-```
+| Concern                         | Windows (ZIP) | Linux (TAR) |
+| ------------------------------- | ------------- | ----------- |
+| OS tag `<os>`                   | `windows`     | `linux`     |
+| Archive extension `<ext>`       | `zip`         | `tar.gz`    |
+| Distribution dir `<format-dir>` | `zip`         | `tarball`   |
 
+### Windows (ZIP)
+
+In addition to the shared [Behavioural Requirements](#behavioural-requirements), a ZIP archive must not create, modify, or delete registry entries.
+
+### Linux (TAR)
+
+In addition to the shared [Behavioural Requirements](#behavioural-requirements), a TAR archive must not:
+
+- Append to or modify shell configuration files (e.g., `.bashrc`, `.zshrc`).
+- Contain absolute paths.
+- Contain path traversal entries (`../`).
+
+Symlinks must not resolve outside the archive root.
+
+For [SDK Root Portability](#sdk-root-portability), scripts must additionally use portable interpreters (e.g., `/usr/bin/env`).
