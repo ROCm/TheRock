@@ -128,7 +128,7 @@
             <File Id="f_amdrocm_blas_dev_lch_ht.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-targets.cmake" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_blas_dev_licmhi" Name="lib\cmake\hipblaslt">
+        <Directory Id="amdrocm_blas_dev_licmhi" Name="hipblaslt">
           <Component Id="c_amdrocm_blas_dev_licmhi_hcv.cmake" Guid="*">
             <File Id="f_amdrocm_blas_dev_licmhi_hcv.cmake" Source="$(var.BuildRoot)/math-libs/rocWMMA/dist/lib/cmake/hipblaslt/hipblaslt-config-version.cmake" KeyPath="yes" />
           </Component>
