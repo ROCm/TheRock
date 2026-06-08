@@ -23,6 +23,14 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_pytorch:
+        description: "Build PyTorch wheels (defaults to true for workflow_call)"
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -69,6 +77,8 @@ jobs:
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      linux_amdgpu_families: ${{ fromJSON(inputs.build_config).linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ fromJSON(inputs.build_config).windows_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -126,7 +136,7 @@ jobs:
     steps:
       - name: Trigger test_artifacts
         if: ${{ matrix.family_info.test-runs-on != '' }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: test_artifacts.yml
           inputs: |
@@ -146,12 +156,13 @@ jobs:
   trigger_release_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
     name: Trigger Release PyTorch Wheels
+    if: ${{ inputs.build_pytorch != false }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
     steps:
       - name: Trigger PyTorch Build
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: multi_arch_release_windows_pytorch_wheels.yml
           inputs: |
@@ -159,5 +170,6 @@ jobs:
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "release_type": "${{ inputs.release_type }}",
-              "ref": "${{ inputs.ref || '' }}"
+              "ref": "${{ inputs.ref || '' }}",
+              "python_version": "${{ inputs.python_version }}"
             }
