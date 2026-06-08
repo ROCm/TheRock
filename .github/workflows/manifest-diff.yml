@@ -4,37 +4,72 @@ on:
   workflow_dispatch:
     inputs:
       start_ref:
-        description: 'Start commit SHA or workflow run ID (required when using workflow mode or commit SHA mode without find-last-successful)'
+        description: 'Start commit SHA or workflow run ID. Used when neither pr_base_ref nor find_last_run is set (start resolution precedence: pr_base_ref > find_last_run > start_ref).'
         required: false
         type: string
       end_ref:
-        description: 'End commit SHA or workflow run ID'
+        description: 'End commit SHA (or, with workflow_mode=true, a workflow run ID).'
         required: true
         type: string
       workflow_mode:
-        description: 'Treat inputs as workflow run IDs instead of commit SHAs'
+        description: 'Interpret start_ref and end_ref as workflow run IDs instead of commit SHAs (pr_base_ref and find_last_run are unaffected).'
         required: false
         type: boolean
         default: false
-      find_last_successful:
-        description: 'Workflow file to find last successful run (e.g., ci_nightly.yml)'
+      find_last_run:
+        description: 'Workflow filename (e.g. multi_arch_ci.yml). When set, start_ref is resolved as the head SHA of that workflow''s most recent run on `branch` that concluded with success or failure (cancelled / skipped / in-progress runs are ignored).'
         required: false
         type: string
+      pr_base_ref:
+        description: 'PR base branch name (e.g. main). When set, start_ref is resolved as the merge-base between end_ref and the named branch via the GitHub Compare API — rebase-safe, works on rewritten PR histories.'
+        required: false
+        type: string
+      branch:
+        description: 'Branch to scope find_last_run lookups against (default: main). Only consulted when find_last_run is set; ignored otherwise.'
+        required: false
+        type: string
+        default: 'main'
+      repository:
+        description: 'Repository to check out (default: the repository hosting this workflow run).'
+        required: false
+        type: string
+        default: ''
+      ref:
+        description: 'Git ref to check out (default: the ref hosting this workflow run).'
+        required: false
+        type: string
+        default: ''
   workflow_call:
     inputs:
       start_ref:
         required: false
         type: string
       end_ref:
-        required: true
+        required: false
         type: string
+        default: ''
       workflow_mode:
         required: false
         type: boolean
         default: false
-      find_last_successful:
+      find_last_run:
         required: false
         type: string
+      pr_base_ref:
+        required: false
+        type: string
+      branch:
+        required: false
+        type: string
+        default: 'main'
+      repository:
+        required: false
+        type: string
+        default: ''
+      ref:
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -42,39 +77,52 @@ permissions:
 jobs:
   generate-report:
     name: Generate Manifest Diff Report
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    # Non-blocking under CI; strict on manual dispatch so regressions surface red.
+    continue-on-error: ${{ github.event_name != 'workflow_dispatch' }}
     permissions:
       id-token: write
       contents: read
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
 
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+
       - name: Generate manifest diff report
+        id: gen-report
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            --end "${{ inputs.end_ref }}" \
-            --start "${{ inputs.start_ref || '' }}" \
-            --find-last-successful "${{ inputs.find_last_successful || '' }}" \
+            --end "${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}" \
+            --start "${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}" \
+            --find-last-run "${{ inputs.find_last_run }}" \
+            --pr-base-ref "${{ inputs.pr_base_ref || (github.event_name == 'pull_request' && github.event.pull_request.base.ref) || '' }}" \
+            --branch "${{ inputs.branch }}" \
             ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 
-      - name: Configure AWS Credentials
-        if: ${{ github.repository == 'ROCm/TheRock' }}
-        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+      - name: Configure AWS credentials for artifact uploads
+        if: ${{ steps.gen-report.conclusion == 'success' }}
+        uses: ./.github/actions/configure_aws_artifacts_credentials
 
       - name: Upload Report to S3
-        if: ${{ github.repository == 'ROCm/TheRock' }}
+        if: ${{ steps.gen-report.conclusion == 'success' }}
         run: |
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family manifest-diff \
+            --subfolder manifest-diff \
             --report-path reports \
             --index-file-name index.html

@@ -480,29 +480,39 @@ def gha_query_workflow_runs_for_commit(
     return runs
 
 
-def gha_query_last_successful_workflow_run(
+def gha_query_last_workflow_run(
     github_repository: str = "ROCm/TheRock",
     workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
+    accepted_statuses: set[str] | None = None,
 ) -> dict | None:
-    """Find the last successful run of a specific workflow on the specified branch.
+    """Find the most recent run of a workflow on ``branch`` whose conclusion
+    is in ``accepted_statuses`` (default ``{"success"}``).
 
-    Args:
-        github_repository: Repository in format "owner/repo"
-        workflow_name: Name of the workflow file (e.g., "ci_nightly.yml")
-        branch: Branch to filter by (defaults to "main")
-
-    Returns:
-        The full workflow run object of the most recent successful run on the specified branch,
-        or None if no successful runs are found.
+    Paginates the most recent runs (newest first), filtering client-side,
+    up to ``MAX_PAGES * PER_PAGE`` runs. Returns ``None`` if no matching
+    run is found within that window.
     """
-    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100&sort=created&direction=desc"
-    response = gha_send_request(url)
-
-    # Return the first (most recent) successful run
-    if response and response.get("workflow_runs"):
-        return response["workflow_runs"][0]
+    if accepted_statuses is None:
+        accepted_statuses = {"success"}
+    MAX_PAGES = 5
+    PER_PAGE = 100
+    page = 1
+    while page <= MAX_PAGES:
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/workflows/{workflow_name}/runs"
+            f"?branch={branch}&per_page={PER_PAGE}&sort=created&direction=desc"
+            f"&page={page}"
+        )
+        response = gha_send_request(url)
+        runs = response.get("workflow_runs", []) if response else []
+        for run in runs:
+            if run.get("conclusion") in accepted_statuses:
+                return run
+        if len(runs) < PER_PAGE:
+            break  # Partial or empty page = no more runs to fetch.
+        page += 1
     return None
 
 
