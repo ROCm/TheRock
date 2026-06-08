@@ -428,6 +428,14 @@ Note the sequence of commits and tags that were created:
 - `main` is checked out initially and is tagged `THEROCK_UPSTREAM_DIFFBASE`
 - hipify is run and its changes are tagged `THEROCK_HIPIFY_DIFFBASE`
 
+For build workflows that need package metadata such as
+`torch.version.git_version` to identify the fetched upstream PyTorch commit,
+pass `--no-commit-hipify`. That still runs HIPIFY, but leaves the source tree
+dirty instead of creating a local `DO NOT SUBMIT: HIPIFY` commit.
+
+For test-only source checkouts, pass `--no-hipify --no-submodules` to fetch the
+PyTorch test files without HIPIFY preprocessing or submodule checkout.
+
 ### Alternative branches and versions
 
 #### PyTorch main branches
