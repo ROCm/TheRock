@@ -360,6 +360,84 @@ class StageImpactTest(unittest.TestCase):
         self.assertEqual(result.matched_source_sets, ())
         self.assertIn("windows-only", result.unmatched_inputs)
 
+    def write_nested_path_topology(self) -> None:
+        self.write_topology("""
+            [source_sets.compilers]
+            description = "Compiler toolchain submodules"
+            submodules = ["amd-llvm"]
+
+            [source_sets.math-libs]
+            description = "Math libraries"
+            submodules = ["libhipcxx"]
+
+            [artifact_groups.compiler]
+            description = "Compiler"
+            type = "generic"
+            source_sets = ["compilers"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "per-arch"
+            source_sets = ["math-libs"]
+
+            [build_stages.compiler-runtime]
+            description = "Compiler runtime"
+            artifact_groups = ["compiler"]
+
+            [build_stages.math-libs]
+            description = "Math libs"
+            artifact_groups = ["math-libs"]
+            type = "per-arch"
+
+            [artifacts.amd-llvm]
+            artifact_group = "compiler"
+            type = "target-neutral"
+
+            [artifacts.prim]
+            artifact_group = "math-libs"
+            type = "target-specific"
+        """)
+
+    def test_nested_math_libs_path_maps_to_math_libs(self):
+        self.write_nested_path_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["math-libs/libhipcxx/include/foo.hpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertIn("math-libs", result.matched_source_sets)
+        self.assertIn("math-libs", result.impacted_artifact_groups)
+        self.assertIn("math-libs", result.rebuild_stages)
+
+    def test_root_level_path_still_maps(self):
+        self.write_nested_path_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["amd-llvm/src/foo.cpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertIn("compilers", result.matched_source_sets)
+        self.assertIn("compiler-runtime", result.rebuild_stages)
+
+    def test_nested_compiler_path_maps_to_compiler_runtime(self):
+        self.write_nested_path_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["compiler/amd-llvm/lib/Target/AMDGPU/foo.cpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertIn("compilers", result.matched_source_sets)
+        self.assertIn("compiler", result.impacted_artifact_groups)
+        self.assertIn("compiler-runtime", result.rebuild_stages)
 
 if __name__ == "__main__":
     unittest.main()

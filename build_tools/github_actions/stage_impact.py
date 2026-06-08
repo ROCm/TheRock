@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+from sys import platform
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from _therock_utils.build_topology import BuildTopology, SourceSet
@@ -181,9 +182,16 @@ class StageImpactAnalyzer:
         if source_set is not None:
             return source_set
 
-        # Then try the first path component as the submodule root.
-        root_name = PurePosixPath(item).parts[0] if PurePosixPath(item).parts else item
-        return self.topology.get_source_set_for_submodule(root_name, platform=platform)
+        # Then try each path component as a possible submodule root.
+        for part in PurePosixPath(item).parts:
+            source_set = self.topology.get_source_set_for_submodule(
+                part,
+                platform=platform,
+            )
+            if source_set is not None:
+                return source_set
+
+        return None
 
     def _resolve_artifact_groups(self, source_set_names: Set[str]) -> Set[str]:
         source_set_to_groups = self.topology.get_source_set_to_artifact_groups()
