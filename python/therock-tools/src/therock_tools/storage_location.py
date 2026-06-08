@@ -8,7 +8,7 @@ direction.  It is the bridge between path computation modules (like
 
 Usage::
 
-    from _therock_utils.storage_location import StorageLocation
+    from therock_tools.storage_location import StorageLocation
 
     loc = StorageLocation("my-bucket", "some/path/file.tar.xz")
     loc.s3_uri        # "s3://my-bucket/some/path/file.tar.xz"

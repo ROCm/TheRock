@@ -28,13 +28,13 @@ from urllib.parse import urlencode, quote
 # Add parent directory to path for artifact and _therock_utils imports.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from artifact_manager import ARTIFACT_COMPONENTS
-from _therock_utils.artifact_backend import (
+from therock_tools.artifact_manager import ARTIFACT_COMPONENTS
+from therock_tools.artifact_backend import (
     ARTIFACT_EXTENSIONS,
     ArtifactBackend,
     S3Backend,
 )
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 from github_actions_api import gha_send_request
 

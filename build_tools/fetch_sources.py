@@ -31,7 +31,7 @@ from _therock_utils.branch_config import (
     get_source_sets_for_artifact_groups,
     load_branch_config,
 )
-from _therock_utils.build_topology import BuildTopology, ExternalGitSource
+from therock_tools.build_topology import BuildTopology, ExternalGitSource
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent

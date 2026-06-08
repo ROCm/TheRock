@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 import expand_amdgpu_families
-from _therock_utils.cmake_amdgpu_targets import expand_families
+from therock_tools.cmake_amdgpu_targets import expand_families
 
 
 _SAMPLE_MAP: dict[str, list[str]] = {

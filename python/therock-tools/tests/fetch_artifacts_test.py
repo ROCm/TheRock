@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifact_backend import ArtifactBackend
-from fetch_artifacts import (
+from therock_tools.artifact_backend import ArtifactBackend
+from therock_tools.fetch_artifacts import (
     list_artifacts_for_group,
     filter_artifacts,
 )

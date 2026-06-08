@@ -39,8 +39,8 @@ PLATFORM = platform.system().lower()
 
 # _therock_utils is a sibling package in the same build_tools/ directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from _therock_utils.storage_location import StorageLocation
+from therock_tools.storage_backend import StorageBackend, create_storage_backend
+from therock_tools.storage_location import StorageLocation
 
 
 def log(*args):
@@ -333,7 +333,7 @@ def generate_index_for_directory(
 
 def run(args) -> None:
     # WorkflowOutputRoot is only needed in the CLI path (to resolve bucket from GHA env).
-    from _therock_utils.workflow_outputs import WorkflowOutputRoot
+    from therock_tools.workflow_outputs import WorkflowOutputRoot
 
     output_root = (
         WorkflowOutputRoot.for_local(run_id=args.run_id, platform=PLATFORM)

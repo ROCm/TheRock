@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.build_topology import (
+from therock_tools.build_topology import (
     BuildStage,
     ArtifactGroup,
     Artifact,

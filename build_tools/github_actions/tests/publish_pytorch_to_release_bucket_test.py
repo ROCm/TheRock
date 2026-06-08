@@ -25,7 +25,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.upload_directory")
     def test_dev_uploads_to_v4_whl_in_dev_python(self, mock_upload):
         mock_upload.return_value = 3
         main(
@@ -46,7 +46,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         self.assertEqual(dest.relative_path, "v4/whl")
         self.assertEqual(call_args.kwargs.get("include"), ["*.whl"])
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.upload_directory")
     def test_nightly_selects_nightly_bucket(self, mock_upload):
         mock_upload.return_value = 2
         main(
@@ -63,7 +63,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         self.assertEqual(dest.bucket, "therock-nightly-python")
         self.assertEqual(dest.relative_path, "v4/whl")
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.upload_directory")
     def test_prerelease_selects_prerelease_bucket(self, mock_upload):
         mock_upload.return_value = 2
         main(
@@ -79,7 +79,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         _source, dest = mock_upload.call_args.args
         self.assertEqual(dest.bucket, "therock-prerelease-python")
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
+    @mock.patch("therock_tools.storage_backend.S3StorageBackend.upload_directory")
     def test_raises_when_no_wheels_uploaded(self, mock_upload):
         mock_upload.return_value = 0
         with self.assertRaises(FileNotFoundError):

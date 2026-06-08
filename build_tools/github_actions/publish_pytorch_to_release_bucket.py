@@ -29,9 +29,9 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.s3_buckets import get_release_bucket_config
-from _therock_utils.storage_backend import create_storage_backend
-from _therock_utils.storage_location import StorageLocation
+from therock_tools.s3_buckets import get_release_bucket_config
+from therock_tools.storage_backend import create_storage_backend
+from therock_tools.storage_location import StorageLocation
 
 logger = logging.getLogger(__name__)
 

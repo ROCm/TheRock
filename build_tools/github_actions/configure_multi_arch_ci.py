@@ -53,7 +53,7 @@ from pathlib import Path
 
 # Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from _therock_utils.build_topology import get_topology
+from therock_tools.build_topology import get_topology
 
 from amdgpu_family_matrix import (
     all_build_variants,
@@ -72,18 +72,23 @@ from github_actions_api import (
     gha_set_output,
 )
 
+THEROCK_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_TOPOLOGY_PATH = THEROCK_REPO_ROOT / "BUILD_TOPOLOGY.toml"
+
 # ---------------------------------------------------------------------------
 # Input parsing helpers
 # ---------------------------------------------------------------------------
 
 
-def _get_all_build_stages() -> list[str]:
+def _get_all_build_stages(
+    topology_path: Path = DEFAULT_TOPOLOGY_PATH,
+) -> list[str]:
     """Get all build stage names from BUILD_TOPOLOGY.toml.
 
     Returns:
         List of stage names in the order they appear in the TOML file
     """
-    topology = get_topology()
+    topology = get_topology(topology_path)
     return list(topology.build_stages.keys())
 
 

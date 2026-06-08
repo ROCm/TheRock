@@ -17,7 +17,7 @@ import shutil
 import sys
 import tarfile
 
-from .artifacts import ArtifactCatalog, ArtifactName
+from therock_tools.artifacts import ArtifactCatalog, ArtifactName
 from .exe_stub_gen import generate_exe_link_stub
 
 is_windows = platform.system() == "Windows"

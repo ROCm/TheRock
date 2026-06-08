@@ -58,10 +58,10 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.s3_buckets import get_release_bucket_config
-from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.s3_buckets import get_release_bucket_config
+from therock_tools.storage_backend import StorageBackend, create_storage_backend
+from therock_tools.storage_location import StorageLocation
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 logger = logging.getLogger(__name__)
 

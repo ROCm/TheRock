@@ -15,13 +15,13 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifact_backend import (
+from therock_tools.artifact_backend import (
     ArtifactBackend,
     LocalDirectoryBackend,
     S3Backend,
     create_backend_from_env,
 )
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from therock_tools.workflow_outputs import WorkflowOutputRoot
 
 
 def _make_local_root(run_id="test-run-123", platform="linux"):
@@ -677,7 +677,7 @@ class TestCreateBackendFromEnv(unittest.TestCase):
                 self.assertIn("override-run", backend.base_uri)
                 self.assertIn("override-platform", backend.base_uri)
 
-    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    @mock.patch("therock_tools.workflow_outputs._retrieve_bucket_info")
     def test_s3_backend_when_no_local_dir(self, mock_retrieve):
         """Test that S3Backend is created when THEROCK_LOCAL_STAGING_DIR is not set."""
         mock_retrieve.return_value = ("", "test-bucket")
@@ -692,7 +692,7 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertEqual(backend.bucket, "test-bucket")
             self.assertIn("s3-run-id", backend.s3_prefix)
 
-    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    @mock.patch("therock_tools.workflow_outputs._retrieve_bucket_info")
     def test_s3_backend_with_github_repository_override(self, mock_retrieve):
         """Test that explicit github_repository overrides GITHUB_REPOSITORY env var.
 

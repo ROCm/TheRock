@@ -172,9 +172,14 @@ function(therock_provide_artifact slice_name)
   endif()
 
   # Populate commands.
-  set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  set(_therock_tools_src_dir "${THEROCK_SOURCE_DIR}/python/therock-tools/src")
+  set(_fileset_tool "${_therock_tools_src_dir}/therock_tools/fileset_tool.py")
+  set(_fileset_tool_command
+    "${CMAKE_COMMAND}" -E env "PYTHONPATH=${_therock_tools_src_dir}"
+    "${Python3_EXECUTABLE}" -m therock_tools.fileset_tool
+  )
   set(_artifact_command
-    COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact
+    COMMAND ${_fileset_tool_command} artifact
           --root-dir "${THEROCK_BINARY_DIR}" --descriptor "${ARG_DESCRIPTOR}"
           --artifact-name "${slice_name}"
   )
@@ -208,7 +213,7 @@ function(therock_provide_artifact slice_name)
   # multiply-aliased unsplit hardlinks.
   if(ARG_DISTRIBUTION AND NOT _should_split)
     list(APPEND _flatten_command_list
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten
+      COMMAND ${_fileset_tool_command} artifact-flatten
         -o "${_dist_dir}" ${_component_dirs}
     )
   endif()
@@ -285,7 +290,7 @@ function(therock_provide_artifact slice_name)
       add_custom_command(
         OUTPUT "${_flatten_stamp}"
         COMMENT "Flatten split artifacts for ${slice_name} to dist/${ARG_DISTRIBUTION}"
-        COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten-split
+        COMMAND ${_fileset_tool_command} artifact-flatten-split
           -o "${_dist_dir}"
           --artifacts-dir "${THEROCK_BINARY_DIR}/artifacts"
           ${_artifact_prefixes}

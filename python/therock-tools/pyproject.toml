@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "therock-tools"
+version = "0.1.0"
+description = "Reusable TheRock build artifact and fileset tools"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Advanced Micro Devices, Inc." },
+]
+dependencies = [
+  "boto3>=1.39.15",
+  "pyzstd>=0.16.0",
+  "tomli>=2.2.1; python_version < '3.11'",
+]
+
+[project.scripts]
+therock-artifact-manager = "therock_tools.artifact_manager:main"
+therock-fetch-artifacts = "therock_tools.fetch_artifacts:main"
+therock-fileset-tool = "therock_tools.fileset_tool:console_main"
+therock-find-artifacts-for-commit = "therock_tools.find_artifacts_for_commit:main"
+therock-find-latest-artifacts = "therock_tools.find_latest_artifacts:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["*_test.py"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["therock_tools"]
+omit = [
+  "tests/*",
+  "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+sort = "Cover"
+
+[tool.coverage.html]
+directory = "../../build/therock-tools-coverage-html"

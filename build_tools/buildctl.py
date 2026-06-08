@@ -86,7 +86,7 @@ import subprocess
 import sys
 from typing import Optional, Set
 
-from _therock_utils.artifacts import ArtifactPopulator, ArtifactName
+from therock_tools.artifacts import ArtifactPopulator, ArtifactName
 
 
 def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
@@ -235,7 +235,7 @@ def reconfigure(build_dir: Path):
 
 def get_inbound_artifact_names(stage: str) -> Set[str]:
     """Get the set of artifact names needed by a build stage."""
-    from _therock_utils.build_topology import BuildTopology
+    from therock_tools.build_topology import BuildTopology
 
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent

@@ -44,7 +44,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
 
-# Add build_tools directory to Python path to import _therock_utils
+# Add build_tools directory to Python path to import therock_tools.
 # This allows the script to be run from anywhere: TheRock root or packaging/linux directory
 if str(BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(BUILD_TOOLS_DIR))
@@ -53,7 +53,7 @@ from packaging_summary import *
 from packaging_utils import *
 from runpath_to_rpath import *
 
-from _therock_utils.artifacts import ArtifactCatalog
+from therock_tools.artifacts import ArtifactCatalog
 
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
@@ -95,7 +95,7 @@ def get_all_target_families(artifact_dir):
     if not artifact_dir.exists() or not artifact_dir.is_dir():
         raise ValueError(f"Artifact directory does not exist: {artifact_dir}")
 
-    # Use ArtifactCatalog from _therock_utils to get all target families
+    # Use ArtifactCatalog from therock_tools to get all target families.
     catalog = ArtifactCatalog(artifact_dir)
     return sorted(catalog.all_target_families)
 

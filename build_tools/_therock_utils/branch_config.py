@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from .build_topology import BuildTopology
+from therock_tools.build_topology import BuildTopology
 
 
 @dataclass

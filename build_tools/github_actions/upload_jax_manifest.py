@@ -12,9 +12,9 @@ import platform
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.storage_backend import create_storage_backend
+from therock_tools.workflow_outputs import WorkflowOutputRoot
+from therock_tools.storage_location import StorageLocation
+from therock_tools.storage_backend import create_storage_backend
 
 from github_actions.manifest_utils import (
     normalize_python_version_for_filename,

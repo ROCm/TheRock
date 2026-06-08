@@ -6,7 +6,7 @@ known file extensions are set automatically during upload.
 
 Usage::
 
-    from _therock_utils.storage_backend import create_storage_backend
+    from therock_tools.storage_backend import create_storage_backend
 
     backend = create_storage_backend()  # S3
     backend = create_storage_backend(staging_dir=Path("/tmp/out"))  # local
@@ -30,7 +30,7 @@ import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from _therock_utils.storage_location import StorageLocation
+from .storage_location import StorageLocation
 
 logger = logging.getLogger(__name__)
 

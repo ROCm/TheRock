@@ -21,7 +21,7 @@ A "workflow output" is anything produced by a CI workflow run:
 
 Usage::
 
-    from _therock_utils.workflow_outputs import WorkflowOutputRoot
+    from therock_tools.workflow_outputs import WorkflowOutputRoot
 
     # Inside a CI workflow (env vars provide bucket info, no API call)
     root = WorkflowOutputRoot.from_workflow_run(run_id="12345", platform="linux")
@@ -42,16 +42,12 @@ Usage::
 """
 
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 import platform as platform_module
 
-# Add build_tools to path for sibling package imports.
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.s3_buckets import get_artifacts_bucket_config_for_workflow_run
+from .storage_location import StorageLocation
+from .s3_buckets import get_artifacts_bucket_config_for_workflow_run
 
 
 # ---------------------------------------------------------------------------

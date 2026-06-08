@@ -11,11 +11,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_DEFAULT_CMAKE_PATH = (
-    Path(__file__).resolve().parent.parent.parent
-    / "cmake"
-    / "therock_amdgpu_targets.cmake"
-)
+_CMAKE_TARGETS_FILENAME = "therock_amdgpu_targets.cmake"
 
 _family_to_targets_cache: dict[Path, dict[str, list[str]]] = {}
 
@@ -95,10 +91,12 @@ def amdgpu_family_map(
 ) -> dict[str, list[str]]:
     """Return the family → gfx targets map, parsing the CMake file once.
 
-    Uses `cmake/therock_amdgpu_targets.cmake` at the repo root by default.
+    Uses `cmake/therock_amdgpu_targets.cmake` from the nearest TheRock checkout
+    by default. Pass `cmake_path` explicitly when using this module outside a
+    checkout.
     Results are cached per resolved path so repeated calls are free.
     """
-    resolved = (cmake_path or _DEFAULT_CMAKE_PATH).resolve()
+    resolved = (cmake_path or _default_cmake_path()).resolve()
     cached = _family_to_targets_cache.get(resolved)
     if cached is None:
         cached = build_family_to_targets(parse_amdgpu_targets_cmake(resolved))
@@ -134,6 +132,15 @@ def expand_families(
                 seen.add(target)
                 targets.append(target)
     return targets
+
+
+def _default_cmake_path() -> Path:
+    """Return the checkout CMake data path when present, else cwd-relative."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "cmake" / _CMAKE_TARGETS_FILENAME
+        if candidate.exists():
+            return candidate
+    return Path.cwd() / "cmake" / _CMAKE_TARGETS_FILENAME
 
 
 def _tokenize_cmake(text: str) -> list[str]:

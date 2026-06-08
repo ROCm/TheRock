@@ -11,7 +11,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _therock_utils.os_util import rmtree_with_retry
+from therock_tools.os_util import rmtree_with_retry
 
 IS_WINDOWS = platform.system() == "Windows"
 

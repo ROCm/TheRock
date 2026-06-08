@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _therock_utils.archive_util import (
+from therock_tools.archive_util import (
     open_archive_for_read,
     open_archive_for_write,
 )
