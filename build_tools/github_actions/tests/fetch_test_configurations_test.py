@@ -283,9 +283,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
             rccl = next(j for j in components if j["job_name"] == "rccl")
             self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called
-            self.assertEqual(len(selected_labels), 1)
-            self.assertEqual(selected_labels[0][1], "gfx94x-multi-gpu")
+            # Verify select_weighted_label was used for multi-GPU jobs. There may
+            # be more than one multi-GPU job (e.g. rccl and rocshmem), so assert
+            # it was called at least once and always with the multi-gpu context.
+            self.assertGreaterEqual(len(selected_labels), 1)
+            self.assertTrue(
+                all(ctx == "gfx94x-multi-gpu" for _, ctx in selected_labels)
+            )
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label
