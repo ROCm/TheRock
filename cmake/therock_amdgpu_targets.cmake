@@ -141,7 +141,6 @@ therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx1
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     composable_kernel # https://github.com/ROCm/TheRock/issues/4836
-    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1033 "AMD Van Gogh iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
