@@ -439,5 +439,6 @@ class StageImpactTest(unittest.TestCase):
         self.assertIn("compiler", result.impacted_artifact_groups)
         self.assertIn("compiler-runtime", result.rebuild_stages)
 
+
 if __name__ == "__main__":
     unittest.main()
