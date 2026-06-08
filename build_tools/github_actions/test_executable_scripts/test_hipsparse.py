@@ -47,7 +47,7 @@ cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
 
 gtest_filter = "--gtest_filter="
 
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     gtest_filter += "*spmv*:*spsv*:*spsm*:*spmm*:*csric0*:*csrilu0*:-known_bug*"
 else:
