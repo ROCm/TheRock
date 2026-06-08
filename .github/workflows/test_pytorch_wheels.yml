@@ -214,7 +214,6 @@ jobs:
         timeout-minutes: 5
         run: |
           if [ "${RUNNER_OS}" = "Windows" ]; then
-            unset ROCM_PATH HIP_PATH
             python build_tools/packaging/python/overlay_rocm_sdk_core_cli.py
           fi
           rocm-sdk test
