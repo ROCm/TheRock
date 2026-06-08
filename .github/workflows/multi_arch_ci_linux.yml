@@ -13,7 +13,7 @@ on:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, expect_failure, build_pytorch,
-          prebuilt_stages, baseline_run_id.
+          build_native_linux, prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
       rocm_package_version:
@@ -28,6 +28,18 @@ on:
         type: string
       release_type:
         description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        type: string
+        default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
 
@@ -45,6 +57,9 @@ jobs:
     steps:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -87,6 +102,9 @@ jobs:
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -101,6 +119,8 @@ jobs:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
@@ -122,16 +142,20 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   build_native_deb_packages:
     needs: [build_multi_arch_stages]
     name: Build DEB Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -139,12 +163,14 @@ jobs:
   build_native_rpm_packages:
     needs: [build_multi_arch_stages]
     name: Build RPM Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -152,7 +178,7 @@ jobs:
   test_native_packages_ubuntu2404:
     needs: [build_native_deb_packages]
     name: Test DEB Install - ubuntu2404
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
@@ -160,6 +186,8 @@ jobs:
       os_profile: ubuntu2404
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -167,7 +195,7 @@ jobs:
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel10
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
@@ -175,6 +203,8 @@ jobs:
       os_profile: rhel10
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -182,7 +212,7 @@ jobs:
   test_native_packages_sles16:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - sles16
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
@@ -190,6 +220,8 @@ jobs:
       os_profile: sles16
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -202,9 +234,13 @@ jobs:
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      linux_amdgpu_families: ${{ fromJSON(inputs.build_config).linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ fromJSON(inputs.build_config).windows_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -239,10 +275,11 @@ jobs:
         }}
       python_version: "3.12"
       rocm_version: ${{ inputs.rocm_package_version }}
-      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.image.name }}
       container_image_url: ${{ matrix.image.url }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   # Multi-arch PyTorch build: one fat wheel covering every target, then
   # split into a host wheel + per-gfx device wheels via rocm-kpack.

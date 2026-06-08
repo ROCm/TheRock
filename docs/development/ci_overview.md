@@ -14,7 +14,7 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 
 ## CI Architecture
 
-TheRock uses a multi-stage CI pipeline that splits the build into stages (foundation → compiler-runtime → math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
+TheRock uses a multi-stage CI pipeline that splits the build into stages (compiler-runtime → runtime-tests/math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
 
 ```mermaid
 graph TD
@@ -37,6 +37,11 @@ Each stage runs as a separate job, uploads its artifacts and logs to S3, then do
   - [`.github/workflows/multi_arch_build_portable_linux.yml`](/.github/workflows/multi_arch_build_portable_linux.yml) - Linux stages for "build rocm"
   - [`.github/workflows/multi_arch_ci_windows.yml`](/.github/workflows/multi_arch_ci_windows.yml) - build rocm, test rocm, build rocm python, build pytorch for Windows
   - [`.github/workflows/multi_arch_build_windows.yml`](/.github/workflows/multi_arch_build_windows.yml) - Windows stages for "build rocm"
+
+The WSL ROCDXG stage is a special case in the portable Linux multi-arch flow:
+the job starts on a Windows runner, then runs artifact fetch, configure, build,
+and upload steps inside a WSL Ubuntu shell. See
+[WSL ROCDXG CI Stage](wsl_rocdxg.md) for details.
 
 ## Build Phase
 

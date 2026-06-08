@@ -13,6 +13,10 @@ Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080
 
+Download all artifacts for all GPU architectures:
+  python build_tools/fetch_artifacts.py \
+    --run-id 15685736080 --output-dir ~/.therock/artifacts_15685736080
+
 Include/exclude regular expressions can be given to control what is downloaded:
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080 \
@@ -38,12 +42,12 @@ import re
 import shutil
 import sys
 
+from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.artifact_backend import ArtifactBackend, S3Backend
 from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.artifacts import (
     ArtifactName,
     ArtifactPopulator,
-    _open_archive_for_read,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from artifact_manager import DownloadRequest, download_artifact
@@ -57,7 +61,7 @@ def log(*args, **kwargs):
 
 def list_artifacts_for_group(
     backend: ArtifactBackend,
-    artifact_group: str,
+    artifact_group: str | None,
     amdgpu_targets: list[str] | None = None,
 ) -> set[str]:
     """Lists artifacts from backend, filtered by artifact_group and/or individual targets.
@@ -68,13 +72,23 @@ def list_artifacts_for_group(
 
     Args:
         backend: ArtifactBackend instance configured for the target run
-        artifact_group: GPU family to filter by (e.g., "gfx94X-dcgpu").
+        artifact_group: GPU family to filter by (e.g., "gfx94X-dcgpu"). If None
+            and amdgpu_targets is also empty, downloads all artifacts.
         amdgpu_targets: Individual GPU targets to also match (e.g., ["gfx942"]).
 
     Returns:
         Set of artifact filenames matching any of the target families or "generic".
+        If both artifact_group and amdgpu_targets are None/empty, returns all artifacts.
     """
     log(f"Retrieving artifacts from '{backend.base_uri}'")
+
+    # Get all artifacts from backend
+    all_artifacts = backend.list_artifacts()
+
+    # If no filtering criteria specified, return all artifacts
+    if not artifact_group and not amdgpu_targets:
+        log("No artifact group or targets specified - downloading all artifacts")
+        return all_artifacts
 
     # Build inclusive set of target families to match
     targets_to_match: set[str] = {"generic"}
@@ -84,9 +98,6 @@ def list_artifacts_for_group(
         targets_to_match.update(amdgpu_targets)
 
     log(f"Matching artifact target families: {sorted(targets_to_match)}")
-
-    # Get all artifacts from backend
-    all_artifacts = backend.list_artifacts()
 
     # Use structured ArtifactName parsing for reliable matching
     data = set()
@@ -166,7 +177,7 @@ def extract_artifact(
         output_dir = archive_file.parent / artifact_name
         if output_dir.exists():
             rmtree_with_retry(output_dir)
-        with _open_archive_for_read(archive_file) as tf:
+        with open_archive_for_read(archive_file) as tf:
             log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
             tf.extractall(archive_file.parent / artifact_name, filter="tar")
     elif postprocess_mode == "flatten":
@@ -306,8 +317,7 @@ def main(argv):
     filter_group.add_argument(
         "--artifact-group",
         type=str,
-        required=True,
-        help="Artifact group to fetch",
+        help="Artifact group to fetch (e.g., 'gfx110X-all'). If omitted along with --amdgpu-targets, downloads all artifacts.",
     )
     filter_group.add_argument(
         "--amdgpu-targets",

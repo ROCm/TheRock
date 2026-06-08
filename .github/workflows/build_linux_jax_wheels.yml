@@ -124,7 +124,7 @@ permissions:
   id-token: write
   contents: read
 
-run-name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
+run-name: Build Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.amdgpu_family }})
 
 jobs:
   build_jax_wheels:
@@ -217,7 +217,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -243,17 +243,6 @@ jobs:
             --amdgpu-family "${{ inputs.amdgpu_family }}" \
             --python-version "${{ inputs.python_version }}" \
             --jax-git-ref "${{ inputs.jax_ref }}"
-
-      - name: (Re-)Generate Python package release index
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variables to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          python3 -m venv .venv
-          source .venv/bin/activate
-          pip3 install boto3 packaging
-          python3 ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
   generate_target_to_run:
     name: Generate target_to_run
@@ -320,7 +309,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v6.1.0
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -352,12 +341,3 @@ jobs:
             ${JAXLIB_INCLUDE:+${JAXLIB_INCLUDE}} \
             --include "jax_rocm7_plugin-${JAX_PLUGIN_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
             --include "jax_rocm7_pjrt-${JAX_PJRT_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
-
-      - name: (Re-)Generate Python package release index
-        if: ${{ env.upload == 'true' }}
-        env:
-          # Environment variables to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}

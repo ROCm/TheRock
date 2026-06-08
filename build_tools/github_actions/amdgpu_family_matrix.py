@@ -46,13 +46,13 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 
 # Build runner configuration for Linux builds
-# Uses weighted distribution: 90% Azure, 10% AWS
+# Uses weighted distribution: 80% Azure, 20% AWS
 # Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 1.0},
-            {"label": "aws-linux-scale-rocm", "weight": 0.0},
+            {"label": "azure-linux-scale-rocm", "weight": 0.8},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 0.2},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -96,10 +96,19 @@ all_build_variants = {
             # "build_variant_cmake_preset": "linux-release-package",
             "build_variant_cmake_preset": "",
         },
+        # full ASAN builds are run on nightly
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+        },
+        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
+        # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
+        "host-asan": {
+            "build_variant_label": "host-asan",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan",
+            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -129,7 +138,7 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
-- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
+- build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
@@ -141,35 +150,33 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            # 1-GPU distribution: 17N (vultr) + 4N (cirrascale) + 8N (core42)
-            "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
+            "test-runs-on": "linux-gfx942-1gpu-core42-ossci-rocm",
             "test-runs-on-labels": [
                 {
-                    "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.59,
-                },  # vultr (17/29)
-                {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.14,
-                },  # cirrascale (4/29)
+                    "weight": 0.117,
+                },  # cirrascale (4/34)
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.27,
-                },  # core42 (8/29)
+                    "weight": 0.736,
+                },  # core42 (25/34)
+                {
+                    "label": "linux-gfx942-1gpu-ossci-rocm",
+                    "weight": 0.147,
+                },  # vultr (5/34)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "rocm-asan-mi325-sandbox",
-            # 8-GPU distribution: 11N (cirrascale) + 7N (core42)
+            "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {
                     "label": "linux-gfx942-8gpu-ossci-rocm",
-                    "weight": 0.61,
-                },  # cirrascale (11/18)
+                    "weight": 0.78,
+                },  # cirrascale (11/14)
                 {
                     "label": "linux-gfx942-8gpu-core42-ossci-rocm",
-                    "weight": 0.39,
-                },  # core42 (7/18)
+                    "weight": 0.21,
+                },  # core42 (3/14)
             ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
@@ -177,7 +184,7 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "host-asan", "tsan"],
         }
     },
     "gfx110x": {
@@ -192,7 +199,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -232,7 +239,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,

@@ -42,6 +42,16 @@ def setup_env(env):
             env["LD_LIBRARY_PATH"] = f"{HIP_LIB_PATH}:{env['LD_LIBRARY_PATH']}"
         else:
             env["LD_LIBRARY_PATH"] = str(HIP_LIB_PATH)
+        ROCM_SYSDEPS_LIB_PATH = ROCM_PATH / "lib" / "rocm_sysdeps" / "lib"
+        LD_PRELOAD_LIBS = [
+            str(ROCM_SYSDEPS_LIB_PATH / "librocm_sysdeps_va.so.2"),
+            str(ROCM_SYSDEPS_LIB_PATH / "librocm_sysdeps_va-drm.so.2"),
+        ]
+        LD_PRELOAD_VALUE = ":".join(LD_PRELOAD_LIBS)
+        logging.info(f"++ rocdecode setting LD_PRELOAD={LD_PRELOAD_VALUE}")
+        env["LD_PRELOAD"] = LD_PRELOAD_VALUE
+        logging.info(f"++ rocdecode setting LIBVA_DRIVERS_PATH={ROCM_SYSDEPS_LIB_PATH}")
+        env["LIBVA_DRIVERS_PATH"] = str(ROCM_SYSDEPS_LIB_PATH)
     else:
         logging.info(f"++ rocdecode tests only supported on Linux")
         sys.exit(0)
@@ -60,6 +70,7 @@ def execute_tests(env):
     cmd = [
         "cmake",
         "-GNinja",
+        "-DENABLE_EXTENDED_TESTS=ON",
         ROCDECODE_TEST_PATH,
     ]
     logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")

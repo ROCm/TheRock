@@ -3,6 +3,54 @@
 
 set(DEBUG_TOOLS_DIR "${THEROCK_SOURCE_DIR}/debug-tools")
 
+# If set, propagate DEBUG_TOOLS_BUILD_TYPE to all debug-tools components.
+if(DEBUG_TOOLS_BUILD_TYPE)
+  message(STATUS "Setting all debug-tools components to CMAKE_BUILD_TYPE=${DEBUG_TOOLS_BUILD_TYPE}")
+  if(NOT amd-dbgapi_BUILD_TYPE)
+    set(amd-dbgapi_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+  if(NOT rocr-debug-agent_BUILD_TYPE)
+    set(rocr-debug-agent_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+  if(NOT rocgdb_BUILD_TYPE)
+    set(rocgdb_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+endif()
+
+# Allow custom debug flags for debug-tools components.
+# Example: -DDEBUG_TOOLS_C_FLAGS_DEBUG="-O0 -g3"
+#          -DDEBUG_TOOLS_CXX_FLAGS_DEBUG="-O0 -g3"
+if(DEBUG_TOOLS_C_FLAGS_DEBUG OR DEBUG_TOOLS_CXX_FLAGS_DEBUG)
+  set(_debug_tools_cmake_args)
+  if(DEBUG_TOOLS_C_FLAGS_DEBUG)
+    message(STATUS "Setting debug-tools CMAKE_C_FLAGS_DEBUG=${DEBUG_TOOLS_C_FLAGS_DEBUG}")
+    list(APPEND _debug_tools_cmake_args "-DCMAKE_C_FLAGS_DEBUG=${DEBUG_TOOLS_C_FLAGS_DEBUG}")
+  endif()
+  if(DEBUG_TOOLS_CXX_FLAGS_DEBUG)
+    message(STATUS "Setting debug-tools CMAKE_CXX_FLAGS_DEBUG=${DEBUG_TOOLS_CXX_FLAGS_DEBUG}")
+    list(APPEND _debug_tools_cmake_args "-DCMAKE_CXX_FLAGS_DEBUG=${DEBUG_TOOLS_CXX_FLAGS_DEBUG}")
+  endif()
+
+  # Propagate to all components CMAKE_ARGS.
+  if(NOT amd-dbgapi_CMAKE_ARGS)
+    set(amd-dbgapi_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND amd-dbgapi_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+
+  if(NOT rocr-debug-agent_CMAKE_ARGS)
+    set(rocr-debug-agent_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND rocr-debug-agent_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+
+  if(NOT rocgdb_CMAKE_ARGS)
+    set(rocgdb_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND rocgdb_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+endif()
+
 if(THEROCK_ENABLE_AMD_DBGAPI)
   ##############################################################################
   # amd-dbgapi
@@ -16,6 +64,12 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     message(WARNING "Configuring amd-dbgapi with modified source directory: ${THEROCK_AMD_DBGAPI_SOURCE_DIR}")
   endif()
 
+  # Build a static library on Windows until there is ABI stability.
+  set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS)
+  if(WIN32)
+    set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
+  endif()
+
   therock_cmake_subproject_declare(amd-dbgapi
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_AMD_DBGAPI_SOURCE_DIR}"
@@ -24,6 +78,7 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       amd-llvm
     CMAKE_ARGS
       -DTHE_ROCK_BUILD=ON
+      ${EXTRA_DEBUG_TOOLS_CMAKE_ARGS}
     BUILD_DEPS
       ${THEROCK_BUNDLED_LIBBACKTRACE}
     RUNTIME_DEPS
@@ -48,10 +103,12 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
   therock_cmake_subproject_activate(amd-dbgapi)
 
   # Check that we built the one library we're supposed to build.
-  therock_test_validate_shared_lib(PATH amd-dbgapi/dist/lib
-    LIB_NAMES
-      librocm-dbgapi.so
-  )
+  if(NOT WIN32)
+    therock_test_validate_shared_lib(PATH amd-dbgapi/dist/lib
+      LIB_NAMES
+        librocm-dbgapi.so
+    )
+  endif()
 
   # The artifacts provided by amd-dbgapi.
   therock_provide_artifact(amd-dbgapi
