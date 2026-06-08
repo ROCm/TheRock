@@ -13,6 +13,9 @@
 # Arguments:
 #   VERSION          - Full version string (e.g., 7.13.0a20260322, 7.11.0)
 #   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110x, gfx94x, gfx110X-all)
+#                      Special value: 'multi-arch' installs the meta-package from
+#                      AMD's packages-multi-arch repository, which supports all
+#                      GPU families in a single image.
 #   RELEASE_TYPE     - Release type: nightlies (default), prereleases, stable
 #
 # Examples:
@@ -20,6 +23,7 @@
 #   ./install_rocm_packages.sh 7.13.0a20260322 gfx110x nightlies
 #   ./install_rocm_packages.sh 7.12.0 gfx94x prereleases
 #   ./install_rocm_packages.sh 7.11.0 gfx110x stable
+#   ./install_rocm_packages.sh 7.13.0a20260322 multi-arch nightlies   # multi-arch
 
 set -euo pipefail
 
@@ -27,6 +31,14 @@ set -euo pipefail
 VERSION="${1:?Error: VERSION is required}"
 AMDGPU_FAMILY="${2:?Error: AMDGPU_FAMILY is required}"
 RELEASE_TYPE="${3:-nightlies}"
+
+# Multi-arch mode: AMDGPU_FAMILY=multi-arch picks the meta-package that supports
+# all GPU families, sourced from AMD's packages-multi-arch repositories.
+if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then
+    MULTI_ARCH=1
+else
+    MULTI_ARCH=0
+fi
 
 # ---------------------------------------------------------------------------
 # Helper: extract MAJOR.MINOR from VERSION (e.g., 7.13.0a20260322 → 7.13)
@@ -121,6 +133,7 @@ map_distro_to_repo() {
 resolve_nightly_build_dir() {
     local date_str="$1"
     local repo_type="$2"  # deb or rpm
+    local multi_arch="${3:-0}"
 
     if [ -z "$date_str" ]; then
         echo "Error: Cannot extract date from VERSION '$VERSION' for nightly builds" >&2
@@ -129,6 +142,7 @@ resolve_nightly_build_dir() {
     fi
 
     local listing_url="https://rocm.nightlies.amd.com/${repo_type}/"
+    [ "$multi_arch" = "1" ] && listing_url="https://rocm.nightlies.amd.com/packages-multi-arch/${repo_type}/"
     echo "Searching for nightly build directory matching date ${date_str}..." >&2
 
     local build_dir
@@ -148,33 +162,43 @@ resolve_nightly_build_dir() {
 
 # ---------------------------------------------------------------------------
 # Helper: build the repo base URL
+#
+# Multi-arch repos live under a 'packages-multi-arch/' path segment that:
+#   - PREFIXES the deb/rpm dir for nightlies (single-family has no such prefix)
+#   - REPLACES the 'packages/' segment for prereleases and stable
 # ---------------------------------------------------------------------------
 build_repo_url() {
     local release_type="$1"
     local pkg_type="$2"
     local repo_distro="$3"
     local nightly_build_dir="$4"
+    local multi_arch="${5:-0}"
+
+    local pkg_segment="packages"
+    [ "$multi_arch" = "1" ] && pkg_segment="packages-multi-arch"
 
     case "$release_type" in
         nightlies)
+            local nightly_root="https://rocm.nightlies.amd.com"
+            [ "$multi_arch" = "1" ] && nightly_root="${nightly_root}/${pkg_segment}"
             if [ "$pkg_type" = "deb" ]; then
-                echo "https://rocm.nightlies.amd.com/deb/${nightly_build_dir}"
+                echo "${nightly_root}/deb/${nightly_build_dir}"
             else
-                echo "https://rocm.nightlies.amd.com/rpm/${nightly_build_dir}/x86_64"
+                echo "${nightly_root}/rpm/${nightly_build_dir}/x86_64"
             fi
             ;;
         prereleases)
             if [ "$pkg_type" = "deb" ]; then
-                echo "https://rocm.prereleases.amd.com/packages/${repo_distro}"
+                echo "https://rocm.prereleases.amd.com/${pkg_segment}/${repo_distro}"
             else
-                echo "https://rocm.prereleases.amd.com/packages/${repo_distro}/x86_64"
+                echo "https://rocm.prereleases.amd.com/${pkg_segment}/${repo_distro}/x86_64"
             fi
             ;;
         stable)
             if [ "$pkg_type" = "deb" ]; then
-                echo "https://repo.amd.com/rocm/packages/${repo_distro}"
+                echo "https://repo.amd.com/rocm/${pkg_segment}/${repo_distro}"
             else
-                echo "https://repo.amd.com/rocm/packages/${repo_distro}/x86_64"
+                echo "https://repo.amd.com/rocm/${pkg_segment}/${repo_distro}/x86_64"
             fi
             ;;
         *)
@@ -187,9 +211,15 @@ build_repo_url() {
 
 # ---------------------------------------------------------------------------
 # Helper: get GPG key URL for signed repos
+#
+# The same AMD signing key is used for both `packages/` and
+# `packages-multi-arch/` repositories, so the key URL is always sourced from
+# `packages/gpg/` regardless of install mode. (The mirror file under
+# `packages-multi-arch/gpg/` currently returns 403 on direct GET.)
 # ---------------------------------------------------------------------------
 get_gpg_key_url() {
     local release_type="$1"
+
     case "$release_type" in
         prereleases)
             echo "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
@@ -329,8 +359,13 @@ REPOEOF
 # ===========================================================================
 
 MAJOR_MINOR=$(extract_major_minor "$VERSION")
-GPU_TARGET=$(normalize_gpu_target "$AMDGPU_FAMILY")
-META_PACKAGE="amdrocm${MAJOR_MINOR}-${GPU_TARGET}"
+if [ "$MULTI_ARCH" = "1" ]; then
+    GPU_TARGET="multi-arch"
+    META_PACKAGE="amdrocm${MAJOR_MINOR}"
+else
+    GPU_TARGET=$(normalize_gpu_target "$AMDGPU_FAMILY")
+    META_PACKAGE="amdrocm${MAJOR_MINOR}-${GPU_TARGET}"
+fi
 
 echo "=============================================="
 echo "ROCm Package Installation"
@@ -341,6 +376,7 @@ echo "AMDGPU Family:   ${AMDGPU_FAMILY}"
 echo "GPU Target:      ${GPU_TARGET}"
 echo "Meta Package:    ${META_PACKAGE}"
 echo "Release Type:    ${RELEASE_TYPE}"
+echo "Install Mode:    $([ "$MULTI_ARCH" = "1" ] && echo "multi-arch" || echo "single-family")"
 echo "=============================================="
 
 # Detect distribution
@@ -357,11 +393,11 @@ echo "=============================================="
 NIGHTLY_BUILD_DIR=""
 if [ "$RELEASE_TYPE" = "nightlies" ]; then
     DATE_STR=$(extract_date_from_version "$VERSION")
-    NIGHTLY_BUILD_DIR=$(resolve_nightly_build_dir "$DATE_STR" "$PKG_TYPE")
+    NIGHTLY_BUILD_DIR=$(resolve_nightly_build_dir "$DATE_STR" "$PKG_TYPE" "$MULTI_ARCH")
 fi
 
 # Build repo URL
-REPO_URL=$(build_repo_url "$RELEASE_TYPE" "$PKG_TYPE" "$REPO_DISTRO" "$NIGHTLY_BUILD_DIR")
+REPO_URL=$(build_repo_url "$RELEASE_TYPE" "$PKG_TYPE" "$REPO_DISTRO" "$NIGHTLY_BUILD_DIR" "$MULTI_ARCH")
 GPG_KEY_URL=$(get_gpg_key_url "$RELEASE_TYPE")
 
 echo "Repo URL:        ${REPO_URL}"

@@ -35,12 +35,14 @@ def parse_cmake_test_subprojects(therock_dir):
             block_content = match.group(2)
 
             # Look for TEST_SUBPROJECTS within this block
+            # Match TEST_SUBPROJECTS with optional list of dependencies
+            # Empty TEST_SUBPROJECTS is valid (only tests itself)
             test_subprojects_match = re.search(
-                r"TEST_SUBPROJECTS\s+((?:\s+\w+)+)", block_content
+                r"TEST_SUBPROJECTS(?:\s+((?:\w+\s*)+))?", block_content
             )
 
             if test_subprojects_match:
-                deps_str = test_subprojects_match.group(1).strip()
+                deps_str = (test_subprojects_match.group(1) or "").strip()
                 deps = [d.strip().lower() for d in deps_str.split() if d.strip()]
                 test_deps[subproject_name] = deps
 
@@ -72,12 +74,26 @@ def get_rocm_test_dependencies(changed_subprojects, therock_dir=None):
     return get_subprojects_to_test(changed_subprojects, therock_dir)
 
 
-def list_subprojects(therock_dir=None):
-    """List all subprojects with TEST_SUBPROJECTS."""
+def list_subprojects(therock_dir=None, show_deps=False):
+    """List all subprojects with TEST_SUBPROJECTS.
+
+    Args:
+        therock_dir: Path to TheRock directory
+        show_deps: If True, return dict with deps; if False, return list of names
+    """
     if therock_dir is None:
         therock_dir = Path.cwd()
 
     test_deps = parse_cmake_test_subprojects(therock_dir)
+
+    if show_deps:
+        # Return dict with "empty" indicator for subprojects with no test deps
+        result = {}
+        for name in sorted(test_deps.keys()):
+            deps = test_deps[name]
+            result[name] = deps if deps else "empty"
+        return result
+
     return sorted(test_deps.keys())
 
 
@@ -106,6 +122,11 @@ def main():
         "--list-subprojects", action="store_true", help="List all subprojects"
     )
     parser.add_argument(
+        "--show-deps",
+        action="store_true",
+        help="With --list-subprojects, show dependencies (or 'empty' if none)",
+    )
+    parser.add_argument(
         "--format",
         choices=["json", "list"],
         default="json",
@@ -117,7 +138,7 @@ def main():
     therock_dir = Path(args.therock_dir).resolve()
 
     if args.list_subprojects:
-        result = list_subprojects(therock_dir)
+        result = list_subprojects(therock_dir, show_deps=args.show_deps)
         print(json.dumps(result, indent=2))
         return
 
