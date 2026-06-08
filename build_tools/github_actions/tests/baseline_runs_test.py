@@ -91,62 +91,6 @@ class BaselineRunsTest(unittest.TestCase):
             )
         )
 
-    def test_query_completed_workflow_runs(self):
-        with mock.patch.object(
-            baseline_runs,
-            "gha_send_request",
-            return_value={
-                "workflow_runs": [
-                    _workflow_run("1"),
-                    _workflow_run("2"),
-                    _workflow_run("3"),
-                ]
-            },
-        ) as mock_send_request:
-            runs = baseline_runs.query_completed_workflow_runs(
-                github_repository="ROCm/TheRock",
-                workflow_name="multi_arch_ci.yml",
-                branch="main",
-                max_runs=2,
-            )
-
-        self.assertEqual([run["id"] for run in runs], ["1", "2"])
-        url = mock_send_request.call_args.args[0]
-        self.assertIn(
-            "/repos/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/runs", url
-        )
-        self.assertIn("status=completed", url)
-        self.assertIn("branch=main", url)
-        self.assertIn("per_page=2", url)
-
-    def test_query_successful_workflow_runs(self):
-        with mock.patch.object(
-            baseline_runs,
-            "gha_send_request",
-            return_value={
-                "workflow_runs": [
-                    _workflow_run("1"),
-                    _workflow_run("2"),
-                    _workflow_run("3"),
-                ]
-            },
-        ) as mock_send_request:
-            runs = baseline_runs.query_successful_workflow_runs(
-                github_repository="ROCm/TheRock",
-                workflow_name="multi_arch_ci.yml",
-                branch="main",
-                max_runs=2,
-            )
-
-        self.assertEqual([run["id"] for run in runs], ["1", "2"])
-        url = mock_send_request.call_args.args[0]
-        self.assertIn(
-            "/repos/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/runs", url
-        )
-        self.assertIn("status=success", url)
-        self.assertIn("branch=main", url)
-        self.assertIn("per_page=2", url)
-
     def test_query_workflow_run_jobs_uses_run_attempt_when_provided(self):
         with mock.patch.object(
             baseline_runs,

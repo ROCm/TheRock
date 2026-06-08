@@ -23,7 +23,6 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 import sys
-from urllib.parse import urlencode, quote
 
 # Add parent directory to path for artifact and _therock_utils imports.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -36,7 +35,10 @@ from _therock_utils.artifact_backend import (
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
-from github_actions_api import gha_send_request
+from github_actions_api import (
+    gha_send_request,
+    gha_query_last_successful_workflow_runs,
+)
 
 
 @dataclass(frozen=True)
@@ -152,68 +154,6 @@ def is_successful_workflow_job(workflow_job: dict) -> bool:
         workflow_job.get("status") == "completed"
         and workflow_job.get("conclusion") == "success"
     )
-
-
-def query_completed_workflow_runs(
-    *,
-    github_repository: str = "ROCm/TheRock",
-    workflow_name: str = "multi_arch_ci.yml",
-    branch: str = "main",
-    max_runs: int = 20,
-) -> list[dict]:
-    """Query recent completed workflow runs for a workflow and branch."""
-    if max_runs < 1:
-        raise ValueError("max_runs must be at least 1")
-
-    per_page = min(max_runs, 100)
-    workflow_path = quote(workflow_name, safe="")
-    query = urlencode(
-        {
-            "status": "completed",
-            "branch": branch,
-            "per_page": per_page,
-            "sort": "created",
-            "direction": "desc",
-        }
-    )
-    url = (
-        f"https://api.github.com/repos/{github_repository}"
-        f"/actions/workflows/{workflow_path}/runs?{query}"
-    )
-    response = gha_send_request(url)
-    workflow_runs = response.get("workflow_runs", [])
-    return workflow_runs[:max_runs]
-
-
-def query_successful_workflow_runs(
-    *,
-    github_repository: str = "ROCm/TheRock",
-    workflow_name: str = "multi_arch_ci.yml",
-    branch: str = "main",
-    max_runs: int = 20,
-) -> list[dict]:
-    """Query recent successful workflow runs for a workflow and branch."""
-    if max_runs < 1:
-        raise ValueError("max_runs must be at least 1")
-
-    per_page = min(max_runs, 100)
-    workflow_path = quote(workflow_name, safe="")
-    query = urlencode(
-        {
-            "status": "success",
-            "branch": branch,
-            "per_page": per_page,
-            "sort": "created",
-            "direction": "desc",
-        }
-    )
-    url = (
-        f"https://api.github.com/repos/{github_repository}"
-        f"/actions/workflows/{workflow_path}/runs?{query}"
-    )
-    response = gha_send_request(url)
-    workflow_runs = response.get("workflow_runs", [])
-    return workflow_runs[:max_runs]
 
 
 def query_workflow_run_jobs(
@@ -441,7 +381,7 @@ def select_baseline_run(
     candidates = (
         list(workflow_runs)
         if workflow_runs is not None
-        else query_completed_workflow_runs(
+        else gha_query_last_successful_workflow_runs(
             github_repository=github_repository,
             workflow_name=workflow_name,
             branch=branch,

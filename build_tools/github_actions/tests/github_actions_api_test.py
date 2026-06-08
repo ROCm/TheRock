@@ -20,6 +20,7 @@ from github_actions_api import (
     gha_fetch_text_file_contents,
     gha_load_github_event,
     gha_query_last_successful_workflow_run,
+    gha_query_last_successful_workflow_runs,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
@@ -636,6 +637,38 @@ class GitHubActionsUtilsTest(unittest.TestCase):
             gha_query_last_successful_workflow_run(
                 "ROCm/TheRock", "nonexistent_workflow_12345.yml", "main"
             )
+
+    def test_gha_query_last_successful_workflow_runs(self):
+        """Test querying recent successful workflow runs on a branch."""
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            return_value={
+                "workflow_runs": [
+                    {"id": 1, "conclusion": "success"},
+                    {"id": 2, "conclusion": "success"},
+                    {"id": 3, "conclusion": "success"},
+                ]
+            },
+        ) as mock_send_request:
+            runs = gha_query_last_successful_workflow_runs(
+                github_repository="ROCm/TheRock",
+                workflow_name="multi_arch_ci.yml",
+                branch="main",
+                max_runs=2,
+            )
+
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[0]["id"], 1)
+        self.assertEqual(runs[1]["id"], 2)
+
+        url = mock_send_request.call_args.args[0]
+        self.assertIn(
+            "/repos/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/runs",
+            url,
+        )
+        self.assertIn("status=success", url)
+        self.assertIn("branch=main", url)
+        self.assertIn("per_page=2", url)
 
     @_skip_unless_authenticated_github_api_is_available
     def test_gha_query_recent_branch_commits(self):
