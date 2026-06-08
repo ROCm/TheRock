@@ -3,7 +3,7 @@
 xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
 xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 <?include common.wxi ?>
-<Package Name="amdrocm-dnn-dev" Version="1.0.0.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="89B996EC-615A-48BD-AFBD-4564CE0067CE" Scope="perMachine">
+<Package Name="amdrocm-dnn-dev" Version="$(var.ProductVersion).0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="89B996EC-615A-48BD-AFBD-4564CE0067CE" Scope="perMachine">
   <MediaTemplate EmbedCab="yes" />
   <StandardDirectory Id="ProgramFiles64Folder">
     <Directory Id="AMDDir" Name="AMD">
