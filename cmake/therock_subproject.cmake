@@ -957,6 +957,19 @@ function(therock_cmake_subproject_activate target_name)
       "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
     )
 
+    # Forward the superproject's CMAKE_PROJECT_TOP_LEVEL_INCLUDES (if any) to the
+    # subproject, alongside its generated init file, so a top-level
+    # -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=... reaches every subproject configure.
+    set(_subproject_top_level_includes "${_cmake_project_init_file}")
+    if(CMAKE_PROJECT_TOP_LEVEL_INCLUDES)
+      list(APPEND _subproject_top_level_includes ${CMAKE_PROJECT_TOP_LEVEL_INCLUDES})
+    endif()
+    # Escape the ';' list separator so the multi-file value reaches cmake as a
+    # single argument. Unescaped, the ';' is emitted verbatim into the generator's
+    # '/bin/sh -c' rule as a shell command separator, which then tries to execute
+    # the trailing include file as a program.
+    string(REPLACE ";" "\\;" _subproject_top_level_includes "${_subproject_top_level_includes}")
+
     # Configure command.
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
@@ -971,7 +984,7 @@ function(therock_cmake_subproject_activate target_name)
         "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
-        "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
+        "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_subproject_top_level_includes}"
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
       # the build graph sane.
