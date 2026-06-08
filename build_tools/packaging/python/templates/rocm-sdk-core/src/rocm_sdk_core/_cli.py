@@ -127,16 +127,13 @@ def _exec(relpath: str, expand_devel=True):
         and full_path.is_file()
         and (is_windows or _host_has_stale_rocm_env(core_path))
     ):
-        os.environ.pop("ROCM_PATH", None)
-        os.environ.pop("HIP_PATH", None)
-        if relpath == "bin/hipcc":
-            root = core_path.as_posix()
-            extra: list[str] = []
-            if not any(arg.startswith("--rocm-path=") for arg in sys.argv[1:]):
-                extra.append(f"--rocm-path={root}")
-            if not any(arg.startswith("--hip-path=") for arg in sys.argv[1:]):
-                extra.append(f"--hip-path={root}")
-            argv = [str(full_path), *extra, *sys.argv[1:]]
+        root = core_path.as_posix()
+        extra: list[str] = []
+        if not any(arg.startswith("--rocm-path=") for arg in sys.argv[1:]):
+            extra.append(f"--rocm-path={root}")
+        if not any(arg.startswith("--hip-path=") for arg in sys.argv[1:]):
+            extra.append(f"--hip-path={root}")
+        argv = [str(full_path), *extra, *sys.argv[1:]]
 
     launch_path = str(full_path)
     if is_windows:
