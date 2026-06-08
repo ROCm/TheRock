@@ -142,6 +142,7 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
