@@ -322,11 +322,15 @@ jobs:
 
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | gfx94X-dcgpu | torch ${{ matrix.pytorch_git_ref }}
+    # Existing rockrel wrappers do not pass run_full_pytorch_tests, so this
+    # remains a no-op until the companion rockrel wrapper PR enables the flag
+    # and provides test_pytorch_wheels_full.yml in that repository.
     if: >-
       ${{
+        always() &&
         inputs.run_full_pytorch_tests &&
         inputs.release_type == 'nightly' &&
-        needs.build_pytorch_wheels.result == 'success'
+        needs.build_pytorch_wheels.result != 'cancelled'
       }}
     needs: [build_pytorch_wheels]
     runs-on: ubuntu-24.04
