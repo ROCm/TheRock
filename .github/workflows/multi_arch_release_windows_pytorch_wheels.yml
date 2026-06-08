@@ -43,7 +43,7 @@ on:
       cache_type:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
-        default: "none"
+        default: "sccache"
       python_version:
         description: "Single Python version to build (empty for full matrix)"
         type: string
@@ -84,7 +84,7 @@ on:
           - none
           - sccache
           - ccache
-        default: none
+        default: sccache
       python_version:
         description: "Single Python version to build (empty for full matrix)"
         type: string
