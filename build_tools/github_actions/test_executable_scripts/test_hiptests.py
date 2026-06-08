@@ -20,9 +20,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1)) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-# TESTING
-TEST_TYPE = "quick"
-# TEST_TYPE = os.getenv("TEST_TYPE", "standard")
+TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
