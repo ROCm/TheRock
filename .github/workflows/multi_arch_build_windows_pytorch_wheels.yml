@@ -63,7 +63,7 @@ on:
       cache_type:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
-        default: "none"
+        default: "sccache"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -108,7 +108,7 @@ on:
           - none
           - sccache
           - ccache
-        default: none
+        default: sccache
 
 run-name: Build Multi-Arch Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -127,8 +127,8 @@ jobs:
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       optional_build_prod_arguments: ""
-      SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-pytorch-sccache"
-      SCCACHE_REGION: us-east-2
+      SCCACHE_BUCKET: "therock-pytorch-sccache-${{ inputs.release_type }}"
+      SCCACHE_REGION: us-east-1
       SCCACHE_S3_KEY_PREFIX: "windows/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
@@ -228,8 +228,11 @@ jobs:
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
         with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
+          # Multi-package PyTorch builds can exceed the default 1h credential
+          # window; the role's MaxSessionDuration must be >= this value.
+          role-duration-seconds: 21600
           special-characters-workaround: true
 
       - name: Verify sccache
