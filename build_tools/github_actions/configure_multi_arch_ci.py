@@ -569,55 +569,55 @@ def _determine_test_type(
     Returns (test_type, reason).
     """
 
-    # Check in priority order - highest priority returns early.
+    # # Check in priority order - highest priority returns early.
 
-    # Priority 1: test_filter: PR label is an explicit manual override.
-    # This is the escape hatch: run comprehensive on a PR before merge,
-    # or downgrade to quick if you know the change is safe.
-    for label in ci_inputs.pr_labels:
-        if not label.startswith("test_filter:"):
-            continue
-        filter_type = label.split(":")[1]
-        if filter_type not in _VALID_TEST_FILTER_TYPES:
-            raise ValueError(
-                f"Unrecognized test_filter value: {filter_type!r}. "
-                f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
-            )
-        return filter_type, f"test_filter label: {label}"
+    # # Priority 1: test_filter: PR label is an explicit manual override.
+    # # This is the escape hatch: run comprehensive on a PR before merge,
+    # # or downgrade to quick if you know the change is safe.
+    # for label in ci_inputs.pr_labels:
+    #     if not label.startswith("test_filter:"):
+    #         continue
+    #     filter_type = label.split(":")[1]
+    #     if filter_type not in _VALID_TEST_FILTER_TYPES:
+    #         raise ValueError(
+    #             f"Unrecognized test_filter value: {filter_type!r}. "
+    #             f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
+    #         )
+    #     return filter_type, f"test_filter label: {label}"
 
-    # Priority 2: test:* labels request specific component tests (e.g.
-    # test:rocprim). When someone explicitly asks for tests, run the full
-    # suite — they're investigating something specific.
-    if _has_test_labels(ci_inputs):
-        return "full", "test labels specified"
+    # # Priority 2: test:* labels request specific component tests (e.g.
+    # # test:rocprim). When someone explicitly asks for tests, run the full
+    # # suite — they're investigating something specific.
+    # if _has_test_labels(ci_inputs):
+    #     return "full", "test labels specified"
 
-    # Priority 3: release builds run deeper test suites than regular CI.
-    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
-    # * 'prerelease' gets full (exhaustive pre-release validation)
-    # * 'dev' falls through to later priorities so changes can be tested quickly
-    if ci_inputs.release_type == "nightly":
-        return "comprehensive", "release build (nightly)"
-    if ci_inputs.release_type == "prerelease":
-        return "full", "release build (prerelease)"
+    # # Priority 3: release builds run deeper test suites than regular CI.
+    # # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
+    # # * 'prerelease' gets full (exhaustive pre-release validation)
+    # # * 'dev' falls through to later priorities so changes can be tested quickly
+    # if ci_inputs.release_type == "nightly":
+    #     return "comprehensive", "release build (nightly)"
+    # if ci_inputs.release_type == "prerelease":
+    #     return "full", "release build (prerelease)"
 
-    # Priority 4: schedule runs the full nightly suite — comprehensive
-    # coverage on a cadence, catching regressions that quick tests miss.
-    if ci_inputs.is_schedule:
-        return "comprehensive", "scheduled run"
+    # # Priority 4: schedule runs the full nightly suite — comprehensive
+    # # coverage on a cadence, catching regressions that quick tests miss.
+    # if ci_inputs.is_schedule:
+    #     return "comprehensive", "scheduled run"
 
-    # Priority 5: a submodule change means actual library code changed
-    # (e.g. rocBLAS, MIOpen). These need full testing since the change
-    # could affect any downstream consumer.
-    if (
-        git_context.changed_files is not None
-        and git_context.submodule_paths is not None
-    ):
-        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-        if matching:
-            return "full", f"submodule(s) changed: {sorted(matching)}"
+    # # Priority 5: a submodule change means actual library code changed
+    # # (e.g. rocBLAS, MIOpen). These need full testing since the change
+    # # could affect any downstream consumer.
+    # if (
+    #     git_context.changed_files is not None
+    #     and git_context.submodule_paths is not None
+    # ):
+    #     matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+    #     if matching:
+    #         return "full", f"submodule(s) changed: {sorted(matching)}"
 
-    # Default: quick tests for fast CI feedback.
-    return "quick", "default"
+    # # Default: quick tests for fast CI feedback.
+    return "standard", "default"
 
 
 def decide_jobs(

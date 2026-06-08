@@ -47,7 +47,7 @@ def is_in_container() -> bool:
 
 # Constants
 GB = 1024**3
-DEFAULT_INTERVAL = 30.0
+DEFAULT_INTERVAL = 10.0
 WARN_PERCENT = 75
 CRIT_PERCENT = 90
 
