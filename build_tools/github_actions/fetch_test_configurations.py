@@ -485,7 +485,7 @@ test_matrix = {
         },
     },
     # !! DISABLED because of https://github.com/ROCm/TheRock/issues/5689
-    # !! Windows loading of the python bindings require special LOAD_LIBRARY_SEARCH_DEFAULT_DIRS 
+    # !! Windows loading of the python bindings require special LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
     # !! We need AddDllDirectory. Commenting out to unblock CI issues.
     # hipDNN Python bindings wheel build + install + pytest
     # "hipdnn_python_bindings": {
