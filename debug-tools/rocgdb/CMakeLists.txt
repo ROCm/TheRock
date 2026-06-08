@@ -705,6 +705,14 @@ if(BUILD_TESTING)
       COMPONENT tests
       USE_SOURCE_PERMISSIONS)
   endforeach()
+
+  # Also install the CI wrapper script to invoke rocgdb tests.
+  # This is used in the context of TheRock CI.
+  install(
+    PROGRAMS ${ROCGDB_SOURCE_DIR}/.github/scripts/test_rocgdb.py
+    DESTINATION tests/rocgdb
+    COMPONENT tests
+  )
 else()
   message(STATUS "rocgdb tests: BUILD_TESTING not set. Skipping installation integrity tests.")
 endif()
