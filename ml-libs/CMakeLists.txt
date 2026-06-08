@@ -169,6 +169,7 @@ if(THEROCK_ENABLE_HIPDNN)
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DHIP_DNN_BUILD_PLUGINS=OFF
       -DHIP_DNN_GENERATE_SDK_HEADERS=OFF
+      -DHIPDNN_BUILD_PYTHON_BINDINGS=ON
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
@@ -179,6 +180,7 @@ if(THEROCK_ENABLE_HIPDNN)
       therock-googletest
       therock-fmt
       therock-nanobind
+      therock-robin-map
       therock-spdlog
     RUNTIME_DEPS
       hip-clr
@@ -332,6 +334,8 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -369,50 +373,47 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
+  therock_cmake_subproject_declare(hipkernelprovider
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DHIPKERNELPROVIDER_ENABLE_TESTS=${THEROCK_BUILD_TESTING}
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      hipDNN
+      therock-googletest
+      therock-flatbuffers
+      therock-nlohmann-json
+    RUNTIME_DEPS
+      hip-clr
+      hipdnn_integration_tests
+    TEST_SUBPROJECTS
+  )
+  therock_cmake_subproject_glob_c_sources(hipkernelprovider
+  SUBDIRS
+    .
+  )
+  therock_cmake_subproject_activate(hipkernelprovider)
 
-  if(HIP_KERNEL_PROVIDER_ENABLE)
-    therock_cmake_subproject_declare(hipkernelprovider
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
-      BACKGROUND_BUILD
-      CMAKE_ARGS
-        -DHIP_PLATFORM=amd
-        -DROCM_PATH=
-        -DROCM_DIR=
-        -DHIPKERNELPROVIDER_ENABLE_TESTS=${THEROCK_BUILD_TESTING}
-        -DENABLE_CLANG_TIDY=OFF
-        -DENABLE_CLANG_FORMAT=OFF
-      CMAKE_INCLUDES
-        therock_explicit_finders.cmake
-      COMPILER_TOOLCHAIN
-        amd-hip
-      BUILD_DEPS
-        hipDNN
-        therock-googletest
-        therock-flatbuffers
-        therock-nlohmann-json
-      RUNTIME_DEPS
-        hip-clr
-        hipdnn_integration_tests
-      TEST_SUBPROJECTS
-    )
-    therock_cmake_subproject_glob_c_sources(hipkernelprovider
-    SUBDIRS
-      .
-    )
-    therock_cmake_subproject_activate(hipkernelprovider)
-
-    therock_provide_artifact(hipkernelprovider
-      TARGET_NEUTRAL
-      DESCRIPTOR artifact-hipkernelprovider.toml
-      COMPONENTS
-        dbg
-        lib
-        test
-      SUBPROJECT_DEPS
-        hipkernelprovider
-    )
-  endif(HIP_KERNEL_PROVIDER_ENABLE)
+  therock_provide_artifact(hipkernelprovider
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipkernelprovider.toml
+    COMPONENTS
+      dbg
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipkernelprovider
+  )
 endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)

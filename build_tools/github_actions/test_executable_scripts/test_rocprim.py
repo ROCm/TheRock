@@ -125,7 +125,7 @@ env_vars["LD_LIBRARY_PATH"] = (
 
 is_windows = platform.system() == "Windows"
 exe_name = "generate_resource_spec.exe" if is_windows else "generate_resource_spec"
-exe_dir = rocm_base / "bin" / "rocthrust"
+exe_dir = rocm_base / "bin" / "rocprim"
 
 resource_spec_file = "resources.json"
 res_gen_cmd = [

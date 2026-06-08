@@ -122,6 +122,20 @@ if(THEROCK_ENABLE_PRIM)
     # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
     # that depend on rocPRIM
     # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
+    # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
+    # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
+    # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
+    # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
+    if(WIN32 OR NOT TARGET amdsmi)
+      set(_rocprim_benchmark_enable "OFF")
+      set(_rocprim_benchmark_deps)
+      set(_rocprim_benchmark_includes)
+    else()
+      set(_rocprim_benchmark_enable "ON")
+      set(_rocprim_benchmark_deps amdsmi)
+      set(_rocprim_benchmark_includes therock_rocprim_benchmark_deps.cmake)
+    endif()
+
     therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
@@ -131,13 +145,17 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_TEST=ON
+        -DBUILD_BENCHMARK=${_rocprim_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
+      CMAKE_INCLUDES
+        ${_rocprim_benchmark_includes}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
         rocm-cmake
         therock-googletest
         rocPRIM
+        ${_rocprim_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
       TEST_SUBPROJECTS
@@ -408,6 +426,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     DEFAULT_GPU_TARGETS
       gfx942  # Fixes issue with empty target list for unsupported architectures.
     CMAKE_ARGS
+      -DLIBHIPCXX_COPY_TO_BUILD=ON
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
