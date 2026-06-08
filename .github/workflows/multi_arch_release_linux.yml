@@ -155,6 +155,7 @@ jobs:
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
     name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -179,34 +180,6 @@ jobs:
               "repository": "${{ inputs.repository }}",
               "ref": "${{ inputs.ref }}"
             }
-
-  # Install tests are dispatched asynchronously (sanity) so publish
-  # is not blocked on GPU runner queues. See https://github.com/ROCm/TheRock/issues/5212
-  trigger_test_native_install:
-    needs: [build_native_deb_packages, build_native_rpm_packages]
-    name: Trigger Native Install Test - ${{ matrix.os_profile }}
-    runs-on: ubuntu-24.04
-    permissions:
-      actions: write
-    strategy:
-      fail-fast: false
-      matrix:
-        os_profile: [ubuntu2404, rhel10, sles16]
-    steps:
-      - name: Trigger test_native_linux_packages_install
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
-        with:
-          workflow: test_native_linux_packages_install.yml
-          inputs: |
-            { "package_install_url": "${{ matrix.os_profile == 'ubuntu2404' && needs.build_native_deb_packages.outputs.package_repository_url || needs.build_native_rpm_packages.outputs.package_repository_url }}",
-              "release_type": "${{ inputs.release_type }}",
-              "os_profile": "${{ matrix.os_profile }}",
-              "artifact_group": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
-              "test_type": "${{ inputs.test_type }}",
-              "repository": "${{ inputs.repository }}",
-              "ref": "${{ inputs.ref }}"
-            }
-
 
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
   #   bucket if the job order is not altered.

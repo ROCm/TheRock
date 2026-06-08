@@ -43,7 +43,7 @@ on:
       cache_type:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
-        default: "none"
+        default: "sccache"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -80,7 +80,7 @@ on:
           - none
           - sccache
           - ccache
-        default: none
+        default: sccache
 
 run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
