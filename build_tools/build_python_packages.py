@@ -27,7 +27,23 @@ from pathlib import Path
 import sys
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
+from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
+
+
+def _amdgpu_families_arg(value: str) -> list[str] | None:
+    """Argparse type for --linux/windows-amdgpu-families CLI flags.
+
+    Accepts both comma and semicolon separators so the same value shape
+    works from a shell prompt and from workflow YAML that passes
+    BuildConfig.dist_amdgpu_families (semicolon-separated) directly.
+
+    Returns None for empty/whitespace-only input so workflow YAML can
+    pass an empty string for "platform not participating" without
+    triggering cross-platform mode in Parameters.
+    """
+    parsed = [f.strip() for f in value.replace(";", ",").split(",") if f.strip()]
+    return parsed or None
 
 
 def load_therock_manifest(artifact_dir: Path) -> dict:
@@ -68,12 +84,35 @@ def run(args: argparse.Namespace):
     if kpack_split:
         print("::: Detected KPACK_SPLIT_ARTIFACTS — producing host + device wheels")
 
+    # Cross-platform target view for the rocm sdist. Expand each platform's
+    # family list to the union of its gfx targets so the
+    # AVAILABLE_TARGET_FAMILIES baked into the meta sdist matches what's
+    # actually published as rocm-sdk-device-<target> wheels across both
+    # platforms' builds.
+    # TODO: kwarg name `linux_target_families` in Parameters and the
+    # LINUX/WINDOWS_TARGET_FAMILIES constants in _dist_info.py predate the
+    # kpack-split semantics where the values are GPU targets. Rename to
+    # *_amdgpu_targets once the wider `target_family` terminology cleanup
+    # is in scope.
+    family_map = None
+    linux_targets: list[str] | None = None
+    windows_targets: list[str] | None = None
+    if args.linux_amdgpu_families is not None:
+        family_map = amdgpu_family_map()
+        linux_targets = expand_families(args.linux_amdgpu_families, family_map)
+    if args.windows_amdgpu_families is not None:
+        if family_map is None:
+            family_map = amdgpu_family_map()
+        windows_targets = expand_families(args.windows_amdgpu_families, family_map)
+
     params = Parameters(
         dest_dir=args.dest_dir,
         version=args.version,
         version_suffix=args.version_suffix,
         artifacts=ArtifactCatalog(args.artifact_dir),
         kpack_split=kpack_split,
+        linux_target_families=linux_targets,
+        windows_target_families=windows_targets,
     )
 
     # Populate each target neutral library package.
@@ -456,6 +495,28 @@ def main(argv: list[str]):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Apply compression when building wheels (disable for faster iteration or prior to recompression activities)",
+    )
+    p.add_argument(
+        "--linux-amdgpu-families",
+        type=_amdgpu_families_arg,
+        default=None,
+        help=(
+            "Comma- or semicolon-separated AMD GPU families for the Linux "
+            "side of a multi-arch release (e.g. 'gfx94X-dcgpu,gfx110X-all'). "
+            "Expanded to GPU targets via cmake/therock_amdgpu_targets.cmake "
+            "and recorded in the rocm sdist so its device-gfx* extras "
+            "advertise the cross-platform union. Absent on single-platform "
+            "builds."
+        ),
+    )
+    p.add_argument(
+        "--windows-amdgpu-families",
+        type=_amdgpu_families_arg,
+        default=None,
+        help=(
+            "Comma- or semicolon-separated AMD GPU families for the Windows "
+            "side of a multi-arch release. See --linux-amdgpu-families."
+        ),
     )
     args = p.parse_args(argv)
 

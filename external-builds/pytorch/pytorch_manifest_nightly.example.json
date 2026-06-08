@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "pytorch": {
+    "repo": "https://github.com/pytorch/pytorch",
+    "commit": "cac8bcf1ca69bff4364b793b570f850cf9e1faa1",
+    "branch": "nightly",
+    "version": "2.13.0a0+rocm7.14.0"
+  },
+  "pytorch_audio": {
+    "repo": "https://github.com/pytorch/audio",
+    "commit": "c6473ed0a5d5254cef30295c4b24019c539007b2",
+    "branch": "nightly",
+    "version": "2.11.0a0+rocm7.14.0"
+  },
+  "pytorch_vision": {
+    "repo": "https://github.com/pytorch/vision",
+    "commit": "97164178c67fc943ab7b3ecddd4454a3265b0f63",
+    "branch": "nightly",
+    "version": "0.28.0a0+rocm7.14.0"
+  },
+  "triton": {
+    "repo": "https://github.com/ROCm/triton",
+    "commit": "88b227e23f0445f3f695bad05bbf1a363b4f50e0",
+    "version": "3.7.0+rocm7.14.0"
+  },
+  "apex": {
+    "repo": "https://github.com/ROCm/apex",
+    "commit": "af25af4e26f0546d897c3e2ff31502ef50530ecc",
+    "branch": "master",
+    "version": "1.11.0+rocm7.14.0"
+  },
+  "therock": {
+    "repo": "https://github.com/ROCm/TheRock",
+    "commit": "2555d629204cb066d6668823ad6241d2fcf250e4",
+    "branch": "main",
+    "version": "7.14.0"
+  }
+}

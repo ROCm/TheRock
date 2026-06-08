@@ -303,8 +303,7 @@ If iterating and wishes to use ccache, see [CCache usage on Windows](../../READM
 ### CMake build usage
 
 ```bash
-cmake --build build --target therock-dist
-cmake --build build --target therock-archives
+cmake --build build --target therock-artifacts therock-dist
 ```
 
 This will start building using MSVC. Once the amd-llvm subproject is built,
@@ -319,7 +318,7 @@ outputs.
 #### Building ROCm Python wheels
 
 To build Python wheels, you will need an "artifacts" directory, either from a
-source build of `therock-archives` (see above) or by running the
+source build of `therock-artifacts` (see above) or by running the
 [`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
 artifacts from a CI run.
 

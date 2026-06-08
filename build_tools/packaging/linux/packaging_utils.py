@@ -154,20 +154,6 @@ def is_meta_package(pkg_info):
     return is_key_defined(pkg_info, "Metapackage")
 
 
-def is_composite_package(pkg_info):
-    """
-    Verifies whether composite key is enabled for a package.
-
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-
-    Returns:
-    bool: True if composite key is defined, False otherwise.
-    """
-
-    return is_key_defined(pkg_info, "composite")
-
-
 def is_rpm_stripping_disabled(pkg_info):
     """
     Verifies whether Disable_RPM_STRIP key is enabled for a package.
@@ -271,13 +257,27 @@ def get_package_list(artifact_dir):
     skipped_list  : list of package names excluded due to missing artifacts
     """
     pkg_list = []
-    skipped = []
+    skipped_list = []
+    artifact_path = Path(artifact_dir)
     data = read_package_json_file()
 
     try:
-        dir_entries = os.listdir(artifact_dir)
+        artifact_dirs = {path.name for path in artifact_path.iterdir() if path.is_dir()}
     except FileNotFoundError:
-        sys.exit(f"{artifact_dir}: Artifactory directory does not exist, Exiting")
+        sys.exit(f"{artifact_dir}: Artifactory directory does not exist, exiting")
+
+    # Create a prefix index for O(1) artifact lookup
+    prefix_index = {}
+    # Component suffixes from artifact.toml [components.{suffix}.*] definitions
+    # See docs/development/artifacts.md for artifact naming conventions
+    SUFFIX_MARKERS = ["_dbg_", "_dev_", "_doc_", "_lib_", "_run_", "_test_"]
+
+    for dirname in artifact_dirs:
+        for marker in SUFFIX_MARKERS:
+            if marker in dirname:
+                prefix = dirname.split(marker, 1)[0]
+                prefix_index[prefix] = True
+                break  # stop after first matching marker
 
     for pkg_info in data:
         pkg_name = pkg_info["Package"]
@@ -285,36 +285,23 @@ def get_package_list(artifact_dir):
         if is_packaging_disabled(pkg_info):
             continue
 
-        # metapackages don't need artifact lookup
+        # Metapackages don't need artifact lookup
         if is_meta_package(pkg_info):
             pkg_list.append(pkg_name)
             continue
 
-        artifactory_list = pkg_info.get("Artifactory", [])
-        artifact_found = False
-
-        for artifactory in artifactory_list:
-            artifact_name = artifactory.get("Artifact")
-            if not artifact_name:
-                continue
-
-            # Look for directories starting with the artifact name
-            for entry in dir_entries:
-                path = Path(artifact_dir) / entry
-
-                if entry.startswith(artifact_name) and path.is_dir():
-                    artifact_found = True
-                    break
-
-            if artifact_found:
-                break
+        # Check if any artifact matches a known prefix
+        artifact_found = any(
+            (artifact := art.get("Artifact")) and prefix_index.get(artifact)
+            for art in pkg_info.get("Artifactory", [])
+        )
 
         if artifact_found:
             pkg_list.append(pkg_name)
         else:
-            skipped.append(pkg_name)
+            skipped_list.append(pkg_name)
 
-    return pkg_list, skipped
+    return pkg_list, skipped_list
 
 
 def remove_dir(dir_name):
@@ -333,31 +320,6 @@ def remove_dir(dir_name):
         print(f"Removed directory: {dir_path}")
     else:
         print(f"Directory does not exist: {dir_path}")
-
-
-def version_to_str(version_str):
-    """Convert a ROCm version string to a numeric representation.
-
-    This function transforms a ROCm version from its dotted format
-    (e.g., "7.1.0") into a numeric string (e.g., "70100")
-    Ex : 7.10.0 -> 71000
-         10.1.0 - > 100100
-         7.1 -> 70100
-         7.1.1.1 -> 70101
-
-    Parameters:
-    version_str: ROCm version separated by dots
-
-    Returns: Numeric string
-    """
-
-    parts = version_str.split(".")
-    # Ensure we have exactly 3 parts: major, minor, patch
-    while len(parts) < 3:
-        parts.append("0")  # Default missing parts to "0"
-    major, minor, patch = parts[:3]  # Ignore extra parts
-
-    return f"{int(major):01d}{int(minor):02d}{int(patch):02d}"
 
 
 def update_package_name(pkg_name, config: PackageConfig):
