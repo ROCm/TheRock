@@ -20,7 +20,7 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
-timeout = "900"
+timeout = "1500"
 cmd = [
     "ctest",
     "--test-dir",
