@@ -196,32 +196,11 @@ class StageImpactAnalyzer:
         self, artifact_groups: Set[str], platform: Optional[str]
     ) -> Set[str]:
         stages_by_group = self.topology.get_artifact_group_to_build_stages()
-        stage_to_source_sets = self.topology.get_stage_to_source_sets(platform=platform)
         impacted_stages: Set[str] = set()
 
         # Direct impact: any stage that builds a touched artifact group.
         for group_name in artifact_groups:
             impacted_stages.update(stages_by_group.get(group_name, []))
-
-        # Conservative expansion: any stage whose source sets overlap with the
-        # directly impacted source sets should be included.
-        # (This helps when a source set feeds a stage indirectly.)
-        source_set_names = {
-            source_set.name
-            for source_set in self.topology.get_source_sets()
-            if any(
-                group in artifact_groups
-                for group in self.topology.get_source_set_to_artifact_groups().get(
-                    source_set.name, []
-                )
-            )
-        }
-        for stage_name, stage_source_sets in stage_to_source_sets.items():
-            if any(
-                source_set_name in source_set_names
-                for source_set_name in stage_source_sets
-            ):
-                impacted_stages.add(stage_name)
 
         return impacted_stages
 
