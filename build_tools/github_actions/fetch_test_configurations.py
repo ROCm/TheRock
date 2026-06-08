@@ -168,32 +168,6 @@ test_matrix = {
             "windows": 6,
         },
     },
-    "rocroller": {
-        "job_name": "rocroller",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 5,
-            "windows": 5,
-        },
-        "exclude_family": {
-            # rocroller does not plan to support Linux and Windows gfx115X architectures
-            "linux": [
-                "gfx1150",
-                "gfx1151",
-                "gfx1152",
-                "gfx1153",
-            ],
-            "windows": [
-                "gfx1150",
-                "gfx1151",
-                "gfx1152",
-                "gfx1153",
-            ],
-        },
-    },
     "tensilelite": {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
