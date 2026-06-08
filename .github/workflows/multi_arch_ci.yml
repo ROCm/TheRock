@@ -115,6 +115,16 @@ jobs:
       contents: read
       id-token: write
 
+  manifest_diff:
+    name: Manifest Diff
+    # Refs are auto-derived from push / pull_request events only.
+    # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    uses: ./.github/workflows/manifest-diff.yml
+    permissions:
+      contents: read
+      id-token: write
+
   ci_summary:
     name: CI Summary
     if: always()
@@ -122,6 +132,7 @@ jobs:
       - setup
       - linux_build_and_test
       - windows_build_and_test
+      - manifest_diff
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
