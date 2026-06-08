@@ -43,9 +43,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
         type: string
@@ -84,9 +88,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
         type: string
@@ -242,10 +250,23 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
+          # Choose the ROCm package source: a PEP 503 index (e.g. repo.amd.com
+          # released wheels) via --index-url, or a flat find-links page (e.g. a
+          # TheRock CI artifacts index.html) via --find-links.
+          rocm_source_flag=()
+          if [ -n "${{ inputs.rocm_package_index_url }}" ]; then
+            rocm_source_flag=(--index-url "${{ inputs.rocm_package_index_url }}")
+          elif [ -n "${{ inputs.rocm_package_find_links_url }}" ]; then
+            rocm_source_flag=(--find-links "${{ inputs.rocm_package_find_links_url }}")
+          else
+            echo "ERROR: set rocm_package_index_url or rocm_package_find_links_url" >&2
+            exit 1
+          fi
+
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --find-links "${{ inputs.rocm_package_find_links_url }}" \
+            "${rocm_source_flag[@]}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
