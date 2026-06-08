@@ -42,6 +42,10 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+      changed_projects:
+        type: string
+        default: ""
+        description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
   pull_request:
     types:
       - labeled
@@ -92,6 +96,7 @@ jobs:
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      changed_projects: ${{ inputs.changed_projects || '' }}
     permissions:
       contents: read
       id-token: write
@@ -111,6 +116,7 @@ jobs:
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      changed_projects: ${{ inputs.changed_projects || '' }}
     permissions:
       contents: read
       id-token: write

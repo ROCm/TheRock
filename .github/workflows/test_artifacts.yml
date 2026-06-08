@@ -141,6 +141,7 @@ jobs:
 
       - name: "Determine test dependencies"
         id: test_deps
+        shell: bash
         env:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
         run: |
