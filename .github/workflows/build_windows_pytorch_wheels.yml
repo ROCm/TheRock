@@ -39,6 +39,11 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
+      pytorch_repo:
+        description: "PyTorch repo to checkout (e.g. 'harkgill-amd/pytorch'). Defaults to 'pytorch/pytorch'."
+        required: false
+        type: string
+        default: ""
       cache_type:
         description: "Compiler cache type (sccache, ccache, or none)"
         required: false
@@ -102,6 +107,10 @@ on:
         required: true
         type: string
         default: "release/2.9"
+      pytorch_repo:
+        description: "PyTorch repo to checkout (e.g. 'harkgill-amd/pytorch'). Defaults to 'pytorch/pytorch'."
+        type: string
+        default: ""
       cache_type:
         description: "Compiler cache type"
         type: choice
@@ -209,12 +218,13 @@ jobs:
       # Checkout nightly sources from https://github.com/pytorch/pytorch
       # TODO: switch to 'nightly' to match our Linux workflows?
       - name: Checkout PyTorch source repos (nightly branch)
-        if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        if: ${{ inputs.pytorch_git_ref == 'nightly' || inputs.pytorch_repo != '' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag nightly
+            ${{ inputs.pytorch_repo != '' && format('--gitrepo-origin https://github.com/{0}.git', inputs.pytorch_repo) || '' }} \
+            --repo-hashtag ${{ inputs.pytorch_git_ref }}
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
             --repo-hashtag nightly
@@ -224,7 +234,7 @@ jobs:
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        if: ${{ inputs.pytorch_git_ref != 'nightly' && inputs.pytorch_repo == '' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
