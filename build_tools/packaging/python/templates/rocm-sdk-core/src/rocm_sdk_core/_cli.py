@@ -97,12 +97,7 @@ is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
 
 
-def _core_wheel_path() -> Path:
-    return _get_core_module_path().resolve()
-
-
 def _host_has_stale_rocm_env(core_path: Path) -> bool:
-    """True when host ROCM_PATH/HIP_PATH point outside the installed core wheel."""
     for var in ("ROCM_PATH", "HIP_PATH"):
         value = os.environ.get(var)
         if not value:
@@ -115,90 +110,35 @@ def _host_has_stale_rocm_env(core_path: Path) -> bool:
     return False
 
 
-def _clear_stale_host_rocm_env() -> None:
-    os.environ.pop("ROCM_PATH", None)
-    os.environ.pop("HIP_PATH", None)
-
-
-def _hip_path_flags(root: Path) -> list[str]:
-    root_posix = root.as_posix()
-    extra: list[str] = []
-    if not any(arg.startswith("--rocm-path=") for arg in sys.argv[1:]):
-        extra.append(f"--rocm-path={root_posix}")
-    if not any(arg.startswith("--hip-path=") for arg in sys.argv[1:]):
-        extra.append(f"--hip-path={root_posix}")
-    return extra
-
-
-def _hipcc_binary_candidates() -> list[Path]:
-    """Return candidate hipcc.exe paths, preferring the core wheel layout."""
-    core_path = _core_wheel_path()
-    candidates = [core_path / ("bin/hipcc" + exe_suffix)]
-    if _has_devel_module():
-        candidates.append(
-            _get_module_path(expand_devel=True).resolve() / ("bin/hipcc" + exe_suffix)
-        )
-    return candidates
-
-
-def _resolve_hipcc_binary() -> Path | None:
-    for candidate in _hipcc_binary_candidates():
-        if candidate.is_file():
-            return candidate
-    return None
-
-
-def _prepare_hipcc_launch() -> tuple[str, list[str]]:
-    """Launch hipcc from the core wheel tree.
-
-    Clang/LLVM live under core even when console scripts expand devel. Stale
-    host ROCM_PATH/HIP_PATH on Windows runners must not override the wheel;
-    --rocm-path/--hip-path take precedence in hipcc even without llvm 0006/0007.
-    """
-    core_path = _core_wheel_path()
-    full_path = _resolve_hipcc_binary()
-    if full_path is None:
-        full_path = core_path / ("bin/hipcc" + exe_suffix)
-    launch_path = str(full_path)
-    argv = [launch_path, *sys.argv[1:]]
-
-    if not full_path.is_file():
-        return launch_path, argv
-
-    if is_windows or _host_has_stale_rocm_env(core_path):
-        _clear_stale_host_rocm_env()
-        argv = [launch_path, *_hip_path_flags(core_path), *sys.argv[1:]]
-    return launch_path, argv
-
-
-def _prepare_hipconfig_launch(expand_devel: bool) -> tuple[str, list[str]]:
-    """Launch hipconfig from core or devel, dropping stale host env overrides."""
-    core_path = _core_wheel_path()
-    module_path = _get_module_path(expand_devel).resolve()
-    full_path = module_path / ("bin/hipconfig" + exe_suffix)
-    launch_path = str(full_path)
-    argv = [launch_path, *sys.argv[1:]]
-
-    if not full_path.is_file():
-        return launch_path, argv
-
-    if is_windows or _host_has_stale_rocm_env(core_path):
-        _clear_stale_host_rocm_env()
-    return launch_path, argv
-
-
 def _exec(relpath: str, expand_devel=True):
     # Default is True because most CLI tools are compiler/build tools that
     # need the devel files. System info tools (amd-smi, rocminfo, etc.)
     # override with expand_devel=False to avoid the expansion cost.
+    core_path = _get_core_module_path().resolve()
     if relpath == "bin/hipcc":
-        launch_path, argv = _prepare_hipcc_launch()
-    elif relpath == "bin/hipconfig":
-        launch_path, argv = _prepare_hipconfig_launch(expand_devel)
+        module_path = core_path
     else:
         module_path = _get_module_path(expand_devel)
-        launch_path = str(module_path / (relpath + exe_suffix))
-        argv = [launch_path, *sys.argv[1:]]
+    full_path = module_path / (relpath + exe_suffix)
+    argv = [str(full_path), *sys.argv[1:]]
+
+    if (
+        relpath in ("bin/hipcc", "bin/hipconfig")
+        and full_path.is_file()
+        and (is_windows or _host_has_stale_rocm_env(core_path))
+    ):
+        os.environ.pop("ROCM_PATH", None)
+        os.environ.pop("HIP_PATH", None)
+        if relpath == "bin/hipcc":
+            root = core_path.as_posix()
+            extra: list[str] = []
+            if not any(arg.startswith("--rocm-path=") for arg in sys.argv[1:]):
+                extra.append(f"--rocm-path={root}")
+            if not any(arg.startswith("--hip-path=") for arg in sys.argv[1:]):
+                extra.append(f"--hip-path={root}")
+            argv = [str(full_path), *extra, *sys.argv[1:]]
+
+    launch_path = str(full_path)
     if is_windows:
         # https://bugs.python.org/issue19124
         # prevent execution from occuring in the backround

@@ -336,7 +336,9 @@ jobs:
         timeout-minutes: 5
         run: |
           if [ "${RUNNER_OS}" = "Windows" ]; then
-            python build_tools/packaging/python/overlay_rocm_sdk_core_cli.py
+            TEST_DIR="${VENV_DIR}/Lib/site-packages/rocm_sdk/tests"
+            cp build_tools/packaging/python/templates/rocm/src/rocm_sdk/tests/core_test.py "${TEST_DIR}/"
+            rm -f "${TEST_DIR}/__pycache__/core_test".*.pyc 2>/dev/null || true
           fi
           rocm-sdk test
 

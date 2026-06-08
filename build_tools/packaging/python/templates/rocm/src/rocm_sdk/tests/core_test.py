@@ -5,6 +5,7 @@
 
 import importlib
 import locale
+import os
 from pathlib import Path
 import platform
 import subprocess
@@ -138,10 +139,16 @@ class ROCmCoreTest(unittest.TestCase):
                     msg=f"Console script {script_path} does not exist",
                 )
                 encoding = locale.getpreferredencoding()
+                kwargs: dict = {}
+                if is_windows and script_name in ("hipcc", "hipconfig"):
+                    env = os.environ.copy()
+                    env.pop("ROCM_PATH", None)
+                    env.pop("HIP_PATH", None)
+                    kwargs["env"] = env
                 output_text = subprocess.check_output(
                     [script_path] + cl,
                     stderr=subprocess.STDOUT,
-                    **utils.subprocess_kwargs_without_host_rocm(script_name),
+                    **kwargs,
                 ).decode(encoding)
                 if expected_text not in output_text:
                     self.fail(
