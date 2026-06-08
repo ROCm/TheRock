@@ -3,6 +3,11 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
+  # The hipDNN frontend Python bindings (prebuilt nanobind extension + test
+  # suite) ship only via the dedicated Python wheel, not the shared-library
+  # tarball. The prebuilt .so carries a CI-only RPATH, so it is not a
+  # user-loadable library here.
+  # See https://github.com/ROCm/TheRock/issues/5678
   "share/hipdnn/python/**",
 ]
 [components.run."ml-libs/hipDNN/stage"]
@@ -12,6 +17,11 @@ include = [
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
 exclude = [
+  # The hipDNN frontend Python bindings (prebuilt nanobind extension + test
+  # suite) ship only via the dedicated Python wheel, not the devel component.
+  # The prebuilt .so carries a CI-only RPATH, so `rocm-sdk test` cannot load
+  # it from here.
+  # See https://github.com/ROCm/TheRock/issues/5678
   "share/hipdnn/python/**",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
