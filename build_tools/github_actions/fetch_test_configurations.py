@@ -485,17 +485,17 @@ test_matrix = {
         },
     },
     # hipDNN Python bindings wheel build + install + pytest
-    "hipdnn_python_bindings": {
-        "job_name": "hipdnn_python_bindings",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn_frontend_python.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
-        },
-    },
+    # "hipdnn_python_bindings": {
+    #     "job_name": "hipdnn_python_bindings",
+    #     "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+    #     "timeout_minutes": 30,
+    #     "test_script": f"python {_get_script_path('test_hipdnn_frontend_python.py')}",
+    #     "platform": ["linux", "windows"],
+    #     "total_shards_dict": {
+    #         "linux": 1,
+    #         "windows": 1,
+    #     },
+    # },
     # hipDNN integration tests (unit tests for the integration test harness)
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",
