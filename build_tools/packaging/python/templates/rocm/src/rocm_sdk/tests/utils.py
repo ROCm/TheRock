@@ -3,6 +3,7 @@
 
 """Test utilities."""
 
+import os
 from pathlib import Path
 import platform
 import shlex
@@ -47,6 +48,22 @@ def get_module_shared_libraries(mod) -> list[Path]:
         ]
 
     return so_paths
+
+
+def subprocess_kwargs_without_host_rocm(script_name: str) -> dict:
+    """Extra subprocess kwargs for console scripts affected by stale HIP SDK env.
+
+    Self-hosted Windows runners often export HIP SDK paths that break hipcc when
+    published rocm-sdk-core wheels predate llvm 0007 / an updated _cli trampoline.
+    Only hipcc/hipconfig need a sanitized environment; other tools keep the
+    inherited process environment.
+    """
+    if not is_windows or script_name not in ("hipcc", "hipconfig"):
+        return {}
+    env = os.environ.copy()
+    env.pop("ROCM_PATH", None)
+    env.pop("HIP_PATH", None)
+    return {"env": env}
 
 
 def find_console_script(script_name: str) -> Path | None:

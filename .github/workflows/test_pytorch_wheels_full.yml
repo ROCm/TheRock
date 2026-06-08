@@ -335,9 +335,11 @@ jobs:
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
-          # Published rocm-sdk-core may predate llvm 0007 / _cli hipcc fixes.
-          # Overlay the in-tree trampoline (Python-side counterpart to 0007).
+          # Published wheels may predate llvm 0007 / _cli / test env helpers.
+          # Overlay in-tree fixes (Python-side counterpart to 0007) and drop
+          # stale host HIP SDK paths before invoking console scripts.
           if [ "${RUNNER_OS}" = "Windows" ]; then
+            unset ROCM_PATH HIP_PATH
             python build_tools/packaging/python/overlay_rocm_sdk_core_cli.py
           fi
           rocm-sdk test

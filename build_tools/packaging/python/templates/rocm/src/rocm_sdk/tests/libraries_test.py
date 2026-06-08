@@ -120,7 +120,9 @@ class ROCmLibrariesTest(unittest.TestCase):
                     msg=f"Console script {script_path} does not exist",
                 )
                 output_text = subprocess.check_output(
-                    [script_path] + cl, stderr=sys.stdout
+                    [script_path] + cl,
+                    stderr=sys.stdout,
+                    **utils.subprocess_kwargs_without_host_rocm(script_name),
                 ).decode()
                 if expected_text not in output_text:
                     self.fail(

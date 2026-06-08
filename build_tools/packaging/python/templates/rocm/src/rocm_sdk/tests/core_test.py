@@ -141,6 +141,7 @@ class ROCmCoreTest(unittest.TestCase):
                 output_text = subprocess.check_output(
                     [script_path] + cl,
                     stderr=subprocess.STDOUT,
+                    **utils.subprocess_kwargs_without_host_rocm(script_name),
                 ).decode(encoding)
                 if expected_text not in output_text:
                     self.fail(

@@ -130,6 +130,24 @@ def _hip_path_flags(root: Path) -> list[str]:
     return extra
 
 
+def _hipcc_binary_candidates() -> list[Path]:
+    """Return candidate hipcc.exe paths, preferring the core wheel layout."""
+    core_path = _core_wheel_path()
+    candidates = [core_path / ("bin/hipcc" + exe_suffix)]
+    if _has_devel_module():
+        candidates.append(
+            _get_module_path(expand_devel=True).resolve() / ("bin/hipcc" + exe_suffix)
+        )
+    return candidates
+
+
+def _resolve_hipcc_binary() -> Path | None:
+    for candidate in _hipcc_binary_candidates():
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _prepare_hipcc_launch() -> tuple[str, list[str]]:
     """Launch hipcc from the core wheel tree.
 
@@ -138,7 +156,9 @@ def _prepare_hipcc_launch() -> tuple[str, list[str]]:
     --rocm-path/--hip-path take precedence in hipcc even without llvm 0006/0007.
     """
     core_path = _core_wheel_path()
-    full_path = core_path / ("bin/hipcc" + exe_suffix)
+    full_path = _resolve_hipcc_binary()
+    if full_path is None:
+        full_path = core_path / ("bin/hipcc" + exe_suffix)
     launch_path = str(full_path)
     argv = [launch_path, *sys.argv[1:]]
 
