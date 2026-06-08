@@ -2,15 +2,11 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Overlay in-tree Python fixes onto published ROCm wheels in the active venv.
+"""Overlay in-tree rocm-sdk test helpers onto published wheels in the active venv.
 
-Published rocm-sdk-core / rocm wheels may predate llvm patch 0007 (hipcc path
-logic) and updated console-script / test helpers. PyTorch CI installs those
-wheels from CloudFront while checking out TheRock at a branch that already has
-the fixes in templates.
-
-This script copies the template sources into site-packages and clears matching
-__pycache__ entries so the updated modules are loaded for ``rocm-sdk test``.
+PyTorch CI installs rocm packages from CloudFront before those wheels pick up
+template fixes. Copy the test env helpers from the checkout so ``rocm-sdk test``
+can run ``hipcc --help`` on Windows runners with stale HIP SDK env vars.
 """
 
 from __future__ import annotations
@@ -25,20 +21,12 @@ TEMPLATE_ROOT = THIS_DIR / "templates"
 
 OVERLAY_FILES: tuple[tuple[str, str], ...] = (
     (
-        "rocm-sdk-core/src/rocm_sdk_core/_cli.py",
-        "rocm_sdk_core._cli",
-    ),
-    (
         "rocm/src/rocm_sdk/tests/utils.py",
         "rocm_sdk.tests.utils",
     ),
     (
         "rocm/src/rocm_sdk/tests/core_test.py",
         "rocm_sdk.tests.core_test",
-    ),
-    (
-        "rocm/src/rocm_sdk/tests/libraries_test.py",
-        "rocm_sdk.tests.libraries_test",
     ),
 )
 

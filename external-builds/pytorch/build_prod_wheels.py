@@ -441,19 +441,6 @@ def do_install_rocm(args: argparse.Namespace):
     run_command(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
-    # Published wheels may lack the Windows hipcc _cli fix (counterpart to llvm
-    # 0007). When building from a TheRock checkout, overlay the in-tree template.
-    if sys.platform == "win32":
-        overlay_script = (
-            Path(__file__).resolve().parents[2]
-            / "build_tools"
-            / "packaging"
-            / "python"
-            / "overlay_rocm_sdk_core_cli.py"
-        )
-        if overlay_script.is_file():
-            run_command([sys.executable, str(overlay_script)], cwd=Path.cwd())
-
 
 def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: str):
     current = env.get(flagname, "")
