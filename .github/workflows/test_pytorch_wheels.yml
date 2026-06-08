@@ -213,6 +213,7 @@ jobs:
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
+          # TODO: drop once published rocm-sdk-core wheels include the _cli fix.
           if [ "${RUNNER_OS}" = "Windows" ]; then
             TEST_DIR="${VENV_DIR}/Lib/site-packages/rocm_sdk/tests"
             cp build_tools/packaging/python/templates/rocm/src/rocm_sdk/tests/core_test.py "${TEST_DIR}/"

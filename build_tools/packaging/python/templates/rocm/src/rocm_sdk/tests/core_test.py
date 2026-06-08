@@ -140,6 +140,7 @@ class ROCmCoreTest(unittest.TestCase):
                 )
                 encoding = locale.getpreferredencoding()
                 kwargs: dict = {}
+                # TODO: drop once published rocm-sdk-core wheels include the _cli fix.
                 if is_windows and script_name in ("hipcc", "hipconfig"):
                     env = os.environ.copy()
                     env.pop("ROCM_PATH", None)
