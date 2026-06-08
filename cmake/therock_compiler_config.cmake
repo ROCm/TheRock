@@ -7,7 +7,7 @@
 # This improves compatibility with ccache and sccache:
 # https://github.com/ccache/ccache/issues/1040
 if(WIN32 AND NOT DEFINED CMAKE_MSVC_DEBUG_INFORMATION_FORMAT)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
 endif()
 
 if(WIN32 AND NOT MSVC AND NOT THEROCK_DISABLE_MSVC_CHECK)
@@ -44,25 +44,6 @@ if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
     "Cannot build 32-bit ROCm with MSVC. You must enable the Windows x64 "
     "development tools and rebuild.\n"
     "  Detected CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
-endif()
-
-
-if(UNIX AND NOT APPLE AND NOT THEROCK_DISABLE_GNU_CHECK)
-  # Linux-specific check.
-  if(THEROCK_ENABLE_ROCPROFSYS AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR NOT CMAKE_C_COMPILER_ID STREQUAL "GNU"))
-   # Currently, the Dyninst dependency in rocprofiler-systems requires GNU compilers (gcc/g++).
-    message(FATAL_ERROR
-        "Currently, rocprofiler-systems requires GNU compilers (gcc/g++).\n"
-        "  Detected CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}\n"
-        "  Detected CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}\n"
-        "  Detected CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}\n"
-        "  Detected CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}\n"
-        "To use GNU compilers, set:\n"
-        "  -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++\n"
-        "To disable rocprofiler-systems, set:\n"
-        "  -DTHEROCK_ENABLE_ROCPROFSYS=OFF\n"
-        "Set THEROCK_DISABLE_GNU_CHECK to bypass this check.")
-  endif()
 endif()
 
 # macOS-specific compiler checks

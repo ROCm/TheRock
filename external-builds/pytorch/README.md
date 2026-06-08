@@ -86,7 +86,7 @@ See the following table for how each version is supported:
 | 2.10 alpha      | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2.9             | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.9` branch](https://github.com/ROCm/pytorch/tree/release/2.9)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.9/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li><li>[ROCm/apex `release/1.9.0` branch](https://github.com/ROCm/apex/tree/release/1.9.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li></ul>         | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.9` branch](https://github.com/ROCm/pytorch/tree/release/2.9)</li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li></ul>                               |
 | 2.9 alpha       | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| 2.8             | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.8` branch](https://github.com/ROCm/pytorch/tree/release/2.8)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.8/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.8/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.8/related_commits)</li><li>[ROCm/apex `release/1.8.0` branch](https://github.com/ROCm/apex/tree/release/1.8.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.8/related_commits)</li></ul>         | Unsupported                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2.8             | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2.7             | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Unsupported                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 See also:
@@ -257,6 +257,23 @@ python run_pytorch_tests.py -k "test_nn and not test_dropout"
 
 # Explicit pytorch repo path (for test sources) and GPU family (for filtering)
 python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+
+# GPU selection happens in two stages:
+#   1. --device-query  decides which GPUs enter the candidate set.
+#   2. --gpu-policy    decides how many candidates are made visible to tests.
+#
+# All GPUs visible at once (for multi-GPU tests):
+python run_pytorch_tests.py --device-query all --gpu-policy all
+
+# All GPUs discovered, but only one visible at a time:
+python run_pytorch_tests.py --device-query all --gpu-policy single
+
+# One GPU per architecture discovered, all of them visible:
+python run_pytorch_tests.py --device-query unique --gpu-policy all
+
+# Multi-GPU run on a single architecture (e.g., use both gfx1201 GPUs on a
+# machine where visible devices are {'gfx1100': [0], 'gfx1201': [1, 2]}):
+python run_pytorch_tests.py --amdgpu-family=gfx1201 --device-query all --gpu-policy all
 ```
 
 Tests can also be run by following the ROCm documentation at
@@ -271,14 +288,20 @@ PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload `torch`, `torchvision`, `torchaudio`, `triton`, and `apex` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/ for non-multi-arch packages.
-Multi-arch wheels are uploded to the "v4/whl-staging" directory with a public URL at https://rocm.nightlies.amd.com/whl-staging-multi-arch/.
+**Per-family releases** (non-multi-arch): Passing builds upload wheels to the
+"v2-staging" directory at https://rocm.nightlies.amd.com/v2-staging/. Only
+after passing torch tests are wheels promoted to "v2" at
+https://rocm.nightlies.amd.com/v2/. If no runner is available, promotion is
+blocked by default. Set `bypass_tests_for_releases=true` for exceptional
+cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py).
 
-Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
-
-<!-- TODO: Add a reference to https://rocm.nightlies.amd.com/whl-multi-arch/ as soon as we promote tested wheels. -->
-
-If no runner is available: Promotion is blocked by default. Set `bypass_tests_for_releases=true` for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
+**Multi-arch releases**: Wheels are published directly to
+https://rocm.nightlies.amd.com/whl-multi-arch/ without a staging step.
+Tests run post-publish as a signal (visible on
+https://therock-hud-dev.amd.com/), not as a gate. This avoids
+pip resolution issues that would arise if shared host `torch` wheel and
+per-target device wheels were promoted independently. See the discussion on
+[#3332](https://github.com/ROCm/TheRock/issues/3332) for details.
 
 ## Advanced build instructions
 
@@ -332,7 +355,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   # From the repository root
-  cmake --build build --target therock-archives
+  cmake --build build --target therock-artifacts
 
   python ./build_tools/build_python_packages.py \
     --artifact-dir=build/artifacts \
@@ -372,6 +395,11 @@ If you want to make changes to PyTorch source code, prefer in this order:
 
 ### Checking out PyTorch repositories
 
+For release-branch work, prefer the manifest-based flow in
+[Checking out using manifests](#checking-out-using-manifests). It records the
+exact torch, audio, vision, triton, and apex commits in one JSON file, then
+checks out all requested repositories from that file.
+
 Each `pytorch_*_repo.py` script handles checkout and preparation:
 
 1. Clone the repository as needed from `--gitrepo-origin` to the `--repo-name`
@@ -399,6 +427,14 @@ Note the sequence of commits and tags that were created:
 
 - `main` is checked out initially and is tagged `THEROCK_UPSTREAM_DIFFBASE`
 - hipify is run and its changes are tagged `THEROCK_HIPIFY_DIFFBASE`
+
+For build workflows that need package metadata such as
+`torch.version.git_version` to identify the fetched upstream PyTorch commit,
+pass `--no-commit-hipify`. That still runs HIPIFY, but leaves the source tree
+dirty instead of creating a local `DO NOT SUBMIT: HIPIFY` commit.
+
+For test-only source checkouts, pass `--no-hipify --no-submodules` to fetch the
+PyTorch test files without HIPIFY preprocessing or submodule checkout.
 
 ### Alternative branches and versions
 
@@ -448,27 +484,91 @@ the fork at https://github.com/ROCm/pytorch.
 
 > [!TIP]
 > You are welcome to maintain your own branches that extend one of AMD's.
-> Change origins and tags as appropriate.
+> Fork these scripts and change origins/tags/commits/versions as appropriate.
 
-In order to check out and build one of these, use the following instructions:
+For most work, run these commands from the TheRock repository root to generate
+a manifest for the release branch and check out from that manifest:
 
 ```bash
-# Other common --repo-hashtag values:
-#   release/2.12
-#   release/2.11
-#   release/2.10
-#   release/2.9
-#   release/2.8
-python pytorch_torch_repo.py checkout \
-  --gitrepo-origin https://github.com/ROCm/pytorch.git \
-  --repo-hashtag release/2.12
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+  --rocm-version 7.13.0a20260501 \
+  --output external-builds/pytorch/pytorch_manifest.json \
+  --pytorch-git-refs release/2.12
 
-# Backport branches have `related_commits` files that point to specific
-# sub-project commits, so the main torch repo must be checked out first to
-# have proper defaults.
-python pytorch_audio_repo.py checkout --require-related-commit
-python pytorch_vision_repo.py checkout --require-related-commit
+python external-builds/pytorch/checkout_from_manifest.py \
+  --manifest external-builds/pytorch/pytorch_manifest.json \
+  --checkout-root ./external-builds/pytorch
+```
 
-python pytorch_triton_repo.py checkout
-python pytorch_apex_repo.py checkout --require-related-commit
+The manifest generator creates files like
+[`pytorch_manifest_nightly.example.json`](pytorch_manifest_nightly.example.json)
+which can then be read by the checkout script.
+
+> [!TIP]
+> You can also use the lower-level checkout scripts that individually read the
+> `related_commit` pins from the torch repository by running these commands from
+> this `external-builds/pytorch/` directory:
+>
+> ```bash
+> python pytorch_torch_repo.py checkout \
+>   --gitrepo-origin https://github.com/ROCm/pytorch.git \
+>   --repo-hashtag release/2.12
+> python pytorch_audio_repo.py checkout --require-related-commit
+> python pytorch_vision_repo.py checkout --require-related-commit
+> python pytorch_triton_repo.py checkout
+> python pytorch_apex_repo.py checkout --require-related-commit
+> ```
+
+#### Generating a manifest
+
+```bash
+# Single version (writes to an explicit path):
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --output external-builds/pytorch/pytorch_manifest.json \
+    --pytorch-git-refs "release/2.10"
+
+# Multiple versions (computed filenames in a directory):
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --manifest-dir external-builds/pytorch/manifests/ \
+    --pytorch-git-refs "release/2.10 release/2.11 nightly"
+
+# The target platform defaults to the current host. Pass it explicitly when
+# generating a manifest for another platform:
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --platform windows \
+    --output manifest.json \
+    --pytorch-git-refs "release/2.10"
+
+# Only pytorch (skip audio/vision/triton/apex):
+python build_tools/github_actions/generate_pytorch_source_manifest.py \
+    --rocm-version 7.13.0a20260501 \
+    --output external-builds/pytorch/manifest.json \
+    --pytorch-git-refs "release/2.10" \
+    --projects pytorch
+```
+
+#### Checking out from a manifest
+
+```bash
+cd external-builds/pytorch
+
+# Check out all projects at pinned commits:
+python checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src
+
+# Check out only pytorch:
+python checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src \
+    --projects pytorch
+
+# Skip HIPIFY (e.g. for test-only runs):
+python checkout_from_manifest.py \
+    --manifest manifest.json \
+    --checkout-root ./src \
+    --no-hipify
 ```

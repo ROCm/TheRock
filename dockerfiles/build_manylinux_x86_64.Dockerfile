@@ -42,9 +42,9 @@ RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
 ######## Ninja ########
 WORKDIR /install-ninja
-ENV CMAKE_VERSION="1.12.1"
+ENV NINJA_VERSION="1.12.1"
 COPY install_ninja.sh ./
-RUN ./install_ninja.sh "${CMAKE_VERSION}" && rm -rf /install-ninja
+RUN ./install_ninja.sh "${NINJA_VERSION}" && rm -rf /install-ninja
 
 ######## AWS CLI ######
 WORKDIR /install-awscli
