@@ -8,7 +8,8 @@ import shutil
 import subprocess
 import sys
 
-build_tools_path = Path(__file__).resolve().parent.parent.parent / "build_tools"
+repo_root = Path(__file__).resolve().parents[4]
+build_tools_path = repo_root / 'build_tools'
 sys.path.insert(0, str(build_tools_path))
 from patch_linux_so import update_library_links, relativize_pc_file
 
