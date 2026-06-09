@@ -60,6 +60,15 @@ CONSOLE_SCRIPT_TESTS = COMMON_CONSOLE_SCRIPT_TESTS + (
     WINDOWS_CONSOLE_SCRIPT_TESTS if is_windows else LINUX_CONSOLE_SCRIPT_TESTS
 )
 
+# TODO: drop once published rocm-sdk-core wheels include the _cli fix.
+_WINDOWS_HIP_SCRIPT_ENV_VARS = (
+    "ROCM_PATH",
+    "HIP_PATH",
+    "HIP_CLANG_PATH",
+    "HIP_LIB_PATH",
+    "HIP_DEVICE_LIB_PATH",
+)
+
 
 class ROCmCoreTest(unittest.TestCase):
     def testInstallationLayout(self):
@@ -140,11 +149,10 @@ class ROCmCoreTest(unittest.TestCase):
                 )
                 encoding = locale.getpreferredencoding()
                 kwargs: dict = {}
-                # TODO: drop once published rocm-sdk-core wheels include the _cli fix.
                 if is_windows and script_name in ("hipcc", "hipconfig"):
                     env = os.environ.copy()
-                    env.pop("ROCM_PATH", None)
-                    env.pop("HIP_PATH", None)
+                    for var in _WINDOWS_HIP_SCRIPT_ENV_VARS:
+                        env.pop(var, None)
                     kwargs["env"] = env
                 output_text = subprocess.check_output(
                     [script_path] + cl,

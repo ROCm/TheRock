@@ -96,6 +96,20 @@ def _get_module_path(expand_devel: bool) -> Path:
 is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
 
+# Host HIP SDK env vars that break hipcc/hipconfig when using rocm-sdk-core wheels.
+_STALE_HIP_ENV_VARS = (
+    "ROCM_PATH",
+    "HIP_PATH",
+    "HIP_CLANG_PATH",
+    "HIP_LIB_PATH",
+    "HIP_DEVICE_LIB_PATH",
+)
+
+
+def _clear_stale_host_hip_env() -> None:
+    for var in _STALE_HIP_ENV_VARS:
+        os.environ.pop(var, None)
+
 
 def _host_has_stale_rocm_env(core_path: Path) -> bool:
     for var in ("ROCM_PATH", "HIP_PATH"):
@@ -127,6 +141,7 @@ def _exec(relpath: str, expand_devel=True):
         and full_path.is_file()
         and (is_windows or _host_has_stale_rocm_env(core_path))
     ):
+        _clear_stale_host_hip_env()
         root = core_path.as_posix()
         extra: list[str] = []
         if not any(arg.startswith("--rocm-path=") for arg in sys.argv[1:]):
