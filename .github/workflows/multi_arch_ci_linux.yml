@@ -231,7 +231,7 @@ jobs:
 
   test_python_packages_per_family:
     needs: [build_python_packages]
-    name: Test Python ${{ matrix.family_info.amdgpu_family }} | py${{ matrix.python_version }} | ${{ matrix.image.name }}
+    name: Test Python
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     strategy:
       fail-fast: false
