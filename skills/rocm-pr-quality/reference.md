@@ -57,12 +57,9 @@ component-specific classes (and bind them to paths).
 
 ______________________________________________________________________
 
-## Test-level mapping (SHOULD — starter, extensible)
+## Test-level mapping (SHOULD)
 
-This is a **starter** map and a deliberate follow-on hook: the test-level → change-class mapping
-is expected to grow, and per-repo testing docs may override it. Keep it here as the central place
-so two reviewers do not disagree on "is the test good enough." Overlays map these levels to real
-paths/lanes.
+Per-repo testing docs may override this mapping. Overlays map these levels to real paths/lanes.
 
 | Change class                  | Default minimum test level                                    |
 | ----------------------------- | ------------------------------------------------------------- |
@@ -103,8 +100,7 @@ Mutation question: *what single change to the source would make this test fail?*
 
 ### Agent / AI-generated change anti-patterns (a hit warrants a closer read)
 
-These recur in AI-assisted PRs and frequently hide a thin or wrong change. Adapted from Scott
-Todd's review guidelines (see Attribution).
+These recur in AI-assisted PRs and frequently hide a thin or wrong change.
 
 - **Test sprawl** — many new test files / a large patch count for a small behavioral change; new
   tests that restate the implementation rather than lock behavior. Prefer parametrizing one test
@@ -126,8 +122,7 @@ ______________________________________________________________________
 
 ## PR-hygiene checklist (author & reviewer)
 
-Quick, mostly mechanical checks that make a PR reviewable. Adapted from Scott Todd's review
-guidelines (see Attribution).
+Quick, mostly mechanical checks that make a PR reviewable.
 
 - **Title** — concise, follows the repo convention (and carries the tracker key if the repo
   requires it for dev-panel auto-linking).
@@ -291,17 +286,3 @@ When a defect is known but the fix is not ready, M1 may be met by a tracked two-
 
 The quarantine must be tracked, time-boxed, and removed by the fix — not left in place. Overlays
 define the concrete mechanism (e.g. a `known_bugs` data file).
-
-______________________________________________________________________
-
-## Attribution & deferral
-
-- The finding tiers / overall-assessment vocabulary, the agent-change anti-patterns, the
-  PR-hygiene checklist, and the self-evident-change exemptions draw on Scott Todd's ROCm code
-  review guidelines (`ScottTodd/rocm-workspace`). Credit to him; the goal is one shared vocabulary
-  across ROCm reviews.
-- This base skill **defers to canonical, in-repo style guides** (e.g. each repo's `CONTRIBUTING`,
-  `docs/.../style_guides/`, pre-commit/lint config) rather than duplicating them. Where a rule is
-  already mechanically enforced (pre-commit, CI lint) the skill assumes it and does not restate it;
-  where a canonical guide exists, the skill links and defers instead of copying. Overlays name the
-  specific guides for their repo.

@@ -4,15 +4,13 @@
 
 """Deterministic subset of the ROCm PR-quality MUST checks.
 
-One checker, two callers: the skill invokes it locally for fast feedback, and a future CI
-status check can run the exact same command. It covers only the *mechanical* checks --
+The skill invokes it locally for fast feedback. It covers only the *mechanical* checks --
 description completeness, work-tracking presence (M4), related-link presence/resolution (M5),
 a product-code-without-tests heuristic (M2), CI currency, and stale-base/adjacent-file overlap.
 Semantic judgments -- test substance, the mutation question, and M3 (never disable tests to
 green CI) -- stay with the agent and the human reviewer; they are intentionally NOT enforced here.
 
-Advisory by default (always exits 0). Pass --enforce to exit non-zero on blockers, matching the
-staged rollout: audit -> advisory -> enforced MUST.
+Advisory by default (always exits 0). Pass --enforce to exit non-zero on blockers.
 
 Usage:
     python pr_quality_check.py --pr <number|url> [--repo owner/name] [--profile hipblaslt]

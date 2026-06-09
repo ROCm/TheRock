@@ -37,21 +37,19 @@ Changes outside these areas follow the base bar only.
 
 ______________________________________________________________________
 
-## Defer to canonical TheRock guides (do not restate)
+## Canonical TheRock references
 
-These are canonical and in-repo; **link and defer** rather than duplicating. Assume their
-mechanically-enforced parts (pre-commit, lint) are already enforced and do not re-litigate style:
+Consult and cite these when reviewing build-repo PRs:
 
 - Build system overview: `docs/development/build_system.md`.
 - Style guides: `docs/development/style_guides/` —
-  [python](../../docs/development/style_guides/python_style_guide.md) (fail-fast / explicit),
+  [python](../../docs/development/style_guides/python_style_guide.md),
   [cmake](../../docs/development/style_guides/cmake_style_guide.md),
   [bash](../../docs/development/style_guides/bash_style_guide.md),
   [github_actions](../../docs/development/style_guides/github_actions_style_guide.md).
 - Formatting: `.pre-commit-config.yaml` (run `pre-commit run --all-files`).
 
-When a finding is "this violates the CMake/Bash/Actions/Python style guide," cite the specific guide
-section instead of re-explaining the rule.
+Cite the specific guide section for a style finding.
 
 ______________________________________________________________________
 
@@ -84,8 +82,8 @@ On top of the base classes, tag TheRock PRs with:
 - Distinguish superbuild-level changes (root `CMakeLists.txt`, `cmake/`, `THEROCK_ENABLE_*`) from
   sub-project CMake; a change in the wrong layer is a maintainability finding.
 - A new `THEROCK_ENABLE_*` (or similar) option needs a sane default, a help string, and a note on
-  how it interacts with existing components. Defer the conventions to
-  `docs/development/build_system.md` and the CMake style guide rather than restating them.
+  how it interacts with existing components. See `docs/development/build_system.md` and the CMake
+  style guide for conventions.
 - Enabling a component by default (or changing a default) is a behavior change → treat as the base
   `heuristic/default-selection` class (safe default + flag/tracker).
 

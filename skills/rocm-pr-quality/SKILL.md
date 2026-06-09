@@ -33,12 +33,12 @@ ______________________________________________________________________
    This applies even when the user says "review the PR" — you produce the review, the human
    posts it.
 1. **Advisory first.** This skill raises the floor; it does not approve and it does not
-   block a merge by itself. Hard enforcement (a required CI status check, a merge queue)
-   is a separate, DevOps-owned lane that may be added later. Do not assume it exists.
-1. **Defer to the repo.** When a component repo ships its own testing/contributing/standards
-   docs (e.g. `CONTRIBUTING.md`, a `docs/testing*.md`, a per-repo best-practices file), read
-   and apply them rather than inventing guidance. The skill checks that repo standards are
-   followed; it does not replace them.
+   block a merge by itself. Hard enforcement (a required CI status check, a merge queue) is a
+   separate, DevOps-owned lane. Do not assume it exists.
+1. **Follow the repo's own standards.** When a component repo ships its own
+   testing/contributing/standards docs (e.g. `CONTRIBUTING.md`, a `docs/testing*.md`, a per-repo
+   best-practices file), read and apply them rather than inventing guidance. The skill checks that
+   repo standards are followed; it does not replace them.
 1. **Discover, do not hardcode.** Supported architectures, CI labels, test lanes, and
    tracker prefixes drift. Discover them from the repo and CI config at run time.
 1. **Evidence over assertion.** Ground every finding in a `file:line`, a CI link, a diff
@@ -261,9 +261,6 @@ merge queue, and it does not force a CI rerun by default.
 (e.g. "overlap on a high-coupling file — rebase + re-run before merge"). The decision stays with
 the human.
 
-The durable fix for CI-currency and stale-base is a real merge queue; until that exists the
-pre-merge gate is the manual stand-in, and a strong argument for funding one.
-
 ______________________________________________________________________
 
 ## Operational notes
@@ -273,14 +270,5 @@ ______________________________________________________________________
 - Save large diffs to a temp file; read focused sections rather than pasting everything.
 - The optional shared checker `tools/pr_quality_check.py` performs the deterministic subset of
   the MUST checks (description sections, work-tracking presence, link resolution, test-file-touched
-  heuristic, CI currency, adjacent-file overlap). It is advisory today and is the same logic a
-  future CI status check could call. Semantic judgments (test substance, M3) stay with the agent
-  and the human.
-
-## Attribution
-
-The finding/assessment vocabulary, the agent-change anti-patterns, the PR-hygiene checklist, and
-the self-evident-change exemptions draw on Scott Todd's ROCm code-review guidelines
-(`ScottTodd/rocm-workspace`), toward one shared review vocabulary across ROCm. This base defers to
-canonical, in-repo style guides and lint/pre-commit config rather than duplicating them; see
-`reference.md` ("Attribution & deferral").
+  heuristic, CI currency, adjacent-file overlap). It is advisory; semantic judgments (test
+  substance, M3) stay with the agent and the human.
