@@ -30,8 +30,8 @@ if is_asan():
 logging.basicConfig(level=logging.INFO)
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
+# Otherwise, we run the standard test suite.
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:

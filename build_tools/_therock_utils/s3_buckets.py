@@ -46,9 +46,9 @@ class S3BucketConfig:
 
 
 s3_bucket_configs = [
-    # CI
+    # CI (self-hosted runners include credentials for therock-ci-artifacts-external)
     S3BucketConfig("therock-ci-artifacts", iam_role="therock-ci"),
-    S3BucketConfig("therock-ci-artifacts-external", iam_role="therock-ci-external"),
+    S3BucketConfig("therock-ci-artifacts-external", iam_role=None),
     # Release type "dev"
     S3BucketConfig("therock-dev-artifacts", iam_role="therock-dev"),
     S3BucketConfig("therock-dev-packages", iam_role="therock-dev"),
