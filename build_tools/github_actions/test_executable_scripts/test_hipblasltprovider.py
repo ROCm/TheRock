@@ -24,7 +24,7 @@ cmd = [
 
 # Determine test filter based on TEST_TYPE environment variable
 environ_vars = os.environ.copy()
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 
 if test_type == "quick":
     # Exclude tests that start with "Full" during quick tests

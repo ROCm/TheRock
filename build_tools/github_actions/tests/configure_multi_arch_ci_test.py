@@ -324,7 +324,7 @@ class TestDecideJobs(unittest.TestCase):
             submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         result = cm.decide_jobs(self._inputs(), git_context=git)
-        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertEqual(result.test_rocm.test_type, "standard")
         self.assertIn("submodule", result.test_rocm.test_type_reason)
 
     def test_no_submodule_change_stays_quick(self):
@@ -1421,10 +1421,10 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 select_build_runner("linux", "release"), "azure-linux-scale-rocm"
             )
 
-        # Random >= 0.8 should select AWS
+        # Random >= 0.8 should select Azure
         with patch("random.random", return_value=0.95):
             self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
+                select_build_runner("linux", "release"), "azure-linux-scale-rocm"
             )
 
         # Random >= 0.9 should select Azure

@@ -1,0 +1,9 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
+
+# util-linux (for libmount and possibly others)
+[components.lib."third-party/sysdeps/linux/util-linux/build/stage"]
+[components.dev."third-party/sysdeps/linux/util-linux/build/stage"]

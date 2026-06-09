@@ -2,6 +2,8 @@
 
 `TheRock` has various stages where each stage will apply a specific test filter.
 
+> Note: Execution time means total test time (excluding environment setup) on a single shard (no parallelization)
+
 ## Types of filters
 
 - <b>quick</b>: A "sanity check" to ensure the system is fundamentally working
@@ -60,5 +62,4 @@ https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/test_execut
 ## Additional information
 
 - Each test filter should build on top of each other, to bring confidence to ROCm at each stage of development
-- Execution time means total test time (excluding environment setup) with no sharding
 - These test execution times will be enforced with GitHub Actions step timeouts, and going over the timeout will cause a CI failure
