@@ -324,7 +324,7 @@ class TestDecideJobs(unittest.TestCase):
             submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         result = cm.decide_jobs(self._inputs(), git_context=git)
-        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertEqual(result.test_rocm.test_type, "standard")
         self.assertIn("submodule", result.test_rocm.test_type_reason)
 
     def test_no_submodule_change_stays_quick(self):
