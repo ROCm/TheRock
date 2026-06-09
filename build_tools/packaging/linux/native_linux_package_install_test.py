@@ -33,7 +33,9 @@ ROCM_APT_KEYRING_FILE, ROCM_ZYPP_REPOS_DIR, ROCM_YUM_REPOS_DIR,
 ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
 After install, Step 2 verifies transitive dependencies (``apt-get check`` + Depends/Pre-Depends
 closure for DEB; ``rpm -qR`` / ``rpm -q --whatprovides`` closure for RPM) unless
-``NATIVE_LINUX_SKIP_DEP_VERIFY=1``.
+``NATIVE_LINUX_SKIP_DEP_VERIFY=1``. The resolved dependency closure is rendered as an indented
+tree with summary counts (packages in closure / dependency edges / roots), printed to the
+console and written to ``NATIVE_LINUX_DEP_REPORT_FILE`` (default ``rocm_dependency_report.txt``).
 
 Prerequisites:
 - This script does NOT start Docker or a VM. You must run it inside an existing
@@ -142,6 +144,7 @@ import sys
 import traceback
 from argparse import ArgumentParser, Namespace
 from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -184,6 +187,10 @@ ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
 # Set to ``1`` to skip transitive dependency verification after install (faster / edge cases).
 ENV_NATIVE_LINUX_SKIP_DEP_VERIFY = "NATIVE_LINUX_SKIP_DEP_VERIFY"
 
+# Path of the transitive-dependency report written after verification; overridable.
+ENV_NATIVE_LINUX_DEP_REPORT_FILE = "NATIVE_LINUX_DEP_REPORT_FILE"
+DEFAULT_DEP_REPORT_FILE = "rocm_dependency_report.txt"
+
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
 GPG_KEY_TIMEOUT_SEC = 60
@@ -225,9 +232,77 @@ def _normalize_test_type(test_type: str | None) -> str:
             f"Unsupported test_type {test_type!r}. Expected one of: {valid}."
         ) from e
 
+
 # Transitive dependency walk limits (avoid pathological cycles / huge trees).
 DEP_VERIFY_MAX_CLOSURE = 8000
 DEP_VERIFY_SUBPROCESS_TIMEOUT = 90
+
+
+@dataclass
+class DependencyReport:
+    """Captured transitive-dependency closure for human-readable reporting.
+
+    ``edges`` maps each visited package to the ordered list of resolved dependency
+    packages (DEB: chosen alternative/provider per Depends/Pre-Depends group; RPM:
+    providers of each non-file requirement). ``closure`` is every visited package.
+    """
+
+    package_type: str = ""
+    roots: list[str] = field(default_factory=list)
+    edges: dict[str, list[str]] = field(default_factory=dict)
+    closure: list[str] = field(default_factory=list)
+
+    def package_count(self) -> int:
+        return len(self.closure)
+
+    def edge_count(self) -> int:
+        return sum(len(deps) for deps in self.edges.values())
+
+    def _render_node(
+        self,
+        node: str,
+        lines: list[str],
+        prefix: str,
+        shown: set[str],
+        path: tuple[str, ...],
+    ) -> None:
+        if node in path:
+            lines.append(f"{prefix}{node} (cycle)")
+            return
+        if node in shown:
+            # Already expanded fully elsewhere; collapse to keep output bounded.
+            suffix = " (see above)" if self.edges.get(node) else ""
+            lines.append(f"{prefix}{node}{suffix}")
+            return
+        shown.add(node)
+        lines.append(f"{prefix}{node}")
+        for child in self.edges.get(node, []):
+            self._render_node(child, lines, prefix + "    ", shown, path + (node,))
+
+    def render(self) -> str:
+        """Render an indented dependency tree (per root) followed by summary counts."""
+        pt = self.package_type.upper() or "PKG"
+        lines: list[str] = []
+        lines.append("=" * 80)
+        lines.append(f"TRANSITIVE DEPENDENCY REPORT ({pt})")
+        lines.append("=" * 80)
+        lines.append(
+            f"Root packages: {', '.join(self.roots) if self.roots else '(none)'}"
+        )
+        lines.append("")
+        lines.append("Dependency tree:")
+        if self.roots:
+            shown: set[str] = set()
+            for root in self.roots:
+                self._render_node(root, lines, "  ", shown, ())
+        else:
+            lines.append("  (no packages walked)")
+        lines.append("")
+        lines.append(
+            f"Summary: {self.package_count()} package(s) in closure, "
+            f"{self.edge_count()} dependency edge(s), {len(self.roots)} root package(s)."
+        )
+        return "\n".join(lines)
 
 
 def _deb_pkg_name_from_dep_token(token: str) -> str | None:
@@ -385,13 +460,18 @@ def verify_debian_transitive_dependencies(
     root_packages: list[str],
     *,
     max_closure: int = DEP_VERIFY_MAX_CLOSURE,
+    report: "DependencyReport | None" = None,
 ) -> tuple[bool, list[str]]:
     """Verify dpkg database consistency and full Depends/Pre-Depends closure for roots.
 
     Confirms each AND-of-OR dependency group is satisfied (including virtual names via
-    Reverse Provides) and walks the chosen installed packages transitively.
+    Reverse Provides) and walks the chosen installed packages transitively. When
+    ``report`` is provided, its ``roots``/``edges``/``closure`` are populated for
+    human-readable reporting.
     """
     errors: list[str] = []
+    if report is not None:
+        report.roots = list(root_packages)
     chk = subprocess.run(
         ["apt-get", "check"],
         capture_output=True,
@@ -411,6 +491,9 @@ def verify_debian_transitive_dependencies(
         if pkg in expanded:
             continue
         expanded.add(pkg)
+        if report is not None:
+            report.closure.append(pkg)
+            report.edges.setdefault(pkg, [])
         steps += 1
         if steps > max_closure:
             errors.append(
@@ -435,6 +518,8 @@ def verify_debian_transitive_dependencies(
                         "none of the alternatives are installed (including providers)"
                     )
                     return False, errors
+                if report is not None and rep not in report.edges.get(pkg, []):
+                    report.edges.setdefault(pkg, []).append(rep)
                 if rep not in expanded:
                     queue.append(rep)
     return True, []
@@ -500,15 +585,19 @@ def verify_rpm_transitive_dependencies(
     root_packages: list[str],
     *,
     max_closure: int = DEP_VERIFY_MAX_CLOSURE,
+    report: "DependencyReport | None" = None,
 ) -> tuple[bool, list[str]]:
     """Walk ``rpm -qR`` requires for installed roots; each require must be provided by some RPM.
 
     Uses ``rpm -q --whatprovides`` so file sonames and virtual provides resolve to installed
-    packages; then recurses on provider package names for multi-level closure.
+    packages; then recurses on provider package names for multi-level closure. When
+    ``report`` is provided, its ``roots``/``edges``/``closure`` are populated (keyed by
+    package name) for human-readable reporting.
     """
     errors: list[str] = []
     expanded: set[str] = set()
     queue: deque[str] = deque()
+    root_names: list[str] = []
     for root in root_packages:
         rq = subprocess.run(
             ["rpm", "-q", root],
@@ -524,6 +613,11 @@ def verify_rpm_transitive_dependencies(
         first = (rq.stdout or "").strip().split("\n")[0].strip()
         if first:
             queue.append(first)
+            root_name = _rpm_name_from_installed_nevra(first)
+            if root_name not in root_names:
+                root_names.append(root_name)
+    if report is not None:
+        report.roots = root_names
 
     steps = 0
     while queue:
@@ -532,6 +626,9 @@ def verify_rpm_transitive_dependencies(
         if name in expanded:
             continue
         expanded.add(name)
+        if report is not None:
+            report.closure.append(name)
+            report.edges.setdefault(name, [])
         steps += 1
         if steps > max_closure:
             errors.append(
@@ -548,6 +645,12 @@ def verify_rpm_transitive_dependencies(
                 return False, errors
             for prov in providers:
                 pn = _rpm_name_from_installed_nevra(prov)
+                if (
+                    report is not None
+                    and pn != name
+                    and pn not in report.edges.get(name, [])
+                ):
+                    report.edges.setdefault(name, []).append(pn)
                 if pn not in expanded:
                     queue.append(prov)
     return True, []
@@ -733,6 +836,8 @@ class NativeLinuxPackageInstallTest:
             self.gfx_arch_list[0] if self.gfx_arch_list else None
         )
         self.gpg_key_url = gpg_key_url
+        # Populated by _verify_transitive_dependencies_installed() on a non-skipped run.
+        self.last_dependency_report: "DependencyReport | None" = None
 
         # Metapackage install targets (four combinations of optional inputs):
         #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
@@ -1168,12 +1273,37 @@ gpgcheck=0
         """Verify full dependency closure for ``self.package_names`` (post-install).
 
         Skipped when ``NATIVE_LINUX_SKIP_DEP_VERIFY`` is ``1``/``true``/``yes``.
+        On a non-skipped run the captured closure is stored on
+        ``self.last_dependency_report`` for reporting.
         """
         if _env(ENV_NATIVE_LINUX_SKIP_DEP_VERIFY, "").lower() in ("1", "true", "yes"):
             return True, []
+        report = DependencyReport(package_type=self.package_type)
+        self.last_dependency_report = report
         if self.package_type == "deb":
-            return verify_debian_transitive_dependencies(self.package_names)
-        return verify_rpm_transitive_dependencies(self.package_names)
+            return verify_debian_transitive_dependencies(
+                self.package_names, report=report
+            )
+        return verify_rpm_transitive_dependencies(self.package_names, report=report)
+
+    def _write_dependency_report(self, report: "DependencyReport") -> str | None:
+        """Render the dependency report to console and write it to the report file.
+
+        Returns the path written, or None if writing failed (a warning is printed).
+        """
+        rendered = report.render()
+        print("\n" + rendered)
+        report_path = Path(
+            _env(ENV_NATIVE_LINUX_DEP_REPORT_FILE, DEFAULT_DEP_REPORT_FILE)
+        )
+        try:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(rendered + "\n", encoding="utf-8")
+        except OSError as e:
+            print(f" [WARN] Could not write dependency report file: {e}")
+            return None
+        print(f"\nDependency report written to: {report_path}")
+        return str(report_path)
 
     def run_repo_setup_and_install(self) -> bool:
         """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
@@ -1265,9 +1395,13 @@ gpgcheck=0
             if not ok_dep:
                 for e in dep_errs:
                     print(f" [FAIL] {e}", file=sys.stderr)
+                if self.last_dependency_report is not None:
+                    self._write_dependency_report(self.last_dependency_report)
                 print("\n[FAIL] Transitive dependency verification FAILED")
                 return False
             print(" [PASS] Transitive dependency verification passed")
+            if self.last_dependency_report is not None:
+                self._write_dependency_report(self.last_dependency_report)
 
         # Check installed packages
         print("\nChecking installed packages:")
