@@ -59,7 +59,7 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | RDNA2        | gfx1035     | ✅            |               |               |
 | RDNA2        | gfx1034     | ✅            |               |               |
 | RDNA2        | gfx1033     | ✅            |               |               |
-| RDNA2        | gfx1032     | ✅            |               |               |
+| RDNA2        | gfx1032     | ✅            | ✅            |               |
 | RDNA2        | gfx1031     | ✅            |               |               |
 | RDNA2        | gfx1030     | ✅            |               |               |
 | RDNA1        | gfx1012     | ✅            |               |               |
