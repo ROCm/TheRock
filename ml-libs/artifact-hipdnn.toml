@@ -11,6 +11,9 @@ include = [
 ]
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
+exclude = [
+  "share/hipdnn/python/**",
+]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
 include = [
