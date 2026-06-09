@@ -111,9 +111,7 @@ def run(
             "No shared tarball URL was produced; check tarball naming and upload logic"
         )
 
-    gha_set_output(
-        {"tarball_urls": json.dumps({"multiarch": shared_tarball_url})}
-    )
+    gha_set_output({"tarball_urls": json.dumps({"multiarch": shared_tarball_url})})
 
     return 0
 
