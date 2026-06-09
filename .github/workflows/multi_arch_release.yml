@@ -43,6 +43,14 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      build_pytorch:
+        description: "Build PyTorch wheels"
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       release_type:
