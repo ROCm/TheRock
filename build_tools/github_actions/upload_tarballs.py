@@ -45,10 +45,6 @@ from github_actions_api import gha_set_output
 logger = logging.getLogger(__name__)
 
 
-def _build_s3_url(bucket: str, relative_path: str, filename: str) -> str:
-    return f"https://{bucket}.s3.amazonaws.com/{relative_path}/{filename}"
-
-
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Upload tarballs to S3")
     parser.add_argument(
@@ -112,11 +108,7 @@ def main(argv: list[str]) -> int:
         name = f.name
 
         if name.startswith(f"therock-dist-{args.platform}-multiarch-"):
-            shared_tarball_url = _build_s3_url(
-                dest.bucket,
-                dest.relative_path,
-                name,
-            )
+            shared_tarball_url = output_root.tarball(name).https_url
             break
 
         prefix = f"therock-dist-{args.platform}-"
@@ -128,11 +120,7 @@ def main(argv: list[str]) -> int:
             # Future RFC #4438:
             # therock-dist-linux-<version>.tar.gz
             if "-" not in stem:
-                shared_tarball_url = _build_s3_url(
-                    dest.bucket,
-                    dest.relative_path,
-                    name,
-                )
+                shared_tarball_url = output_root.tarball(name).https_url
                 break
 
     if not shared_tarball_url:

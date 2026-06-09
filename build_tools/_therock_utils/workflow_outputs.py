@@ -249,6 +249,10 @@ class WorkflowOutputRoot:
         """Location for the tarballs directory."""
         return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
 
+    def tarball(self, filename: str) -> StorageLocation:
+        """Location for a specific tarball file."""
+        return StorageLocation(self.bucket, f"{self.prefix}/tarballs/{filename}")
+
     # -- Factories --------------------------------------------------------------
 
     @classmethod
