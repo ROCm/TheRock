@@ -23,14 +23,6 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
-      build_pytorch:
-        description: "Build PyTorch wheels (defaults to true for workflow_call)"
-        type: boolean
-        default: true
-      python_version:
-        description: "Single Python version for wheel builds (empty for full matrix)"
-        type: string
-        default: ""
 
 permissions:
   contents: read
@@ -156,7 +148,6 @@ jobs:
   trigger_release_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
     name: Trigger Release PyTorch Wheels
-    if: ${{ inputs.build_pytorch != false }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -170,6 +161,5 @@ jobs:
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "release_type": "${{ inputs.release_type }}",
-              "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}"
+              "ref": "${{ inputs.ref || '' }}"
             }
