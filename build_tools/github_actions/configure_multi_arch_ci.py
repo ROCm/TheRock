@@ -614,7 +614,7 @@ def _determine_test_type(
     ):
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
         if matching:
-            return "full", f"submodule(s) changed: {sorted(matching)}"
+            return "standard", f"submodule(s) changed: {sorted(matching)}"
 
     # Default: quick tests for fast CI feedback.
     return "quick", "default"

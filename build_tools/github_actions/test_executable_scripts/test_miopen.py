@@ -273,8 +273,8 @@ if AMDGPU_FAMILIES != "gfx950-dcgpu":
 ####################################################
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
+# Otherwise, we run the standard test suite.
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     test_filter = "--gtest_filter=" + ":".join(quick_filter)
 else:
