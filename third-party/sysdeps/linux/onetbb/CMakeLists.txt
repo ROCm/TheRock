@@ -43,12 +43,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_cmake_subproject_provide_package(therock-onetbb TBB lib/rocm_sysdeps/lib/cmake/TBB)
     therock_cmake_subproject_activate(therock-onetbb)
 
-    # Validate the libraries produced by oneTBB.
-    therock_test_validate_shared_lib(
-      PATH build/dist/lib/rocm_sysdeps/lib
-      LIB_NAMES libtbb.so libtbbmalloc.so libtbbmalloc_proxy.so
-    )
-
     # Test key headers
     set(ONETBB_HEADERS "tbb/tbb.h" "oneapi/tbb.h")
     foreach(onetbb_header ${ONETBB_HEADERS})
@@ -86,7 +80,7 @@ add_custom_target(
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
       -DCMAKE_INSTALL_LIBDIR=lib
-      -DBUILD_SHARED_LIBS=ON
+      -DBUILD_SHARED_LIBS=OFF
       -DTBB_TEST=OFF
       -DTBB_EXAMPLES=OFF
       -DTBB_STRICT=OFF

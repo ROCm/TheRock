@@ -4,7 +4,6 @@
 from pathlib import Path
 import os
 import platform
-import subprocess
 import sys
 
 
@@ -27,51 +26,35 @@ install_prefix = sys.argv[1]
 
 # Required environment variables.
 therock_source_dir = Path(get_env_or_exit("THEROCK_SOURCE_DIR"))
-patchelf_exe = get_env_or_exit("PATCHELF")
 
 # Import common utilities from build_tools using THEROCK_SOURCE_DIR
 script_path = therock_source_dir / "build_tools" / "patch_linux_so.py"
 sys.path.insert(0, str(script_path.parent))
-from patch_linux_so import update_library_links, relativize_pc_file
+from patch_linux_so import relativize_pc_file
 
 if platform.system() == "Linux":
     lib_dir = Path(install_prefix) / "lib"
 
-    # Remove static libs (*.a) and descriptors (*.la).
+    # Remove libtool descriptors (*.la). Shared libs (*.so) are not built since
+    # oneTBB is configured static-only; only the *.a archives are kept.
     for file_path in lib_dir.iterdir():
-        if file_path.suffix in (".a", ".la"):
+        if file_path.suffix == ".la":
             file_path.unlink(missing_ok=True)
 
-    # Set RPATH on all prefixed shared libraries.
-    for lib_path in lib_dir.glob("librocm_sysdeps_*.so*"):
-        if lib_path.is_symlink():
-            continue
-        try:
-            subprocess.run(
-                [
-                    patchelf_exe,
-                    "--set-rpath",
-                    "$ORIGIN",
-                    str(lib_path),
-                ],
-                check=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print(
-                f"Error: Failed to set RPATH on {lib_path.name} (Exit: {e.returncode})"
-            )
-            sys.exit(e.returncode)
-
-    # Create linker-name symlinks (e.g. libtbb.so -> librocm_sysdeps_tbb.so)
+    # Create linker-name symlinks (e.g. libtbb.a -> librocm_sysdeps_tbb.a) so
+    # consumers can link with the conventional names.
     libraries = [
-        ("librocm_sysdeps_tbb.so", "libtbb.so"),
-        ("librocm_sysdeps_tbbmalloc.so", "libtbbmalloc.so"),
-        ("librocm_sysdeps_tbbmalloc_proxy.so", "libtbbmalloc_proxy.so"),
+        ("librocm_sysdeps_tbb.a", "libtbb.a"),
+        ("librocm_sysdeps_tbbmalloc.a", "libtbbmalloc.a"),
+        ("librocm_sysdeps_tbbmalloc_proxy.a", "libtbbmalloc_proxy.a"),
     ]
     for source_name, linker_name in libraries:
         source = lib_dir / source_name
         if source.exists():
-            update_library_links(source, linker_name, patchelf_exe)
+            link_path = lib_dir / linker_name
+            if link_path.exists() or link_path.is_symlink():
+                link_path.unlink()
+            link_path.symlink_to(source_name)
 
     # Fix .pc files to use relocatable paths.
     pkgconfig_dir = lib_dir / "pkgconfig"

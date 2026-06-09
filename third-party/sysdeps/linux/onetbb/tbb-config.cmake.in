@@ -8,28 +8,28 @@ endif()
 
 # tbb
 if(NOT TARGET TBB::tbb)
-  add_library(TBB::tbb SHARED IMPORTED)
+  add_library(TBB::tbb STATIC IMPORTED)
   set_target_properties(TBB::tbb PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libtbb.so"
+    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libtbb.a"
   )
 endif()
 
 # tbbmalloc
 if(NOT TARGET TBB::tbbmalloc)
-  add_library(TBB::tbbmalloc SHARED IMPORTED)
+  add_library(TBB::tbbmalloc STATIC IMPORTED)
   set_target_properties(TBB::tbbmalloc PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libtbbmalloc.so"
+    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libtbbmalloc.a"
   )
 endif()
 
 # tbbmalloc_proxy (depends on tbbmalloc)
 if(NOT TARGET TBB::tbbmalloc_proxy)
-  add_library(TBB::tbbmalloc_proxy SHARED IMPORTED)
+  add_library(TBB::tbbmalloc_proxy STATIC IMPORTED)
   set_target_properties(TBB::tbbmalloc_proxy PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libtbbmalloc_proxy.so"
+    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libtbbmalloc_proxy.a"
     INTERFACE_LINK_LIBRARIES "TBB::tbbmalloc"
   )
 endif()
