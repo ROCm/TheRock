@@ -12,7 +12,6 @@ import json
 import os
 import sys
 import tempfile
-import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -25,16 +24,10 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import upload_tarballs as mod
 
 
-class TestUploadTarballsMain(unittest.TestCase):
+class TestUploadTarballsRun(unittest.TestCase):
     @patch("upload_tarballs.gha_set_output")
-    @patch("upload_tarballs.create_storage_backend")
-    @patch("upload_tarballs.WorkflowOutputRoot")
-    @patch("upload_tarballs.logger")
-    def test_main_exports_multiarch_url(
+    def test_run_exports_multiarch_url(
         self,
-        mock_logger,
-        mock_workflow_output_root,
-        mock_create_storage_backend,
         mock_gha_set_output,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -44,28 +37,15 @@ class TestUploadTarballsMain(unittest.TestCase):
             )
             multiarch_tarball.write_text("x")
 
-            dest = types.SimpleNamespace(
-                bucket="therock-dev-artifacts",
-                relative_path="25834210506-linux/tarballs",
-                s3_uri="s3://therock-dev-artifacts/25834210506-linux/tarballs",
-            )
+            staging_dir = tarballs_dir / "staging"
+            staging_dir.mkdir()
 
-            mock_workflow_output_root.from_workflow_run.return_value.tarballs.return_value = (
-                dest
-            )
-            mock_create_storage_backend.return_value.upload_directory.return_value = 1
-
-            rc = mod.main(
-                [
-                    "--input-tarballs-dir",
-                    str(tarballs_dir),
-                    "--run-id",
-                    "25834210506",
-                    "--platform",
-                    "linux",
-                    "--release-type",
-                    "dev",
-                ]
+            rc = mod.run(
+                input_tarballs_dir=tarballs_dir,
+                run_id="25834210506",
+                platform="linux",
+                release_type="dev",
+                output_dir=staging_dir,
             )
 
             self.assertEqual(rc, 0)
@@ -81,14 +61,8 @@ class TestUploadTarballsMain(unittest.TestCase):
             )
 
     @patch("upload_tarballs.gha_set_output")
-    @patch("upload_tarballs.create_storage_backend")
-    @patch("upload_tarballs.WorkflowOutputRoot")
-    @patch("upload_tarballs.logger")
-    def test_main_treats_tarball_without_family_as_multiarch(
+    def test_run_treats_tarball_without_family_as_multiarch(
         self,
-        mock_logger,
-        mock_workflow_output_root,
-        mock_create_storage_backend,
         mock_gha_set_output,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -96,28 +70,14 @@ class TestUploadTarballsMain(unittest.TestCase):
             future_multiarch_tarball = tarballs_dir / "therock-dist-linux-7.13.0.tar.gz"
             future_multiarch_tarball.write_text("x")
 
-            dest = types.SimpleNamespace(
-                bucket="therock-dev-artifacts",
-                relative_path="25834210506-linux/tarballs",
-                s3_uri="s3://therock-dev-artifacts/25834210506-linux/tarballs",
-            )
-
-            mock_workflow_output_root.from_workflow_run.return_value.tarballs.return_value = (
-                dest
-            )
-            mock_create_storage_backend.return_value.upload_directory.return_value = 1
-
-            rc = mod.main(
-                [
-                    "--input-tarballs-dir",
-                    str(tarballs_dir),
-                    "--run-id",
-                    "25834210506",
-                    "--platform",
-                    "linux",
-                    "--release-type",
-                    "dev",
-                ]
+            staging_dir = tarballs_dir / "staging"
+            staging_dir.mkdir()
+            rc = mod.run(
+                input_tarballs_dir=tarballs_dir,
+                run_id="25834210506",
+                platform="linux",
+                release_type="dev",
+                output_dir=staging_dir,
             )
 
             self.assertEqual(rc, 0)
