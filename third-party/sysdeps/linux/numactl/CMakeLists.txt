@@ -11,6 +11,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       # Originally mirrored from: "https://github.com/numactl/numactl/releases/download/v2.0.19/numactl-2.0.19.tar.gz"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/numactl-2.0.19.tar.gz"
       URL_HASH "SHA256=f2672a0381cb59196e9c246bf8bcc43d5568bc457700a697f1a1df762b9af884"
+      PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/numactl
       TOUCH "${_download_stamp}"
     )
 
