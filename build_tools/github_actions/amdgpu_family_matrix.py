@@ -51,8 +51,8 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 0.8},
-            {"label": "aws-linux-scale-rocm-prod", "weight": 0.2},
+            {"label": "azure-linux-scale-rocm", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 0.0},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -154,12 +154,16 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.138,
-                },  # cirrascale (4/29)
+                    "weight": 0.117,
+                },  # cirrascale (4/34)
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.862,
-                },  # core42 (25/29)
+                    "weight": 0.736,
+                },  # core42 (25/34)
+                {
+                    "label": "linux-gfx942-1gpu-ossci-rocm",
+                    "weight": 0.147,
+                },  # vultr (5/34)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",

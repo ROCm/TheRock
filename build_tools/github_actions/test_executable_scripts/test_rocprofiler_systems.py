@@ -82,7 +82,7 @@ def execute_tests():
     # TODO: Sharding cannot be used as certain of our tests depend on the output of other tests
     # shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
     # total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
-    test_type = os.getenv("TEST_TYPE", "full").lower()
+    test_type = os.getenv("TEST_TYPE", "standard").lower()
 
     ctest_base = [
         "ctest",

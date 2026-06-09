@@ -343,22 +343,31 @@ def gha_set_output(vars: Mapping[str, str | Path]):
     """Sets values in a step's output parameters.
 
     This appends to the file located at the $GITHUB_OUTPUT environment variable.
+    Multi-line values are written using the heredoc form required by GitHub
+    Actions (see "Multiline strings" in the workflow-commands reference).
 
     See
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-output-parameter
+      * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#multiline-strings
       * https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
     """
-    _log(f"Setting github output:\n{json.dumps(vars, indent=2)}")
+    _log(
+        f"Setting github output:\n{json.dumps({k: str(v) for k, v in vars.items()}, indent=2)}"
+    )
 
     step_output_file = os.getenv("GITHUB_OUTPUT")
     if not step_output_file:
         _log("  Warning: GITHUB_OUTPUT env var not set, can't set github outputs")
         return
 
-    with open(step_output_file, "a") as f:
+    with open(step_output_file, "a", encoding="utf-8") as f:
         for k, v in vars.items():
-            print(f"OUTPUT {k}={str(v)}")
-            f.write(f"{k}={str(v)}\n")
+            value = "" if v is None else str(v)
+            if "\n" in value:
+                f.write(f"{k}<<EOF\n{value}\nEOF\n")
+            else:
+                print(f"OUTPUT {k}={value}")
+                f.write(f"{k}={value}\n")
 
 
 def gha_append_step_summary(summary: str):
@@ -383,18 +392,43 @@ def gha_append_step_summary(summary: str):
 
 
 def gha_load_github_event() -> dict[str, Any]:
-    """Load the GitHub Actions workflow event JSON from disk.
+    """Loads the JSON event payload pointed to by $GITHUB_EVENT_PATH.
 
-    Reads the path from :envvar:`GITHUB_EVENT_PATH`. GitHub writes that file
-    as UTF-8. On Windows the process default encoding is often not UTF-8, so
-    the file must be opened with ``encoding="utf-8"``.
+    Raises:
+        KeyError: $GITHUB_EVENT_PATH is not set (not running under GitHub
+            Actions, or the step was given no event payload).
+        FileNotFoundError: $GITHUB_EVENT_PATH is set but the file
+            doesn't exist (CI misconfiguration).
+        ValueError: the file contains invalid JSON, or the top-level
+            payload is not a JSON object.
+        RuntimeError: the file exists but couldn't be read (permissions,
+            disk error, etc.).
 
-    Returns:
-        Parsed JSON object (GitHub webhook payloads are JSON objects).
+    See: https://docs.github.com/en/actions/reference/variables-reference#default-environment-variables
+         https://docs.github.com/en/webhooks/webhook-events-and-payloads
     """
-    path = os.environ["GITHUB_EVENT_PATH"]
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    event_path = Path(os.environ["GITHUB_EVENT_PATH"])
+    if not event_path.is_file():
+        raise FileNotFoundError(
+            f"GITHUB_EVENT_PATH is set to '{event_path}' but no such file exists"
+        )
+    try:
+        with open(event_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' contains invalid JSON: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' must contain a JSON object, "
+            f"got {type(data).__name__}"
+        )
+    return data
 
 
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
@@ -480,29 +514,39 @@ def gha_query_workflow_runs_for_commit(
     return runs
 
 
-def gha_query_last_successful_workflow_run(
+def gha_query_last_workflow_run(
     github_repository: str = "ROCm/TheRock",
     workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
+    accepted_statuses: set[str] | None = None,
 ) -> dict | None:
-    """Find the last successful run of a specific workflow on the specified branch.
+    """Find the most recent run of a workflow on ``branch`` whose conclusion
+    is in ``accepted_statuses`` (default ``{"success"}``).
 
-    Args:
-        github_repository: Repository in format "owner/repo"
-        workflow_name: Name of the workflow file (e.g., "ci_nightly.yml")
-        branch: Branch to filter by (defaults to "main")
-
-    Returns:
-        The full workflow run object of the most recent successful run on the specified branch,
-        or None if no successful runs are found.
+    Paginates the most recent runs (newest first), filtering client-side,
+    up to ``MAX_PAGES * PER_PAGE`` runs. Returns ``None`` if no matching
+    run is found within that window.
     """
-    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100&sort=created&direction=desc"
-    response = gha_send_request(url)
-
-    # Return the first (most recent) successful run
-    if response and response.get("workflow_runs"):
-        return response["workflow_runs"][0]
+    if accepted_statuses is None:
+        accepted_statuses = {"success"}
+    MAX_PAGES = 5
+    PER_PAGE = 100
+    page = 1
+    while page <= MAX_PAGES:
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/workflows/{workflow_name}/runs"
+            f"?branch={branch}&per_page={PER_PAGE}&sort=created&direction=desc"
+            f"&page={page}"
+        )
+        response = gha_send_request(url)
+        runs = response.get("workflow_runs", []) if response else []
+        for run in runs:
+            if run.get("conclusion") in accepted_statuses:
+                return run
+        if len(runs) < PER_PAGE:
+            break  # Partial or empty page = no more runs to fetch.
+        page += 1
     return None
 
 
