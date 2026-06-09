@@ -23,7 +23,7 @@ host_triple = subprocess.check_output(
     [str(THEROCK_CLANG_PATH), "--print-target-triple"], text=True
 ).strip()
 
-THE_ROCK_LLVM_LIB_HOST_TRIPLE_PATH = THE_ROCK_LIB_PATH \ host_triple
+THE_ROCK_LLVM_LIB_HOST_TRIPLE_PATH = THE_ROCK_LIB_PATH / host_triple
 
 # LLVM Paths
 THEROCK_LLVM_BIN_PATH = THEROCK_PATH / "llvm" / "bin"
