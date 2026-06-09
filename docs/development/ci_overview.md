@@ -14,7 +14,7 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 
 ## CI Architecture
 
-TheRock uses a multi-stage CI pipeline that splits the build into stages (foundation → compiler-runtime → math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
+TheRock uses a multi-stage CI pipeline that splits the build into stages (compiler-runtime → runtime-tests/math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
 
 ```mermaid
 graph TD
@@ -167,6 +167,7 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 - [workflow_outputs.md](workflow_outputs.md) - CI output directory structure
 - [github_actions_debugging.md](github_actions_debugging.md) - Debugging GitHub Actions
 - [ci_behavior_manipulation.md](ci_behavior_manipulation.md) - Controlling CI behavior with labels and inputs
+- [manifest_diff.md](manifest_diff.md) - Manifest diff report (submodule SHA changes between two commits)
 
 ## Getting Help
 
