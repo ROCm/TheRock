@@ -179,6 +179,15 @@ directory for each style guide:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+## PR Quality Skill
+
+A composable, ROCm-wide PR-quality agent skill lives at
+[skills/rocm-pr-quality/](skills/rocm-pr-quality/). When authoring, reviewing, or
+pre-merge-gating a pull request, read and apply
+[skills/rocm-pr-quality/SKILL.md](skills/rocm-pr-quality/SKILL.md) (and its `reference.md`).
+It is the library-agnostic base; component repositories add thin overlays on top. The skill is
+advisory and never posts to GitHub/Jira without explicit human approval.
+
 ## Project Structure
 
 ```
