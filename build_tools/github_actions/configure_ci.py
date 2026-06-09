@@ -611,6 +611,7 @@ def main(base_args, linux_families, windows_families):
                     test_type = filter_type
                     test_type_reason = f"test filter label specified: {label}"
                     break
+    test_type = "full"
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
     print(f"run_extended_tests: {run_extended_tests}")
