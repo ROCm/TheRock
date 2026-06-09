@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -e
+
+{% if target == "deb" %}
+rm_ldconfig() {
+  ldconfig
+}
+
+case "$1" in
+  purge)
+  ;;
+  remove | upgrade )
+    rm_ldconfig
+  ;;
+  *)
+    exit 0
+  ;;
+esac
+{% else %}
+# RPM post-uninstall
+if [ $1 -eq 0 ]; then
+  # ldconfig during remove/uninstall operation. No ldconfig during upgrade
+  ldconfig
+fi
+{% endif %}
