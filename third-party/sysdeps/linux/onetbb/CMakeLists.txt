@@ -9,7 +9,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_subproject_fetch(therock-onetbb-sources
       SOURCE_DIR "${_source_dir}"
       # Originally downloaded from: https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2023.0.0.tar.gz
-      URL "https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2023.0.0.tar.gz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/oneTBB-2023.0.0.tar.gz"
       URL_HASH "SHA256=f8767b971ec6aea25dde58ae0f593e94e7aa75a739a86f67967012f69e2199b1"
       PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/onetbb
 
