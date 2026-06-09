@@ -10,7 +10,7 @@ errors are found. Uses multiprocessing (up to 32 workers) and a disk cache.
 
 Example:
     python3 build_tools/audit_hipblaslt_libraries.py \
-        --hipblaslt-path /workspace/rocm-libraries/projects/hipblaslt \
+        --hipblaslt-path rocm-libraries/projects/hipblaslt \
         --subset gfx950/gfx950/Equality \
         --workers 16
 """
@@ -45,27 +45,58 @@ except AttributeError:  # pragma: no cover
 # gemm_name
 # ========================================================================
 
-# Maps short name tokens (filename) to Tensile DataType enum indices.
-NAME_TO_TYPE_INDEX: dict[str, int] = {
+# Maps Tensile DataType ``char`` tokens (from SolutionLibrary placeholder names) to enum indices.
+TYPE_CHAR_TO_INDEX: dict[str, int] = {
     "S": 0,
     "D": 1,
+    "C": 2,
+    "Z": 3,
     "H": 4,
-    "I8": 5,
+    "4xi8": 5,
     "I": 6,
     "B": 7,
+    "I8": 8,
+    "I64": 9,
+    "X": 10,
+    "F8N": 11,
+    "B8N": 12,
+    "F8B8N": 13,
+    "B8F8N": 14,
     "F8": 15,
     "B8": 16,
+    "F8B8": 17,
+    "B8F8": 18,
+    "F6": 19,
+    "B6": 20,
+    "F4": 21,
+    "E8": 22,
+    "E5M3": 23,
 }
 
-TYPE_INDEX_TO_SHORT: dict[int, str] = {
-    0: "S",
-    4: "H",
-    5: "I8",
-    6: "I",
-    7: "B",
-    15: "F8",
-    16: "B8",
-}
+# Problem/feature suffixes appended after the GEMM type chars (see Tensile/SolutionLibrary.py).
+_FILENAME_TYPE_SUFFIXES: tuple[str, ...] = (
+    "_SABV",
+    "_SAV",
+    "_SAB",
+    "_SCD",
+    "_Bias",
+    "_Grad",
+    "_Aux",
+    "_STB",
+    "_STA",
+    "_GG",
+    "_GB",
+    "_HAI",
+    "_HA",
+    "_UA",
+    "_A",
+)
+
+_FILENAME_TYPE_SUFFIX_RES: tuple[re.Pattern[str], ...] = (
+    re.compile(r"_SP[AB](?:ML\d+)?$"),
+    re.compile(r"_MX[AB][A-Za-z0-9]+$"),
+    re.compile(r"_M[A-Za-z0-9]+$"),
+)
 
 # Filename pattern: {arch}_Cijk_{Alayout}_{Blayout}_{typeToken}_...
 FILENAME_RE = re.compile(
@@ -114,30 +145,95 @@ def transpose_b_from_layout(blayout: str) -> bool:
     return blayout[2] == "l"
 
 
-def _slice_to_alphabet(value: str) -> list[str]:
-    slices: list[str] = []
-    current = ""
-    for char in value:
-        if char.isalpha():
-            if current:
-                slices.append(current)
-            current = char
-        else:
-            current += char
-    if current:
-        slices.append(current)
-    return slices
+def _lookup_type_char(token: str) -> int:
+    """Map a Tensile type char token to its DataType enum index.
+
+    Args:
+        token: Short type name from a library filename (e.g. ``B``, ``F8N``).
+
+    Returns:
+        Integer DataType enum index.
+
+    Raises:
+        ValueError: If the token is not recognized.
+    """
+    try:
+        return TYPE_CHAR_TO_INDEX[token]
+    except KeyError as exc:
+        raise ValueError(f"Unknown type token {token!r}") from exc
+
+
+def _strip_filename_type_suffixes(token: str) -> str:
+    """Remove Tensile problem/feature suffixes from a filename type token.
+
+    Suffixes such as ``_STA`` (SwizzleTensorA) are not part of the GEMM datatype
+    encoding and must be stripped before decoding (``BBS_STA`` → ``BBS``).
+
+    Args:
+        token: Raw type substring from the library filename.
+
+    Returns:
+        Token with known suffixes removed.
+    """
+    if token == "S_MX":
+        return token
+    base = token
+    while True:
+        changed = False
+        for suffix in _FILENAME_TYPE_SUFFIXES:
+            if base.endswith(suffix):
+                base = base[: -len(suffix)]
+                changed = True
+                break
+        if not changed:
+            for pattern in _FILENAME_TYPE_SUFFIX_RES:
+                match = pattern.search(base)
+                if match:
+                    base = base[: match.start()]
+                    changed = True
+                    break
+        if not changed:
+            break
+    return base
+
+
+def _greedy_type_tokens(type_chars: str) -> list[str]:
+    """Split a concatenated type string into Tensile ``DataType`` char tokens.
+
+    Args:
+        type_chars: GEMM type portion of a filename (suffixes already stripped).
+
+    Returns:
+        Ordered list of matched type char tokens.
+
+    Raises:
+        ValueError: If the string cannot be fully tokenized.
+    """
+    keys = sorted(TYPE_CHAR_TO_INDEX.keys(), key=len, reverse=True)
+    tokens: list[str] = []
+    index = 0
+    while index < len(type_chars):
+        matched = None
+        for key in keys:
+            if type_chars[index:].startswith(key):
+                matched = key
+                break
+        if matched is None:
+            raise ValueError(f"Cannot tokenize type string {type_chars!r} at {type_chars[index:]!r}")
+        tokens.append(matched)
+        index += len(matched)
+    return tokens
 
 
 def decode_gemm_type_token(token: str) -> Tuple[int, int, int, int, int]:
-    """Decode a filename type token (e.g. ``B8BS``, ``F8F8S``) to type indices.
+    """Decode a filename type token (e.g. ``B8BS``, ``BBS_STA``) to type indices.
 
     Args:
         token: Type substring from the library filename.
 
     Returns:
-        Tuple of (DataType/A, DataTypeB or same as A, DestDataType, DataTypeE, ComputeDataType)
-        as Tensile enum indices. Compute uses index 0 (FP32) for HPA kernels.
+        Tuple of (DataType/A, DataTypeB, DestDataType, DataTypeE, ComputeDataType)
+        as Tensile enum indices.
 
     Raises:
         ValueError: If the token cannot be decoded.
@@ -145,29 +241,31 @@ def decode_gemm_type_token(token: str) -> Tuple[int, int, int, int, int]:
     if token == "S_MX":
         return 0, 0, 0, 0, 0
 
-    input_name = ""
-    gemm_name = token
-    if "_" in token:
-        input_name, gemm_name = token.split("_", 1)
+    type_chars = _strip_filename_type_suffixes(token)
+    parts = _greedy_type_tokens(type_chars)
 
-    slices = _slice_to_alphabet(gemm_name)
-    if len(slices) == 3:
-        a = b = NAME_TO_TYPE_INDEX[slices[0]]
-        c = d = NAME_TO_TYPE_INDEX[slices[1]]
-        compute = 0
-    elif len(slices) == 4:
-        a = NAME_TO_TYPE_INDEX[slices[0]]
-        b = NAME_TO_TYPE_INDEX[slices[1]]
-        c = d = NAME_TO_TYPE_INDEX[slices[2]]
-        compute = 0
+    if len(parts) == 2:
+        a = _lookup_type_char(parts[0])
+        b = _lookup_type_char(parts[1])
+        c = d = b
+        compute = a
+    elif len(parts) == 3:
+        a = _lookup_type_char(parts[0])
+        b = _lookup_type_char(parts[1])
+        c = d = b
+        compute = _lookup_type_char(parts[2])
+    elif len(parts) == 4:
+        a = _lookup_type_char(parts[0])
+        b = _lookup_type_char(parts[1])
+        c = d = _lookup_type_char(parts[2])
+        compute = _lookup_type_char(parts[3])
+    elif len(parts) == 5:
+        a = _lookup_type_char(parts[0])
+        b = _lookup_type_char(parts[1])
+        c = d = _lookup_type_char(parts[2])
+        compute = _lookup_type_char(parts[3])
     else:
-        raise ValueError(f"Cannot decode GEMM type token {token!r}")
-
-    if input_name:
-        in_slices = _slice_to_alphabet(input_name)
-        if len(in_slices) == 2:
-            a = NAME_TO_TYPE_INDEX[in_slices[0]]
-            b = NAME_TO_TYPE_INDEX[in_slices[1]]
+        raise ValueError(f"Cannot decode GEMM type token {token!r} ({len(parts)} parts)")
 
     return a, b, c, d, compute
 
@@ -190,7 +288,7 @@ def parse_filename(stem: str) -> Optional[dict[str, object]]:
     tb_b = transpose_b_from_layout(blayout)
     try:
         types = decode_gemm_type_token(match.group("type"))
-    except ValueError:
+    except (ValueError, KeyError):
         types = None
     return {
         "architecture": match.group("arch").lower(),
@@ -531,7 +629,7 @@ def default_hipblaslt_path() -> Path:
         candidates.append(Path(workspace) / "projects" / "hipblaslt")
     candidates.extend(
         [
-            Path("/workspace/rocm-libraries/projects/hipblaslt"),
+            Path("rocm-libraries/projects/hipblaslt"),
             Path(__file__).resolve().parents[1] / "rocm-libraries/projects/hipblaslt",
         ]
     )
