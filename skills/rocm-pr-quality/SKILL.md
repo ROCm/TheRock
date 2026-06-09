@@ -1,7 +1,7 @@
 ---
 name: rocm-pr-quality
-description: "Help an engineer author, review, or pre-merge-gate a pull request to a ROCm library so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing a PR, or deciding whether an approved PR is safe to merge right now, or when the user provides a GitHub PR URL or branch and asks for help with PR quality, description, testing, review, or merge-readiness. Library-agnostic base; component overlays extend it."
-argument-hint: "[author | review | pre-merge] [PR URL | branch:<name> | local] [base:<branch>]"
+description: Help an engineer author, review, or pre-merge-gate a pull request to a ROCm library so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing a PR, or deciding whether an approved PR is safe to merge right now, or when the user provides a GitHub PR URL or branch and asks for help with PR quality, description, testing, review, or merge-readiness. Library-agnostic base; component overlays extend it.
+argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local] [base:<branch>]'
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 ---
 
