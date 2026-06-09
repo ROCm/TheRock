@@ -39,7 +39,43 @@ skip_tests = {
             # Separately tracked in https://github.com/ROCm/TheRock/issues/5270
             "test_upsamplingNearest2d_launch_rocm_cuda",
         ],
-   
+        "modules": [
+            # Run 27228539427 inductor shard 1/4:
+            # CTCLoss CPU/GPU parity scalar mismatch under --inductor.
+            "test_cpu_gpu_parity_nn_CTCLoss_cuda_float32",
+            # Run 27228539427 inductor shard 3/4:
+            # CTCLoss forward returns a huge scalar under --inductor.
+            "test_forward_nn_CTCLoss_cuda_float32",
+        ],
+        "inductor": [
+            # Run 27228539427 inductor shard 1/4:
+            # diagonal_scatter backward grad mismatch on ROCm Inductor.
+            "(GPUTests and test_diagonal_scatter_backward_cuda)",
+        ],
+        "ops_gradients": [
+            # Run 27228539427 inductor shard 3/4:
+            # test_ops_gradients aborted with ROCm GPU hang while running
+            # TestBwdGradientsCUDA::test_fn_gradgrad_svd_lowrank_cuda_complex128.
+            # Provisional: keep only if repeat evidence confirms this is not runner-only.
+            "(TestBwdGradientsCUDA and test_fn_gradgrad_svd_lowrank_cuda_complex128)",
+            # Run 27228539427 inductor shard 4/4:
+            # test_ops_gradients aborted with ROCm GPU hang while running
+            # TestBwdGradientsCUDA::test_fn_gradgrad_ormqr_cuda_complex128.
+            # Provisional: keep only if repeat evidence confirms this is not runner-only.
+            "(TestBwdGradientsCUDA and test_fn_gradgrad_ormqr_cuda_complex128)",
+        ],
+        "torch": [
+            # Run 27238010876 inductor shard 3/4:
+            # test_lognormal_kstest float16 aborts after ROCm GPU hang under
+            # --inductor.
+            "(TestTorchDeviceTypeCUDA and test_lognormal_kstest_cuda_float16)",
+        ],
+        "ops": [
+            # Run 27238010876 inductor shard 4/4:
+            # test_out_nn_functional_hardshrink float32 aborts after ROCm GPU
+            # hang under --inductor.
+            "(TestCommonCUDA and test_out_nn_functional_hardshrink_cuda_float32)",
+        ],
         "distributed": [
             # torch.linalg.eig has no non-MAGMA backend; MAGMA not linked in this build
             "test_linalg_ops",
