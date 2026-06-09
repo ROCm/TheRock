@@ -45,9 +45,11 @@ exclude = [
 include = [
   "bin/origami-tests*",
   "bin/origami/**",
-  # Python extension is fetched here so the test script can set PYTHONPATH
-  # to lib/pythonX.Y/site-packages/ for ctest Python tests.
-  "lib/python*/site-packages/**",
+  # Python extension is installed here so the test script can set PYTHONPATH
+  # to lib/pythonX.Y/site-packages/ for ctest Python tests. Scoped to the
+  # origami package so co-located packages in the shared site-packages tree
+  # are not pulled in.
+  "lib/python*/site-packages/origami/**",
 ]
 
 # hipBLAS
