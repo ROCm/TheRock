@@ -63,16 +63,16 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             )
         self.assertEqual(matrix, {"include": []})
 
-    def test_gfx_target_builds_platform_test_matrix(self) -> None:
+    def test_gfx_target_match_is_case_insensitive_and_platform_specific(self) -> None:
         with mock.patch.object(
             m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
         ):
             matrix = m.build_test_matrix(
-                amdgpu_families=["gfxalpha0"],
+                amdgpu_families=["GFXALPHA0"],
                 platform="linux",
             )
         # FAKE_FAMILY_MATRIX also has a windows-alpha runner. The Linux
-        # request should only use the Linux platform entry.
+        # request should only use the Linux platform entry and canonical target.
         self.assertEqual(
             matrix,
             {
@@ -132,6 +132,19 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         outputs = gha_set_output.call_args.args[0]
         matrix = json.loads(outputs["matrix"])
         self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha0")
+
+    def test_main_rejects_mixed_control_and_explicit_families(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be mixed"):
+            m.main(
+                [
+                    "--build-amdgpu-families",
+                    "gfxalpha0",
+                    "--test-amdgpu-families",
+                    "auto;gfxalpha0",
+                    "--platform",
+                    "linux",
+                ]
+            )
 
     def test_main_none_skips_tests(self) -> None:
         with mock.patch.object(m, "gha_set_output") as gha_set_output:

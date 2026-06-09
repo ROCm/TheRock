@@ -13,6 +13,7 @@ plus explicit opt-in/opt-out family lists.
 """
 
 import argparse
+from dataclasses import dataclass
 import json
 import platform as platform_module
 import sys
@@ -29,8 +30,16 @@ def split_families(value: str) -> list[str]:
     return [f.strip() for f in value.split(";") if f.strip()]
 
 
-def find_amdgpu_family(*, requested_family: str, platform: str) -> tuple[str, str, str]:
-    """Return test family, canonical matrix family, and runner label."""
+@dataclass(frozen=True)
+class AmdgpuFamilyMatch:
+    """AMDGPU test configuration resolved from a workflow family request."""
+
+    test_family: str
+    matrix_family: str
+    test_runs_on: str
+
+
+def find_amdgpu_family(*, requested_family: str, platform: str) -> AmdgpuFamilyMatch:
     requested_lower = requested_family.lower()
     matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
     for key, info_for_key in matrix.items():
@@ -42,9 +51,18 @@ def find_amdgpu_family(*, requested_family: str, platform: str) -> tuple[str, st
         fetch_targets = platform_info.get("fetch-gfx-targets", [])
 
         if requested_lower == key.lower() or requested_lower == family.lower():
-            return family, family, platform_info["test-runs-on"]
-        if requested_family in fetch_targets:
-            return requested_family, family, platform_info["test-runs-on"]
+            return AmdgpuFamilyMatch(
+                test_family=family,
+                matrix_family=family,
+                test_runs_on=platform_info["test-runs-on"],
+            )
+        for fetch_target in fetch_targets:
+            if requested_lower == fetch_target.lower():
+                return AmdgpuFamilyMatch(
+                    test_family=fetch_target,
+                    matrix_family=family,
+                    test_runs_on=platform_info["test-runs-on"],
+                )
 
     raise ValueError(
         f"No {platform} AMDGPU family entry found for {requested_family!r}"
@@ -60,20 +78,30 @@ def build_test_matrix(
     include: list[dict[str, str]] = []
     seen_families: set[str] = set()
     for requested_family in amdgpu_families:
-        test_family, matrix_family, test_runs_on = find_amdgpu_family(
+        family_match = find_amdgpu_family(
             requested_family=requested_family,
             platform=platform,
         )
-        if test_family in seen_families:
+        if family_match.test_family in seen_families:
             continue
-        seen_families.add(test_family)
+        seen_families.add(family_match.test_family)
 
-        if not test_runs_on:
-            print(f"Skipping {matrix_family}: no {platform} test runner is configured")
+        if not family_match.test_runs_on:
+            print(
+                f"Skipping {family_match.matrix_family}: "
+                f"no {platform} test runner is configured"
+            )
             continue
 
-        print(f"Including {test_family}: testing on {test_runs_on}")
-        include.append({"amdgpu_family": test_family, "test_runs_on": test_runs_on})
+        print(
+            f"Including {family_match.test_family}: testing on {family_match.test_runs_on}"
+        )
+        include.append(
+            {
+                "amdgpu_family": family_match.test_family,
+                "test_runs_on": family_match.test_runs_on,
+            }
+        )
 
     return {"include": include}
 
@@ -118,6 +146,12 @@ def main(argv: list[str]) -> None:
         test_amdgpu_families = []
     else:
         test_amdgpu_families = split_families(args.test_amdgpu_families)
+        for test_family in test_amdgpu_families:
+            if test_family.lower() in ("auto", "built", "none", "skip"):
+                raise ValueError(
+                    f"Test family control value {test_family!r} cannot be mixed "
+                    "with explicit AMDGPU families"
+                )
 
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
