@@ -1421,10 +1421,10 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 select_build_runner("linux", "release"), "azure-linux-scale-rocm"
             )
 
-        # Random >= 0.8 should select Azure
+        # Random >= 0.8 should select AWS
         with patch("random.random", return_value=0.95):
             self.assertEqual(
-                select_build_runner("linux", "release"), "azure-linux-scale-rocm"
+                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
             )
 
         # Random >= 0.9 should select Azure
