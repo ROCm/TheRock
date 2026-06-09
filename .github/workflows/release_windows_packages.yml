@@ -208,12 +208,6 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      - name: Installing WIX and dependencies
-        run: |
-          dotnet tool install --version 6.0.0 --global wix
-          wix extension add -g WixToolset.UI.wixext/6.0.0
-          wix extension add -g WixToolset.Dependency.wixext/6.0.0
-
       - name: Runner health status
         run: |
           python ./build_tools/health_status.py
@@ -245,9 +239,6 @@ jobs:
 
       - name: Build therock-artifacts and therock-dist
         run: cmake --build "${{ env.BUILD_DIR }}" --target therock-artifacts therock-dist
-
-      - name: Build ROCm MSI Packages
-        run: cmd /c ./build_tools/packaging/windows/build-all.bat "${{ env.BUILD_DIR }}/dist/rocm"
 
       - name: Compress dist folder
         run: |
