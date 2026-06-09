@@ -53,14 +53,12 @@ on:
         required: true
         type: string
       release_type:
-        description: "Release line (ci, dev, nightly, or prerelease)"
+        description: 'Release type: "ci" or "dev"'
         required: true
         type: choice
         options:
           - ci
           - dev
-          - nightly
-          - prerelease
       gpg_key_url:
         description: "GPG key URL for signed repos"
         type: string

@@ -75,9 +75,11 @@ on:
         type: string
         default: "3.12"
       release_type:
-        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
-        type: string
-        default: "dev"
+        description: 'Release type; developer-triggered jobs should use "dev"'
+        type: choice
+        options:
+          - dev
+        default: dev
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
         type: string
@@ -133,7 +135,7 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: "windows/${{ inputs.amdgpu_family }}/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
-      SCCACHE_IDLE_TIMEOUT: "600"
+      SCCACHE_IDLE_TIMEOUT: "0" # never idle-out; keeps stats accurate on long builds
       SCCACHE_LOG: warn
     outputs:
       cp_version: ${{ env.cp_version }}

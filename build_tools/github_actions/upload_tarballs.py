@@ -60,8 +60,8 @@ def main(argv: list[str]) -> int:
     )
     parser.add_argument(
         "--release-type",
-        default="",
-        help='Release type: "" for CI, or "dev", "nightly", "prerelease"',
+        default="ci",
+        help='Release type: "ci", "dev", "nightly", or "prerelease"',
     )
     parser.add_argument(
         "--output-dir",
@@ -90,7 +90,7 @@ def main(argv: list[str]) -> int:
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,
         platform=args.platform,
-        release_type=args.release_type or None,
+        release_type=args.release_type,
     )
     dest = output_root.tarballs()
     logger.info("Destination: %s", dest.s3_uri)

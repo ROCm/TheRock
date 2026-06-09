@@ -47,7 +47,7 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        description: 'Release type; selects the S3 bucket.'
         type: string
         required: true
       repository:
@@ -88,9 +88,11 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
-        type: string
-        required: true
+        description: 'Release type; developer-triggered jobs should use "dev".'
+        type: choice
+        options:
+          - dev
+        default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -132,7 +134,7 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
-      SCCACHE_IDLE_TIMEOUT: "600"
+      SCCACHE_IDLE_TIMEOUT: "0" # never idle-out; keeps stats accurate on long builds
       SCCACHE_LOG: warn
     steps:
       - name: Checkout
