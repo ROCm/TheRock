@@ -22,19 +22,16 @@ FAKE_FAMILY_MATRIX: FamilyMatrix = {
     "gfxalpha": {
         "linux": {
             "family": "gfxalpha-all",
-            "fetch-gfx-targets": ["gfxalpha0"],
             "test-runs-on": "linux-alpha",
         },
         "windows": {
             "family": "gfxalpha-all",
-            "fetch-gfx-targets": ["gfxalpha0"],
             "test-runs-on": "windows-alpha",
         },
     },
     "gfxnorunner": {
         "linux": {
             "family": "gfxnorunner",
-            "fetch-gfx-targets": ["gfxnorunner0"],
             "test-runs-on": "",
         }
     },
@@ -63,22 +60,22 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             )
         self.assertEqual(matrix, {"include": []})
 
-    def test_gfx_target_match_is_case_insensitive_and_platform_specific(self) -> None:
+    def test_family_match_is_platform_specific(self) -> None:
         with mock.patch.object(
             m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
         ):
             matrix = m.build_test_matrix(
-                amdgpu_families=["GFXALPHA0"],
+                amdgpu_families=["gfxalpha-all"],
                 platform="linux",
             )
         # FAKE_FAMILY_MATRIX also has a windows-alpha runner. The Linux
-        # request should only use the Linux platform entry and canonical target.
+        # request should only use the Linux platform entry and canonical family.
         self.assertEqual(
             matrix,
             {
                 "include": [
                     {
-                        "amdgpu_family": "gfxalpha0",
+                        "amdgpu_family": "gfxalpha-all",
                         "test_runs_on": "linux-alpha",
                     }
                 ]
@@ -101,9 +98,9 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             m.main(
                 [
                     "--build-amdgpu-families",
-                    "gfxalpha0",
+                    "gfxalpha-all",
                     "--test-amdgpu-families",
-                    "gfxalpha0",
+                    "gfxalpha-all",
                     "--platform",
                     "linux",
                 ]
@@ -112,7 +109,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         outputs = gha_set_output.call_args.args[0]
         self.assertEqual(outputs["enabled"], "true")
         matrix = json.loads(outputs["matrix"])
-        self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha0")
+        self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha-all")
 
     def test_main_auto_uses_built_families(self) -> None:
         with mock.patch.object(
@@ -121,7 +118,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             m.main(
                 [
                     "--build-amdgpu-families",
-                    "gfxalpha0",
+                    "gfxalpha-all;gfxalpha-all",
                     "--test-amdgpu-families",
                     "auto",
                     "--platform",
@@ -131,16 +128,16 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
 
         outputs = gha_set_output.call_args.args[0]
         matrix = json.loads(outputs["matrix"])
-        self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha0")
+        self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha-all")
 
     def test_main_rejects_mixed_control_and_explicit_families(self) -> None:
         with self.assertRaisesRegex(ValueError, "cannot be mixed"):
             m.main(
                 [
                     "--build-amdgpu-families",
-                    "gfxalpha0",
+                    "gfxalpha-all",
                     "--test-amdgpu-families",
-                    "auto;gfxalpha0",
+                    "auto;gfxalpha-all",
                     "--platform",
                     "linux",
                 ]
@@ -151,7 +148,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             m.main(
                 [
                     "--build-amdgpu-families",
-                    "gfxalpha0",
+                    "gfxalpha-all",
                     "--test-amdgpu-families",
                     "none",
                     "--platform",
@@ -163,9 +160,9 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         self.assertEqual(outputs["enabled"], "false")
         self.assertEqual(json.loads(outputs["matrix"]), {"include": []})
 
-    def test_real_family_matrix_resolves_gfx950(self) -> None:
+    def test_real_family_matrix_finds_gfx950_runner(self) -> None:
         matrix = m.build_test_matrix(
-            amdgpu_families=["gfx950"],
+            amdgpu_families=["gfx950-dcgpu"],
             platform="linux",
         )
         include = matrix["include"]
