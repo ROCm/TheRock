@@ -30,8 +30,6 @@ useDefault = true
 # can't live: vendored third-party trees and dependency lock files.
 description = "Vendored and generated paths"
 paths = [
-  '''third-party/''',
-  '''third_party/''',
   '''.*\.lock$''',
 ]
 

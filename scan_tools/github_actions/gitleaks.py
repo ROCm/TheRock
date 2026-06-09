@@ -52,6 +52,7 @@ _SUPPORTED_FORMATS: dict[str, str] = {
 }
 # Mirrored to the rocm-third-party-deps S3 bucket (see
 # docs/development/git_chores.md) so CI doesn't depend on github.com.
+# Original source: https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
 _GITLEAKS_VERSION = "8.30.1"
 _GITLEAKS_TARBALL_URL = (
     "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/"
@@ -60,8 +61,7 @@ _GITLEAKS_TARBALL_URL = (
 _GITLEAKS_TARBALL_SHA256 = (
     "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
 )
-# Hardcoded (no input override) so every caller uses the same file and
-# can't drift. Missing is a hard error (see `_resolve_config_path`).
+_GITLEAKS_MAX_TARBALL_BYTES = 100 * 1024 * 1024  # 100 MiB guardrail
 _CONFIG_PATH = "gitleaks.toml"
 # Pin --exit-code to 1 so we can tell clean (0) from leaks (1) from a
 # gitleaks error (>1).
@@ -86,7 +86,11 @@ def _sha256_of(path: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def _ensure_gitleaks() -> Path:
+def get_gitleaks_binary() -> Path:
+    """Return a verified gitleaks binary in RUNNER_TEMP/gitleaks-<ver>.
+
+    Downloads and validates it if missing.
+    """
     install_root = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
     install_dir = install_root / f"gitleaks-{_GITLEAKS_VERSION}"
     binary = install_dir / "gitleaks"
@@ -107,7 +111,17 @@ def _ensure_gitleaks() -> Path:
             urlopen(Request(_GITLEAKS_TARBALL_URL), timeout=60) as resp,
             open(tarball_path, "wb") as out,
         ):
-            shutil.copyfileobj(resp, out)
+            written = 0
+            chunk = resp.read(1024 * 1024)
+            while chunk:
+                if written + len(chunk) > _GITLEAKS_MAX_TARBALL_BYTES:
+                    raise RuntimeError(
+                        f"gitleaks tarball exceeds {_GITLEAKS_MAX_TARBALL_BYTES} bytes "
+                        f"(source: {_GITLEAKS_TARBALL_URL})"
+                    )
+                out.write(chunk)
+                written += len(chunk)
+                chunk = resp.read(1024 * 1024)
         actual_sha = _sha256_of(tarball_path)
         if actual_sha != _GITLEAKS_TARBALL_SHA256:
             raise RuntimeError(
@@ -151,6 +165,7 @@ def _ensure_gitleaks() -> Path:
 
 
 def _parse_report_formats(raw: str) -> list[_ReportTarget]:
+    """Parse comma-separated report formats into unique report targets."""
     targets: list[_ReportTarget] = []
     seen: set[str] = set()
     for raw_fmt in raw.split(","):
@@ -184,7 +199,11 @@ def _resolve_config_path() -> str:
 
 
 def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) -> str:
-    """Build the `--log-opts` value for `gitleaks detect`."""
+    """Build the `--log-opts` value for `gitleaks detect`.
+
+    Returns '' to scan the full history; otherwise returns a git range
+    derived from the triggering event or raises when unavailable.
+    """
     if scan_mode == "all":
         return ""
 
@@ -247,8 +266,8 @@ def _determine_log_opts(scan_mode: str, event_name: str, event: dict[str, Any]) 
 def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     """Mark every gitleaks SARIF result as High severity for code scanning.
 
-    Pre-existing values for either field are preserved verbatim (so a
-    future gitleaks version that emits them natively keeps control).
+    Gitleaks leaves `level` and `security-severity` unset; we backfill to
+    match GitHub's severity tiers. Pre-existing values are preserved.
     """
     try:
         with open(sarif_path, encoding="utf-8") as f:
@@ -256,11 +275,6 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     except json.JSONDecodeError as exc:
         raise ValueError(f"SARIF file '{sarif_path}' is not valid JSON: {exc}") from exc
 
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"SARIF file '{sarif_path}' top-level must be a JSON object, "
-            f"got {type(data).__name__}"
-        )
     runs = data.get("runs", [])
     if not isinstance(runs, list):
         raise ValueError(
@@ -410,7 +424,10 @@ def _run_gitleaks(
 
 
 def _md_code_fence(content: str) -> str:
-    """Return a backtick fence longer than any backtick run in `content`."""
+    """Return a backtick fence longer than any backtick run in `content`.
+
+    Ensures markdown summaries stay intact even when reports contain backticks.
+    """
     longest = max((len(m) for m in re.findall(r"`+", content)), default=0)
     return "`" * max(3, longest + 1)
 
@@ -521,7 +538,7 @@ def main(argv: list[str]) -> int:
     )
 
     try:
-        binary = _ensure_gitleaks()
+        binary = get_gitleaks_binary()
         leaks_found = _run_gitleaks(
             binary,
             targets,
