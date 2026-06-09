@@ -77,7 +77,7 @@ groups  # verify 'video' and 'render' appear in the output
 
 On Arch, these groups are typically created by the `amdgpu` kernel module but
 users are **not** added automatically. Without this step, ROCm will fail at
-runtime with permission errors (e.g., `hsaKinit` returning
+runtime with permission errors (e.g., `hsaKmtInit` returning
 `HSA_STATUS_ERROR_NOT_INITIALIZED` or `HIP` returning `hipErrorNoDevice`).
 
 Arch provides `patchelf` via `pacman`. **Verify that the installed version
@@ -93,10 +93,10 @@ readelf -l build/dist/rocm/lib/libhsa-runtime64.so 2>/dev/null | grep -A1 PHDR
 ```
 
 If the fix is not present, build `patchelf` from source using the script above.
-On Arch, you will need `base-devel` for the build tools:
+On Arch, you will need the build tools:
 
 ```bash
-sudo pacman -S base-devel curl autoconf automake
+sudo pacman -S curl autoconf automake
 sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
 ```
 
@@ -132,7 +132,7 @@ the host GCC.
 Arch kernels ship with `systemd-oomd` enabled by default on many installations.
 Combined with high core counts (e.g., 14600K with 20 threads), this can kill
 the build during `amd-llvm` link steps. See [Resource Utilization](#resource-utilization)
-above for guidance — `-j8` is a safe starting point on a 32 GB system.
+below for guidance — `-j8` is a safe starting point on a 32 GB system.
 
 ## Common Issues
 
@@ -222,12 +222,12 @@ ROCm is a very resource hungry project to build. The `compiler/amd-llvm` compone
 
 #### Controlling Build Parallelism
 
-The most effective way to bound memory usage is to cap the number of concurrent build jobs. There are several ways to do this, from most to least specific:
+The most effective way to bound memory usage is to cap the number of concurrent build jobs. Note that `-j` passed to the outer Ninja/CMake invocation controls parallelism at the super-project level; subproject builds (e.g., `amd-llvm`) spawn their own Ninja instances and are not directly bounded by this setting. See [TheRock issue #XXXX](https://github.com/ROCm/TheRock/issues) for tracking a Ninja job server that would propagate limits into subprojects.
 
 1. **Per-invocation via `ninja -j`:**
 
    ```bash
-   # Use only 8 concurrent jobs (safe for 32 GB RAM)
+   # Use only 8 concurrent jobs at the super-project level (safe for 32 GB RAM)
    ninja -C build -j8
 
    # Or even lower for very memory-constrained systems
@@ -283,7 +283,14 @@ Monitor ccache effectiveness with `ccache -s` — on subsequent rebuilds you sho
 
 #### Reducing build scope
 
-If memory is tight and you don't need the full ROCm stack, disable heavy components you don't need:
+If memory is tight and you only need a specific component, build that target
+directly rather than the full stack. For example, to work on rocBLAS:
+
+```bash
+ninja -C build rocBLAS+build
+```
+
+Or configure with only the components you need enabled:
 
 ```bash
 cmake -B build -GNinja \
@@ -291,9 +298,6 @@ cmake -B build -GNinja \
   -DTHEROCK_ENABLE_HIPIFY=ON \
   -DTHEROCK_ENABLE_CORE=ON \
   -DTHEROCK_ENABLE_MATH_LIBS=ON \
-  -DTHEROCK_ENABLE_DEBUG_TOOLS=OFF \
-  -DTHEROCK_ENABLE_MEDIA_LIBS=OFF \
-  -DTHEROCK_ENABLE_COMM_LIBS=OFF \
   -DTHEROCK_AMDGPU_FAMILIES=gfx1032
 ```
 
