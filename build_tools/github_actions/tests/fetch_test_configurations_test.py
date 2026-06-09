@@ -155,7 +155,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         names = {job["job_name"] for job in components}
-        self.assertNotIn("rocroller", names)
+        self.assertNotIn("hipsparselt", names)
 
     # -----------------------
     # Functional test merging via run_extended_tests

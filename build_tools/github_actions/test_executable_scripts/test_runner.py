@@ -49,7 +49,6 @@ COMPONENT_DIR_MAPPING = {
     "rocsparse": "rocsparse",
     "hipsparse": "hipsparse",
     "hipsparselt": "hipsparselt",
-    "rocroller": "rocroller",
     "hipblas": "hipblas",
     # Add more mappings as needed
 }
@@ -101,9 +100,7 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #
 # - env_prepend_from_therock: Same shape as additional_env_paths, but the path
 #   parts are interpreted relative to THEROCK_DIR (the source/build tree
-#   checkout root) rather than ROCM_PATH (the install prefix). Use this for
-#   components whose tests need to load libraries straight out of the build
-#   tree, e.g. rocroller.
+#   checkout root) rather than ROCM_PATH (the install prefix).
 COMPONENT_OVERRIDES = {
     # For rocprofiler-compute, we need the following additional paths:
     # - PATH=ROCM_PATH/bin:$PATH
@@ -115,28 +112,6 @@ COMPONENT_OVERRIDES = {
             "LD_LIBRARY_PATH": [
                 ["lib"],
                 ["lib", "rocm_sysdeps", "lib"],
-            ],
-        },
-    },
-    # rocroller's gtests link against shared libraries that live in the
-    # build tree (under THEROCK_DIR/build/...), not in the install prefix,
-    # so prepend those build-tree paths to LD_LIBRARY_PATH.
-    "rocroller": {
-        "env_prepend_from_therock": {
-            "LD_LIBRARY_PATH": [
-                ["build", "core", "clr", "dist", "lib"],
-                ["build", "core", "clr", "dist", "lib", "llvm", "lib"],
-                ["build", "math-libs", "BLAS", "rocRoller", "dist", "lib"],
-                [
-                    "build",
-                    "math-libs",
-                    "BLAS",
-                    "rocRoller",
-                    "dist",
-                    "lib",
-                    "host-math",
-                    "lib",
-                ],
             ],
         },
     },
@@ -158,8 +133,7 @@ def apply_component_overrides(job_name, rocm_path, therock_dir, default_test_dir
       test directory.
     - 'additional_env_paths' prepends ROCM_PATH-relative paths to env vars.
     - 'env_prepend_from_therock' prepends THEROCK_DIR-relative (build tree)
-      paths to env vars. Used by components like rocroller that load shared
-      libraries straight out of the build tree.
+      paths to env vars.
     """
     overrides = COMPONENT_OVERRIDES.get(job_name)
     if not overrides:

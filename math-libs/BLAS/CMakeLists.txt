@@ -42,58 +42,6 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 
 
 ##############################################################################
-# rocRoller
-##############################################################################
-
-if(WIN32)
-  set(_enable_rocRoller "OFF")
-else()
-  set(_enable_rocRoller "ON")
-endif()
-
-if(_enable_rocRoller)
-  therock_cmake_subproject_declare(rocRoller
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRoller"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCROLLER_ENABLE_YAML_CPP=ON
-      -DROCROLLER_ENABLE_CLIENT=OFF
-      -DROCROLLER_BUILD_TESTING=${THEROCK_BUILD_TESTING}
-      -DROCROLLER_BUILD_SHARED_LIBS=ON
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      mxDataGenerator
-      rocm-cmake
-      therock-boost
-      therock-catch2
-      therock-fmt
-      therock-googletest
-      therock-libdivide
-      therock-msgpack-cxx
-      therock-spdlog
-      therock-yaml-cpp
-      # therock-cl11 # will need this dep to enable client
-    RUNTIME_DEPS
-      therock-host-blas
-      hip-clr
-      ${optional_profiler_deps}
-  )
-  therock_cmake_subproject_glob_c_sources(rocRoller
-  SUBDIRS
-      .
-  )
-  therock_cmake_subproject_provide_package(rocRoller rocroller lib/cmake/rocroller)
-  therock_cmake_subproject_activate(rocRoller)
-  list(APPEND _blas_subproject_names rocRoller)
-endif()
-
-
-##############################################################################
 # hipBLASLt
 ##############################################################################
 
@@ -106,21 +54,6 @@ if(NOT WIN32)
   if(TARGET rocm_smi_lib)
     list(APPEND hipBLASLt_runtime_deps rocm_smi_lib)
   endif()
-endif()
-
-set(hipBLASLt_rocRoller_deps)
-if(_enable_rocRoller)
-  list(APPEND hipBLASLt_rocRoller_build_deps
-    mxDataGenerator
-    therock-boost
-    therock-fmt
-    therock-yaml-cpp
-    therock-spdlog
-    therock-libdivide
-  )
-  list(APPEND hipBLASLt_rocRoller_runtime_deps
-    rocRoller
-  )
 endif()
 
 therock_cmake_subproject_declare(hipBLASLt
@@ -136,7 +69,7 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${THEROCK_BUILD_TESTING}
     -DROCISA_USE_STABLE_ABI=ON
-    -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
+    -DHIPBLASLT_ENABLE_ROCROLLER=OFF
     -DHIPBLASLT_ENABLE_FETCH=OFF
     -DHIPBLASLT_ENABLE_THEROCK=ON
   CMAKE_INCLUDES
@@ -148,11 +81,10 @@ therock_cmake_subproject_declare(hipBLASLt
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
-    ${hipBLASLt_rocRoller_build_deps}
+    mxDataGenerator
   RUNTIME_DEPS
     hip-clr
     therock-host-blas
-    ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
     ${optional_profiler_deps}
   TEST_SUBPROJECTS
