@@ -108,18 +108,12 @@ therock_cmake_subproject_declare(origami
     -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DORIGAMI_ENABLE_PYTHON=ON
     -DORIGAMI_ENABLE_FETCH=OFF
-  IGNORE_PACKAGES
-    # origami's Python bindings vendor their own nanobind via FetchContent, and
-    # nanobind's CMake self-calls find_package(nanobind). Exempt it from the
-    # super-project dependency provider, which otherwise fatals because nanobind
-    # is a strict-provided package not declared as an origami dependency.
-    # (origami pins its own nanobind version rather than consuming TheRock's.)
-    nanobind
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
     rocm-cmake
     therock-catch2
+    therock-nanobind
   RUNTIME_DEPS
     hip-clr
 )
