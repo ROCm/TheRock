@@ -551,6 +551,14 @@ def process_main_dependencies_kpack(
         dep_list = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
+    elif not is_gfxarch_package(pkg_info, config.enable_kpack):
+        # Non-gfxarch versioned package: use all dependencies directly
+        # These packages don't have host/device split, so include everything
+        dep_list = pkg_info.get(field_key, [])
+        # Filter deps without artifacts
+        dep_list = filter_dependencies_by_artifacts(
+            dep_list, config.artifacts_dir, config.gfx_arch
+        )
     else:
         # Device package: depend on host package + gfxarch dependencies with arch suffix
         dep_list = pkg_info.get(field_key, [])
@@ -894,7 +902,8 @@ def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
             versioned = convert_to_versiondependency(
                 [dep], config, preserve_arch=preserve
             )
-            result_deps.append(versioned)
+            if versioned:  # Filter out empty strings from missing packages
+                result_deps.append(versioned)
 
         deps = ", ".join(result_deps)
         deps = append_version_suffix(deps, config)

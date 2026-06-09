@@ -133,9 +133,7 @@ def build_package_variants(pkg_name, config: PackageConfig) -> list:
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
 
     if config.enable_kpack:
-        if is_gfxarch_package(pkg_info, config.enable_kpack) or is_meta_package(
-            pkg_info
-        ):
+        if is_gfxarch_package(pkg_info, config.enable_kpack):
             # GfxArch=True: host + devices + meta + non-versioned
             return build_gfxarch_package_variants(pkg_name, config)
         else:
