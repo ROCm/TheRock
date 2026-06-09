@@ -154,11 +154,11 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 1.0,
+                    "weight": 0.0,
                 },  # cirrascale (4/34)
                 {
-                    "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.0,
+                    "label": "linux-gfx942-2gpu-core42-ossci-rocm",
+                    "weight": 1.0,
                 },  # core42 (25/34)
                 {
                     "label": "linux-gfx942-1gpu-ossci-rocm",
