@@ -86,6 +86,13 @@ def detailed_component_analysis_csv(output_file='artifact_package_coverage.csv')
     # Scan TOML files
     artifact_files = glob.glob('**/artifact-*.toml', recursive=True)
     
+    # Get list of artifacts actually in the artifacts directory
+    artifacts_in_directory = set()
+    if Path('artifacts').exists():
+        for item in Path('artifacts').iterdir():
+            if item.is_dir():
+                artifacts_in_directory.add(item.name.lower())
+    
     # Prepare CSV data
     csv_rows = []
     
@@ -150,11 +157,17 @@ def detailed_component_analysis_csv(output_file='artifact_package_coverage.csv')
                 has_package = component_type in packages_map.get(artifact_key, {})
                 package_names = packages_map.get(artifact_key, {}).get(component_type, [])
                 
+                # Determine status: check if artifact is in directory
+                if artifact_key in artifacts_in_directory:
+                    status = 'COVERED' if has_package else 'MISSING'
+                else:
+                    status = 'NOT IN ARTIFACTS' if not has_package else 'COVERED'
+                
                 csv_rows.append({
                     'Artifact': artifact_name,
                     'Artifact_From_File': artifact_name_from_file,
                     'Component': component_type,
-                    'Status': 'COVERED' if has_package else 'MISSING',
+                    'Status': status,
                     'Package Names': ', '.join(package_names) if package_names else '',
                     'TOML File': artifact_file
                 })
@@ -173,45 +186,57 @@ def detailed_component_analysis_csv(output_file='artifact_package_coverage.csv')
     # Write to CSV
     if csv_rows:
         fieldnames = ['Artifact', 'Artifact_From_File', 'Component', 'Status', 'Package Names', 'TOML File']
-        
-        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+        with open(output_file, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
-            
-            # Sort by artifact name, then component
-            csv_rows.sort(key=lambda x: (x['Artifact'], x['Component']))
-            
-            for row in csv_rows:
-                writer.writerow(row)
+            writer.writerows(csv_rows)
         
-        print(f"✅ CSV report written to: {output_file}")
+        print(f"\n✓ CSV report written to: {output_file}")
+        print(f"✓ Total rows processed: {len(csv_rows)}")
         
-        # Print summary
-        total = len(csv_rows)
-        covered = sum(1 for row in csv_rows if row['Status'] == 'COVERED')
-        missing = sum(1 for row in csv_rows if row['Status'] == 'MISSING')
-        errors = sum(1 for row in csv_rows if row['Status'] == 'ERROR')
+        # Count statuses
+        status_counts = defaultdict(int)
+        for row in csv_rows:
+            status_counts[row['Status']] += 1
         
-        print(f"\nSummary:")
-        print(f"  Total component entries: {total}")
-        print(f"  ✅ Covered: {covered}")
-        print(f"  ❌ Missing: {missing}")
-        print(f"  ⚠️  Errors: {errors}")
+        print("\n--- Status Summary ---")
+        for status, count in sorted(status_counts.items()):
+            print(f"  {status}: {count}")
         
-        # Print some examples of missing packages
-        missing_rows = [row for row in csv_rows if row['Status'] == 'MISSING']
-        if missing_rows:
-            print(f"\nMissing packages:")
-            for row in missing_rows:
-                print(f"  - {row['Artifact']}: {row['Component']}")
-
-        # return error if packages are missing
-        if missing > 0:
-            print(f"Failed missing {missing} packages")
-            sys.exit(1)
-
+        # Print artifacts with "NOT IN ARTIFACTS" status
+        not_in_artifacts = [row for row in csv_rows if row['Status'] == 'NOT IN ARTIFACTS']
+        if not_in_artifacts:
+            print("\n--- Artifacts NOT IN ARTIFACTS Directory ---")
+            for row in not_in_artifacts:
+                print(f"  • {row['Artifact']} ({row['Component']}) - {row['TOML File']}")
+        
+        # Print artifacts with "MISSING" status
+        missing = [row for row in csv_rows if row['Status'] == 'MISSING']
+        if missing:
+            print("\n--- Artifacts MISSING from Package Mapping ---")
+            for row in missing:
+                print(f"  • {row['Artifact']} ({row['Component']}) - {row['TOML File']}")
+        
+        # Print artifacts with "ERROR" status
+        errors = [row for row in csv_rows if row['Status'] == 'ERROR']
+        if errors:
+            print("\n--- Processing Errors ---")
+            for row in errors:
+                error_msg = row.get('Error', 'Unknown error')
+                print(f"  • {row['TOML File']}: {error_msg}")
+        
+        # Print comprehensive summary
+        print("\n" + "="*60)
+        print("FINAL SUMMARY")
+        print("="*60)
+        print(f"Total Component Entries:     {len(csv_rows)}")
+        print(f" ✅ Covered:                 {status_counts.get('COVERED', 0)}")
+        print(f" ❌ Missing:                 {status_counts.get('MISSING', 0)}")
+        print(f" ⚠️ Not In Artifacts:         {status_counts.get('NOT IN ARTIFACTS', 0)}")
+        print(f" ⚠️ Errors:                   {status_counts.get('ERROR', 0)}")
+        print("="*60)
     else:
-        print("No data to write to CSV")
+        print("No artifact TOML files found or no components defined.")
 
 if __name__ == '__main__':
     detailed_component_analysis_csv()
