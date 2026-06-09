@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Many things need to be configured with paths to additional LLVM tools.
 # If a project is using an amd-hip or amd-llvm toolchain, then it will already
 # have an implicit dep on the toolchain, so it is safe to reference binaries
@@ -106,6 +109,11 @@ therock_cmake_subproject_declare(origami
     -DORIGAMI_ENABLE_PYTHON=ON
     -DORIGAMI_ENABLE_FETCH=OFF
   IGNORE_PACKAGES
+    # origami's Python bindings vendor their own nanobind via FetchContent, and
+    # nanobind's CMake self-calls find_package(nanobind). Exempt it from the
+    # super-project dependency provider, which otherwise fatals because nanobind
+    # is a strict-provided package not declared as an origami dependency.
+    # (origami pins its own nanobind version rather than consuming TheRock's.)
     nanobind
   COMPILER_TOOLCHAIN
     amd-hip
@@ -176,7 +184,6 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
-    origami
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
@@ -385,7 +392,6 @@ if(THEROCK_ENABLE_SPARSE)
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
-        origami
         rocm-cmake
         hipSPARSE
         rocSPARSE
