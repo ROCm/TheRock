@@ -68,7 +68,7 @@ CI_STALE_DAYS = 3
 class Finding:
     def __init__(self, rule: str, severity: str, message: str):
         self.rule = rule
-        self.severity = severity  # BLOCKER | WARN | INFO
+        self.severity = severity  # BLOCKING | IMPORTANT | INFO
         self.message = message
 
     def as_dict(self):
@@ -152,7 +152,9 @@ def check_description(body: str, findings: list[Finding]) -> None:
     if missing:
         findings.append(
             Finding(
-                "DESC", "WARN", f"PR body missing section(s): {', '.join(missing)}."
+                "DESC",
+                "IMPORTANT",
+                f"PR body missing section(s): {', '.join(missing)}.",
             )
         )
     for empty in re.findall(r"(Devices?|Link):\s*N/?A", body, re.IGNORECASE):
@@ -198,7 +200,7 @@ def check_tracking(
         findings.append(
             Finding(
                 "M4",
-                "WARN",
+                "IMPORTANT",
                 f"No work-tracking ticket, but cross-reference(s)/mention(s) found "
                 f"({shown}). A related PR or mention is not work tracking -- confirm "
                 "a ticket/issue or declare a credible no-tracker waiver.",
@@ -208,7 +210,7 @@ def check_tracking(
         findings.append(
             Finding(
                 "M4",
-                "BLOCKER",
+                "BLOCKING",
                 "No work-tracking reference and no cross-reference or declared "
                 "waiver. Add a tracker, or a credible no-tracker waiver.",
             )
@@ -225,7 +227,7 @@ def check_related_links(
         findings.append(
             Finding(
                 "M5",
-                "WARN",
+                "IMPORTANT",
                 "No related links found in the PR body. Link the work item, the "
                 "defect fixed, and directly related PRs.",
             )
@@ -247,7 +249,7 @@ def check_related_links(
                     findings.append(
                         Finding(
                             "M5",
-                            "WARN",
+                            "IMPORTANT",
                             f"Reference #{num} did not resolve to an issue or PR.",
                         )
                     )
@@ -263,7 +265,7 @@ def check_tests(data: dict, prof: dict, findings: list[Finding]) -> None:
         findings.append(
             Finding(
                 "M2",
-                "BLOCKER",
+                "BLOCKING",
                 f"{len(product)} product file(s) changed but no test files touched "
                 "and no waiver declared. Add tests, a safe-default flag + tracker, "
                 "or a written waiver. (Substance is judged separately by the agent.)",
@@ -294,7 +296,7 @@ def check_ci_currency(data: dict, findings: list[Finding]) -> None:
         findings.append(
             Finding(
                 "CI",
-                "WARN",
+                "IMPORTANT",
                 f"Newest CI result is ~{age_days:.1f} days old (> {CI_STALE_DAYS}). "
                 "Consider a rebase + re-run before merge.",
             )
@@ -326,7 +328,7 @@ def _report_overlap(
         findings.append(
             Finding(
                 "STALE-BASE",
-                "BLOCKER",
+                "BLOCKING",
                 "Overlap on high-coupling file(s) since divergence "
                 f"({how}): {', '.join(sorted(hot))}. Rebase + re-run before merge.",
             )
@@ -335,7 +337,7 @@ def _report_overlap(
         findings.append(
             Finding(
                 "STALE-BASE",
-                "WARN",
+                "IMPORTANT",
                 f"Overlap with base on {len(overlap)} file(s) ({how}); "
                 "consider rebase + re-run.",
             )
@@ -386,7 +388,7 @@ def check_stale_base_api(
         findings.append(
             Finding(
                 "STALE-BASE",
-                "WARN",
+                "IMPORTANT",
                 "Inconclusive: base advanced past the API's 300-file limit, so the "
                 "adjacent-file check is incomplete. Re-run nearer merge time, or use "
                 "--repo-path <clone> for an exact result.",
@@ -445,7 +447,7 @@ def main() -> None:
         "--check-links", action="store_true", help="resolve #refs via gh (network)"
     )
     ap.add_argument(
-        "--enforce", action="store_true", help="exit non-zero on BLOCKER findings"
+        "--enforce", action="store_true", help="exit non-zero on BLOCKING findings"
     )
     ap.add_argument("--json", action="store_true", help="emit JSON")
     args = ap.parse_args()
@@ -462,8 +464,8 @@ def main() -> None:
     check_ci_currency(data, findings)
     check_stale_base(data, prof, args.repo_path, args.repo, findings)
 
-    blockers = [f for f in findings if f.severity == "BLOCKER"]
-    warns = [f for f in findings if f.severity == "WARN"]
+    blockers = [f for f in findings if f.severity == "BLOCKING"]
+    warns = [f for f in findings if f.severity == "IMPORTANT"]
 
     if args.json:
         print(
@@ -481,11 +483,11 @@ def main() -> None:
         )
     else:
         print(f"PR #{data.get('number')} [{args.profile}] - {data.get('url')}")
-        order = {"BLOCKER": 0, "WARN": 1, "INFO": 2}
+        order = {"BLOCKING": 0, "IMPORTANT": 1, "INFO": 2}
         for f in sorted(findings, key=lambda x: order[x.severity]):
-            print(f"  [{f.severity:7}] {f.rule:11} {f.message}")
+            print(f"  [{f.severity:9}] {f.rule:11} {f.message}")
         print(
-            f"Summary: {len(blockers)} blocker(s), {len(warns)} warning(s). "
+            f"Summary: {len(blockers)} blocking, {len(warns)} important. "
             "Substance/M3 judged separately by the agent + human reviewer."
         )
 

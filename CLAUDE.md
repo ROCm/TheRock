@@ -181,12 +181,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## PR Quality Skill
 
-A composable, ROCm-wide PR-quality agent skill lives at
-[skills/rocm-pr-quality/](skills/rocm-pr-quality/). When authoring, reviewing, or
-pre-merge-gating a pull request, read and apply
-[skills/rocm-pr-quality/SKILL.md](skills/rocm-pr-quality/SKILL.md) (and its `reference.md`).
-It is the library-agnostic base; component repositories add thin overlays on top. The skill is
-advisory and never posts to GitHub/Jira without explicit human approval.
+Composable, ROCm-wide PR-quality agent skills live under [skills/](skills/). When authoring,
+reviewing, or pre-merge-gating a pull request, read and apply the base skill, plus the TheRock
+overlay when the change touches the build:
+
+- **Base — [skills/rocm-pr-quality/SKILL.md](skills/rocm-pr-quality/SKILL.md)** (and its
+  `reference.md`): the library-agnostic floor. Always read this first.
+- **TheRock overlay — [skills/therock-pr-quality/SKILL.md](skills/therock-pr-quality/SKILL.md)**:
+  add this for PRs touching the superbuild, submodules/patches, `artifact-*.toml` /
+  `BUILD_TOPOLOGY.toml`, or reusable CI workflows. It extends the base and defers to the canonical
+  `docs/development/style_guides/`.
+
+Component repositories add their own thin overlays on top (e.g. `hipblaslt-pr-quality` in
+`rocm-libraries`). Overlays may tighten but never weaken the base MUST rules. The skills are
+advisory and never post to GitHub/Jira without explicit human approval.
 
 ## Project Structure
 

@@ -88,7 +88,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Test-substance smell scan (a hit is a blocker, not a nit)
+## Test-substance smell scan (a hit is `BLOCKING`, not a nit)
 
 - assert-callable only / asserts only that a mock was called
 - `hasattr`-guarded test bodies that silently skip
@@ -101,24 +101,86 @@ ______________________________________________________________________
 Mutation question: *what single change to the source would make this test fail?* No clear answer
 → coverage padding.
 
+### Agent / AI-generated change anti-patterns (a hit warrants a closer read)
+
+These recur in AI-assisted PRs and frequently hide a thin or wrong change. Adapted from Scott
+Todd's review guidelines (see Attribution).
+
+- **Test sprawl** — many new test files / a large patch count for a small behavioral change; new
+  tests that restate the implementation rather than lock behavior. Prefer parametrizing one test
+  over generating ten near-duplicates.
+- **Change-narrative comments** — comments that describe the *diff* ("renamed X to Y", "now also
+  handles Z", "previously this did…") instead of the code's intent. The diff already records the
+  change; such comments rot immediately. Flag them.
+- **"Backward-compat" framing for internal-only code** — keeping a deprecated alias / old code
+  path "for compatibility" when the symbol is internal and has no external users. That is
+  incomplete cleanup, not compatibility → `BLOCKING`.
+- **Over-mocking** — mocking the very thing under test, or so much that the test passes against a
+  no-op. The test must exercise real behavior.
+- **Excessive patch count / churn** — large reformat or rename noise mixed into a functional
+  change, making the real change hard to find. Ask for a split.
+- **File-naming / placement drift** — new files that do not follow the repo's existing test naming
+  and directory conventions; tests placed where the suite will not pick them up.
+
 ______________________________________________________________________
 
-## Severity (individual findings)
+## PR-hygiene checklist (author & reviewer)
 
-| Severity       | Meaning                                                                                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Critical**   | Likely correctness failure, data corruption, leak/crash in normal use, ABI/API break, or an untested broad-blast-radius change to a default/shipping path. Blocks merge. |
-| **Major**      | Real behavioral risk, missing essential validation, meaningful test gap, missing required device/arch coverage, or a maintainability issue likely to cause defects.      |
-| **Minor**      | Localized quality issue, unclear docs, low-risk edge case, non-blocking cleanup.                                                                                         |
-| **Suggestion** | Optional improvement, refactor, or broader follow-up.                                                                                                                    |
+Quick, mostly mechanical checks that make a PR reviewable. Adapted from Scott Todd's review
+guidelines (see Attribution).
 
-## Verdict (PR overall)
+- **Title** — concise, follows the repo convention (and carries the tracker key if the repo
+  requires it for dev-panel auto-linking).
+- **Motivation answers "why"** — the description explains *why* the change is needed, not a
+  restatement of the title or a file-by-file list of *what* changed. A reviewer should understand
+  the problem before the diff.
+- **PR size** — scoped to one logical change. Large mechanical churn (reformat, rename, generated
+  code) is split from functional changes so the real change is reviewable. If it must be combined,
+  call it out and isolate it in its own commit.
+- **Revert vs roll-forward** — for a revert, link the PR being reverted (that is the "why"); for a
+  fix-forward, say why forward is safer than reverting.
+- **Reviewers / CODEOWNERS** — the right owners are requested; cross-component changes name each
+  affected area's owner.
+- **No leftover scaffolding** — no debug prints, commented-out code, TODOs without a tracker, or
+  generated/temporary files committed by accident.
 
-| Verdict    | When                                                                                                                                                |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STANDARD` | Policy met.                                                                                                                                         |
-| `WAIVER`   | A valid, documented, reviewer-accepted exception covers the gap.                                                                                    |
-| `BLOCKER`  | Missing tests/flags/waiver, bad/absent tracking, defect without a regression plan, an unresolved Critical finding, or a weak/again-rejected waiver. |
+## Self-evident changes (reduced-justification exemptions)
+
+Not every PR needs the full description, a tracker, or new tests. These classes are self-evident;
+do not manufacture process for them (but M3 still always applies — never weaken tests to green CI):
+
+- **Pure docs / comments / typo fixes** — link/metadata validation only; no tracker or tests
+  required.
+- **Mechanical, tool-driven changes** — auto-formatting, lint autofixes, generated-file
+  regeneration, dependency-pin bumps from a bot — where the tool and command are named.
+- **Reverts** — the linked reverted PR is the justification (add a regression test only if you are
+  reverting a fix).
+- **Trivial, obviously-correct edits** — a one-line constant/string fix, a version bump, fixing an
+  obvious typo in an identifier — where the diff is its own proof.
+
+For anything outside these classes, the normal MUST set (M1–M5) applies. When in doubt, treat the
+change as non-self-evident and ask for the missing justification.
+
+______________________________________________________________________
+
+## Finding tiers (individual findings)
+
+| Tier            | Meaning                                                                                                                                                                                                                                                                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **BLOCKING**    | Must fix before merge: correctness/logic error, security issue, leak/crash in normal use, ABI/API break, breaking change without a migration path, missing required tests for new functionality, an untested broad-blast-radius change to a default/shipping path, or incomplete cleanup of code this PR modifies (dead params/constants/helpers left behind). |
+| **IMPORTANT**   | Should fix: real behavioral risk, missing validation for a likely edge case, meaningful test gap, missing required device/arch coverage, or a maintainability issue likely to cause defects soon.                                                                                                                                                              |
+| **SUGGESTION**  | Nice to have on code already being touched: clarity, naming, a small refactor, an extra test case.                                                                                                                                                                                                                                                             |
+| **FUTURE WORK** | Out of scope for this PR: improvements to code not being modified, larger refactors, follow-up features. Track separately; do not block this PR.                                                                                                                                                                                                               |
+
+Decision framework: correctness/security issue, or incomplete cleanup of code being modified → **BLOCKING**; will cause problems for users/developers soon → **IMPORTANT**; an improvement to code being modified → **SUGGESTION**; otherwise → **FUTURE WORK**. Do not mark unrelated improvements BLOCKING, and do not soften incomplete cleanup to SUGGESTION/FUTURE WORK.
+
+## Overall assessment (PR-level)
+
+| Status              | When                                                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APPROVED`          | Policy met. May carry documented, reviewer-accepted waivers and optional recommendations. A valid waiver is recorded here, not treated as a block.                                    |
+| `CHANGES REQUESTED` | One or more `BLOCKING` items: missing tests/flags/waiver, bad/absent tracking, a defect without a regression plan, an unresolved `BLOCKING` finding, or a weak/again-rejected waiver. |
+| `REJECTED`          | Fundamental problem with the approach; needs rework or abandonment.                                                                                                                   |
 
 ______________________________________________________________________
 
@@ -229,3 +291,17 @@ When a defect is known but the fix is not ready, M1 may be met by a tracked two-
 
 The quarantine must be tracked, time-boxed, and removed by the fix — not left in place. Overlays
 define the concrete mechanism (e.g. a `known_bugs` data file).
+
+______________________________________________________________________
+
+## Attribution & deferral
+
+- The finding tiers / overall-assessment vocabulary, the agent-change anti-patterns, the
+  PR-hygiene checklist, and the self-evident-change exemptions draw on Scott Todd's ROCm code
+  review guidelines (`ScottTodd/rocm-workspace`). Credit to him; the goal is one shared vocabulary
+  across ROCm reviews.
+- This base skill **defers to canonical, in-repo style guides** (e.g. each repo's `CONTRIBUTING`,
+  `docs/.../style_guides/`, pre-commit/lint config) rather than duplicating them. Where a rule is
+  already mechanically enforced (pre-commit, CI lint) the skill assumes it and does not restate it;
+  where a canonical guide exists, the skill links and defers instead of copying. Overlays name the
+  specific guides for their repo.

@@ -1,7 +1,7 @@
 ---
 name: rocm-pr-quality
-description: Help an engineer author, review, or pre-merge-gate a pull request to a ROCm library so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing a PR, or deciding whether an approved PR is safe to merge right now, or when the user provides a GitHub PR URL or branch and asks for help with PR quality, description, testing, review, or merge-readiness. Library-agnostic base; component overlays extend it.
-argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local] [base:<branch>]'
+description: "Help an engineer author, review, or pre-merge-gate a pull request to a ROCm library so it is traceable, tested, and safe to merge. Use when preparing a PR, reviewing a PR, or deciding whether an approved PR is safe to merge right now, or when the user provides a GitHub PR URL or branch and asks for help with PR quality, description, testing, review, or merge-readiness. Library-agnostic base; component overlays extend it."
+argument-hint: "[author | review | pre-merge] [PR URL | branch:<name> | local] [base:<branch>]"
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 ---
 
@@ -85,8 +85,8 @@ reviewer adjudicates. M1 is waiver-able only via the tracked two-PR plan. M3 has
 ### Waivers (author-declared, reviewer-adjudicated)
 
 An exception is never a silent self-override. The author declares a waiver code + a one-to-
-two-sentence reason (and any required approver); the reviewer accepts (verdict WAIVER) or
-rejects a weak one (verdict BLOCKER). A bare "N/A" is not a waiver — "why" is mandatory even
+two-sentence reason (and any required approver); the reviewer accepts (`APPROVED`, with the waiver
+recorded) or rejects a weak one (`CHANGES REQUESTED`). A bare "N/A" is not a waiver — "why" is mandatory even
 when the rule is waived. Higher-risk waivers need a named approver. Waiver codes are in
 `reference.md`.
 
@@ -195,18 +195,33 @@ web diff alone has lower confidence). Do not modify files during review.
    (waiver?), (4) what adjacent tests should have been considered.
 1. Adjudicate any author-declared waiver: accept a well-justified one, reject a weak one.
 
-**Severity** for individual findings: Critical / Major / Minor / Suggestion (see `reference.md`).
+**Evidence-based review (CI validation).** Treat CI as data, not a binary. Look at *all* CI runs on
+the PR, not only the one linked in the description — a green rollup can hide a skipped lane, a flaky
+retry that masked a real failure, or a required check that never ran. Where a baseline exists (the
+target branch's latest run, or the PR's own earlier run), compare against it: new failures,
+newly-skipped tests, and large step-timing deltas (a job that suddenly runs much longer or shorter)
+are signals worth a finding. Calibrate severity against this data instead of asserting risk — "this
+lane was green on the base and now fails here" is `BLOCKING`; "the build step is 3× slower" is at
+least `IMPORTANT` to ask about. Ground each finding in the specific run/step link.
 
-**Verdict** for the PR overall: `STANDARD` (policy met), `WAIVER` (valid documented exception),
-or `BLOCKER` (missing tests/flags/waiver, bad tracking, defect without regression plan,
-unresolved Critical finding, etc.).
+**Finding tiers** (severity-ordered): `BLOCKING` / `IMPORTANT` / `SUGGESTION` / `FUTURE WORK`
+(see `reference.md`). Quick decision framework: correctness / security / incomplete cleanup of
+code being modified → `BLOCKING`; will bite users or developers soon → `IMPORTANT`; nice-to-have
+on code already being touched → `SUGGESTION`; genuinely out of scope for this PR → `FUTURE WORK`.
+
+**Overall assessment** for the PR: `APPROVED` (policy met — may still carry documented,
+reviewer-accepted waivers and optional recommendations), `CHANGES REQUESTED` (one or more
+`BLOCKING` items: missing tests/flags/waiver, bad/absent tracking, a defect without a regression
+plan, or an unresolved correctness/security finding), or `REJECTED` (fundamental problem with the
+approach that needs rework). A valid, documented waiver does not block: that is `APPROVED` with the
+waiver recorded.
 
 **Optional delegation:** for broad PRs, you may split the review by scope bucket via subagents
 and add cross-cutting testing/reuse passes; otherwise do a single-pass review.
 
-**Output:** verdict + the four answers + a severity-ordered findings list + a blocking-items
-list. Only on request, and only after the user approves the wording, produce a draft
-request-changes comment. Never post it yourself.
+**Output:** the overall assessment + the four answers + a severity-ordered findings list + a
+`BLOCKING`-items list. Only on request, and only after the user approves the wording, produce a
+draft request-changes comment. Never post it yourself.
 
 ______________________________________________________________________
 
@@ -229,7 +244,9 @@ merge queue, and it does not force a CI rerun by default.
 - **CI currency.** An approved green can be hours or days old. Report when this PR's CI last
   completed against a freshness policy (default SHOULD: flag beyond ~3 days). Whether a rebase +
   re-run is *required* vs *recommended* is a component SHOULD (overlays set it); the base does not
-  force a rerun.
+  force a rerun. Also confirm the green is *real*, not just a passing rollup summary (see
+  "Evidence-based review" under Action 2): every required lane actually ran and passed, with no
+  skipped/cancelled required check hiding under the green.
 - **Adjacent-file / stale-base check on develop.** Compare the PR's changed files against the
   files the base branch changed since the PR diverged. No overlap → do not tax velocity, merge is
   fine. Overlap on high-coupling files (shared generators, register/lifetime code, shared
@@ -259,3 +276,11 @@ ______________________________________________________________________
   heuristic, CI currency, adjacent-file overlap). It is advisory today and is the same logic a
   future CI status check could call. Semantic judgments (test substance, M3) stay with the agent
   and the human.
+
+## Attribution
+
+The finding/assessment vocabulary, the agent-change anti-patterns, the PR-hygiene checklist, and
+the self-evident-change exemptions draw on Scott Todd's ROCm code-review guidelines
+(`ScottTodd/rocm-workspace`), toward one shared review vocabulary across ROCm. This base defers to
+canonical, in-repo style guides and lint/pre-commit config rather than duplicating them; see
+`reference.md` ("Attribution & deferral").
