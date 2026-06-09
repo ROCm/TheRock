@@ -44,10 +44,6 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
-      python_version:
-        description: "Single Python version to build (empty for full matrix)"
-        type: string
-        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -85,10 +81,6 @@ on:
           - sccache
           - ccache
         default: sccache
-      python_version:
-        description: "Single Python version to build (empty for full matrix)"
-        type: string
-        default: ""
 
 run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -96,31 +88,13 @@ permissions:
   contents: read
 
 jobs:
-  setup_matrix:
-    runs-on: ubuntu-24.04
-    outputs:
-      pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
-
-      - name: Generate PyTorch matrix
-        id: matrix
-        run: |
-          python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
-            --python-versions="${{ inputs.python_version }}" \
-            --platform=windows
-
   build_pytorch_wheels:
-    needs: setup_matrix
-    name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    name: Release | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.setup_matrix.outputs.pytorch_matrix) }}
+        python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        pytorch_git_ref: ["release/2.9", "release/2.10", "release/2.11", "release/2.12", "nightly"]
     permissions:
       id-token: write
       contents: read

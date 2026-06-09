@@ -52,14 +52,14 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", "1")
 environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 
 if test_type == "quick":
     logging.info("Running quick tests only for amdsmitst")
     test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
 
 else:
-    logging.info("Running full amdsmitst test suite (include + exclude filter)")
+    logging.info("Running standard amdsmitst test suite (include + exclude filter)")
 
     include_tests = [
         "amdsmitstReadOnly.*",
