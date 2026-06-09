@@ -8,12 +8,13 @@ Dependency: amdrocm-blas
 
 **No manual alignments set yet**
 
-## amdrocm-blas-dev.msi, total files: 277
+## amdrocm-blas-dev.msi, total files: 281
 | `File` | `amdrocm-blas-dev.msi` |`amdrocm-blas-dev7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `bin/hipblas-bench.exe` |  |n/a |
 | `bin/hipblas-test.exe` |  |n/a |
 | `bin/hipblas.dll` |  |n/a |
+| `bin/hipblas/CTestTestfile.cmake` |  |n/a |
 | `bin/hipblas_clients_readme.txt` |  |n/a |
 | `bin/hipblas_common.yaml` |  |n/a |
 | `bin/hipblas_gentest.py` |  |n/a |
@@ -29,6 +30,9 @@ Dependency: amdrocm-blas
 | `bin/hipblaslt-bench.exe` |  |n/a |
 | `bin/hipblaslt-perf` |  |n/a |
 | `bin/hipblaslt-test.exe` |  |n/a |
+| `bin/hipblaslt/library/extop_gfx1201.co` |  |n/a |
+| `bin/hipblaslt/library/hipblasltExtOpLibrary_gfx1201.dat` |  |n/a |
+| `bin/hipblaslt/library/hipblasltTransform_gfx1201.hsaco` |  |n/a |
 | `bin/hipblaslt_common.yaml` |  |n/a |
 | `bin/hipblaslt_gentest.py` |  |n/a |
 | `bin/hipblaslt_gtest.data` |  |n/a |

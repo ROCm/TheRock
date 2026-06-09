@@ -8,12 +8,13 @@ Dependency: amdrocm-runtime
 
 **No manual alignments set yet**
 
-## amdrocm-blas.msi, total files: 161
+## amdrocm-blas.msi, total files: 165
 | `File` | `amdrocm-blas.msi` |`amdrocm-blas7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `bin/hipblas-bench.exe` |  |n/a |
 | `bin/hipblas-test.exe` |  |n/a |
 | `bin/hipblas.dll` | &#x2705; |&#x2705; lib/libhipblas.so&lt;br&gt;&#x2705; lib/libhipblas.so.3&lt;br&gt;&#x2705; lib/libhipblas.so.3.4 |
+| `bin/hipblas/CTestTestfile.cmake` |  |n/a |
 | `bin/hipblas_clients_readme.txt` | &#x2705; |&#x2705; bin/hipblas_clients_readme.txt |
 | `bin/hipblas_common.yaml` |  |n/a |
 | `bin/hipblas_gentest.py` |  |n/a |
@@ -29,6 +30,9 @@ Dependency: amdrocm-runtime
 | `bin/hipblaslt-bench.exe` |  |n/a |
 | `bin/hipblaslt-perf` |  |n/a |
 | `bin/hipblaslt-test.exe` |  |n/a |
+| `bin/hipblaslt/library/extop_gfx1201.co` |  |n/a |
+| `bin/hipblaslt/library/hipblasltExtOpLibrary_gfx1201.dat` |  |n/a |
+| `bin/hipblaslt/library/hipblasltTransform_gfx1201.hsaco` |  |n/a |
 | `bin/hipblaslt_common.yaml` |  |n/a |
 | `bin/hipblaslt_gentest.py` |  |n/a |
 | `bin/hipblaslt_gtest.data` |  |n/a |

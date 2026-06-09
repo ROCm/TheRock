@@ -4,7 +4,7 @@
 
 **No manual alignments set yet**
 
-## amdrocm-llvm.msi, total files: 4464
+## amdrocm-llvm.msi, total files: 4513
 | `File` | `amdrocm-llvm.msi` |`amdrocm-llvm7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `lib/llvm/amdgcn/bitcode/asanrtl.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/asanrtl.bc |
@@ -13,10 +13,6 @@
 | `lib/llvm/amdgcn/bitcode/oclc_abi_version_400.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_abi_version_400.bc |
 | `lib/llvm/amdgcn/bitcode/oclc_abi_version_500.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_abi_version_500.bc |
 | `lib/llvm/amdgcn/bitcode/oclc_abi_version_600.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_abi_version_600.bc |
-| `lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_off.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_off.bc |
-| `lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_on.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_on.bc |
-| `lib/llvm/amdgcn/bitcode/oclc_daz_opt_off.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_daz_opt_off.bc |
-| `lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc |
 | `lib/llvm/amdgcn/bitcode/oclc_finite_only_off.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_finite_only_off.bc |
 | `lib/llvm/amdgcn/bitcode/oclc_finite_only_on.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_finite_only_on.bc |
 | `lib/llvm/amdgcn/bitcode/oclc_isa_version_10-1-generic.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_isa_version_10-1-generic.bc |
@@ -78,8 +74,10 @@
 | `lib/llvm/amdgcn/bitcode/oclc_wavefrontsize64_on.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/oclc_wavefrontsize64_on.bc |
 | `lib/llvm/amdgcn/bitcode/ocml.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/ocml.bc |
 | `lib/llvm/amdgcn/bitcode/opencl.bc` | &#x2705; |&#x2705; lib/llvm/amdgcn/bitcode/opencl.bc |
+| `lib/llvm/bin/FileCheck.exe` |  |n/a |
+| `lib/llvm/bin/UnicodeNameMappingGenerator.exe` |  |n/a |
 | `lib/llvm/bin/amd-llvm-spirv.exe` | &#x2705; |&#x2705; lib/llvm/bin/amd-llvm-spirv |
-| `lib/llvm/bin/amdclang++.exe` | &#x2705; |n/a |
+| `lib/llvm/bin/amdclang++.exe` |  |n/a |
 | `lib/llvm/bin/amdclang-23.exe` | &#x2705; |&#x2705; lib/llvm/bin/amdclang-23 |
 | `lib/llvm/bin/amdclang-cl.exe` | &#x2705; |n/a |
 | `lib/llvm/bin/amdclang-cpp.exe` | &#x2705; |n/a |
@@ -88,7 +86,7 @@
 | `lib/llvm/bin/amdgpu-arch.exe` | &#x2705; |&#x2705; lib/llvm/bin/amdgpu-arch |
 | `lib/llvm/bin/amdlld.exe` | &#x2705; |n/a |
 | `lib/llvm/bin/amdllvm.exe` | &#x2705; |&#x2705; lib/llvm/bin/amdllvm |
-| `lib/llvm/bin/clang++.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang++ |
+| `lib/llvm/bin/clang++.exe` |  |&#x2705; lib/llvm/bin/clang++ |
 | `lib/llvm/bin/clang-apply-replacements.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-apply-replacements |
 | `lib/llvm/bin/clang-change-namespace.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-change-namespace |
 | `lib/llvm/bin/clang-cl.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-cl |
@@ -107,6 +105,7 @@
 | `lib/llvm/bin/clang-tblgen.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-tblgen |
 | `lib/llvm/bin/clang-tidy.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-tidy |
 | `lib/llvm/bin/clang.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang |
+| `lib/llvm/bin/count.exe` |  |n/a |
 | `lib/llvm/bin/find-all-symbols.exe` | &#x2705; |&#x2705; lib/llvm/bin/find-all-symbols |
 | `lib/llvm/bin/flang.exe` | &#x2705; |&#x2705; lib/llvm/bin/flang |
 | `lib/llvm/bin/hmaptool` | &#x2705; |n/a |
@@ -115,6 +114,7 @@
 | `lib/llvm/bin/libclang.dll` | &#x2705; |&#x2705; lib/llvm/lib/libclang.so&lt;br&gt;&#x2705; lib/llvm/lib/libclang.so.23.0.0git&lt;br&gt;&#x2705; lib/llvm/lib/libclang.so.23.0git |
 | `lib/llvm/bin/lld-link.exe` | &#x2705; |&#x2705; lib/llvm/bin/lld-link |
 | `lib/llvm/bin/lld.exe` | &#x2705; |&#x2705; lib/llvm/bin/lld |
+| `lib/llvm/bin/llvm-PerfectShuffle.exe` |  |n/a |
 | `lib/llvm/bin/llvm-addr2line.exe` | &#x2705; |&#x2705; lib/llvm/bin/llvm-addr2line |
 | `lib/llvm/bin/llvm-ar.exe` | &#x2705; |&#x2705; lib/llvm/bin/llvm-ar |
 | `lib/llvm/bin/llvm-as.exe` | &#x2705; |&#x2705; lib/llvm/bin/llvm-as |
@@ -138,13 +138,18 @@
 | `lib/llvm/bin/llvm-strip.exe` | &#x2705; |&#x2705; lib/llvm/bin/llvm-strip |
 | `lib/llvm/bin/llvm-symbolizer.exe` | &#x2705; |&#x2705; lib/llvm/bin/llvm-symbolizer |
 | `lib/llvm/bin/llvm-tblgen.exe` | &#x2705; |&#x2705; lib/llvm/bin/llvm-tblgen |
+| `lib/llvm/bin/llvm-test-mustache-spec.exe` |  |n/a |
 | `lib/llvm/bin/modularize.exe` | &#x2705; |&#x2705; lib/llvm/bin/modularize |
+| `lib/llvm/bin/not.exe` |  |n/a |
 | `lib/llvm/bin/nvptx-arch.exe` | &#x2705; |&#x2705; lib/llvm/bin/nvptx-arch |
 | `lib/llvm/bin/offload-arch.exe` | &#x2705; |n/a |
 | `lib/llvm/bin/opt.exe` | &#x2705; |&#x2705; lib/llvm/bin/opt |
 | `lib/llvm/bin/pp-trace.exe` | &#x2705; |&#x2705; lib/llvm/bin/pp-trace |
 | `lib/llvm/bin/run-clang-tidy` | &#x2705; |n/a |
+| `lib/llvm/bin/split-file.exe` |  |n/a |
 | `lib/llvm/bin/wasm-ld.exe` | &#x2705; |&#x2705; lib/llvm/bin/wasm-ld |
+| `lib/llvm/bin/yaml-bench.exe` |  |n/a |
+| `lib/llvm/bin/yaml2obj.exe` |  |n/a |
 | `lib/llvm/include/LLVMSPIRVLib/LLVMSPIRVExtensions.inc` |  |n/a |
 | `lib/llvm/include/LLVMSPIRVLib/LLVMSPIRVLib.h` |  |n/a |
 | `lib/llvm/include/LLVMSPIRVLib/LLVMSPIRVOpts.h` |  |n/a |
@@ -221,6 +226,7 @@
 | `lib/llvm/include/clang-tidy/bugprone/ArgumentCommentCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/bugprone/AssertSideEffectCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/bugprone/AssignmentInIfConditionCheck.h` |  |n/a |
+| `lib/llvm/include/clang-tidy/bugprone/AssignmentInSelectionStatementCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/bugprone/BadSignalToKillThreadCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/bugprone/BitwisePointerCastCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/bugprone/BoolPointerImplicitConversionCheck.h` |  |n/a |
@@ -390,6 +396,7 @@
 | `lib/llvm/include/clang-tidy/llvm/PreferIsaOrDynCastInConditionalsCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/llvm/PreferRegisterOverUnsignedCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/llvm/PreferStaticOverAnonymousNamespaceCheck.h` |  |n/a |
+| `lib/llvm/include/clang-tidy/llvm/RedundantCastingCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/llvm/TwineLocalCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/llvm/TypeSwitchCaseTypesCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/llvm/UseNewMLIROpBuilderCheck.h` |  |n/a |
@@ -494,7 +501,6 @@
 | `lib/llvm/include/clang-tidy/openmp/UseDefaultNoneCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/AvoidEndlCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/EnumSizeCheck.h` |  |n/a |
-| `lib/llvm/include/clang-tidy/performance/FasterStringFindCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/ForRangeCopyCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/ImplicitConversionInLoopCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/InefficientAlgorithmCheck.h` |  |n/a |
@@ -508,6 +514,7 @@
 | `lib/llvm/include/clang-tidy/performance/NoexceptFunctionBaseCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/NoexceptMoveConstructorCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/NoexceptSwapCheck.h` |  |n/a |
+| `lib/llvm/include/clang-tidy/performance/PreferSingleCharOverloadsCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/StringViewConversionsCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/TriviallyDestructibleCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/performance/TypePromotionInMathFnCheck.h` |  |n/a |
@@ -562,6 +569,7 @@
 | `lib/llvm/include/clang-tidy/readability/RedundantMemberInitCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/readability/RedundantParenthesesCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/readability/RedundantPreprocessorCheck.h` |  |n/a |
+| `lib/llvm/include/clang-tidy/readability/RedundantQualifiedAliasCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/readability/RedundantSmartptrGetCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/readability/RedundantStringCStrCheck.h` |  |n/a |
 | `lib/llvm/include/clang-tidy/readability/RedundantStringInitCheck.h` |  |n/a |
@@ -852,35 +860,11 @@
 | `lib/llvm/include/clang/Analysis/PathDiagnostic.h` |  |n/a |
 | `lib/llvm/include/clang/Analysis/ProgramPoint.h` |  |n/a |
 | `lib/llvm/include/clang/Analysis/RetainSummaryManager.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/ASTEntityMapping.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsage.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsageBuilder.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntityLinker.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntitySummaryEncoding.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummary.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummaryEncoding.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/TUSummaryEncoding.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/BuildNamespace.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityId.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityIdTable.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityLinkage.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityName.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/PrivateFieldNames.def` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/SummaryName.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Serialization/JSONFormat.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormat.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormatRegistry.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Support/ErrorBuilder.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/Support/FormatProviders.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/EntitySummary.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/ExtractorRegistry.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummary.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryBuilder.h` |  |n/a |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryExtractor.h` |  |n/a |
 | `lib/llvm/include/clang/Analysis/SelectorExtras.h` |  |n/a |
 | `lib/llvm/include/clang/Analysis/Support/BumpVector.h` |  |n/a |
 | `lib/llvm/include/clang/Analysis/Support/FixitUtil.h` |  |n/a |
 | `lib/llvm/include/clang/Basic/AArch64ACLETypes.def` |  |n/a |
+| `lib/llvm/include/clang/Basic/AArch64CodeGenUtils.h` |  |n/a |
 | `lib/llvm/include/clang/Basic/ABI.h` |  |n/a |
 | `lib/llvm/include/clang/Basic/ABIVersions.def` |  |n/a |
 | `lib/llvm/include/clang/Basic/AMDGPUTypes.def` |  |n/a |
@@ -904,7 +888,7 @@
 | `lib/llvm/include/clang/Basic/Builtins.def` |  |n/a |
 | `lib/llvm/include/clang/Basic/Builtins.h` |  |n/a |
 | `lib/llvm/include/clang/Basic/Builtins.inc` |  |n/a |
-| `lib/llvm/include/clang/Basic/BuiltinsAArch64.def` |  |n/a |
+| `lib/llvm/include/clang/Basic/BuiltinsAArch64.inc` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge.def` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge_cg.def` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsAMDGPU.inc` |  |n/a |
@@ -923,7 +907,7 @@
 | `lib/llvm/include/clang/Basic/BuiltinsSPIRVCL.inc` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsSPIRVCommon.inc` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsSPIRVVK.inc` |  |n/a |
-| `lib/llvm/include/clang/Basic/BuiltinsSystemZ.def` |  |n/a |
+| `lib/llvm/include/clang/Basic/BuiltinsSystemZ.inc` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsVE.def` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsVEVL.gen.def` |  |n/a |
 | `lib/llvm/include/clang/Basic/BuiltinsWebAssembly.def` |  |n/a |
@@ -1146,6 +1130,7 @@
 | `lib/llvm/include/clang/CIR/Dialect/IR/CIRTypesDetails.h` |  |n/a |
 | `lib/llvm/include/clang/CIR/Dialect/OpenACC/CIROpenACCTypeInterfaces.h` |  |n/a |
 | `lib/llvm/include/clang/CIR/Dialect/OpenACC/RegisterOpenACCExtensions.h` |  |n/a |
+| `lib/llvm/include/clang/CIR/Dialect/OpenMP/RegisterOpenMPExtensions.h` |  |n/a |
 | `lib/llvm/include/clang/CIR/Dialect/Passes.h` |  |n/a |
 | `lib/llvm/include/clang/CIR/FrontendAction/CIRGenAction.h` |  |n/a |
 | `lib/llvm/include/clang/CIR/Interfaces/ASTAttrInterfaces.h` |  |n/a |
@@ -1324,6 +1309,52 @@
 | `lib/llvm/include/clang/Rewrite/Frontend/FixItRewriter.h` |  |n/a |
 | `lib/llvm/include/clang/Rewrite/Frontend/FrontendActions.h` |  |n/a |
 | `lib/llvm/include/clang/Rewrite/Frontend/Rewriters.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/CallGraph/CallGraphSummary.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsage.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsageExtractor.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsageTest.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/ASTEntityMapping.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/EntityLinker.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/EntitySummaryEncoding.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/LUSummary.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/LUSummaryEncoding.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/TUSummaryEncoding.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/BuildNamespace.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityId.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityIdTable.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityLinkage.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityName.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/PrivateFieldNames.def` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/SummaryName.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/JSONFormat.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/SerializationFormat.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/SerializationFormatRegistry.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/LUSummaryConsumer.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryData.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataBuilder.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataBuilderRegistry.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataStore.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataTraits.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Support/ErrorBuilder.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Support/FormatProviders.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/EntitySummary.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/ExtractorRegistry.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummary.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummaryBuilder.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummaryExtractor.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisBase.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisDriver.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisName.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisRegistry.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisResult.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisTraits.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/DerivedAnalysis.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/SummaryAnalysis.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/WPASuite.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Frontend/TUSummaryExtractorFrontendAction.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/SSAFBuiltinForceLinker.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/SSAFForceLinker.h` |  |n/a |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Tool/Utils.h` |  |n/a |
 | `lib/llvm/include/clang/Sema/AnalysisBasedWarnings.h` |  |n/a |
 | `lib/llvm/include/clang/Sema/Attr.h` |  |n/a |
 | `lib/llvm/include/clang/Sema/AttrIsTypeDependent.inc` |  |n/a |
@@ -1554,6 +1585,7 @@
 | `lib/llvm/include/clang/UnifiedSymbolResolution/USRGeneration.h` |  |n/a |
 | `lib/llvm/include/lld/Common/Args.h` |  |n/a |
 | `lib/llvm/include/lld/Common/Arrays.h` |  |n/a |
+| `lib/llvm/include/lld/Common/BPSectionOrdererBase.h` |  |n/a |
 | `lib/llvm/include/lld/Common/BPSectionOrdererBase.inc` |  |n/a |
 | `lib/llvm/include/lld/Common/CommonLinkerContext.h` |  |n/a |
 | `lib/llvm/include/lld/Common/DWARF.h` |  |n/a |
@@ -1598,6 +1630,7 @@
 | `lib/llvm/include/llvm-c/Visibility.h` |  |n/a |
 | `lib/llvm/include/llvm-c/blake3.h` |  |n/a |
 | `lib/llvm/include/llvm-c/lto.h` |  |n/a |
+| `lib/llvm/include/llvm/ABI/FunctionInfo.h` |  |n/a |
 | `lib/llvm/include/llvm/ABI/Types.h` |  |n/a |
 | `lib/llvm/include/llvm/ADT/ADL.h` |  |n/a |
 | `lib/llvm/include/llvm/ADT/APFixedPoint.h` |  |n/a |
@@ -1662,6 +1695,7 @@
 | `lib/llvm/include/llvm/ADT/PriorityQueue.h` |  |n/a |
 | `lib/llvm/include/llvm/ADT/PriorityWorklist.h` |  |n/a |
 | `lib/llvm/include/llvm/ADT/RadixTree.h` |  |n/a |
+| `lib/llvm/include/llvm/ADT/Repeated.h` |  |n/a |
 | `lib/llvm/include/llvm/ADT/RewriteBuffer.h` |  |n/a |
 | `lib/llvm/include/llvm/ADT/RewriteRope.h` |  |n/a |
 | `lib/llvm/include/llvm/ADT/SCCIterator.h` |  |n/a |
@@ -1967,7 +2001,6 @@
 | `lib/llvm/include/llvm/CodeGen/AsmPrinterHandler.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/AssignmentTrackingAnalysis.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/AtomicExpand.h` |  |n/a |
-| `lib/llvm/include/llvm/CodeGen/AtomicExpandUtils.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/BasicBlockMatchingAndInference.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/BasicBlockSectionUtils.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/BasicBlockSectionsProfileReader.h` |  |n/a |
@@ -2001,7 +2034,6 @@
 | `lib/llvm/include/llvm/CodeGen/EdgeBundles.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/ExecutionDomainFix.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/ExpandIRInsts.h` |  |n/a |
-| `lib/llvm/include/llvm/CodeGen/ExpandMemCmp.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/ExpandPostRAPseudos.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/ExpandReductions.h` |  |n/a |
 | `lib/llvm/include/llvm/CodeGen/ExpandVectorPredication.h` |  |n/a |
@@ -2563,8 +2595,6 @@
 | `lib/llvm/include/llvm/DebugInfo/Symbolize/Symbolize.h` |  |n/a |
 | `lib/llvm/include/llvm/Debuginfod/BuildIDFetcher.h` |  |n/a |
 | `lib/llvm/include/llvm/Debuginfod/Debuginfod.h` |  |n/a |
-| `lib/llvm/include/llvm/Debuginfod/HTTPClient.h` |  |n/a |
-| `lib/llvm/include/llvm/Debuginfod/HTTPServer.h` |  |n/a |
 | `lib/llvm/include/llvm/Demangle/Demangle.h` |  |n/a |
 | `lib/llvm/include/llvm/Demangle/DemangleConfig.h` |  |n/a |
 | `lib/llvm/include/llvm/Demangle/ItaniumDemangle.h` |  |n/a |
@@ -2584,6 +2614,7 @@
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_aarch32.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_aarch64.h` |  |n/a |
+| `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_hexagon.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_loongarch.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_ppc64.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_riscv.h` |  |n/a |
@@ -2601,6 +2632,7 @@
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/XCOFF_ppc64.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/aarch32.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/aarch64.h` |  |n/a |
+| `lib/llvm/include/llvm/ExecutionEngine/JITLink/hexagon.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/loongarch.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ppc64.h` |  |n/a |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/riscv.h` |  |n/a |
@@ -2965,6 +2997,7 @@
 | `lib/llvm/include/llvm/MC/MCAsmInfoWasm.h` |  |n/a |
 | `lib/llvm/include/llvm/MC/MCAsmInfoXCOFF.h` |  |n/a |
 | `lib/llvm/include/llvm/MC/MCAsmMacro.h` |  |n/a |
+| `lib/llvm/include/llvm/MC/MCAsmStreamer.h` |  |n/a |
 | `lib/llvm/include/llvm/MC/MCAssembler.h` |  |n/a |
 | `lib/llvm/include/llvm/MC/MCCodeEmitter.h` |  |n/a |
 | `lib/llvm/include/llvm/MC/MCCodeView.h` |  |n/a |
@@ -3093,6 +3126,7 @@
 | `lib/llvm/include/llvm/ObjCopy/wasm/WasmObjcopy.h` |  |n/a |
 | `lib/llvm/include/llvm/Object/Archive.h` |  |n/a |
 | `lib/llvm/include/llvm/Object/ArchiveWriter.h` |  |n/a |
+| `lib/llvm/include/llvm/Object/BBAddrMap.h` |  |n/a |
 | `lib/llvm/include/llvm/Object/Binary.h` |  |n/a |
 | `lib/llvm/include/llvm/Object/BuildID.h` |  |n/a |
 | `lib/llvm/include/llvm/Object/COFF.h` |  |n/a |
@@ -3332,6 +3366,9 @@
 | `lib/llvm/include/llvm/Support/GenericLoopInfoImpl.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/GlobPattern.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/GraphWriter.h` |  |n/a |
+| `lib/llvm/include/llvm/Support/HTTP/HTTPClient.h` |  |n/a |
+| `lib/llvm/include/llvm/Support/HTTP/HTTPServer.h` |  |n/a |
+| `lib/llvm/include/llvm/Support/HTTP/StreamedHTTPResponseHandler.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/Hash.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/HashBuilder.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/HashingOutputBackend.h` |  |n/a |
@@ -3371,6 +3408,7 @@
 | `lib/llvm/include/llvm/Support/Mustache.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/Mutex.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/NVPTXAddrSpace.h` |  |n/a |
+| `lib/llvm/include/llvm/Support/NVVMAttributes.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/NativeFormatting.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/OnDiskHashTable.h` |  |n/a |
 | `lib/llvm/include/llvm/Support/OptimizedStructLayout.h` |  |n/a |
@@ -3500,6 +3538,7 @@
 | `lib/llvm/include/llvm/TargetParser/AArch64FeatPriorities.inc` |  |n/a |
 | `lib/llvm/include/llvm/TargetParser/AArch64TargetParser.h` |  |n/a |
 | `lib/llvm/include/llvm/TargetParser/AArch64TargetParserDef.inc` |  |n/a |
+| `lib/llvm/include/llvm/TargetParser/AMDGPUTargetParser.def` |  |n/a |
 | `lib/llvm/include/llvm/TargetParser/ARMTargetParser.def` |  |n/a |
 | `lib/llvm/include/llvm/TargetParser/ARMTargetParser.h` |  |n/a |
 | `lib/llvm/include/llvm/TargetParser/ARMTargetParserCommon.h` |  |n/a |
@@ -3655,6 +3694,7 @@
 | `lib/llvm/include/llvm/Transforms/Scalar/DivRemPairs.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Scalar/DropUnnecessaryAssumes.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Scalar/EarlyCSE.h` |  |n/a |
+| `lib/llvm/include/llvm/Transforms/Scalar/ExpandMemCmp.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Scalar/FlattenCFG.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Scalar/Float2Int.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Scalar/GVN.h` |  |n/a |
@@ -3825,6 +3865,7 @@
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Interval.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Legality.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/BottomUpVec.h` |  |n/a |
+| `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/LoadStoreVec.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/NullPass.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PackReuse.h` |  |n/a |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PrintInstructionCount.h` |  |n/a |
@@ -3957,6 +3998,7 @@
 | `lib/llvm/lib/LLVMScalarOpts.lib` |  |n/a |
 | `lib/llvm/lib/LLVMSelectionDAG.lib` |  |n/a |
 | `lib/llvm/lib/LLVMSupport.lib` |  |n/a |
+| `lib/llvm/lib/LLVMSupportHTTP.lib` |  |n/a |
 | `lib/llvm/lib/LLVMSupportLSP.lib` |  |n/a |
 | `lib/llvm/lib/LLVMSymbolize.lib` |  |n/a |
 | `lib/llvm/lib/LLVMTableGen.lib` |  |n/a |
@@ -3995,6 +4037,7 @@
 | `lib/llvm/lib/clang/23/include/__clang_hip_runtime_wrapper.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/__clang_hip_runtime_wrapper.h |
 | `lib/llvm/lib/clang/23/include/__clang_hip_stdlib.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/__clang_hip_stdlib.h |
 | `lib/llvm/lib/clang/23/include/__clang_spirv_builtins.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/__clang_spirv_builtins.h |
+| `lib/llvm/lib/clang/23/include/__clang_spirv_libdevice_declares.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/__float_float.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/__float_float.h |
 | `lib/llvm/lib/clang/23/include/__float_header_macro.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/__float_header_macro.h |
 | `lib/llvm/lib/clang/23/include/__float_infinity_nan.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/__float_infinity_nan.h |
@@ -4095,16 +4138,17 @@
 | `lib/llvm/lib/clang/23/include/cmpccxaddintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cmpccxaddintrin.h |
 | `lib/llvm/lib/clang/23/include/cpuid.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cpuid.h |
 | `lib/llvm/lib/clang/23/include/crc32intrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/crc32intrin.h |
-| `lib/llvm/lib/clang/23/include/cuda_wrappers/__utility/declval.h` |  |n/a |
-| `lib/llvm/lib/clang/23/include/cuda_wrappers/algorithm` |  |n/a |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/__utility/declval.h` | &#x2705; |n/a |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/algorithm` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.h |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.tcc` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.tcc |
-| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h` |  |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/shared_ptr_base.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/shared_ptr_base.h |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/cmath` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/cmath |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/complex` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/complex |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/new` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/new |
 | `lib/llvm/lib/clang/23/include/emmintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/emmintrin.h |
+| `lib/llvm/lib/clang/23/include/endian.h` | &#x2705; |&#x2705; lib/llvm/include/c++/v1/__bit/endian.h |
 | `lib/llvm/lib/clang/23/include/enqcmdintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/enqcmdintrin.h |
 | `lib/llvm/lib/clang/23/include/f16cintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/f16cintrin.h |
 | `lib/llvm/lib/clang/23/include/float.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/float.h |
@@ -4117,6 +4161,8 @@
 | `lib/llvm/lib/clang/23/include/hexagon_circ_brev_intrinsics.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/hexagon_circ_brev_intrinsics.h |
 | `lib/llvm/lib/clang/23/include/hexagon_protos.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/hexagon_protos.h |
 | `lib/llvm/lib/clang/23/include/hexagon_types.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/hexagon_types.h |
+| `lib/llvm/lib/clang/23/include/hlsl_alias_intrinsics_gen.inc` | &#x2705; |n/a |
+| `lib/llvm/lib/clang/23/include/hlsl_inline_intrinsics_gen.inc` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/hresetintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/hresetintrin.h |
 | `lib/llvm/lib/clang/23/include/htmintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/htmintrin.h |
 | `lib/llvm/lib/clang/23/include/htmxlintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/htmxlintrin.h |
@@ -4133,12 +4179,12 @@
 | `lib/llvm/lib/clang/23/include/lasxintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/lasxintrin.h |
 | `lib/llvm/lib/clang/23/include/limits.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/limits.h |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/assert.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/llvm_libc_wrappers/assert.h |
-| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/ctype.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/ctype.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/inttypes.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/llvm_libc_wrappers/inttypes.h |
-| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdio.h` |  |n/a |
-| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdlib.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdio.h` | &#x2705; |n/a |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdlib.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/string.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/llvm_libc_wrappers/string.h |
-| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/time.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/time.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload.h |
 | `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_device.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_device.h |
 | `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_host.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_host.h |
@@ -4148,7 +4194,7 @@
 | `lib/llvm/lib/clang/23/include/mm3dnow.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/mm3dnow.h |
 | `lib/llvm/lib/clang/23/include/mm_malloc.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/mm_malloc.h |
 | `lib/llvm/lib/clang/23/include/mmintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/mmintrin.h |
-| `lib/llvm/lib/clang/23/include/module.modulemap` |  |n/a |
+| `lib/llvm/lib/clang/23/include/module.modulemap` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/movdirintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/movdirintrin.h |
 | `lib/llvm/lib/clang/23/include/movrs_avx10_2_512intrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/movrs_avx10_2_512intrin.h |
 | `lib/llvm/lib/clang/23/include/movrs_avx10_2intrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/movrs_avx10_2intrin.h |
@@ -4163,10 +4209,10 @@
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/__clang_openmp_device_functions.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/openmp_wrappers/__clang_openmp_device_functions.h |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/cmath` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/openmp_wrappers/cmath |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/complex` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/openmp_wrappers/complex |
-| `lib/llvm/lib/clang/23/include/openmp_wrappers/complex.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/openmp_wrappers/complex.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/complex_cmath.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/openmp_wrappers/complex_cmath.h |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/hip_runtime.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/openmp_wrappers/hip_runtime.h |
-| `lib/llvm/lib/clang/23/include/openmp_wrappers/math.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/openmp_wrappers/math.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/new` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/openmp_wrappers/new |
 | `lib/llvm/lib/clang/23/include/orc/c_api.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/orc/c_api.h |
 | `lib/llvm/lib/clang/23/include/pconfigintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/pconfigintrin.h |
@@ -4232,16 +4278,16 @@
 | `lib/llvm/lib/clang/23/include/spirvintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/spirvintrin.h |
 | `lib/llvm/lib/clang/23/include/stdalign.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/stdalign.h |
 | `lib/llvm/lib/clang/23/include/stdarg.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/stdarg.h |
-| `lib/llvm/lib/clang/23/include/stdatomic.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/stdatomic.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/stdbool.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/stdbool.h |
 | `lib/llvm/lib/clang/23/include/stdckdint.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/stdckdint.h |
 | `lib/llvm/lib/clang/23/include/stdcountof.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/stdcountof.h |
-| `lib/llvm/lib/clang/23/include/stddef.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/stddef.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/stddefer.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/stddefer.h |
-| `lib/llvm/lib/clang/23/include/stdint.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/stdint.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/stdnoreturn.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/stdnoreturn.h |
 | `lib/llvm/lib/clang/23/include/tbmintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/tbmintrin.h |
-| `lib/llvm/lib/clang/23/include/tgmath.h` |  |n/a |
+| `lib/llvm/lib/clang/23/include/tgmath.h` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/tmmintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/tmmintrin.h |
 | `lib/llvm/lib/clang/23/include/tsxldtrkintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/tsxldtrkintrin.h |
 | `lib/llvm/lib/clang/23/include/uintrintrin.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/uintrintrin.h |
@@ -4297,7 +4343,6 @@
 | `lib/llvm/lib/clangAnalysisFlowSensitive.lib` |  |n/a |
 | `lib/llvm/lib/clangAnalysisFlowSensitiveModels.lib` |  |n/a |
 | `lib/llvm/lib/clangAnalysisLifetimeSafety.lib` |  |n/a |
-| `lib/llvm/lib/clangAnalysisScalable.lib` |  |n/a |
 | `lib/llvm/lib/clangApplyReplacements.lib` |  |n/a |
 | `lib/llvm/lib/clangBasic.lib` |  |n/a |
 | `lib/llvm/lib/clangChangeNamespace.lib` |  |n/a |
@@ -4329,6 +4374,10 @@
 | `lib/llvm/lib/clangReorderFields.lib` |  |n/a |
 | `lib/llvm/lib/clangRewrite.lib` |  |n/a |
 | `lib/llvm/lib/clangRewriteFrontend.lib` |  |n/a |
+| `lib/llvm/lib/clangScalableStaticAnalysisFrameworkAnalyses.lib` |  |n/a |
+| `lib/llvm/lib/clangScalableStaticAnalysisFrameworkCore.lib` |  |n/a |
+| `lib/llvm/lib/clangScalableStaticAnalysisFrameworkFrontend.lib` |  |n/a |
+| `lib/llvm/lib/clangScalableStaticAnalysisFrameworkTool.lib` |  |n/a |
 | `lib/llvm/lib/clangSema.lib` |  |n/a |
 | `lib/llvm/lib/clangSerialization.lib` |  |n/a |
 | `lib/llvm/lib/clangStaticAnalyzerCheckers.lib` |  |n/a |
@@ -4481,6 +4530,10 @@
 | `bin/hipcc` | n/a |&#x2705; bin/hipcc |
 | `bin/hipconfig` | n/a |&#x2705; bin/hipconfig |
 | `bin/offload-arch` | n/a |&#x2705; bin/offload-arch |
+| `lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_off.bc` | n/a |&#x2705; lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_off.bc |
+| `lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_on.bc` | n/a |&#x2705; lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_on.bc |
+| `lib/llvm/amdgcn/bitcode/oclc_daz_opt_off.bc` | n/a |&#x2705; lib/llvm/amdgcn/bitcode/oclc_daz_opt_off.bc |
+| `lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` | n/a |&#x2705; lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc |
 | `lib/llvm/bin/amdclang` | n/a |&#x2705; lib/llvm/bin/amdclang |
 | `lib/llvm/bin/amdclang++` | n/a |&#x2705; lib/llvm/bin/amdclang++ |
 | `lib/llvm/bin/amdclang-cl` | n/a |&#x2705; lib/llvm/bin/amdclang-cl |
@@ -4757,7 +4810,6 @@
 | `lib/llvm/include/c++/v1/__bit/byteswap.h` | n/a |&#x2705; lib/llvm/include/c++/v1/__bit/byteswap.h |
 | `lib/llvm/include/c++/v1/__bit/countl.h` | n/a |&#x2705; lib/llvm/include/c++/v1/__bit/countl.h |
 | `lib/llvm/include/c++/v1/__bit/countr.h` | n/a |&#x2705; lib/llvm/include/c++/v1/__bit/countr.h |
-| `lib/llvm/include/c++/v1/__bit/endian.h` | n/a |&#x2705; lib/llvm/include/c++/v1/__bit/endian.h |
 | `lib/llvm/include/c++/v1/__bit/has_single_bit.h` | n/a |&#x2705; lib/llvm/include/c++/v1/__bit/has_single_bit.h |
 | `lib/llvm/include/c++/v1/__bit/invert_if.h` | n/a |&#x2705; lib/llvm/include/c++/v1/__bit/invert_if.h |
 | `lib/llvm/include/c++/v1/__bit/popcount.h` | n/a |&#x2705; lib/llvm/include/c++/v1/__bit/popcount.h |
@@ -6350,4 +6402,6 @@
 
 | File |
 |:-----|
-| **No abandoned files found** |
+| `lib/llvm/bin/amdclang  .exe` |
+| `lib/llvm/bin/clang  .exe` |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c  config.h` |

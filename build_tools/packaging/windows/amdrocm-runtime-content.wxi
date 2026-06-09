@@ -2,7 +2,7 @@
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Directory Id="amdrocm_runtime_b" Name="bin">
       <Component Id="c_amdrocm_runtime_b_ac.dll" Guid="*">
-        <File Id="f_amdrocm_runtime_b_ac.dll" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/bin/amd_comgr0713.dll" KeyPath="yes" />
+        <File Id="f_amdrocm_runtime_b_ac.dll" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/bin/amd_comgr.dll" KeyPath="yes" />
       </Component>
       <Component Id="c_amdrocm_runtime_b_a7.dll" Guid="*">
         <File Id="f_amdrocm_runtime_b_a7.dll" Source="$(var.BuildRoot)/core/clr/dist/bin/amdhip64_7.dll" KeyPath="yes" />
@@ -11,9 +11,16 @@
         <File Id="f_amdrocm_runtime_b_rk.dll" Source="$(var.BuildRoot)/core/clr/dist/bin/rocm_kpack.dll" KeyPath="yes" />
       </Component>
     </Directory>
+    <Directory Id="amdrocm_runtime_i" Name="include">
+      <Directory Id="amdrocm_runtime_iac" Name="amd_comgr">
+        <Component Id="c_amdrocm_runtime_iac_ac.h" Guid="*">
+          <File Id="f_amdrocm_runtime_iac_ac.h" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/include/amd_comgr/amd_comgr.h" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </Directory>
     <Directory Id="amdrocm_runtime_s" Name="share">
-      <Directory Id="amdrocm_runtime_sd" Name="share\doc">
-        <Directory Id="amdrocm_runtime_sdac" Name="share\doc\amd_comgr">
+      <Directory Id="amdrocm_runtime_sd" Name="doc">
+        <Directory Id="amdrocm_runtime_sdac" Name="amd_comgr">
           <Component Id="c_amdrocm_runtime_sdac_L.txt" Guid="*">
             <File Id="f_amdrocm_runtime_sdac_L.txt" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/share/doc/amd_comgr/LICENSE.txt" KeyPath="yes" />
           </Component>

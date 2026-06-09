@@ -47,6 +47,8 @@
 | `include/hip/amd_detail/hip_fp16_gcc.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/hip_fp16_gcc.h` |
 | `include/hip/amd_detail/hip_fp16_math_fwd.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/hip_fp16_math_fwd.h` |
 | `include/hip/amd_detail/hip_ldg.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/hip_ldg.h` |
+| `include/hip/amd_detail/hip_prof_str.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/hip_prof_str.h` |
+| `include/hip/amd_detail/hip_profiler_ext.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/hip_profiler_ext.h` |
 | `include/hip/amd_detail/hip_runtime_prof.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/hip_runtime_prof.h` |
 | `include/hip/amd_detail/hip_storage.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/hip_storage.h` |
 | `include/hip/amd_detail/host_defines.h` | `%BUILD_ROOT%/core/clr/dist/include/hip/amd_detail/host_defines.h` |
@@ -106,6 +108,13 @@
 | `lib/cmake/hiprtc/hiprtc-config.cmake` | `%BUILD_ROOT%/core/clr/dist/lib/cmake/hiprtc/hiprtc-config.cmake` |
 | `lib/cmake/hiprtc/hiprtc-targets-release.cmake` | `%BUILD_ROOT%/core/clr/dist/lib/cmake/hiprtc/hiprtc-targets-release.cmake` |
 | `lib/cmake/hiprtc/hiprtc-targets.cmake` | `%BUILD_ROOT%/core/clr/dist/lib/cmake/hiprtc/hiprtc-targets.cmake` |
+| `lib/cmake/libhipcxx/libhipcxx-config-version.cmake` | `%BUILD_ROOT%/math-libs/libhipcxx/dist/lib/cmake/libhipcxx/libhipcxx-config-version.cmake` |
+| `lib/cmake/libhipcxx/libhipcxx-config.cmake` | `%BUILD_ROOT%/math-libs/libhipcxx/dist/lib/cmake/libhipcxx/libhipcxx-config.cmake` |
+| `lib/cmake/libhipcxx/libhipcxx-header-search.cmake` | `%BUILD_ROOT%/math-libs/libhipcxx/dist/lib/cmake/libhipcxx/libhipcxx-header-search.cmake` |
+| `lib/cmake/rocm-core/rocm-core-config-version.cmake` | `%BUILD_ROOT%/base/rocm-core/dist/lib/cmake/rocm-core/rocm-core-config-version.cmake` |
+| `lib/cmake/rocm-core/rocm-core-config.cmake` | `%BUILD_ROOT%/base/rocm-core/dist/lib/cmake/rocm-core/rocm-core-config.cmake` |
+| `lib/cmake/rocm-core/rocmCoreTargets-release.cmake` | `%BUILD_ROOT%/base/rocm-core/dist/lib/cmake/rocm-core/rocmCoreTargets-release.cmake` |
+| `lib/cmake/rocm-core/rocmCoreTargets.cmake` | `%BUILD_ROOT%/base/rocm-core/dist/lib/cmake/rocm-core/rocmCoreTargets.cmake` |
 | `lib/cmake/rocm-kpack/rocm-kpack-config-version.cmake` | `%BUILD_ROOT%/core/clr/dist/lib/cmake/rocm-kpack/rocm-kpack-config-version.cmake` |
 | `lib/cmake/rocm-kpack/rocm-kpack-config.cmake` | `%BUILD_ROOT%/core/clr/dist/lib/cmake/rocm-kpack/rocm-kpack-config.cmake` |
 | `lib/cmake/rocm-kpack/rocm-kpack-targets-release.cmake` | `%BUILD_ROOT%/core/clr/dist/lib/cmake/rocm-kpack/rocm-kpack-targets-release.cmake` |

@@ -8,11 +8,11 @@ Dependency: amdrocm-runtime
 
 **No manual alignments set yet**
 
-## amdrocm-runtime-dev.msi, total files: 1730
+## amdrocm-runtime-dev.msi, total files: 1731
 | `File` | `amdrocm-runtime-dev.msi` |`amdrocm-runtime-dev7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `bin/AMD.ROCM.Comgr.MANIFEST` |  |n/a |
-| `bin/amd_comgr0713.dll` |  |n/a |
+| `bin/amd_comgr.dll` |  |n/a |
 | `bin/amdhip64_7.dll` |  |n/a |
 | `bin/hipcc.bat` |  |n/a |
 | `bin/hipcc.exe` |  |n/a |
@@ -20,8 +20,8 @@ Dependency: amdrocm-runtime
 | `bin/hipconfig.bat` |  |n/a |
 | `bin/hipconfig.exe` |  |n/a |
 | `bin/hipdemangleatp` |  |n/a |
-| `bin/hiprtc-builtins07013.dll` |  |n/a |
-| `bin/hiprtc07013.dll` |  |n/a |
+| `bin/hiprtc-builtins0714.dll` |  |n/a |
+| `bin/hiprtc0714.dll` |  |n/a |
 | `bin/rocm_kpack.dll` |  |n/a |
 | `cmake/FindHIP.cmake` | &#x2705; |&#x2705; lib/cmake/hip/FindHIP.cmake |
 | `cmake/FindHIP/run_hipcc.cmake` | &#x2705; |&#x2705; lib/cmake/hip/FindHIP/run_hipcc.cmake |
@@ -858,7 +858,8 @@ Dependency: amdrocm-runtime
 | `include/hip/amd_detail/hip_fp16_gcc.h` | &#x2705; |&#x2705; include/hip/amd_detail/hip_fp16_gcc.h |
 | `include/hip/amd_detail/hip_fp16_math_fwd.h` | &#x2705; |&#x2705; include/hip/amd_detail/hip_fp16_math_fwd.h |
 | `include/hip/amd_detail/hip_ldg.h` | &#x2705; |&#x2705; include/hip/amd_detail/hip_ldg.h |
-| `include/hip/amd_detail/hip_prof_str.h` |  |n/a |
+| `include/hip/amd_detail/hip_prof_str.h` | &#x2705; |n/a |
+| `include/hip/amd_detail/hip_profiler_ext.h` | &#x2705; |n/a |
 | `include/hip/amd_detail/hip_runtime_prof.h` | &#x2705; |&#x2705; include/hip/amd_detail/hip_runtime_prof.h |
 | `include/hip/amd_detail/hip_storage.h` | &#x2705; |&#x2705; include/hip/amd_detail/hip_storage.h |
 | `include/hip/amd_detail/host_defines.h` | &#x2705; |&#x2705; include/hip/amd_detail/host_defines.h |
@@ -1698,7 +1699,7 @@ Dependency: amdrocm-runtime
 | `include/rocm_kpack/kpack_export.h` | &#x2705; |&#x2705; include/rocm_kpack/kpack_export.h |
 | `include/rocm_kpack/kpack_types.h` | &#x2705; |&#x2705; include/rocm_kpack/kpack_types.h |
 | `lib/.hipInfo` |  |n/a |
-| `lib/amd_comgr0713.lib` |  |n/a |
+| `lib/amd_comgr.lib` |  |n/a |
 | `lib/amdhip64.lib` |  |n/a |
 | `lib/cmake/amd_comgr/amd_comgr-config-version.cmake` |  |n/a |
 | `lib/cmake/amd_comgr/amd_comgr-config.cmake` |  |n/a |
@@ -1718,13 +1719,13 @@ Dependency: amdrocm-runtime
 | `lib/cmake/hiprtc/hiprtc-config.cmake` | &#x2705; |&#x2705; lib/cmake/hiprtc/hiprtc-config.cmake |
 | `lib/cmake/hiprtc/hiprtc-targets-release.cmake` | &#x2705; |&#x2705; lib/cmake/hiprtc/hiprtc-targets-release.cmake |
 | `lib/cmake/hiprtc/hiprtc-targets.cmake` | &#x2705; |&#x2705; lib/cmake/hiprtc/hiprtc-targets.cmake |
-| `lib/cmake/libhipcxx/libhipcxx-config-version.cmake` |  |n/a |
-| `lib/cmake/libhipcxx/libhipcxx-config.cmake` |  |n/a |
-| `lib/cmake/libhipcxx/libhipcxx-header-search.cmake` |  |n/a |
-| `lib/cmake/rocm-core/rocm-core-config-version.cmake` |  |n/a |
-| `lib/cmake/rocm-core/rocm-core-config.cmake` |  |n/a |
-| `lib/cmake/rocm-core/rocmCoreTargets-release.cmake` |  |n/a |
-| `lib/cmake/rocm-core/rocmCoreTargets.cmake` |  |n/a |
+| `lib/cmake/libhipcxx/libhipcxx-config-version.cmake` | &#x2705; |n/a |
+| `lib/cmake/libhipcxx/libhipcxx-config.cmake` | &#x2705; |n/a |
+| `lib/cmake/libhipcxx/libhipcxx-header-search.cmake` | &#x2705; |n/a |
+| `lib/cmake/rocm-core/rocm-core-config-version.cmake` | &#x2705; |n/a |
+| `lib/cmake/rocm-core/rocm-core-config.cmake` | &#x2705; |n/a |
+| `lib/cmake/rocm-core/rocmCoreTargets-release.cmake` | &#x2705; |n/a |
+| `lib/cmake/rocm-core/rocmCoreTargets.cmake` | &#x2705; |n/a |
 | `lib/cmake/rocm-kpack/rocm-kpack-config-version.cmake` | &#x2705; |&#x2705; lib/cmake/rocm-kpack/rocm-kpack-config-version.cmake |
 | `lib/cmake/rocm-kpack/rocm-kpack-config.cmake` | &#x2705; |&#x2705; lib/cmake/rocm-kpack/rocm-kpack-config.cmake |
 | `lib/cmake/rocm-kpack/rocm-kpack-targets-release.cmake` | &#x2705; |&#x2705; lib/cmake/rocm-kpack/rocm-kpack-targets-release.cmake |

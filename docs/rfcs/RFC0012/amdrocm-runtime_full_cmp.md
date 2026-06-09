@@ -6,11 +6,11 @@
 |:-------------|:---------------|
 | `amd_comgr0713.dll` | `lib/libamd_comgr.so`&lt;br&gt;`lib/libamd_comgr.so.3`&lt;br&gt;`lib/libamd_comgr.so.3.0.0`&lt;br&gt; |
 | `amdhip64_7.dll` | `lib/libamdhip64.so`&lt;br&gt;`lib/libamdhip64.so.7`&lt;br&gt;`lib/libamdhip64.so.7.13.26176-79e85e14`&lt;br&gt; |
-## amdrocm-runtime.msi, total files: 1730
+## amdrocm-runtime.msi, total files: 1731
 | `File` | `amdrocm-runtime.msi` |`amdrocm-runtime7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `bin/AMD.ROCM.Comgr.MANIFEST` |  |n/a |
-| `bin/amd_comgr0713.dll` | &#x2705; |&#x2705; lib/libamd_comgr.so&lt;br&gt;&#x2705; lib/libamd_comgr.so.3&lt;br&gt;&#x2705; lib/libamd_comgr.so.3.0.0 |
+| `bin/amd_comgr.dll` | &#x2705; |n/a |
 | `bin/amdhip64_7.dll` | &#x2705; |&#x2705; lib/libamdhip64.so&lt;br&gt;&#x2705; lib/libamdhip64.so.7&lt;br&gt;&#x2705; lib/libamdhip64.so.7.13.26176-79e85e14 |
 | `bin/hipcc.bat` |  |n/a |
 | `bin/hipcc.exe` |  |n/a |
@@ -18,14 +18,14 @@
 | `bin/hipconfig.bat` |  |n/a |
 | `bin/hipconfig.exe` |  |n/a |
 | `bin/hipdemangleatp` |  |n/a |
-| `bin/hiprtc-builtins07013.dll` |  |n/a |
-| `bin/hiprtc07013.dll` |  |n/a |
+| `bin/hiprtc-builtins0714.dll` |  |n/a |
+| `bin/hiprtc0714.dll` |  |n/a |
 | `bin/rocm_kpack.dll` | &#x2705; |&#x2705; lib/librocm_kpack.so&lt;br&gt;&#x2705; lib/librocm_kpack.so.0&lt;br&gt;&#x2705; lib/librocm_kpack.so.0.1.0 |
 | `cmake/FindHIP.cmake` |  |n/a |
 | `cmake/FindHIP/run_hipcc.cmake` |  |n/a |
 | `cmake/FindHIP/run_make2cmake.cmake` |  |n/a |
 | `include/amd/amd_utils.h` |  |n/a |
-| `include/amd_comgr/amd_comgr.h` |  |&#x2705; include/amd_comgr/amd_comgr.h |
+| `include/amd_comgr/amd_comgr.h` | &#x2705; |&#x2705; include/amd_comgr/amd_comgr.h |
 | `include/cuda/__atomic/atomic.h` |  |n/a |
 | `include/cuda/__barrier/aligned_size.h` |  |n/a |
 | `include/cuda/__barrier/async_contract_fulfillment.h` |  |n/a |
@@ -857,6 +857,7 @@
 | `include/hip/amd_detail/hip_fp16_math_fwd.h` |  |n/a |
 | `include/hip/amd_detail/hip_ldg.h` |  |n/a |
 | `include/hip/amd_detail/hip_prof_str.h` |  |n/a |
+| `include/hip/amd_detail/hip_profiler_ext.h` |  |n/a |
 | `include/hip/amd_detail/hip_runtime_prof.h` |  |n/a |
 | `include/hip/amd_detail/hip_storage.h` |  |n/a |
 | `include/hip/amd_detail/host_defines.h` |  |n/a |
@@ -1696,7 +1697,7 @@
 | `include/rocm_kpack/kpack_export.h` |  |n/a |
 | `include/rocm_kpack/kpack_types.h` |  |n/a |
 | `lib/.hipInfo` |  |&#x2705; lib/.hipInfo |
-| `lib/amd_comgr0713.lib` |  |n/a |
+| `lib/amd_comgr.lib` |  |n/a |
 | `lib/amdhip64.lib` |  |n/a |
 | `lib/cmake/amd_comgr/amd_comgr-config-version.cmake` |  |&#x2705; lib/cmake/amd_comgr/amd_comgr-config-version.cmake |
 | `lib/cmake/amd_comgr/amd_comgr-config.cmake` |  |&#x2705; lib/cmake/amd_comgr/amd_comgr-config.cmake |
@@ -1741,6 +1742,9 @@
 | `share/doc/rocm-core/LICENSE.md` |  |n/a |
 | `bin/hipcc_cmake_linker_helper` | n/a |&#x2705; bin/hipcc_cmake_linker_helper |
 | `bin/hipdemangleatp` | n/a |&#x2705; bin/hipdemangleatp |
+| `lib/libamd_comgr.so` | n/a |&#x2705; lib/libamd_comgr.so |
+| `lib/libamd_comgr.so.3` | n/a |&#x2705; lib/libamd_comgr.so.3 |
+| `lib/libamd_comgr.so.3.0.0` | n/a |&#x2705; lib/libamd_comgr.so.3.0.0 |
 | `lib/libhiprtc-builtins.so` | n/a |&#x2705; lib/libhiprtc-builtins.so |
 | `lib/libhiprtc-builtins.so.7` | n/a |&#x2705; lib/libhiprtc-builtins.so.7 |
 | `lib/libhiprtc-builtins.so.7.13.26176-79e85e14` | n/a |&#x2705; lib/libhiprtc-builtins.so.7.13.26176-79e85e14 |

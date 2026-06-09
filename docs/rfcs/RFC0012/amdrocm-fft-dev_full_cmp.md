@@ -27,7 +27,7 @@ Dependency: amdrocm-fft
 | `lib/cmake/hipfft/hipfft-targets.cmake` | &#x2705; |&#x2705; lib/cmake/hipfft/hipfft-targets.cmake |
 | `lib/hipfft.lib` | &#x2705; |n/a |
 | `lib/hipfftw.lib` | &#x2705; |n/a |
-| `share/doc/hipfft/LICENSE.md` |  |n/a |
+| `share/doc/hipfft/LICENSE.md` | &#x2705; |n/a |
 | `include/rocfft/rocfft-export.h` | n/a |&#x2705; include/rocfft/rocfft-export.h |
 | `include/rocfft/rocfft-version.h` | n/a |&#x2705; include/rocfft/rocfft-version.h |
 | `include/rocfft/rocfft.h` | n/a |&#x2705; include/rocfft/rocfft.h |

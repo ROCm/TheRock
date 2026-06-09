@@ -15,3 +15,4 @@
 | `lib/cmake/hipfft/hipfft-targets.cmake` | `%BUILD_ROOT%/math-libs/hipFFT/dist/lib/cmake/hipfft/hipfft-targets.cmake` |
 | `lib/hipfft.lib` | `%BUILD_ROOT%/math-libs/hipFFT/dist/lib/hipfft.lib` |
 | `lib/hipfftw.lib` | `%BUILD_ROOT%/math-libs/hipFFT/dist/lib/hipfftw.lib` |
+| `share/doc/hipfft/LICENSE.md` | `%BUILD_ROOT%/math-libs/hipFFT/dist/share/doc/hipfft/LICENSE.md` |

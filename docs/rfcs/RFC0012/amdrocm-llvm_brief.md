@@ -3,15 +3,11 @@
 | Destination | Source |
 |:------------|:-------|
 | `lib/llvm/amdgcn/bitcode/asanrtl.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/asanrtl.bc` |
-| `lib/llvm/amdgcn/bitcode/hip.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` |
+| `lib/llvm/amdgcn/bitcode/hip.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/hip.bc` |
 | `lib/llvm/amdgcn/bitcode/ockl.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/ockl.bc` |
 | `lib/llvm/amdgcn/bitcode/oclc_abi_version_400.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_abi_version_400.bc` |
 | `lib/llvm/amdgcn/bitcode/oclc_abi_version_500.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_abi_version_500.bc` |
 | `lib/llvm/amdgcn/bitcode/oclc_abi_version_600.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_abi_version_600.bc` |
-| `lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_off.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` |
-| `lib/llvm/amdgcn/bitcode/oclc_correctly_rounded_sqrt_on.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` |
-| `lib/llvm/amdgcn/bitcode/oclc_daz_opt_off.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` |
-| `lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_daz_opt_on.bc` |
 | `lib/llvm/amdgcn/bitcode/oclc_finite_only_off.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_finite_only_off.bc` |
 | `lib/llvm/amdgcn/bitcode/oclc_finite_only_on.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_finite_only_on.bc` |
 | `lib/llvm/amdgcn/bitcode/oclc_isa_version_10-1-generic.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1010.bc` |
@@ -74,7 +70,7 @@
 | `lib/llvm/amdgcn/bitcode/ocml.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/ocml.bc` |
 | `lib/llvm/amdgcn/bitcode/opencl.bc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/amdgcn/bitcode/opencl.bc` |
 | `lib/llvm/bin/amd-llvm-spirv.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/amd-llvm-spirv.exe` |
-| `lib/llvm/bin/amdclang++.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/amdllvm.exe` |
+| `lib/llvm/bin/amdclang  .exe` | `%BUILD_ROOT%/` |
 | `lib/llvm/bin/amdclang-23.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/amdllvm.exe` |
 | `lib/llvm/bin/amdclang-cl.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/amdllvm.exe` |
 | `lib/llvm/bin/amdclang-cpp.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/amdllvm.exe` |
@@ -83,7 +79,7 @@
 | `lib/llvm/bin/amdgpu-arch.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/offload-arch.exe` |
 | `lib/llvm/bin/amdlld.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/amdllvm.exe` |
 | `lib/llvm/bin/amdllvm.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/amdllvm.exe` |
-| `lib/llvm/bin/clang++.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/flang.exe` |
+| `lib/llvm/bin/clang  .exe` | `%BUILD_ROOT%/` |
 | `lib/llvm/bin/clang-apply-replacements.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/clang-apply-replacements.exe` |
 | `lib/llvm/bin/clang-change-namespace.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/clang-change-namespace.exe` |
 | `lib/llvm/bin/clang-cl.exe` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/bin/flang.exe` |
@@ -156,6 +152,7 @@
 | `lib/llvm/lib/clang/23/include/__clang_hip_runtime_wrapper.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/__clang_hip_runtime_wrapper.h` |
 | `lib/llvm/lib/clang/23/include/__clang_hip_stdlib.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/__clang_hip_stdlib.h` |
 | `lib/llvm/lib/clang/23/include/__clang_spirv_builtins.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/__clang_spirv_builtins.h` |
+| `lib/llvm/lib/clang/23/include/__clang_spirv_libdevice_declares.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/__clang_spirv_libdevice_declares.h` |
 | `lib/llvm/lib/clang/23/include/__float_float.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/__float_float.h` |
 | `lib/llvm/lib/clang/23/include/__float_header_macro.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/__float_header_macro.h` |
 | `lib/llvm/lib/clang/23/include/__float_infinity_nan.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/__float_infinity_nan.h` |
@@ -256,14 +253,17 @@
 | `lib/llvm/lib/clang/23/include/cmpccxaddintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cmpccxaddintrin.h` |
 | `lib/llvm/lib/clang/23/include/cpuid.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cpuid.h` |
 | `lib/llvm/lib/clang/23/include/crc32intrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/crc32intrin.h` |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/__utility/declval.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/__utility/declval.h` |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/algorithm` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/algorithm` |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.h` |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.tcc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.tcc` |
-| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h` |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c  config.h` | `%BUILD_ROOT%/` |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/shared_ptr_base.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/bits/shared_ptr_base.h` |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/cmath` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/cmath` |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/complex` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/complex` |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/new` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/new` |
 | `lib/llvm/lib/clang/23/include/emmintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/emmintrin.h` |
+| `lib/llvm/lib/clang/23/include/endian.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/endian.h` |
 | `lib/llvm/lib/clang/23/include/enqcmdintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/enqcmdintrin.h` |
 | `lib/llvm/lib/clang/23/include/f16cintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/f16cintrin.h` |
 | `lib/llvm/lib/clang/23/include/float.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/float.h` |
@@ -276,6 +276,8 @@
 | `lib/llvm/lib/clang/23/include/hexagon_circ_brev_intrinsics.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/hexagon_circ_brev_intrinsics.h` |
 | `lib/llvm/lib/clang/23/include/hexagon_protos.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/hexagon_protos.h` |
 | `lib/llvm/lib/clang/23/include/hexagon_types.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/hexagon_types.h` |
+| `lib/llvm/lib/clang/23/include/hlsl_alias_intrinsics_gen.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/hlsl_alias_intrinsics_gen.inc` |
+| `lib/llvm/lib/clang/23/include/hlsl_inline_intrinsics_gen.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/hlsl_inline_intrinsics_gen.inc` |
 | `lib/llvm/lib/clang/23/include/hresetintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/hresetintrin.h` |
 | `lib/llvm/lib/clang/23/include/htmintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/htmintrin.h` |
 | `lib/llvm/lib/clang/23/include/htmxlintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/htmxlintrin.h` |
@@ -292,8 +294,12 @@
 | `lib/llvm/lib/clang/23/include/lasxintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/lasxintrin.h` |
 | `lib/llvm/lib/clang/23/include/limits.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/limits.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/assert.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/assert.h` |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/ctype.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/ctype.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/inttypes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/inttypes.h` |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdio.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdio.h` |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdlib.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdlib.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/string.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/string.h` |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/time.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/time.h` |
 | `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload.h` |
 | `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_device.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_device.h` |
 | `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_host.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_host.h` |
@@ -303,6 +309,7 @@
 | `lib/llvm/lib/clang/23/include/mm3dnow.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/mm3dnow.h` |
 | `lib/llvm/lib/clang/23/include/mm_malloc.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/mm_malloc.h` |
 | `lib/llvm/lib/clang/23/include/mmintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/mmintrin.h` |
+| `lib/llvm/lib/clang/23/include/module.modulemap` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/module.modulemap` |
 | `lib/llvm/lib/clang/23/include/movdirintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/movdirintrin.h` |
 | `lib/llvm/lib/clang/23/include/movrs_avx10_2_512intrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/movrs_avx10_2_512intrin.h` |
 | `lib/llvm/lib/clang/23/include/movrs_avx10_2intrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/movrs_avx10_2intrin.h` |
@@ -317,8 +324,10 @@
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/__clang_openmp_device_functions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/__clang_openmp_device_functions.h` |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/cmath` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/cmath` |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/complex` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/complex` |
+| `lib/llvm/lib/clang/23/include/openmp_wrappers/complex.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/complex.h` |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/complex_cmath.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/complex_cmath.h` |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/hip_runtime.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/hip_runtime.h` |
+| `lib/llvm/lib/clang/23/include/openmp_wrappers/math.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/math.h` |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/new` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/new` |
 | `lib/llvm/lib/clang/23/include/orc/c_api.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/orc/c_api.h` |
 | `lib/llvm/lib/clang/23/include/pconfigintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/pconfigintrin.h` |
@@ -384,12 +393,16 @@
 | `lib/llvm/lib/clang/23/include/spirvintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/spirvintrin.h` |
 | `lib/llvm/lib/clang/23/include/stdalign.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdalign.h` |
 | `lib/llvm/lib/clang/23/include/stdarg.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdarg.h` |
+| `lib/llvm/lib/clang/23/include/stdatomic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdatomic.h` |
 | `lib/llvm/lib/clang/23/include/stdbool.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdbool.h` |
 | `lib/llvm/lib/clang/23/include/stdckdint.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdckdint.h` |
 | `lib/llvm/lib/clang/23/include/stdcountof.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdcountof.h` |
+| `lib/llvm/lib/clang/23/include/stddef.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stddef.h` |
 | `lib/llvm/lib/clang/23/include/stddefer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stddefer.h` |
+| `lib/llvm/lib/clang/23/include/stdint.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdint.h` |
 | `lib/llvm/lib/clang/23/include/stdnoreturn.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdnoreturn.h` |
 | `lib/llvm/lib/clang/23/include/tbmintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/tbmintrin.h` |
+| `lib/llvm/lib/clang/23/include/tgmath.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/tgmath.h` |
 | `lib/llvm/lib/clang/23/include/tmmintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/tmmintrin.h` |
 | `lib/llvm/lib/clang/23/include/tsxldtrkintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/tsxldtrkintrin.h` |
 | `lib/llvm/lib/clang/23/include/uintrintrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/uintrintrin.h` |

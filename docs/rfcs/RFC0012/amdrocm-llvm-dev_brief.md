@@ -15,7 +15,9 @@
 | `lib/llvm/include/clang-c/Documentation.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-c/Documentation.h` |
 | `lib/llvm/include/clang-c/ExternC.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-c/ExternC.h` |
 | `lib/llvm/include/clang-c/FatalErrorHandler.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-c/FatalErrorHandler.h` |
+| `lib/llvm/include/clang-c/Index.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-c/Index.h` |
 | `lib/llvm/include/clang-c/Platform.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-c/Platform.h` |
+| `lib/llvm/include/clang-c/Rewrite.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-c/Rewrite.h` |
 | `lib/llvm/include/clang-tidy/ClangTidy.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/ClangTidy.h` |
 | `lib/llvm/include/clang-tidy/ClangTidyCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/ClangTidyCheck.h` |
 | `lib/llvm/include/clang-tidy/ClangTidyDiagnosticConsumer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/ClangTidyDiagnosticConsumer.h` |
@@ -76,6 +78,7 @@
 | `lib/llvm/include/clang-tidy/bugprone/ArgumentCommentCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/bugprone/ArgumentCommentCheck.h` |
 | `lib/llvm/include/clang-tidy/bugprone/AssertSideEffectCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/bugprone/AssertSideEffectCheck.h` |
 | `lib/llvm/include/clang-tidy/bugprone/AssignmentInIfConditionCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/bugprone/AssignmentInIfConditionCheck.h` |
+| `lib/llvm/include/clang-tidy/bugprone/AssignmentInSelectionStatementCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/bugprone/AssignmentInSelectionStatementCheck.h` |
 | `lib/llvm/include/clang-tidy/bugprone/BadSignalToKillThreadCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/bugprone/BadSignalToKillThreadCheck.h` |
 | `lib/llvm/include/clang-tidy/bugprone/BitwisePointerCastCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/bugprone/BitwisePointerCastCheck.h` |
 | `lib/llvm/include/clang-tidy/bugprone/BoolPointerImplicitConversionCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/bugprone/BoolPointerImplicitConversionCheck.h` |
@@ -245,6 +248,7 @@
 | `lib/llvm/include/clang-tidy/llvm/PreferIsaOrDynCastInConditionalsCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/llvm/PreferIsaOrDynCastInConditionalsCheck.h` |
 | `lib/llvm/include/clang-tidy/llvm/PreferRegisterOverUnsignedCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/llvm/PreferRegisterOverUnsignedCheck.h` |
 | `lib/llvm/include/clang-tidy/llvm/PreferStaticOverAnonymousNamespaceCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/llvm/PreferStaticOverAnonymousNamespaceCheck.h` |
+| `lib/llvm/include/clang-tidy/llvm/RedundantCastingCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/llvm/RedundantCastingCheck.h` |
 | `lib/llvm/include/clang-tidy/llvm/TwineLocalCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/llvm/TwineLocalCheck.h` |
 | `lib/llvm/include/clang-tidy/llvm/TypeSwitchCaseTypesCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/llvm/TypeSwitchCaseTypesCheck.h` |
 | `lib/llvm/include/clang-tidy/llvm/UseNewMLIROpBuilderCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/llvm/UseNewMLIROpBuilderCheck.h` |
@@ -349,7 +353,6 @@
 | `lib/llvm/include/clang-tidy/openmp/UseDefaultNoneCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/openmp/UseDefaultNoneCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/AvoidEndlCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/AvoidEndlCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/EnumSizeCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/EnumSizeCheck.h` |
-| `lib/llvm/include/clang-tidy/performance/FasterStringFindCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/FasterStringFindCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/ForRangeCopyCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/ForRangeCopyCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/ImplicitConversionInLoopCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/ImplicitConversionInLoopCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/InefficientAlgorithmCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/InefficientAlgorithmCheck.h` |
@@ -363,6 +366,7 @@
 | `lib/llvm/include/clang-tidy/performance/NoexceptFunctionBaseCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/NoexceptFunctionBaseCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/NoexceptMoveConstructorCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/NoexceptMoveConstructorCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/NoexceptSwapCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/NoexceptSwapCheck.h` |
+| `lib/llvm/include/clang-tidy/performance/PreferSingleCharOverloadsCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/PreferSingleCharOverloadsCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/StringViewConversionsCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/StringViewConversionsCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/TriviallyDestructibleCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/TriviallyDestructibleCheck.h` |
 | `lib/llvm/include/clang-tidy/performance/TypePromotionInMathFnCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/performance/TypePromotionInMathFnCheck.h` |
@@ -417,6 +421,7 @@
 | `lib/llvm/include/clang-tidy/readability/RedundantMemberInitCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/readability/RedundantMemberInitCheck.h` |
 | `lib/llvm/include/clang-tidy/readability/RedundantParenthesesCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/readability/RedundantParenthesesCheck.h` |
 | `lib/llvm/include/clang-tidy/readability/RedundantPreprocessorCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/readability/RedundantPreprocessorCheck.h` |
+| `lib/llvm/include/clang-tidy/readability/RedundantQualifiedAliasCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/readability/RedundantQualifiedAliasCheck.h` |
 | `lib/llvm/include/clang-tidy/readability/RedundantSmartptrGetCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/readability/RedundantSmartptrGetCheck.h` |
 | `lib/llvm/include/clang-tidy/readability/RedundantStringCStrCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/readability/RedundantStringCStrCheck.h` |
 | `lib/llvm/include/clang-tidy/readability/RedundantStringInitCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/readability/RedundantStringInitCheck.h` |
@@ -450,6 +455,7 @@
 | `lib/llvm/include/clang-tidy/utils/IncludeInserter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/utils/IncludeInserter.h` |
 | `lib/llvm/include/clang-tidy/utils/IncludeSorter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/utils/IncludeSorter.h` |
 | `lib/llvm/include/clang-tidy/utils/LexerUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/utils/LexerUtils.h` |
+| `lib/llvm/include/clang-tidy/utils/Matchers.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/utils/Matchers.h` |
 | `lib/llvm/include/clang-tidy/utils/NamespaceAliaser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/utils/NamespaceAliaser.h` |
 | `lib/llvm/include/clang-tidy/utils/OptionsUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/utils/OptionsUtils.h` |
 | `lib/llvm/include/clang-tidy/utils/RenamerClangTidyCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang-tidy/utils/RenamerClangTidyCheck.h` |
@@ -620,8 +626,10 @@
 | `lib/llvm/include/clang/ASTMatchers/ASTMatchers.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/ASTMatchers.h` |
 | `lib/llvm/include/clang/ASTMatchers/ASTMatchersInternal.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/ASTMatchersInternal.h` |
 | `lib/llvm/include/clang/ASTMatchers/ASTMatchersMacros.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/ASTMatchersMacros.h` |
+| `lib/llvm/include/clang/ASTMatchers/Dynamic/Diagnostics.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/Dynamic/Diagnostics.h` |
 | `lib/llvm/include/clang/ASTMatchers/Dynamic/Parser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/Dynamic/Parser.h` |
 | `lib/llvm/include/clang/ASTMatchers/Dynamic/Registry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/Dynamic/Registry.h` |
+| `lib/llvm/include/clang/ASTMatchers/Dynamic/VariantValue.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/Dynamic/VariantValue.h` |
 | `lib/llvm/include/clang/ASTMatchers/LowLevelHelpers.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ASTMatchers/LowLevelHelpers.h` |
 | `lib/llvm/include/clang/Analysis/Analyses/CFGReachabilityAnalysis.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Analyses/CFGReachabilityAnalysis.h` |
 | `lib/llvm/include/clang/Analysis/Analyses/CalledOnceCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Analyses/CalledOnceCheck.h` |
@@ -704,34 +712,11 @@
 | `lib/llvm/include/clang/Analysis/PathDiagnostic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/PathDiagnostic.h` |
 | `lib/llvm/include/clang/Analysis/ProgramPoint.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/ProgramPoint.h` |
 | `lib/llvm/include/clang/Analysis/RetainSummaryManager.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/RetainSummaryManager.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/ASTEntityMapping.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/ASTEntityMapping.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsage.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsage.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsageBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Analyses/UnsafeBufferUsage/UnsafeBufferUsageBuilder.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntityLinker.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntityLinker.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntitySummaryEncoding.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/EntitySummaryEncoding.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummary.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummaryEncoding.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/LUSummaryEncoding.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/EntityLinker/TUSummaryEncoding.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/EntityLinker/TUSummaryEncoding.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/BuildNamespace.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/BuildNamespace.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityId.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityId.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityIdTable.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityIdTable.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityLinkage.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityLinkage.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/EntityName.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/EntityName.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/PrivateFieldNames.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/PrivateFieldNames.def` |
-| `lib/llvm/include/clang/Analysis/Scalable/Model/SummaryName.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Model/SummaryName.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Serialization/JSONFormat.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Serialization/JSONFormat.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormat.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormat.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormatRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Serialization/SerializationFormatRegistry.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/Support/FormatProviders.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/Support/FormatProviders.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/EntitySummary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/EntitySummary.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/ExtractorRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/ExtractorRegistry.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummary.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryBuilder.h` |
-| `lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryExtractor.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Scalable/TUSummary/TUSummaryExtractor.h` |
 | `lib/llvm/include/clang/Analysis/SelectorExtras.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/SelectorExtras.h` |
 | `lib/llvm/include/clang/Analysis/Support/BumpVector.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Support/BumpVector.h` |
 | `lib/llvm/include/clang/Analysis/Support/FixitUtil.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Analysis/Support/FixitUtil.h` |
 | `lib/llvm/include/clang/Basic/AArch64ACLETypes.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/AArch64ACLETypes.def` |
+| `lib/llvm/include/clang/Basic/AArch64CodeGenUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/AArch64CodeGenUtils.h` |
 | `lib/llvm/include/clang/Basic/ABI.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/ABI.h` |
 | `lib/llvm/include/clang/Basic/ABIVersions.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/ABIVersions.def` |
 | `lib/llvm/include/clang/Basic/AMDGPUTypes.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/AMDGPUTypes.def` |
@@ -755,7 +740,7 @@
 | `lib/llvm/include/clang/Basic/Builtins.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Builtins.def` |
 | `lib/llvm/include/clang/Basic/Builtins.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Builtins.h` |
 | `lib/llvm/include/clang/Basic/Builtins.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Builtins.inc` |
-| `lib/llvm/include/clang/Basic/BuiltinsAArch64.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64.def` |
+| `lib/llvm/include/clang/Basic/BuiltinsAArch64.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64.inc` |
 | `lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge.def` |
 | `lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge_cg.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge_cg.def` |
 | `lib/llvm/include/clang/Basic/BuiltinsAMDGPU.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsAMDGPU.inc` |
@@ -774,7 +759,7 @@
 | `lib/llvm/include/clang/Basic/BuiltinsSPIRVCL.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsSPIRVCL.inc` |
 | `lib/llvm/include/clang/Basic/BuiltinsSPIRVCommon.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsSPIRVCommon.inc` |
 | `lib/llvm/include/clang/Basic/BuiltinsSPIRVVK.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsSPIRVVK.inc` |
-| `lib/llvm/include/clang/Basic/BuiltinsSystemZ.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsSystemZ.def` |
+| `lib/llvm/include/clang/Basic/BuiltinsSystemZ.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsSystemZ.inc` |
 | `lib/llvm/include/clang/Basic/BuiltinsVE.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsVE.def` |
 | `lib/llvm/include/clang/Basic/BuiltinsVEVL.gen.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsVEVL.gen.def` |
 | `lib/llvm/include/clang/Basic/BuiltinsWebAssembly.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/BuiltinsWebAssembly.def` |
@@ -787,6 +772,7 @@
 | `lib/llvm/include/clang/Basic/CXX11AttributeInfo.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/CXX11AttributeInfo.inc` |
 | `lib/llvm/include/clang/Basic/CapturedStmt.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/CapturedStmt.h` |
 | `lib/llvm/include/clang/Basic/CharInfo.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/CharInfo.h` |
+| `lib/llvm/include/clang/Basic/CodeGenOptions.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/CodeGenOptions.def` |
 | `lib/llvm/include/clang/Basic/CodeGenOptions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/CodeGenOptions.h` |
 | `lib/llvm/include/clang/Basic/CommentOptions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/CommentOptions.h` |
 | `lib/llvm/include/clang/Basic/Cuda.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Cuda.h` |
@@ -888,6 +874,8 @@
 | `lib/llvm/include/clang/Basic/JsonSupport.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/JsonSupport.h` |
 | `lib/llvm/include/clang/Basic/LLVM.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/LLVM.h` |
 | `lib/llvm/include/clang/Basic/Lambda.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Lambda.h` |
+| `lib/llvm/include/clang/Basic/LangOptions.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/LangOptions.def` |
+| `lib/llvm/include/clang/Basic/LangOptions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/LangOptions.h` |
 | `lib/llvm/include/clang/Basic/LangStandard.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/LangStandard.h` |
 | `lib/llvm/include/clang/Basic/LangStandards.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/LangStandards.def` |
 | `lib/llvm/include/clang/Basic/Linkage.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Linkage.h` |
@@ -947,6 +935,7 @@
 | `lib/llvm/include/clang/Basic/TypeTraits.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/TypeTraits.h` |
 | `lib/llvm/include/clang/Basic/UnsignedOrNone.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/UnsignedOrNone.h` |
 | `lib/llvm/include/clang/Basic/Version.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Version.h` |
+| `lib/llvm/include/clang/Basic/Version.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Version.inc` |
 | `lib/llvm/include/clang/Basic/Visibility.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/Visibility.h` |
 | `lib/llvm/include/clang/Basic/WebAssemblyReferenceTypes.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/WebAssemblyReferenceTypes.def` |
 | `lib/llvm/include/clang/Basic/XRayInstr.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Basic/XRayInstr.h` |
@@ -992,6 +981,8 @@
 | `lib/llvm/include/clang/CIR/Dialect/IR/CIRTypes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/Dialect/IR/CIRTypes.h` |
 | `lib/llvm/include/clang/CIR/Dialect/IR/CIRTypesDetails.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/Dialect/IR/CIRTypesDetails.h` |
 | `lib/llvm/include/clang/CIR/Dialect/OpenACC/CIROpenACCTypeInterfaces.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/Dialect/OpenACC/CIROpenACCTypeInterfaces.h` |
+| `lib/llvm/include/clang/CIR/Dialect/OpenACC/RegisterOpenACCExtensions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/Dialect/OpenACC/RegisterOpenACCExtensions.h` |
+| `lib/llvm/include/clang/CIR/Dialect/OpenMP/RegisterOpenMPExtensions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/Dialect/OpenMP/RegisterOpenMPExtensions.h` |
 | `lib/llvm/include/clang/CIR/Dialect/Passes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/Dialect/Passes.h` |
 | `lib/llvm/include/clang/CIR/FrontendAction/CIRGenAction.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/FrontendAction/CIRGenAction.h` |
 | `lib/llvm/include/clang/CIR/Interfaces/ASTAttrInterfaces.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/CIR/Interfaces/ASTAttrInterfaces.h` |
@@ -1023,6 +1014,7 @@
 | `lib/llvm/include/clang/DependencyScanning/InProcessModuleCache.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/DependencyScanning/InProcessModuleCache.h` |
 | `lib/llvm/include/clang/DependencyScanning/ModuleDepCollector.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/DependencyScanning/ModuleDepCollector.h` |
 | `lib/llvm/include/clang/DirectoryWatcher/DirectoryWatcher.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/DirectoryWatcher/DirectoryWatcher.h` |
+| `lib/llvm/include/clang/Driver/Action.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Driver/Action.h` |
 | `lib/llvm/include/clang/Driver/CommonArgs.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Driver/CommonArgs.h` |
 | `lib/llvm/include/clang/Driver/Compilation.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Driver/Compilation.h` |
 | `lib/llvm/include/clang/Driver/CreateASTUnitFromArgs.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Driver/CreateASTUnitFromArgs.h` |
@@ -1067,10 +1059,15 @@
 | `lib/llvm/include/clang/Frontend/ASTUnit.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/ASTUnit.h` |
 | `lib/llvm/include/clang/Frontend/ChainedDiagnosticConsumer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/ChainedDiagnosticConsumer.h` |
 | `lib/llvm/include/clang/Frontend/CommandLineSourceLoc.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/CommandLineSourceLoc.h` |
+| `lib/llvm/include/clang/Frontend/CompilerInstance.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/CompilerInstance.h` |
+| `lib/llvm/include/clang/Frontend/CompilerInvocation.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/CompilerInvocation.h` |
 | `lib/llvm/include/clang/Frontend/DependencyOutputOptions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/DependencyOutputOptions.h` |
 | `lib/llvm/include/clang/Frontend/DiagnosticRenderer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/DiagnosticRenderer.h` |
+| `lib/llvm/include/clang/Frontend/FrontendAction.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/FrontendAction.h` |
 | `lib/llvm/include/clang/Frontend/FrontendActions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/FrontendActions.h` |
 | `lib/llvm/include/clang/Frontend/FrontendDiagnostic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/FrontendDiagnostic.h` |
+| `lib/llvm/include/clang/Frontend/FrontendOptions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/FrontendOptions.h` |
+| `lib/llvm/include/clang/Frontend/FrontendPluginRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/FrontendPluginRegistry.h` |
 | `lib/llvm/include/clang/Frontend/LayoutOverrideSource.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/LayoutOverrideSource.h` |
 | `lib/llvm/include/clang/Frontend/LogDiagnosticPrinter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/LogDiagnosticPrinter.h` |
 | `lib/llvm/include/clang/Frontend/MigratorOptions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/MigratorOptions.h` |
@@ -1084,6 +1081,9 @@
 | `lib/llvm/include/clang/Frontend/SerializedDiagnosticReader.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/SerializedDiagnosticReader.h` |
 | `lib/llvm/include/clang/Frontend/SerializedDiagnostics.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/SerializedDiagnostics.h` |
 | `lib/llvm/include/clang/Frontend/StandaloneDiagnostic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/StandaloneDiagnostic.h` |
+| `lib/llvm/include/clang/Frontend/TextDiagnostic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/TextDiagnostic.h` |
+| `lib/llvm/include/clang/Frontend/TextDiagnosticBuffer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/TextDiagnosticBuffer.h` |
+| `lib/llvm/include/clang/Frontend/TextDiagnosticPrinter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/TextDiagnosticPrinter.h` |
 | `lib/llvm/include/clang/Frontend/Utils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/Utils.h` |
 | `lib/llvm/include/clang/Frontend/VerifyDiagnosticConsumer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Frontend/VerifyDiagnosticConsumer.h` |
 | `lib/llvm/include/clang/FrontendTool/Utils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/FrontendTool/Utils.h` |
@@ -1138,6 +1138,7 @@
 | `lib/llvm/include/clang/Lex/PreprocessingRecord.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Lex/PreprocessingRecord.h` |
 | `lib/llvm/include/clang/Lex/Preprocessor.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Lex/Preprocessor.h` |
 | `lib/llvm/include/clang/Lex/PreprocessorLexer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Lex/PreprocessorLexer.h` |
+| `lib/llvm/include/clang/Lex/PreprocessorOptions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Lex/PreprocessorOptions.h` |
 | `lib/llvm/include/clang/Lex/ScratchBuffer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Lex/ScratchBuffer.h` |
 | `lib/llvm/include/clang/Lex/Token.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Lex/Token.h` |
 | `lib/llvm/include/clang/Lex/TokenConcatenation.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Lex/TokenConcatenation.h` |
@@ -1160,6 +1161,52 @@
 | `lib/llvm/include/clang/Rewrite/Frontend/FixItRewriter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Rewrite/Frontend/FixItRewriter.h` |
 | `lib/llvm/include/clang/Rewrite/Frontend/FrontendActions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Rewrite/Frontend/FrontendActions.h` |
 | `lib/llvm/include/clang/Rewrite/Frontend/Rewriters.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Rewrite/Frontend/Rewriters.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/CallGraph/CallGraphSummary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/CallGraph/CallGraphSummary.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsage.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsage.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsageExtractor.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsageExtractor.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsageTest.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/UnsafeBufferUsageTest.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/ASTEntityMapping.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/ASTEntityMapping.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/EntityLinker.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/EntityLinker.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/EntitySummaryEncoding.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/EntitySummaryEncoding.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/LUSummary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/LUSummary.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/LUSummaryEncoding.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/LUSummaryEncoding.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/TUSummaryEncoding.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/TUSummaryEncoding.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/BuildNamespace.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/BuildNamespace.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityId.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityId.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityIdTable.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityIdTable.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityLinkage.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityLinkage.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityName.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/EntityName.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/PrivateFieldNames.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/PrivateFieldNames.def` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/SummaryName.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/SummaryName.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/JSONFormat.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/JSONFormat.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/SerializationFormat.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/SerializationFormat.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/SerializationFormatRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/SerializationFormatRegistry.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/LUSummaryConsumer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/LUSummaryConsumer.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryData.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryData.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataBuilder.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataBuilderRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataBuilderRegistry.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataStore.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataStore.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataTraits.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/SummaryDataTraits.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Support/ErrorBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Support/ErrorBuilder.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Support/FormatProviders.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Support/FormatProviders.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/EntitySummary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/EntitySummary.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/ExtractorRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/ExtractorRegistry.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummary.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummaryBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummaryBuilder.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummaryExtractor.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/TUSummaryExtractor.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisBase.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisBase.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisDriver.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisDriver.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisName.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisName.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisRegistry.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisResult.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisResult.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisTraits.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/AnalysisTraits.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/DerivedAnalysis.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/DerivedAnalysis.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/SummaryAnalysis.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/SummaryAnalysis.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/WPASuite.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/WPASuite.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Frontend/TUSummaryExtractorFrontendAction.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Frontend/TUSummaryExtractorFrontendAction.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/SSAFBuiltinForceLinker.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/SSAFBuiltinForceLinker.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/SSAFForceLinker.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/SSAFForceLinker.h` |
+| `lib/llvm/include/clang/ScalableStaticAnalysisFramework/Tool/Utils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Tool/Utils.h` |
 | `lib/llvm/include/clang/Sema/AnalysisBasedWarnings.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Sema/AnalysisBasedWarnings.h` |
 | `lib/llvm/include/clang/Sema/Attr.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Sema/Attr.h` |
 | `lib/llvm/include/clang/Sema/AttrIsTypeDependent.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Sema/AttrIsTypeDependent.inc` |
@@ -1271,6 +1318,7 @@
 | `lib/llvm/include/clang/StaticAnalyzer/Core/PathDiagnosticConsumers.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathDiagnosticConsumers.h` |
 | `lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/APSIntPtr.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/APSIntPtr.h` |
 | `lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/APSIntType.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/APSIntType.h` |
+| `lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h` |
 | `lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/BasicValueFactory.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/BasicValueFactory.h` |
 | `lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/BlockCounter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/BlockCounter.h` |
 | `lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/CallDescription.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/CallDescription.h` |
@@ -1326,6 +1374,7 @@
 | `lib/llvm/include/clang/Tooling/AllTUsExecution.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/AllTUsExecution.h` |
 | `lib/llvm/include/clang/Tooling/ArgumentsAdjusters.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/ArgumentsAdjusters.h` |
 | `lib/llvm/include/clang/Tooling/CommonOptionsParser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/CommonOptionsParser.h` |
+| `lib/llvm/include/clang/Tooling/CompilationDatabase.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/CompilationDatabase.h` |
 | `lib/llvm/include/clang/Tooling/CompilationDatabasePluginRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/CompilationDatabasePluginRegistry.h` |
 | `lib/llvm/include/clang/Tooling/Core/Diagnostic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Core/Diagnostic.h` |
 | `lib/llvm/include/clang/Tooling/Core/Replacement.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Core/Replacement.h` |
@@ -1369,6 +1418,7 @@
 | `lib/llvm/include/clang/Tooling/Syntax/BuildTree.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Syntax/BuildTree.h` |
 | `lib/llvm/include/clang/Tooling/Syntax/Mutations.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Syntax/Mutations.h` |
 | `lib/llvm/include/clang/Tooling/Syntax/NodeClasses.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Syntax/NodeClasses.inc` |
+| `lib/llvm/include/clang/Tooling/Syntax/Nodes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Syntax/Nodes.h` |
 | `lib/llvm/include/clang/Tooling/Syntax/Nodes.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Syntax/Nodes.inc` |
 | `lib/llvm/include/clang/Tooling/Syntax/TokenBufferTokenManager.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Syntax/TokenBufferTokenManager.h` |
 | `lib/llvm/include/clang/Tooling/Syntax/TokenManager.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/Tooling/Syntax/TokenManager.h` |
@@ -1387,6 +1437,7 @@
 | `lib/llvm/include/clang/UnifiedSymbolResolution/USRGeneration.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/clang/UnifiedSymbolResolution/USRGeneration.h` |
 | `lib/llvm/include/lld/Common/Args.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/lld/Common/Args.h` |
 | `lib/llvm/include/lld/Common/Arrays.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/lld/Common/Arrays.h` |
+| `lib/llvm/include/lld/Common/BPSectionOrdererBase.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/lld/Common/BPSectionOrdererBase.h` |
 | `lib/llvm/include/lld/Common/BPSectionOrdererBase.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/lld/Common/BPSectionOrdererBase.inc` |
 | `lib/llvm/include/lld/Common/CommonLinkerContext.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/lld/Common/CommonLinkerContext.h` |
 | `lib/llvm/include/lld/Common/DWARF.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/lld/Common/DWARF.h` |
@@ -1422,6 +1473,7 @@
 | `lib/llvm/include/llvm-c/Object.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/Object.h` |
 | `lib/llvm/include/llvm-c/Orc.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/Orc.h` |
 | `lib/llvm/include/llvm-c/OrcEE.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/OrcEE.h` |
+| `lib/llvm/include/llvm-c/Remarks.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/Remarks.h` |
 | `lib/llvm/include/llvm-c/Support.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/Support.h` |
 | `lib/llvm/include/llvm-c/Target.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/Target.h` |
 | `lib/llvm/include/llvm-c/TargetMachine.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/TargetMachine.h` |
@@ -1430,6 +1482,7 @@
 | `lib/llvm/include/llvm-c/Visibility.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/Visibility.h` |
 | `lib/llvm/include/llvm-c/blake3.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/blake3.h` |
 | `lib/llvm/include/llvm-c/lto.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm-c/lto.h` |
+| `lib/llvm/include/llvm/ABI/FunctionInfo.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ABI/FunctionInfo.h` |
 | `lib/llvm/include/llvm/ABI/Types.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ABI/Types.h` |
 | `lib/llvm/include/llvm/ADT/ADL.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/ADL.h` |
 | `lib/llvm/include/llvm/ADT/APFixedPoint.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/APFixedPoint.h` |
@@ -1494,6 +1547,7 @@
 | `lib/llvm/include/llvm/ADT/PriorityQueue.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/PriorityQueue.h` |
 | `lib/llvm/include/llvm/ADT/PriorityWorklist.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/PriorityWorklist.h` |
 | `lib/llvm/include/llvm/ADT/RadixTree.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/RadixTree.h` |
+| `lib/llvm/include/llvm/ADT/Repeated.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/Repeated.h` |
 | `lib/llvm/include/llvm/ADT/RewriteBuffer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/RewriteBuffer.h` |
 | `lib/llvm/include/llvm/ADT/RewriteRope.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/RewriteRope.h` |
 | `lib/llvm/include/llvm/ADT/SCCIterator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/SCCIterator.h` |
@@ -1544,6 +1598,7 @@
 | `lib/llvm/include/llvm/ADT/iterator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/iterator.h` |
 | `lib/llvm/include/llvm/ADT/iterator_range.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/iterator_range.h` |
 | `lib/llvm/include/llvm/ADT/simple_ilist.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ADT/simple_ilist.h` |
+| `lib/llvm/include/llvm/Analysis/AliasAnalysis.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/AliasAnalysis.h` |
 | `lib/llvm/include/llvm/Analysis/AliasAnalysisEvaluator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/AliasAnalysisEvaluator.h` |
 | `lib/llvm/include/llvm/Analysis/AliasSetTracker.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/AliasSetTracker.h` |
 | `lib/llvm/include/llvm/Analysis/AssumeBundleQueries.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/AssumeBundleQueries.h` |
@@ -1693,6 +1748,7 @@
 | `lib/llvm/include/llvm/Analysis/ValueLatticeUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/ValueLatticeUtils.h` |
 | `lib/llvm/include/llvm/Analysis/ValueTracking.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/ValueTracking.h` |
 | `lib/llvm/include/llvm/Analysis/VecFuncs.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/VecFuncs.def` |
+| `lib/llvm/include/llvm/Analysis/VectorUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/VectorUtils.h` |
 | `lib/llvm/include/llvm/Analysis/WithCache.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Analysis/WithCache.h` |
 | `lib/llvm/include/llvm/AsmParser/AsmParserContext.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/AsmParser/AsmParserContext.h` |
 | `lib/llvm/include/llvm/AsmParser/FileLoc.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/AsmParser/FileLoc.h` |
@@ -1797,7 +1853,6 @@
 | `lib/llvm/include/llvm/CodeGen/AsmPrinterHandler.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/AsmPrinterHandler.h` |
 | `lib/llvm/include/llvm/CodeGen/AssignmentTrackingAnalysis.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/AssignmentTrackingAnalysis.h` |
 | `lib/llvm/include/llvm/CodeGen/AtomicExpand.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/AtomicExpand.h` |
-| `lib/llvm/include/llvm/CodeGen/AtomicExpandUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/AtomicExpandUtils.h` |
 | `lib/llvm/include/llvm/CodeGen/BasicBlockMatchingAndInference.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/BasicBlockMatchingAndInference.h` |
 | `lib/llvm/include/llvm/CodeGen/BasicBlockSectionUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/BasicBlockSectionUtils.h` |
 | `lib/llvm/include/llvm/CodeGen/BasicBlockSectionsProfileReader.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/BasicBlockSectionsProfileReader.h` |
@@ -1831,7 +1886,6 @@
 | `lib/llvm/include/llvm/CodeGen/EdgeBundles.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/EdgeBundles.h` |
 | `lib/llvm/include/llvm/CodeGen/ExecutionDomainFix.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExecutionDomainFix.h` |
 | `lib/llvm/include/llvm/CodeGen/ExpandIRInsts.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandIRInsts.h` |
-| `lib/llvm/include/llvm/CodeGen/ExpandMemCmp.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandMemCmp.h` |
 | `lib/llvm/include/llvm/CodeGen/ExpandPostRAPseudos.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandPostRAPseudos.h` |
 | `lib/llvm/include/llvm/CodeGen/ExpandReductions.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandReductions.h` |
 | `lib/llvm/include/llvm/CodeGen/ExpandVectorPredication.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/ExpandVectorPredication.h` |
@@ -1978,6 +2032,7 @@
 | `lib/llvm/include/llvm/CodeGen/OptimizePHIs.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/OptimizePHIs.h` |
 | `lib/llvm/include/llvm/CodeGen/PBQP/CostAllocator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/PBQP/CostAllocator.h` |
 | `lib/llvm/include/llvm/CodeGen/PBQP/Graph.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/PBQP/Graph.h` |
+| `lib/llvm/include/llvm/CodeGen/PBQP/Math.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/PBQP/Math.h` |
 | `lib/llvm/include/llvm/CodeGen/PBQP/ReductionRules.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/PBQP/ReductionRules.h` |
 | `lib/llvm/include/llvm/CodeGen/PBQP/Solution.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/PBQP/Solution.h` |
 | `lib/llvm/include/llvm/CodeGen/PBQPRAConstraint.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/CodeGen/PBQPRAConstraint.h` |
@@ -2392,8 +2447,6 @@
 | `lib/llvm/include/llvm/DebugInfo/Symbolize/Symbolize.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/DebugInfo/Symbolize/Symbolize.h` |
 | `lib/llvm/include/llvm/Debuginfod/BuildIDFetcher.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Debuginfod/BuildIDFetcher.h` |
 | `lib/llvm/include/llvm/Debuginfod/Debuginfod.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Debuginfod/Debuginfod.h` |
-| `lib/llvm/include/llvm/Debuginfod/HTTPClient.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Debuginfod/HTTPClient.h` |
-| `lib/llvm/include/llvm/Debuginfod/HTTPServer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Debuginfod/HTTPServer.h` |
 | `lib/llvm/include/llvm/Demangle/Demangle.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Demangle/Demangle.h` |
 | `lib/llvm/include/llvm/Demangle/DemangleConfig.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Demangle/DemangleConfig.h` |
 | `lib/llvm/include/llvm/Demangle/ItaniumDemangle.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Demangle/ItaniumDemangle.h` |
@@ -2413,6 +2466,7 @@
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_aarch32.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_aarch32.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_aarch64.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_aarch64.h` |
+| `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_hexagon.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_hexagon.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_loongarch.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_loongarch.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_ppc64.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_ppc64.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_riscv.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ELF_riscv.h` |
@@ -2430,6 +2484,7 @@
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/XCOFF_ppc64.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/XCOFF_ppc64.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/aarch32.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/aarch32.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/aarch64.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/aarch64.h` |
+| `lib/llvm/include/llvm/ExecutionEngine/JITLink/hexagon.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/hexagon.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/loongarch.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/loongarch.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/ppc64.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/ppc64.h` |
 | `lib/llvm/include/llvm/ExecutionEngine/JITLink/riscv.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/riscv.h` |
@@ -2614,6 +2669,7 @@
 | `lib/llvm/include/llvm/IR/CycleInfo.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/CycleInfo.h` |
 | `lib/llvm/include/llvm/IR/DIBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/DIBuilder.h` |
 | `lib/llvm/include/llvm/IR/DIExprOps.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/DIExprOps.def` |
+| `lib/llvm/include/llvm/IR/DataLayout.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/DataLayout.h` |
 | `lib/llvm/include/llvm/IR/DbgVariableFragmentInfo.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/DbgVariableFragmentInfo.h` |
 | `lib/llvm/include/llvm/IR/DebugInfo.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/DebugInfo.h` |
 | `lib/llvm/include/llvm/IR/DebugInfoFlags.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/DebugInfoFlags.def` |
@@ -2659,6 +2715,7 @@
 | `lib/llvm/include/llvm/IR/IntrinsicEnums.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/IntrinsicEnums.inc` |
 | `lib/llvm/include/llvm/IR/IntrinsicImpl.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/IntrinsicImpl.inc` |
 | `lib/llvm/include/llvm/IR/IntrinsicInst.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/IntrinsicInst.h` |
+| `lib/llvm/include/llvm/IR/Intrinsics.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/Intrinsics.h` |
 | `lib/llvm/include/llvm/IR/Intrinsics.td` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/Intrinsics.td` |
 | `lib/llvm/include/llvm/IR/IntrinsicsAArch64.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/IntrinsicsAArch64.h` |
 | `lib/llvm/include/llvm/IR/IntrinsicsAArch64.td` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/IntrinsicsAArch64.td` |
@@ -2708,6 +2765,7 @@
 | `lib/llvm/include/llvm/IR/LegacyPassManagers.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/LegacyPassManagers.h` |
 | `lib/llvm/include/llvm/IR/LegacyPassNameParser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/LegacyPassNameParser.h` |
 | `lib/llvm/include/llvm/IR/MDBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/MDBuilder.h` |
+| `lib/llvm/include/llvm/IR/Mangler.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/Mangler.h` |
 | `lib/llvm/include/llvm/IR/MatrixBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/MatrixBuilder.h` |
 | `lib/llvm/include/llvm/IR/MemoryModelRelaxationAnnotations.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/MemoryModelRelaxationAnnotations.h` |
 | `lib/llvm/include/llvm/IR/Metadata.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/Metadata.def` |
@@ -2721,10 +2779,12 @@
 | `lib/llvm/include/llvm/IR/OperandTraits.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/OperandTraits.h` |
 | `lib/llvm/include/llvm/IR/Operator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/Operator.h` |
 | `lib/llvm/include/llvm/IR/OptBisect.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/OptBisect.h` |
+| `lib/llvm/include/llvm/IR/PassInstrumentation.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PassInstrumentation.h` |
 | `lib/llvm/include/llvm/IR/PassManager.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PassManager.h` |
 | `lib/llvm/include/llvm/IR/PassManagerImpl.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PassManagerImpl.h` |
 | `lib/llvm/include/llvm/IR/PassManagerInternal.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PassManagerInternal.h` |
 | `lib/llvm/include/llvm/IR/PassTimingInfo.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PassTimingInfo.h` |
+| `lib/llvm/include/llvm/IR/PatternMatch.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PatternMatch.h` |
 | `lib/llvm/include/llvm/IR/PredIteratorCache.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PredIteratorCache.h` |
 | `lib/llvm/include/llvm/IR/PrintPasses.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/PrintPasses.h` |
 | `lib/llvm/include/llvm/IR/ProfDataUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/ProfDataUtils.h` |
@@ -2756,6 +2816,7 @@
 | `lib/llvm/include/llvm/IR/ValueMap.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/ValueMap.h` |
 | `lib/llvm/include/llvm/IR/ValueSymbolTable.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/ValueSymbolTable.h` |
 | `lib/llvm/include/llvm/IR/VectorTypeUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/VectorTypeUtils.h` |
+| `lib/llvm/include/llvm/IR/Verifier.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/Verifier.h` |
 | `lib/llvm/include/llvm/IR/pch.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IR/pch.h` |
 | `lib/llvm/include/llvm/IRPrinter/IRPrintingPasses.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IRPrinter/IRPrintingPasses.h` |
 | `lib/llvm/include/llvm/IRReader/IRReader.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/IRReader/IRReader.h` |
@@ -2788,6 +2849,7 @@
 | `lib/llvm/include/llvm/MC/MCAsmInfoWasm.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/MC/MCAsmInfoWasm.h` |
 | `lib/llvm/include/llvm/MC/MCAsmInfoXCOFF.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/MC/MCAsmInfoXCOFF.h` |
 | `lib/llvm/include/llvm/MC/MCAsmMacro.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/MC/MCAsmMacro.h` |
+| `lib/llvm/include/llvm/MC/MCAsmStreamer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/MC/MCAsmStreamer.h` |
 | `lib/llvm/include/llvm/MC/MCAssembler.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/MC/MCAssembler.h` |
 | `lib/llvm/include/llvm/MC/MCCodeEmitter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/MC/MCCodeEmitter.h` |
 | `lib/llvm/include/llvm/MC/MCCodeView.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/MC/MCCodeView.h` |
@@ -2916,6 +2978,7 @@
 | `lib/llvm/include/llvm/ObjCopy/wasm/WasmObjcopy.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ObjCopy/wasm/WasmObjcopy.h` |
 | `lib/llvm/include/llvm/Object/Archive.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Object/Archive.h` |
 | `lib/llvm/include/llvm/Object/ArchiveWriter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Object/ArchiveWriter.h` |
+| `lib/llvm/include/llvm/Object/BBAddrMap.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Object/BBAddrMap.h` |
 | `lib/llvm/include/llvm/Object/Binary.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Object/Binary.h` |
 | `lib/llvm/include/llvm/Object/BuildID.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Object/BuildID.h` |
 | `lib/llvm/include/llvm/Object/COFF.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Object/COFF.h` |
@@ -2980,6 +3043,7 @@
 | `lib/llvm/include/llvm/Pass.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Pass.h` |
 | `lib/llvm/include/llvm/PassAnalysisSupport.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/PassAnalysisSupport.h` |
 | `lib/llvm/include/llvm/PassInfo.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/PassInfo.h` |
+| `lib/llvm/include/llvm/PassRegistry.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/PassRegistry.h` |
 | `lib/llvm/include/llvm/PassSupport.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/PassSupport.h` |
 | `lib/llvm/include/llvm/Passes/CodeGenPassBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Passes/CodeGenPassBuilder.h` |
 | `lib/llvm/include/llvm/Passes/MachinePassRegistry.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Passes/MachinePassRegistry.def` |
@@ -2987,6 +3051,7 @@
 | `lib/llvm/include/llvm/Passes/PassBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Passes/PassBuilder.h` |
 | `lib/llvm/include/llvm/Passes/StandardInstrumentations.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Passes/StandardInstrumentations.h` |
 | `lib/llvm/include/llvm/Passes/TargetPassRegistry.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Passes/TargetPassRegistry.inc` |
+| `lib/llvm/include/llvm/Plugins/PassPlugin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Plugins/PassPlugin.h` |
 | `lib/llvm/include/llvm/ProfileData/Coverage/CoverageMapping.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ProfileData/Coverage/CoverageMapping.h` |
 | `lib/llvm/include/llvm/ProfileData/Coverage/CoverageMappingReader.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ProfileData/Coverage/CoverageMappingReader.h` |
 | `lib/llvm/include/llvm/ProfileData/Coverage/CoverageMappingWriter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/ProfileData/Coverage/CoverageMappingWriter.h` |
@@ -3027,6 +3092,7 @@
 | `lib/llvm/include/llvm/Remarks/RemarkLinker.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Remarks/RemarkLinker.h` |
 | `lib/llvm/include/llvm/Remarks/RemarkParser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Remarks/RemarkParser.h` |
 | `lib/llvm/include/llvm/Remarks/RemarkSerializer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Remarks/RemarkSerializer.h` |
+| `lib/llvm/include/llvm/Remarks/RemarkStreamer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Remarks/RemarkStreamer.h` |
 | `lib/llvm/include/llvm/Remarks/RemarkStringTable.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Remarks/RemarkStringTable.h` |
 | `lib/llvm/include/llvm/Remarks/YAMLRemarkSerializer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Remarks/YAMLRemarkSerializer.h` |
 | `lib/llvm/include/llvm/SandboxIR/Argument.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/Argument.h` |
@@ -3040,6 +3106,7 @@
 | `lib/llvm/include/llvm/SandboxIR/Operator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/Operator.h` |
 | `lib/llvm/include/llvm/SandboxIR/Pass.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/Pass.h` |
 | `lib/llvm/include/llvm/SandboxIR/PassManager.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/PassManager.h` |
+| `lib/llvm/include/llvm/SandboxIR/Region.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/Region.h` |
 | `lib/llvm/include/llvm/SandboxIR/Tracker.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/Tracker.h` |
 | `lib/llvm/include/llvm/SandboxIR/Type.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/Type.h` |
 | `lib/llvm/include/llvm/SandboxIR/Use.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/SandboxIR/Use.h` |
@@ -3096,6 +3163,7 @@
 | `lib/llvm/include/llvm/Support/Casting.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Casting.h` |
 | `lib/llvm/include/llvm/Support/CheckedArithmetic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/CheckedArithmetic.h` |
 | `lib/llvm/include/llvm/Support/Chrono.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Chrono.h` |
+| `lib/llvm/include/llvm/Support/CodeGen.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/CodeGen.h` |
 | `lib/llvm/include/llvm/Support/CodeGenCoverage.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/CodeGenCoverage.h` |
 | `lib/llvm/include/llvm/Support/CommandLine.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/CommandLine.h` |
 | `lib/llvm/include/llvm/Support/Compiler.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Compiler.h` |
@@ -3135,6 +3203,7 @@
 | `lib/llvm/include/llvm/Support/FileOutputBuffer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/FileOutputBuffer.h` |
 | `lib/llvm/include/llvm/Support/FileSystem.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/FileSystem.h` |
 | `lib/llvm/include/llvm/Support/FileSystem/UniqueID.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/FileSystem/UniqueID.h` |
+| `lib/llvm/include/llvm/Support/FileUtilities.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/FileUtilities.h` |
 | `lib/llvm/include/llvm/Support/Format.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Format.h` |
 | `lib/llvm/include/llvm/Support/FormatAdapters.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/FormatAdapters.h` |
 | `lib/llvm/include/llvm/Support/FormatCommon.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/FormatCommon.h` |
@@ -3149,6 +3218,9 @@
 | `lib/llvm/include/llvm/Support/GenericLoopInfoImpl.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/GenericLoopInfoImpl.h` |
 | `lib/llvm/include/llvm/Support/GlobPattern.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/GlobPattern.h` |
 | `lib/llvm/include/llvm/Support/GraphWriter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/GraphWriter.h` |
+| `lib/llvm/include/llvm/Support/HTTP/HTTPClient.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/HTTP/HTTPClient.h` |
+| `lib/llvm/include/llvm/Support/HTTP/HTTPServer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/HTTP/HTTPServer.h` |
+| `lib/llvm/include/llvm/Support/HTTP/StreamedHTTPResponseHandler.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/HTTP/StreamedHTTPResponseHandler.h` |
 | `lib/llvm/include/llvm/Support/Hash.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Hash.h` |
 | `lib/llvm/include/llvm/Support/HashBuilder.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/HashBuilder.h` |
 | `lib/llvm/include/llvm/Support/HashingOutputBackend.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/HashingOutputBackend.h` |
@@ -3172,6 +3244,7 @@
 | `lib/llvm/include/llvm/Support/LineIterator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/LineIterator.h` |
 | `lib/llvm/include/llvm/Support/Locale.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Locale.h` |
 | `lib/llvm/include/llvm/Support/LockFileManager.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/LockFileManager.h` |
+| `lib/llvm/include/llvm/Support/LogicalResult.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/LogicalResult.h` |
 | `lib/llvm/include/llvm/Support/MD5.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/MD5.h` |
 | `lib/llvm/include/llvm/Support/MSP430AttributeParser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/MSP430AttributeParser.h` |
 | `lib/llvm/include/llvm/Support/MSP430Attributes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/MSP430Attributes.h` |
@@ -3187,6 +3260,7 @@
 | `lib/llvm/include/llvm/Support/Mustache.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Mustache.h` |
 | `lib/llvm/include/llvm/Support/Mutex.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Mutex.h` |
 | `lib/llvm/include/llvm/Support/NVPTXAddrSpace.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/NVPTXAddrSpace.h` |
+| `lib/llvm/include/llvm/Support/NVVMAttributes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/NVVMAttributes.h` |
 | `lib/llvm/include/llvm/Support/NativeFormatting.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/NativeFormatting.h` |
 | `lib/llvm/include/llvm/Support/OnDiskHashTable.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/OnDiskHashTable.h` |
 | `lib/llvm/include/llvm/Support/OptimizedStructLayout.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/OptimizedStructLayout.h` |
@@ -3238,6 +3312,7 @@
 | `lib/llvm/include/llvm/Support/TextEncoding.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/TextEncoding.h` |
 | `lib/llvm/include/llvm/Support/ThreadPool.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/ThreadPool.h` |
 | `lib/llvm/include/llvm/Support/ThreadSafeAllocator.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/ThreadSafeAllocator.h` |
+| `lib/llvm/include/llvm/Support/Threading.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Threading.h` |
 | `lib/llvm/include/llvm/Support/TimeProfiler.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/TimeProfiler.h` |
 | `lib/llvm/include/llvm/Support/Timer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/Timer.h` |
 | `lib/llvm/include/llvm/Support/ToolOutputFile.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/ToolOutputFile.h` |
@@ -3267,6 +3342,7 @@
 | `lib/llvm/include/llvm/Support/YAMLParser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/YAMLParser.h` |
 | `lib/llvm/include/llvm/Support/YAMLTraits.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/YAMLTraits.h` |
 | `lib/llvm/include/llvm/Support/circular_raw_ostream.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/circular_raw_ostream.h` |
+| `lib/llvm/include/llvm/Support/float128.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/float128.h` |
 | `lib/llvm/include/llvm/Support/pch.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/pch.h` |
 | `lib/llvm/include/llvm/Support/raw_os_ostream.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/raw_os_ostream.h` |
 | `lib/llvm/include/llvm/Support/raw_ostream.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/raw_ostream.h` |
@@ -3278,8 +3354,10 @@
 | `lib/llvm/include/llvm/Support/xxhash.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Support/xxhash.h` |
 | `lib/llvm/include/llvm/TableGen/AArch64ImmCheck.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/AArch64ImmCheck.h` |
 | `lib/llvm/include/llvm/TableGen/Automaton.td` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/Automaton.td` |
+| `lib/llvm/include/llvm/TableGen/CodeGenHelpers.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/CodeGenHelpers.h` |
 | `lib/llvm/include/llvm/TableGen/DirectiveEmitter.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/DirectiveEmitter.h` |
 | `lib/llvm/include/llvm/TableGen/Error.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/Error.h` |
+| `lib/llvm/include/llvm/TableGen/Main.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/Main.h` |
 | `lib/llvm/include/llvm/TableGen/Parser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/Parser.h` |
 | `lib/llvm/include/llvm/TableGen/Record.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/Record.h` |
 | `lib/llvm/include/llvm/TableGen/SearchableTable.td` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TableGen/SearchableTable.td` |
@@ -3312,6 +3390,7 @@
 | `lib/llvm/include/llvm/TargetParser/AArch64FeatPriorities.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TargetParser/AArch64FeatPriorities.inc` |
 | `lib/llvm/include/llvm/TargetParser/AArch64TargetParser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TargetParser/AArch64TargetParser.h` |
 | `lib/llvm/include/llvm/TargetParser/AArch64TargetParserDef.inc` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TargetParser/AArch64TargetParserDef.inc` |
+| `lib/llvm/include/llvm/TargetParser/AMDGPUTargetParser.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TargetParser/AMDGPUTargetParser.def` |
 | `lib/llvm/include/llvm/TargetParser/ARMTargetParser.def` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TargetParser/ARMTargetParser.def` |
 | `lib/llvm/include/llvm/TargetParser/ARMTargetParser.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TargetParser/ARMTargetParser.h` |
 | `lib/llvm/include/llvm/TargetParser/ARMTargetParserCommon.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/TargetParser/ARMTargetParserCommon.h` |
@@ -3402,6 +3481,7 @@
 | `lib/llvm/include/llvm/Transforms/IPO/HotColdSplitting.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/IPO/HotColdSplitting.h` |
 | `lib/llvm/include/llvm/Transforms/IPO/IROutliner.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/IPO/IROutliner.h` |
 | `lib/llvm/include/llvm/Transforms/IPO/InferFunctionAttrs.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/IPO/InferFunctionAttrs.h` |
+| `lib/llvm/include/llvm/Transforms/IPO/Inliner.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/IPO/Inliner.h` |
 | `lib/llvm/include/llvm/Transforms/IPO/Internalize.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/IPO/Internalize.h` |
 | `lib/llvm/include/llvm/Transforms/IPO/LoopExtractor.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/IPO/LoopExtractor.h` |
 | `lib/llvm/include/llvm/Transforms/IPO/LowerTypeTests.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/IPO/LowerTypeTests.h` |
@@ -3466,6 +3546,7 @@
 | `lib/llvm/include/llvm/Transforms/Scalar/DivRemPairs.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/DivRemPairs.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/DropUnnecessaryAssumes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/DropUnnecessaryAssumes.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/EarlyCSE.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/EarlyCSE.h` |
+| `lib/llvm/include/llvm/Transforms/Scalar/ExpandMemCmp.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/ExpandMemCmp.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/FlattenCFG.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/FlattenCFG.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/Float2Int.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/Float2Int.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/GVN.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/GVN.h` |
@@ -3519,6 +3600,7 @@
 | `lib/llvm/include/llvm/Transforms/Scalar/Reg2Mem.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/Reg2Mem.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/RewriteStatepointsForGC.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/RewriteStatepointsForGC.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/SCCP.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/SCCP.h` |
+| `lib/llvm/include/llvm/Transforms/Scalar/SROA.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/SROA.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/ScalarizeMaskedMemIntrin.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/ScalarizeMaskedMemIntrin.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/Scalarizer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/Scalarizer.h` |
 | `lib/llvm/include/llvm/Transforms/Scalar/SeparateConstOffsetFromGEP.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Scalar/SeparateConstOffsetFromGEP.h` |
@@ -3579,6 +3661,7 @@
 | `lib/llvm/include/llvm/Transforms/Utils/LoopPeel.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LoopPeel.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/LoopRotationUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LoopRotationUtils.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/LoopSimplify.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LoopSimplify.h` |
+| `lib/llvm/include/llvm/Transforms/Utils/LoopUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LoopUtils.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/LoopVersioning.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LoopVersioning.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/LowerAtomic.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LowerAtomic.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/LowerGlobalDtors.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LowerGlobalDtors.h` |
@@ -3588,6 +3671,7 @@
 | `lib/llvm/include/llvm/Transforms/Utils/LowerSwitch.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LowerSwitch.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/LowerVectorIntrinsics.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/LowerVectorIntrinsics.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/MatrixUtils.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/MatrixUtils.h` |
+| `lib/llvm/include/llvm/Transforms/Utils/Mem2Reg.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/Mem2Reg.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/MemoryOpRemark.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/MemoryOpRemark.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/MemoryTaggingSupport.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/MemoryTaggingSupport.h` |
 | `lib/llvm/include/llvm/Transforms/Utils/MetaRenamer.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Utils/MetaRenamer.h` |
@@ -3633,6 +3717,7 @@
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Interval.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Interval.h` |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Legality.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Legality.h` |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/BottomUpVec.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/BottomUpVec.h` |
+| `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/LoadStoreVec.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/LoadStoreVec.h` |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/NullPass.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/NullPass.h` |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PackReuse.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PackReuse.h` |
 | `lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PrintInstructionCount.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/PrintInstructionCount.h` |
@@ -3677,9 +3762,14 @@
 | `lib/llvm/lib/clang/23/include/limits.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/limits.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/assert.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/assert.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/ctype.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/ctype.h` |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/inttypes.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/inttypes.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdio.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdio.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdlib.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/stdlib.h` |
+| `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/string.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/string.h` |
 | `lib/llvm/lib/clang/23/include/llvm_libc_wrappers/time.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/time.h` |
+| `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload.h` |
+| `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_device.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_device.h` |
+| `lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_host.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/__llvm_offload_host.h` |
 | `lib/llvm/lib/clang/23/include/openmp_wrappers/math.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/math.h` |
 | `lib/llvm/lib/clang/23/include/stdint.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/stdint.h` |
 | `lib/llvm/lib/clang/23/include/unwind.h` | `%BUILD_ROOT%/compiler/amd-comgr/dist/lib/llvm/lib/clang/23/include/unwind.h` |

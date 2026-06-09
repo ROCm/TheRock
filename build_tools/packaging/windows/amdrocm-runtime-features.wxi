@@ -3,6 +3,7 @@
     <ComponentRef Id="c_amdrocm_runtime_b_ac.dll" />
     <ComponentRef Id="c_amdrocm_runtime_b_a7.dll" />
     <ComponentRef Id="c_amdrocm_runtime_b_rk.dll" />
+    <ComponentRef Id="c_amdrocm_runtime_iac_ac.h" />
     <ComponentRef Id="c_amdrocm_runtime_sdac_L.txt" />
     <ComponentRef Id="c_amdrocm_runtime_sdac_R.md" />
 </Include>

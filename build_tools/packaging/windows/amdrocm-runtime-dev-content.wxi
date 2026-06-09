@@ -4,7 +4,7 @@
       <Component Id="c_amdrocm_runtime_dev_c_F.cmake" Guid="*">
         <File Id="f_amdrocm_runtime_dev_c_F.cmake" Source="$(var.BuildRoot)/core/clr/dist/cmake/FindHIP.cmake" KeyPath="yes" />
       </Component>
-      <Directory Id="amdrocm_runtime_dev_cF" Name="cmake\FindHIP">
+      <Directory Id="amdrocm_runtime_dev_cF" Name="FindHIP">
         <Component Id="c_amdrocm_runtime_dev_cF_rh.cmake" Guid="*">
           <File Id="f_amdrocm_runtime_dev_cF_rh.cmake" Source="$(var.BuildRoot)/core/clr/dist/cmake/FindHIP/run_hipcc.cmake" KeyPath="yes" />
         </Component>
@@ -14,7 +14,7 @@
       </Directory>
     </Directory>
     <Directory Id="amdrocm_runtime_dev_i" Name="include">
-      <Directory Id="amdrocm_runtime_dev_ih" Name="include\hip">
+      <Directory Id="amdrocm_runtime_dev_ih" Name="hip">
         <Component Id="c_amdrocm_runtime_dev_ih_cd.h" Guid="*">
           <File Id="f_amdrocm_runtime_dev_ih_cd.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/channel_descriptor.h" KeyPath="yes" />
         </Component>
@@ -105,7 +105,7 @@
         <Component Id="c_amdrocm_runtime_dev_ih_tt.h" Guid="*">
           <File Id="f_amdrocm_runtime_dev_ih_tt.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/texture_types.h" KeyPath="yes" />
         </Component>
-        <Directory Id="amdrocm_runtime_dev_ihad" Name="include\hip\amd_detail">
+        <Directory Id="amdrocm_runtime_dev_ihad" Name="amd_detail">
           <Component Id="c_amdrocm_runtime_dev_ihad_acd.h" Guid="*">
             <File Id="f_amdrocm_runtime_dev_ihad_acd.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/amd_detail/amd_channel_descriptor.h" KeyPath="yes" />
           </Component>
@@ -232,6 +232,12 @@
           <Component Id="c_amdrocm_runtime_dev_ihad_hl.h" Guid="*">
             <File Id="f_amdrocm_runtime_dev_ihad_hl.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/amd_detail/hip_ldg.h" KeyPath="yes" />
           </Component>
+          <Component Id="c_amdrocm_runtime_dev_ihad_hps.h" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_ihad_hps.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/amd_detail/hip_prof_str.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_runtime_dev_ihad_hpe.h" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_ihad_hpe.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/amd_detail/hip_profiler_ext.h" KeyPath="yes" />
+          </Component>
           <Component Id="c_amdrocm_runtime_dev_ihad_hrp.h" Guid="*">
             <File Id="f_amdrocm_runtime_dev_ihad_hrp.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/amd_detail/hip_runtime_prof.h" KeyPath="yes" />
           </Component>
@@ -263,7 +269,7 @@
             <File Id="f_amdrocm_runtime_dev_ihad_tif.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/amd_detail/texture_indirect_functions.h" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_runtime_dev_ihcg" Name="include\hip\cooperative_groups">
+        <Directory Id="amdrocm_runtime_dev_ihcg" Name="cooperative_groups">
           <Component Id="c_amdrocm_runtime_dev_ihcg_hr.h" Guid="*">
             <File Id="f_amdrocm_runtime_dev_ihcg_hr.h" Source="$(var.BuildRoot)/core/clr/dist/include/hip/cooperative_groups/hip_reduce.h" KeyPath="yes" />
           </Component>
@@ -272,7 +278,7 @@
           </Component>
         </Directory>
       </Directory>
-      <Directory Id="amdrocm_runtime_dev_irk" Name="include\rocm_kpack">
+      <Directory Id="amdrocm_runtime_dev_irk" Name="rocm_kpack">
         <Component Id="c_amdrocm_runtime_dev_irk_k.h" Guid="*">
           <File Id="f_amdrocm_runtime_dev_irk_k.h" Source="$(var.BuildRoot)/core/clr/dist/include/rocm_kpack/kpack.h" KeyPath="yes" />
         </Component>
@@ -285,8 +291,8 @@
       </Directory>
     </Directory>
     <Directory Id="amdrocm_runtime_dev_l" Name="lib">
-      <Directory Id="amdrocm_runtime_dev_lc" Name="lib\cmake">
-        <Directory Id="amdrocm_runtime_dev_lchl" Name="lib\cmake\hip-lang">
+      <Directory Id="amdrocm_runtime_dev_lc" Name="cmake">
+        <Directory Id="amdrocm_runtime_dev_lchl" Name="hip-lang">
           <Component Id="c_amdrocm_runtime_dev_lchl_hlcv.cmake" Guid="*">
             <File Id="f_amdrocm_runtime_dev_lchl_hlcv.cmake" Source="$(var.BuildRoot)/core/clr/dist/lib/cmake/hiprtc/hiprtc-config-version.cmake" Name="hip-lang-config-version.cmake" KeyPath="yes" />
           </Component>
@@ -300,7 +306,7 @@
             <File Id="f_amdrocm_runtime_dev_lchl_hlt.cmake" Source="$(var.BuildRoot)/core/clr/dist/lib/cmake/hip-lang/hip-lang-targets.cmake" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_runtime_dev_lch" Name="lib\cmake\hip">
+        <Directory Id="amdrocm_runtime_dev_lch" Name="hip">
           <Component Id="c_amdrocm_runtime_dev_lch_hca.cmake" Guid="*">
             <File Id="f_amdrocm_runtime_dev_lch_hca.cmake" Source="$(var.BuildRoot)/core/clr/dist/lib/cmake/hip/hip-config-amd.cmake" KeyPath="yes" />
           </Component>
@@ -320,7 +326,7 @@
             <File Id="f_amdrocm_runtime_dev_lch_ht.cmake" Source="$(var.BuildRoot)/core/clr/dist/lib/cmake/hip/hip-targets.cmake" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_runtime_dev_licmhi" Name="lib\cmake\hiprtc">
+        <Directory Id="amdrocm_runtime_dev_licmhi" Name="hiprtc">
           <Component Id="c_amdrocm_runtime_dev_licmhi_hcv.cmake" Guid="*">
             <File Id="f_amdrocm_runtime_dev_licmhi_hcv.cmake" Source="$(var.BuildRoot)/core/clr/dist/lib/cmake/hiprtc/hiprtc-config-version.cmake" KeyPath="yes" />
           </Component>
@@ -334,7 +340,32 @@
             <File Id="f_amdrocm_runtime_dev_licmhi_ht.cmake" Source="$(var.BuildRoot)/core/clr/dist/lib/cmake/hiprtc/hiprtc-targets.cmake" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_runtime_dev_lcrk" Name="lib\cmake\rocm-kpack">
+        <Directory Id="amdrocm_runtime_dev_lcl" Name="libhipcxx">
+          <Component Id="c_amdrocm_runtime_dev_lcl_lcv.cmake" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_lcl_lcv.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/libhipcxx/libhipcxx-config-version.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_runtime_dev_lcl_lc.cmake" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_lcl_lc.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/libhipcxx/libhipcxx-config.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_runtime_dev_lcl_lhs.cmake" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_lcl_lhs.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/libhipcxx/libhipcxx-header-search.cmake" KeyPath="yes" />
+          </Component>
+        </Directory>
+        <Directory Id="amdrocm_runtime_dev_lcrc" Name="rocm-core">
+          <Component Id="c_amdrocm_runtime_dev_lcrc_rccv.cmake" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_lcrc_rccv.cmake" Source="$(var.BuildRoot)/base/rocm-core/dist/lib/cmake/rocm-core/rocm-core-config-version.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_runtime_dev_lcrc_rcc.cmake" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_lcrc_rcc.cmake" Source="$(var.BuildRoot)/base/rocm-core/dist/lib/cmake/rocm-core/rocm-core-config.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_runtime_dev_lcrc_rr.cmake" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_lcrc_rr.cmake" Source="$(var.BuildRoot)/base/rocm-core/dist/lib/cmake/rocm-core/rocmCoreTargets-release.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_runtime_dev_lcrc_r.cmake" Guid="*">
+            <File Id="f_amdrocm_runtime_dev_lcrc_r.cmake" Source="$(var.BuildRoot)/base/rocm-core/dist/lib/cmake/rocm-core/rocmCoreTargets.cmake" KeyPath="yes" />
+          </Component>
+        </Directory>
+        <Directory Id="amdrocm_runtime_dev_lcrk" Name="rocm-kpack">
           <Component Id="c_amdrocm_runtime_dev_lcrk_rkcv.cmake" Guid="*">
             <File Id="f_amdrocm_runtime_dev_lcrk_rkcv.cmake" Source="$(var.BuildRoot)/core/clr/dist/lib/cmake/rocm-kpack/rocm-kpack-config-version.cmake" KeyPath="yes" />
           </Component>
@@ -351,8 +382,8 @@
       </Directory>
     </Directory>
     <Directory Id="amdrocm_runtime_dev_s" Name="share">
-      <Directory Id="amdrocm_runtime_dev_sd" Name="share\doc">
-        <Directory Id="amdrocm_runtime_dev_sdrc" Name="share\doc\rocm-core">
+      <Directory Id="amdrocm_runtime_dev_sd" Name="doc">
+        <Directory Id="amdrocm_runtime_dev_sdrc" Name="rocm-core">
           <Component Id="c_amdrocm_runtime_dev_sdrc_L.md" Guid="*">
             <File Id="f_amdrocm_runtime_dev_sdrc_L.md" Source="$(var.BuildRoot)/base/rocm-core/dist/share/doc/rocm-core/LICENSE.md" KeyPath="yes" />
           </Component>

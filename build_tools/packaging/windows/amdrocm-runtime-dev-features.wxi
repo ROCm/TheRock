@@ -75,6 +75,8 @@
     <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hfg.h" />
     <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hfmf.h" />
     <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hl.h" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hps.h" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hpe.h" />
     <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hrp.h" />
     <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hs.h" />
     <ComponentRef Id="c_amdrocm_runtime_dev_ihad_hd.h" />
@@ -104,6 +106,13 @@
     <ComponentRef Id="c_amdrocm_runtime_dev_licmhi_hc.cmake" />
     <ComponentRef Id="c_amdrocm_runtime_dev_licmhi_htr.cmake" />
     <ComponentRef Id="c_amdrocm_runtime_dev_licmhi_ht.cmake" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_lcl_lcv.cmake" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_lcl_lc.cmake" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_lcl_lhs.cmake" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_lcrc_rccv.cmake" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_lcrc_rcc.cmake" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_lcrc_rr.cmake" />
+    <ComponentRef Id="c_amdrocm_runtime_dev_lcrc_r.cmake" />
     <ComponentRef Id="c_amdrocm_runtime_dev_lcrk_rkcv.cmake" />
     <ComponentRef Id="c_amdrocm_runtime_dev_lcrk_rkc.cmake" />
     <ComponentRef Id="c_amdrocm_runtime_dev_lcrk_rktr.cmake" />

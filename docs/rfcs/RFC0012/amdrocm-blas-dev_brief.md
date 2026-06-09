@@ -40,7 +40,7 @@
 | `lib/cmake/hipblas/hipblas-config.cmake` | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-config.cmake` |
 | `lib/cmake/hipblas/hipblas-targets-release.cmake` | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-targets-release.cmake` |
 | `lib/cmake/hipblas/hipblas-targets.cmake` | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-targets.cmake` |
-| `lib/cmake/hipblaslt/hipblaslt-config-version.cmake` | `%BUILD_ROOT%/math-libs/rocWMMA/dist/lib/cmake/hipblaslt/hipblaslt-config-version.cmake` |
+| `lib/cmake/hipblaslt/hipblaslt-config-version.cmake` | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS-common/dist/lib/cmake/hipblas-common/hipblas-common-config-version.cmake` |
 | `lib/cmake/hipblaslt/hipblaslt-config.cmake` | `%BUILD_ROOT%/math-libs/rocWMMA/dist/lib/cmake/hipblaslt/hipblaslt-config.cmake` |
 | `lib/cmake/hipblaslt/hipblaslt-targets-release.cmake` | `%BUILD_ROOT%/math-libs/rocWMMA/dist/lib/cmake/hipblaslt/hipblaslt-targets-release.cmake` |
 | `lib/cmake/hipblaslt/hipblaslt-targets.cmake` | `%BUILD_ROOT%/math-libs/rocWMMA/dist/lib/cmake/hipblaslt/hipblaslt-targets.cmake` |

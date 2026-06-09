@@ -9,7 +9,7 @@ Dependency: amdrocm-dnn
 | Package File | Reference File |
 |:-------------|:---------------|
 | `flatbuffers.lib` | `lib/libflatbuffers.a`&lt;br&gt; |
-## amdrocm-dnn-dev.msi, total files: 674
+## amdrocm-dnn-dev.msi, total files: 624
 | `File` | `amdrocm-dnn-dev.msi` |`amdrocm-dnn-dev7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `bin/MIOpen.dll` |  |n/a |
@@ -34,16 +34,29 @@ Dependency: amdrocm-dnn
 | `bin/hipdnn_public_frontend_tests.exe` |  |n/a |
 | `bin/hipdnn_test_sdk_tests.exe` |  |n/a |
 | `bin/miopen_gtest.exe` |  |n/a |
+| `bin/test_plugins/custom/test_bad_api_version_heuristic_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_duplicate_id_a_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_duplicate_id_b_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_duplicate_policy_id_a_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_duplicate_policy_id_b_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_empty_name_heuristic_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_execute_fails_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_good_heuristic_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_good_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_incompatible_version_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_incomplete_api_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_incomplete_heuristic_api_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_knob_constraint_validation_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_knobs_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_malformed_version_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_no_applicable_engines_a_plugin.dll` |  |n/a |
 | `bin/test_plugins/custom/test_no_applicable_engines_b_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_no_optional_heuristic_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_override_implementing_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_override_omitting_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_second_override_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_version_liar_plugin.dll` |  |n/a |
+| `bin/test_plugins/custom/test_version_zero_plugin.dll` |  |n/a |
 | `bin/test_plugins/default/test_good_default_plugin.dll` |  |n/a |
 | `bin/test_plugins/hipdnn_test_no_api_version_plugin_name.dll` |  |n/a |
 | `bin/test_plugins/hipdnn_test_plugin1.dll` |  |n/a |
@@ -80,10 +93,11 @@ Dependency: amdrocm-dnn
 | `include/flatbuffers/vector.h` | &#x2705; |&#x2705; include/flatbuffers/vector.h |
 | `include/flatbuffers/vector_downward.h` | &#x2705; |&#x2705; include/flatbuffers/vector_downward.h |
 | `include/flatbuffers/verifier.h` | &#x2705; |&#x2705; include/flatbuffers/verifier.h |
-| `include/half/half.hpp` |  |n/a |
+| `include/half/half.hpp` | &#x2705; |n/a |
 | `include/hipdnn/backend/HipdnnAttentionImplementation.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnAttentionImplementation.h |
 | `include/hipdnn/backend/HipdnnBackendAttributeName.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnBackendAttributeName.h |
 | `include/hipdnn/backend/HipdnnBackendAttributeType.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnBackendAttributeType.h |
+| `include/hipdnn/backend/HipdnnBackendBehaviorNote.h` | &#x2705; |n/a |
 | `include/hipdnn/backend/HipdnnBackendCallbackTypes.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnBackendCallbackTypes.h |
 | `include/hipdnn/backend/HipdnnBackendDescriptorType.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnBackendDescriptorType.h |
 | `include/hipdnn/backend/HipdnnBackendFlatbufferData.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnBackendFlatbufferData.h |
@@ -96,72 +110,14 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/backend/HipdnnDiagonalAlignment.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnDiagonalAlignment.h |
 | `include/hipdnn/backend/HipdnnNormFwdPhase.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnNormFwdPhase.h |
 | `include/hipdnn/backend/HipdnnOperationType.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnOperationType.h |
+| `include/hipdnn/backend/HipdnnPaddingMode.h` | &#x2705; |n/a |
 | `include/hipdnn/backend/HipdnnPointwiseMode.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnPointwiseMode.h |
 | `include/hipdnn/backend/HipdnnReduceTensorOp.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnReduceTensorOp.h |
+| `include/hipdnn/backend/HipdnnResampleMode.h` | &#x2705; |n/a |
 | `include/hipdnn/backend/HipdnnStatus.h` | &#x2705; |&#x2705; include/hipdnn/backend/HipdnnStatus.h |
 | `include/hipdnn/backend/hipdnn_backend.h` | &#x2705; |&#x2705; include/hipdnn/backend/hipdnn_backend.h |
 | `include/hipdnn/backend/hipdnn_backend_export.h` | &#x2705; |&#x2705; include/hipdnn/backend/hipdnn_backend_export.h |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/Visibility.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/Visibility.hpp |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/batchnorm_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/batchnorm_backward_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/batchnorm_inference_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/block_scale_dequantize_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/block_scale_quantize_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/convolution_bwd_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/convolution_common_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/convolution_fwd_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/convolution_wrw_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/custom_op_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/data_types_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/engine_config_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/engine_details_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/graph_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/knob_value_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/layernorm_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/matmul_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/norm_common_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/pointwise_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/reduction_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/rmsnorm_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/rmsnorm_backward_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/sdpa_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/sdpa_backward_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v24_12_23/hipdnn_data_sdk/data_objects/tensor_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/batchnorm_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/batchnorm_backward_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/batchnorm_inference_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/block_scale_dequantize_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/block_scale_quantize_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/convolution_bwd_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/convolution_common_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/convolution_fwd_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/convolution_wrw_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/custom_op_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/data_types_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/engine_config_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/engine_details_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/graph_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/knob_value_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/layernorm_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/matmul_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/norm_common_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/pointwise_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/reduction_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/rmsnorm_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/rmsnorm_backward_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/sdpa_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/sdpa_backward_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/data_objects/v25_9_23/hipdnn_data_sdk/data_objects/tensor_attributes_generated.h` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/EngineConfigWrapper.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/EngineDetailsWrapper.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/FlatbufferTypeHelpers.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/GraphWrapper.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/KnobSettingWrapper.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/KnobWrapper.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/NodeWrapper.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/flatbuffer_utilities/TensorAttributesWrapper.hpp` |  |n/a |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/logging/CallbackTypes.h` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/logging/CallbackTypes.h |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/logging/LogLevel.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/logging/LogLevel.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/logging/Logger.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/logging/Logger.hpp |
@@ -174,7 +130,9 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp6E2M3.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp6E2M3.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp6E3M2.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp6E3M2.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E4M3.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E4M3.hpp |
+| `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E4M3Fnuz.hpp` | &#x2705; |n/a |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E5M2.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E5M2.hpp |
+| `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E5M2Fnuz.hpp` | &#x2705; |n/a |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E8M0.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/types/Fp8E8M0.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Half.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/types/Half.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/types/Int32.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/types/Int32.hpp |
@@ -184,12 +142,12 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Allocators.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Allocators.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Constants.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Constants.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/EngineNames.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/EngineNames.hpp |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/FlatbufferUtils.hpp` |  |n/a |
+| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/EngineOrdering.hpp` | &#x2705; |n/a |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/MigratableMemory.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/MigratableMemory.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PlatformUtils.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PlatformUtils.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PlatformUtils.linux.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PlatformUtils.linux.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PlatformUtils.windows.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PlatformUtils.windows.hpp |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PointwiseValidation.hpp` |  |n/a |
+| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/PolicyNames.hpp` | &#x2705; |n/a |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/ScopedResource.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/ScopedResource.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/ShallowHostOnlyMigratableMemory.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/ShallowHostOnlyMigratableMemory.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/ShallowTensor.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/ShallowTensor.hpp |
@@ -200,80 +158,38 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/VersionUtils.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/VersionUtils.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Visitor.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Visitor.hpp |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Workspace.hpp` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/Workspace.hpp |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/BatchnormAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/BatchnormBackwardAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/BatchnormInferenceAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/BatchnormInferenceAttributesVarianceExt.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/BlockScaleDequantizeAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/BlockScaleQuantizeAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/Common.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/ConvolutionBwdAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/ConvolutionFwdAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/ConvolutionWrwAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/CustomOpAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/Graph.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/LayernormAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/MatmulAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/PointwiseAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/RMSNormAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/RMSNormBackwardAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/ReductionAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/SdpaAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/SdpaBackwardAttributes.hpp` |  |n/a |
-| `include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/json/TensorAttributes.hpp` |  |n/a |
 | `include/hipdnn/data_sdk/hipdnn_data_sdk/version.h` | &#x2705; |&#x2705; include/hipdnn/data_sdk/hipdnn_data_sdk/version.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h |
-| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/device_properties_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/execution_plan_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/layernorm_backward_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/resample_common_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/resample_fwd_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h` | &#x2705; |n/a |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h` | &#x2705; |n/a |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/flatbuffer_utilities/EngineConfigWrapper.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/flatbuffer_utilities/EngineConfigWrapper.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/flatbuffer_utilities/EngineDetailsWrapper.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/flatbuffer_utilities/EngineDetailsWrapper.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/flatbuffer_utilities/FlatbufferTypeHelpers.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/flatbuffer_utilities/FlatbufferTypeHelpers.hpp |
@@ -298,11 +214,13 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/CustomOpAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/CustomOpAttributes.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/Graph.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/Graph.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/LayernormAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/LayernormAttributes.hpp |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/LayernormBackwardAttributes.hpp` | &#x2705; |n/a |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/MatmulAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/MatmulAttributes.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/PointwiseAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/PointwiseAttributes.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/RMSNormAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/RMSNormAttributes.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/RMSNormBackwardAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/RMSNormBackwardAttributes.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/ReductionAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/ReductionAttributes.hpp |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/ResampleFwdAttributes.hpp` | &#x2705; |n/a |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/SdpaAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/SdpaAttributes.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/SdpaBackwardAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/SdpaBackwardAttributes.hpp |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/TensorAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/TensorAttributes.hpp |
@@ -331,7 +249,9 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/frontend/hipdnn_frontend/attributes/MatmulAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/attributes/MatmulAttributes.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/attributes/PointwiseAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/attributes/PointwiseAttributes.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/attributes/RMSNormAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/attributes/RMSNormAttributes.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/attributes/RMSNormBackwardAttributes.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/attributes/ReductionAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/attributes/ReductionAttributes.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/attributes/ResampleFwdAttributes.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/attributes/SdpaAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/attributes/SdpaAttributes.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/attributes/SdpaBackwardAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/attributes/SdpaBackwardAttributes.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/attributes/TensorAttributes.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/attributes/TensorAttributes.hpp |
@@ -361,9 +281,8 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/frontend/hipdnn_frontend/detail/CustomOpUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/CustomOpUnpacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/DescriptorHelpers.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/DescriptorHelpers.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/DescriptorUnpackHelpers.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/DescriptorUnpackHelpers.hpp |
-| `include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideConfig.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideConfig.hpp |
-| `include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideUtils.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideUtils.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/GraphDetail.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/GraphDetail.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/GraphOverrideValidation.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/GraphPacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/GraphPacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/GraphUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/GraphUnpacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/HipdnnBackendInterface.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/HipdnnBackendInterface.hpp |
@@ -377,15 +296,20 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/frontend/hipdnn_frontend/detail/OperationUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/OperationUnpacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/PointwisePacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/PointwisePacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/PointwiseUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/PointwiseUnpacker.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/RMSNormBackwardPacker.hpp` | &#x2705; |n/a |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/RMSNormBackwardUnpacker.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/RMSNormPacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/RMSNormPacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/RMSNormUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/RMSNormUnpacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/ReductionPacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/ReductionPacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/ReductionUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/ReductionUnpacker.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/ResampleFwdPacker.hpp` | &#x2705; |n/a |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/ResampleFwdUnpacker.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/ScopedHipdnnBackendDescriptor.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/ScopedHipdnnBackendDescriptor.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/SdpaBwdPacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/SdpaBwdPacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/SdpaBwdUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/SdpaBwdUnpacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/SdpaFwdPacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/SdpaFwdPacker.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/detail/SdpaFwdUnpacker.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/SdpaFwdUnpacker.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/VariantPackHelpers.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/knob/Knob.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/knob/Knob.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/knob/KnobConstraint.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/knob/KnobConstraint.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/knob/KnobSetting.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/knob/KnobSetting.hpp |
@@ -404,13 +328,16 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/frontend/hipdnn_frontend/node/Node.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/Node.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/node/NodeType.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/NodeType.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/node/PointwiseNode.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/PointwiseNode.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/node/RMSNormBackwardNode.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/node/RMSNormNode.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/RMSNormNode.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/node/ReductionNode.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/ReductionNode.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/node/ResampleFwdNode.hpp` | &#x2705; |n/a |
 | `include/hipdnn/frontend/hipdnn_frontend/node/SdpaBwdNode.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/SdpaBwdNode.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/node/SdpaFwdNode.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/SdpaFwdNode.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/node/detail/TopologicalSortingUtils.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/detail/TopologicalSortingUtils.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/node/detail/Utilities.hpp` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/node/detail/Utilities.hpp |
 | `include/hipdnn/frontend/hipdnn_frontend/version.h` | &#x2705; |&#x2705; include/hipdnn/frontend/hipdnn_frontend/version.h |
+| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/BehaviorNote.h` | &#x2705; |n/a |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/EngineManager.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/EngineManager.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/EnginePluginApi.h` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/EnginePluginApi.h |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/EnginePluginImpl.inl` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/EnginePluginImpl.inl |
@@ -418,6 +345,8 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/ExecutionContextBase.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/ExecutionContextBase.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/FunctionNameMacro.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/FunctionNameMacro.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/GlobalKnobDefines.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/GlobalKnobDefines.hpp |
+| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/HeuristicValidation.hpp` | &#x2705; |n/a |
+| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/HeuristicsPluginApi.h` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/HeuristicsPluginApi.h |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/KnobFactory.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/KnobFactory.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/KnobSettingFactory.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/KnobSettingFactory.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginApi.h` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginApi.h |
@@ -429,7 +358,10 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginHelpers.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginHelpers.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginLastErrorManager.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginLastErrorManager.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginLogging.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginLogging.hpp |
+| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/PluginVersionConstants.hpp` | &#x2705; |n/a |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/SharedContainerManager.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/SharedContainerManager.hpp |
+| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/engine_api_version.h` | &#x2705; |n/a |
+| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/heuristic_api_version.h` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/heuristic_api_version.h |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/interfaces/IEngine.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/interfaces/IEngine.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/interfaces/IPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/interfaces/IPlan.hpp |
 | `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/interfaces/IPlanBuilder.hpp` | &#x2705; |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/interfaces/IPlanBuilder.hpp |
@@ -447,12 +379,15 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/LayernormConstants.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/constants/LayernormConstants.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/MatmulConstants.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/constants/MatmulConstants.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/PointwiseConstants.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/constants/PointwiseConstants.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/RMSNormBackwardConstants.hpp` | &#x2705; |n/a |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/RMSNormConstants.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/constants/RMSNormConstants.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/ReductionConstants.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/constants/ReductionConstants.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/ResampleFwdConstants.hpp` | &#x2705; |n/a |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/SdpaBwdConstants.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/constants/SdpaBwdConstants.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/constants/SdpaFwdConstants.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/constants/SdpaFwdConstants.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/ConvolutionValidation.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/ConvolutionValidation.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceBatchnorm.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceBatchnorm.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceBlockScaleDequantize.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceBlockScaleDequantize.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceConvolution.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceConvolution.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceLayernorm.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceLayernorm.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceMatmul.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceMatmul.hpp |
@@ -462,11 +397,14 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceSdpa.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceSdpa.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceValidation.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceValidation.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerances.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerances.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesBatchNorm.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesBatchNorm.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesCommon.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesCommon.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesConv.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesConv.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesLayerNorm.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesLayerNorm.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesMatmul.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesMatmul.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesPointwise.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesPointwise.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesRMSNorm.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesRMSNorm.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesSdpa.hpp` | &#x2705; |n/a |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/FileUtilities.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/FileUtilities.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/FlatbufferDatatypeMapping.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/FlatbufferDatatypeMapping.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/FlatbufferGraphTestUtils.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/FlatbufferGraphTestUtils.hpp |
@@ -501,6 +439,8 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BatchnormFwdInferenceWithVarianceSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BatchnormFwdInferenceWithVarianceSignatureKey.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BatchnormTrainPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BatchnormTrainPlan.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BatchnormTrainSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BatchnormTrainSignatureKey.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizePlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizePlan.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizeSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizeSignatureKey.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ConvolutionBwdPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ConvolutionBwdPlan.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ConvolutionBwdSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ConvolutionBwdSignatureKey.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ConvolutionFwdPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ConvolutionFwdPlan.hpp |
@@ -518,10 +458,14 @@ Dependency: amdrocm-dnn
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/PlanUtils.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/PlanUtils.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/PointwisePlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/PointwisePlan.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/PointwiseSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/PointwiseSignatureKey.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/RMSNormBwdPlan.hpp` | &#x2705; |n/a |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/RMSNormBwdSignatureKey.hpp` | &#x2705; |n/a |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/RMSNormFwdPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/RMSNormFwdPlan.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/RMSNormFwdSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/RMSNormFwdSignatureKey.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ReductionPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ReductionPlan.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ReductionSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/ReductionSignatureKey.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdPlan.hpp |
+| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdSignatureKey.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaFwdPlan.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaFwdPlan.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaFwdSignatureKey.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaFwdSignatureKey.hpp |
 | `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/detail/CpuFpReferenceUtilities.hpp` | &#x2705; |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/detail/CpuFpReferenceUtilities.hpp |
@@ -588,7 +532,7 @@ Dependency: amdrocm-dnn
 | `include/nlohmann/ordered_map.hpp` | &#x2705; |&#x2705; include/nlohmann/ordered_map.hpp |
 | `include/nlohmann/thirdparty/hedley/hedley.hpp` | &#x2705; |&#x2705; include/nlohmann/thirdparty/hedley/hedley.hpp |
 | `include/nlohmann/thirdparty/hedley/hedley_undef.hpp` | &#x2705; |&#x2705; include/nlohmann/thirdparty/hedley/hedley_undef.hpp |
-| `lib/MIOpen.lib` |  |n/a |
+| `lib/MIOpen.lib` | &#x2705; |n/a |
 | `lib/cmake/flatbuffers/BuildFlatBuffers.cmake` | &#x2705; |&#x2705; lib/cmake/flatbuffers/BuildFlatBuffers.cmake |
 | `lib/cmake/flatbuffers/FlatBuffersTargets-release.cmake` | &#x2705; |&#x2705; lib/cmake/flatbuffers/FlatBuffersTargets-release.cmake |
 | `lib/cmake/flatbuffers/FlatBuffersTargets.cmake` | &#x2705; |&#x2705; lib/cmake/flatbuffers/FlatBuffersTargets.cmake |
@@ -606,14 +550,15 @@ Dependency: amdrocm-dnn
 | `lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkConfig.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkConfig.cmake |
 | `lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkConfigVersion.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkConfigVersion.cmake |
 | `lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkTargets.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkTargets.cmake |
+| `lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_version_check.cmake` | &#x2705; |n/a |
 | `lib/cmake/hipdnn_frontend/hipdnn_frontendConfig.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_frontend/hipdnn_frontendConfig.cmake |
 | `lib/cmake/hipdnn_frontend/hipdnn_frontendConfigVersion.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_frontend/hipdnn_frontendConfigVersion.cmake |
 | `lib/cmake/hipdnn_frontend/hipdnn_frontendTargets.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_frontend/hipdnn_frontendTargets.cmake |
-| `lib/cmake/hipdnn_integration_tests/HipdnnIntegrationTestHelpers.cmake` |  |n/a |
-| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsConfig.cmake` |  |n/a |
-| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsConfigVersion.cmake` |  |n/a |
-| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsTargets-release.cmake` |  |n/a |
-| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsTargets.cmake` |  |n/a |
+| `lib/cmake/hipdnn_integration_tests/HipdnnIntegrationTestHelpers.cmake` | &#x2705; |n/a |
+| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsConfig.cmake` | &#x2705; |n/a |
+| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsConfigVersion.cmake` | &#x2705; |n/a |
+| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsTargets-release.cmake` | &#x2705; |n/a |
+| `lib/cmake/hipdnn_integration_tests/hipdnn_integration_testsTargets.cmake` | &#x2705; |n/a |
 | `lib/cmake/hipdnn_plugin_sdk/hipdnn_plugin_sdkConfig.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_plugin_sdk/hipdnn_plugin_sdkConfig.cmake |
 | `lib/cmake/hipdnn_plugin_sdk/hipdnn_plugin_sdkConfigVersion.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_plugin_sdk/hipdnn_plugin_sdkConfigVersion.cmake |
 | `lib/cmake/hipdnn_plugin_sdk/hipdnn_plugin_sdkTargets.cmake` | &#x2705; |&#x2705; lib/cmake/hipdnn_plugin_sdk/hipdnn_plugin_sdkTargets.cmake |
@@ -625,49 +570,50 @@ Dependency: amdrocm-dnn
 | `lib/cmake/miopen/miopen-targets-release.cmake` | &#x2705; |&#x2705; lib/cmake/miopen/miopen-targets-release.cmake |
 | `lib/cmake/miopen/miopen-targets.cmake` | &#x2705; |&#x2705; lib/cmake/miopen/miopen-targets.cmake |
 | `lib/flatbuffers.lib` | &#x2705; |&#x2705; lib/libflatbuffers.a |
+| `lib/golden_reference_data/.gitattributes` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.json` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensor0.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensor1.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensor2.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensor3.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensor4.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/ncdhw/fp32/Small/Small.tensor5.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.json` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensor0.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensor1.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensor2.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensor3.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensor4.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/bfp16/Small/Small.tensor5.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp16/Small/Small.json` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensor0.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensor1.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensor2.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensor3.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensor4.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp16/Small/Small.tensor5.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Large/Large.json` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensor0.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensor1.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensor2.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensor3.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensor4.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Large/Large.tensor5.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.json` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensor0.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensor1.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensor2.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensor3.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensor4.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/MIOpen/MIOpen.tensor5.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Small/Small.json` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensor0.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensor1.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensor2.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensor3.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensor4.bin` |  |n/a |
+| `lib/golden_reference_data/quick/BatchnormFwdInference/nchw/fp32/Small/Small.tensor5.bin` |  |n/a |
 | `lib/hipdnn_backend.lib` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/ncdhw/fp32/Small.json` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/ncdhw/fp32/Small.tensor0.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/ncdhw/fp32/Small.tensor1.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/ncdhw/fp32/Small.tensor2.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/ncdhw/fp32/Small.tensor3.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/ncdhw/fp32/Small.tensor4.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/ncdhw/fp32/Small.tensor5.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/bfp16/Small.json` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/bfp16/Small.tensor0.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/bfp16/Small.tensor1.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/bfp16/Small.tensor2.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/bfp16/Small.tensor3.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/bfp16/Small.tensor4.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/bfp16/Small.tensor5.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp16/Small.json` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp16/Small.tensor0.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp16/Small.tensor1.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp16/Small.tensor2.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp16/Small.tensor3.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp16/Small.tensor4.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp16/Small.tensor5.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Large.json` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Large.tensor0.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Large.tensor1.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Large.tensor2.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Large.tensor3.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Large.tensor4.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Large.tensor5.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/MIOpen.json` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/MIOpen.tensor0.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/MIOpen.tensor1.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/MIOpen.tensor2.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/MIOpen.tensor3.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/MIOpen.tensor4.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/MIOpen.tensor5.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Small.json` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Small.tensor0.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Small.tensor1.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Small.tensor2.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Small.tensor3.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Small.tensor4.bin` |  |n/a |
-| `lib/hipdnn_reference_data/BatchnormFwdInference/nchw/fp32/Small.tensor5.bin` |  |n/a |
 | `lib/pkgconfig/flatbuffers.pc` | &#x2705; |&#x2705; lib/pkgconfig/flatbuffers.pc |
 | `lib/rocm_sysdeps/bin/bunzip2.exe` |  |n/a |
 | `lib/rocm_sysdeps/bin/bzcat.exe` |  |n/a |
@@ -676,6 +622,7 @@ Dependency: amdrocm-dnn
 | `lib/rocm_sysdeps/include/sqlite3.h` |  |n/a |
 | `lib/rocm_sysdeps/include/sqlite3ext.h` |  |n/a |
 | `lib/rocm_sysdeps/lib/cmake/BZip2/bzip2-config.cmake` |  |n/a |
+| `lib/rocm_sysdeps/lib/cmake/SQLite3/sqlite3-config-version.cmake` |  |n/a |
 | `lib/rocm_sysdeps/lib/cmake/SQLite3/sqlite3-config.cmake` |  |n/a |
 | `lib/rocm_sysdeps/lib/rocm_sysdeps_bz2.lib` |  |n/a |
 | `lib/rocm_sysdeps/lib/rocm_sysdeps_sqlite3.lib` |  |n/a |
@@ -685,18 +632,66 @@ Dependency: amdrocm-dnn
 | `share/cmake/nlohmann_json/nlohmann_jsonTargets.cmake` | &#x2705; |&#x2705; share/cmake/nlohmann_json/nlohmann_jsonTargets.cmake |
 | `share/doc/half/LICENSE.txt` |  |n/a |
 | `share/doc/miopen-hip/LICENSE.md` | &#x2705; |&#x2705; share/doc/miopen-hip/LICENSE.md |
+| `share/hipdnn/python/hipdnn_frontend/__init__.py` |  |n/a |
+| `share/hipdnn/python/hipdnn_frontend/hipdnn_frontend_python.cp312-win_amd64.pyd` |  |n/a |
+| `share/hipdnn/tests/python/test_engine_id_overloads.py` |  |n/a |
 | `share/pkgconfig/nlohmann_json.pc` | &#x2705; |&#x2705; share/pkgconfig/nlohmann_json.pc |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/device_properties_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/device_properties_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v24_12_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_backward_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/batchnorm_inference_attributes_variance_ext_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_dequantize_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/block_scale_quantize_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_bwd_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_common_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_fwd_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/convolution_wrw_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/custom_op_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/data_types_generated.h |
 | `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/device_properties_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/device_properties_generated.h |
-| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/HeuristicsPluginApi.h` | n/a |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/HeuristicsPluginApi.h |
-| `include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/heuristic_api_version.h` | n/a |&#x2705; include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/heuristic_api_version.h |
-| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceBlockScaleDequantize.hpp` | n/a |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/CpuFpReferenceBlockScaleDequantize.hpp |
-| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesBatchNorm.hpp` | n/a |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesBatchNorm.hpp |
-| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesLayerNorm.hpp` | n/a |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/DynamicTolerancesLayerNorm.hpp |
-| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizePlan.hpp` | n/a |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizePlan.hpp |
-| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizeSignatureKey.hpp` | n/a |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/BlockScaleDequantizeSignatureKey.hpp |
-| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdPlan.hpp` | n/a |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdPlan.hpp |
-| `include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdSignatureKey.hpp` | n/a |&#x2705; include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/SdpaBwdSignatureKey.hpp |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_config_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/engine_details_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/graph_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/knob_value_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/layernorm_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/matmul_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/norm_common_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/pointwise_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/reduction_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/rmsnorm_backward_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/sdpa_backward_attributes_generated.h |
+| `include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h` | n/a |&#x2705; include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/v25_9_23/hipdnn_flatbuffers_sdk/data_objects/tensor_attributes_generated.h |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideConfig.hpp` | n/a |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideConfig.hpp |
+| `include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideUtils.hpp` | n/a |&#x2705; include/hipdnn/frontend/hipdnn_frontend/detail/EngineOverrideUtils.hpp |
 | `libexec/miopen/install_precompiled_kernels.sh` | n/a |&#x2705; libexec/miopen/install_precompiled_kernels.sh |
 | `share/doc/amdrocm-dnn-dev7.13/changelog.Debian.gz` | n/a |&#x2705; share/doc/amdrocm-dnn-dev7.13/changelog.Debian.gz |
 

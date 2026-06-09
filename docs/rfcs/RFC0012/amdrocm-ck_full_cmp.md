@@ -4,7 +4,7 @@
 
 **No manual alignments set yet**
 
-## amdrocm-ck.msi, total files: 1472
+## amdrocm-ck.msi, total files: 1552
 | `File` | `amdrocm-ck.msi` |`amdrocm-ck7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `include/ck/BUILD_TIME_OPTIMIZATION.md` | &#x2705; |&#x2705; include/ck/BUILD_TIME_OPTIMIZATION.md |
@@ -133,6 +133,7 @@
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_bilinear_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_bilinear_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_scale_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_scale_instance.hpp |
+| `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_v3_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_v3_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_exp_gemm_wmma_universal_km_kn_mn_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_exp_gemm_wmma_universal_km_kn_mn_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_exp_gemm_xdl_universal_km_kn_mn_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_exp_gemm_xdl_universal_km_kn_mn_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_dl_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_dl_instance.hpp |
@@ -140,6 +141,7 @@
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_two_stage_xdl_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_two_stage_xdl_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_v3_wmma_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_v3_wmma_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_v3_xdl_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_v3_xdl_instance.hpp |
+| `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_wavelet_xdl_instance.hpp` | &#x2705; |n/a |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_wmma_bilinear_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_wmma_bilinear_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_wmma_scale_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_wmma_scale_instance.hpp |
 | `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_xdl_bilinear_instance.hpp` | &#x2705; |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_xdl_bilinear_instance.hpp |
@@ -620,6 +622,7 @@
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_wmma_cshuffle.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_wmma_cshuffle.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_wmma_cshuffle_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_wmma_cshuffle_v3.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v1.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v1.hpp |
+| `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v3.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_dl.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_dl.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_explicit.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_explicit.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_multiple_d_wmma_cshuffle_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_multiple_d_wmma_cshuffle_v3.hpp |
@@ -630,6 +633,7 @@
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_wmma_cshuffle_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_wmma_cshuffle_v3.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_xdl_cshuffle.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_xdl_cshuffle.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_xdl_cshuffle_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_xdl_cshuffle_v3.hpp |
+| `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_xdl_waveletmodel_cshuffle_v3.hpp` | &#x2705; |n/a |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_dl_multiple_d_nhwc_kyxc_nhwk.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_dl_multiple_d_nhwc_kyxc_nhwk.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_dl_nhwc_kyxc_nhwk.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_dl_nhwc_kyxc_nhwk.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_wmma_cshuffle_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_wmma_cshuffle_v3.hpp |
@@ -642,6 +646,7 @@
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_d_xdl_cshuffle.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_d_xdl_cshuffle.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_d_xdl_large_tensor_cshuffle.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_d_xdl_large_tensor_cshuffle.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_utils.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_utils.hpp |
+| `include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_fixed_nk_common.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_fixed_nk_common.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_multi_abd_wmma_fixed_nk.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_multi_abd_wmma_fixed_nk.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_multi_abd_xdl_fixed_nk.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_multi_abd_xdl_fixed_nk.hpp |
 | `include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_multiple_d_dl.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_multiple_d_dl.hpp |
@@ -687,6 +692,7 @@
 | `include/ck/tensor_operation/gpu/device/matrix_padder.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/matrix_padder.hpp |
 | `include/ck/tensor_operation/gpu/device/reduction_operator_mapping.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/reduction_operator_mapping.hpp |
 | `include/ck/tensor_operation/gpu/device/tensor_layout.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/tensor_layout.hpp |
+| `include/ck/tensor_operation/gpu/device/tensor_size_check.hpp` | &#x2705; |n/a |
 | `include/ck/tensor_operation/gpu/device/tensor_specialization.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/tensor_specialization.hpp |
 | `include/ck/tensor_operation/gpu/device/welford_helper.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/device/welford_helper.hpp |
 | `include/ck/tensor_operation/gpu/element/binary_element_wise_operation.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/element/binary_element_wise_operation.hpp |
@@ -705,6 +711,7 @@
 | `include/ck/tensor_operation/gpu/grid/epilogue_cshuffle_v3_wmma.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/epilogue_cshuffle_v3_wmma.hpp |
 | `include/ck/tensor_operation/gpu/grid/epilogue_cshuffle_v3_wmma_base.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/epilogue_cshuffle_v3_wmma_base.hpp |
 | `include/ck/tensor_operation/gpu/grid/epilogue_direct_store.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/epilogue_direct_store.hpp |
+| `include/ck/tensor_operation/gpu/grid/epilogue_type.hpp` | &#x2705; |n/a |
 | `include/ck/tensor_operation/gpu/grid/gemm_layernorm/gridwise_gemm_multiple_d_welford_first_half_xdl_cshuffle.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gemm_layernorm/gridwise_gemm_multiple_d_welford_first_half_xdl_cshuffle.hpp |
 | `include/ck/tensor_operation/gpu/grid/gemm_layernorm/gridwise_welford_second_half_layernorm2d.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gemm_layernorm/gridwise_welford_second_half_layernorm2d.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_2d_multiple_reduction_multiblock.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_2d_multiple_reduction_multiblock.hpp |
@@ -751,6 +758,7 @@
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3_ab_scale.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3_ab_scale.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3_common.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3_common.hpp |
+| `include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3_common_kernels.hpp` | &#x2705; |n/a |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_common.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_common.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_conv_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_conv_v3.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_streamk_v3.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_streamk_v3.hpp |
@@ -768,6 +776,7 @@
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_v3_mx_bpreshuffle.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_v3_mx_bpreshuffle.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_layernorm_cshuffle_v1.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_layernorm_cshuffle_v1.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_waveletmodel_cshuffle.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_waveletmodel_cshuffle.hpp |
+| `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_waveletmodel_cshuffle_conv_v3.hpp` | &#x2705; |n/a |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdlops_bwd_weight.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdlops_bwd_weight.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdlops_skip_b_lds_v1.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdlops_skip_b_lds_v1.hpp |
 | `include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdlops_splitk_lds_direct_load.hpp` | &#x2705; |&#x2705; include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdlops_splitk_lds_direct_load.hpp |
@@ -836,6 +845,7 @@
 | `include/ck/utility/amd_buffer_addressing_builtins.hpp` | &#x2705; |&#x2705; include/ck/utility/amd_buffer_addressing_builtins.hpp |
 | `include/ck/utility/amd_buffer_coherence.hpp` | &#x2705; |&#x2705; include/ck/utility/amd_buffer_coherence.hpp |
 | `include/ck/utility/amd_ck_fp8.hpp` | &#x2705; |&#x2705; include/ck/utility/amd_ck_fp8.hpp |
+| `include/ck/utility/amd_cluster_load.hpp` | &#x2705; |n/a |
 | `include/ck/utility/amd_gemm_dpp.hpp` | &#x2705; |&#x2705; include/ck/utility/amd_gemm_dpp.hpp |
 | `include/ck/utility/amd_inline_asm.hpp` | &#x2705; |&#x2705; include/ck/utility/amd_inline_asm.hpp |
 | `include/ck/utility/amd_lds.hpp` | &#x2705; |&#x2705; include/ck/utility/amd_lds.hpp |
@@ -851,11 +861,14 @@
 | `include/ck/utility/common_header.hpp` | &#x2705; |&#x2705; include/ck/utility/common_header.hpp |
 | `include/ck/utility/container_element_picker.hpp` | &#x2705; |&#x2705; include/ck/utility/container_element_picker.hpp |
 | `include/ck/utility/container_helper.hpp` | &#x2705; |&#x2705; include/ck/utility/container_helper.hpp |
+| `include/ck/utility/data_cache_prefetch.hpp` | &#x2705; |n/a |
 | `include/ck/utility/data_type.hpp` | &#x2705; |&#x2705; include/ck/utility/data_type.hpp |
 | `include/ck/utility/debug.hpp` | &#x2705; |&#x2705; include/ck/utility/debug.hpp |
 | `include/ck/utility/dtype_fp64.hpp` | &#x2705; |&#x2705; include/ck/utility/dtype_fp64.hpp |
 | `include/ck/utility/dtype_vector.hpp` | &#x2705; |&#x2705; include/ck/utility/dtype_vector.hpp |
 | `include/ck/utility/dynamic_buffer.hpp` | &#x2705; |&#x2705; include/ck/utility/dynamic_buffer.hpp |
+| `include/ck/utility/e4m3.hpp` | &#x2705; |n/a |
+| `include/ck/utility/e5m3.hpp` | &#x2705; |n/a |
 | `include/ck/utility/e8m0.hpp` | &#x2705; |&#x2705; include/ck/utility/e8m0.hpp |
 | `include/ck/utility/enable_if.hpp` | &#x2705; |&#x2705; include/ck/utility/enable_if.hpp |
 | `include/ck/utility/env.hpp` | &#x2705; |&#x2705; include/ck/utility/env.hpp |
@@ -893,6 +906,7 @@
 | `include/ck/utility/reduction_enums.hpp` | &#x2705; |&#x2705; include/ck/utility/reduction_enums.hpp |
 | `include/ck/utility/reduction_functions_accumulate.hpp` | &#x2705; |&#x2705; include/ck/utility/reduction_functions_accumulate.hpp |
 | `include/ck/utility/reduction_operator.hpp` | &#x2705; |&#x2705; include/ck/utility/reduction_operator.hpp |
+| `include/ck/utility/scale_utils.hpp` | &#x2705; |n/a |
 | `include/ck/utility/scaled_type_convert.hpp` | &#x2705; |&#x2705; include/ck/utility/scaled_type_convert.hpp |
 | `include/ck/utility/scheduler_enum.hpp` | &#x2705; |&#x2705; include/ck/utility/scheduler_enum.hpp |
 | `include/ck/utility/sequence.hpp` | &#x2705; |&#x2705; include/ck/utility/sequence.hpp |
@@ -932,21 +946,34 @@
 | `include/ck_tile/core/arch/amd_buffer_addressing.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/amd_buffer_addressing.hpp |
 | `include/ck_tile/core/arch/amd_buffer_addressing_builtins.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/amd_buffer_addressing_builtins.hpp |
 | `include/ck_tile/core/arch/amd_buffer_coherence.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/amd_buffer_coherence.hpp |
+| `include/ck_tile/core/arch/amd_cluster_load.hpp` | &#x2705; |n/a |
+| `include/ck_tile/core/arch/amd_tdm_descriptor.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/arch/amd_transpose_load_encoding.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/amd_transpose_load_encoding.hpp |
+| `include/ck_tile/core/arch/amd_wave_read_first_lane.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/arch/arch.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/arch.hpp |
+| `include/ck_tile/core/arch/barrier.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/arch/generic_memory_space_atomic.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/generic_memory_space_atomic.hpp |
+| `include/ck_tile/core/arch/inst_prefetch.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/arch/mma/amdgcn_mma.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/amdgcn_mma.hpp |
 | `include/ck_tile/core/arch/mma/mfma/mfma.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mfma/mfma.hpp |
 | `include/ck_tile/core/arch/mma/mfma/mfma_gfx9.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mfma/mfma_gfx9.hpp |
 | `include/ck_tile/core/arch/mma/mfma/mfma_selector.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mfma/mfma_selector.hpp |
 | `include/ck_tile/core/arch/mma/mfma/mfma_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mfma/mfma_traits.hpp |
 | `include/ck_tile/core/arch/mma/mfma/mfma_transforms.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mfma/mfma_transforms.hpp |
+| `include/ck_tile/core/arch/mma/mma.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/arch/mma/mma_op_family.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mma_op_family.hpp |
 | `include/ck_tile/core/arch/mma/mma_pipeline.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mma_pipeline.hpp |
 | `include/ck_tile/core/arch/mma/mma_selector.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mma_selector.hpp |
 | `include/ck_tile/core/arch/mma/mma_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mma_traits.hpp |
 | `include/ck_tile/core/arch/mma/mma_transforms.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mma_transforms.hpp |
 | `include/ck_tile/core/arch/mma/mma_wavewise.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/mma_wavewise.hpp |
+| `include/ck_tile/core/arch/mma/scale/mfma/scale_gfx9.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/scale/mfma/scale_gfx9.hpp |
+| `include/ck_tile/core/arch/mma/scale/mfma/selector.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/scale/mfma/selector.hpp |
+| `include/ck_tile/core/arch/mma/scale/scale.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/scale/scale.hpp |
+| `include/ck_tile/core/arch/mma/scale/scale_mma_pipeline.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/scale/scale_mma_pipeline.hpp |
+| `include/ck_tile/core/arch/mma/scale/scale_selector.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/scale/scale_selector.hpp |
+| `include/ck_tile/core/arch/mma/scale/scale_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/scale/scale_traits.hpp |
+| `include/ck_tile/core/arch/mma/scale/scale_transforms.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/scale/scale_transforms.hpp |
 | `include/ck_tile/core/arch/mma/sparse/mfma/selector.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/sparse/mfma/selector.hpp |
 | `include/ck_tile/core/arch/mma/sparse/mfma/sparse_gfx9.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/sparse/mfma/sparse_gfx9.hpp |
 | `include/ck_tile/core/arch/mma/sparse/sparse.hpp` | &#x2705; |&#x2705; include/ck_tile/core/arch/mma/sparse/sparse.hpp |
@@ -979,25 +1006,32 @@
 | `include/ck_tile/core/container/thread_buffer.hpp` | &#x2705; |&#x2705; include/ck_tile/core/container/thread_buffer.hpp |
 | `include/ck_tile/core/container/tuple.hpp` | &#x2705; |&#x2705; include/ck_tile/core/container/tuple.hpp |
 | `include/ck_tile/core/numeric/bfloat16.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/bfloat16.hpp |
+| `include/ck_tile/core/numeric/e4m3.hpp` | &#x2705; |n/a |
+| `include/ck_tile/core/numeric/e5m3.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/numeric/e8m0.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/e8m0.hpp |
 | `include/ck_tile/core/numeric/ext_vector_base.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/ext_vector_base.hpp |
 | `include/ck_tile/core/numeric/float8.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/float8.hpp |
+| `include/ck_tile/core/numeric/float8_ext.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/numeric/half.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/half.hpp |
 | `include/ck_tile/core/numeric/int8.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/int8.hpp |
 | `include/ck_tile/core/numeric/integer.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/integer.hpp |
 | `include/ck_tile/core/numeric/integral_constant.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/integral_constant.hpp |
 | `include/ck_tile/core/numeric/math.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/math.hpp |
+| `include/ck_tile/core/numeric/math_v2.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/numeric/mxfp_convert.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/mxfp_convert.hpp |
+| `include/ck_tile/core/numeric/mxfp_scale.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/numeric/null_type.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/null_type.hpp |
 | `include/ck_tile/core/numeric/numeric.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/numeric.hpp |
+| `include/ck_tile/core/numeric/pk_f6.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/numeric/pk_fp4.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/pk_fp4.hpp |
-| `include/ck_tile/core/numeric/pk_fp6.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/pk_fp6.hpp |
 | `include/ck_tile/core/numeric/pk_int4.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/pk_int4.hpp |
+| `include/ck_tile/core/numeric/scale_util.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/numeric/type_convert.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/type_convert.hpp |
 | `include/ck_tile/core/numeric/vector_type.hpp` | &#x2705; |&#x2705; include/ck_tile/core/numeric/vector_type.hpp |
 | `include/ck_tile/core/tensor/buffer_view.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/buffer_view.hpp |
 | `include/ck_tile/core/tensor/load_tile.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/load_tile.hpp |
 | `include/ck_tile/core/tensor/load_tile_transpose.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/load_tile_transpose.hpp |
+| `include/ck_tile/core/tensor/load_tile_transpose.hpp.bk` | &#x2705; |n/a |
 | `include/ck_tile/core/tensor/null_tensor.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/null_tensor.hpp |
 | `include/ck_tile/core/tensor/null_tile_window.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/null_tile_window.hpp |
 | `include/ck_tile/core/tensor/shuffle_tile.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/shuffle_tile.hpp |
@@ -1015,12 +1049,14 @@
 | `include/ck_tile/core/tensor/tile_elementwise.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/tile_elementwise.hpp |
 | `include/ck_tile/core/tensor/tile_scatter_gather.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/tile_scatter_gather.hpp |
 | `include/ck_tile/core/tensor/tile_window.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/tile_window.hpp |
+| `include/ck_tile/core/tensor/tile_window.hpp.bk` | &#x2705; |n/a |
 | `include/ck_tile/core/tensor/tile_window_base.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/tile_window_base.hpp |
 | `include/ck_tile/core/tensor/tile_window_linear.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/tile_window_linear.hpp |
 | `include/ck_tile/core/tensor/tile_window_utils.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/tile_window_utils.hpp |
 | `include/ck_tile/core/tensor/transpose_tile.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/transpose_tile.hpp |
 | `include/ck_tile/core/tensor/update_tile.hpp` | &#x2705; |&#x2705; include/ck_tile/core/tensor/update_tile.hpp |
 | `include/ck_tile/core/utility/bit_cast.hpp` | &#x2705; |&#x2705; include/ck_tile/core/utility/bit_cast.hpp |
+| `include/ck_tile/core/utility/data_cache_prefetch.hpp` | &#x2705; |n/a |
 | `include/ck_tile/core/utility/debug.hpp` | &#x2705; |&#x2705; include/ck_tile/core/utility/debug.hpp |
 | `include/ck_tile/core/utility/env.hpp` | &#x2705; |&#x2705; include/ck_tile/core/utility/env.hpp |
 | `include/ck_tile/core/utility/functional.hpp` | &#x2705; |&#x2705; include/ck_tile/core/utility/functional.hpp |
@@ -1054,9 +1090,11 @@
 | `include/ck_tile/host/high_res_cpu_clock.hpp` | &#x2705; |&#x2705; include/ck_tile/host/high_res_cpu_clock.hpp |
 | `include/ck_tile/host/hip_check_error.hpp` | &#x2705; |&#x2705; include/ck_tile/host/hip_check_error.hpp |
 | `include/ck_tile/host/host_tensor.hpp` | &#x2705; |&#x2705; include/ck_tile/host/host_tensor.hpp |
+| `include/ck_tile/host/host_tensor_io.hpp` | &#x2705; |n/a |
 | `include/ck_tile/host/joinable_thread.hpp` | &#x2705; |&#x2705; include/ck_tile/host/joinable_thread.hpp |
 | `include/ck_tile/host/kernel_launch.hpp` | &#x2705; |&#x2705; include/ck_tile/host/kernel_launch.hpp |
 | `include/ck_tile/host/permute_pk_int4.hpp` | &#x2705; |&#x2705; include/ck_tile/host/permute_pk_int4.hpp |
+| `include/ck_tile/host/pinned_host_releaser.hpp` | &#x2705; |n/a |
 | `include/ck_tile/host/ranges.hpp` | &#x2705; |&#x2705; include/ck_tile/host/ranges.hpp |
 | `include/ck_tile/host/reference/reference_batched_contraction.hpp` | &#x2705; |&#x2705; include/ck_tile/host/reference/reference_batched_contraction.hpp |
 | `include/ck_tile/host/reference/reference_batched_dropout.hpp` | &#x2705; |&#x2705; include/ck_tile/host/reference/reference_batched_dropout.hpp |
@@ -1137,6 +1175,7 @@
 | `include/ck_tile/ops/epilogue/default_2d_epilogue.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/epilogue/default_2d_epilogue.hpp |
 | `include/ck_tile/ops/epilogue/dynamic_quant_epilogue.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/epilogue/dynamic_quant_epilogue.hpp |
 | `include/ck_tile/ops/epilogue/permuten_epilogue.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/epilogue/permuten_epilogue.hpp |
+| `include/ck_tile/ops/epilogue/tdm_epilogue.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/flatmm.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/flatmm.hpp |
 | `include/ck_tile/ops/flatmm/block/block_flatmm_asmem_bsmem_creg_v1.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/flatmm/block/block_flatmm_asmem_bsmem_creg_v1.hpp |
 | `include/ck_tile/ops/flatmm/block/block_flatmm_asmem_bsmem_creg_v1_custom_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/flatmm/block/block_flatmm_asmem_bsmem_creg_v1_custom_policy.hpp |
@@ -1163,6 +1202,7 @@
 | `include/ck_tile/ops/flatmm/pipeline/tile_flatmm_shape.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/flatmm/pipeline/tile_flatmm_shape.hpp |
 | `include/ck_tile/ops/fmha.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha.hpp |
 | `include/ck_tile/ops/fmha/block/block_attention_bias_enum.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/block/block_attention_bias_enum.hpp |
+| `include/ck_tile/ops/fmha/block/block_attention_kv_load_mode_enum.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/block/block_attention_kv_load_mode_enum.hpp |
 | `include/ck_tile/ops/fmha/block/block_attention_kvcache_layout_enum.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/block/block_attention_kvcache_layout_enum.hpp |
 | `include/ck_tile/ops/fmha/block/block_attention_quant_scale_enum.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/block/block_attention_quant_scale_enum.hpp |
 | `include/ck_tile/ops/fmha/block/block_dropout.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/block/block_dropout.hpp |
@@ -1216,6 +1256,7 @@
 | `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_fp8.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_fp8.hpp |
 | `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch.hpp |
 | `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_default_policy.hpp |
+| `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_trload.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_trload.hpp |
 | `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qs_ks_vs.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qs_ks_vs.hpp |
 | `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qs_ks_vs_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qs_ks_vs_default_policy.hpp |
 | `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qx_ks_vs_custom_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qx_ks_vs_custom_policy.hpp |
@@ -1255,7 +1296,10 @@
 | `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2.hpp |
 | `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_custom_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_custom_policy.hpp |
 | `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_default_policy.hpp |
+| `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_k.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_k.hpp |
+| `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_n.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_n.hpp |
 | `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2r1.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2r1.hpp |
+| `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_trload_creg_v2_prefetch_n.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_trload_creg_v2_prefetch_n.hpp |
 | `include/ck_tile/ops/gemm/block/block_gemm_asmem_breg_creg_v1.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_asmem_breg_creg_v1.hpp |
 | `include/ck_tile/ops/gemm/block/block_gemm_asmem_breg_creg_v1_custom_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_asmem_breg_creg_v1_custom_policy.hpp |
 | `include/ck_tile/ops/gemm/block/block_gemm_asmem_breg_creg_v1_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_asmem_breg_creg_v1_default_policy.hpp |
@@ -1275,6 +1319,8 @@
 | `include/ck_tile/ops/gemm/kernel/gemm_multi_d_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/kernel/gemm_multi_d_kernel.hpp |
 | `include/ck_tile/ops/gemm/kernel/gemm_tile_partitioner.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/kernel/gemm_tile_partitioner.hpp |
 | `include/ck_tile/ops/gemm/kernel/grouped_gemm_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/kernel/grouped_gemm_kernel.hpp |
+| `include/ck_tile/ops/gemm/kernel/mx_gemm_kernel.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm/kernel/mx_grouped_gemm_kernel.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm/kernel/streamk_gemm/streamk_gemm_coherency.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/kernel/streamk_gemm/streamk_gemm_coherency.hpp |
 | `include/ck_tile/ops/gemm/kernel/streamk_gemm/streamk_gemm_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/kernel/streamk_gemm/streamk_gemm_kernel.hpp |
 | `include/ck_tile/ops/gemm/kernel/streamk_gemm/streamk_gemm_tile_partitioner.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/kernel/streamk_gemm/streamk_gemm_tile_partitioner.hpp |
@@ -1285,6 +1331,10 @@
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_default_policy.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves_policy.hpp |
+| `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_v2.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_tdm_default_policy.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_tdm_v1.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_tdm_v2.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v4.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v4.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v4_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v4_default_policy.hpp |
@@ -1295,6 +1345,7 @@
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_eight_waves_base.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_eight_waves_base.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_mem.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_mem.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_scheduler.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_scheduler.hpp |
+| `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_wavelet.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_agmem_bgmem_creg_async_v1.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_agmem_bgmem_creg_async_v1.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_agmem_bgmem_creg_v1.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_agmem_bgmem_creg_v1.hpp |
 | `include/ck_tile/ops/gemm/pipeline/gemm_pipeline_agmem_bgmem_creg_v1_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/gemm_pipeline_agmem_bgmem_creg_v1_default_policy.hpp |
@@ -1306,6 +1357,8 @@
 | `include/ck_tile/ops/gemm/pipeline/tile_gemm_shape.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/tile_gemm_shape.hpp |
 | `include/ck_tile/ops/gemm/pipeline/tile_gemm_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/tile_gemm_traits.hpp |
 | `include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_base_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_base_policy.hpp |
+| `include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_tdm.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_tdm_policy.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_v2.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_v2.hpp |
 | `include/ck_tile/ops/gemm/warp/warp_gemm.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm.hpp |
 | `include/ck_tile/ops/gemm/warp/warp_gemm_attribute_mfma.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm_attribute_mfma.hpp |
@@ -1317,17 +1370,27 @@
 | `include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_16bit_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_16bit_traits.hpp |
 | `include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp |
 | `include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_base_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_base_traits.hpp |
+| `include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_highprec_traits.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm/warp/warp_gemm_dispatcher.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm_dispatcher.hpp |
+| `include/ck_tile/ops/gemm/warp/warp_gemm_dispatcher.hpp.bk` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm/warp/warp_gemm_impl.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm_impl.hpp |
+| `include/ck_tile/ops/gemm/warp/warp_gemm_params.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm/warp/warp_gemm_smfmac_impl.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_gemm_smfmac_impl.hpp |
 | `include/ck_tile/ops/gemm/warp/warp_wmma_gemm.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_wmma_gemm.hpp |
 | `include/ck_tile/ops/gemm/warp/warp_wmma_gemm_gfx11_utils.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm/warp/warp_wmma_gemm_gfx11_utils.hpp |
 | `include/ck_tile/ops/gemm_mx.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_mx.hpp |
 | `include/ck_tile/ops/gemm_mx/README.md` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_mx/README.md |
+| `include/ck_tile/ops/gemm_mx/block/block_mx_asmem_breg_creg.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm_mx/block/block_mx_gemm_areg_breg_creg_eight_waves_v1.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm_mx/block/block_mx_gemm_areg_breg_creg_v1.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm_mx/kernel/gemm_mx_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_mx/kernel/gemm_mx_kernel.hpp |
 | `include/ck_tile/ops/gemm_mx/kernel/scale_pointer.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_mx/kernel/scale_pointer.hpp |
 | `include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async.hpp |
 | `include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async_default_policy.hpp |
+| `include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves_policy.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm_mx/pipeline/wp_pipeline_agmem_bgmem_creg_v1.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/gemm_mx/pipeline/wp_pipeline_agmem_bgmem_creg_v1_policy.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm_quant.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant.hpp |
 | `include/ck_tile/ops/gemm_quant/block/block_gemm_quant_common.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/block/block_gemm_quant_common.hpp |
 | `include/ck_tile/ops/gemm_quant/block/block_universal_gemm_ar_aquant_flatbr_bquant_cr.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/block/block_universal_gemm_ar_aquant_flatbr_bquant_cr.hpp |
@@ -1336,6 +1399,7 @@
 | `include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_aquant_bs_bquant_cr_eight_waves.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_aquant_bs_bquant_cr_eight_waves.hpp |
 | `include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_aquant_bs_cr.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_aquant_bs_cr.hpp |
 | `include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_bs_bquant_cr.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_bs_bquant_cr.hpp |
+| `include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_bs_bquant_cr.hpp.bk` | &#x2705; |n/a |
 | `include/ck_tile/ops/gemm_quant/kernel/gemm_quant_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/kernel/gemm_quant_kernel.hpp |
 | `include/ck_tile/ops/gemm_quant/kernel/grouped_gemm_quant_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/kernel/grouped_gemm_quant_kernel.hpp |
 | `include/ck_tile/ops/gemm_quant/pipeline/gemm_abquant_pipeline_ag_bg_cr_base.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/gemm_quant/pipeline/gemm_abquant_pipeline_ag_bg_cr_base.hpp |
@@ -1365,6 +1429,7 @@
 | `include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_backward_weight_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_backward_weight_kernel.hpp |
 | `include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_forward_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_forward_kernel.hpp |
 | `include/ck_tile/ops/grouped_convolution/pipeline/grouped_conv_universal_pipeline_ag_bg_cr_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/grouped_convolution/pipeline/grouped_conv_universal_pipeline_ag_bg_cr_policy.hpp |
+| `include/ck_tile/ops/grouped_convolution/pipeline/grouped_convolution_forward_depthwise_pipeline.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/grouped_convolution/utils/convolution_specialization.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/grouped_convolution/utils/convolution_specialization.hpp |
 | `include/ck_tile/ops/grouped_convolution/utils/grouped_convolution_utils.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/grouped_convolution/utils/grouped_convolution_utils.hpp |
 | `include/ck_tile/ops/grouped_convolution/utils/split_k_utils.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/grouped_convolution/utils/split_k_utils.hpp |
@@ -1418,6 +1483,19 @@
 | `include/ck_tile/ops/rmsnorm2d/pipeline/rmsnorm2d_fwd_pipeline_two_pass.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/rmsnorm2d/pipeline/rmsnorm2d_fwd_pipeline_two_pass.hpp |
 | `include/ck_tile/ops/rmsnorm2d/pipeline/rmsnorm2d_fwd_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/rmsnorm2d/pipeline/rmsnorm2d_fwd_traits.hpp |
 | `include/ck_tile/ops/rotary.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/rotary.hpp |
+| `include/ck_tile/ops/sageattention.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/sageattention/block/block_sageattention_quant_scale_enum.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/block/block_sageattention_quant_scale_enum.hpp |
+| `include/ck_tile/ops/sageattention/kernel/sageattn_fwd_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/kernel/sageattn_fwd_kernel.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_enum.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_enum.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_problem.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_problem.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async_default_policy.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_custom_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_custom_policy.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_default_policy.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_default_policy.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/tile_sageattn_shape.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/tile_sageattn_shape.hpp |
+| `include/ck_tile/ops/sageattention/pipeline/tile_sageattn_traits.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattention/pipeline/tile_sageattn_traits.hpp |
+| `include/ck_tile/ops/sageattn.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sageattn.hpp |
 | `include/ck_tile/ops/smoothquant.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/smoothquant.hpp |
 | `include/ck_tile/ops/smoothquant/kernel/moe_smoothquant_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/smoothquant/kernel/moe_smoothquant_kernel.hpp |
 | `include/ck_tile/ops/smoothquant/kernel/smoothquant_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/smoothquant/kernel/smoothquant_kernel.hpp |
@@ -1433,6 +1511,8 @@
 | `include/ck_tile/ops/sparse_attn/kernel/fmha_fwd_vsa_kernel.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sparse_attn/kernel/fmha_fwd_vsa_kernel.hpp |
 | `include/ck_tile/ops/sparse_attn/pipeline/block_fmha_pipeline_qr_ks_vs_async_jenga.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sparse_attn/pipeline/block_fmha_pipeline_qr_ks_vs_async_jenga.hpp |
 | `include/ck_tile/ops/sparse_attn/pipeline/block_fmha_pipeline_qr_ks_vs_async_vsa.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/sparse_attn/pipeline/block_fmha_pipeline_qr_ks_vs_async_vsa.hpp |
+| `include/ck_tile/ops/tdm.hpp` | &#x2705; |n/a |
+| `include/ck_tile/ops/tdm/kernel/tdm_kernel.hpp` | &#x2705; |n/a |
 | `include/ck_tile/ops/topk.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/topk.hpp |
 | `include/ck_tile/ops/topk/block/block_topk_stream_2d.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/topk/block/block_topk_stream_2d.hpp |
 | `include/ck_tile/ops/topk/block/block_topk_stream_2d_problem.hpp` | &#x2705; |&#x2705; include/ck_tile/ops/topk/block/block_topk_stream_2d_problem.hpp |
@@ -1451,8 +1531,8 @@
 | `include/ck_tile/remod.py` | &#x2705; |&#x2705; include/ck_tile/remod.py |
 | `include/ck_tile/utility/json_dump.hpp` | &#x2705; |&#x2705; include/ck_tile/utility/json_dump.hpp |
 | `include/ck_tile/utility/tile_load_store_microkernels.hpp` | &#x2705; |&#x2705; include/ck_tile/utility/tile_load_store_microkernels.hpp |
-| `include/getopt.h` |  |n/a |
-| `include/half/half.hpp` |  |n/a |
+| `include/getopt.h` | &#x2705; |n/a |
+| `include/half/half.hpp` | &#x2705; |n/a |
 | `lib/cmake/composable_kernel/composable_kernelConfig.cmake` | &#x2705; |&#x2705; lib/cmake/composable_kernel/composable_kernelConfig.cmake |
 | `lib/cmake/composable_kernel/composable_kernelConfigVersion.cmake` | &#x2705; |&#x2705; lib/cmake/composable_kernel/composable_kernelConfigVersion.cmake |
 | `lib/cmake/composable_kernel/composable_kerneldevice_contraction_operationsTargets-release.cmake` | &#x2705; |&#x2705; lib/cmake/composable_kernel/composable_kerneldevice_contraction_operationsTargets-release.cmake |
@@ -1479,33 +1559,7 @@
 | `lib/wingetopt.lib` |  |n/a |
 | `share/doc/composablekernel/LICENSE` | &#x2705; |&#x2705; share/doc/composablekernel/LICENSE |
 | `share/doc/half/LICENSE.txt` |  |n/a |
-| `include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_v3_instance.hpp` | n/a |&#x2705; include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_v3_instance.hpp |
-| `include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v3.hpp` | n/a |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v3.hpp |
-| `include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_fixed_nk_common.hpp` | n/a |&#x2705; include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_fixed_nk_common.hpp |
-| `include/ck_tile/core/arch/mma/scale/mfma/scale_gfx9.hpp` | n/a |&#x2705; include/ck_tile/core/arch/mma/scale/mfma/scale_gfx9.hpp |
-| `include/ck_tile/core/arch/mma/scale/mfma/selector.hpp` | n/a |&#x2705; include/ck_tile/core/arch/mma/scale/mfma/selector.hpp |
-| `include/ck_tile/core/arch/mma/scale/scale.hpp` | n/a |&#x2705; include/ck_tile/core/arch/mma/scale/scale.hpp |
-| `include/ck_tile/core/arch/mma/scale/scale_mma_pipeline.hpp` | n/a |&#x2705; include/ck_tile/core/arch/mma/scale/scale_mma_pipeline.hpp |
-| `include/ck_tile/core/arch/mma/scale/scale_selector.hpp` | n/a |&#x2705; include/ck_tile/core/arch/mma/scale/scale_selector.hpp |
-| `include/ck_tile/core/arch/mma/scale/scale_traits.hpp` | n/a |&#x2705; include/ck_tile/core/arch/mma/scale/scale_traits.hpp |
-| `include/ck_tile/core/arch/mma/scale/scale_transforms.hpp` | n/a |&#x2705; include/ck_tile/core/arch/mma/scale/scale_transforms.hpp |
-| `include/ck_tile/ops/fmha/block/block_attention_kv_load_mode_enum.hpp` | n/a |&#x2705; include/ck_tile/ops/fmha/block/block_attention_kv_load_mode_enum.hpp |
-| `include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_trload.hpp` | n/a |&#x2705; include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_trload.hpp |
-| `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_k.hpp` | n/a |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_k.hpp |
-| `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_n.hpp` | n/a |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_n.hpp |
-| `include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_trload_creg_v2_prefetch_n.hpp` | n/a |&#x2705; include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_trload_creg_v2_prefetch_n.hpp |
-| `include/ck_tile/ops/sageattention/block/block_sageattention_quant_scale_enum.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/block/block_sageattention_quant_scale_enum.hpp |
-| `include/ck_tile/ops/sageattention/kernel/sageattn_fwd_kernel.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/kernel/sageattn_fwd_kernel.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_enum.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_enum.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_problem.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_problem.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async_default_policy.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async_default_policy.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_custom_policy.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_custom_policy.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_default_policy.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_default_policy.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/tile_sageattn_shape.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/tile_sageattn_shape.hpp |
-| `include/ck_tile/ops/sageattention/pipeline/tile_sageattn_traits.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattention/pipeline/tile_sageattn_traits.hpp |
-| `include/ck_tile/ops/sageattn.hpp` | n/a |&#x2705; include/ck_tile/ops/sageattn.hpp |
+| `include/ck_tile/core/numeric/pk_fp6.hpp` | n/a |&#x2705; include/ck_tile/core/numeric/pk_fp6.hpp |
 | `lib/libdevice_contraction_operations.a` | n/a |&#x2705; lib/libdevice_contraction_operations.a |
 | `lib/libdevice_conv_operations.a` | n/a |&#x2705; lib/libdevice_conv_operations.a |
 | `lib/libdevice_other_operations.a` | n/a |&#x2705; lib/libdevice_other_operations.a |

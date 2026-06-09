@@ -8,7 +8,7 @@ Dependency: amdrocm-runtime
 
 **No manual alignments set yet**
 
-## amdrocm-fft.msi, total files: 33
+## amdrocm-fft.msi, total files: 34
 | `File` | `amdrocm-fft.msi` |`amdrocm-fft7.13_7.13.0~20260507-25474076902_amd64.deb` |
 | :---- | :----: |:----- |
 | `.info/client-version` |  |n/a |
@@ -19,6 +19,7 @@ Dependency: amdrocm-runtime
 | `bin/rocfft-bench.exe` |  |n/a |
 | `bin/rocfft-test.exe` |  |n/a |
 | `bin/rocfft.dll` | &#x2705; |&#x2705; lib/librocfft.so&lt;br&gt;&#x2705; lib/librocfft.so.0&lt;br&gt;&#x2705; lib/librocfft.so.0.1 |
+| `bin/rocfft/CTestTestfile.cmake` |  |n/a |
 | `bin/rocfft_rtc_helper.exe` | &#x2705; |&#x2705; lib/rocfft/1.0.37/rocfft_rtc_helper |
 | `bin/rtc_helper_crash.exe` |  |n/a |
 | `include/hipfft/hipfft-export.h` |  |n/a |

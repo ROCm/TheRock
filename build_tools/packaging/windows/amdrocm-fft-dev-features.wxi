@@ -13,4 +13,5 @@
     <ComponentRef Id="c_amdrocm_fft_dev_lch_hc.cmake" />
     <ComponentRef Id="c_amdrocm_fft_dev_lch_htr.cmake" />
     <ComponentRef Id="c_amdrocm_fft_dev_lch_ht.cmake" />
+    <ComponentRef Id="c_amdrocm_fft_dev_sdh_L.md" />
 </Include>

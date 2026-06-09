@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
     <Directory Id="amdrocm_ck_i" Name="include">
-      <Directory Id="amdrocm_ck_ic" Name="include\ck">
+      <Component Id="c_amdrocm_ck_i_g.h" Guid="*">
+        <File Id="f_amdrocm_ck_i_g.h" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/getopt.h" KeyPath="yes" />
+      </Component>
+      <Directory Id="amdrocm_ck_ic" Name="ck">
         <Component Id="c_amdrocm_ck_ic_BTO.md" Guid="*">
           <File Id="f_amdrocm_ck_ic_BTO.md" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/BUILD_TIME_OPTIMIZATION.md" KeyPath="yes" />
         </Component>
@@ -29,7 +32,7 @@
         <Component Id="c_amdrocm_ck_ic_v.in" Guid="*">
           <File Id="f_amdrocm_ck_ic_v.in" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/version.h.in" KeyPath="yes" />
         </Component>
-        <Directory Id="amdrocm_ck_ichu" Name="include\ck\host_utility">
+        <Directory Id="amdrocm_ck_ichu" Name="host_utility">
           <Component Id="c_amdrocm_ck_ichu_dp.hpp" Guid="*">
             <File Id="f_amdrocm_ck_ichu_dp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/host_utility/device_prop.hpp" KeyPath="yes" />
           </Component>
@@ -49,9 +52,9 @@
             <File Id="f_amdrocm_ck_ichu_su.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/host_utility/stream_utility.hpp" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_ck_icl" Name="include\ck\library">
-          <Directory Id="amdrocm_ck_iclrto" Name="include\ck\library\reference_tensor_operation">
-            <Directory Id="amdrocm_ck_iclrtoc" Name="include\ck\library\reference_tensor_operation\cpu">
+        <Directory Id="amdrocm_ck_icl" Name="library">
+          <Directory Id="amdrocm_ck_iclrto" Name="reference_tensor_operation">
+            <Directory Id="amdrocm_ck_iclrtoc" Name="cpu">
               <Component Id="c_amdrocm_ck_iclrtoc_rab.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_iclrtoc_rab.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/reference_tensor_operation/cpu/reference_avgpool_bwd.hpp" KeyPath="yes" />
               </Component>
@@ -164,7 +167,7 @@
                 <File Id="f_amdrocm_ck_iclrtoc_rsefl.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/reference_tensor_operation/cpu/reference_sparse_embedding3_forward_layernorm.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_iclrtog" Name="include\ck\library\reference_tensor_operation\gpu">
+            <Directory Id="amdrocm_ck_iclrtog" Name="gpu">
               <Component Id="c_amdrocm_ck_iclrtog_ncbdg.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_iclrtog_ncbdg.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/reference_tensor_operation/gpu/naive_conv_bwd_data_gpu.hpp" KeyPath="yes" />
               </Component>
@@ -182,7 +185,7 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_icltoi" Name="include\ck\library\tensor_operation_instance">
+          <Directory Id="amdrocm_ck_icltoi" Name="tensor_operation_instance">
             <Component Id="c_amdrocm_ck_icltoi_adoi.hpp" Guid="*">
               <File Id="f_amdrocm_ck_icltoi_adoi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/add_device_operation_instance.hpp" KeyPath="yes" />
             </Component>
@@ -192,7 +195,7 @@
             <Component Id="c_amdrocm_ck_icltoi_doif.hpp" Guid="*">
               <File Id="f_amdrocm_ck_icltoi_doif.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/device_operation_instance_factory.hpp" KeyPath="yes" />
             </Component>
-            <Directory Id="amdrocm_ck_icltoig" Name="include\ck\library\tensor_operation_instance\gpu">
+            <Directory Id="amdrocm_ck_icltoig" Name="gpu">
               <Component Id="c_amdrocm_ck_icltoig_apb.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_icltoig_apb.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/avg_pool2d_bwd.hpp" KeyPath="yes" />
               </Component>
@@ -553,12 +556,12 @@
               <Component Id="c_amdrocm_ck_icltoig_t3.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_icltoig_t3.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/transpose_3d.hpp" KeyPath="yes" />
               </Component>
-              <Directory Id="amdrocm_ck_icltoigc" Name="include\ck\library\tensor_operation_instance\gpu\contraction">
+              <Directory Id="amdrocm_ck_icltoigc" Name="contraction">
                 <Component Id="c_amdrocm_ck_icltoigc_dci.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigc_dci.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/contraction/device_contraction_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoigctr" Name="include\ck\library\tensor_operation_instance\gpu\conv_tensor_rearrange">
+              <Directory Id="amdrocm_ck_icltoigctr" Name="conv_tensor_rearrange">
                 <Component Id="c_amdrocm_ck_icltoigctr_dctii.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigctr_dctii.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/conv_tensor_rearrange/device_column_to_image_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -566,7 +569,7 @@
                   <File Id="f_amdrocm_ck_icltoigctr_ditci.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/conv_tensor_rearrange/device_image_to_column_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoiggcbd" Name="include\ck\library\tensor_operation_instance\gpu\grouped_conv_bwd_data">
+              <Directory Id="amdrocm_ck_icltoiggcbd" Name="grouped_conv_bwd_data">
                 <Component Id="c_amdrocm_ck_icltoiggcbd_dgcbdtxi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoiggcbd_dgcbdtxi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_transpose_xdl_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -594,8 +597,11 @@
                 <Component Id="c_amdrocm_ck_icltoiggcbd_dgcbdxsi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoiggcbd_dgcbdxsi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_scale_instance.hpp" KeyPath="yes" />
                 </Component>
+                <Component Id="c_amdrocm_ck_icltoiggcbd_dgcbdxvi.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_icltoiggcbd_dgcbdxvi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_v3_instance.hpp" KeyPath="yes" />
+                </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoiggcbw" Name="include\ck\library\tensor_operation_instance\gpu\grouped_conv_bwd_weight">
+              <Directory Id="amdrocm_ck_icltoiggcbw" Name="grouped_conv_bwd_weight">
                 <Component Id="c_amdrocm_ck_icltoiggcbw_degwukkmi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoiggcbw_degwukkmi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_exp_gemm_wmma_universal_km_kn_mn_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -617,6 +623,9 @@
                 <Component Id="c_amdrocm_ck_icltoiggcbw_dgcbwvxi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoiggcbw_dgcbwvxi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_v3_xdl_instance.hpp" KeyPath="yes" />
                 </Component>
+                <Component Id="c_amdrocm_ck_icltoiggcbw_dgcbwwxi.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_icltoiggcbw_dgcbwwxi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_wavelet_xdl_instance.hpp" KeyPath="yes" />
+                </Component>
                 <Component Id="c_amdrocm_ck_icltoiggcbw_dgcbwwbi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoiggcbw_dgcbwwbi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_wmma_bilinear_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -633,7 +642,7 @@
                   <File Id="f_amdrocm_ck_icltoiggcbw_dgcbwxsi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_weight/device_grouped_conv_bwd_weight_xdl_scale_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoiggcf" Name="include\ck\library\tensor_operation_instance\gpu\grouped_conv_fwd">
+              <Directory Id="amdrocm_ck_icltoiggcf" Name="grouped_conv_fwd">
                 <Component Id="c_amdrocm_ck_icltoiggcf_dgcfdi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoiggcf_dgcfdi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_fwd/device_grouped_conv_fwd_dl_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -707,7 +716,7 @@
                   <File Id="f_amdrocm_ck_icltoiggcf_dgcfxssri.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_conv_fwd/device_grouped_conv_fwd_xdl_scaleadd_scaleadd_relu_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoiggg" Name="include\ck\library\tensor_operation_instance\gpu\grouped_gemm">
+              <Directory Id="amdrocm_ck_icltoiggg" Name="grouped_gemm">
                 <Component Id="c_amdrocm_ck_icltoiggg_dggwfni.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoiggg_dggwfni.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_gemm/device_grouped_gemm_wmma_fixed_nk_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -718,7 +727,7 @@
                   <File Id="f_amdrocm_ck_icltoiggg_dggxsi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_gemm/device_grouped_gemm_xdl_splitk_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoigggtl" Name="include\ck\library\tensor_operation_instance\gpu\grouped_gemm_tile_loop">
+              <Directory Id="amdrocm_ck_icltoigggtl" Name="grouped_gemm_tile_loop">
                 <Component Id="c_amdrocm_ck_icltoigggtl_dggtlmwi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigggtl_dggtlmwi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_gemm_tile_loop/device_grouped_gemm_tile_loop_multiply_wmma_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -726,12 +735,12 @@
                   <File Id="f_amdrocm_ck_icltoigggtl_dggtlwi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/grouped_gemm_tile_loop/device_grouped_gemm_tile_loop_wmma_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoigps" Name="include\ck\library\tensor_operation_instance\gpu\permute_scale">
+              <Directory Id="amdrocm_ck_icltoigps" Name="permute_scale">
                 <Component Id="c_amdrocm_ck_icltoigps_dpsi.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigps_dpsi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/permute_scale/device_permute_scale_instances.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoigq" Name="include\ck\library\tensor_operation_instance\gpu\quantization">
+              <Directory Id="amdrocm_ck_icltoigq" Name="quantization">
                 <Component Id="c_amdrocm_ck_icltoigq_gq.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigq_gq.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/quantization/gemm_quantization.hpp" KeyPath="yes" />
                 </Component>
@@ -748,7 +757,7 @@
                   <File Id="f_amdrocm_ck_icltoigq_grcofopequ.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/quantization/grouped_convolution_forward_perlayer_quantization.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoigr" Name="include\ck\library\tensor_operation_instance\gpu\reduce">
+              <Directory Id="amdrocm_ck_icltoigr" Name="reduce">
                 <Component Id="c_amdrocm_ck_icltoigr_dri.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigr_dri.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/reduce/device_reduce_instance.hpp" KeyPath="yes" />
                 </Component>
@@ -990,7 +999,7 @@
                   <File Id="f_amdrocm_ck_icltoigr_r.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/reduce/reduce.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoigs" Name="include\ck\library\tensor_operation_instance\gpu\softmax">
+              <Directory Id="amdrocm_ck_icltoigs" Name="softmax">
                 <Component Id="c_amdrocm_ck_icltoigs_dsffirr.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigs_dsffirr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/softmax/device_softmax_f16_f16_instance_rank3_reduce1.hpp" KeyPath="yes" />
                 </Component>
@@ -1043,14 +1052,14 @@
                   <File Id="f_amdrocm_ck_icltoigs_dsi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/softmax/device_softmax_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_icltoigt" Name="include\ck\library\tensor_operation_instance\gpu\transpose">
+              <Directory Id="amdrocm_ck_icltoigt" Name="transpose">
                 <Component Id="c_amdrocm_ck_icltoigt_dti.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_icltoigt_dti.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/tensor_operation_instance/gpu/transpose/device_transpose_instance.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_iclu" Name="include\ck\library\utility">
+          <Directory Id="amdrocm_ck_iclu" Name="utility">
             <Component Id="c_amdrocm_ck_iclu_a.hpp" Guid="*">
               <File Id="f_amdrocm_ck_iclu_a.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/library/utility/algorithm.hpp" KeyPath="yes" />
             </Component>
@@ -1110,17 +1119,17 @@
             </Component>
           </Directory>
         </Directory>
-        <Directory Id="amdrocm_ck_icpt" Name="include\ck\problem_transform">
+        <Directory Id="amdrocm_ck_icpt" Name="problem_transform">
           <Component Id="c_amdrocm_ck_icpt_tfcigvnkn.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icpt_tfcigvnkn.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/problem_transform/transform_forward_convolution3d_into_gemm_v4r4r4_ndhwc_kzyxc_ndhwk.hpp" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_ck_ict" Name="include\ck\tensor">
+        <Directory Id="amdrocm_ck_ict" Name="tensor">
           <Component Id="c_amdrocm_ck_ict_st.hpp" Guid="*">
             <File Id="f_amdrocm_ck_ict_st.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor/static_tensor.hpp" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_ck_ictd" Name="include\ck\tensor_description">
+        <Directory Id="amdrocm_ck_ictd" Name="tensor_description">
           <Component Id="c_amdrocm_ck_ictd_cd.hpp" Guid="*">
             <File Id="f_amdrocm_ck_ictd_cd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_description/cluster_descriptor.hpp" KeyPath="yes" />
           </Component>
@@ -1143,9 +1152,9 @@
             <File Id="f_amdrocm_ck_ictd_tsfc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_description/tensor_space_filling_curve.hpp" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_ck_icto" Name="include\ck\tensor_operation">
-          <Directory Id="amdrocm_ck_ictog" Name="include\ck\tensor_operation\gpu">
-            <Directory Id="amdrocm_ck_ictogb" Name="include\ck\tensor_operation\gpu\block">
+        <Directory Id="amdrocm_ck_icto" Name="tensor_operation">
+          <Directory Id="amdrocm_ck_ictog" Name="gpu">
+            <Directory Id="amdrocm_ck_ictogb" Name="block">
               <Component Id="c_amdrocm_ck_ictogb_bgdv.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogb_bgdv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/block/blockwise_gemm_dl_v2r3.hpp" KeyPath="yes" />
               </Component>
@@ -1396,7 +1405,7 @@
                 <File Id="f_amdrocm_ck_ictogb_tgtstvs.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/block/thread_group_tensor_slice_transfer_v7r3_scatter.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogd" Name="include\ck\tensor_operation\gpu\device">
+            <Directory Id="amdrocm_ck_ictogd" Name="device">
               <Component Id="c_amdrocm_ck_ictogd_ctro.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogd_ctro.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/conv_tensor_rearrange_op.hpp" KeyPath="yes" />
               </Component>
@@ -1619,13 +1628,16 @@
               <Component Id="c_amdrocm_ck_ictogd_tl.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogd_tl.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/tensor_layout.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_ictogd_tsc.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogd_tsc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/tensor_size_check.hpp" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_ictogd_ts.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogd_ts.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/tensor_specialization.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_ictogd_wh.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogd_wh.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/welford_helper.hpp" KeyPath="yes" />
               </Component>
-              <Directory Id="amdrocm_ck_ictogdi" Name="include\ck\tensor_operation\gpu\device\impl">
+              <Directory Id="amdrocm_ck_ictogdi" Name="impl">
                 <Component Id="c_amdrocm_ck_ictogdi_cdgcfmaxc.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogdi_cdgcfmaxc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/codegen_device_grouped_conv_fwd_multiple_abd_xdl_cshuffle.hpp" KeyPath="yes" />
                 </Component>
@@ -1917,6 +1929,9 @@
                 <Component Id="c_amdrocm_ck_ictogdi_dgcbdmdxcv.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogdi_dgcbdmdxcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v1.hpp" KeyPath="yes" />
                 </Component>
+                <Component Id="c_amdrocm_ck_ictogdi_degrcobwdamudxdcsv3.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_ictogdi_degrcobwdamudxdcsv3.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_data_multiple_d_xdl_cshuffle_v3.hpp" KeyPath="yes" />
+                </Component>
                 <Component Id="c_amdrocm_ck_ictogdi_dgcbwd.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogdi_dgcbwd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_dl.hpp" KeyPath="yes" />
                 </Component>
@@ -1946,6 +1961,9 @@
                 </Component>
                 <Component Id="c_amdrocm_ck_ictogdi_dgcbwxcv.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogdi_dgcbwxcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_xdl_cshuffle_v3.hpp" KeyPath="yes" />
+                </Component>
+                <Component Id="c_amdrocm_ck_ictogdi_dgcbwxwcv.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_ictogdi_dgcbwxwcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_bwd_weight_xdl_waveletmodel_cshuffle_v3.hpp" KeyPath="yes" />
                 </Component>
                 <Component Id="c_amdrocm_ck_ictogdi_dgcfdmdnkn.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogdi_dgcfdmdnkn.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_dl_multiple_d_nhwc_kyxc_nhwk.hpp" KeyPath="yes" />
@@ -1982,6 +2000,9 @@
                 </Component>
                 <Component Id="c_amdrocm_ck_ictogdi_dgcu.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogdi_dgcu.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_conv_utils.hpp" KeyPath="yes" />
+                </Component>
+                <Component Id="c_amdrocm_ck_ictogdi_dggfnc.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_ictogdi_dggfnc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_fixed_nk_common.hpp" KeyPath="yes" />
                 </Component>
                 <Component Id="c_amdrocm_ck_ictogdi_dggmawfn.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogdi_dggmawfn.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/device/impl/device_grouped_gemm_multi_abd_wmma_fixed_nk.hpp" KeyPath="yes" />
@@ -2108,7 +2129,7 @@
                 </Component>
               </Directory>
             </Directory>
-            <Directory Id="amdrocm_ck_ictoge" Name="include\ck\tensor_operation\gpu\element">
+            <Directory Id="amdrocm_ck_ictoge" Name="element">
               <Component Id="c_amdrocm_ck_ictoge_bewo.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoge_bewo.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/element/binary_element_wise_operation.hpp" KeyPath="yes" />
               </Component>
@@ -2125,7 +2146,7 @@
                 <File Id="f_amdrocm_ck_ictoge_uewo.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/element/unary_element_wise_operation.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogg" Name="include\ck\tensor_operation\gpu\grid">
+            <Directory Id="amdrocm_ck_ictogg" Name="grid">
               <Component Id="c_amdrocm_ck_ictogg_btcm.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_btcm.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/block_to_ctile_map.hpp" KeyPath="yes" />
               </Component>
@@ -2143,6 +2164,9 @@
               </Component>
               <Component Id="c_amdrocm_ck_ictogg_eds.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_eds.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/epilogue_direct_store.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogg_et.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogg_et.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/epilogue_type.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_ictogg_g2mrm.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_g2mrm.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_2d_multiple_reduction_multiblock.hpp" KeyPath="yes" />
@@ -2276,6 +2300,9 @@
               <Component Id="c_amdrocm_ck_ictogg_ggwcvc.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_ggwcvc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3_common.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_ictogg_ggwcvck.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogg_ggwcvck.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_gemm_wmma_cshuffle_v3_common_kernels.hpp" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_ictogg_ggxcc.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_ggxcc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_cshuffle_common.hpp" KeyPath="yes" />
               </Component>
@@ -2326,6 +2353,9 @@
               </Component>
               <Component Id="c_amdrocm_ck_ictogg_ggxwc.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_ggxwc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_waveletmodel_cshuffle.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogg_ggxwccv.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogg_ggxwccv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdl_waveletmodel_cshuffle_conv_v3.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_ictogg_ggxbw.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_ggxbw.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_gemm_xdlops_bwd_weight.hpp" KeyPath="yes" />
@@ -2396,7 +2426,7 @@
               <Component Id="c_amdrocm_ck_ictogg_gtr.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogg_gtr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gridwise_tensor_rearrange.hpp" KeyPath="yes" />
               </Component>
-              <Directory Id="amdrocm_ck_ictoggbm" Name="include\ck\tensor_operation\gpu\grid\batchnorm_multiblock">
+              <Directory Id="amdrocm_ck_ictoggbm" Name="batchnorm_multiblock">
                 <Component Id="c_amdrocm_ck_ictoggbm_gmbf.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictoggbm_gmbf.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/batchnorm_multiblock/gridwise_multiblock_batchnorm_forward.hpp" KeyPath="yes" />
                 </Component>
@@ -2413,7 +2443,7 @@
                   <File Id="f_amdrocm_ck_ictoggbm_gmwshmrfh.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/batchnorm_multiblock/gridwise_multiblock_welford_second_half_multiblock_reduce_first_half.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_ictogggl" Name="include\ck\tensor_operation\gpu\grid\gemm_layernorm">
+              <Directory Id="amdrocm_ck_ictogggl" Name="gemm_layernorm">
                 <Component Id="c_amdrocm_ck_ictogggl_ggmdwfhxc.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogggl_ggmdwfhxc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gemm_layernorm/gridwise_gemm_multiple_d_welford_first_half_xdl_cshuffle.hpp" KeyPath="yes" />
                 </Component>
@@ -2421,7 +2451,7 @@
                   <File Id="f_amdrocm_ck_ictogggl_gwshl.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/gemm_layernorm/gridwise_welford_second_half_layernorm2d.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_ictoggn" Name="include\ck\tensor_operation\gpu\grid\normalization">
+              <Directory Id="amdrocm_ck_ictoggn" Name="normalization">
                 <Component Id="c_amdrocm_ck_ictoggn_gnbd.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictoggn_gnbd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/grid/normalization/gridwise_normalization_bwd_data.hpp" KeyPath="yes" />
                 </Component>
@@ -2445,7 +2475,7 @@
                 </Component>
               </Directory>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogt" Name="include\ck\tensor_operation\gpu\thread">
+            <Directory Id="amdrocm_ck_ictogt" Name="thread">
               <Component Id="c_amdrocm_ck_ictogt_rft.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogt_rft.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/thread/reduction_functions_threadwise.hpp" KeyPath="yes" />
               </Component>
@@ -2510,7 +2540,7 @@
                 <File Id="f_amdrocm_ck_ictogt_tw.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/thread/threadwise_welford.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogw" Name="include\ck\tensor_operation\gpu\warp">
+            <Directory Id="amdrocm_ck_ictogw" Name="warp">
               <Component Id="c_amdrocm_ck_ictogw_dg.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogw_dg.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/gpu/warp/dpp_gemm.hpp" KeyPath="yes" />
               </Component>
@@ -2525,7 +2555,7 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictoot" Name="include\ck\tensor_operation\operator_transform">
+          <Directory Id="amdrocm_ck_ictoot" Name="operator_transform">
             <Component Id="c_amdrocm_ck_ictoot_tctg.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictoot_tctg.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/tensor_operation/operator_transform/transform_contraction_to_gemm.hpp" KeyPath="yes" />
             </Component>
@@ -2549,7 +2579,7 @@
             </Component>
           </Directory>
         </Directory>
-        <Directory Id="amdrocm_ck_icu" Name="include\ck\utility">
+        <Directory Id="amdrocm_ck_icu" Name="utility">
           <Component Id="c_amdrocm_ck_icu_aas.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_aas.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/amd_address_space.hpp" KeyPath="yes" />
           </Component>
@@ -2567,6 +2597,9 @@
           </Component>
           <Component Id="c_amdrocm_ck_icu_acf.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_acf.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/amd_ck_fp8.hpp" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_ck_icu_acl.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_icu_acl.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/amd_cluster_load.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_icu_agd.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_agd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/amd_gemm_dpp.hpp" KeyPath="yes" />
@@ -2613,6 +2646,9 @@
           <Component Id="c_amdrocm_ck_icu_cohe.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_cohe.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/container_helper.hpp" KeyPath="yes" />
           </Component>
+          <Component Id="c_amdrocm_ck_icu_dcp.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_icu_dcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/data_cache_prefetch.hpp" KeyPath="yes" />
+          </Component>
           <Component Id="c_amdrocm_ck_icu_dt.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_dt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/data_type.hpp" KeyPath="yes" />
           </Component>
@@ -2629,7 +2665,13 @@
             <File Id="f_amdrocm_ck_icu_db.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/dynamic_buffer.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_icu_e.hpp" Guid="*">
-            <File Id="f_amdrocm_ck_icu_e.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/e8m0.hpp" KeyPath="yes" />
+            <File Id="f_amdrocm_ck_icu_e.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/e4m3.hpp" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_ck_icu_e5.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_icu_e5.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/e5m3.hpp" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_ck_icu_e8.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_icu_e8.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/e8m0.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_icu_ei.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_ei.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/enable_if.hpp" KeyPath="yes" />
@@ -2739,6 +2781,9 @@
           <Component Id="c_amdrocm_ck_icu_ro.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_ro.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/reduction_operator.hpp" KeyPath="yes" />
           </Component>
+          <Component Id="c_amdrocm_ck_icu_su.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_icu_su.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/scale_utils.hpp" KeyPath="yes" />
+          </Component>
           <Component Id="c_amdrocm_ck_icu_stc.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icu_stc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/scaled_type_convert.hpp" KeyPath="yes" />
           </Component>
@@ -2791,14 +2836,14 @@
             <File Id="f_amdrocm_ck_icu_ws.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/utility/workgroup_synchronization.hpp" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_ck_icw" Name="include\ck\wrapper">
+        <Directory Id="amdrocm_ck_icw" Name="wrapper">
           <Component Id="c_amdrocm_ck_icw_l.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icw_l.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/wrapper/layout.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_icw_t.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icw_t.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/wrapper/tensor.hpp" KeyPath="yes" />
           </Component>
-          <Directory Id="amdrocm_ck_icwo" Name="include\ck\wrapper\operations">
+          <Directory Id="amdrocm_ck_icwo" Name="operations">
             <Component Id="c_amdrocm_ck_icwo_c.hpp" Guid="*">
               <File Id="f_amdrocm_ck_icwo_c.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/wrapper/operations/copy.hpp" KeyPath="yes" />
             </Component>
@@ -2806,12 +2851,12 @@
               <File Id="f_amdrocm_ck_icwo_g.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/wrapper/operations/gemm.hpp" KeyPath="yes" />
             </Component>
           </Directory>
-          <Directory Id="amdrocm_ck_icwt" Name="include\ck\wrapper\traits">
+          <Directory Id="amdrocm_ck_icwt" Name="traits">
             <Component Id="c_amdrocm_ck_icwt_bgxt.hpp" Guid="*">
               <File Id="f_amdrocm_ck_icwt_bgxt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/wrapper/traits/blockwise_gemm_xdl_traits.hpp" KeyPath="yes" />
             </Component>
           </Directory>
-          <Directory Id="amdrocm_ck_icwu" Name="include\ck\wrapper\utils">
+          <Directory Id="amdrocm_ck_icwu" Name="utils">
             <Component Id="c_amdrocm_ck_icwu_ku.hpp" Guid="*">
               <File Id="f_amdrocm_ck_icwu_ku.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck/wrapper/utils/kernel_utils.hpp" KeyPath="yes" />
             </Component>
@@ -2827,7 +2872,7 @@
           </Directory>
         </Directory>
       </Directory>
-      <Directory Id="amdrocm_ck_inckti" Name="include\ck_tile">
+      <Directory Id="amdrocm_ck_inckti" Name="ck_tile">
         <Component Id="c_amdrocm_ck_inckti_c.hpp" Guid="*">
           <File Id="f_amdrocm_ck_inckti_c.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core.hpp" KeyPath="yes" />
         </Component>
@@ -2840,14 +2885,14 @@
         <Component Id="c_amdrocm_ck_inckti_r.py" Guid="*">
           <File Id="f_amdrocm_ck_inckti_r.py" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/remod.py" KeyPath="yes" />
         </Component>
-        <Directory Id="amdrocm_ck_ictc" Name="include\ck_tile\core">
+        <Directory Id="amdrocm_ck_ictc" Name="core">
           <Component Id="c_amdrocm_ck_ictc_c.hpp" Guid="*">
             <File Id="f_amdrocm_ck_ictc_c.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/config.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_ictc_R.md" Guid="*">
             <File Id="f_amdrocm_ck_ictc_R.md" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/README.md" KeyPath="yes" />
           </Component>
-          <Directory Id="amdrocm_ck_ictca" Name="include\ck_tile\core\algorithm">
+          <Directory Id="amdrocm_ck_ictca" Name="algorithm">
             <Component Id="c_amdrocm_ck_ictca_cd.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictca_cd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/algorithm/cluster_descriptor.hpp" KeyPath="yes" />
             </Component>
@@ -2864,7 +2909,7 @@
               <File Id="f_amdrocm_ck_ictca_sep.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/algorithm/static_encoding_pattern.hpp" KeyPath="yes" />
             </Component>
           </Directory>
-          <Directory Id="amdrocm_ck_inckticoar" Name="include\ck_tile\core\arch">
+          <Directory Id="amdrocm_ck_inckticoar" Name="arch">
             <Component Id="c_amdrocm_ck_inckticoar_aba.hpp" Guid="*">
               <File Id="f_amdrocm_ck_inckticoar_aba.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/amd_buffer_addressing.hpp" KeyPath="yes" />
             </Component>
@@ -2874,14 +2919,29 @@
             <Component Id="c_amdrocm_ck_inckticoar_abc.hpp" Guid="*">
               <File Id="f_amdrocm_ck_inckticoar_abc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/amd_buffer_coherence.hpp" KeyPath="yes" />
             </Component>
+            <Component Id="c_amdrocm_ck_inckticoar_acl.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_inckticoar_acl.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/amd_cluster_load.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_inckticoar_atd.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_inckticoar_atd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/amd_tdm_descriptor.hpp" KeyPath="yes" />
+            </Component>
             <Component Id="c_amdrocm_ck_inckticoar_atle.hpp" Guid="*">
               <File Id="f_amdrocm_ck_inckticoar_atle.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/amd_transpose_load_encoding.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_inckticoar_awrfl.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_inckticoar_awrfl.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/amd_wave_read_first_lane.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_inckticoar_a.hpp" Guid="*">
               <File Id="f_amdrocm_ck_inckticoar_a.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/arch.hpp" KeyPath="yes" />
             </Component>
+            <Component Id="c_amdrocm_ck_inckticoar_b.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_inckticoar_b.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/barrier.hpp" KeyPath="yes" />
+            </Component>
             <Component Id="c_amdrocm_ck_inckticoar_gmsa.hpp" Guid="*">
               <File Id="f_amdrocm_ck_inckticoar_gmsa.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/generic_memory_space_atomic.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_inckticoar_ip.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_inckticoar_ip.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/inst_prefetch.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_inckticoar_u.hpp" Guid="*">
               <File Id="f_amdrocm_ck_inckticoar_u.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/utility.hpp" KeyPath="yes" />
@@ -2889,9 +2949,12 @@
             <Component Id="c_amdrocm_ck_inckticoar_wb.hpp" Guid="*">
               <File Id="f_amdrocm_ck_inckticoar_wb.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/workgroup_barrier.hpp" KeyPath="yes" />
             </Component>
-            <Directory Id="amdrocm_ck_ictcam" Name="include\ck_tile\core\arch\mma">
+            <Directory Id="amdrocm_ck_ictcam" Name="mma">
               <Component Id="c_amdrocm_ck_ictcam_am.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictcam_am.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/amdgcn_mma.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictcam_m.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictcam_m.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/mma.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_ictcam_mof.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictcam_mof.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/mma_op_family.hpp" KeyPath="yes" />
@@ -2911,7 +2974,7 @@
               <Component Id="c_amdrocm_ck_ictcam_mw.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictcam_mw.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/mma_wavewise.hpp" KeyPath="yes" />
               </Component>
-              <Directory Id="amdrocm_ck_ictcamm" Name="include\ck_tile\core\arch\mma\mfma">
+              <Directory Id="amdrocm_ck_ictcamm" Name="mfma">
                 <Component Id="c_amdrocm_ck_ictcamm_m.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictcamm_m.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/mfma/mfma.hpp" KeyPath="yes" />
                 </Component>
@@ -2928,31 +2991,56 @@
                   <File Id="f_amdrocm_ck_ictcamm_mftr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/mfma/mfma_transforms.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_ictcams" Name="include\ck_tile\core\arch\mma\sparse">
+              <Directory Id="amdrocm_ck_ictcams" Name="scale">
                 <Component Id="c_amdrocm_ck_ictcams_s.hpp" Guid="*">
-                  <File Id="f_amdrocm_ck_ictcams_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse.hpp" KeyPath="yes" />
+                  <File Id="f_amdrocm_ck_ictcams_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/scale/scale.hpp" KeyPath="yes" />
                 </Component>
                 <Component Id="c_amdrocm_ck_ictcams_smp.hpp" Guid="*">
-                  <File Id="f_amdrocm_ck_ictcams_smp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_mma_pipeline.hpp" KeyPath="yes" />
+                  <File Id="f_amdrocm_ck_ictcams_smp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/scale/scale_mma_pipeline.hpp" KeyPath="yes" />
                 </Component>
                 <Component Id="c_amdrocm_ck_ictcams_ss.hpp" Guid="*">
-                  <File Id="f_amdrocm_ck_ictcams_ss.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_selector.hpp" KeyPath="yes" />
+                  <File Id="f_amdrocm_ck_ictcams_ss.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/scale/scale_selector.hpp" KeyPath="yes" />
                 </Component>
                 <Component Id="c_amdrocm_ck_ictcams_st.hpp" Guid="*">
-                  <File Id="f_amdrocm_ck_ictcams_st.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_traits.hpp" KeyPath="yes" />
+                  <File Id="f_amdrocm_ck_ictcams_st.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/scale/scale_traits.hpp" KeyPath="yes" />
                 </Component>
-                <Component Id="c_amdrocm_ck_ictcams_sptr.hpp" Guid="*">
-                  <File Id="f_amdrocm_ck_ictcams_sptr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_transforms.hpp" KeyPath="yes" />
+                <Component Id="c_amdrocm_ck_ictcams_sctr.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_ictcams_sctr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/scale/scale_transforms.hpp" KeyPath="yes" />
                 </Component>
-                <Directory Id="amdrocm_ck_ictcamsm" Name="include\ck_tile\core\arch\mma\sparse\mfma">
-                  <Component Id="c_amdrocm_ck_ictcamsm_s.hpp" Guid="*">
-                    <File Id="f_amdrocm_ck_ictcamsm_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/mfma/selector.hpp" KeyPath="yes" />
-                  </Component>
+                <Directory Id="amdrocm_ck_ictcamsm" Name="mfma">
                   <Component Id="c_amdrocm_ck_ictcamsm_sg.hpp" Guid="*">
-                    <File Id="f_amdrocm_ck_ictcamsm_sg.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/mfma/sparse_gfx9.hpp" KeyPath="yes" />
+                    <File Id="f_amdrocm_ck_ictcamsm_sg.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/scale/mfma/scale_gfx9.hpp" KeyPath="yes" />
+                  </Component>
+                  <Component Id="c_amdrocm_ck_ictcamsm_s.hpp" Guid="*">
+                    <File Id="f_amdrocm_ck_ictcamsm_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/scale/mfma/selector.hpp" KeyPath="yes" />
                   </Component>
                 </Directory>
-                <Directory Id="amdrocm_ck_ictcamsw" Name="include\ck_tile\core\arch\mma\sparse\wmma">
+              </Directory>
+              <Directory Id="amdrocm_ck_inckticoarmmsp" Name="sparse">
+                <Component Id="c_amdrocm_ck_inckticoarmmsp_s.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_inckticoarmmsp_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse.hpp" KeyPath="yes" />
+                </Component>
+                <Component Id="c_amdrocm_ck_inckticoarmmsp_smp.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_inckticoarmmsp_smp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_mma_pipeline.hpp" KeyPath="yes" />
+                </Component>
+                <Component Id="c_amdrocm_ck_inckticoarmmsp_ss.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_inckticoarmmsp_ss.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_selector.hpp" KeyPath="yes" />
+                </Component>
+                <Component Id="c_amdrocm_ck_inckticoarmmsp_st.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_inckticoarmmsp_st.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_traits.hpp" KeyPath="yes" />
+                </Component>
+                <Component Id="c_amdrocm_ck_inckticoarmmsp_sptr.hpp" Guid="*">
+                  <File Id="f_amdrocm_ck_inckticoarmmsp_sptr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/sparse_transforms.hpp" KeyPath="yes" />
+                </Component>
+                <Directory Id="amdrocm_ck_inckticoarmmspmf" Name="mfma">
+                  <Component Id="c_amdrocm_ck_inckticoarmmspmf_s.hpp" Guid="*">
+                    <File Id="f_amdrocm_ck_inckticoarmmspmf_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/mfma/selector.hpp" KeyPath="yes" />
+                  </Component>
+                  <Component Id="c_amdrocm_ck_inckticoarmmspmf_sg.hpp" Guid="*">
+                    <File Id="f_amdrocm_ck_inckticoarmmspmf_sg.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/mfma/sparse_gfx9.hpp" KeyPath="yes" />
+                  </Component>
+                </Directory>
+                <Directory Id="amdrocm_ck_ictcamsw" Name="wmma">
                   <Component Id="c_amdrocm_ck_ictcamsw_s.hpp" Guid="*">
                     <File Id="f_amdrocm_ck_ictcamsw_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/sparse/wmma/selector.hpp" KeyPath="yes" />
                   </Component>
@@ -2961,7 +3049,7 @@
                   </Component>
                 </Directory>
               </Directory>
-              <Directory Id="amdrocm_ck_ictcamu" Name="include\ck_tile\core\arch\mma\utility">
+              <Directory Id="amdrocm_ck_ictcamu" Name="utility">
                 <Component Id="c_amdrocm_ck_ictcamu_tdec.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictcamu_tdec.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/utility/tile_distribution_encoding_calculator.hpp" KeyPath="yes" />
                 </Component>
@@ -2969,7 +3057,7 @@
                   <File Id="f_amdrocm_ck_ictcamu_tderm.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/utility/tile_distribution_encoding_register_mapper.hpp" KeyPath="yes" />
                 </Component>
               </Directory>
-              <Directory Id="amdrocm_ck_ictcamw" Name="include\ck_tile\core\arch\mma\wmma">
+              <Directory Id="amdrocm_ck_ictcamw" Name="wmma">
                 <Component Id="c_amdrocm_ck_ictcamw_w.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictcamw_w.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/arch/mma/wmma/wmma.hpp" KeyPath="yes" />
                 </Component>
@@ -2991,7 +3079,7 @@
               </Directory>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictcc" Name="include\ck_tile\core\container">
+          <Directory Id="amdrocm_ck_ictcc" Name="container">
             <Component Id="c_amdrocm_ck_ictcc_a.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcc_a.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/container/array.hpp" KeyPath="yes" />
             </Component>
@@ -3026,18 +3114,27 @@
               <File Id="f_amdrocm_ck_ictcc_t.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/container/tuple.hpp" KeyPath="yes" />
             </Component>
           </Directory>
-          <Directory Id="amdrocm_ck_ictcn" Name="include\ck_tile\core\numeric">
+          <Directory Id="amdrocm_ck_ictcn" Name="numeric">
             <Component Id="c_amdrocm_ck_ictcn_b.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_b.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/bfloat16.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_e.hpp" Guid="*">
-              <File Id="f_amdrocm_ck_ictcn_e.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/e8m0.hpp" KeyPath="yes" />
+              <File Id="f_amdrocm_ck_ictcn_e.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/e4m3.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_ictcn_e5.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_ictcn_e5.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/e5m3.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_ictcn_e8.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_ictcn_e8.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/e8m0.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_evb.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_evb.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/ext_vector_base.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_f.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_f.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/float8.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_ictcn_fe.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_ictcn_fe.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/float8_ext.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_h.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_h.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/half.hpp" KeyPath="yes" />
@@ -3054,8 +3151,14 @@
             <Component Id="c_amdrocm_ck_ictcn_m.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_m.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/math.hpp" KeyPath="yes" />
             </Component>
+            <Component Id="c_amdrocm_ck_ictcn_mv.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_ictcn_mv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/math_v2.hpp" KeyPath="yes" />
+            </Component>
             <Component Id="c_amdrocm_ck_ictcn_mc.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_mc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/mxfp_convert.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_ictcn_ms.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_ictcn_ms.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/mxfp_scale.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_nt.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_nt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/null_type.hpp" KeyPath="yes" />
@@ -3064,13 +3167,16 @@
               <File Id="f_amdrocm_ck_ictcn_n.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/numeric.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_pf.hpp" Guid="*">
-              <File Id="f_amdrocm_ck_ictcn_pf.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_fp4.hpp" KeyPath="yes" />
+              <File Id="f_amdrocm_ck_ictcn_pf.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_f6.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_pkfp.hpp" Guid="*">
-              <File Id="f_amdrocm_ck_ictcn_pkfp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_fp6.hpp" KeyPath="yes" />
+              <File Id="f_amdrocm_ck_ictcn_pkfp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_fp4.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_pi.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_pi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/pk_int4.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_ictcn_su.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_ictcn_su.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/scale_util.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcn_tc.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcn_tc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/type_convert.hpp" KeyPath="yes" />
@@ -3079,7 +3185,7 @@
               <File Id="f_amdrocm_ck_ictcn_vt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/numeric/vector_type.hpp" KeyPath="yes" />
             </Component>
           </Directory>
-          <Directory Id="amdrocm_ck_ictct" Name="include\ck_tile\core\tensor">
+          <Directory Id="amdrocm_ck_ictct" Name="tensor">
             <Component Id="c_amdrocm_ck_ictct_bv.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictct_bv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/buffer_view.hpp" KeyPath="yes" />
             </Component>
@@ -3088,6 +3194,9 @@
             </Component>
             <Component Id="c_amdrocm_ck_ictct_ltt.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictct_ltt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/load_tile_transpose.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_ictct_ltt.bk" Guid="*">
+              <File Id="f_amdrocm_ck_ictct_ltt.bk" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/load_tile_transpose.hpp.bk" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictct_nt.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictct_nt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/null_tensor.hpp" KeyPath="yes" />
@@ -3140,6 +3249,9 @@
             <Component Id="c_amdrocm_ck_ictct_tw.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictct_tw.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/tile_window.hpp" KeyPath="yes" />
             </Component>
+            <Component Id="c_amdrocm_ck_ictct_tw.bk" Guid="*">
+              <File Id="f_amdrocm_ck_ictct_tw.bk" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/tile_window.hpp.bk" KeyPath="yes" />
+            </Component>
             <Component Id="c_amdrocm_ck_ictct_twb.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictct_twb.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/tile_window_base.hpp" KeyPath="yes" />
             </Component>
@@ -3156,9 +3268,12 @@
               <File Id="f_amdrocm_ck_ictct_ut.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/tensor/update_tile.hpp" KeyPath="yes" />
             </Component>
           </Directory>
-          <Directory Id="amdrocm_ck_ictcu" Name="include\ck_tile\core\utility">
+          <Directory Id="amdrocm_ck_ictcu" Name="utility">
             <Component Id="c_amdrocm_ck_ictcu_bc.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcu_bc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/utility/bit_cast.hpp" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_ck_ictcu_dcp.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_ictcu_dcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/utility/data_cache_prefetch.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictcu_d.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictcu_d.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/core/utility/debug.hpp" KeyPath="yes" />
@@ -3222,7 +3337,7 @@
             </Component>
           </Directory>
         </Directory>
-        <Directory Id="amdrocm_ck_icth" Name="include\ck_tile\host">
+        <Directory Id="amdrocm_ck_icth" Name="host">
           <Component Id="c_amdrocm_ck_icth_ap.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icth_ap.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/arg_parser.hpp" KeyPath="yes" />
           </Component>
@@ -3259,6 +3374,9 @@
           <Component Id="c_amdrocm_ck_icth_ht.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icth_ht.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/host_tensor.hpp" KeyPath="yes" />
           </Component>
+          <Component Id="c_amdrocm_ck_icth_hti.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_icth_hti.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/host_tensor_io.hpp" KeyPath="yes" />
+          </Component>
           <Component Id="c_amdrocm_ck_icth_jt.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icth_jt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/joinable_thread.hpp" KeyPath="yes" />
           </Component>
@@ -3267,6 +3385,9 @@
           </Component>
           <Component Id="c_amdrocm_ck_icth_ppi.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icth_ppi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/permute_pk_int4.hpp" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_ck_icth_phr.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_icth_phr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/pinned_host_releaser.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_icth_r.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icth_r.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/ranges.hpp" KeyPath="yes" />
@@ -3286,7 +3407,7 @@
           <Component Id="c_amdrocm_ck_icth_t.hpp" Guid="*">
             <File Id="f_amdrocm_ck_icth_t.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/timer.hpp" KeyPath="yes" />
           </Component>
-          <Directory Id="amdrocm_ck_icthr" Name="include\ck_tile\host\reference">
+          <Directory Id="amdrocm_ck_icthr" Name="reference">
             <Component Id="c_amdrocm_ck_icthr_rbc.hpp" Guid="*">
               <File Id="f_amdrocm_ck_icthr_rbc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/host/reference/reference_batched_contraction.hpp" KeyPath="yes" />
             </Component>
@@ -3376,7 +3497,7 @@
             </Component>
           </Directory>
         </Directory>
-        <Directory Id="amdrocm_ck_incktiop" Name="include\ck_tile\ops">
+        <Directory Id="amdrocm_ck_incktiop" Name="ops">
           <Component Id="c_amdrocm_ck_incktiop_arr.hpp" Guid="*">
             <File Id="f_amdrocm_ck_incktiop_arr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/add_rmsnorm2d_rdquant.hpp" KeyPath="yes" />
           </Component>
@@ -3468,16 +3589,25 @@
             <File Id="f_amdrocm_ck_incktiop_ro.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/rotary.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_incktiop_s.hpp" Guid="*">
-            <File Id="f_amdrocm_ck_incktiop_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant.hpp" KeyPath="yes" />
+            <File Id="f_amdrocm_ck_incktiop_s.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention.hpp" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_ck_incktiop_sa.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_incktiop_sa.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattn.hpp" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_ck_incktiop_sm.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_incktiop_sm.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_incktiop_so.hpp" Guid="*">
             <File Id="f_amdrocm_ck_incktiop_so.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/softmax.hpp" KeyPath="yes" />
           </Component>
-          <Component Id="c_amdrocm_ck_incktiop_sa.hpp" Guid="*">
-            <File Id="f_amdrocm_ck_incktiop_sa.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sparse_attn.hpp" KeyPath="yes" />
+          <Component Id="c_amdrocm_ck_incktiop_spat.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_incktiop_spat.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sparse_attn.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_incktiop_t.hpp" Guid="*">
-            <File Id="f_amdrocm_ck_incktiop_t.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/topk.hpp" KeyPath="yes" />
+            <File Id="f_amdrocm_ck_incktiop_t.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/tdm.hpp" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_ck_incktiop_to.hpp" Guid="*">
+            <File Id="f_amdrocm_ck_incktiop_to.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/topk.hpp" KeyPath="yes" />
           </Component>
           <Component Id="c_amdrocm_ck_incktiop_ts.hpp" Guid="*">
             <File Id="f_amdrocm_ck_incktiop_ts.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/topk_softmax.hpp" KeyPath="yes" />
@@ -3485,13 +3615,13 @@
           <Component Id="c_amdrocm_ck_incktiop_u.hpp" Guid="*">
             <File Id="f_amdrocm_ck_incktiop_u.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/utils.hpp" KeyPath="yes" />
           </Component>
-          <Directory Id="amdrocm_ck_ictoarr" Name="include\ck_tile\ops\add_rmsnorm2d_rdquant">
-            <Directory Id="amdrocm_ck_ictoarrk" Name="include\ck_tile\ops\add_rmsnorm2d_rdquant\kernel">
+          <Directory Id="amdrocm_ck_ictoarr" Name="add_rmsnorm2d_rdquant">
+            <Directory Id="amdrocm_ck_ictoarrk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictoarrk_arrfk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoarrk_arrfk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/add_rmsnorm2d_rdquant/kernel/add_rmsnorm2d_rdquant_fwd_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictoarrp" Name="include\ck_tile\ops\add_rmsnorm2d_rdquant\pipeline">
+            <Directory Id="amdrocm_ck_ictoarrp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictoarrp_arrfpdp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoarrp_arrfpdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/add_rmsnorm2d_rdquant/pipeline/add_rmsnorm2d_rdquant_fwd_pipeline_default_policy.hpp" KeyPath="yes" />
               </Component>
@@ -3506,30 +3636,30 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictobc" Name="include\ck_tile\ops\batched_contraction">
-            <Directory Id="amdrocm_ck_ictobck" Name="include\ck_tile\ops\batched_contraction\kernel">
+          <Directory Id="amdrocm_ck_ictobc" Name="batched_contraction">
+            <Directory Id="amdrocm_ck_ictobck" Name="kernel">
               <Component Id="c_amdrocm_ck_ictobck_bck.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictobck_bck.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/batched_contraction/kernel/batched_contraction_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictobcp" Name="include\ck_tile\ops\batched_contraction\pipeline">
+            <Directory Id="amdrocm_ck_ictobcp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictobcp_bcp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictobcp_bcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/batched_contraction/pipeline/batched_contraction_problem.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictobcu" Name="include\ck_tile\ops\batched_contraction\utils">
+            <Directory Id="amdrocm_ck_ictobcu" Name="utils">
               <Component Id="c_amdrocm_ck_ictobcu_tdu.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictobcu_tdu.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/batched_contraction/utils/tensor_descriptor_utils.hpp" KeyPath="yes" />
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictobt" Name="include\ck_tile\ops\batched_transpose">
-            <Directory Id="amdrocm_ck_ictobtk" Name="include\ck_tile\ops\batched_transpose\kernel">
+          <Directory Id="amdrocm_ck_ictobt" Name="batched_transpose">
+            <Directory Id="amdrocm_ck_ictobtk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictobtk_btk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictobtk_btk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/batched_transpose/kernel/batched_transpose_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictobtp" Name="include\ck_tile\ops\batched_transpose\pipeline">
+            <Directory Id="amdrocm_ck_ictobtp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictobtp_btcp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictobtp_btcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/batched_transpose/pipeline/batched_transpose_common_policy.hpp" KeyPath="yes" />
               </Component>
@@ -3553,7 +3683,7 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictoc" Name="include\ck_tile\ops\common">
+          <Directory Id="amdrocm_ck_ictoc" Name="common">
             <Component Id="c_amdrocm_ck_ictoc_g2bs.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictoc_g2bs.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/common/generic_2d_block_shape.hpp" KeyPath="yes" />
             </Component>
@@ -3573,19 +3703,19 @@
               <File Id="f_amdrocm_ck_ictoc_u.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/common/utils.hpp" KeyPath="yes" />
             </Component>
           </Directory>
-          <Directory Id="amdrocm_ck_ictoe" Name="include\ck_tile\ops\elementwise">
+          <Directory Id="amdrocm_ck_ictoe" Name="elementwise">
             <Component Id="c_amdrocm_ck_ictoe_beo.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictoe_beo.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/elementwise/binary_elementwise_operation.hpp" KeyPath="yes" />
             </Component>
             <Component Id="c_amdrocm_ck_ictoe_uewo.hpp" Guid="*">
               <File Id="f_amdrocm_ck_ictoe_uewo.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/elementwise/unary_element_wise_operation.hpp" KeyPath="yes" />
             </Component>
-            <Directory Id="amdrocm_ck_ictoek" Name="include\ck_tile\ops\elementwise\kernel">
+            <Directory Id="amdrocm_ck_ictoek" Name="kernel">
               <Component Id="c_amdrocm_ck_ictoek_ek.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoek_ek.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/elementwise/kernel/elementwise_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictoep" Name="include\ck_tile\ops\elementwise\pipeline">
+            <Directory Id="amdrocm_ck_ictoep" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictoep_epdp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoep_epdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/elementwise/pipeline/elementwise_pipeline_default_policy.hpp" KeyPath="yes" />
               </Component>
@@ -3597,7 +3727,7 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_incktiopep" Name="include\ck_tile\ops\epilogue">
+          <Directory Id="amdrocm_ck_incktiopep" Name="epilogue">
             <Component Id="c_amdrocm_ck_incktiopep_ce.hpp" Guid="*">
               <File Id="f_amdrocm_ck_incktiopep_ce.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/epilogue/cshuffle_epilogue.hpp" KeyPath="yes" />
             </Component>
@@ -3613,7 +3743,10 @@
             <Component Id="c_amdrocm_ck_incktiopep_pe.hpp" Guid="*">
               <File Id="f_amdrocm_ck_incktiopep_pe.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/epilogue/permuten_epilogue.hpp" KeyPath="yes" />
             </Component>
-            <Directory Id="amdrocm_ck_ictoec" Name="include\ck_tile\ops\epilogue\chainer">
+            <Component Id="c_amdrocm_ck_incktiopep_te.hpp" Guid="*">
+              <File Id="f_amdrocm_ck_incktiopep_te.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/epilogue/tdm_epilogue.hpp" KeyPath="yes" />
+            </Component>
+            <Directory Id="amdrocm_ck_ictoec" Name="chainer">
               <Component Id="c_amdrocm_ck_ictoec_ceo.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoec_ceo.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/epilogue/chainer/common_epilogue_ops.hpp" KeyPath="yes" />
               </Component>
@@ -3631,8 +3764,8 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictof" Name="include\ck_tile\ops\flatmm">
-            <Directory Id="amdrocm_ck_ictofb" Name="include\ck_tile\ops\flatmm\block">
+          <Directory Id="amdrocm_ck_ictof" Name="flatmm">
+            <Directory Id="amdrocm_ck_ictofb" Name="block">
               <Component Id="c_amdrocm_ck_ictofb_bfabcv.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictofb_bfabcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/flatmm/block/block_flatmm_asmem_bsmem_creg_v1.hpp" KeyPath="yes" />
               </Component>
@@ -3651,7 +3784,7 @@
               <Component Id="c_amdrocm_ck_ictofb_fuc.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictofb_fuc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/flatmm/block/flatmm_uk_config.hpp" KeyPath="yes" />
               </Component>
-              <Directory Id="amdrocm_ck_ictofbu" Name="include\ck_tile\ops\flatmm\block\uk">
+              <Directory Id="amdrocm_ck_ictofbu" Name="uk">
                 <Component Id="c_amdrocm_ck_ictofbu_fsug311.inc" Guid="*">
                   <File Id="f_amdrocm_ck_ictofbu_fsug311.inc" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/flatmm/block/uk/flatmm_sn_uk_gfx9_32x128x512_1x4x1_16x16x16.inc" KeyPath="yes" />
                 </Component>
@@ -3666,7 +3799,7 @@
                 </Component>
               </Directory>
             </Directory>
-            <Directory Id="amdrocm_ck_ictofk" Name="include\ck_tile\ops\flatmm\kernel">
+            <Directory Id="amdrocm_ck_ictofk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictofk_fk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictofk_fk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/flatmm/kernel/flatmm_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -3683,7 +3816,7 @@
                 <File Id="f_amdrocm_ck_ictofk_mxflke.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/flatmm/kernel/mx_flatmm_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictofp" Name="include\ck_tile\ops\flatmm\pipeline">
+            <Directory Id="amdrocm_ck_ictofp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictofp_fpabcv.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictofp_fpabcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/flatmm/pipeline/flatmm_pipeline_agmem_bgmem_creg_v1.hpp" KeyPath="yes" />
               </Component>
@@ -3710,10 +3843,13 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_incktiopfm" Name="include\ck_tile\ops\fmha">
-            <Directory Id="amdrocm_ck_incktiopfmbl" Name="include\ck_tile\ops\fmha\block">
+          <Directory Id="amdrocm_ck_incktiopfm" Name="fmha">
+            <Directory Id="amdrocm_ck_incktiopfmbl" Name="block">
               <Component Id="c_amdrocm_ck_incktiopfmbl_babe.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopfmbl_babe.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/block/block_attention_bias_enum.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopfmbl_baklme.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopfmbl_baklme.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/block/block_attention_kv_load_mode_enum.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_incktiopfmbl_bakle.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopfmbl_bakle.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/block/block_attention_kvcache_layout_enum.hpp" KeyPath="yes" />
@@ -3743,7 +3879,7 @@
                 <File Id="f_amdrocm_ck_incktiopfmbl_v.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/block/variants.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_incktiopfmke" Name="include\ck_tile\ops\fmha\kernel">
+            <Directory Id="amdrocm_ck_incktiopfmke" Name="kernel">
               <Component Id="c_amdrocm_ck_incktiopfmke_fbpk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopfmke_fbpk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/kernel/fmha_batch_prefill_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -3772,7 +3908,7 @@
                 <File Id="f_amdrocm_ck_incktiopfmke_ffvk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/kernel/fmha_fwd_v3_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_incktiopfmpi" Name="include\ck_tile\ops\fmha\pipeline">
+            <Directory Id="amdrocm_ck_incktiopfmpi" Name="pipeline">
               <Component Id="c_amdrocm_ck_incktiopfmpi_bfbppqkva.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopfmpi_bfbppqkva.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/pipeline/block_fmha_batch_prefill_pipeline_qr_ks_vs_async.hpp" KeyPath="yes" />
               </Component>
@@ -3878,6 +4014,9 @@
               <Component Id="c_amdrocm_ck_incktiopfmpi_bfpqkvwkpdp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopfmpi_bfpqkvwkpdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_default_policy.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_incktiopfmpi_bfpqkvwkpt.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopfmpi_bfpqkvwkpt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qr_ks_vs_whole_k_prefetch_trload.hpp" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_incktiopfmpi_blfmpiqsksvs.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopfmpi_blfmpiqsksvs.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qs_ks_vs.hpp" KeyPath="yes" />
               </Component>
@@ -3895,8 +4034,8 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictofm" Name="include\ck_tile\ops\fused_moe">
-            <Directory Id="amdrocm_ck_ictofmk" Name="include\ck_tile\ops\fused_moe\kernel">
+          <Directory Id="amdrocm_ck_ictofm" Name="fused_moe">
+            <Directory Id="amdrocm_ck_ictofmk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictofmk_fmk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictofmk_fmk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fused_moe/kernel/fused_moegemm_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -3913,7 +4052,7 @@
                 <File Id="f_amdrocm_ck_ictofmk_msp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fused_moe/kernel/moe_sorting_problem.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictofmp" Name="include\ck_tile\ops\fused_moe\pipeline">
+            <Directory Id="amdrocm_ck_ictofmp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictofmp_fmpfe.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictofmp_fmpfe.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/fused_moe/pipeline/fused_moegemm_pipeline_flatmm_ex.hpp" KeyPath="yes" />
               </Component>
@@ -3937,8 +4076,8 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_incktiopge" Name="include\ck_tile\ops\gemm">
-            <Directory Id="amdrocm_ck_incktiopgebl" Name="include\ck_tile\ops\gemm\block">
+          <Directory Id="amdrocm_ck_incktiopge" Name="gemm">
+            <Directory Id="amdrocm_ck_incktiopgebl" Name="block">
               <Component Id="c_amdrocm_ck_incktiopgebl_bgabcv.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgebl_bgabcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_gemm_areg_bgmem_creg_v1.hpp" KeyPath="yes" />
               </Component>
@@ -3984,8 +4123,17 @@
               <Component Id="c_amdrocm_ck_incktiopgebl_blgearbscrv2depo.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgebl_blgearbscrv2depo.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_default_policy.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_incktiopgebl_bgabcvpk.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopgebl_bgabcvpk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_k.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopgebl_bgabcvpn.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopgebl_bgabcvpn.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_prefetch_n.hpp" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_incktiopgebl_blogemarebsmcrev2r.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgebl_blogemarebsmcrev2r.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2r1.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopgebl_bgabtcvpn.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopgebl_bgabtcvpn.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_gemm_areg_bsmem_trload_creg_v2_prefetch_n.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_incktiopgebl_blgeasbrcrv1.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgebl_blgeasbrcrv1.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_gemm_asmem_breg_creg_v1.hpp" KeyPath="yes" />
@@ -4027,7 +4175,7 @@
                 <File Id="f_amdrocm_ck_incktiopgebl_bwabcvcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/block/block_wp_asmem_bsmem_creg_v1_custom_policy.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogk" Name="include\ck_tile\ops\gemm\kernel">
+            <Directory Id="amdrocm_ck_ictogk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictogk_bgk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogk_bgk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/kernel/batched_gemm_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -4046,10 +4194,16 @@
               <Component Id="c_amdrocm_ck_ictogk_ggk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogk_ggk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/kernel/grouped_gemm_kernel.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_ictogk_mgk.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogk_mgk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/kernel/mx_gemm_kernel.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogk_mggk.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogk_mggk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/kernel/mx_grouped_gemm_kernel.hpp" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_ictogk_ugk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogk_ugk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/kernel/universal_gemm_kernel.hpp" KeyPath="yes" />
               </Component>
-              <Directory Id="amdrocm_ck_ictogksg" Name="include\ck_tile\ops\gemm\kernel\streamk_gemm">
+              <Directory Id="amdrocm_ck_ictogksg" Name="streamk_gemm">
                 <Component Id="c_amdrocm_ck_ictogksg_sgc.hpp" Guid="*">
                   <File Id="f_amdrocm_ck_ictogksg_sgc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/kernel/streamk_gemm/streamk_gemm_coherency.hpp" KeyPath="yes" />
                 </Component>
@@ -4064,7 +4218,7 @@
                 </Component>
               </Directory>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogp" Name="include\ck_tile\ops\gemm\pipeline">
+            <Directory Id="amdrocm_ck_ictogp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictogp_gpabcb.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogp_gpabcb.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_base.hpp" KeyPath="yes" />
               </Component>
@@ -4079,6 +4233,18 @@
               </Component>
               <Component Id="c_amdrocm_ck_ictogp_gpabccaewp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogp_gpabccaewp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves_policy.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogp_gpabccav.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogp_gpabccav.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_async_v2.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogp_gpabcctdp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogp_gpabcctdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_tdm_default_policy.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogp_gpabcctv.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogp_gpabcctv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_tdm_v1.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogp_gepiagbgcrcotdv2.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogp_gepiagbgcrcotdv2.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_tdm_v2.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_ictogp_gpabccv.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogp_gpabccv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp" KeyPath="yes" />
@@ -4109,6 +4275,9 @@
               </Component>
               <Component Id="c_amdrocm_ck_ictogp_gpabcs.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogp_gpabcs.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_scheduler.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogp_gpabcw.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogp_gpabcw.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_wavelet.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_ictogp_gpabcav.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogp_gpabcav.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_agmem_bgmem_creg_async_v1.hpp" KeyPath="yes" />
@@ -4143,11 +4312,17 @@
               <Component Id="c_amdrocm_ck_ictogp_wpabcbp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogp_wpabcbp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_base_policy.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_ictogp_wpabct.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogp_wpabct.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_tdm.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogp_wpabctp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogp_wpabctp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_tdm_policy.hpp" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_ictogp_wpabcv.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogp_wpabcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/pipeline/wp_pipeline_agmem_bgmem_creg_v2.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_incktiopgewa" Name="include\ck_tile\ops\gemm\warp">
+            <Directory Id="amdrocm_ck_incktiopgewa" Name="warp">
               <Component Id="c_amdrocm_ck_incktiopgewa_wg.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgewa_wg.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm.hpp" KeyPath="yes" />
               </Component>
@@ -4178,11 +4353,20 @@
               <Component Id="c_amdrocm_ck_incktiopgewa_wgawibt.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgewa_wgawibt.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_base_traits.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_incktiopgewa_wgawiht.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopgewa_wgawiht.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_highprec_traits.hpp" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_incktiopgewa_wgd.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgewa_wgd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm_dispatcher.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_incktiopgewa_wgd.bk" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopgewa_wgd.bk" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm_dispatcher.hpp.bk" KeyPath="yes" />
+              </Component>
               <Component Id="c_amdrocm_ck_incktiopgewa_wgi.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgewa_wgi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm_impl.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopgewa_wgp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopgewa_wgp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm_params.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_incktiopgewa_wgsi.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktiopgewa_wgsi.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm/warp/warp_gemm_smfmac_impl.hpp" KeyPath="yes" />
@@ -4195,11 +4379,22 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictogm" Name="include\ck_tile\ops\gemm_mx">
+          <Directory Id="amdrocm_ck_ictogm" Name="gemm_mx">
             <Component Id="c_amdrocm_ck_ictogm_R.md" Guid="*">
               <File Id="f_amdrocm_ck_ictogm_R.md" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/README.md" KeyPath="yes" />
             </Component>
-            <Directory Id="amdrocm_ck_ictogmk" Name="include\ck_tile\ops\gemm_mx\kernel">
+            <Directory Id="amdrocm_ck_ictogmb" Name="block">
+              <Component Id="c_amdrocm_ck_ictogmb_bmabc.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogmb_bmabc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/block/block_mx_asmem_breg_creg.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogmb_bmgabcewv.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogmb_bmgabcewv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/block/block_mx_gemm_areg_breg_creg_eight_waves_v1.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogmb_bmgabcv.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogmb_bmgabcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/block/block_mx_gemm_areg_breg_creg_v1.hpp" KeyPath="yes" />
+              </Component>
+            </Directory>
+            <Directory Id="amdrocm_ck_ictogmk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictogmk_gmk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogmk_gmk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/kernel/gemm_mx_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -4207,17 +4402,29 @@
                 <File Id="f_amdrocm_ck_ictogmk_sp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/kernel/scale_pointer.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogmp" Name="include\ck_tile\ops\gemm_mx\pipeline">
+            <Directory Id="amdrocm_ck_ictogmp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictogmp_gpabcca.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogmp_gpabcca.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async.hpp" KeyPath="yes" />
               </Component>
               <Component Id="c_amdrocm_ck_ictogmp_gpabccadp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogmp_gpabccadp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async_default_policy.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_ictogmp_gpabccaew.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogmp_gpabccaew.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogmp_gpabccaewp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogmp_gpabccaewp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/pipeline/gemm_pipeline_ag_bg_cr_comp_async_eight_waves_policy.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogmp_wpabcv.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogmp_wpabcv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/pipeline/wp_pipeline_agmem_bgmem_creg_v1.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictogmp_wpabcvp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogmp_wpabcvp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_mx/pipeline/wp_pipeline_agmem_bgmem_creg_v1_policy.hpp" KeyPath="yes" />
+              </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictogq" Name="include\ck_tile\ops\gemm_quant">
-            <Directory Id="amdrocm_ck_ictogqb" Name="include\ck_tile\ops\gemm_quant\block">
+          <Directory Id="amdrocm_ck_ictogq" Name="gemm_quant">
+            <Directory Id="amdrocm_ck_ictogqb" Name="block">
               <Component Id="c_amdrocm_ck_ictogqb_bgqc.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogqb_bgqc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_quant/block/block_gemm_quant_common.hpp" KeyPath="yes" />
               </Component>
@@ -4239,8 +4446,11 @@
               <Component Id="c_amdrocm_ck_ictogqb_bugabbc.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogqb_bugabbc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_bs_bquant_cr.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_ictogqb_bugabbc.bk" Guid="*">
+                <File Id="f_amdrocm_ck_ictogqb_bugabbc.bk" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_quant/block/block_universal_gemm_as_bs_bquant_cr.hpp.bk" KeyPath="yes" />
+              </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogqk" Name="include\ck_tile\ops\gemm_quant\kernel">
+            <Directory Id="amdrocm_ck_ictogqk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictogqk_gqk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogqk_gqk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_quant/kernel/gemm_quant_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -4248,7 +4458,7 @@
                 <File Id="f_amdrocm_ck_ictogqk_ggqk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_quant/kernel/grouped_gemm_quant_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogqp" Name="include\ck_tile\ops\gemm_quant\pipeline">
+            <Directory Id="amdrocm_ck_ictogqp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictogqp_gapabcb.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogqp_gapabcb.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/gemm_quant/pipeline/gemm_abquant_pipeline_ag_bg_cr_base.hpp" KeyPath="yes" />
               </Component>
@@ -4317,8 +4527,8 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictogc" Name="include\ck_tile\ops\grouped_convolution">
-            <Directory Id="amdrocm_ck_ictogck" Name="include\ck_tile\ops\grouped_convolution\kernel">
+          <Directory Id="amdrocm_ck_ictogc" Name="grouped_convolution">
+            <Directory Id="amdrocm_ck_ictogck" Name="kernel">
               <Component Id="c_amdrocm_ck_ictogck_gcbdk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogck_gcbdk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_backward_data_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -4329,12 +4539,15 @@
                 <File Id="f_amdrocm_ck_ictogck_gcfk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_forward_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogcp" Name="include\ck_tile\ops\grouped_convolution\pipeline">
+            <Directory Id="amdrocm_ck_ictogcp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictogcp_gcupabcp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogcp_gcupabcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/grouped_convolution/pipeline/grouped_conv_universal_pipeline_ag_bg_cr_policy.hpp" KeyPath="yes" />
               </Component>
+              <Component Id="c_amdrocm_ck_ictogcp_gcfdp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictogcp_gcfdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/grouped_convolution/pipeline/grouped_convolution_forward_depthwise_pipeline.hpp" KeyPath="yes" />
+              </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictogcu" Name="include\ck_tile\ops\grouped_convolution\utils">
+            <Directory Id="amdrocm_ck_ictogcu" Name="utils">
               <Component Id="c_amdrocm_ck_ictogcu_cs.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictogcu_cs.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/grouped_convolution/utils/convolution_specialization.hpp" KeyPath="yes" />
               </Component>
@@ -4355,13 +4568,13 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictoitc" Name="include\ck_tile\ops\image_to_column">
-            <Directory Id="amdrocm_ck_ictoitck" Name="include\ck_tile\ops\image_to_column\kernel">
+          <Directory Id="amdrocm_ck_ictoitc" Name="image_to_column">
+            <Directory Id="amdrocm_ck_ictoitck" Name="kernel">
               <Component Id="c_amdrocm_ck_ictoitck_itck.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoitck_itck.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/image_to_column/kernel/image_to_column_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictoitcp" Name="include\ck_tile\ops\image_to_column\pipeline">
+            <Directory Id="amdrocm_ck_ictoitcp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictoitcp_bitcp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictoitcp_bitcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/image_to_column/pipeline/block_image_to_column_problem.hpp" KeyPath="yes" />
               </Component>
@@ -4370,13 +4583,13 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictol" Name="include\ck_tile\ops\layernorm2d">
-            <Directory Id="amdrocm_ck_ictolk" Name="include\ck_tile\ops\layernorm2d\kernel">
+          <Directory Id="amdrocm_ck_ictol" Name="layernorm2d">
+            <Directory Id="amdrocm_ck_ictolk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictolk_lfk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictolk_lfk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/layernorm2d/kernel/layernorm2d_fwd_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictolp" Name="include\ck_tile\ops\layernorm2d\pipeline">
+            <Directory Id="amdrocm_ck_ictolp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictolp_lfpdp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictolp_lfpdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/layernorm2d/pipeline/layernorm2d_fwd_pipeline_default_policy.hpp" KeyPath="yes" />
               </Component>
@@ -4394,8 +4607,8 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictonr" Name="include\ck_tile\ops\norm_reduce">
-            <Directory Id="amdrocm_ck_ictonrb" Name="include\ck_tile\ops\norm_reduce\block">
+          <Directory Id="amdrocm_ck_ictonr" Name="norm_reduce">
+            <Directory Id="amdrocm_ck_ictonrb" Name="block">
               <Component Id="c_amdrocm_ck_ictonrb_bnr.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictonrb_bnr.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/norm_reduce/block/block_norm_reduce.hpp" KeyPath="yes" />
               </Component>
@@ -4403,31 +4616,31 @@
                 <File Id="f_amdrocm_ck_ictonrb_bnrp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/norm_reduce/block/block_norm_reduce_problem.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictonrt" Name="include\ck_tile\ops\norm_reduce\thread">
+            <Directory Id="amdrocm_ck_ictonrt" Name="thread">
               <Component Id="c_amdrocm_ck_ictonrt_tw.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictonrt_tw.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/norm_reduce/thread/thread_welford.hpp" KeyPath="yes" />
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictop" Name="include\ck_tile\ops\permute">
-            <Directory Id="amdrocm_ck_ictopk" Name="include\ck_tile\ops\permute\kernel">
+          <Directory Id="amdrocm_ck_ictop" Name="permute">
+            <Directory Id="amdrocm_ck_ictopk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictopk_gpk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictopk_gpk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/permute/kernel/generic_permute_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictopp" Name="include\ck_tile\ops\permute\pipeline">
+            <Directory Id="amdrocm_ck_ictopp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictopp_gpp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictopp_gpp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/permute/pipeline/generic_petmute_problem.hpp" KeyPath="yes" />
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_incktioppo" Name="include\ck_tile\ops\pooling">
-            <Directory Id="amdrocm_ck_incktioppoke" Name="include\ck_tile\ops\pooling\kernel">
+          <Directory Id="amdrocm_ck_incktioppo" Name="pooling">
+            <Directory Id="amdrocm_ck_incktioppoke" Name="kernel">
               <Component Id="c_amdrocm_ck_incktioppoke_pk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktioppoke_pk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/pooling/kernel/pool_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_incktioppopi" Name="include\ck_tile\ops\pooling\pipeline">
+            <Directory Id="amdrocm_ck_incktioppopi" Name="pipeline">
               <Component Id="c_amdrocm_ck_incktioppopi_pdp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktioppopi_pdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/pooling/pipeline/pool_default_policy.hpp" KeyPath="yes" />
               </Component>
@@ -4439,8 +4652,8 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictor" Name="include\ck_tile\ops\reduce">
-            <Directory Id="amdrocm_ck_ictorb" Name="include\ck_tile\ops\reduce\block">
+          <Directory Id="amdrocm_ck_ictor" Name="reduce">
+            <Directory Id="amdrocm_ck_ictorb" Name="block">
               <Component Id="c_amdrocm_ck_ictorb_br.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictorb_br.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/reduce/block/block_reduce.hpp" KeyPath="yes" />
               </Component>
@@ -4451,7 +4664,7 @@
                 <File Id="f_amdrocm_ck_ictorb_brp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/reduce/block/block_reduce2d_problem.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictork" Name="include\ck_tile\ops\reduce\kernel">
+            <Directory Id="amdrocm_ck_ictork" Name="kernel">
               <Component Id="c_amdrocm_ck_ictork_mrk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictork_mrk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/reduce/kernel/multi_reduce2d_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -4468,7 +4681,7 @@
                 <File Id="f_amdrocm_ck_ictork_rk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/reduce/kernel/reduce2d_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictorp" Name="include\ck_tile\ops\reduce\pipeline">
+            <Directory Id="amdrocm_ck_ictorp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictorp_rdp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictorp_rdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/reduce/pipeline/reduce2d_default_policy.hpp" KeyPath="yes" />
               </Component>
@@ -4480,13 +4693,13 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_incktioprm" Name="include\ck_tile\ops\rmsnorm2d">
-            <Directory Id="amdrocm_ck_incktioprmke" Name="include\ck_tile\ops\rmsnorm2d\kernel">
+          <Directory Id="amdrocm_ck_incktioprm" Name="rmsnorm2d">
+            <Directory Id="amdrocm_ck_incktioprmke" Name="kernel">
               <Component Id="c_amdrocm_ck_incktioprmke_rfk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktioprmke_rfk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/rmsnorm2d/kernel/rmsnorm2d_fwd_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_incktioprmpi" Name="include\ck_tile\ops\rmsnorm2d\pipeline">
+            <Directory Id="amdrocm_ck_incktioprmpi" Name="pipeline">
               <Component Id="c_amdrocm_ck_incktioprmpi_rfpdp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_incktioprmpi_rfpdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/rmsnorm2d/pipeline/rmsnorm2d_fwd_pipeline_default_policy.hpp" KeyPath="yes" />
               </Component>
@@ -4507,42 +4720,83 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictos" Name="include\ck_tile\ops\smoothquant">
-            <Directory Id="amdrocm_ck_ictosk" Name="include\ck_tile\ops\smoothquant\kernel">
-              <Component Id="c_amdrocm_ck_ictosk_msk.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosk_msk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/kernel/moe_smoothquant_kernel.hpp" KeyPath="yes" />
-              </Component>
-              <Component Id="c_amdrocm_ck_ictosk_sk.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosk_sk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/kernel/smoothquant_kernel.hpp" KeyPath="yes" />
+          <Directory Id="amdrocm_ck_ictos" Name="sageattention">
+            <Directory Id="amdrocm_ck_ictosb" Name="block">
+              <Component Id="c_amdrocm_ck_ictosb_bsqse.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosb_bsqse.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/block/block_sageattention_quant_scale_enum.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictosp" Name="include\ck_tile\ops\smoothquant\pipeline">
-              <Component Id="c_amdrocm_ck_ictosp_spdp.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosp_spdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_default_policy.hpp" KeyPath="yes" />
+            <Directory Id="amdrocm_ck_ictosk" Name="kernel">
+              <Component Id="c_amdrocm_ck_ictosk_sfk.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosk_sfk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/kernel/sageattn_fwd_kernel.hpp" KeyPath="yes" />
               </Component>
-              <Component Id="c_amdrocm_ck_ictosp_spop.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosp_spop.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_one_pass.hpp" KeyPath="yes" />
+            </Directory>
+            <Directory Id="amdrocm_ck_ictosp" Name="pipeline">
+              <Component Id="c_amdrocm_ck_ictosp_bspe.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_bspe.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_enum.hpp" KeyPath="yes" />
               </Component>
-              <Component Id="c_amdrocm_ck_ictosp_spp.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosp_spp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_problem.hpp" KeyPath="yes" />
+              <Component Id="c_amdrocm_ck_ictosp_bspp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_bspp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_problem.hpp" KeyPath="yes" />
               </Component>
-              <Component Id="c_amdrocm_ck_ictosp_sptp.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosp_sptp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_two_pass.hpp" KeyPath="yes" />
+              <Component Id="c_amdrocm_ck_ictosp_bspqkv.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_bspqkv.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictosp_bspqkva.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_bspqkva.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictosp_bspqkvadp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_bspqkvadp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_async_default_policy.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictosp_bspqkvcp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_bspqkvcp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_custom_policy.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictosp_bspqkvdp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_bspqkvdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/block_sageattn_pipeline_qr_ks_vs_default_policy.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictosp_tss.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_tss.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/tile_sageattn_shape.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_ictosp_tst.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictosp_tst.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sageattention/pipeline/tile_sageattn_traits.hpp" KeyPath="yes" />
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_incktiopso" Name="include\ck_tile\ops\softmax">
-            <Directory Id="amdrocm_ck_ictosb" Name="include\ck_tile\ops\softmax\block">
-              <Component Id="c_amdrocm_ck_ictosb_bs2.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosb_bs2.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/softmax/block/block_softmax_2d.hpp" KeyPath="yes" />
+          <Directory Id="amdrocm_ck_incktiopsm" Name="smoothquant">
+            <Directory Id="amdrocm_ck_incktiopsmke" Name="kernel">
+              <Component Id="c_amdrocm_ck_incktiopsmke_msk.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsmke_msk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/kernel/moe_smoothquant_kernel.hpp" KeyPath="yes" />
               </Component>
-              <Component Id="c_amdrocm_ck_ictosb_bs2p.hpp" Guid="*">
-                <File Id="f_amdrocm_ck_ictosb_bs2p.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/softmax/block/block_softmax_2d_problem.hpp" KeyPath="yes" />
+              <Component Id="c_amdrocm_ck_incktiopsmke_sk.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsmke_sk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/kernel/smoothquant_kernel.hpp" KeyPath="yes" />
+              </Component>
+            </Directory>
+            <Directory Id="amdrocm_ck_incktiopsmpi" Name="pipeline">
+              <Component Id="c_amdrocm_ck_incktiopsmpi_spdp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsmpi_spdp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_default_policy.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopsmpi_spop.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsmpi_spop.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_one_pass.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopsmpi_spp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsmpi_spp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_problem.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopsmpi_sptp.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsmpi_sptp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/smoothquant/pipeline/smoothquant_pipeline_two_pass.hpp" KeyPath="yes" />
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictosa" Name="include\ck_tile\ops\sparse_attn">
-            <Directory Id="amdrocm_ck_ictosak" Name="include\ck_tile\ops\sparse_attn\kernel">
+          <Directory Id="amdrocm_ck_incktiopso" Name="softmax">
+            <Directory Id="amdrocm_ck_incktiopsobl" Name="block">
+              <Component Id="c_amdrocm_ck_incktiopsobl_bs2.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsobl_bs2.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/softmax/block/block_softmax_2d.hpp" KeyPath="yes" />
+              </Component>
+              <Component Id="c_amdrocm_ck_incktiopsobl_bs2p.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_incktiopsobl_bs2p.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/softmax/block/block_softmax_2d_problem.hpp" KeyPath="yes" />
+              </Component>
+            </Directory>
+          </Directory>
+          <Directory Id="amdrocm_ck_ictosa" Name="sparse_attn">
+            <Directory Id="amdrocm_ck_ictosak" Name="kernel">
               <Component Id="c_amdrocm_ck_ictosak_ffjk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictosak_ffjk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sparse_attn/kernel/fmha_fwd_jenga_kernel.hpp" KeyPath="yes" />
               </Component>
@@ -4550,7 +4804,7 @@
                 <File Id="f_amdrocm_ck_ictosak_ffvk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sparse_attn/kernel/fmha_fwd_vsa_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictosap" Name="include\ck_tile\ops\sparse_attn\pipeline">
+            <Directory Id="amdrocm_ck_ictosap" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictosap_bfpqkvaj.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictosap_bfpqkvaj.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/sparse_attn/pipeline/block_fmha_pipeline_qr_ks_vs_async_jenga.hpp" KeyPath="yes" />
               </Component>
@@ -4559,8 +4813,15 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictot" Name="include\ck_tile\ops\topk">
-            <Directory Id="amdrocm_ck_ictotb" Name="include\ck_tile\ops\topk\block">
+          <Directory Id="amdrocm_ck_ictot" Name="tdm">
+            <Directory Id="amdrocm_ck_ictotk" Name="kernel">
+              <Component Id="c_amdrocm_ck_ictotk_tk.hpp" Guid="*">
+                <File Id="f_amdrocm_ck_ictotk_tk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/tdm/kernel/tdm_kernel.hpp" KeyPath="yes" />
+              </Component>
+            </Directory>
+          </Directory>
+          <Directory Id="amdrocm_ck_incktiopto" Name="topk">
+            <Directory Id="amdrocm_ck_ictotb" Name="block">
               <Component Id="c_amdrocm_ck_ictotb_bts2.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictotb_bts2.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/topk/block/block_topk_stream_2d.hpp" KeyPath="yes" />
               </Component>
@@ -4569,13 +4830,13 @@
               </Component>
             </Directory>
           </Directory>
-          <Directory Id="amdrocm_ck_ictots" Name="include\ck_tile\ops\topk_softmax">
-            <Directory Id="amdrocm_ck_ictotsk" Name="include\ck_tile\ops\topk_softmax\kernel">
+          <Directory Id="amdrocm_ck_ictots" Name="topk_softmax">
+            <Directory Id="amdrocm_ck_ictotsk" Name="kernel">
               <Component Id="c_amdrocm_ck_ictotsk_tsk.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictotsk_tsk.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/topk_softmax/kernel/topk_softmax_kernel.hpp" KeyPath="yes" />
               </Component>
             </Directory>
-            <Directory Id="amdrocm_ck_ictotsp" Name="include\ck_tile\ops\topk_softmax\pipeline">
+            <Directory Id="amdrocm_ck_ictotsp" Name="pipeline">
               <Component Id="c_amdrocm_ck_ictotsp_tswprp.hpp" Guid="*">
                 <File Id="f_amdrocm_ck_ictotsp_tswprp.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ops/topk_softmax/pipeline/topk_softmax_warp_per_row_pipeline.hpp" KeyPath="yes" />
               </Component>
@@ -4588,7 +4849,7 @@
             </Directory>
           </Directory>
         </Directory>
-        <Directory Id="amdrocm_ck_ictr" Name="include\ck_tile\ref">
+        <Directory Id="amdrocm_ck_ictr" Name="ref">
           <Component Id="c_amdrocm_ck_ictr_cc.hpp" Guid="*">
             <File Id="f_amdrocm_ck_ictr_cc.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ref/conv_common.hpp" KeyPath="yes" />
           </Component>
@@ -4608,7 +4869,7 @@
             <File Id="f_amdrocm_ck_ictr_R.md" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/ref/README.md" KeyPath="yes" />
           </Component>
         </Directory>
-        <Directory Id="amdrocm_ck_ictu" Name="include\ck_tile\utility">
+        <Directory Id="amdrocm_ck_ictu" Name="utility">
           <Component Id="c_amdrocm_ck_ictu_jd.hpp" Guid="*">
             <File Id="f_amdrocm_ck_ictu_jd.hpp" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/include/ck_tile/utility/json_dump.hpp" KeyPath="yes" />
           </Component>
@@ -4617,10 +4878,15 @@
           </Component>
         </Directory>
       </Directory>
+      <Directory Id="amdrocm_ck_ih" Name="half">
+        <Component Id="c_amdrocm_ck_ih_h.hpp" Guid="*">
+          <File Id="f_amdrocm_ck_ih_h.hpp" Source="$(var.BuildRoot)/base/half/dist/include/half/half.hpp" KeyPath="yes" />
+        </Component>
+      </Directory>
     </Directory>
     <Directory Id="amdrocm_ck_l" Name="lib">
-      <Directory Id="amdrocm_ck_lc" Name="lib\cmake">
-        <Directory Id="amdrocm_ck_lcck" Name="lib\cmake\composable_kernel">
+      <Directory Id="amdrocm_ck_lc" Name="cmake">
+        <Directory Id="amdrocm_ck_lcck" Name="composable_kernel">
           <Component Id="c_amdrocm_ck_lcck_ck.cmake" Guid="*">
             <File Id="f_amdrocm_ck_lcck_ck.cmake" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/lib/cmake/composable_kernel/composable_kernelConfig.cmake" KeyPath="yes" />
           </Component>
@@ -4661,8 +4927,8 @@
       </Directory>
     </Directory>
     <Directory Id="amdrocm_ck_s" Name="share">
-      <Directory Id="amdrocm_ck_sd" Name="share\doc">
-        <Directory Id="amdrocm_ck_sdc" Name="share\doc\composablekernel">
+      <Directory Id="amdrocm_ck_sd" Name="doc">
+        <Directory Id="amdrocm_ck_sdc" Name="composablekernel">
           <Component Id="c_amdrocm_ck_sdc_L" Guid="*">
             <File Id="f_amdrocm_ck_sdc_L" Source="$(var.BuildRoot)/ml-libs/composable_kernel/dist/share/doc/composablekernel/LICENSE" KeyPath="yes" />
           </Component>
