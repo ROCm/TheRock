@@ -40,7 +40,7 @@ if(THEROCK_ENABLE_COMPILER)
       execute_process(
         COMMAND "${CMAKE_COMMAND}" -E env
         "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
-	"${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang"
+        "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang"
         --print-target-triple
         OUTPUT_VARIABLE LLVM_HOST_TRIPLE
         OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -53,7 +53,7 @@ if(THEROCK_ENABLE_COMPILER)
       endif()
     endif()
   else()
-     message(STATUS "!! CMAKE_BINARY_DIR NOT FOUND")
+    message(STATUS "!! CMAKE_BINARY_DIR NOT FOUND")
   endif()
   message(STATUS "!!!THEROCK_LLVM_RPATH_WITH_TRIPLE: ${THEROCK_LLVM_RPATH_WITH_TRIPLE}")
   message(STATUS "!!!LLVM_HOST_TRIPLE: ${LLVM_HOST_TRIPLE}")
