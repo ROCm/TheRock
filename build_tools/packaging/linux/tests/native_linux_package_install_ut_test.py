@@ -16,7 +16,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import ANY, patch, MagicMock
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
@@ -2811,7 +2811,7 @@ class VerifyTransitiveDependenciesInstalledTest(unittest.TestCase):
         ):
             ok, _ = t._verify_transitive_dependencies_installed()
         self.assertTrue(ok)
-        mock_deb.assert_called_once_with(t.package_names)
+        mock_deb.assert_called_once_with(t.package_names, report=ANY)
 
     @patch(
         "native_linux_package_install_test.verify_rpm_transitive_dependencies",
@@ -2830,7 +2830,7 @@ class VerifyTransitiveDependenciesInstalledTest(unittest.TestCase):
         ):
             ok, _ = t._verify_transitive_dependencies_installed()
         self.assertTrue(ok)
-        mock_rpm.assert_called_once_with(t.package_names)
+        mock_rpm.assert_called_once_with(t.package_names, report=ANY)
 
 
 if __name__ == "__main__":
