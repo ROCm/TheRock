@@ -43,6 +43,10 @@ on:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
         default: ""
+      build_only:
+        description: "Only run the AWS build stages, skip packaging and PyTorch."
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -136,6 +140,7 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BUILD_ONLY: ${{ inputs.build_only }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
