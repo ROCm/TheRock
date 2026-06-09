@@ -78,7 +78,8 @@ jobs:
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
-            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}"
+            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
+            --expand-family-to-targets
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
