@@ -128,6 +128,51 @@ ID; the corresponding role ARNs are
 for `therock-{dev,nightly}` also covers `repo:ROCm/rockrel:*` so reusable
 workflow invocations from `rockrel` can assume the role.
 
+Workflow steps that assume these roles must skip runs from contexts that are not
+authorized for the PyTorch sccache roles. Typically this means using a pattern
+like:
+
+```yaml
+- name: Configure AWS Credentials for sccache
+  if: >-
+    ${{
+      inputs.cache_type == 'sccache' &&
+      github.repository_owner == 'ROCm' &&
+      (
+        github.event_name != 'pull_request' ||
+        github.event.pull_request.head.repo.owner.login == 'ROCm'
+      )
+    }}
+  uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+  with:
+    aws-region: us-east-1
+    role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
+```
+
+TODO: this should be moved into a script like
+[`build_tools/_therock_utils/s3_buckets.py`](build_tools/_therock_utils/s3_buckets.py),
+as has already been done for artifact access (see above).
+
+> [!WARNING]
+> Just checking `pull_request.head.repo.fork` would exclude ROCm organization
+> repositories which are themselves forks of upstream repositories, like
+> https://github.com/ROCm/llvm-project/ (fork of
+> https://github.com/llvm/llvm-project).
+>
+> ```yaml
+> - name: Configure AWS Credentials for sccache
+>   # Don't use this code pattern! Use the previous pattern instead.
+>   if: >-
+>     ${{
+>       inputs.cache_type == 'sccache' &&
+>       github.repository_owner == 'ROCm' &&
+>       (
+>         github.event_name != 'pull_request' ||
+>         !github.event.pull_request.head.repo.fork
+>       )
+>     }}
+> ```
+
 | Bucket                               | Contents                   | IAM role             |
 | ------------------------------------ | -------------------------- | -------------------- |
 | `therock-pytorch-sccache-ci`         | PyTorch CI sccache         | `therock-ci`         |
