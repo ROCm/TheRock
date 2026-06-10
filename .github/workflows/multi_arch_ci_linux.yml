@@ -98,6 +98,7 @@ jobs:
       expect_failure: ${{ fromJSON(inputs.build_config).expect_failure }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      build_only: ${{ fromJSON(inputs.build_config).build_only }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}

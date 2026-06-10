@@ -441,6 +441,7 @@ class BuildConfig:
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
+    build_only: bool = False
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -986,6 +987,7 @@ def _expand_build_config_for_platform(
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
+        build_only=build_only,
     )
 
 
