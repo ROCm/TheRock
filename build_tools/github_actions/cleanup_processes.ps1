@@ -180,6 +180,27 @@ if ($currentUser -match "NT AUTHORITY") {
     echo "[*] Not Running as a Windows Service (NT AUTHORITY\*) - skipping system environment cleanup"
 }
 
+#### Cleanup stale git submodule working trees ####
+# These runners are non-ephemeral and shared across super-repos whose checkouts
+# pin DIFFERENT submodule commits. `actions/checkout` runs
+# `git submodule foreach --recursive` during its auth setup/teardown, descending
+# into leftover submodule working trees from a prior job.
+# `git reset --hard` does not clear nested submodule working trees, so a newer
+# nested submodule left on disk can remain under an older superproject whose
+# .gitmodules lacks that URL. The recursive foreach then aborts with
+# `fatal: No url found for submodule path ...` (exit 128) and the job dies
+# before its own checkout begins. Deiniting empties those working trees (deinit
+# is non-recursive, so it won't trip on the missing URL itself) leaving nothing
+# stale for the recursive foreach to enter.
+$workspaceRepo = $env:GITHUB_WORKSPACE
+if ($workspaceRepo -and (Test-Path (Join-Path $workspaceRepo ".git"))) {
+    echo "[*] Deiniting stale git submodules in workspace: $workspaceRepo"
+    git -C $workspaceRepo submodule deinit -f --all 2>&1 | ForEach-Object { echo "      $_" }
+    echo "[*] >> Submodule deinit finished (git exit code: $LASTEXITCODE)"
+} else {
+    echo "[*] No git repo at workspace root, skipping submodule deinit"
+}
+
 #### Cleanup Processes ####
 echo "[*] Cleaning up processes..."
 
