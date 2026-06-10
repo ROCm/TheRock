@@ -202,9 +202,26 @@ def get_artifacts_bucket_config_for_workflow_run(
     # Deferred import: github_actions is an optional dependency not available in
     # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
-        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+        from github_actions.github_actions_api import (
+            GitHubAPIError,
+            gha_query_workflow_run_by_id,
+        )
 
-        workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
+        try:
+            workflow_run = gha_query_workflow_run_by_id(
+                github_repository, workflow_run_id
+            )
+        except GitHubAPIError as e:
+            run_url = (
+                f"https://github.com/{github_repository}/actions/runs/{workflow_run_id}"
+            )
+            raise GitHubAPIError(
+                f"Failed to query workflow run {workflow_run_id} in repository "
+                f"{github_repository}: {run_url}\n"
+                f"  {e}\n"
+                f"Hint: Did you mean to specify a different repository with "
+                f"--run-github-repo?"
+            ) from e
 
     # Extract metadata from workflow_run if available
     if workflow_run is not None:

@@ -120,7 +120,6 @@ from botocore import UNSIGNED
 from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
-from github_actions.github_actions_api import GitHubAPIError
 from pathlib import Path
 import platform
 import re
@@ -495,17 +494,7 @@ def retrieve_artifacts_by_run_id(args):
         pass
 
     log(f"\nCalling fetch_artifacts_main with args:\n  {' '.join(argv)}\n")
-    try:
-        fetch_artifacts_main(argv)
-    except GitHubAPIError as e:
-        log(f"\nError: Failed to retrieve artifacts for workflow run {run_id}")
-        log(f"  {e}")
-        log(
-            "\nHint: If this run ID is from a different repository, "
-            "specify --run-github-repo=<owner/repo>"
-        )
-        log("  Example: --run-github-repo=ROCm/rocm-libraries")
-        sys.exit(1)
+    fetch_artifacts_main(argv)
 
     log(f"Retrieved artifacts for run ID {run_id}")
 
