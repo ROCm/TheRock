@@ -59,11 +59,9 @@ on:
           - gfx950-dcgpu
         default: gfx94X-dcgpu
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
-        type: choice
-        options:
-          - dev
-        default: dev
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+        type: string
+        default: "dev"
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
         type: string

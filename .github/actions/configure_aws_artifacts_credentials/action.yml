@@ -12,8 +12,8 @@ description: >-
 
 inputs:
   release_type:
-    description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
-    default: ci
+    description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+    default: ""
 
 runs:
   using: "composite"
