@@ -177,6 +177,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     logs_dir = resolve_logs_dir(args)
+    if not logs_dir.exists():
+        print(f"Log directory does not exist: {logs_dir}", file=sys.stderr)
+        return 0
 
     summary_path = args.summary_path or os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
