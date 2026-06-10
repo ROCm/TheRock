@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_sparse_dev_b" Name="bin">
+      <Directory Id="amdrocm_sparse_dev_bh" Name="hipsparse" />
+    </Directory>
+    <Directory Id="amdrocm_sparse_dev_i" Name="include">
+      <Directory Id="amdrocm_sparse_dev_ih" Name="hipsparse">
+        <Directory Id="amdrocm_sparse_dev_ihi" Name="internal">
+          <Directory Id="amdrocm_sparse_dev_ihic" Name="conversion" />
+          <Directory Id="amdrocm_sparse_dev_ihie" Name="extra" />
+          <Directory Id="amdrocm_sparse_dev_ihig" Name="generic" />
+          <Directory Id="amdrocm_sparse_dev_ihil" Name="level1" />
+          <Directory Id="amdrocm_sparse_dev_inhiinle" Name="level2" />
+          <Directory Id="amdrocm_sparse_dev_inchipintlev" Name="level3" />
+          <Directory Id="amdrocm_sparse_dev_ihip" Name="precond" />
+          <Directory Id="amdrocm_sparse_dev_ihir" Name="reorder" />
+        </Directory>
+      </Directory>
+      <Directory Id="amdrocm_sparse_dev_ir" Name="rocsparse">
+        <Directory Id="amdrocm_sparse_dev_iri" Name="internal">
+          <Directory Id="amdrocm_sparse_dev_iric" Name="conversion" />
+          <Directory Id="amdrocm_sparse_dev_irie" Name="extra" />
+          <Directory Id="amdrocm_sparse_dev_irig" Name="generic" />
+          <Directory Id="amdrocm_sparse_dev_iril" Name="level1" />
+          <Directory Id="amdrocm_sparse_dev_inroinle" Name="level2" />
+          <Directory Id="amdrocm_sparse_dev_incrocintlev" Name="level3" />
+          <Directory Id="amdrocm_sparse_dev_irip" Name="precond" />
+          <Directory Id="amdrocm_sparse_dev_irir" Name="reordering" />
+          <Directory Id="amdrocm_sparse_dev_iriu" Name="util" />
+        </Directory>
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_sparse_dev_l" Name="lib">
+      <Directory Id="amdrocm_sparse_dev_lc" Name="cmake">
+        <Directory Id="amdrocm_sparse_dev_lch" Name="hipsparse" />
+        <Directory Id="amdrocm_sparse_dev_lcr" Name="rocsparse" />
+      </Directory>
+    </Directory>
+</Include>

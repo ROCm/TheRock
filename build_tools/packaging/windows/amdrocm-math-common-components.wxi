@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_math_common_b" Directory="amdrocm_math_common_b">
+    <Files Include="$(var.BuildRoot)/third-party/host-blas/host-blas64/dist/bin/*.*" />
+  </ComponentGroup>
+
+</Include>

@@ -77,7 +77,7 @@
 | `lib/llvm/bin/FileCheck.exe` |  |n/a |
 | `lib/llvm/bin/UnicodeNameMappingGenerator.exe` |  |n/a |
 | `lib/llvm/bin/amd-llvm-spirv.exe` | &#x2705; |&#x2705; lib/llvm/bin/amd-llvm-spirv |
-| `lib/llvm/bin/amdclang++.exe` |  |n/a |
+| `lib/llvm/bin/amdclang++.exe` | &#x2705; |n/a |
 | `lib/llvm/bin/amdclang-23.exe` | &#x2705; |&#x2705; lib/llvm/bin/amdclang-23 |
 | `lib/llvm/bin/amdclang-cl.exe` | &#x2705; |n/a |
 | `lib/llvm/bin/amdclang-cpp.exe` | &#x2705; |n/a |
@@ -86,7 +86,7 @@
 | `lib/llvm/bin/amdgpu-arch.exe` | &#x2705; |&#x2705; lib/llvm/bin/amdgpu-arch |
 | `lib/llvm/bin/amdlld.exe` | &#x2705; |n/a |
 | `lib/llvm/bin/amdllvm.exe` | &#x2705; |&#x2705; lib/llvm/bin/amdllvm |
-| `lib/llvm/bin/clang++.exe` |  |&#x2705; lib/llvm/bin/clang++ |
+| `lib/llvm/bin/clang++.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang++ |
 | `lib/llvm/bin/clang-apply-replacements.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-apply-replacements |
 | `lib/llvm/bin/clang-change-namespace.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-change-namespace |
 | `lib/llvm/bin/clang-cl.exe` | &#x2705; |&#x2705; lib/llvm/bin/clang-cl |
@@ -4142,7 +4142,7 @@
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/algorithm` | &#x2705; |n/a |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.h |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.tcc` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/basic_string.tcc |
-| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h` |  |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h |
+| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c++config.h |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/shared_ptr_base.h` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/bits/shared_ptr_base.h |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/cmath` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/cmath |
 | `lib/llvm/lib/clang/23/include/cuda_wrappers/complex` | &#x2705; |&#x2705; lib/llvm/lib/clang/23/include/cuda_wrappers/complex |
@@ -6402,6 +6402,4 @@
 
 | File |
 |:-----|
-| `lib/llvm/bin/amdclang  .exe` |
-| `lib/llvm/bin/clang  .exe` |
-| `lib/llvm/lib/clang/23/include/cuda_wrappers/bits/c  config.h` |
+| **No abandoned files found** |

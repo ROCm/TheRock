@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_ck_i" Name="include">
+      <Directory Id="amdrocm_ck_ic" Name="ck">
+        <Directory Id="amdrocm_ck_ichu" Name="host_utility" />
+        <Directory Id="amdrocm_ck_icl" Name="library">
+          <Directory Id="amdrocm_ck_iclrto" Name="reference_tensor_operation">
+            <Directory Id="amdrocm_ck_iclrtoc" Name="cpu" />
+            <Directory Id="amdrocm_ck_iclrtog" Name="gpu" />
+          </Directory>
+          <Directory Id="amdrocm_ck_icltoi" Name="tensor_operation_instance">
+            <Directory Id="amdrocm_ck_icltoig" Name="gpu">
+              <Directory Id="amdrocm_ck_icltoigc" Name="contraction" />
+              <Directory Id="amdrocm_ck_icltoigctr" Name="conv_tensor_rearrange" />
+              <Directory Id="amdrocm_ck_icltoiggcbd" Name="grouped_conv_bwd_data" />
+              <Directory Id="amdrocm_ck_icltoiggcbw" Name="grouped_conv_bwd_weight" />
+              <Directory Id="amdrocm_ck_icltoiggcf" Name="grouped_conv_fwd" />
+              <Directory Id="amdrocm_ck_icltoiggg" Name="grouped_gemm" />
+              <Directory Id="amdrocm_ck_icltoigggtl" Name="grouped_gemm_tile_loop" />
+              <Directory Id="amdrocm_ck_icltoigps" Name="permute_scale" />
+              <Directory Id="amdrocm_ck_icltoigq" Name="quantization" />
+              <Directory Id="amdrocm_ck_icltoigr" Name="reduce" />
+              <Directory Id="amdrocm_ck_icltoigs" Name="softmax" />
+              <Directory Id="amdrocm_ck_icltoigt" Name="transpose" />
+            </Directory>
+          </Directory>
+          <Directory Id="amdrocm_ck_iclu" Name="utility" />
+        </Directory>
+        <Directory Id="amdrocm_ck_icpt" Name="problem_transform" />
+        <Directory Id="amdrocm_ck_ict" Name="tensor" />
+        <Directory Id="amdrocm_ck_ictd" Name="tensor_description" />
+        <Directory Id="amdrocm_ck_icto" Name="tensor_operation">
+          <Directory Id="amdrocm_ck_ictog" Name="gpu">
+            <Directory Id="amdrocm_ck_ictogb" Name="block" />
+            <Directory Id="amdrocm_ck_ictogd" Name="device">
+              <Directory Id="amdrocm_ck_ictogdi" Name="impl" />
+            </Directory>
+            <Directory Id="amdrocm_ck_ictoge" Name="element" />
+            <Directory Id="amdrocm_ck_ictogg" Name="grid">
+              <Directory Id="amdrocm_ck_ictoggbm" Name="batchnorm_multiblock" />
+              <Directory Id="amdrocm_ck_ictogggl" Name="gemm_layernorm" />
+              <Directory Id="amdrocm_ck_ictoggn" Name="normalization" />
+            </Directory>
+            <Directory Id="amdrocm_ck_ictogt" Name="thread" />
+            <Directory Id="amdrocm_ck_ictogw" Name="warp" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictoot" Name="operator_transform" />
+        </Directory>
+        <Directory Id="amdrocm_ck_icu" Name="utility" />
+        <Directory Id="amdrocm_ck_icw" Name="wrapper">
+          <Directory Id="amdrocm_ck_icwo" Name="operations" />
+          <Directory Id="amdrocm_ck_icwt" Name="traits" />
+          <Directory Id="amdrocm_ck_icwu" Name="utils" />
+        </Directory>
+      </Directory>
+      <Directory Id="amdrocm_ck_inckti" Name="ck_tile">
+        <Directory Id="amdrocm_ck_ictc" Name="core">
+          <Directory Id="amdrocm_ck_ictca" Name="algorithm" />
+          <Directory Id="amdrocm_ck_inckticoar" Name="arch">
+            <Directory Id="amdrocm_ck_ictcam" Name="mma">
+              <Directory Id="amdrocm_ck_ictcamm" Name="mfma" />
+              <Directory Id="amdrocm_ck_ictcams" Name="scale">
+                <Directory Id="amdrocm_ck_ictcamsm" Name="mfma" />
+              </Directory>
+              <Directory Id="amdrocm_ck_inckticoarmmsp" Name="sparse">
+                <Directory Id="amdrocm_ck_inckticoarmmspmf" Name="mfma" />
+                <Directory Id="amdrocm_ck_ictcamsw" Name="wmma" />
+              </Directory>
+              <Directory Id="amdrocm_ck_ictcamu" Name="utility" />
+              <Directory Id="amdrocm_ck_ictcamw" Name="wmma" />
+            </Directory>
+          </Directory>
+          <Directory Id="amdrocm_ck_ictcc" Name="container" />
+          <Directory Id="amdrocm_ck_ictcn" Name="numeric" />
+          <Directory Id="amdrocm_ck_ictct" Name="tensor" />
+          <Directory Id="amdrocm_ck_ictcu" Name="utility" />
+        </Directory>
+        <Directory Id="amdrocm_ck_icth" Name="host">
+          <Directory Id="amdrocm_ck_icthr" Name="reference" />
+        </Directory>
+        <Directory Id="amdrocm_ck_incktiop" Name="ops">
+          <Directory Id="amdrocm_ck_ictoarr" Name="add_rmsnorm2d_rdquant">
+            <Directory Id="amdrocm_ck_ictoarrk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictoarrp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictobc" Name="batched_contraction">
+            <Directory Id="amdrocm_ck_ictobck" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictobcp" Name="pipeline" />
+            <Directory Id="amdrocm_ck_ictobcu" Name="utils" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictobt" Name="batched_transpose">
+            <Directory Id="amdrocm_ck_ictobtk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictobtp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictoc" Name="common" />
+          <Directory Id="amdrocm_ck_ictoe" Name="elementwise">
+            <Directory Id="amdrocm_ck_ictoek" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictoep" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktiopep" Name="epilogue">
+            <Directory Id="amdrocm_ck_ictoec" Name="chainer" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictof" Name="flatmm">
+            <Directory Id="amdrocm_ck_ictofb" Name="block">
+              <Directory Id="amdrocm_ck_ictofbu" Name="uk" />
+            </Directory>
+            <Directory Id="amdrocm_ck_ictofk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictofp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktiopfm" Name="fmha">
+            <Directory Id="amdrocm_ck_incktiopfmbl" Name="block" />
+            <Directory Id="amdrocm_ck_incktiopfmke" Name="kernel" />
+            <Directory Id="amdrocm_ck_incktiopfmpi" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictofm" Name="fused_moe">
+            <Directory Id="amdrocm_ck_ictofmk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictofmp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktiopge" Name="gemm">
+            <Directory Id="amdrocm_ck_incktiopgebl" Name="block" />
+            <Directory Id="amdrocm_ck_ictogk" Name="kernel">
+              <Directory Id="amdrocm_ck_ictogksg" Name="streamk_gemm" />
+            </Directory>
+            <Directory Id="amdrocm_ck_ictogp" Name="pipeline" />
+            <Directory Id="amdrocm_ck_incktiopgewa" Name="warp" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictogm" Name="gemm_mx">
+            <Directory Id="amdrocm_ck_ictogmb" Name="block" />
+            <Directory Id="amdrocm_ck_ictogmk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictogmp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictogq" Name="gemm_quant">
+            <Directory Id="amdrocm_ck_ictogqb" Name="block" />
+            <Directory Id="amdrocm_ck_ictogqk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictogqp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictogc" Name="grouped_convolution">
+            <Directory Id="amdrocm_ck_ictogck" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictogcp" Name="pipeline" />
+            <Directory Id="amdrocm_ck_ictogcu" Name="utils" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictoitc" Name="image_to_column">
+            <Directory Id="amdrocm_ck_ictoitck" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictoitcp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictol" Name="layernorm2d">
+            <Directory Id="amdrocm_ck_ictolk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictolp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictonr" Name="norm_reduce">
+            <Directory Id="amdrocm_ck_ictonrb" Name="block" />
+            <Directory Id="amdrocm_ck_ictonrt" Name="thread" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictop" Name="permute">
+            <Directory Id="amdrocm_ck_ictopk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictopp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktioppo" Name="pooling">
+            <Directory Id="amdrocm_ck_incktioppoke" Name="kernel" />
+            <Directory Id="amdrocm_ck_incktioppopi" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictor" Name="reduce">
+            <Directory Id="amdrocm_ck_ictorb" Name="block" />
+            <Directory Id="amdrocm_ck_ictork" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictorp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktioprm" Name="rmsnorm2d">
+            <Directory Id="amdrocm_ck_incktioprmke" Name="kernel" />
+            <Directory Id="amdrocm_ck_incktioprmpi" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictos" Name="sageattention">
+            <Directory Id="amdrocm_ck_ictosb" Name="block" />
+            <Directory Id="amdrocm_ck_ictosk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictosp" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktiopsm" Name="smoothquant">
+            <Directory Id="amdrocm_ck_incktiopsmke" Name="kernel" />
+            <Directory Id="amdrocm_ck_incktiopsmpi" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktiopso" Name="softmax">
+            <Directory Id="amdrocm_ck_incktiopsobl" Name="block" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictosa" Name="sparse_attn">
+            <Directory Id="amdrocm_ck_ictosak" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictosap" Name="pipeline" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictot" Name="tdm">
+            <Directory Id="amdrocm_ck_ictotk" Name="kernel" />
+          </Directory>
+          <Directory Id="amdrocm_ck_incktiopto" Name="topk">
+            <Directory Id="amdrocm_ck_ictotb" Name="block" />
+          </Directory>
+          <Directory Id="amdrocm_ck_ictots" Name="topk_softmax">
+            <Directory Id="amdrocm_ck_ictotsk" Name="kernel" />
+            <Directory Id="amdrocm_ck_ictotsp" Name="pipeline" />
+          </Directory>
+        </Directory>
+        <Directory Id="amdrocm_ck_ictr" Name="ref" />
+        <Directory Id="amdrocm_ck_ictu" Name="utility" />
+      </Directory>
+      <Directory Id="amdrocm_ck_ih" Name="half" />
+    </Directory>
+    <Directory Id="amdrocm_ck_l" Name="lib">
+      <Directory Id="amdrocm_ck_lc" Name="cmake">
+        <Directory Id="amdrocm_ck_lcck" Name="composable_kernel" />
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_ck_s" Name="share">
+      <Directory Id="amdrocm_ck_sd" Name="doc">
+        <Directory Id="amdrocm_ck_sdc" Name="composablekernel" />
+      </Directory>
+    </Directory>
+</Include>

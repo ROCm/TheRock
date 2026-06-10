@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
-    <ComponentRef Id="c_amdrocm_dnn_b_M.dll" />
-    <ComponentRef Id="c_amdrocm_dnn_b_f.exe" />
-    <ComponentRef Id="c_amdrocm_dnn_b_hb.dll" />
-</Include>

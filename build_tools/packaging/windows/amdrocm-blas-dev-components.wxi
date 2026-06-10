@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory include -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_i" Directory="amdrocm_blas_dev_i">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_ih" Directory="amdrocm_blas_dev_ih">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblas/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipblaslt -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_inhi" Directory="amdrocm_blas_dev_inhi">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_ir" Directory="amdrocm_blas_dev_ir">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/rocblas/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocblas\internal -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_iri" Directory="amdrocm_blas_dev_iri">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_lch" Directory="amdrocm_blas_dev_lch">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipblaslt -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_licmhi" Directory="amdrocm_blas_dev_licmhi">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblaslt/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\rocblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_lcr" Directory="amdrocm_blas_dev_lcr">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/lib/cmake/rocblas/*.*" />
+  </ComponentGroup>
+
+</Include>

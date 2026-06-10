@@ -1527,7 +1527,7 @@
 | `include/ck_tile/utility/json_dump.hpp` | `%BUILD_ROOT%/ml-libs/composable_kernel/dist/include/ck_tile/utility/json_dump.hpp` |
 | `include/ck_tile/utility/tile_load_store_microkernels.hpp` | `%BUILD_ROOT%/ml-libs/composable_kernel/dist/include/ck_tile/utility/tile_load_store_microkernels.hpp` |
 | `include/getopt.h` | `%BUILD_ROOT%/ml-libs/composable_kernel/dist/include/getopt.h` |
-| `include/half/half.hpp` | `%BUILD_ROOT%/base/half/dist/include/half/half.hpp` |
+| `include/half/half.hpp` | `%BUILD_ROOT%/ml-libs/composable_kernel/dist/include/half/half.hpp` |
 | `lib/cmake/composable_kernel/composable_kernelConfig.cmake` | `%BUILD_ROOT%/ml-libs/composable_kernel/dist/lib/cmake/composable_kernel/composable_kernelConfig.cmake` |
 | `lib/cmake/composable_kernel/composable_kernelConfigVersion.cmake` | `%BUILD_ROOT%/ml-libs/composable_kernel/dist/lib/cmake/composable_kernel/composable_kernelConfigVersion.cmake` |
 | `lib/cmake/composable_kernel/composable_kerneldevice_contraction_operationsTargets-release.cmake` | `%BUILD_ROOT%/ml-libs/composable_kernel/dist/lib/cmake/composable_kernel/composable_kerneldevice_contraction_operationsTargets-release.cmake` |

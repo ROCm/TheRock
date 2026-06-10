@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin\hipsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_bh" Directory="amdrocm_sparse_dev_bh">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/bin/hipsparse/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ih" Directory="amdrocm_sparse_dev_ih">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\conversion -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ihic" Directory="amdrocm_sparse_dev_ihic">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\extra -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ihie" Directory="amdrocm_sparse_dev_ihie">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/extra/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\generic -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ihig" Directory="amdrocm_sparse_dev_ihig">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\level1 -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ihil" Directory="amdrocm_sparse_dev_ihil">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\level2 -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_inhiinle" Directory="amdrocm_sparse_dev_inhiinle">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\level3 -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_inchipintlev" Directory="amdrocm_sparse_dev_inchipintlev">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level3/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\precond -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ihip" Directory="amdrocm_sparse_dev_ihip">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse\internal\reorder -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ihir" Directory="amdrocm_sparse_dev_ihir">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/reorder/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ir" Directory="amdrocm_sparse_dev_ir">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_iri" Directory="amdrocm_sparse_dev_iri">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\conversion -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_iric" Directory="amdrocm_sparse_dev_iric">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/conversion/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\extra -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_irie" Directory="amdrocm_sparse_dev_irie">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/extra/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\generic -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_irig" Directory="amdrocm_sparse_dev_irig">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/generic/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\level1 -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_iril" Directory="amdrocm_sparse_dev_iril">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/level1/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\level2 -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_inroinle" Directory="amdrocm_sparse_dev_inroinle">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/level2/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\level3 -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_incrocintlev" Directory="amdrocm_sparse_dev_incrocintlev">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/level3/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\precond -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_irip" Directory="amdrocm_sparse_dev_irip">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/precond/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\reordering -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_irir" Directory="amdrocm_sparse_dev_irir">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/reordering/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse\internal\util -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_iriu" Directory="amdrocm_sparse_dev_iriu">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/internal/util/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_l" Directory="amdrocm_sparse_dev_l">
+    <Component Id="c_amdrocm_sparse_dev_l_h.lib" Guid="*">
+      <File Id="f_amdrocm_sparse_dev_l_h.lib" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/hipsparse.lib" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_sparse_dev_l_r.lib" Guid="*">
+      <File Id="f_amdrocm_sparse_dev_l_r.lib" Source="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/lib/rocsparse.lib" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_lch" Directory="amdrocm_sparse_dev_lch">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/cmake/hipsparse/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\rocsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_lcr" Directory="amdrocm_sparse_dev_lcr">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/lib/cmake/rocsparse/*.*" />
+  </ComponentGroup>
+
+</Include>

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
-    <ComponentRef Id="c_amdrocm_math_common_b_ro.dll" />
-    <ComponentRef Id="c_amdrocm_math_common_b_roop.dll" />
-</Include>

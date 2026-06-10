@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_sparse_b" Directory="amdrocm_sparse_b">
+    <Component Id="c_amdrocm_sparse_b_h.dll" Guid="*">
+      <File Id="f_amdrocm_sparse_b_h.dll" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/bin/hipsparse.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_sparse_b_hm" Guid="*">
+      <File Id="f_amdrocm_sparse_b_hm" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/bin/hipsparse_mtx2csr" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_sparse_b_r.dll" Guid="*">
+      <File Id="f_amdrocm_sparse_b_r.dll" Source="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/bin/rocsparse.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_sparse_b_rm" Guid="*">
+      <File Id="f_amdrocm_sparse_b_rm" Source="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/bin/rocsparse_mtx2csr" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_sparse_b_rc.exe" Guid="*">
+      <File Id="f_amdrocm_sparse_b_rc.exe" Source="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/bin/rocsparseio-convert.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_sparse_b_ri.exe" Guid="*">
+      <File Id="f_amdrocm_sparse_b_ri.exe" Source="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/bin/rocsparseio-info.exe" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+</Include>

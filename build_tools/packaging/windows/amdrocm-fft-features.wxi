@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
-    <ComponentRef Id="c_amdrocm_fft_b_h.dll" />
-    <ComponentRef Id="c_amdrocm_fft_b_hi.dll" />
-    <ComponentRef Id="c_amdrocm_fft_b_r.dll" />
-    <ComponentRef Id="c_amdrocm_fft_b_rrh.exe" />
-    <ComponentRef Id="c_amdrocm_fft_sdh_L.md" />
-    <ComponentRef Id="c_amdrocm_fft_sdr_L.md" />
-</Include>

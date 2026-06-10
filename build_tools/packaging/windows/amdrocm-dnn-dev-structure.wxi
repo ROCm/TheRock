@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_dnn_dev_b" Name="bin">
+      <Directory Id="amdrocm_dnn_dev_bM" Name="MIOpen" />
+    </Directory>
+    <Directory Id="amdrocm_dnn_dev_i" Name="include">
+      <Directory Id="amdrocm_dnn_dev_if" Name="flatbuffers">
+        <Directory Id="amdrocm_dnn_dev_ifp" Name="pch" />
+      </Directory>
+      <Directory Id="amdrocm_dnn_dev_ih" Name="half" />
+      <Directory Id="amdrocm_dnn_dev_inhi" Name="hipdnn">
+        <Directory Id="amdrocm_dnn_dev_ihb" Name="backend" />
+        <Directory Id="amdrocm_dnn_dev_ihds" Name="data_sdk">
+          <Directory Id="amdrocm_dnn_dev_ihdshds" Name="hipdnn_data_sdk">
+            <Directory Id="amdrocm_dnn_dev_ihdshdsl" Name="logging" />
+            <Directory Id="amdrocm_dnn_dev_ihdshdst" Name="types" />
+            <Directory Id="amdrocm_dnn_dev_ihdshdsu" Name="utilities" />
+          </Directory>
+        </Directory>
+        <Directory Id="amdrocm_dnn_dev_ihfs" Name="flatbuffers_sdk">
+          <Directory Id="amdrocm_dnn_dev_ihfshfs" Name="hipdnn_flatbuffers_sdk">
+            <Directory Id="amdrocm_dnn_dev_ihfshfsdo" Name="data_objects" />
+            <Directory Id="amdrocm_dnn_dev_ihfshfsfu" Name="flatbuffer_utilities" />
+            <Directory Id="amdrocm_dnn_dev_ihfshfsu" Name="utilities">
+              <Directory Id="amdrocm_dnn_dev_ihfshfsuj" Name="json" />
+            </Directory>
+          </Directory>
+        </Directory>
+        <Directory Id="amdrocm_dnn_dev_ihf" Name="frontend">
+          <Directory Id="amdrocm_dnn_dev_ihfhf" Name="hipdnn_frontend">
+            <Directory Id="amdrocm_dnn_dev_ihfhfa" Name="attributes" />
+            <Directory Id="amdrocm_dnn_dev_ihfhfd" Name="detail" />
+            <Directory Id="amdrocm_dnn_dev_ihfhfk" Name="knob" />
+            <Directory Id="amdrocm_dnn_dev_ihfhfn" Name="node">
+              <Directory Id="amdrocm_dnn_dev_ihfhfnd" Name="detail" />
+            </Directory>
+          </Directory>
+        </Directory>
+        <Directory Id="amdrocm_dnn_dev_ihps" Name="plugin_sdk">
+          <Directory Id="amdrocm_dnn_dev_ihpshps" Name="hipdnn_plugin_sdk">
+            <Directory Id="amdrocm_dnn_dev_ihpshpsi" Name="interfaces" />
+          </Directory>
+        </Directory>
+        <Directory Id="amdrocm_dnn_dev_ihts" Name="test_sdk">
+          <Directory Id="amdrocm_dnn_dev_ihtshts" Name="hipdnn_test_sdk">
+            <Directory Id="amdrocm_dnn_dev_ihtshtsc" Name="constants" />
+            <Directory Id="amdrocm_dnn_dev_ihtshtsu" Name="utilities">
+              <Directory Id="amdrocm_dnn_dev_ihtshtsucge" Name="cpu_graph_executor">
+                <Directory Id="amdrocm_dnn_dev_ihtshtsucged" Name="detail" />
+              </Directory>
+              <Directory Id="amdrocm_dnn_dev_ihtshtsud" Name="detail" />
+              <Directory Id="amdrocm_dnn_dev_ihtshtsup" Name="pointwise" />
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="amdrocm_dnn_dev_im" Name="miopen" />
+      <Directory Id="amdrocm_dnn_dev_in" Name="nlohmann">
+        <Directory Id="amdrocm_dnn_dev_ind" Name="detail">
+          <Directory Id="amdrocm_dnn_dev_indc" Name="conversions" />
+          <Directory Id="amdrocm_dnn_dev_indi" Name="input" />
+          <Directory Id="amdrocm_dnn_dev_innldeit" Name="iterators" />
+          <Directory Id="amdrocm_dnn_dev_indm" Name="meta">
+            <Directory Id="amdrocm_dnn_dev_indmcs" Name="call_std" />
+          </Directory>
+          <Directory Id="amdrocm_dnn_dev_indo" Name="output" />
+        </Directory>
+        <Directory Id="amdrocm_dnn_dev_int" Name="thirdparty">
+          <Directory Id="amdrocm_dnn_dev_inth" Name="hedley" />
+        </Directory>
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_dnn_dev_l" Name="lib">
+      <Directory Id="amdrocm_dnn_dev_lc" Name="cmake">
+        <Directory Id="amdrocm_dnn_dev_lcf" Name="flatbuffers" />
+        <Directory Id="amdrocm_dnn_dev_lchb" Name="hipdnn_backend" />
+        <Directory Id="amdrocm_dnn_dev_lchds" Name="hipdnn_data_sdk" />
+        <Directory Id="amdrocm_dnn_dev_lchfs" Name="hipdnn_flatbuffers_sdk" />
+        <Directory Id="amdrocm_dnn_dev_lchf" Name="hipdnn_frontend" />
+        <Directory Id="amdrocm_dnn_dev_lchit" Name="hipdnn_integration_tests" />
+        <Directory Id="amdrocm_dnn_dev_lchps" Name="hipdnn_plugin_sdk" />
+        <Directory Id="amdrocm_dnn_dev_lchts" Name="hipdnn_test_sdk" />
+        <Directory Id="amdrocm_dnn_dev_lcm" Name="miopen" />
+      </Directory>
+      <Directory Id="amdrocm_dnn_dev_lp" Name="pkgconfig" />
+    </Directory>
+    <Directory Id="amdrocm_dnn_dev_s" Name="share">
+      <Directory Id="amdrocm_dnn_dev_sc" Name="cmake">
+        <Directory Id="amdrocm_dnn_dev_scnj" Name="nlohmann_json" />
+      </Directory>
+      <Directory Id="amdrocm_dnn_dev_sd" Name="doc">
+        <Directory Id="amdrocm_dnn_dev_sdmh" Name="miopen-hip" />
+      </Directory>
+      <Directory Id="amdrocm_dnn_dev_sp" Name="pkgconfig" />
+    </Directory>
+</Include>

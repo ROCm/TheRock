@@ -1,0 +1,2076 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory lib\llvm\include\LLVMSPIRVLib -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lliL" Directory="amdrocm_llvm_dev_lliL">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/LLVMSPIRVLib/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-c -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicc" Directory="amdrocm_llvm_dev_llicc">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-c/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llict" Directory="amdrocm_llvm_dev_llict">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\abseil -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicta" Directory="amdrocm_llvm_dev_llicta">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/abseil/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\altera -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltial" Directory="amdrocm_llvm_dev_lillincltial">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/altera/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\android -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltian" Directory="amdrocm_llvm_dev_lillincltian">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/android/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\boost -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictb" Directory="amdrocm_llvm_dev_llictb">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/boost/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\bugprone -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltibu" Directory="amdrocm_llvm_dev_lillincltibu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/bugprone/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\concurrency -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictc" Directory="amdrocm_llvm_dev_llictc">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/concurrency/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\cppcoreguidelines -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclticp" Directory="amdrocm_llvm_dev_lillinclticp">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/cppcoreguidelines/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\custom -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclticu" Directory="amdrocm_llvm_dev_lillinclticu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/custom/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\darwin -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictd" Directory="amdrocm_llvm_dev_llictd">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/darwin/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\fuchsia -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictf" Directory="amdrocm_llvm_dev_llictf">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/fuchsia/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\google -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictg" Directory="amdrocm_llvm_dev_llictg">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/google/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\hicpp -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicth" Directory="amdrocm_llvm_dev_llicth">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/hicpp/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\linuxkernel -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictl" Directory="amdrocm_llvm_dev_llictl">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/linuxkernel/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\llvm -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltill" Directory="amdrocm_llvm_dev_lillincltill">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/llvm/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\llvmlibc -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclatidllv" Directory="amdrocm_llvm_dev_libllvincclatidllv">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/llvmlibc/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\misc -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictm" Directory="amdrocm_llvm_dev_llictm">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/misc/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\modernize -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltimo" Directory="amdrocm_llvm_dev_lillincltimo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/modernize/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\mpi -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltimp" Directory="amdrocm_llvm_dev_lillincltimp">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/mpi/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\objc -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicto" Directory="amdrocm_llvm_dev_llicto">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/objc/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\openmp -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltiop" Directory="amdrocm_llvm_dev_lillincltiop">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/openmp/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\performance -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictp" Directory="amdrocm_llvm_dev_llictp">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/performance/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\portability -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillincltipo" Directory="amdrocm_llvm_dev_lillincltipo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/portability/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\readability -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictr" Directory="amdrocm_llvm_dev_llictr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/readability/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\tool -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictt" Directory="amdrocm_llvm_dev_llictt">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/tool/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang-tidy\utils -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llictu" Directory="amdrocm_llvm_dev_llictu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang-tidy/utils/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\APINotes -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicA" Directory="amdrocm_llvm_dev_llicA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/APINotes/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\AST -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclAS" Directory="amdrocm_llvm_dev_lillinclAS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/AST/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ASTMatchers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclaAST" Directory="amdrocm_llvm_dev_libllvincclaAST">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ASTMatchers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ASTMatchers\Dynamic -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicAD" Directory="amdrocm_llvm_dev_llicAD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ASTMatchers/Dynamic/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Analysis -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclAn" Directory="amdrocm_llvm_dev_lillinclAn">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Analysis/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Analysis\Analyses -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicAA" Directory="amdrocm_llvm_dev_llicAA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Analysis/Analyses/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Analysis\Analyses\LifetimeSafety -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicAAL" Directory="amdrocm_llvm_dev_llicAAL">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Analysis/Analyses/LifetimeSafety/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Analysis\DomainSpecific -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclAnDo" Directory="amdrocm_llvm_dev_lillinclAnDo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Analysis/DomainSpecific/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Analysis\FlowSensitive -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicAF" Directory="amdrocm_llvm_dev_llicAF">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Analysis/FlowSensitive/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Analysis\FlowSensitive\Models -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicAFM" Directory="amdrocm_llvm_dev_llicAFM">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Analysis/FlowSensitive/Models/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Analysis\Support -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicAS" Directory="amdrocm_llvm_dev_llicAS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Analysis/Support/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Basic -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicB" Directory="amdrocm_llvm_dev_llicB">
+    <Component Id="c_amdrocm_llvm_dev_llicB_A.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_A.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AArch64ACLETypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_A.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_A.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AArch64CodeGenUtils.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_AB.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_AB.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ABI.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_AB.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_AB.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ABIVersions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ad.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ad.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AddressSpaces.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Al.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Al.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AlignedAllocation.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_All.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_All.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AllDiagnostics.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_AM.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_AM.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AMDGPUTypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_acba.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_acba.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_cde_builtin_aliases.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_acbc.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_acbc.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_cde_builtin_cg.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_acbs.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_acbs.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_cde_builtin_sema.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_acb.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_acb.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_cde_builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_af.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_af.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_fp16.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_ait.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_ait.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_immcheck_types.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_amba.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_amba.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_mve_builtin_aliases.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_ambc.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_ambc.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_mve_builtin_cg.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_ambs.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_ambs.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_mve_builtin_sema.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_amb.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_amb.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_mve_builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_an.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_an.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_neon.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_asbc.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_asbc.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sme_builtin_cg.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_asb.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_asb.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sme_builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_asbzs.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_asbzs.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sme_builtins_za_state.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_assr.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_assr.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sme_sema_rangechecks.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_assa.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_assa.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sme_streaming_attrs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_arsvbucg.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_arsvbucg.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sve_builtin_cg.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_arsvbu.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_arsvbu.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sve_builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_arsvsera.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_arsvsera.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sve_sema_rangechecks.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_arsvstat.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_arsvstat.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sve_streaming_attrs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_ast.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_ast.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/arm_sve_typeflags.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_AS.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_AS.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ASTSourceDescriptor.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_A.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_A.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttrHasAttributeImpl.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Attr.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Attr.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttributeCommonInfo.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Attrib.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Attrib.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Attributes.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Attri.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Attri.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttributeScopeInfo.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Attri.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Attri.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttributeSpellingList.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_At.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_At.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttrKinds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_At.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_At.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttrList.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Att.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Att.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttrParsedAttrList.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Att.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Att.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttrSubjectMatchRules.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Attr.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Attr.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/AttrSubMatchRulesList.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_B.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_B.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BitmaskEnum.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_B.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_B.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinHeaders.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Bu.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Bu.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Builtins.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Bu.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Bu.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Builtins.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Bu.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Bu.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Bui.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Bui.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Bui.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Bui.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Bc.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Bc.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsAArch64NeonSVEBridge_cg.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Buil.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Buil.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsAMDGPU.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Buil.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Buil.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsARM.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Built.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Built.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsBPF.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Builti.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Builti.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsDirectX.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Builtin.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Builtin.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsHexagon.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Built.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Built.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsHexagonMapCustomDep.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Builti.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Builti.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsLoongArchBase.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Builtin.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Builtin.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsLoongArchLASX.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Builtins.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Builtins.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsLoongArchLSX.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsM.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsM.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsMips.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Builtins.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Builtins.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsNVPTX.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsP.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsP.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsPPC.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsR.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsR.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsRISCV.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsS.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsS.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsSPIRVCL.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsSP.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsSP.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsSPIRVCommon.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsSPI.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsSPI.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsSPIRVVK.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsSy.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsSy.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsSystemZ.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsV.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsV.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsVE.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsVE.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsVE.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsVEVL.gen.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsW.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsW.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsWebAssembly.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsX.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsX.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsX86.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_B6.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_B6.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsX86_64.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_BuiltinsX.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_BuiltinsX.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinsXCore.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_B.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_B.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/BuiltinTemplates.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ca.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ca.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CapturedStmt.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_C.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_C.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CFProtectionOptions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_C.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_C.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CFProtectionOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ch.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ch.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CharInfo.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_CL.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_CL.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CLWarnings.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Co.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Co.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CodeGenOptions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Co.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Co.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CodeGenOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Com.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Com.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CommentOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Cu.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Cu.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Cuda.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Cus.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Cus.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CustomizableOptional.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_C.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_C.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/CXX11AttributeInfo.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_D.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_D.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DarwinSDKInfo.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_D.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_D.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DebugOptions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Di.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Di.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Diagnostic.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagn.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagn.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAllCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diag.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diag.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysis.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagno.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagno.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnos.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnos.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticAnalysisEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnost.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnost.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnosti.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnosti.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Dia.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Dia.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAST.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_D.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_D.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticASTCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Di.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Di.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticASTEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Dia.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Dia.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticASTInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diag.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diag.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticASTKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCategories.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagno.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagno.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticComment.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnostic.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnostic.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticCommentCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticC.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticC.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCommentEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCo.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCo.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCommentInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCom.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCom.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCommentKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticComm.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticComm.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticCommonCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCommo.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCommo.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticCommonEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCommon.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCommon.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCommonInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCommonK.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCommonK.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCommonKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnos.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnos.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCrossTU.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCr.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCr.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticCrossTUCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCro.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCro.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticCrossTUEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCros.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCros.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCrossTUInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticCross.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticCross.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticCrossTUKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnost.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnost.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticDriver.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticD.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticD.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticDriverCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticDr.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticDr.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticDriverEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticDri.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticDri.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticDriverInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticDriv.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticDriv.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticDriverKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnosti.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnosti.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticError.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Diagnostic.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Diagnostic.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticFrontend.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticF.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticF.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticFrontendCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticFr.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticFr.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticFrontendEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticFro.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticFro.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticFrontendInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticFron.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticFron.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticFrontendKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticG.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticG.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticGroups.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticI.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticI.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticIDs.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticI.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticI.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticIndexName.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticIn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticIn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticInstallAPI.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticIn.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticIn.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticInstallAPICompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticIns.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticIns.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticInstallAPIEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticInst.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticInst.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticInstallAPIInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticInsta.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticInsta.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticInstallAPIKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticL.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticL.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticLex.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticL.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticL.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticLexCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticLe.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticLe.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticLexEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticLex.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticLex.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticLexInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticLexK.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticLexK.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticLexKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Di.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Di.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticOptions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticO.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticO.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticP.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticP.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticParse.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticP.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticP.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticParseCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticPa.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticPa.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticParseEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticPar.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticPar.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticParseInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticPars.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticPars.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticParseKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticR.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticR.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticRefactoring.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticR.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticR.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticRefactoringCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticRe.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticRe.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticRefactoringEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticRef.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticRef.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticRefactoringInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticRefa.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticRefa.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticRefactoringKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticS.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticS.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSema.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticS.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticS.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSemaCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSe.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSe.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSemaEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSem.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSem.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSemaInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSema.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSema.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSemaKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSe.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSe.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSerialization.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSer.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSer.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticSerializationCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSeri.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSeri.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticSerializationEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSeria.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSeria.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSerializationInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSerial.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSerial.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticSerializationKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticSt.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticSt.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticStableIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticT.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticT.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticTrap.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticT.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticT.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticAnalysisCompatIDs.inc" Name="DiagnosticTrapCompatIDs.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticTr.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticTr.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticTrapEnums.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticTra.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticTra.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticTrapInterface.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_DiagnosticTrap.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_DiagnosticTrap.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DiagnosticTrapKinds.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Dir.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Dir.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/DirectoryEntry.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_E.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_E.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ExceptionSpecificationType.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ex.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ex.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ExpressionTraits.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Fe.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Fe.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Features.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_F.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_F.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/FileEntry.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Fi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Fi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/FileManager.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Fil.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Fil.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/FileSystemOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_File.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_File.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/FileSystemStatCache.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_F.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_F.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/FPOptions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_He.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_He.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/HeaderInclude.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_H.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_H.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/HLSLIntangibleTypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_H.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_H.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/HLSLRuntime.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_I.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_I.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/IdentifierTable.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_J.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_J.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/JsonSupport.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_La.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_La.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Lambda.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_L.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_L.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/LangOptions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Lan.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Lan.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/LangOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Lang.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Lang.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/LangStandard.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_La.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_La.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/LangStandards.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Li.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Li.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Linkage.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_L.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_L.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/LLVM.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_M.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_M.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/MacroBuilder.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ma.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ma.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/MakeSupport.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Mo.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Mo.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Module.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_M.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_M.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/MSP430Target.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_N.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_N.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/NoSanitizeList.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_O.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_O.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ObjCRuntime.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Of.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Of.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OffloadArch.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_O.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_O.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenACCClauses.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Op.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Op.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenACCKinds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ope.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ope.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenCLExtensions.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Op.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Op.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenCLExtensionTypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Open.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Open.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenCLImageTypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ope.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ope.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenCLOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_OpenM.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_OpenM.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenMPKinds.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Open.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Open.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OpenMPKinds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Oper.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Oper.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OperatorKinds.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Oper.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Oper.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OperatorKinds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Opera.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Opera.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/OperatorPrecedence.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_P.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_P.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ParsedAttrInfo.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Pa.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Pa.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/PartialDiagnostic.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Pl.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Pl.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/PlistSupport.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Po.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Po.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/PointerAuthOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_P.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_P.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/PPCTypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Pr.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Pr.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/PragmaKinds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Pre.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Pre.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/PrettyStackTrace.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Pro.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Pro.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/ProfileList.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_R.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_R.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/RegularKeywordAttrInfo.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_ravbc.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_ravbc.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_andes_vector_builtin_cg.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_ravbs.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_ravbs.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_andes_vector_builtin_sema.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_ravb.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_ravb.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_andes_vector_builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_rsvbc.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_rsvbc.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_sifive_vector_builtin_cg.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_rsvbs.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_rsvbs.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_sifive_vector_builtin_sema.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_rsvb.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_rsvb.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_sifive_vector_builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_rvbc.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_rvbc.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_vector_builtin_cg.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_rvbs.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_rvbs.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_vector_builtin_sema.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_rvb.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_rvb.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/riscv_vector_builtins.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_R.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_R.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/RISCVVTypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_S.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_S.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Sanitizers.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sa.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sa.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Sanitizers.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_S.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_S.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/SanitizerSpecialCaseList.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sar.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sar.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Sarif.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Si.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Si.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/SimpleTypoCorrection.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_So.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_So.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/SourceLocation.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sou.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sou.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/SourceManager.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sour.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sour.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/SourceManagerInternals.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sourc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sourc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/SourceMgrAdapter.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Specifiers.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_St.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_St.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Stack.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sta.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sta.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/StackExhaustionHandler.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Sy.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Sy.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/SyncScope.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_T.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_T.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TargetBuiltins.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_T.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_T.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TargetCXXABI.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ta.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ta.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TargetCXXABI.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Tar.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Tar.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TargetID.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Targ.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Targ.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TargetInfo.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Targe.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Targe.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TargetOptions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ta.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ta.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TargetOSMacros.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Te.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Te.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TemplateKinds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Th.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Th.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Thunk.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_To.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_To.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TokenKinds.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_To.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_To.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TokenKinds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Tr.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Tr.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TransformTypeTraits.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Ty.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Ty.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/TypeTraits.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_U.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_U.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/UnsignedOrNone.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_V.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_V.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Version.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_V.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_V.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Version.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_Vi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_Vi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/Visibility.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_W.def" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_W.def" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/WebAssemblyReferenceTypes.def" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_X.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_X.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/XRayInstr.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_llicB_XR.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_llicB_XR.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Basic/XRayLists.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicC" Directory="amdrocm_llvm_dev_llicC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR\Dialect -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicCD" Directory="amdrocm_llvm_dev_llicCD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/Dialect/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR\Dialect\Builder -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicCDB" Directory="amdrocm_llvm_dev_llicCDB">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/Dialect/Builder/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR\Dialect\IR -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicCDI" Directory="amdrocm_llvm_dev_llicCDI">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/Dialect/IR/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR\Dialect\OpenACC -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicCDO" Directory="amdrocm_llvm_dev_llicCDO">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/Dialect/OpenACC/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR\Dialect\OpenMP -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclCIDiOp" Directory="amdrocm_llvm_dev_lillinclCIDiOp">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/Dialect/OpenMP/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR\FrontendAction -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicCF" Directory="amdrocm_llvm_dev_llicCF">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/FrontendAction/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CIR\Interfaces -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicCI" Directory="amdrocm_llvm_dev_llicCI">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CIR/Interfaces/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CodeGen -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclCo" Directory="amdrocm_llvm_dev_lillinclCo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CodeGen/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Config -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclaCon" Directory="amdrocm_llvm_dev_libllvincclaCon">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Config/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\CrossTU -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclCr" Directory="amdrocm_llvm_dev_lillinclCr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/CrossTU/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\DependencyScanning -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicD" Directory="amdrocm_llvm_dev_llicD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/DependencyScanning/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\DirectoryWatcher -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclDi" Directory="amdrocm_llvm_dev_lillinclDi">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/DirectoryWatcher/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Driver -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclDr" Directory="amdrocm_llvm_dev_lillinclDr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Driver/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Edit -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicE" Directory="amdrocm_llvm_dev_llicE">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Edit/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ExtractAPI -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclEx" Directory="amdrocm_llvm_dev_lillinclEx">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ExtractAPI/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ExtractAPI\Serialization -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicES" Directory="amdrocm_llvm_dev_llicES">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ExtractAPI/Serialization/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Format -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicF" Directory="amdrocm_llvm_dev_llicF">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Format/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Frontend -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclFr" Directory="amdrocm_llvm_dev_lillinclFr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Frontend/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\FrontendTool -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclaFro" Directory="amdrocm_llvm_dev_libllvincclaFro">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/FrontendTool/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Index -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicI" Directory="amdrocm_llvm_dev_llicI">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Index/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\IndexSerialization -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclIn" Directory="amdrocm_llvm_dev_lillinclIn">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/IndexSerialization/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\InstallAPI -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclaIns" Directory="amdrocm_llvm_dev_libllvincclaIns">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/InstallAPI/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Interpreter -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclaInt" Directory="amdrocm_llvm_dev_libllvincclaInt">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Interpreter/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Lex -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicL" Directory="amdrocm_llvm_dev_llicL">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Lex/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Options -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicO" Directory="amdrocm_llvm_dev_llicO">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Options/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Parse -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicP" Directory="amdrocm_llvm_dev_llicP">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Parse/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Rewrite\Core -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicRC" Directory="amdrocm_llvm_dev_llicRC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Rewrite/Core/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Rewrite\Frontend -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicRF" Directory="amdrocm_llvm_dev_llicRF">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Rewrite/Frontend/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicS" Directory="amdrocm_llvm_dev_llicS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Analyses\CallGraph -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSAC" Directory="amdrocm_llvm_dev_llicSAC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/CallGraph/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Analyses\UnsafeBufferUsage -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSAU" Directory="amdrocm_llvm_dev_llicSAU">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Analyses/UnsafeBufferUsage/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSC" Directory="amdrocm_llvm_dev_llicSC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core\EntityLinker -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSCE" Directory="amdrocm_llvm_dev_llicSCE">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/EntityLinker/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core\Model -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSCM" Directory="amdrocm_llvm_dev_llicSCM">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Model/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core\Serialization -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSCS" Directory="amdrocm_llvm_dev_llicSCS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Serialization/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core\SummaryData -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclScCoSu" Directory="amdrocm_llvm_dev_lillinclScCoSu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/SummaryData/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core\Support -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclaScaCorSup" Directory="amdrocm_llvm_dev_libllvincclaScaCorSup">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/Support/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core\TUSummary -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSCT" Directory="amdrocm_llvm_dev_llicSCT">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/TUSummary/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Core\WholeProgramAnalysis -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSCW" Directory="amdrocm_llvm_dev_llicSCW">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Core/WholeProgramAnalysis/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Frontend -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSF" Directory="amdrocm_llvm_dev_llicSF">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Frontend/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\ScalableStaticAnalysisFramework\Tool -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicST" Directory="amdrocm_llvm_dev_llicST">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/ScalableStaticAnalysisFramework/Tool/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Sema -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclSe" Directory="amdrocm_llvm_dev_lillinclSe">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Sema/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Serialization -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincclaSer" Directory="amdrocm_llvm_dev_libllvincclaSer">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Serialization/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\StaticAnalyzer\Checkers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclStCh" Directory="amdrocm_llvm_dev_lillinclStCh">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/StaticAnalyzer/Checkers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\StaticAnalyzer\Core -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclStCo" Directory="amdrocm_llvm_dev_lillinclStCo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/StaticAnalyzer/Core/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\StaticAnalyzer\Core\BugReporter -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSCB" Directory="amdrocm_llvm_dev_llicSCB">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/StaticAnalyzer/Core/BugReporter/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\StaticAnalyzer\Core\PathSensitive -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicSCP" Directory="amdrocm_llvm_dev_llicSCP">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/StaticAnalyzer/Core/PathSensitive/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\StaticAnalyzer\Frontend -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclStFr" Directory="amdrocm_llvm_dev_lillinclStFr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/StaticAnalyzer/Frontend/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Support -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclSu" Directory="amdrocm_llvm_dev_lillinclSu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Support/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Testing -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicT" Directory="amdrocm_llvm_dev_llicT">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Testing/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinclTo" Directory="amdrocm_llvm_dev_lillinclTo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\ASTDiff -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTA" Directory="amdrocm_llvm_dev_llicTA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/ASTDiff/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\Core -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTC" Directory="amdrocm_llvm_dev_llicTC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/Core/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\Inclusions -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTI" Directory="amdrocm_llvm_dev_llicTI">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/Inclusions/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\Refactoring -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTR" Directory="amdrocm_llvm_dev_llicTR">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/Refactoring/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\Refactoring\Extract -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTRE" Directory="amdrocm_llvm_dev_llicTRE">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/Refactoring/Extract/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\Refactoring\Rename -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTRR" Directory="amdrocm_llvm_dev_llicTRR">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/Refactoring/Rename/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\Syntax -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTS" Directory="amdrocm_llvm_dev_llicTS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/Syntax/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\Tooling\Transformer -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicTT" Directory="amdrocm_llvm_dev_llicTT">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/Tooling/Transformer/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\clang\UnifiedSymbolResolution -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llicU" Directory="amdrocm_llvm_dev_llicU">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/clang/UnifiedSymbolResolution/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\lld\Common -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilC" Directory="amdrocm_llvm_dev_llilC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/lld/Common/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm-c -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilc" Directory="amdrocm_llvm_dev_llilc">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm-c/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm-c\Transforms -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilcT" Directory="amdrocm_llvm_dev_llilcT">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm-c/Transforms/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinll" Directory="amdrocm_llvm_dev_lillinll">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ABI -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilA" Directory="amdrocm_llvm_dev_llilA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ABI/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ADT -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllAD" Directory="amdrocm_llvm_dev_lillinllAD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ADT/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Analysis -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllAn" Directory="amdrocm_llvm_dev_lillinllAn">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Analysis/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Analysis\Utils -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilAU" Directory="amdrocm_llvm_dev_llilAU">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Analysis/Utils/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\AsmParser -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllAs" Directory="amdrocm_llvm_dev_lillinllAs">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/AsmParser/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\BinaryFormat -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilB" Directory="amdrocm_llvm_dev_llilB">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/BinaryFormat/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\BinaryFormat\ELFRelocs -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilBE" Directory="amdrocm_llvm_dev_llilBE">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/BinaryFormat/ELFRelocs/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Bitcode -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllBi" Directory="amdrocm_llvm_dev_lillinllBi">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Bitcode/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Bitstream -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvBit" Directory="amdrocm_llvm_dev_libllvincllvBit">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Bitstream/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\CAS -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllCA" Directory="amdrocm_llvm_dev_lillinllCA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/CAS/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\CGData -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllCG" Directory="amdrocm_llvm_dev_lillinllCG">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/CGData/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\CodeGen -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllCo" Directory="amdrocm_llvm_dev_lillinllCo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/CodeGen/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\CodeGen\GlobalISel -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilCG" Directory="amdrocm_llvm_dev_llilCG">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/CodeGen/GlobalISel/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\CodeGen\MIRParser -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilCM" Directory="amdrocm_llvm_dev_llilCM">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/CodeGen/MIRParser/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\CodeGen\PBQP -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilCP" Directory="amdrocm_llvm_dev_llilCP">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/CodeGen/PBQP/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\CodeGenTypes -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvCod" Directory="amdrocm_llvm_dev_libllvincllvCod">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/CodeGenTypes/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Config -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvCon" Directory="amdrocm_llvm_dev_libllvincllvCon">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Config/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DTLTO -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilD" Directory="amdrocm_llvm_dev_llilD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DTLTO/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DWARFCFIChecker -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllDW" Directory="amdrocm_llvm_dev_lillinllDW">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DWARFCFIChecker/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DWARFLinker -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvDWA" Directory="amdrocm_llvm_dev_libllvincllvDWA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DWARFLinker/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DWARFLinker\Classic -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDC" Directory="amdrocm_llvm_dev_llilDC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DWARFLinker/Classic/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DWARFLinker\Parallel -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDP" Directory="amdrocm_llvm_dev_llilDP">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DWARFLinker/Parallel/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DWP -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvDWP" Directory="amdrocm_llvm_dev_libllvincllvDWP">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DWP/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllDe" Directory="amdrocm_llvm_dev_lillinllDe">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\BTF -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDB" Directory="amdrocm_llvm_dev_llilDB">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/BTF/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\CodeView -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllDeCo" Directory="amdrocm_llvm_dev_lillinllDeCo">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/CodeView/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\DWARF -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDD" Directory="amdrocm_llvm_dev_llilDD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/DWARF/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\DWARF\LowLevel -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDDL" Directory="amdrocm_llvm_dev_llilDDL">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/DWARF/LowLevel/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\GSYM -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDG" Directory="amdrocm_llvm_dev_llilDG">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/GSYM/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\LogicalView -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDL" Directory="amdrocm_llvm_dev_llilDL">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/LogicalView/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\LogicalView\Core -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDLC" Directory="amdrocm_llvm_dev_llilDLC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/LogicalView/Core/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\LogicalView\Readers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDLR" Directory="amdrocm_llvm_dev_llilDLR">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/LogicalView/Readers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\MSF -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDM" Directory="amdrocm_llvm_dev_llilDM">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/MSF/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\PDB -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllDePD" Directory="amdrocm_llvm_dev_lillinllDePD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/PDB/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\PDB\DIA -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDPD" Directory="amdrocm_llvm_dev_llilDPD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/PDB/DIA/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\PDB\Native -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDPN" Directory="amdrocm_llvm_dev_llilDPN">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/PDB/Native/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\DebugInfo\Symbolize -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilDS" Directory="amdrocm_llvm_dev_llilDS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/DebugInfo/Symbolize/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Debuginfod -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvDeb" Directory="amdrocm_llvm_dev_libllvincllvDeb">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Debuginfod/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Demangle -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvDem" Directory="amdrocm_llvm_dev_libllvincllvDem">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Demangle/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ExecutionEngine -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilE" Directory="amdrocm_llvm_dev_llilE">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ExecutionEngine/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ExecutionEngine\JITLink -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilEJ" Directory="amdrocm_llvm_dev_llilEJ">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ExecutionEngine/JITLink/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ExecutionEngine\Orc -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilEO" Directory="amdrocm_llvm_dev_llilEO">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ExecutionEngine/Orc/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ExecutionEngine\Orc\Debugging -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilEOD" Directory="amdrocm_llvm_dev_llilEOD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ExecutionEngine/Orc/Debugging/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ExecutionEngine\Orc\Shared -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilEOS" Directory="amdrocm_llvm_dev_llilEOS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ExecutionEngine/Orc/Shared/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ExecutionEngine\Orc\TargetProcess -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilEOT" Directory="amdrocm_llvm_dev_llilEOT">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ExecutionEngine/Orc/TargetProcess/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\FileCheck -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilF" Directory="amdrocm_llvm_dev_llilF">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/FileCheck/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\Atomic -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilFA" Directory="amdrocm_llvm_dev_llilFA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/Atomic/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\Debug -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilFD" Directory="amdrocm_llvm_dev_llilFD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/Debug/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\Directive -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllFrDi" Directory="amdrocm_llvm_dev_lillinllFrDi">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/Directive/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\Driver -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllFrDr" Directory="amdrocm_llvm_dev_lillinllFrDr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/Driver/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\HLSL -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilFH" Directory="amdrocm_llvm_dev_llilFH">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/HLSL/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\Offloading -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilFO" Directory="amdrocm_llvm_dev_llilFO">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/Offloading/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\OpenACC -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllFrOp" Directory="amdrocm_llvm_dev_lillinllFrOp">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/OpenACC/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Frontend\OpenMP -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvFroOpe" Directory="amdrocm_llvm_dev_libllvincllvFroOpe">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Frontend/OpenMP/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\FuzzMutate -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllFu" Directory="amdrocm_llvm_dev_lillinllFu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/FuzzMutate/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\IR -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilI" Directory="amdrocm_llvm_dev_llilI">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/IR/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\IRPrinter -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllIR" Directory="amdrocm_llvm_dev_lillinllIR">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/IRPrinter/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\IRReader -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvIRR" Directory="amdrocm_llvm_dev_libllvincllvIRR">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/IRReader/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\InterfaceStub -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllIn" Directory="amdrocm_llvm_dev_lillinllIn">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/InterfaceStub/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\LTO -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilL" Directory="amdrocm_llvm_dev_llilL">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/LTO/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\LTO\legacy -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilLl" Directory="amdrocm_llvm_dev_llilLl">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/LTO/legacy/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\LineEditor -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllLi" Directory="amdrocm_llvm_dev_lillinllLi">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/LineEditor/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Linker -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvLin" Directory="amdrocm_llvm_dev_libllvincllvLin">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Linker/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\MC -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilM" Directory="amdrocm_llvm_dev_llilM">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/MC/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\MC\MCDisassembler -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilMM" Directory="amdrocm_llvm_dev_llilMM">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/MC/MCDisassembler/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\MC\MCParser -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllMCMC" Directory="amdrocm_llvm_dev_lillinllMCMC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/MC/MCParser/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\MCA -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllMC" Directory="amdrocm_llvm_dev_lillinllMC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/MCA/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\MCA\HardwareUnits -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilMH" Directory="amdrocm_llvm_dev_llilMH">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/MCA/HardwareUnits/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\MCA\Stages -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilMS" Directory="amdrocm_llvm_dev_llilMS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/MCA/Stages/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjCopy -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilO" Directory="amdrocm_llvm_dev_llilO">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjCopy/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjCopy\COFF -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilOC" Directory="amdrocm_llvm_dev_llilOC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjCopy/COFF/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjCopy\DXContainer -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilOD" Directory="amdrocm_llvm_dev_llilOD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjCopy/DXContainer/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjCopy\ELF -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilOE" Directory="amdrocm_llvm_dev_llilOE">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjCopy/ELF/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjCopy\MachO -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilOM" Directory="amdrocm_llvm_dev_llilOM">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjCopy/MachO/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjCopy\XCOFF -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilOX" Directory="amdrocm_llvm_dev_llilOX">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjCopy/XCOFF/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjCopy\wasm -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilOw" Directory="amdrocm_llvm_dev_llilOw">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjCopy/wasm/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Object -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllOb" Directory="amdrocm_llvm_dev_lillinllOb">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Object/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ObjectYAML -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvObj" Directory="amdrocm_llvm_dev_libllvincllvObj">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ObjectYAML/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Option -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllOp" Directory="amdrocm_llvm_dev_lillinllOp">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Option/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Passes -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilP" Directory="amdrocm_llvm_dev_llilP">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Passes/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Plugins -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllPl" Directory="amdrocm_llvm_dev_lillinllPl">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Plugins/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ProfileData -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllPr" Directory="amdrocm_llvm_dev_lillinllPr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ProfileData/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ProfileData\Coverage -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilPC" Directory="amdrocm_llvm_dev_llilPC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ProfileData/Coverage/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Remarks -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilR" Directory="amdrocm_llvm_dev_llilR">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Remarks/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\SandboxIR -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilS" Directory="amdrocm_llvm_dev_llilS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/SandboxIR/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Support -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllSu" Directory="amdrocm_llvm_dev_lillinllSu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Support/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Support\FileSystem -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilSF" Directory="amdrocm_llvm_dev_llilSF">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Support/FileSystem/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Support\HTTP -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilSH" Directory="amdrocm_llvm_dev_llilSH">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Support/HTTP/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Support\LSP -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilSL" Directory="amdrocm_llvm_dev_llilSL">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Support/LSP/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Support\Solaris\sys -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilSSs" Directory="amdrocm_llvm_dev_llilSSs">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Support/Solaris/sys/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Support\SystemZ\zos_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilSSzw" Directory="amdrocm_llvm_dev_llilSSzw">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Support/SystemZ/zos_wrappers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Support\Windows -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilSW" Directory="amdrocm_llvm_dev_llilSW">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Support/Windows/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\TableGen -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilT" Directory="amdrocm_llvm_dev_llilT">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/TableGen/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Target -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllTa" Directory="amdrocm_llvm_dev_lillinllTa">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Target/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Target\GlobalISel -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTG" Directory="amdrocm_llvm_dev_llilTG">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Target/GlobalISel/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\TargetParser -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvTar" Directory="amdrocm_llvm_dev_libllvincllvTar">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/TargetParser/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Telemetry -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllTe" Directory="amdrocm_llvm_dev_lillinllTe">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Telemetry/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Testing\ADT -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTA" Directory="amdrocm_llvm_dev_llilTA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Testing/ADT/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Testing\Annotations -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllTeAn" Directory="amdrocm_llvm_dev_lillinllTeAn">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Testing/Annotations/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Testing\Demangle -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTD" Directory="amdrocm_llvm_dev_llilTD">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Testing/Demangle/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Testing\Support -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTS" Directory="amdrocm_llvm_dev_llilTS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Testing/Support/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\TextAPI -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvTex" Directory="amdrocm_llvm_dev_libllvincllvTex">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/TextAPI/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ToolDrivers\llvm-dlltool -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTld" Directory="amdrocm_llvm_dev_llilTld">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ToolDrivers/llvm-dlltool/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\ToolDrivers\llvm-lib -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTll" Directory="amdrocm_llvm_dev_llilTll">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ToolDrivers/llvm-lib/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllTr" Directory="amdrocm_llvm_dev_lillinllTr">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\AggressiveInstCombine -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllTrAg" Directory="amdrocm_llvm_dev_lillinllTrAg">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/AggressiveInstCombine/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\Coroutines -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTC" Directory="amdrocm_llvm_dev_llilTC">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/Coroutines/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\HipStdPar -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTH" Directory="amdrocm_llvm_dev_llilTH">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/HipStdPar/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\IPO -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTI" Directory="amdrocm_llvm_dev_llilTI">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/IPO/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\InstCombine -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllTrIn" Directory="amdrocm_llvm_dev_lillinllTrIn">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/InstCombine/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\Instrumentation -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvTraIns" Directory="amdrocm_llvm_dev_libllvincllvTraIns">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/Instrumentation/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\Scalar -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllTrSc" Directory="amdrocm_llvm_dev_lillinllTrSc">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/Scalar/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\Utils -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTU" Directory="amdrocm_llvm_dev_llilTU">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/Utils/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\Vectorize -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTV" Directory="amdrocm_llvm_dev_llilTV">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/Vectorize/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\Vectorize\SandboxVectorizer -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTVS" Directory="amdrocm_llvm_dev_llilTVS">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\Transforms\Vectorize\SandboxVectorizer\Passes -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilTVSP" Directory="amdrocm_llvm_dev_llilTVSP">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/Transforms/Vectorize/SandboxVectorizer/Passes/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\WindowsDriver -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilW" Directory="amdrocm_llvm_dev_llilW">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/WindowsDriver/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\WindowsManifest -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lillinllWi" Directory="amdrocm_llvm_dev_lillinllWi">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/WindowsManifest/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\WindowsResource -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_libllvincllvWin" Directory="amdrocm_llvm_dev_libllvincllvWin">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/WindowsResource/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\include\llvm\XRay -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_llilX" Directory="amdrocm_llvm_dev_llilX">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/XRay/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllc2i" Directory="amdrocm_llvm_dev_lllc2i">
+    <Component Id="c_amdrocm_llvm_dev_lllc2i_f.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllc2i_f.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/float.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lllc2i_l.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllc2i_l.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/limits.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lllc2i_s.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllc2i_s.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdint.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lllc2i_u.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllc2i_u.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/unwind.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\llvm_libc_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllc2illw" Directory="amdrocm_llvm_dev_lllc2illw">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\llvm_offload_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllc2ilow" Directory="amdrocm_llvm_dev_lllc2ilow">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\openmp_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllc2iow" Directory="amdrocm_llvm_dev_lllc2iow">
+    <Component Id="c_amdrocm_llvm_dev_lllc2iow_m.h" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllc2iow_m.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/math.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\AMDDeviceLibs -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllcA" Directory="amdrocm_llvm_dev_lllcA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/AMDDeviceLibs/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\clang -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllcc" Directory="amdrocm_llvm_dev_lllcc">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/clang/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\lld -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllcl" Directory="amdrocm_llvm_dev_lllcl">
+    <Component Id="c_amdrocm_llvm_dev_lllcl_L.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllcl_L.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/lld/LLDConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lllcl_LL.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllcl_LL.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/clang/ClangConfigVersion.cmake" Name="LLDConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lllcl_Lr.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllcl_Lr.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/lld/LLDTargets-release.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lllcl_LLD.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lllcl_LLD.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/lld/LLDTargets.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\llvm -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lilllicmll" Directory="amdrocm_llvm_dev_lilllicmll">
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_A.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_A.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/AddLLVM.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Ad.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Ad.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/AddOCaml.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Add.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Add.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/AddSphinxTarget.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_C.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_C.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/CheckAtomic.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Ch.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Ch.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/CheckCompilerVersion.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Che.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Che.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/CheckProblematicConfigurations.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Co.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Co.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/CoverageReport.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Cr.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Cr.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/CrossCompile.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_D.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_D.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/DetermineGCCCompatible.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_F.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_F.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/FileLock.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Fi.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Fi.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/FindFFI.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Fin.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Fin.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/FindLibEdit.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Find.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Find.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/FindLibpfm.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_FindO.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_FindO.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/FindOCaml.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_FindS.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_FindS.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/FindSphinx.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_FindZ.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_FindZ.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/FindZ3.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Findz.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Findz.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/Findzstd.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_G.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_G.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/GenerateVersionFromVCS.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Ge.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Ge.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/GetErrcMessages.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Get.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Get.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/GetLibraryName.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_H.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_H.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/HandleLLVMOptions.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Ha.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Ha.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/HandleLLVMStdlib.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LB.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LB.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVM-Build.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LC.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LC.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVM-Config.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_ldt.in" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_ldt.in" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/llvm-driver-template.cpp.in" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_L.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_L.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LL.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LL.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMConfigExtensions.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LLV.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LLV.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/clang/ClangConfigVersion.cmake" Name="LLVMConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LLVM.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LLVM.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMDistributionSupport.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Lr.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Lr.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMExports-release.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LLVME.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LLVME.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMExports.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LLVMEx.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LLVMEx.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMExternalProjectUtils.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LLVMI.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LLVMI.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMInstallSymlink.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_LLVMP.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_LLVMP.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMProcessSources.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_T.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_T.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/TableGen.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_Te.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_Te.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/TensorFlowCompile.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_U.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_U.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/UseLibtool.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_dev_lilllicmll_V.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_dev_lilllicmll_V.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/VersionFromVCS.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\pkgconfig -->
+  <ComponentGroup Id="cg_amdrocm_llvm_dev_lllp" Directory="amdrocm_llvm_dev_lllp">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/pkgconfig/*.*" />
+  </ComponentGroup>
+
+</Include>
