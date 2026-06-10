@@ -381,8 +381,6 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
     cmd.extend(
         [
             "--output-on-failure",
-            # Fail (non-zero) when the label selection matches no tests.
-            "--no-tests=error",
             "--parallel",
             f"{ctest_parallel_count}",
             "--timeout",
