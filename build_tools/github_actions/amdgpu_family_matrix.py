@@ -251,27 +251,11 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on": "",
             "family": "gfx900",
             "fetch-gfx-targets": [],
-            "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx900",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx906": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx906",
-            "fetch-gfx-targets": [],
-            "sanity_check_only_for_family": True,
-            "build_variants": ["release"],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx906",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
@@ -292,14 +276,14 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx103x": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "",
+            "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
