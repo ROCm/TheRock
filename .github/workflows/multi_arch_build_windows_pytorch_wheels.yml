@@ -32,6 +32,13 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated AMD GPU families to run tests for (e.g.
+          'gfx120X-all'). Use 'auto' to test built families, or 'none' to skip
+          tests.
+        type: string
+        default: "auto"
       python_version:
         description: Python version to build wheels for.
         type: string
@@ -49,7 +56,7 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        description: 'Release type; selects the S3 bucket.'
         type: string
         required: true
       repository:
@@ -73,6 +80,13 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated AMD GPU families to run tests for (e.g.
+          'gfx120X-all'). Use 'auto' to test built families, or 'none' to skip
+          tests.
+        type: string
+        default: "auto"
       python_version:
         description: Python version to build wheels for (for example, "3.12").
         type: string
@@ -90,9 +104,11 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
-        type: string
-        required: true
+        description: 'Release type; developer-triggered jobs should use "dev".'
+        type: choice
+        options:
+          - dev
+        default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -134,6 +150,11 @@ jobs:
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
       SCCACHE_IDLE_TIMEOUT: "0" # never idle-out; keeps stats accurate on long builds
       SCCACHE_LOG: warn
+    outputs:
+      torch_version: ${{ steps.pytorch-versions.outputs.torch_version }}
+      torchaudio_version: ${{ steps.pytorch-versions.outputs.torchaudio_version }}
+      torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
+      package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
@@ -369,13 +390,70 @@ jobs:
           echo "Post-split contents of ${DIST_DIR}:"
           ls -lh "${DIST_DIR}/"
 
+      # TODO(#5110): Once manifest-driven builds land, write these outputs from
+      # the manifest and keep wheel scanning as a validation step that the build
+      # produced the requested package versions.
+      - name: Write PyTorch package version outputs
+        id: pytorch-versions
+        shell: cmd
+        run: |
+          python build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
+
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
           release_type: ${{ inputs.release_type }}
 
       - name: Upload PyTorch wheels to release bucket
+        id: publish-pytorch-wheels
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
+
+  configure_pytorch_tests:
+    name: Configure PyTorch Tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.configure.outputs.enabled }}
+      matrix: ${{ steps.configure.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Configure PyTorch test matrix
+        id: configure
+        run: |
+          python build_tools/github_actions/configure_pytorch_test_matrix.py \
+            --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
+            --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
+            --platform windows
+
+  test_pytorch_wheels:
+    name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
+    if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
+    needs: [build_pytorch_wheels, configure_pytorch_tests]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.configure_pytorch_tests.outputs.matrix) }}
+    uses: ./.github/workflows/test_pytorch_wheels.yml
+    with:
+      amdgpu_family: ${{ matrix.amdgpu_family }}
+      test_runs_on: ${{ matrix.test_runs_on }}
+      package_index_url: ${{ needs.build_pytorch_wheels.outputs.package_index_url }}
+      python_version: ${{ inputs.python_version }}
+      torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+      # TODO(#5110): pass manifest_url here and let test_pytorch_wheels.yml use
+      # checkout_from_manifest.py --no-hipify --no-submodules so tests use the
+      # exact source commit that produced the package under test.
+      pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
+      multi_arch: true
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}

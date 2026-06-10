@@ -57,9 +57,11 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
-        type: string
-        required: true
+        description: 'Release type; developer-triggered jobs should use "dev".'
+        type: choice
+        options:
+          - dev
+        default: dev
       rocm_version:
         description: ROCm package version to build against.
         type: string

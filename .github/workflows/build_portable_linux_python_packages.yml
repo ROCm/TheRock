@@ -37,9 +37,12 @@ on:
         description: "package_version to set on packages, e.g. '7.13.0.dev0+dbd7369489260265fc6ddfc9d0de1262a95fe974'"
         type: string
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
-        type: string
-        default: ""
+        description: 'Release type: "ci" or "dev"'
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -73,7 +76,7 @@ on:
         type: string
       release_type:
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string

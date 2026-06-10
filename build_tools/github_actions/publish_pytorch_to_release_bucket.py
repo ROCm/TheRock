@@ -32,8 +32,18 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 from _therock_utils.s3_buckets import get_release_bucket_config
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
+from github_actions.github_actions_api import gha_set_output
 
 logger = logging.getLogger(__name__)
+
+
+MULTI_ARCH_INDEX_URLS = {
+    # TODO: Move this release bucket to CDN/index URL mapping into
+    # build_tools/_therock_utils/s3_buckets.py.
+    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
+}
 
 
 def main(argv: list[str]) -> None:
@@ -70,6 +80,7 @@ def main(argv: list[str]) -> None:
     logger.info("Uploaded %d wheel files", count)
     if count == 0:
         raise FileNotFoundError(f"No wheels found at {args.source_dir}")
+    gha_set_output({"package_index_url": MULTI_ARCH_INDEX_URLS[args.release_type]})
 
 
 if __name__ == "__main__":
