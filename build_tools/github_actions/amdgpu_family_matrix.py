@@ -406,18 +406,7 @@ amdgpu_family_info_matrix_nightly = {
 
 
 def get_all_families_for_trigger_types(trigger_types, external_config=None):
-    """
-    Returns a combined family matrix for the specified trigger types.
-
-    Args:
-        trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
-        external_config: Optional external config dict from therock-ci-config.
-            If provided, uses gpu_families from external config instead of
-            local definitions.
-
-    Returns:
-        Combined family matrix for the specified trigger types.
-    """
+    """Returns combined family matrix for the specified trigger types."""
     # Use external config if provided
     if external_config is not None:
         gpu_families = external_config.get("gpu_families", {})
@@ -445,16 +434,7 @@ def get_all_families_for_trigger_types(trigger_types, external_config=None):
 
 
 def get_build_runner_labels(external_config=None):
-    """
-    Returns build runner label configuration.
-
-    Args:
-        external_config: Optional external config dict from therock-ci-config.
-            If provided, uses build_runners from external config.
-
-    Returns:
-        Build runner labels dict with platform -> variant -> labels mapping.
-    """
+    """Returns build runner label configuration."""
     if external_config is not None:
         return external_config.get("build_runners", {})
 

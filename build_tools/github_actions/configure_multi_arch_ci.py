@@ -710,7 +710,25 @@ def _filter_families_by_platform(
 def select_targets(
     ci_inputs: CIInputs, external_config: dict | None = None
 ) -> TargetSelection:
-    """Determine GPU families per platform based on trigger type and inputs."""
+    """Determine GPU families per platform based on trigger type and inputs.
+
+    Trigger types run progressively larger sets of builds and tests:
+    - pull_request: Smallest default set (presubmit families). Designed for
+      fast feedback on proposed changes. PR labels can opt in to additional
+      families (gfx* labels) or the full set (ci:run-all-archs).
+    - push: Broader coverage (presubmit + postsubmit families). Runs on
+      code that has landed, so we want more thorough validation than PRs
+      without paying the full nightly cost.
+    - schedule: Full coverage (all families including nightly-only). Catches
+      regressions on targets that are too slow or expensive for every push.
+    - workflow_dispatch: Full manual control. Per-platform family inputs are
+      taken directly from the workflow inputs, giving the caller the ability
+      to either replicate what CI does on PRs/push or build/test a narrow
+      set of targets for investigation.
+
+    Returns per-platform family lists, filtered to only include families
+    that have a platform entry in amdgpu_family_matrix.py.
+    """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"], external_config=external_config
     )
