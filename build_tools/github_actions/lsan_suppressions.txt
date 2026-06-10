@@ -1,0 +1,18 @@
+# LSAN suppressions for known false positives in Python test environments.
+# These are not actual memory leaks - they are artifacts of Python's internal
+# memory management and third-party libraries that do not fully cooperate with
+# LeakSanitizer's expectations.
+
+# Python's internal memory allocator (pymalloc)
+leak:_PyMem_RawMalloc
+leak:PyObject_Malloc
+leak:PyMem_Malloc
+leak:_PyObject_Malloc
+leak:_PyBytes_Resize
+leak:PyMem_RawMalloc
+leak:PyMem_Realloc
+leak:_PyObject_Realloc
+
+# rpds (Rust-based persistent data structures library, pytest dependency)
+leak:rpds::HashTrieMapPy
+leak:rpds::HashTrieSetPy
