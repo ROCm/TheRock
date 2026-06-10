@@ -82,6 +82,8 @@ def find_failed_logs(log_dir: Path, tail_bytes: int = 4096) -> list[tuple[Path, 
     failed: list[tuple[Path, str]] = []
 
     for path in sorted(log_dir.glob("*.log")):
+        if path.name.startswith("0.error."):
+            continue
         failure_end = get_failed_end_line(path, tail_bytes=tail_bytes)
         if failure_end:
             failed.append((path, failure_end))
