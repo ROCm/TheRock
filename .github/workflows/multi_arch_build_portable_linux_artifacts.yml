@@ -164,6 +164,30 @@ jobs:
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
+      - name: Inject mock failure into rocm-core
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="rocm-systems/projects/rocm-core/rocm_getpath.cpp"
+
+          if ! grep -q 'INJECTED_DETERMINISTIC_FAILURE' "$FILE"; then
+            printf '\n#error INJECTED_DETERMINISTIC_FAILURE\n' >> "$FILE"
+            echo "Injected deterministic compile error into $FILE"
+          fi
+
+      - name: Inject mock failure into rocm-smi-lib
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="rocm-systems/projects/rocm-smi-lib/src/rocm_smi.cc"
+
+          if ! grep -q 'INJECTED_DETERMINISTIC_FAILURE_2' "$FILE"; then
+            printf '\n#error INJECTED_DETERMINISTIC_FAILURE_2\n' >> "$FILE"
+            echo "Injected deterministic compile error into $FILE"
+          fi
+          
       - name: Build stage
         run: |
           cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
