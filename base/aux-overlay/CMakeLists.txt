@@ -28,12 +28,17 @@ if(NOT WIN32)
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
   )
-  install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/bin"
-    "${CMAKE_CURRENT_BINARY_DIR}/llvm"
-    "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
-    DESTINATION .
-  )
+  # llvm and amdgcn are symlinks to directories; install(FILES) rejects
+  # directories, so create the symlinks directly at install time.
+  # Targets must match those created by the symlinks target above.
+  # See https://github.com/ROCm/TheRock/issues/3714
+  install(CODE "
+    file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}\")
+    file(CREATE_LINK \"lib/llvm\"
+      \"\${CMAKE_INSTALL_PREFIX}/llvm\" SYMBOLIC)
+    file(CREATE_LINK \"lib/llvm/amdgcn\"
+      \"\${CMAKE_INSTALL_PREFIX}/amdgcn\" SYMBOLIC)
+  ")
   install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
@@ -67,9 +72,20 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(THEROCK_MANIFEST_JSON "${CMAKE_CURRENT_BINARY_DIR}/therock_manifest.json")
 set(THEROCK_MANIFEST_SCRIPT "${THEROCK_SOURCE_DIR}/build_tools/generate_therock_manifest.py")
 
+set(_manifest_flag_args)
+if(THEROCK_FLAG_SETTINGS_FILE)
+  list(APPEND _manifest_flag_args --flag-settings "${THEROCK_FLAG_SETTINGS_FILE}")
+endif()
+
+if(THEROCK_PACKAGE_VERSION)
+  list(APPEND _manifest_flag_args --rocm-package-version "${THEROCK_PACKAGE_VERSION}")
+endif()
+
 add_custom_command(
   OUTPUT "${THEROCK_MANIFEST_JSON}"
-  COMMAND "${Python3_EXECUTABLE}" "${THEROCK_MANIFEST_SCRIPT}" -o "${THEROCK_MANIFEST_JSON}"
+  COMMAND "${Python3_EXECUTABLE}" "${THEROCK_MANIFEST_SCRIPT}"
+    -o "${THEROCK_MANIFEST_JSON}"
+    ${_manifest_flag_args}
   WORKING_DIRECTORY "${THEROCK_SOURCE_DIR}"
   DEPENDS "${THEROCK_MANIFEST_SCRIPT}" "${THEROCK_SOURCE_DIR}/.gitmodules"
   COMMENT "Generating TheRock manifest"

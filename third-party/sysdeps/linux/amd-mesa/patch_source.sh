@@ -36,6 +36,7 @@ sed -i "/description: 'Userspace Video Acceleration (VA) DRM interface'/a\  libr
 sed -i "/driverdir = join_paths(get_option('prefix'), get_option('libdir'), 'dri')/c\    driverdir = join_paths(get_option('prefix'), get_option('libdir'))" "$LIBVA_MAIN_MESON_BUILD"
 
 # This eliminates the need for LIBVA_DRIVERS_PATH environment variable
+sed -i '/^[[:space:]]*char \*search_path = NULL;/a\    char *temp_path = NULL;' "$LIBVA_SOURCE"
 sed -i "/^[[:space:]]*if[[:space:]]*(![[:space:]]*search_path)[[:space:]]*$/{
     N
     /^[[:space:]]*if[[:space:]]*(![[:space:]]*search_path)[[:space:]]*\n[[:space:]]*search_path[[:space:]]*=[[:space:]]*VA_DRIVERS_PATH;/{
@@ -43,8 +44,10 @@ sed -i "/^[[:space:]]*if[[:space:]]*(![[:space:]]*search_path)[[:space:]]*$/{
     if (!search_path) {\
         char *rocm_path = secure_getenv(\"ROCM_PATH\");\
         if (rocm_path) {\
-            if (asprintf(&search_path, \"%s/lib/rocm_sysdeps/lib\", rocm_path) == -1) {\
-                search_path = NULL;\
+            if (asprintf(&temp_path, \"%s/lib/rocm_sysdeps/lib\", rocm_path) == -1) {\
+                temp_path = NULL;\
+            } else {\
+                search_path = temp_path;\
             }\
         } else {\
             search_path = VA_DRIVERS_PATH;\
@@ -52,6 +55,7 @@ sed -i "/^[[:space:]]*if[[:space:]]*(![[:space:]]*search_path)[[:space:]]*$/{
     }
     }
 }" "$LIBVA_SOURCE"
+sed -i '/^[[:space:]]*search_path = strdup((const char \*)*search_path);$/a\    if (temp_path) { free(temp_path); temp_path = NULL; }' "$LIBVA_SOURCE"
 
 # Modify pkgconfig generation to make driverdir relative to ${libdir} for relocatable packages
 sed -i "/va_vars = vars + \['driverdir=' + driverdir\]/c\va_vars = vars + ['driverdir=\${libdir}']" "$LIBVA_PKGCONFIG_MESON_BUILD"

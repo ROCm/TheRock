@@ -6,8 +6,10 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-from importlib.metadata import version
+from importlib.metadata import version as get_package_version
+from packaging.version import Version
 
 
 def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
@@ -105,9 +107,7 @@ except Exception as e:
         sys.exit(1)
 
 
-def get_all_supported_devices(
-    amdgpu_family: str = "", log: bool = True
-) -> dict[str, list[int]]:
+def get_all_supported_devices(amdgpu_family: str = "") -> dict[str, list[int]]:
     """Detect supported AMDGPU devices and return mapping of arch to device indices.
 
     This function queries available GPUs and returns a mapping of architecture
@@ -119,7 +119,6 @@ def get_all_supported_devices(
             - Empty string (default): Auto-detect all visible GPUs supported by PyTorch
             - Specific arch (e.g., "gfx1151"): Find and use matching GPU
             - Wildcard family (e.g., "gfx94X"): Find all matching GPUs
-        log: If True, prints summary and debug information to the console.
 
     Returns:
         Dictionary mapping architecture names to lists of system device indices.
@@ -140,28 +139,24 @@ def get_all_supported_devices(
         original_system_indices = [
             int(idx.strip()) for idx in current_hip_visible.split(",")
         ]
-        if log:
-            print(f"HIP_VISIBLE_DEVICES already set to: {current_hip_visible}")
+        print(f"HIP_VISIBLE_DEVICES already set to: {current_hip_visible}")
     else:
         # HIP_VISIBLE_DEVICES not set, no remapping needed
         original_system_indices = None
 
     # Query both supported and visible GPUs in a single subprocess call
     # (doesn't initialize CUDA in main process)
-    if log:
-        print("Getting GPU information from PyTorch...", end="")
+    print("Getting GPU information from PyTorch...", end=" ")
     supported_gpus, raw_visible_gpus = get_supported_and_visible_gpus()
-    if log:
-        print("done")
+    print("done")
 
     # Normalize gpu names
     # get_supported_and_visible_gpus() (via device_properties.gcnArchName):
     # Often returns detailed arch names like "gfx942:sramecc+:xnack-" or "gfx1100:xnack-"
     visible_gpus = [gpu.split(":")[0] for gpu in raw_visible_gpus]
 
-    if log:
-        print(f"Supported AMD GPUs: {supported_gpus}")
-        print(f"Visible AMD GPUs: {visible_gpus}")
+    print(f"Supported AMD GPUs: {supported_gpus}")
+    print(f"Visible AMD GPUs: {visible_gpus}")
 
     selected_gpu_indices = []
     selected_gpu_archs = []
@@ -189,11 +184,10 @@ def get_all_supported_devices(
             print(f"[ERROR] No GPU found matching wildcard pattern '{amdgpu_family}'.")
             sys.exit(1)
 
-        if log:
-            print(
-                f"AMDGPU Arch detected via wildcard match '{partial_match}': "
-                f"{selected_gpu_archs} (logical indices {selected_gpu_indices})"
-            )
+        print(
+            f"AMDGPU Arch detected via wildcard match '{partial_match}': "
+            f"{selected_gpu_archs} (logical indices {selected_gpu_indices})"
+        )
     else:
         # Mode 3: Specific GPU arch - validate it is visible and supported by the current PyTorch build.
 
@@ -232,14 +226,11 @@ def get_all_supported_devices(
             result[arch] = []
         result[arch].append(sys_idx)
 
-    if log:
-        print(f"Detected PyTorch supported architecture at device indices: {result}")
+    print(f"Detected PyTorch supported architecture at device indices: {result}")
     return result
 
 
-def get_unique_supported_devices(
-    amdgpu_family: str = "", log: bool = False
-) -> dict[str, int]:
+def get_unique_supported_devices(amdgpu_family: str = "") -> dict[str, list[int]]:
     """
     Returns a dictionary mapping each supported architecture to a single device index (the first one for each).
     This is a convenience wrapper over get_all_supported_devices for situations where
@@ -247,36 +238,21 @@ def get_unique_supported_devices(
 
     Args:
         amdgpu_family: Optionally filter by a specific AMDGPU family string or pattern.
-        log: If True, passes through to get_all_supported_devices for printing.
 
     Returns:
-        Dictionary: {arch: device_index} for each supported arch.
+        Dictionary: {arch: [device_index]} for each supported arch (single-element lists).
     """
-    devices_by_arch = get_all_supported_devices(amdgpu_family, log=log)
+    devices_by_arch = get_all_supported_devices(amdgpu_family)
     unique_devices = {
-        arch: indices[0] for arch, indices in devices_by_arch.items() if indices
+        arch: [indices[0]] for arch, indices in devices_by_arch.items() if indices
     }
     return unique_devices
 
 
-def get_unique_supported_devices_count(
-    amdgpu_family: str = "", log: bool = False
-) -> int:
-    """Get the number of unique supported architectures.
-
-    Args:
-        amdgpu_family: AMDGPU family filter string (optional).
-        log: If True, passes through to get_unique_supported_devices for printing.
-
-    Returns:
-        Count of unique architectures (one device per arch).
-    """
-    unique_devices_per_arch = get_unique_supported_devices(amdgpu_family, log=log)
-    return len(unique_devices_per_arch)
-
-
 def set_gpu_execution_policy(
-    amdgpu_family: str, policy: str, offset: int = 0, log: bool = True
+    supported_devices: dict[str, list[int]],
+    policy: str,
+    offset: int = 0,
 ) -> list[tuple[str, int]]:
     """
     Configures the HIP_VISIBLE_DEVICES environment variable according to a GPU selection policy,
@@ -284,39 +260,40 @@ def set_gpu_execution_policy(
     *before* torch is imported, because HIP_VISIBLE_DEVICES cannot affect CUDA device visibility after initialization.
 
     Args:
-        amdgpu_family (str): (Optional) AMDGPU family filter string, e.g., "gfx942", "gfx94X", or "" for all.
+        supported_devices (dict[str, list[int]]): Dictionary mapping GPU architectures to lists of device indices.
+            Can be obtained from get_all_supported_devices() or get_unique_supported_devices().
+            - get_all_supported_devices(): {"gfx942": [0, 1], "gfx1100": [2]}
+            - get_unique_supported_devices(): {"gfx942": [0], "gfx1100": [2]}
         policy (str): Device selection policy. Must be one of:
-            - "single": Use a single device from all supported devices at the given offset.
-            - "unique-single": Use a single device from the set of unique architectures at the given offset.
-            - "unique": Use the first device for each detected unique architecture (all at once).
-            - "all": Use all supported devices (every detected, possibly multiple per arch).
-        offset (int): Index offset for selecting device in "single" or "unique-single" mode.
-        log (bool): If True, prints device selection details.
+            - "single": Use a single device from the provided devices at the given offset.
+            - "all": Use all provided devices. The offset parameter is ignored.
+        offset (int): Index offset for selecting device with "single" policy. Ignored for "all" policy.
+            Offset is applied to the flattened list of (arch, idx) pairs made from supported_devices dictionary.
+            Depending on the function used to get supported_devices:
+            - get_all_supported_devices(): Select the device at the given offset.
+              Example: {"gfx942": [0, 1], "gfx1100": [2]} => [("gfx942", 0), ("gfx942", 1), ("gfx1100", 2)]
+            - get_unique_supported_devices(): Since every architecture has a single device,
+              offset effectively allows us to iterate over specific architectures.
+              Example: {"gfx942": [0], "gfx1100": [2]} => [("gfx942", 0), ("gfx1100", 2)]
 
     Returns:
         list[tuple[str, int]]: A list of (arch, device_index) tuples that were selected and made visible.
-            - For policies "single" and "unique-single", the list contains a single (arch, idx).
-            - For "unique" and "all", the list contains every (arch, idx) made visible.
+            - For policy "single", the list contains a single (arch, idx).
+            - For "all", the list contains every (arch, idx) made visible.
 
     Raises:
-        ValueError: If an invalid policy is supplied.
-        IndexError: If the requested offset exceeds the set of possible devices.
+        ValueError: If an invalid policy is supplied or if supported_devices is empty.
+        IndexError: If the requested offset exceeds the set of possible devices (only for "single" policy).
     """
-    valid_policies = ("single", "unique-single", "unique", "all")
+    valid_policies = ("single", "all")
     if policy not in valid_policies:
         raise ValueError(f"Invalid policy '{policy}'. Must be one of {valid_policies}.")
 
-    if policy in ("unique", "unique-single"):
-        supported_devices = get_unique_supported_devices(amdgpu_family, log=log)
-    else:
-        supported_devices = get_all_supported_devices(amdgpu_family, log=log)
-
     if not supported_devices:
-        print("[ERROR] No supported devices found")
-        sys.exit(1)
+        raise ValueError("supported_devices cannot be empty; no devices available.")
 
     if policy == "single":
-        # Flatten all (arch, idx) pairs and select using offset.
+        # Flatten the supported_devices dictionary into pairs of (arch, idx) for each device.
         flat_devices = [
             (arch, idx)
             for arch, indices in supported_devices.items()
@@ -328,35 +305,12 @@ def set_gpu_execution_policy(
             )
         arch, device_idx = flat_devices[offset]
         os.environ["HIP_VISIBLE_DEVICES"] = str(device_idx)
-        if log:
-            print(f"Policy '{policy}': Using device {device_idx} ({arch})")
+        print(f"Policy '{policy}': Using device {device_idx} ({arch})")
         return [(arch, device_idx)]
-
-    elif policy == "unique-single":
-        # Selects a single device (first device) from unique architectures using offset.
-        flat_unique_devices = [(arch, idx) for arch, idx in supported_devices.items()]
-        if offset < 0 or offset >= len(flat_unique_devices):
-            raise IndexError(
-                f"Offset {offset} out of range for {len(flat_unique_devices)} unique devices"
-            )
-        arch, device_idx = flat_unique_devices[offset]
-        os.environ["HIP_VISIBLE_DEVICES"] = str(device_idx)
-        if log:
-            print(f"Policy '{policy}': Using device {device_idx} ({arch})")
-        return [(arch, device_idx)]
-
-    elif policy == "unique":
-        # Use one device per architecture (first device of each arch) simultaneously
-        flat_devices = [(arch, idx) for arch, idx in supported_devices.items()]
-        device_indices_str = ",".join(str(idx) for _, idx in flat_devices)
-        os.environ["HIP_VISIBLE_DEVICES"] = device_indices_str
-        if log:
-            device_pairs_str = ", ".join(f"{arch}: {idx}" for arch, idx in flat_devices)
-            print(f"Policy '{policy}': Using devices [{device_pairs_str}]")
-        return flat_devices
 
     else:
-        # "all" policy: Use all supported devices (can have multiple per arch)
+        # "all" policy: Use all supported devices in the provided dictionary
+        # Can have multiple devices per specific architecture
         flat_devices = [
             (arch, idx)
             for arch, indices in supported_devices.items()
@@ -364,10 +318,49 @@ def set_gpu_execution_policy(
         ]
         device_indices_str = ",".join(str(idx) for _, idx in flat_devices)
         os.environ["HIP_VISIBLE_DEVICES"] = device_indices_str
-        if log:
-            device_pairs_str = ", ".join(f"{arch}: {idx}" for arch, idx in flat_devices)
-            print(f"Policy 'all': Using devices [{device_pairs_str}]")
+        device_pairs_str = ", ".join(f"{arch}: {idx}" for arch, idx in flat_devices)
+        print(f"Policy 'all': Using devices [{device_pairs_str}]")
         return flat_devices
+
+
+def configure_gpu_visibility(
+    amdgpu_family: str,
+    device_query: str,
+    gpu_policy: str,
+) -> list[str]:
+    """Query candidate GPUs, apply the selection policy, and set HIP_VISIBLE_DEVICES.
+
+    Combines the two GPU-selection stages shared by the PyTorch test runners:
+    stage 1 (``device_query``) builds the candidate set, stage 2 (``gpu_policy``)
+    decides how many candidates are made visible.
+
+    Must run BEFORE torch is imported: once torch.cuda is initialized, changing
+    HIP_VISIBLE_DEVICES has no effect.
+
+    Args:
+        amdgpu_family: AMDGPU family filter (empty string auto-detects).
+        device_query: Stage-1 candidate selection, "unique" or "all".
+        gpu_policy: Stage-2 visibility policy, "single" or "all".
+
+    Returns:
+        Sorted list of the architectures that were made visible.
+    """
+    if device_query == "unique":
+        supported_devices = get_unique_supported_devices(amdgpu_family)
+    else:
+        supported_devices = get_all_supported_devices(amdgpu_family)
+
+    selected_devices = set_gpu_execution_policy(supported_devices, policy=gpu_policy)
+
+    selected_archs = sorted({arch for arch, _ in selected_devices})
+    device_ids = [str(dev_id) for _, dev_id in selected_devices]
+    print(
+        f"Selected {len(selected_devices)} GPU(s): "
+        f"query={device_query}, policy={gpu_policy}, "
+        f"arch(es)={', '.join(selected_archs)}, "
+        f"device(s)={', '.join(device_ids)}"
+    )
+    return selected_archs
 
 
 def detect_pytorch_version() -> str:
@@ -376,5 +369,62 @@ def detect_pytorch_version() -> str:
     Returns:
         The detected PyTorch version as major.minor (e.g., "2.7").
     """
-    # Get version, remove build suffix (+rocm, +cpu, etc.) and patch version
-    return version("torch").rsplit("+", 1)[0].rsplit(".", 1)[0]
+    v = Version(get_package_version("torch"))
+    return f"{v.major}.{v.minor}"
+
+
+def check_pytorch_source_version(pytorch_dir: Path, allow_mismatch: bool) -> None:
+    """Verify that the PyTorch test source version matches the installed wheel.
+
+    Compares the major.minor version from <pytorch_dir>/version.txt against
+    the installed torch package. A mismatch causes confusing test failures
+    (missing attributes, changed APIs, collection errors) that look like real
+    bugs but are just version skew.
+
+    Args:
+        pytorch_dir: Path to the PyTorch source directory.
+
+    Raises:
+        SystemExit: If there is a major.minor version mismatch.
+    """
+    version_file = pytorch_dir / "version.txt"
+    if not version_file.exists():
+        print(
+            f"[WARNING] {version_file} not found — cannot verify test source "
+            f"version matches installed wheel. Proceeding anyway."
+        )
+        return
+
+    source_version = Version(version_file.read_text().strip())
+    installed_version = Version(get_package_version("torch"))
+
+    # Compare major.minor only (ignore patch, pre-release, local segments).
+    if source_version.release[:2] != installed_version.release[:2]:
+        print(
+            f"[ERROR] PyTorch version mismatch!\n"
+            f"  Test sources: {source_version.major}.{source_version.minor} "
+            f"(from {version_file}: {source_version})\n"
+            f"  Installed wheel: "
+            f"{installed_version.major}.{installed_version.minor} "
+            f"({installed_version})\n"
+            f"\n"
+            f"Running tests from a different PyTorch version than the installed\n"
+            f"wheel causes misleading failures (missing APIs, changed error\n"
+            f"messages, collection errors). Check out matching test sources or\n"
+            f"install a matching wheel."
+        )
+        if allow_mismatch:
+            print(
+                "[WARNING] allow_mismatch (--allow-version-mismatch) was set, so continuing anyway\n"
+            )
+            return
+        else:
+            print(
+                "[ERROR] Set allow_mismatch (--allow-version-mismatch) to bypass this check. Exiting"
+            )
+            sys.exit(1)
+
+    print(
+        f"PyTorch version check OK: source and wheel both "
+        f"{installed_version.major}.{installed_version.minor}"
+    )

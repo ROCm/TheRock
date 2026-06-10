@@ -1,8 +1,8 @@
 # hiptests
+[components.lib."core/hip-tests/stage"]
 [components.dbg."core/hip-tests/stage"]
 [components.dev."core/hip-tests/stage"]
 [components.doc."core/hip-tests/stage"]
-[components.lib."core/hip-tests/stage"]
 [components.test."core/hip-tests/stage"]
 include = [
   "share/hip/**",

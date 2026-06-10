@@ -4,9 +4,10 @@
 # Multi-Arch Build - Sharded Pipeline for Windows
 #
 # This workflow builds TheRock in stages:
-# 1. foundation (generic) - sysdeps, base
-# 2. compiler-runtime (generic) - compiler, runtimes
+# 1. compiler-runtime (generic) - sysdeps, base, compiler, runtimes
+# 2. runtime-tests (generic) - hip-tests (parallel to math-libs)
 # 3. math-libs (per-arch) - BLAS, FFT, etc.
+# 4. debug-tools (generic) - amd-dbgapi (rocgdb eventually).
 #
 # Stages disabled on Windows: comm-libs, dctools-core, profiler-apps, media
 # (see BUILD_TOPOLOGY.toml disable_platforms)
@@ -34,39 +35,42 @@ on:
         type: string
       expect_failure:
         type: boolean
-      use_prebuilt_artifacts:
+      prebuilt_stages:
         type: string
+        default: ""
+        description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      build_runs_on:
+        type: string
+        default: ""
+        description: "Build runner label (not currently used for Windows, reserved for future use)"
       rocm_package_version:
         type: string
-      test_type:
+      release_type:
+        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
         type: string
+        default: ci
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      external_repo_config:
+        description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   # ==========================================================================
-  # STAGE: foundation (generic)
-  # ==========================================================================
-  foundation:
-    uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
-    secrets: inherit
-    with:
-      stage_name: foundation
-      stage_display_name: "Stage - Foundation"
-      timeout_minutes: 180  # 3 hours
-      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
-      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      rocm_package_version: ${{ inputs.rocm_package_version }}
-    permissions:
-      contents: read
-      id-token: write
-
-  # ==========================================================================
   # STAGE: compiler-runtime (generic)
   # ==========================================================================
   compiler-runtime:
-    needs: foundation
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
     with:
@@ -76,6 +80,33 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: runtime-tests (generic, parallel to math-libs)
+  # ==========================================================================
+  runtime-tests:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') }}
+    uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: runtime-tests
+      stage_display_name: "Stage - Runtime Tests"
+      timeout_minutes: 120  # 2 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
@@ -85,7 +116,13 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
     strategy:
+      # `fail-fast: false` lets all families complete even if one fails.
+      # This is useful for CI (to see all failures at once), but for releases
+      # this risks publishing incomplete packages. Release pipelines may want
+      # to either set `fail-fast: true` or add a validation step that blocks
+      # promotion unless all jobs succeeded.
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
@@ -99,6 +136,33 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: debug-tools (generic, parallel to math-libs)
+  # ==========================================================================
+  debug-tools:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') }}
+    uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: debug-tools
+      stage_display_name: "Stage - Debug Tools"
+      timeout_minutes: 180  # 3 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write

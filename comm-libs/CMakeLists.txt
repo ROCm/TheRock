@@ -5,6 +5,7 @@ if(THEROCK_ENABLE_RCCL)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
+
   if(THEROCK_FLAG_INCLUDE_PROFILER)
     list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
   endif()
@@ -27,6 +28,9 @@ if(THEROCK_ENABLE_RCCL)
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
+    # Build all GPU targets in a single target-neutral artifact as long as the
+    # host code isn't fully target agnostic.
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
@@ -64,7 +68,14 @@ if(THEROCK_ENABLE_RCCL)
   list(APPEND _rccl_subproject_names rccl)
 
   if(THEROCK_BUILD_TESTING)
+
+    set(_rccl_tests_optional_deps)
+    if(THEROCK_ENABLE_MPI)
+      set(_rccl_tests_optional_deps "therock-openmpi")
+    endif()
+
     therock_cmake_subproject_declare(rccl-tests
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
@@ -82,6 +93,7 @@ if(THEROCK_ENABLE_RCCL)
         hip-clr
         hipify
         rccl
+        ${_rccl_tests_optional_deps}
     )
     therock_cmake_subproject_glob_c_sources(rccl-tests
       SUBDIRS
@@ -92,6 +104,7 @@ if(THEROCK_ENABLE_RCCL)
   endif(THEROCK_BUILD_TESTING)
 
   therock_provide_artifact(rccl
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-rccl.toml
     COMPONENTS
       dbg
@@ -111,6 +124,10 @@ if(THEROCK_ENABLE_ROCSHMEM)
   ##############################################################################
   set(_rocshmem_subproject_names)
   therock_cmake_subproject_declare(rocshmem
+    # rocshmem uses .hip_fatbin/.hip_gpubin_* ELF sections for device code
+    # instead of .hipFatBinSegment, making it incompatible with kpack injection.
+    # Build all GPU targets in a single target-neutral artifact as a workaround.
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocshmem"
     # High latency LTO link of a single library.
@@ -134,7 +151,8 @@ if(THEROCK_ENABLE_ROCSHMEM)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DEXPLICIT_ROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
-      -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DBUILD_FUNCTIONAL_TESTS=${THEROCK_BUILD_TESTING}
+      -DBUILD_UNIT_TESTS=${THEROCK_BUILD_TESTING}
       -DSOURCE_DIR=${_source_dir}
       -DPATCHELF=${PATCHELF}
       -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
@@ -146,9 +164,9 @@ if(THEROCK_ENABLE_ROCSHMEM)
       rocm-cmake
       therock-fmt
       therock-googletest
-      ${THEROCK_BUNDLED_NUMACTL}
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_NUMACTL}
   )
   therock_cmake_subproject_glob_c_sources(rocshmem
     SUBDIRS
@@ -159,6 +177,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
   list(APPEND _rocshmem_subproject_names rocshmem)
 
   therock_provide_artifact(rocshmem
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-rocshmem.toml
     COMPONENTS
       dbg

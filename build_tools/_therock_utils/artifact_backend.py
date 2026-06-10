@@ -82,6 +82,20 @@ class ArtifactBackend(ABC):
         """Check if an artifact exists in the backend."""
         pass
 
+    @abstractmethod
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
+        """Copy an artifact from source_backend into this backend (server-side when possible).
+
+        Also copies the companion .sha256sum file if it exists in the source.
+
+        Args:
+            artifact_key: The artifact filename (e.g., "blas_lib_gfx94X.tar.zst")
+            source_backend: The backend to copy from
+        """
+        pass
+
     @property
     @abstractmethod
     def base_uri(self) -> str:
@@ -156,6 +170,25 @@ class LocalDirectoryBackend(ArtifactBackend):
         if sha_src.exists():
             shutil.copy2(sha_src, self._artifact_path(f"{artifact_key}.sha256sum"))
 
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
+        """Copy artifact from another local backend."""
+        if not isinstance(source_backend, LocalDirectoryBackend):
+            raise TypeError(
+                f"Cannot copy from {type(source_backend).__name__} to LocalDirectoryBackend"
+            )
+        src = source_backend.base_path / artifact_key
+        if not src.exists():
+            raise FileNotFoundError(f"Artifact not found in source backend: {src}")
+        dest = self.base_path / artifact_key
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        # Also copy sha256sum if it exists
+        sha_src = source_backend.base_path / f"{artifact_key}.sha256sum"
+        if sha_src.exists():
+            shutil.copy2(sha_src, self.base_path / f"{artifact_key}.sha256sum")
+
     def artifact_exists(self, artifact_key: str) -> bool:
         """Check if artifact exists in local staging."""
         return self._artifact_path(artifact_key).exists()
@@ -184,26 +217,36 @@ class S3Backend(ArtifactBackend):
 
     @property
     def s3_client(self):
-        """Lazy initialization of S3 client."""
+        """Lazy-initialized boto3 S3 client.
+
+        Credentials are resolved through boto3's default credential chain
+        (see https://docs.aws.amazon.com/boto3/latest/guide/credentials.html).
+        Relevant locations are checked in order:
+
+        1. Environment variables (``AWS_ACCESS_KEY_ID``,
+           ``AWS_SECRET_ACCESS_KEY``, ``AWS_SESSION_TOKEN``)
+        2. Assume role providers
+        3. Shared credentials file (``AWS_SHARED_CREDENTIALS_FILE``)
+
+        When no credentials are found at all, the client falls back to
+        unsigned requests for public bucket reads.
+        """
         if self._s3_client is None:
             import boto3
             from botocore import UNSIGNED
             from botocore.config import Config
 
-            _access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
-            _secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-            _session_token = os.environ.get("AWS_SESSION_TOKEN")
+            session = boto3.Session()
+            credentials = session.get_credentials()
 
-            if None not in (_access_key_id, _secret_access_key, _session_token):
-                self._s3_client = boto3.client(
+            if credentials is not None:
+                self._s3_client = session.client(
                     "s3",
                     verify=True,
-                    aws_access_key_id=_access_key_id,
-                    aws_secret_access_key=_secret_access_key,
-                    aws_session_token=_session_token,
+                    config=Config(max_pool_connections=100),
                 )
             else:
-                self._s3_client = boto3.client(
+                self._s3_client = session.client(
                     "s3",
                     verify=True,
                     config=Config(max_pool_connections=100, signature_version=UNSIGNED),
@@ -252,6 +295,31 @@ class S3Backend(ArtifactBackend):
         loc = self.output_root.artifact(artifact_key)
         self.s3_client.upload_file(str(source_path), self.bucket, loc.relative_path)
 
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
+        """Server-side copy from another S3 backend (cross-bucket supported)."""
+        if not isinstance(source_backend, S3Backend):
+            raise TypeError(
+                f"Cannot copy from {type(source_backend).__name__} to S3Backend"
+            )
+        copy_source = {
+            "Bucket": source_backend.bucket,
+            "Key": f"{source_backend.s3_prefix}/{artifact_key}",
+        }
+        dest_key = f"{self.s3_prefix}/{artifact_key}"
+        self.s3_client.copy(copy_source, self.bucket, dest_key)
+        # Also copy sha256sum if it exists
+        sha_key = f"{artifact_key}.sha256sum"
+        if source_backend.artifact_exists(sha_key):
+            sha_copy_source = {
+                "Bucket": source_backend.bucket,
+                "Key": f"{source_backend.s3_prefix}/{sha_key}",
+            }
+            self.s3_client.copy(
+                sha_copy_source, self.bucket, f"{self.s3_prefix}/{sha_key}"
+            )
+
     def artifact_exists(self, artifact_key: str) -> bool:
         """Check if artifact exists in S3."""
         try:
@@ -264,6 +332,7 @@ class S3Backend(ArtifactBackend):
 
 def create_backend_from_env(
     run_id: Optional[str] = None,
+    github_repository: Optional[str] = None,
     platform: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create the appropriate backend based on environment variables.
@@ -294,6 +363,6 @@ def create_backend_from_env(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=run_id, platform=platform_name
+        run_id=run_id, platform=platform_name, github_repository=github_repository
     )
     return S3Backend(output_root=output_root)

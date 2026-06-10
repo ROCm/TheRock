@@ -1,7 +1,4 @@
 # clr
-[components.dbg."core/clr/stage"]
-[components.dev."core/clr/stage"]
-[components.doc."core/clr/stage"]
 [components.lib."core/clr/stage"]
 include = [
   "lib/.hipInfo",
@@ -11,3 +8,6 @@ include = [
 include = [
   "bin/**",
 ]
+[components.dbg."core/clr/stage"]
+[components.dev."core/clr/stage"]
+[components.doc."core/clr/stage"]

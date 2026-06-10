@@ -17,6 +17,10 @@ THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, os.fspath(THIS_DIR))
 
 import generate_pytorch_manifest as m
+from github_actions.manifest_utils import (
+    normalize_python_version_for_filename,
+    normalize_ref_for_filename,
+)
 
 
 class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
@@ -55,16 +59,17 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         m.main(argv)
 
     def test_normalize_release_track(self) -> None:
-        self.assertEqual(m.normalize_release_track("nightly"), "nightly")
-        self.assertEqual(m.normalize_release_track("release/2.7"), "release-2.7")
+        self.assertEqual(normalize_ref_for_filename("nightly"), "nightly")
+        self.assertEqual(normalize_ref_for_filename("release/2.7"), "release-2.7")
         self.assertEqual(
-            m.normalize_release_track("users/alice/feature"), "users-alice-feature"
+            normalize_ref_for_filename("users/alice/feature"),
+            "users-alice-feature",
         )
 
     def test_normalize_py(self) -> None:
-        self.assertEqual(m.normalize_py("3.11"), "3.11")
-        self.assertEqual(m.normalize_py("py3.11"), "3.11")
-        self.assertEqual(m.normalize_py(" py3.12 "), "3.12")
+        self.assertEqual(normalize_python_version_for_filename("3.11"), "3.11")
+        self.assertEqual(normalize_python_version_for_filename("py3.11"), "3.11")
+        self.assertEqual(normalize_python_version_for_filename(" py3.12 "), "3.12")
 
     def test_manifest_filename(self) -> None:
         name = m.manifest_filename(python_version="3.11", pytorch_git_ref="release/2.7")

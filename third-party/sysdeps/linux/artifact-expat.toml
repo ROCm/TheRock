@@ -5,9 +5,9 @@ unmatched_exclude = [
 ]
 
 # Expat
-[components.dev."third-party/sysdeps/linux/expat/build/stage"]
-[components.doc."third-party/sysdeps/linux/expat/build/stage"]
 [components.lib."third-party/sysdeps/linux/expat/build/stage"]
 include = [
   "**/bin/*"
 ]
+[components.dev."third-party/sysdeps/linux/expat/build/stage"]
+[components.doc."third-party/sysdeps/linux/expat/build/stage"]

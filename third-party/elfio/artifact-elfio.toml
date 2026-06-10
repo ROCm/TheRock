@@ -1,0 +1,4 @@
+# elfio
+[components.dev."third-party/elfio/stage"]
+[components.doc."third-party/elfio/stage"]
+[components.lib."third-party/elfio/stage"]

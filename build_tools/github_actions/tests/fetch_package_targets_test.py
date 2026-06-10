@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import fetch_package_targets
@@ -129,6 +130,65 @@ class FetchPackageTargetsTest(unittest.TestCase):
         self.assertFalse(any("gfx94X-dcgpu" == t["amdgpu_family"] for t in targets))
         self.assertTrue(any("gfx110X-all" == t["amdgpu_family"] for t in targets))
         self.assertTrue(any("gfx120X-all" == t["amdgpu_family"] for t in targets))
+
+    def test_gfx94x_multi_label_selects_first_when_random_low(self):
+        """When random() is low, first label should be selected."""
+        args = {
+            "AMDGPU_FAMILIES": "gfx94x",
+            "THEROCK_PACKAGE_PLATFORM": "linux",
+        }
+
+        # Mock random.random() to return 0.1 (< 0.369 first weight)
+        with patch("random.random", return_value=0.1):
+            targets = fetch_package_targets.determine_package_targets(args)
+
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ccs-ossci-rocm")
+
+    def test_gfx94x_multi_label_selects_second_when_random_medium(self):
+        """When random() is in second range, second label should be selected."""
+        args = {
+            "AMDGPU_FAMILIES": "gfx94x",
+            "THEROCK_PACKAGE_PLATFORM": "linux",
+        }
+
+        # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
+        with patch("random.random", return_value=0.4):
+            targets = fetch_package_targets.determine_package_targets(args)
+
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(
+            targets[0]["test_machine"], "linux-gfx942-1gpu-core42-ossci-rocm"
+        )
+
+    def test_gfx94x_multi_label_selects_third_when_random_high(self):
+        """When random() is high, third label should be selected."""
+        args = {
+            "AMDGPU_FAMILIES": "gfx94x",
+            "THEROCK_PACKAGE_PLATFORM": "linux",
+        }
+
+        # Mock random.random() to return 0.5 (>= 0.455)
+        with patch("random.random", return_value=0.5):
+            targets = fetch_package_targets.determine_package_targets(args)
+
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(
+            targets[0]["test_machine"], "linux-gfx942-1gpu-core42-ossci-rocm"
+        )
+
+    def test_families_without_multi_label_use_primary(self):
+        """Families without multi-label config should use primary label."""
+        args = {
+            "AMDGPU_FAMILIES": "gfx110x",
+            "THEROCK_PACKAGE_PLATFORM": "linux",
+        }
+
+        # Run multiple times to ensure consistency
+        for _ in range(5):
+            targets = fetch_package_targets.determine_package_targets(args)
+            self.assertEqual(len(targets), 1)
+            self.assertEqual(targets[0]["test_machine"], "linux-gfx110X-gpu-rocm")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,6 @@ unmatched_exclude = [
 ]
 
 # MPFR (depends on GMP from sysdeps-gmp artifact)
+[components.lib."third-party/sysdeps/linux/mpfr/build/stage"]
 [components.dev."third-party/sysdeps/linux/mpfr/build/stage"]
 [components.doc."third-party/sysdeps/linux/mpfr/build/stage"]
-[components.lib."third-party/sysdeps/linux/mpfr/build/stage"]

@@ -8,9 +8,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-libdrm-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: "https://gitlab.freedesktop.org/mesa/libdrm/-/archive/libdrm-2.4.127/libdrm-libdrm-2.4.127.tar.bz2"
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libdrm-libdrm-2.4.127.tar.bz2"
-      URL_HASH "SHA256=3A11654905C595FCA2825D6E259A8086D04A448DCE215B4CB03A49320D9259EC"
+      # Originally mirrored from: "https://gitlab.freedesktop.org/mesa/libdrm/-/archive/libdrm-2.4.134/libdrm-libdrm-2.4.134.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libdrm-libdrm-2.4.134.tar.bz2"
+      URL_HASH "SHA256=D77E5AF336B6491F9E2427378244912EF5295C3C034AF76846C0FCFFE2EB869C"
       TOUCH "${_download_stamp}"
     )
 
@@ -58,6 +58,9 @@ if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
+include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
+therock_get_meson_compiler_env(_meson_cc _meson_cxx)
+
 # Meson refuses to build if the source dir is a subdir of the build dir, so
 # make it a sibling.
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
@@ -80,6 +83,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       # Escaping hack: experimentally determined to persist through the layers.
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${_meson_cc}"
+      "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure

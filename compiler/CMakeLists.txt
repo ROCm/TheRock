@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_COMPILER)
+  if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
+    set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
+  endif()
+
   ##############################################################################
   # amd-llvm
   # Everything built as part of LLVM installs to lib/llvm
@@ -74,6 +78,7 @@ if(THEROCK_ENABLE_COMPILER)
 
       # Features
       -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
+      -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
@@ -96,7 +101,6 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
       -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
@@ -132,9 +136,10 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/llvm/lib"
   )
-  # Note that we do not trigger on LLVM source changes because the monorepo is
-  # too large to glob like that. Consider having a project dev mode option for
-  # enabling better ergonomics here.
+  # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
+  if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
+    therock_cmake_subproject_glob_c_sources(amd-llvm SUBDIRS .)
+  endif()
 
   therock_cmake_subproject_provide_package(amd-llvm AMDDeviceLibs lib/llvm/lib/cmake/AMDDeviceLibs)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
@@ -146,27 +151,23 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
-  # runtime.
+  # runtime. LLVM/Clang/LLD are statically linked and hidden behind comgr's
+  # version script, avoiding symbol interposition issues.
   ##############################################################################
-  set(_amd_comgr_target_name "amd-comgr")
-  set(_amd_comgr_stub_target_name)
-  if(THEROCK_FLAG_COMGR_DELAY_LOAD)
-    set(_amd_comgr_target_name "amd-comgr-impl")
-    set(_amd_comgr_stub_target_name "amd-comgr")
-  endif()
 
-  therock_cmake_subproject_declare("${_amd_comgr_target_name}"
+  therock_cmake_subproject_declare(amd-comgr
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
-    LOGICAL_TARGET_NAME "amd-comgr"
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
     BINARY_DIR "amd-comgr"
     BACKGROUND_BUILD
     CMAKE_ARGS
-      # TODO: Currently unstable. Enable in >6.4.
-      -DCOMGR_DISABLE_SPIRV=ON
-      -DTHEROCK_HIP_MAJOR_VERSION=${THEROCK_HIP_MAJOR_VERSION}
-      -DTHEROCK_HIP_MINOR_VERSION=${THEROCK_HIP_MINOR_VERSION}
+      # Statically link LLVM/Clang into comgr. Combined with comgr's
+      # -fvisibility=hidden and version script (local: *;), this hides all LLVM
+      # symbols inside libamd_comgr.so, preventing symbol interposition without
+      # requiring namespace isolation via dlmopen.
+      -DCOMGR_STATIC_LLVM=ON
+      -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
     BUILD_DEPS
@@ -179,54 +180,31 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
   )
-  if(NOT THEROCK_FLAG_COMGR_DELAY_LOAD)
-    therock_cmake_subproject_provide_package("${_amd_comgr_target_name}" amd_comgr lib/cmake/amd_comgr)
+  therock_cmake_subproject_provide_package(amd-comgr amd_comgr lib/cmake/amd_comgr)
+  therock_cmake_subproject_activate(amd-comgr)
+
+  if(THEROCK_BUILD_COMGR_TESTS)
+    if(WIN32)
+      set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit.py")
+    else()
+      set(_llvm_lit_script "${CMAKE_BINARY_DIR}/compiler/amd-llvm/build/bin/llvm-lit")
+    endif()
+    therock_cmake_subproject_build_test(amd-comgr
+      COMMAND
+        "${Python3_EXECUTABLE}" "${_llvm_lit_script}"
+        "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build/test-lit" -v
+      COMMAND
+        "${CMAKE_CTEST_COMMAND}"
+        --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
+        --output-on-failure
+    )
   endif()
-  therock_cmake_subproject_activate("${_amd_comgr_target_name}")
 
   therock_test_validate_shared_lib(
     PATH amd-comgr/dist/lib
     LIB_NAMES
       libamd_comgr.so
   )
-
-  ##############################################################################
-  # amd-comgr stub
-  # Generates a stub that is used for dynamically loading amd-comgr in an
-  # appropriately private namespace. Since all uses of LLVM are hidden behind
-  # the comgr interface, this allows us to completely hide our LLVM and make it
-  # impossible to conflict.
-  # When enabled, this is declared as the "amd-comgr" target so that all
-  # dependencies in TheRock will use it. It also advertises the amd_comgr
-  # CMake package to be sourced from itself.
-  ##############################################################################
-
-  if(THEROCK_FLAG_COMGR_DELAY_LOAD)
-    therock_cmake_subproject_declare("${_amd_comgr_stub_target_name}"
-      FPRINT_SOURCE_HASH
-      USE_DIST_AMDGPU_TARGETS
-      NO_INSTALL_RPATH
-      LOGICAL_TARGET_NAME "amd-comgr-stub"
-      EXTERNAL_SOURCE_DIR "amd-comgr-stub"
-      BINARY_DIR "amd-comgr-stub"
-      BACKGROUND_BUILD
-      CMAKE_ARGS
-        -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
-      RUNTIME_DEPS
-        "${_amd_comgr_target_name}"
-    INTERFACE_LINK_DIRS
-      "lib"
-    INTERFACE_INSTALL_RPATH_DIRS
-      "lib"
-    )
-    therock_cmake_subproject_glob_c_sources("${_amd_comgr_stub_target_name}" SUBDIRS src)
-    therock_cmake_subproject_provide_package("${_amd_comgr_stub_target_name}" amd_comgr lib/cmake/amd_comgr_stub)
-    therock_cmake_subproject_activate("${_amd_comgr_stub_target_name}")
-
-    add_test(NAME amd_comgr_stub_test
-      COMMAND "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-stub/dist/bin/test_amd_comgr_stub"
-    )
-  endif()
 
   ##############################################################################
   # hipcc
@@ -259,8 +237,7 @@ if(THEROCK_ENABLE_COMPILER)
     SUBPROJECT_DEPS
       amd-llvm
       hipcc
-      "${_amd_comgr_target_name}"
-      ${_amd_comgr_stub_target_name}
+      amd-comgr
   )
 endif(THEROCK_ENABLE_COMPILER)
 

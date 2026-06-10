@@ -65,11 +65,6 @@ def parse_components(components: list[str]) -> list[list]:
             "rocm-cmake",
         ]
 
-    if "profiler" in components:
-        system_projects += [
-            "rocprof-trace-decoder",
-        ]
-
     if "rocm-libraries" in components:
         arguments.append("--include-rocm-libraries")
         arguments.append("--include-ml-frameworks")
@@ -90,11 +85,6 @@ def parse_components(components: list[str]) -> list[list]:
         arguments.append("--include-compilers")
     else:
         arguments.append("--no-include-compilers")
-
-    if "iree-libs" in components:
-        arguments.append("--include-iree-libs")
-    else:
-        arguments.append("--no-include-iree-libs")
 
     if "debug-tools" in components:
         arguments.append("--include-debug-tools")
@@ -198,7 +188,6 @@ def main(argv):
                   rocm-libraries,
                   rocm-systems,
                   profiler,
-                  iree-libs,
                   debug-tools,
                   media-libs,
                   math-libraries

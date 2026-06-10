@@ -42,7 +42,7 @@ import subprocess
 import sys
 import re
 
-from github_actions.github_actions_utils import *
+from github_actions.github_actions_api import *
 
 is_windows = platform.system() == "Windows"
 

@@ -20,9 +20,9 @@ THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
-# Importing is_asan from github_actions_utils.py
+# Importing is_asan from github_actions_api.py
 sys.path.append(str(THIS_DIR.parent / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan
+from github_actions_api import is_asan
 
 
 def is_windows():
@@ -85,6 +85,11 @@ class TestROCmSanity:
     # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
     @pytest.mark.skipif(
         is_asan(), reason="hipcc test fails with ASAN build, see TheRock#3313"
+    )
+    # TODO(#4755): Re-enable test for windows once offload-arch.exe is fixed
+    @pytest.mark.skipif(
+        is_windows(),
+        reason="Windows offload-arch.exe is not retrieving correct data, ignoring test",
     )
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
@@ -158,74 +163,3 @@ class TestROCmSanity:
         return_code = process.returncode
         check.equal(return_code, 0)
         check.is_true(output)
-
-    @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
-    # TODO(#2789): Remove skip once amdsmi supports gfx1151
-    @pytest.mark.skipif(
-        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
-    )
-    def test_amdsmi_suite(self):
-        amdsmi_test_bin = (
-            THEROCK_BIN_DIR.parent / "share" / "amd_smi" / "tests" / "amdsmitst"
-        ).resolve()
-
-        assert (
-            amdsmi_test_bin.exists()
-        ), f"amdsmitst not found at expected location: {amdsmi_test_bin}"
-        assert os.access(
-            amdsmi_test_bin, os.X_OK
-        ), f"amdsmitst is not executable: {amdsmi_test_bin}"
-
-        include_tests = [
-            "amdsmitstReadOnly.*",
-            "amdsmitstReadWrite.FanReadWrite",
-            "amdsmitstReadWrite.TestOverdriveReadWrite",
-            "amdsmitstReadWrite.TestPciReadWrite",
-            "amdsmitstReadWrite.TestPowerReadWrite",
-            "amdsmitstReadWrite.TestPerfCntrReadWrite",
-            "amdsmitstReadWrite.TestEvtNotifReadWrite",
-            "AmdSmiDynamicMetricTest.*",
-        ]
-
-        exclude_tests = [
-            "amdsmitstReadOnly.TempRead",
-            "amdsmitstReadOnly.TestFrequenciesRead",
-            "amdsmitstReadWrite.TestPowerReadWrite",
-        ]
-
-        TESTS_TO_IGNORE = {
-            "gfx90X-dcgpu": {
-                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx90X-dcgpu
-                "linux": [
-                    "amdsmitstReadOnly.TestSysInfoRead",
-                    "amdsmitstReadOnly.TestIdInfoRead",
-                    "amdsmitstReadWrite.TestPciReadWrite",
-                ]
-            },
-            "gfx110X-all": {
-                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx110X-all
-                "linux": [
-                    "amdsmitstReadWrite.FanReadWrite",
-                ]
-            },
-        }
-
-        platform_key = "windows" if is_windows() else "linux"
-        if (
-            AMDGPU_FAMILIES in TESTS_TO_IGNORE
-            and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
-        ):
-            ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
-            exclude_tests.extend(ignored_tests)
-
-        gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
-        cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]
-
-        process = run_command(cmd, cwd=str(amdsmi_test_bin.parent))
-
-        combined = (process.stdout or "") + "\n" + (process.stderr or "")
-        for line in combined.splitlines():
-            if "[==========]" in line:
-                print(f"[amdsmitst-summary] {line}")
-
-        check.equal(process.returncode, 0)

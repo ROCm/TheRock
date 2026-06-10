@@ -40,9 +40,11 @@ def assert_is_physical_package(mod):
 def get_module_shared_libraries(mod) -> list[Path]:
     path = Path(mod.__file__).parent
     if is_windows:
-        so_paths = list(path.glob("**/*.dll"))
+        so_paths = [p for p in path.glob("**/*.dll") if p.is_file()]
     else:
-        so_paths = list(path.glob("**/*.so.*")) + list(path.glob("**/*.so"))
+        so_paths = [p for p in path.glob("**/*.so.*") if p.is_file()] + [
+            p for p in path.glob("**/*.so") if p.is_file()
+        ]
 
     return so_paths
 

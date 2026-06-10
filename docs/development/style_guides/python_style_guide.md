@@ -13,6 +13,7 @@ Table of Contents
   - [Script structure and organization](#script-structure-and-organization)
     - [Use `__main__` guard](#use-__main__-guard)
     - [Use `argparse` for CLI flags](#use-argparse-for-cli-flags)
+    - [Access `argparse` attributes directly](#access-argparse-attributes-directly)
     - [Import organization](#import-organization)
     - [Code organization](#code-organization)
     - [No duplicate code](#no-duplicate-code)
@@ -411,6 +412,41 @@ if len(sys.argv) < 3:
 
 run_id = sys.argv[1]  # String, not validated
 output_dir = sys.argv[2]
+```
+
+#### Access `argparse` attributes directly
+
+**Access parsed arguments with `args.foo`, not `getattr(args, "foo", default)`.**
+
+If an argument was added to the parser (or subparser), it is guaranteed to exist
+on the `Namespace`. Using `getattr` obscures that contract and suggests the
+attribute might be missing — which it won't be.
+
+When subcommand handlers pass `args` values into typed function calls, trust the
+unpacking:
+
+✅ **Preferred:**
+
+```python
+def do_copy(args: argparse.Namespace):
+    source_backend = create_backend(
+        run_id=args.source_run_id,
+        platform=args.platform,
+        staging_dir=args.local_staging_dir,  # Always present (None if not given)
+    )
+```
+
+❌ **Avoid:**
+
+```python
+def do_copy(args: argparse.Namespace):
+    source_backend = create_backend(
+        run_id=args.source_run_id,
+        platform=args.platform,
+        staging_dir=getattr(
+            args, "local_staging_dir", None
+        ),  # Suggests it might not exist
+    )
 ```
 
 #### Import organization

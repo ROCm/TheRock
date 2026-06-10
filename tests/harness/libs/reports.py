@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import gha_append_step_summary
+from github_actions_api import gha_append_step_summary
 
 
 class Table:

@@ -192,6 +192,15 @@ For example, this will build the "hipBLASLt" subproject in `RelWithDebInfo` and 
 > See the [Tips for using VSCode](#tips-for-using-vscode) section below for an
 > example of how to debug programs built in this way.
 
+- `{project}_CMAKE_ARGS`
+
+This variable will append to a subproject's default CMAKE arguments. It is a semicolon separated list.
+For example, this will add options to set tensilelite build parallel and keep build tmp in the "hipBLASLt" subproject:
+
+```bash
+  -DhipBLASLt_CMAKE_ARGS="-DTENSILELITE_BUILD_PARALLEL_LEVEL=32;-DTENSILELITE_KEEP_BUILD_TMP=ON"
+```
+
 ### Additional CMake developer ergonomic flags
 
 We add developer ergonomic flags as needed in order to support project-wide development activities. This currently includes:
@@ -306,9 +315,24 @@ extension can be used to configure the superproject and build individual targets
 Settings for CMake builds can be specified in `.vscode/settings.json` or a
 `.vscode/*.code-workspace` file, like so:
 
+> [!IMPORTANT]
+> If using ccache, first run `setup_ccache.py` to generate the config file:
+>
+> ```bash
+> python build_tools/setup_ccache.py
+> ```
+>
+> Then set the `CCACHE_CONFIGPATH` environment variable in your VSCode
+> settings as shown below. See the
+> [README ccache instructions](../../README.md#ccache-usage-on-linux)
+> for full details.
+
 ```jsonc
 {
   "cmake.generator": "Ninja",
+  "cmake.environment": {
+    "CCACHE_CONFIGPATH": "${workspaceFolder}/.ccache/ccache.conf"
+  },
   "cmake.configureArgs": [
     // General settings.
     "-DTHEROCK_VERBOSE=ON",

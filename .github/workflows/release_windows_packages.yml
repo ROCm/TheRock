@@ -27,6 +27,9 @@ on:
       prerelease_version:
         description: "(Optional) Number of the prerelease"
         type: string
+      extra_cmake_options:
+        description: "Extra options to pass to the CMake configure command"
+        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -37,9 +40,11 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
-        type: string
-        default: "dev"
+        description: 'Release type; developer-triggered jobs should use "dev"'
+        type: choice
+        options:
+          - dev
+        default: dev
       package_suffix:
         type: string
       s3_subdir:
@@ -53,6 +58,7 @@ on:
       families:
         description: "A comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`, or empty for the default list"
         type: string
+        default: "gfx110X"
       prerelease_version:
         description: "(Optional) Number of the prerelease"
         type: string
@@ -62,20 +68,20 @@ on:
 
   # Trigger on a schedule to build nightly release candidates.
   schedule:
-    # Runs at 04:00 AM UTC, which is 8:00 PM PST (UTC-8)
-    - cron: '0 04 * * *'
+    # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
+    - cron: '0 02 * * *'
 
 permissions:
   contents: read
 
-run-name: Release Windows packages (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})
+run-name: Release Windows packages (${{ github.event_name == 'schedule' && 'nightly' || inputs.release_type }}, ${{ inputs.families || 'default' }})
 
 jobs:
   setup_metadata:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     env:
-      release_type: ${{ inputs.release_type || 'nightly' }}
+      release_type: ${{ github.event_name == 'schedule' && 'nightly' || inputs.release_type }}
     outputs:
       version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       release_type: ${{ env.release_type }}
@@ -85,7 +91,7 @@ jobs:
       s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -158,8 +164,7 @@ jobs:
       TEATIME_LABEL_GH_GROUP: 1
       BUILD_DIR: B:\build
       CACHE_DIR: "${{github.workspace}}/.cache"
-      CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
-      CCACHE_MAXSIZE: "4000M"
+      CCACHE_CONFIGPATH: "${{github.workspace}}/.ccache/ccache.conf"
       DIST_ARCHIVE: "B:/build/artifacts/therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
@@ -170,7 +175,7 @@ jobs:
 
     steps:
       - name: "Checking out repository"
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -186,6 +191,8 @@ jobs:
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ccache
           # ninja pinned due to a bug in the 1.13.0 release:
           # https://github.com/ninja-build/ninja/issues/2616
@@ -196,7 +203,7 @@ jobs:
           choco install --no-progress -y pkgconfiglite
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
-      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
+      - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
         with:
           version: '3.62.0'
 
@@ -206,18 +213,15 @@ jobs:
 
       - name: Runner health status
         run: |
-          ccache --zero-stats
           python ./build_tools/health_status.py
 
-      # TODO: We shouldn't be using a cache on actual release branches, but it
-      # really helps for iteration time.
-      - name: Enable cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
-          restore-keys: |
-            windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
+      - name: Setup ccache
+        run: |
+          python ./build_tools/setup_ccache.py \
+            --release-type "${{ env.RELEASE_TYPE }}" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache" \
+            --log-dir "${BUILD_DIR}/logs/ccache"
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -234,16 +238,10 @@ jobs:
           package_version: "ADHOCBUILD"
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
-          # clear cache before build and after download
-          ccache -z
-
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-dist
-
-      - name: Build therock-archives
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives
+      - name: Build therock-artifacts and therock-dist
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-artifacts therock-dist
 
       - name: Compress dist folder
         run: |
@@ -268,7 +266,7 @@ jobs:
             ls -lh "${{ env.BUILD_DIR }}"
             echo "CCache Stats:"
             echo "-------------"
-            ccache -s
+            ccache -s -v
           else
             echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
             echo "        This should only happen if the CI is cancelled before the build step."
@@ -277,11 +275,19 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
           special-characters-workaround: true
+
+      - name: Push artifacts
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+        run: |
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
+            --build-dir ${{ env.BUILD_DIR }} \
+            --stage all
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
@@ -302,15 +308,6 @@ jobs:
           --include "*.whl" \
           --include "*.tar.gz"
 
-      - name: (Re-)Generate Python package release index for staging
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variable to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
-
       ## TODO: Restrict uploading to the non-staging S3 directory until sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -322,24 +319,9 @@ jobs:
           --include "*.whl" \
           --include "*.tar.gz"
 
-      # TODO(marbre): guard against race conditions where multiple workflows update the index at the same time?
-      #    Moving the index computation server-side could help
-      - name: (Re-)Generate release index pages
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variable to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py  ${{ env.CUSTOM_PREFIX }}
-          python ./build_tools/index_generation_s3_tar.py \
-            --bucket ${{ env.S3_BUCKET_TAR }} \
-            --directory ${{ env.S3_SUBDIR_TAR }} \
-            --upload
-
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
-        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: release_windows_pytorch_wheels.yml
           inputs: |
@@ -352,10 +334,3 @@ jobs:
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
               "ref": "${{ inputs.ref || '' }}"
             }
-
-      - name: Save cache
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}

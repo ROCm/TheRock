@@ -115,6 +115,7 @@ add_custom_target(
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --with-gmp="${GMP_PREFIX}"
   COMMAND
     make V=1

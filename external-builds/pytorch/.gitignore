@@ -5,7 +5,7 @@ src/
 /pytorch_audio
 /triton
 
-# Written by run_pytorch_tests.py on Windows as a workaround for
-# https://github.com/ROCm/TheRock/issues/999.
-# Once that is solved we can remove this ignore rule.
-*exit_code.txt
+# Manifest files
+manifest.json
+pytorch_manifest.json
+manifests/
