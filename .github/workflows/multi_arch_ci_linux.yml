@@ -148,7 +148,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_deb_package_version }}
+      rocm_version: ${{ inputs.rocm_deb_package_version || inputs.rocm_package_version }}
       native_package_type: deb
     permissions:
       contents: read
@@ -161,7 +161,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_rpm_package_version }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version || inputs.rocm_package_version }}
       native_package_type: rpm
     permissions:
       contents: read
@@ -284,6 +284,8 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
