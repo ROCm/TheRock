@@ -125,9 +125,9 @@ Benefits:
 - **Developer-friendly:** Easy to use for common cases
 
 > [!NOTE]
-> Release workflows in TheRock should only offer "dev" for manual dispatch.
-> CI-oriented build/test helpers may offer "ci" and "dev"; rockrel-owned
-> callers can pass "nightly" and "prerelease" through `workflow_call`.
+> Some workflows may be configured to have stricter security boundaries, such
+> as only accepting "nightly" release types from certain branches or from
+> certain repositories.
 
 ✅ **Preferred:**
 
@@ -140,6 +140,8 @@ on:
         description: Type of release to create. All developer-triggered jobs should use "dev"!
         options:
           - dev
+          - nightly
+          - prerelease
         default: dev  # Safe: development releases don't affect production
 
       amdgpu_families:
