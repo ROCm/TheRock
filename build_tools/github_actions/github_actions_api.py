@@ -767,13 +767,18 @@ def load_external_config() -> dict | None:
     """
     ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
     if not ci_config_path:
+        _log("CI_CONFIG_PATH not set, using local amdgpu_family_matrix.py")
         return None
     config_path = Path(ci_config_path)
     sys.path.insert(0, str(config_path))
     try:
         from ci_config_api import config_exists, load_runner_config
     except ImportError:
+        _log(f"CI config API not found at {ci_config_path}, using local fallback")
         return None
     if not config_exists(config_path):
+        _log(f"CI config not found at {ci_config_path}, using local fallback")
         return None
-    return load_runner_config(config_path)
+    config = load_runner_config(config_path)
+    _log(f"Using external CI config from {ci_config_path}")
+    return config
