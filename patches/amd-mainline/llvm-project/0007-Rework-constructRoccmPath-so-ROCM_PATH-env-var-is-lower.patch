@@ -1,14 +1,12 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: TheRock <therock@amd.com>
-Date: Wed, 3 Jun 2026 00:00:00 +0000
+From 4ecdaa8f6513c69c91441f0906314b75fb2f1bdb Mon Sep 17 00:00:00 2001
+From: Tijana Vukovic <tvukovic@amd.com>
+Date: Wed, 10 Jun 2026 09:34:59 -0700
 Subject: [PATCH 7/8] Rework constructRoccmPath so ROCM_PATH env var is lower
  priority.
 
-Mirror constructHipPath (PATCH 6/8): prefer the install layout next to
-hipcc over a stale ROCM_PATH from the host environment.
 ---
- amd/hipcc/src/hipBin_base.h | 27 +++++++++++++++++++++------
- 1 file changed, 21 insertions(+), 6 deletions(-)
+ amd/hipcc/src/hipBin_base.h | 33 +++++++++++++++++++++++++--------
+ 1 file changed, 25 insertions(+), 8 deletions(-)
 
 diff --git a/amd/hipcc/src/hipBin_base.h b/amd/hipcc/src/hipBin_base.h
 index 1d2f043e9558..65699bb05f71 100644
@@ -56,3 +54,6 @@ index 1d2f043e9558..65699bb05f71 100644
  }
  
  // reads the Hip Version
+-- 
+2.51.1.windows.1
+
