@@ -76,7 +76,7 @@ jobs:
           GITLEAKS_SCAN_MODE: ${{ inputs.scan_mode }}
           GITLEAKS_REPORT_FORMATS: ${{ inputs.report_formats }}
           GITLEAKS_SOURCE_DIR: ${{ inputs.scan_path }}
-        run: python scan_tools/github_actions/gitleaks.py
+        run: python build_tools/scan_tools/github_actions/gitleaks.py
 
       - name: Upload SARIF report to code scanning
         if: always() && steps.scan.outputs.sarif_path != ''

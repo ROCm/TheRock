@@ -49,7 +49,7 @@ jobs:
           --cov --cov-report=term-missing --cov-report=html
 
     - name: Test scan_tools
-      working-directory: scan_tools
+      working-directory: build_tools/scan_tools
       run: python -m pytest -vv
 
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require

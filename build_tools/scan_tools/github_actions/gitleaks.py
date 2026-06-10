@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+THEROCK_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 # Add build_tools to path for github_actions imports.
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
@@ -275,6 +275,11 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     except json.JSONDecodeError as exc:
         raise ValueError(f"SARIF file '{sarif_path}' is not valid JSON: {exc}") from exc
 
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"SARIF file '{sarif_path}' top-level must be a JSON object, "
+            f"got {type(data).__name__}"
+        )
     runs = data.get("runs", [])
     if not isinstance(runs, list):
         raise ValueError(
