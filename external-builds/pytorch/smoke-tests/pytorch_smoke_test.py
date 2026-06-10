@@ -2,26 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 import logging
-import platform
-
+import torch
 import pytest
 import re
-import torch
-
-
-def _skip_windows_mxgpu_cuda_compute() -> bool:
-    """Windows MxGPU CI runners hang on in-process HIP compute under pytest."""
-    if platform.system() != "Windows":
-        return False
-    if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
-        return False
-    return "mxgpu" in torch.cuda.get_device_name(0).lower()
-
-
-_WINDOWS_MXGPU_CUDA_SKIP_REASON = (
-    "In-process CUDA compute hangs on Windows MxGPU CI runners "
-    "(e.g. torch.mm); see https://github.com/ROCm/TheRock/issues/999"
-)
 
 
 class TestROCmAvailability:
@@ -38,10 +21,6 @@ class TestROCmAvailability:
         ), "ROCm is not available or not detected by PyTorch"
 
 
-@pytest.mark.skipif(
-    _skip_windows_mxgpu_cuda_compute(),
-    reason=_WINDOWS_MXGPU_CUDA_SKIP_REASON,
-)
 class TestMatrixOperations:
     def test_matrix_multiplication(self):
         matrix1 = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device="cuda")
@@ -122,10 +101,6 @@ class TestMatrixOperations:
         assert result.device.type == "cuda"
 
 
-@pytest.mark.skipif(
-    _skip_windows_mxgpu_cuda_compute(),
-    reason=_WINDOWS_MXGPU_CUDA_SKIP_REASON,
-)
 class TestConvolutions:
     def teardown_method(self):
         # TODO(#999): fix tests stalling on exit without this

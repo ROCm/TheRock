@@ -334,12 +334,6 @@ jobs:
         run: |
           ./build_tools/health_status.py
 
-      - name: Sync rocm_sdk core tests from branch
-        if: ${{ contains(inputs.test_runs_on, 'windows') }}
-        run: |
-          INSTALLED="$(python -c "import rocm_sdk.tests.core_test as m; print(m.__file__)")"
-          cp "build_tools/packaging/python/templates/rocm/src/rocm_sdk/tests/core_test.py" "$INSTALLED"
-
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
