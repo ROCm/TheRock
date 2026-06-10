@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 """
-This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
-Also provides the select_weighted_label utility for weighted runner selection.
+AMD GPU Family Matrix and runner selection utilities for GitHub workflows.
 
-* Each entry determines which families and test runners are available to use
-* Each group determines which entries run by default on workflow triggers
+NOTE: The primary source of truth for GPU families and runner labels is
+ROCm/therock-ci-config (runner-config.json). The definitions in this file
+serve as a fallback when external config is not available.
 
 For presubmit, postsubmit and nightly family selection:
 
@@ -16,10 +16,6 @@ For presubmit, postsubmit and nightly family selection:
 
 TODO(#2200): clarify AMD GPU family selection
 """
-
-#############################################################################################
-# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
-#############################################################################################
 
 import random
 
