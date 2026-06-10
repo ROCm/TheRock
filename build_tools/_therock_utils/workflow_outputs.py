@@ -138,7 +138,7 @@ class WorkflowOutputRoot:
         per-arch stages (e.g., math-libs) get a subdirectory per family.
 
         Args:
-            stage_name: Build stage (e.g., 'foundation', 'math-libs')
+            stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs')
             amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
         """
         if amdgpu_family:
@@ -279,7 +279,7 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
-            release_type: Release type override (e.g. "dev", "nightly"). If
+            release_type: Release type override (e.g. "ci", "dev", "nightly"). If
                 None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (
