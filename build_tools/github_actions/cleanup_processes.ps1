@@ -189,16 +189,38 @@ if ($currentUser -match "NT AUTHORITY") {
 # nested submodule left on disk can remain under an older superproject whose
 # .gitmodules lacks that URL. The recursive foreach then aborts with
 # `fatal: No url found for submodule path ...` (exit 128) and the job dies
-# before its own checkout begins. Deiniting empties those working trees (deinit
-# is non-recursive, so it won't trip on the missing URL itself) leaving nothing
-# stale for the recursive foreach to enter.
+# before its own checkout begins.
+#
+# We cannot rely on `git submodule deinit`: a prior job can leave the workspace
+# partially corrupted (e.g. submodule.<name>.url registered in .git/config while
+# .git/modules/<name> is missing), which makes deinit abort with
+# `could not lock config file .git/modules/<name>/config`. Instead we physically
+# empty the top-level submodule working trees listed in .gitmodules. The
+# recursive foreach only descends into populated submodule dirs, so emptying them
+# leaves nothing for it to enter, independent of .git/modules health. We keep
+# .git/modules objects (repopulation stays a local checkout, no network re-clone)
+# and never touch ccache/deps (those are not submodule paths).
 $workspaceRepo = $env:GITHUB_WORKSPACE
-if ($workspaceRepo -and (Test-Path (Join-Path $workspaceRepo ".git"))) {
-    echo "[*] Deiniting stale git submodules in workspace: $workspaceRepo"
-    git -C $workspaceRepo submodule deinit -f --all 2>&1 | ForEach-Object { echo "      $_" }
-    echo "[*] >> Submodule deinit finished (git exit code: $LASTEXITCODE)"
+$gitmodulesPath = if ($workspaceRepo) { Join-Path $workspaceRepo ".gitmodules" } else { $null }
+if ($workspaceRepo -and (Test-Path (Join-Path $workspaceRepo ".git")) -and $gitmodulesPath -and (Test-Path $gitmodulesPath)) {
+    echo "[*] Clearing stale git submodule working trees in workspace: $workspaceRepo"
+    # Parse submodule paths directly from .gitmodules (no git state required).
+    $submodulePaths = Select-String -Path $gitmodulesPath -Pattern '^\s*path\s*=\s*(.+)$' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    foreach ($subPath in $submodulePaths) {
+        $fullSubPath = Join-Path $workspaceRepo $subPath
+        if (Test-Path $fullSubPath) {
+            echo "      removing $subPath"
+            try {
+                Remove-Item -Recurse -Force -LiteralPath $fullSubPath -ErrorAction Stop
+            } catch {
+                echo "      WARNING: could not fully remove ${subPath}: $_"
+            }
+        }
+    }
+    echo "[*] >> Submodule working-tree cleanup finished"
 } else {
-    echo "[*] No git repo at workspace root, skipping submodule deinit"
+    echo "[*] No git repo / .gitmodules at workspace root, skipping submodule cleanup"
 }
 
 #### Cleanup Processes ####
