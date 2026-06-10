@@ -170,6 +170,11 @@ class ROCmDevelTest(unittest.TestCase):
                 # We use OpenCL ICD from distro rather than TheRock
                 # and we do not build it
                 continue
+            if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
+                # Python C extensions use symbols resolved at import time,
+                # not via dlopen — ctypes.CDLL fails across interpreter
+                # versions (e.g. .abi3.so using PyType_FromMetaclass on <3.12).
+                continue
 
             extra_setup = ""
             if (
