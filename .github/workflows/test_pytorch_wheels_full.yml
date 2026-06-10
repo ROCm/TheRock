@@ -49,6 +49,30 @@ on:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: ""
+      device_query:
+        description: >-
+          GPU candidate-set selection (--device-query, stage 1). "unique": one
+          device per architecture. "all": every device of each architecture.
+          "auto": derive from the test config ("all" for distributed, "unique"
+          otherwise).
+        type: choice
+        options:
+          - "auto"
+          - "unique"
+          - "all"
+        default: "auto"
+      gpu_policy:
+        description: >-
+          How many candidate GPUs are made visible (--gpu-policy, stage 2).
+          "single": one GPU visible at a time. "all": all candidate GPUs visible
+          at once. "auto": derive from the test config ("all" for distributed,
+          "single" otherwise).
+        type: choice
+        options:
+          - "auto"
+          - "single"
+          - "all"
+        default: "auto"
       multi_arch:
         description: >-
           Install from a multi-arch index using device extras
@@ -102,6 +126,18 @@ on:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
         default: ""
+      device_query:
+        description: >-
+          --device-query. "unique": one device per architecture; "all": every
+          device of each architecture; "auto": derive from the test config.
+        type: string
+        default: "auto"
+      gpu_policy:
+        description: >-
+          --gpu-policy. "single": one GPU visible at a time; "all": all candidate
+          GPUs visible at once; "auto": derive from the test config.
+        type: string
+        default: "auto"
 
 permissions:
   contents: read
@@ -115,7 +151,7 @@ jobs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -171,7 +207,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -201,13 +237,15 @@ jobs:
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY or apply any patches, so we skip those steps to save time.
+      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
+      # steps to save time.
       - name: Checkout PyTorch Source
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15
@@ -312,6 +350,8 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --device-query "${{ inputs.device_query }}" \
+            --gpu-policy "${{ inputs.gpu_policy }}" \
             -- \
             --continue-on-collection-errors
 

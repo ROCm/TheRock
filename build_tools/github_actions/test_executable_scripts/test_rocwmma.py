@@ -31,8 +31,8 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 logging.basicConfig(level=logging.INFO)
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
+# Otherwise, we run the standard test suite.
+test_type = os.getenv("TEST_TYPE", "standard")
 
 # TODO(#2823): Re-enable test once flaky issue is resolved
 TESTS_TO_IGNORE = ["unpack_util_test", "contamination_test", "map_util_test"]

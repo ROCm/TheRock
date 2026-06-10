@@ -55,6 +55,7 @@ project wide:
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
   - `THEROCK_BUNDLED_TBB`
+  - `THEROCK_BUNDLED_UTIL_LINUX`
   - `THEROCK_BUNDLED_ZLIB`
   - `THEROCK_BUNDLED_ZSTD`
 - Sub-projects must arrange for any libraries that depend on these to add the
@@ -212,6 +213,27 @@ Supported sub-libraries: `tbb`, `tbbmalloc`, `tbbmalloc_proxy`.
 - Canonical method: `find_package(TBB CONFIG)`
 - Import libraries: `TBB::tbb`, `TBB::tbbmalloc`, `TBB::tbbmalloc_proxy`
 - Alternatives: `pkg_check_modules(TBB tbb)`
+
+## util-linux
+
+Provides the `libmount` (mount table parsing/manipulation) and `libblkid`
+(block device identification) shared libraries. The full util-linux project
+ships many more utilities and libraries, but TheRock only builds these two.
+
+Note: `libmount` links `libblkid` transitively, so consumers that only use
+`libmount` typically do not need to depend on `libblkid` directly.
+
+### libmount
+
+- Canonical method: `pkg_check_modules(LIBMOUNT REQUIRED IMPORTED_TARGET mount)`
+- Import library: `PkgConfig::LIBMOUNT`
+- Alternatives: none
+
+### libblkid
+
+- Canonical method: `pkg_check_modules(LIBBLKID REQUIRED IMPORTED_TARGET blkid)`
+- Import library: `PkgConfig::LIBBLKID`
+- Alternatives: none
 
 ## zlib
 

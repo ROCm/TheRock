@@ -103,6 +103,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_BUILD_SAMPLES=OFF
       -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -118,6 +119,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       rocprof-trace-decoder
       rocprofiler-register
+      therock-yaml-cpp
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -271,9 +273,7 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 ##############################################################################
 # rocprofiler-systems
 ##############################################################################
-# rocprofiler-systems requires GCC, but sanitizer builds use Clang.
-# Skip enabling rocprofiler-systems when building with sanitizers.
-if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
+if(THEROCK_ENABLE_ROCPROFSYS)
 
   therock_detect_python_versions(_rocprofsys_detected_python_executables _rocprofsys_detected_python_versions)
   if(NOT _rocprofsys_detected_python_versions OR NOT _rocprofsys_detected_python_executables)
@@ -316,6 +316,8 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
       -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
       "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
+    COMPILER_TOOLCHAIN
+      amd-hip
     INSTALL_RPATH_DIRS
       "lib"
       "lib/rocprofiler-systems"
@@ -381,7 +383,7 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
-        -DROCPROFSYS_DISABLE_EXAMPLES=lulesh
+        -DROCPROFSYS_DISABLE_EXAMPLES="lulesh\\;openmp-target\\;causal"
       COMPILER_TOOLCHAIN
         amd-hip
       INSTALL_RPATH_DIRS
@@ -405,4 +407,4 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
         rocprofiler-systems-examples
     )
   endif()
-endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
+endif(THEROCK_ENABLE_ROCPROFSYS)

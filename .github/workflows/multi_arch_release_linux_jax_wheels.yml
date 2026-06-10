@@ -32,7 +32,7 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       release_type:
-        description: 'Release type. All developer-triggered jobs should use "dev"!'
+        description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
         options:
           - dev
@@ -70,13 +70,13 @@ jobs:
 
     steps:
       - name: Checkout TheRock
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
