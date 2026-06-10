@@ -204,9 +204,11 @@ $workspaceRepo = $env:GITHUB_WORKSPACE
 $gitmodulesPath = if ($workspaceRepo) { Join-Path $workspaceRepo ".gitmodules" } else { $null }
 if ($workspaceRepo -and (Test-Path (Join-Path $workspaceRepo ".git")) -and $gitmodulesPath -and (Test-Path $gitmodulesPath)) {
     echo "[*] Clearing stale git submodule working trees in workspace: $workspaceRepo"
-    # Parse submodule paths directly from .gitmodules (no git state required).
-    $submodulePaths = Select-String -Path $gitmodulesPath -Pattern '^\s*path\s*=\s*(.+)$' |
-        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    # Read submodule paths via `git config -f`, which parses .gitmodules as a
+    # standalone config file without touching repo state (no index, no
+    # .git/modules), so it cannot trip on the corruption we are cleaning up.
+    $submodulePaths = git config -f $gitmodulesPath --get-regexp '^submodule\..*\.path$' |
+        ForEach-Object { ($_ -split '\s+', 2)[1].Trim() }
     foreach ($subPath in $submodulePaths) {
         $fullSubPath = Join-Path $workspaceRepo $subPath
         if (Test-Path $fullSubPath) {
