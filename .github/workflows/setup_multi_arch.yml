@@ -129,6 +129,10 @@ jobs:
           path: ci-config
         continue-on-error: true
 
+      # Note: the script reads PR labels, the base ref, etc. from the event
+      # payload (GITHUB_EVENT_PATH). That is the original event that started
+      # the workflow run, which may not directly map to the "inputs" on
+      # the "workflow_call" trigger for this file.
       - name: Configuring CI options
         id: configure
         env:
