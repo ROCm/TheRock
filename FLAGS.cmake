@@ -35,6 +35,17 @@ therock_declare_flag(
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
+therock_declare_flag(
+  NAME HIPSPARSE_SPMV_BSR
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable hipsparseSpMV in BSR format and BSR sparse matrix creation routines (hipsparseCreateBsr, hipsparseCreateConstBsr)"
+  ISSUE https://github.com/ROCm/rocm-libraries/pull/7820
+  CMAKE_VARS
+    HIPSPARSE_ENABLE_SPMV_BSR=ON
+  SUB_PROJECTS
+    hipSPARSE
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
