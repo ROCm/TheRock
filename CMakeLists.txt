@@ -247,6 +247,7 @@ option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK
 option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
+option(THEROCK_ENABLE_HIPFILE "Enable building hipFile and its dependencies (e.g. oneTBB)" OFF)
 option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
@@ -348,11 +349,11 @@ endif()
 # install_name_tool on macOS to set RPATH.
 ################################################################################
 
-if(THEROCK_BUNDLE_SYSDEPS OR THEROCK_ENABLE_ROCGDB)
+if(THEROCK_BUNDLE_SYSDEPS OR THEROCK_ENABLE_ROCGDB OR THEROCK_ENABLE_ONETBB)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(PATCHELF patchelf)
     if(NOT PATCHELF)
-      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on Linux requires `patchelf`")
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON, THEROCK_ENABLE_ROCGDB=ON, or THEROCK_ENABLE_ONETBB=ON on Linux requires `patchelf`")
     endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     # macOS uses install_name_tool (from Xcode) instead of patchelf

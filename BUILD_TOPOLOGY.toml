@@ -470,7 +470,7 @@ feature_group = "CORE"
 artifact_group = "third-party-libs"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
+feature_group = "HIPFILE"  # Controlled by THEROCK_ENABLE_HIPFILE (OFF by default)
 disable_platforms = ["windows"]
 
 # --- Base Infrastructure ---

@@ -54,7 +54,8 @@ if(THEROCK_ENABLE_MPI)
   add_subdirectory(openmpi)
 endif()
 
-# oneTBB (Linux only)
+# oneTBB (Linux only): a dependency of hipFile. Its THEROCK_ENABLE_ONETBB feature
+# is in the HIPFILE group, so it defaults OFF and is only built when enabled.
 if(THEROCK_ENABLE_ONETBB)
   add_subdirectory(onetbb)
 endif()

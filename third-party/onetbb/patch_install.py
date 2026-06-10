@@ -18,12 +18,11 @@ def get_env_or_exit(var_name):
 
 
 # Validate the install prefix argument.
-prefix = Path(sys.argv[1]) if len(sys.argv) > 1 else None
-if not prefix:
+if len(sys.argv) < 2:
     print("Error: Expected install prefix argument")
     sys.exit(1)
 
-install_prefix = sys.argv[1]
+install_prefix = Path(sys.argv[1])
 
 # Required environment variables.
 therock_source_dir = Path(get_env_or_exit("THEROCK_SOURCE_DIR"))
@@ -35,7 +34,7 @@ sys.path.insert(0, str(script_path.parent))
 from patch_linux_so import relativize_pc_file
 
 if platform.system() == "Linux":
-    lib_dir = Path(install_prefix) / "lib"
+    lib_dir = install_prefix / "lib"
 
     # Remove static libs (*.a) and libtool descriptors (*.la). oneTBB is built
     # shared-only; only the *.so files are kept.
