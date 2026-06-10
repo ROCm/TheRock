@@ -127,6 +127,7 @@ jobs:
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
+        continue-on-error: true
 
       - name: Configuring CI options
         id: configure
