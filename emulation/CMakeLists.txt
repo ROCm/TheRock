@@ -3,7 +3,7 @@
 
 # ROCm Emulation Tools
 
-if(THEROCK_ENABLE_ROCJITSU AND THEROCK_ENABLE_EMULATION)
+if(THEROCK_ENABLE_ROCJITSU)
   ##############################################################################
   # rocjitsu
   #
@@ -13,20 +13,11 @@ if(THEROCK_ENABLE_ROCJITSU AND THEROCK_ENABLE_EMULATION)
   # hardware.
   ##############################################################################
 
-  if(EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/CMakeLists.txt")
-    set(_rocjitsu_source_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu")
-  elseif(EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/experimental/rocjitsu/CMakeLists.txt")
-    set(_rocjitsu_source_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/experimental/rocjitsu")
-  else()
-    message(FATAL_ERROR "rocjitsu source directory not found under rocm-systems/emulation or rocm-systems/experimental")
-  endif()
-
   therock_cmake_subproject_declare(rocjitsu
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${_rocjitsu_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     CMAKE_ARGS
-      -DRJ_BUILD_GUI=OFF
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
   )
 
@@ -45,7 +36,7 @@ if(THEROCK_ENABLE_ROCJITSU AND THEROCK_ENABLE_EMULATION)
 
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
     LIB_NAMES
-      librocjitsu.so
+      librocjitsu_kmd.so
   )
 
   therock_provide_artifact(rocjitsu

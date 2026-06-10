@@ -32,7 +32,7 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       release_type:
-        description: 'Release type. All developer-triggered jobs should use "dev"!'
+        description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
         options:
           - dev
