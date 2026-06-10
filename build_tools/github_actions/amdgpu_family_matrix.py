@@ -411,7 +411,7 @@ def get_all_families_for_trigger_types(trigger_types, external_config=None):
 
     Args:
         trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
-        external_config: Optional external config dict from ci_config_loader.
+        external_config: Optional external config dict from therock-ci-config.
             If provided, uses gpu_families from external config instead of
             local definitions.
 
@@ -420,9 +420,13 @@ def get_all_families_for_trigger_types(trigger_types, external_config=None):
     """
     # Use external config if provided
     if external_config is not None:
-        import ci_config_loader
-
-        return ci_config_loader.get_gpu_families(external_config, trigger_types)
+        gpu_families = external_config.get("gpu_families", {})
+        result = {}
+        for trigger_type in trigger_types:
+            if trigger_type in gpu_families:
+                for name, cfg in gpu_families[trigger_type].items():
+                    result[name] = cfg
+        return result
 
     # Fall back to local definitions
     result = {}
@@ -445,15 +449,13 @@ def get_build_runner_labels(external_config=None):
     Returns build runner label configuration.
 
     Args:
-        external_config: Optional external config dict from ci_config_loader.
+        external_config: Optional external config dict from therock-ci-config.
             If provided, uses build_runners from external config.
 
     Returns:
         Build runner labels dict with platform -> variant -> labels mapping.
     """
     if external_config is not None:
-        import ci_config_loader
-
-        return ci_config_loader.get_build_runners(external_config)
+        return external_config.get("build_runners", {})
 
     return BUILD_RUNNER_LABELS

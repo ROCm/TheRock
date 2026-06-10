@@ -60,7 +60,8 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_build_runner,
 )
-from ci_config_loader import config_exists, load_runner_config, log_config_version
+# CI config API is loaded from therock-ci-config (checked out to CI_CONFIG_PATH)
+# Import is deferred to _load_external_config() after adding config path to sys.path
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
@@ -1135,11 +1136,20 @@ def configure(
 
 
 def _load_external_config():
-    """Load external CI config from CI_CONFIG_PATH."""
+    """Load external CI config from CI_CONFIG_PATH.
+
+    The CI config API lives in therock-ci-config repo, which is checked out
+    to CI_CONFIG_PATH. We add that path to sys.path and import the API.
+    """
     ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
     if not ci_config_path:
         raise RuntimeError("CI_CONFIG_PATH environment variable is required")
     config_path = Path(ci_config_path)
+
+    # Add config path to import the API from therock-ci-config
+    sys.path.insert(0, str(config_path))
+    from ci_config_api import config_exists, load_runner_config, log_config_version
+
     if not config_exists(config_path):
         raise RuntimeError(f"CI config not found at {ci_config_path}")
     config = load_runner_config(config_path)
