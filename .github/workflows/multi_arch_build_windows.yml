@@ -46,9 +46,9 @@ on:
       rocm_package_version:
         type: string
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
