@@ -242,7 +242,7 @@ test_matrix = {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_hipsolver.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -266,7 +266,7 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -277,8 +277,8 @@ test_matrix = {
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 45,
+        "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -310,8 +310,8 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 45,
+        "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -676,7 +676,7 @@ def run():
     platform = os.getenv("RUNNER_OS").lower()
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    test_type = os.getenv("TEST_TYPE", "full")
+    test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))

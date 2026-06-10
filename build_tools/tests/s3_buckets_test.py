@@ -26,7 +26,7 @@ from _therock_utils.s3_buckets import (
 class TestGetArtifactsBucketConfig(unittest.TestCase):
     def test_ci_rocm_therock(self):
         config = get_artifacts_bucket_config(
-            release_type="", repository="ROCm/TheRock", is_pr_from_fork=False
+            release_type="ci", repository="ROCm/TheRock", is_pr_from_fork=False
         )
         self.assertEqual(config.name, "therock-ci-artifacts")
         self.assertEqual(
@@ -36,13 +36,13 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
 
     def test_ci_fork_pr(self):
         config = get_artifacts_bucket_config(
-            release_type="", repository="ROCm/TheRock", is_pr_from_fork=True
+            release_type="ci", repository="ROCm/TheRock", is_pr_from_fork=True
         )
         self.assertEqual(config.name, "therock-ci-artifacts-external")
 
     def test_ci_external_repo(self):
         config = get_artifacts_bucket_config(
-            release_type="", repository="ROCm/rocm-libraries", is_pr_from_fork=False
+            release_type="ci", repository="ROCm/rocm-libraries", is_pr_from_fork=False
         )
         self.assertEqual(config.name, "therock-ci-artifacts-external")
 
@@ -67,6 +67,14 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
                 is_pr_from_fork=False,
             )
         self.assertIn("bogus", str(cm.exception))
+
+    def test_empty_release_type_raises(self):
+        with self.assertRaises(ValueError):
+            get_artifacts_bucket_config(
+                release_type="",
+                repository="ROCm/TheRock",
+                is_pr_from_fork=False,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +118,10 @@ class TestGetReleaseBucketConfig(unittest.TestCase):
     def test_empty_release_type_raises(self):
         with self.assertRaises(ValueError):
             get_release_bucket_config(release_type="", bucket_type="tarball")
+
+    def test_ci_release_type_raises(self):
+        with self.assertRaises(ValueError):
+            get_release_bucket_config(release_type="ci", bucket_type="tarball")
 
     def test_invalid_bucket_type_raises(self):
         with self.assertRaises(ValueError) as cm:
