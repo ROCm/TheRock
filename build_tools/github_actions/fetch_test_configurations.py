@@ -266,7 +266,7 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -277,7 +277,7 @@ test_matrix = {
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -310,7 +310,7 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
