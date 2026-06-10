@@ -38,10 +38,21 @@ skip_tests = {
             # TestNNDeviceTypeCUDA - upsampling launch failure on gfx950
             # Separately tracked in https://github.com/ROCm/TheRock/issues/5270
             "test_upsamplingNearest2d_launch_rocm_cuda",
+            # Run 27246343570 default shard 1/10, job 80461205629:
+            # CrossEntropyLoss 2d out-of-bounds device assert reports HIP
+            # visibility warning / GPU memory fault text instead of the
+            # expected device-assert stderr signature; FAILED CONSISTENTLY.
+            "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float16)",
+            "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float32)",
             # Run 27228539427 default shard 8/10:
             # Conv2d deterministic cudnn dilation=2 bf16 hangs GPU in backward
             # after MIOpen GemmFwdRest workspace warning.
             "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_bfloat16)",
+            # Run 27246343570 default shard 8/10, job 80461205597:
+            # Conv2d deterministic cudnn dilation=2 complex64 exceeds the
+            # TheRock command watchdog; dilation=3 bf16 hits a MIOpen GPU hang.
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_complex64)",
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_3_cuda_bfloat16)",
             # Run 27228539427 default shard 10/10:
             # Conv2d deterministic cudnn dilation=1 variants exceed TheRock's
             # command watchdog on gfx94X; float16 was active when GitHub
@@ -49,6 +60,11 @@ skip_tests = {
             "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_bfloat16)",
             "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_complex64)",
             "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_float16)",
+            # Run 27246343570 default shard 10/10, job 80461205617:
+            # Additional deterministic convolution variants repeatedly hit
+            # TheRock 30-minute watchdogs before the job's 6h cancellation.
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_float32)",
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_float16)",
         ],
         "custom_operator": [
             # Run 27228539427 default shard 7/10:
@@ -79,6 +95,20 @@ skip_tests = {
             # singular linalg.inv under aot_eager does not raise _LinAlgError
             # on ROCm.
             "(ReproTests and test_linalg_inv_singular_aot_eager_raises)",
+        ],
+        "export": [
+            # Run 27246343570 default shard 10/10, job 80461205617:
+            # TestExportOnFakeCudaCUDA subprocesses exit 127 because
+            # libpython3.12.so.1.0 is missing. Expressions mirrored from 2.12.
+            "test_fake_export___getitem___cuda_float32",
+            "test_fake_export_nn_functional_batch_norm_cuda_float32",
+            "test_fake_export_nn_functional_batch_norm_without_cudnn_cuda_float32",
+            "test_fake_export_nn_functional_conv2d_cuda_float32",
+            "test_fake_export_nn_functional_instance_norm_cuda_float32",
+            "test_fake_export_nn_functional_multi_margin_loss_cuda_float32",
+            "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
+            "test_fake_export_nonzero_cuda_float32",
+            "test_preserve_original_behavior_cuda",
         ],
         "functorch": [
             # Run 27228539427 default shard 7/10:
@@ -111,6 +141,10 @@ skip_tests = {
             # Run 27228539427 default shard 9/10:
             # diagonal_scatter backward dynamic-shapes CPU grad mismatch on ROCm Inductor.
             "(DynamicShapesCodegenCpuTests and test_diagonal_scatter_backward_dynamic_shapes_cpu)",
+            # Run 27246343570 default shard 7/10, job 80461205591:
+            # diagonal_scatter backward dynamic-shapes CPU mismatch on ROCm
+            # Inductor in the non-codegen CPU class; FAILED CONSISTENTLY.
+            "(DynamicShapesCpuTests and test_diagonal_scatter_backward_dynamic_shapes_cpu)",
             # Run 27228539427 default shard 8/10:
             # test_triton_kernels expects max helper reuse removal, but ROCm
             # generated source still contains triton_helpers.max2.
@@ -127,6 +161,33 @@ skip_tests = {
             # Run 27228539427 default shard 6/10:
             # log10 inductor_default float16 differs from eager under exact equality.
             "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float16",
+            # Run 27246343570 default shard 4/10, job 80461205582:
+            # OpInfo determinism minimum under ROCm Inductor hung the GPU and
+            # aborted Python before rerun/classification.
+            "(TestOpInfoPropertiesCUDA and test_determinism_minimum_backend_inductor_numerics_cuda_float32)",
+            # Run 27246343570 default shard 10/10, job 80461205617:
+            # SaveGpuKernelSchemaTest reads disagree with saved ROCm kernel
+            # schema metadata such as name, num_warps, and shared_mem.
+            "(SaveGpuKernelSchemaTest and test_schema_path_reads_entry_name)",
+            "(SaveGpuKernelSchemaTest and test_schema_path_reads_num_warps)",
+            "(SaveGpuKernelSchemaTest and test_schema_path_reads_shared_mem)",
+        ],
+        "jit_fuser_te": [
+            # Run 27246343570 default shard 3/10, job 80461205622:
+            # TE fuser static/dynamic op tests fail consistently on ROCm,
+            # mostly with bfloat16 CUDA runtime failures; one dynamic norm
+            # rerun also ended in a GPU hang and Fatal Python error: Aborted.
+            "(TestTEFuserStatic and test_binary_div_ops)",
+            "(TestTEFuserStatic and test_binary_ops)",
+            "(TestTEFuserStatic and test_binary_tensor_scalar_ops)",
+            "(TestTEFuserStatic and test_ternary_norm_ops)",
+            "(TestTEFuserStatic and test_ternary_ops)",
+            "(TestTEFuserStatic and test_unary_ops)",
+            "(TestTEFuserStatic and test_where_ops)",
+            "(TestTEFuserDynamic and test_binary_div_ops)",
+            "(TestTEFuserDynamic and test_binary_ops)",
+            "(TestTEFuserDynamic and test_binary_tensor_scalar_ops)",
+            "(TestTEFuserDynamic and test_ternary_norm_ops)",
         ],
         "ops_gradients": [
             # Run 27228539427 inductor shard 3/4:
