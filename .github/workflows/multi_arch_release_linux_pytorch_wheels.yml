@@ -29,7 +29,7 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        description: 'Release type; selects the S3 bucket'
         type: string
         required: true
       repository:
@@ -66,9 +66,11 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
-        type: string
-        required: true
+        description: 'Release type; developer-triggered jobs should use "dev"'
+        type: choice
+        options:
+          - dev
+        default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string

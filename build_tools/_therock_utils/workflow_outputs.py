@@ -279,7 +279,7 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
-            release_type: Release type override (e.g. "dev", "nightly"). If
+            release_type: Release type override (e.g. "ci", "dev", "nightly"). If
                 None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (
