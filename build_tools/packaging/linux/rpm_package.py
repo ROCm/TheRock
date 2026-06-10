@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 from dataclasses import replace
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 
 from packaging_utils import *
@@ -153,7 +153,14 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     pkg_name = update_package_name(pkg_name, config)
 
-    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    env = Environment(
+        loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
+    )
     template = env.get_template("template/rpm_specfile.j2")
     context = {
         "pkg_name": pkg_name,
@@ -201,7 +208,14 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
     }
     pkg_name = pkg_info.get("Package")
     parts = config.rocm_version.split(".")
-    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    env = Environment(
+        loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
+    )
     # Prepare your context dictionary
     context = {
         "install_prefix": config.install_prefix,

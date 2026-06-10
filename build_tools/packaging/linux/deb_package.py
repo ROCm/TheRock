@@ -13,7 +13,7 @@ import sys
 from dataclasses import replace
 from datetime import datetime, timezone
 from email.utils import format_datetime
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 
 from packaging_utils import *
@@ -163,7 +163,14 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
     if config.version_suffix:
         version += f"-{str(config.version_suffix)}"
 
-    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    env = Environment(
+        loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
+    )
     template = env.get_template("template/debian_changelog.j2")
 
     # Prepare context dictionary
@@ -216,7 +223,14 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
             else:
                 has_regular_files = True
 
-    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    env = Environment(
+        loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
+    )
     template = env.get_template("template/debian_install.j2")
     # Prepare your context dictionary
     context = {
@@ -254,7 +268,14 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     if config.enable_kpack:
         disable_dh_strip = True
 
-    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    env = Environment(
+        loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
+    )
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
     context = {
@@ -306,7 +327,14 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
     pkg_name = update_package_name(pkg_name, config)
 
-    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    env = Environment(
+        loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
+    )
     template = env.get_template("template/debian_control.j2")
     context = {
         "source": pkg_name,
@@ -351,7 +379,14 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
             f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
         )
 
-    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    env = Environment(
+        loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
+    )
     # Prepare your context dictionary
     context = {
         "install_prefix": config.install_prefix,
