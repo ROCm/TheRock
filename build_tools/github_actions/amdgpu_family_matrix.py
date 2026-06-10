@@ -245,6 +245,16 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only nightly.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
+        },
+    },
 }
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
