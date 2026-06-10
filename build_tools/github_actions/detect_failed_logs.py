@@ -108,7 +108,7 @@ def build_excerpt(
         excerpt = lines[-(window_before + window_after) :]
     else:
         start = max(0, important_idx - window_before)
-        end = min(len(lines), important_idx + window_after)
+        end = min(len(lines), important_idx + window_after + 1)
         excerpt = lines[start:end]
 
     return excerpt
