@@ -11,7 +11,7 @@ import sys
 repo_root = Path(__file__).resolve().parents[4]
 build_tools_path = repo_root / "build_tools"
 sys.path.insert(0, str(build_tools_path))
-from patch_linux_so import update_library_links, relativize_pc_file
+from patch_linux_so import relativize_pc_file
 
 
 def rename_pc_files(pc_file: Path) -> None:
@@ -61,6 +61,72 @@ def symlink_or_copy(existing_path, new_link):
         shutil.copytree(existing_path, new_link)
     else:
         shutil.copy2(existing_path, new_link)
+
+
+def update_library_links(libfile: Path) -> None:
+    """
+    Normalize a shared library so that its real file is named exactly as its ELF SONAME,
+    and ensure a canonical linker-visible symlink exists.
+
+    This function is used when a library has been installed under a prefixed or
+    non-standard filename (e.g., librocm_sysdeps_ncursesw.so).
+    It performs the following operations:
+    - Extracts the library's SONAME using `patchelf --print-soname`.
+    - Resolves the underlying real file (following symlinks).
+    - Renames the real file to match its SONAME if it does not already.
+    - Creates or updates a symlink named `linker_name` pointing to the SONAME file.
+    - Removes or renames the original file or symlink as appropriate.
+
+    Parameters ----------
+    libfile : Path
+    Path to the library file or symlink to normalize.
+    Example: /prefix/lib/librocm_sysdeps_ncursesw.so
+
+    """
+    # Ensure file exists
+    if not libfile.exists():
+        raise FileNotFoundError(f"File '{libfile}' not found")
+
+    dir_path = libfile.parent
+    # Get SONAME
+    try:
+        lib_soname = subprocess.check_output(
+            [patchelf_exe, "--print-soname", str(libfile)],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except subprocess.CalledProcessError:
+        print(f"Error: No SONAME found in '{libfile}'", flush=True)
+        sys.exit(1)
+
+    # Resolve real file path
+    try:
+        realname = libfile.resolve(strict=True)
+    except FileNotFoundError:
+        print(f"Error: resolve() failed for '{libfile}'", flush=True)
+        sys.exit(1)
+
+    linker_name = libfile.name.replace("librocm_sysdeps_", "lib")
+    target_real = dir_path / lib_soname
+    symlink_path = dir_path / linker_name
+
+    if realname != target_real:
+        # Move real file to $dir/$soname
+        shutil.move(str(realname), str(target_real))
+
+        # Create/update symlink
+        if symlink_path.exists() or symlink_path.is_symlink():
+            symlink_path.unlink()
+        symlink_path.symlink_to(lib_soname)
+
+        # Remove the original symlink or file
+        if libfile.is_symlink() or libfile.exists():
+            libfile.unlink()
+    else:
+        # Rename symlink in the same directory
+        if symlink_path.exists():
+            symlink_path.unlink()
+        libfile.rename(symlink_path)
 
 
 def link_header_files_under_dir(source_dir, dest_dir):
