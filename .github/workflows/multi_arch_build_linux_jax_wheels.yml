@@ -100,7 +100,7 @@ jobs:
       - name: Determine build arguments
         run: |
           if [ "${{ inputs.build_jaxlib }}" = "true" ]; then
-            echo "SOURCE_ARG=--jax-source-dir=${{ github.workspace }}/jax" >> "$GITHUB_ENV"
+            echo "SOURCE_ARG=--jax-source-dir=$GITHUB_WORKSPACE/jax" >> "$GITHUB_ENV"
           else
             echo "SOURCE_ARG=" >> "$GITHUB_ENV"
           fi
