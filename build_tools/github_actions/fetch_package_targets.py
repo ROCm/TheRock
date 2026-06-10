@@ -63,7 +63,7 @@ import string
 from github_actions_api import *
 
 
-def determine_package_targets(args):
+def determine_package_targets(args, external_config=None):
     amdgpu_families = args.get("AMDGPU_FAMILIES")
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
     test_harness_target_fetch = args.get("TEST_HARNESS_TARGET_FETCH", False)
@@ -72,7 +72,9 @@ def determine_package_targets(args):
     # When a family appears in multiple trigger types (e.g., gfx110x in both presubmit and nightly),
     # the presubmit configuration takes priority. This ensures consistent behavior across all
     # packaging workflows.
-    matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
+    matrix = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"], external_config=external_config
+    )
     family_matrix = matrix
     package_targets = []
     # If the workflow does specify AMD GPU family, package those. Otherwise, then package all families
@@ -133,8 +135,8 @@ def determine_package_targets(args):
     return package_targets
 
 
-def main(args):
-    package_targets = determine_package_targets(args)
+def main(args, external_config=None):
+    package_targets = determine_package_targets(args, external_config=external_config)
     gha_set_output({"package_targets": json.dumps(package_targets)})
 
 
@@ -143,4 +145,5 @@ if __name__ == "__main__":
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
     args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
     args["TEST_HARNESS_TARGET_FETCH"] = str2bool(os.getenv("TEST_HARNESS_TARGET_FETCH"))
-    main(args)
+    external_config = load_external_config()
+    main(args, external_config=external_config)

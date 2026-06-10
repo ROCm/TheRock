@@ -756,3 +756,24 @@ def is_asan():
     """Using artifact_group, determines if this is an asan build"""
     ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
     return "asan" in ARTIFACT_GROUP
+
+
+def load_external_config() -> dict | None:
+    """Load external CI config from CI_CONFIG_PATH if set.
+
+    The CI config API lives in therock-ci-config repo, which is checked out
+    to CI_CONFIG_PATH. Returns None if CI_CONFIG_PATH is not set or config
+    doesn't exist (fallback to local definitions).
+    """
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if not ci_config_path:
+        return None
+    config_path = Path(ci_config_path)
+    sys.path.insert(0, str(config_path))
+    try:
+        from ci_config_api import config_exists, load_runner_config
+    except ImportError:
+        return None
+    if not config_exists(config_path):
+        return None
+    return load_runner_config(config_path)

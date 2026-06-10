@@ -22,15 +22,19 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
-from github_actions.github_actions_api import gha_set_output
+from github_actions.github_actions_api import gha_set_output, load_external_config
 
 
 def split_families(value: str) -> list[str]:
     return list(dict.fromkeys(f.strip() for f in value.split(";") if f.strip()))
 
 
-def find_test_runs_on(*, amdgpu_family: str, platform: str) -> str:
-    matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
+def find_test_runs_on(
+    *, amdgpu_family: str, platform: str, external_config=None
+) -> str:
+    matrix = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"], external_config=external_config
+    )
     for info_for_key in matrix.values():
         platform_info = info_for_key.get(platform)
         if not platform_info:
@@ -47,6 +51,7 @@ def build_test_matrix(
     *,
     amdgpu_families: list[str],
     platform: str,
+    external_config=None,
 ) -> dict[str, list[dict[str, str]]]:
     print(f"Requested {platform} AMDGPU families: {amdgpu_families}")
     include: list[dict[str, str]] = []
@@ -54,6 +59,7 @@ def build_test_matrix(
         test_runs_on = find_test_runs_on(
             amdgpu_family=requested_family,
             platform=platform,
+            external_config=external_config,
         )
 
         if not test_runs_on:
@@ -120,9 +126,11 @@ def main(argv: list[str]) -> None:
                     "with explicit AMDGPU families"
                 )
 
+    external_config = load_external_config()
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
         platform=args.platform,
+        external_config=external_config,
     )
     emit_outputs(matrix)
 
