@@ -57,6 +57,9 @@ def is_failed_end_line(line: str) -> bool:
         return False
 
 
+# Read only the tail of the log when searching for a failed END record.
+# Teatime writes the END line at the end of the log, so scanning the last
+# few KiB avoids reading large log files into memory.
 def get_failed_end_line(path: Path, tail_bytes: int = 4096) -> str | None:
     try:
         with path.open("rb") as f:
