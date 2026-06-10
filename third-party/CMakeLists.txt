@@ -54,6 +54,11 @@ if(THEROCK_ENABLE_MPI)
   add_subdirectory(openmpi)
 endif()
 
+# oneTBB (Linux only)
+if(THEROCK_ENABLE_ONETBB)
+  add_subdirectory(onetbb)
+endif()
+
 # gRPC: Static library for RDC (built on-demand when depended upon)
 # See: docs/rfcs/RFC0007-rdc-therock-integration.md
 add_subdirectory(grpc)

@@ -385,13 +385,6 @@ artifact_deps = []
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
-[artifacts.sysdeps-onetbb]
-artifact_group = "third-party-sysdeps"
-type = "target-neutral"
-artifact_deps = []
-feature_group = "CORE"
-disable_platforms = ["windows"]
-
 [artifacts.sysdeps-libnl]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
@@ -472,6 +465,13 @@ artifact_group = "third-party-libs"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"
+
+[artifacts.onetbb]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
 
 # --- Base Infrastructure ---
 

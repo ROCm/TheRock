@@ -1,0 +1,9 @@
+[options]
+unmatched_exclude = [
+  "share/locale/**",
+  "share/man/**",
+]
+
+# oneTBB
+[components.lib."third-party/onetbb/build/stage"]
+[components.dev."third-party/onetbb/build/stage"]
