@@ -38,6 +38,53 @@ skip_tests = {
             # TestNNDeviceTypeCUDA - upsampling launch failure on gfx950
             # Separately tracked in https://github.com/ROCm/TheRock/issues/5270
             "test_upsamplingNearest2d_launch_rocm_cuda",
+            # Run 27228539427 default shard 8/10:
+            # Conv2d deterministic cudnn dilation=2 bf16 hangs GPU in backward
+            # after MIOpen GemmFwdRest workspace warning.
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_bfloat16)",
+            # Run 27228539427 default shard 10/10:
+            # Conv2d deterministic cudnn dilation=1 variants exceed TheRock's
+            # command watchdog on gfx94X; float16 was active when GitHub
+            # cancelled at 6h.
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_bfloat16)",
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_complex64)",
+            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_float16)",
+        ],
+        "custom_operator": [
+            # Run 27228539427 default shard 7/10:
+            # TestInferSchemaWithAnnotation::test_name_error_hint failed
+            # consistently due to an error-message regex mismatch around
+            # `from __future__ import annotations`.
+            "(TestInferSchemaWithAnnotation and test_name_error_hint)",
+        ],
+        "dynamo": [
+            # Run 27228539427 default shard 3/10:
+            # LoggingTests::test_logs_out fails consistently because a ROCm
+            # HIP visibility warning is injected into Dynamo's exact
+            # log-output comparison.
+            "(LoggingTests and test_logs_out)",
+            # Run 27228539427 default shard 6/10:
+            # linalg_inv_ex AOT dynamic-shapes graph does not preserve the
+            # expected error behavior on ROCm.
+            "(DynamicShapesReproTests and test_linalg_inv_check_errors_preserved_in_aot_graph_dynamic_shapes)",
+            # Run 27228539427 default shard 6/10:
+            # singular linalg.inv under aot_eager dynamic shapes does not
+            # raise _LinAlgError on ROCm.
+            "(DynamicShapesReproTests and test_linalg_inv_singular_aot_eager_raises_dynamic_shapes)",
+            # Run 27228539427 default shard 1/10:
+            # linalg_inv_ex AOT graph does not preserve expected error behavior
+            # on ROCm.
+            "(ReproTests and test_linalg_inv_check_errors_preserved_in_aot_graph)",
+            # Run 27228539427 default shard 1/10:
+            # singular linalg.inv under aot_eager does not raise _LinAlgError
+            # on ROCm.
+            "(ReproTests and test_linalg_inv_singular_aot_eager_raises)",
+        ],
+        "functorch": [
+            # Run 27228539427 default shard 7/10:
+            # TestOperatorsCUDA::test_grad_unbind_copy_cuda_float32 hit a GPU
+            # hang followed by Fatal Python error: Aborted.
+            "(TestOperatorsCUDA and test_grad_unbind_copy_cuda_float32)",
         ],
         "modules": [
             # Run 27228539427 inductor shard 1/4:
@@ -48,9 +95,38 @@ skip_tests = {
             "test_forward_nn_CTCLoss_cuda_float32",
         ],
         "inductor": [
-            # Run 27228539427 inductor shard 1/4:
+            # Run 27228539427 inductor shard 1/4 and default shard 6/10:
             # diagonal_scatter backward grad mismatch on ROCm Inductor.
             "(GPUTests and test_diagonal_scatter_backward_cuda)",
+            # Run 27228539427 default shard 6/10:
+            # PadMM exclude-padding cache assertion fails: expected 2 local-cache
+            # entries but got 0.
+            "(PadMMTest and test_exclude_padding)",
+            # Run 27228539427 default shard 2/10:
+            # diagonal_scatter backward dynamic-shapes mismatch on ROCm Inductor.
+            "(DynamicShapesGPUTests and test_diagonal_scatter_backward_dynamic_shapes_cuda)",
+            # Run 27228539427 default shard 1/10:
+            # diagonal_scatter backward dynamic-shapes codegen grad mismatch on ROCm Inductor.
+            "(DynamicShapesCodegenGPUTests and test_diagonal_scatter_backward_dynamic_shapes_cuda)",
+            # Run 27228539427 default shard 9/10:
+            # diagonal_scatter backward dynamic-shapes CPU grad mismatch on ROCm Inductor.
+            "(DynamicShapesCodegenCpuTests and test_diagonal_scatter_backward_dynamic_shapes_cpu)",
+            # Run 27228539427 default shard 8/10:
+            # test_triton_kernels expects max helper reuse removal, but ROCm
+            # generated source still contains triton_helpers.max2.
+            "(KernelTests and test_dim_max_min_reuse_argreduce_value)",
+            # Run 27228539427 default shard 4/10:
+            # log10 inductor_numerics float16 XPASSes on ROCm, tripping xfail metadata.
+            "test_unary_ufunc_numerical_log10_backend_inductor_numerics_cuda_float16",
+            # Run 27228539427 default shard 1/10:
+            # log10 inductor_numerics float32 XPASSes on ROCm, tripping xfail metadata.
+            "test_unary_ufunc_numerical_log10_backend_inductor_numerics_cuda_float32",
+            # Run 27228539427 default shard 6/10:
+            # log10 inductor_default float32 differs from eager under exact equality.
+            "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float32",
+            # Run 27228539427 default shard 6/10:
+            # log10 inductor_default float16 differs from eager under exact equality.
+            "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float16",
         ],
         "ops_gradients": [
             # Run 27228539427 inductor shard 3/4:
@@ -75,6 +151,33 @@ skip_tests = {
             # test_out_nn_functional_hardshrink float32 aborts after ROCm GPU
             # hang under --inductor.
             "(TestCommonCUDA and test_out_nn_functional_hardshrink_cuda_float32)",
+        ],
+        "privateuseone_python_backend": [
+            # Run 27228539427 default shard 2/10:
+            # PrivateUse1 ldexp hits missing npy DispatchStub kernel.
+            "(PrivateUse1BackendTest and test_ldexp)",
+        ],
+        "cpp_extensions": [
+            # Run 27228539427 default shard 4/10:
+            # libtorch AGN 2.10 version-compatibility tests fail before
+            # compile because g++ is absent.
+            "(FunctionVersionCompatibilityTest and requires_2_10)",
+        ],
+        "utils": [
+            # Run 27228539427 default shard 9/10:
+            # TestStandaloneCPPJIT::test_load_standalone sees versioned
+            # extension paths (`_v1`/`_v2`) while the test expects the base path.
+            "(TestStandaloneCPPJIT and test_load_standalone)",
+        ],
+        "multiprocessing": [
+            # Run 27228539427 default shard 1/10:
+            # torch_shm_manager cannot load librocprofiler-sdk.so.1 in CI, so
+            # file-system sharing tests fail consistently.
+            "test_fs",
+            "test_fs_is_shared",
+            "test_fs_pool",
+            "test_fs_preserve_sharing",
+            "test_fs_sharing",
         ],
         "distributed": [
             # torch.linalg.eig has no non-MAGMA backend; MAGMA not linked in this build
