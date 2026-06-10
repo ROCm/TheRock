@@ -47,10 +47,18 @@ on:
         description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
         type: boolean
         default: false
+      build_pytorch:
+        description: "Build PyTorch wheels"
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type. All developer-triggered jobs should use "dev"!'
+        description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
         options:
           - dev

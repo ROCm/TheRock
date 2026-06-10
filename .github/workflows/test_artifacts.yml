@@ -35,9 +35,12 @@ on:
         type: string
         default: 'false'
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
-        type: string
-        default: ""
+        description: 'Release type: "ci" or "dev".'
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -76,7 +79,7 @@ on:
         default: 'false'
       release_type:
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -90,7 +93,7 @@ on:
 permissions:
   contents: read
 
-run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type || 'ci' }}, ${{ inputs.test_type }}, ${{ inputs.test_runs_on }})
+run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.test_runs_on }})
 
 jobs:
   configure_test_matrix:
@@ -106,7 +109,7 @@ jobs:
     steps:
       - name: "Fetch 'build_tools' from repository"
         if: ${{ runner.os == 'Windows' }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -121,7 +124,7 @@ jobs:
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Checking out repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}

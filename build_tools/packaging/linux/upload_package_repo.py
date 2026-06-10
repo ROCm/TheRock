@@ -640,7 +640,7 @@ def _resolve_upload_target(
             run_id=args.run_id, platform="linux"
         )
         loc = root.native_linux_packages(pkg_type)
-        job_type = os.environ.get("RELEASE_TYPE", "") or "ci"
+        job_type = os.environ.get("RELEASE_TYPE", "ci")
         install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
         return loc.bucket, loc.relative_path, install_url, True, job_type
 
