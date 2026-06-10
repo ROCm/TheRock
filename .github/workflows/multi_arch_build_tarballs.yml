@@ -28,9 +28,12 @@ on:
         description: "ROCm package version string (e.g. '7.13.0.dev0+abc123')"
         type: string
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
-        type: string
-        default: ""
+        description: 'Release type: "ci" or "dev"'
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
   workflow_call:
     inputs:
       artifact_run_id:
@@ -50,7 +53,7 @@ on:
         required: true
       release_type:
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string

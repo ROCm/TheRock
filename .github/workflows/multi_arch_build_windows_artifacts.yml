@@ -47,9 +47,9 @@ on:
         required: true
         description: "ROCm package version string"
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease". Controls artifact bucket and IAM role.'
+        description: 'Release type; controls artifact bucket and IAM role'
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
