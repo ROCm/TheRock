@@ -20,8 +20,7 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-  "share/hipdnn/python/**/*.py",
-  "share/hipdnn/python/**/*.so",
-  "share/hipdnn/python/**/*.pyd",
-  "share/hipdnn/tests/python/**/*.py",
+]
+exclude = [
+  "share/hipdnn/python/**",
 ]
