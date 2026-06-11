@@ -192,7 +192,7 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
 > winget install cmake
-> winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
+> winget install ninja-build.ninja ccache python strawberryperl
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 

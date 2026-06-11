@@ -66,11 +66,9 @@ on:
         type: string
         required: false
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev".'
-        type: choice
-        options:
-          - dev
-        default: dev
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+        type: string
+        default: "dev"
       skip_package_upload:
         description: Skip uploading packages to S3. Set to true when called from test workflows.
         type: boolean

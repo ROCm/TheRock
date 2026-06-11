@@ -39,7 +39,9 @@ struct inline_amdgpu_id {
       # the file version leading line.
       continue
     fi
-    echo "  {0x${parts[0]}, 0x${parts[1]}, \"${parts[2]}\"},"
+    did="${parts[0]// /}"
+    rid="${parts[1]// /}"
+    echo "  {0x${did}, 0x${rid}, \"${parts[2]}\"},"
   done < "${SOURCE_DIR}/data/amdgpu.ids"
   echo '};'
 

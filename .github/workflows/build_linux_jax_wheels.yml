@@ -78,10 +78,12 @@ on:
         type: string
         default: "3.12"
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
         type: choice
+        description: Type of release to create. All developer-triggered jobs should use "dev"!
         options:
           - dev
+          - nightly
+          - prerelease
         default: dev
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
