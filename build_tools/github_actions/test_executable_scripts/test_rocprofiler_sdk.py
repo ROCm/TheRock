@@ -8,6 +8,11 @@ import subprocess
 from pathlib import Path
 import sys
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_api import is_asan
+
 # Base Paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
@@ -56,6 +61,8 @@ def cmake_config():
         f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH}",
         f"-DPython3_EXECUTABLE={sys.executable}",
     ]
+    if is_asan():
+        cmake_config_cmd.append("-DROCPROFILER_MEMCHECK=AddressSanitizer")
 
     logging.info(
         f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(cmake_config_cmd)}"
