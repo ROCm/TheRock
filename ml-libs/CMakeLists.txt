@@ -160,6 +160,9 @@ if(THEROCK_ENABLE_HIPDNN)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      # Pin the shipped hipDNN product version. TheRock is the source of truth
+      # for release builds; the in-repo HIPDNN_VERSION is only a local default.
+      -DHIPDNN_VERSION=0.2.0
       -DROCM_PATH=
       -DROCM_DIR=
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
