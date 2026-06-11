@@ -128,16 +128,20 @@ class BuildCtestCommandTest(unittest.TestCase):
     def test_category_exclude_label_applied(self):
         exclude_labels = {"quick_exclude", "standard_exclude"}
         cmd = self._build("quick", "", set(), exclude_labels)
+        # build_ctest_command emits a single -LE flag with all exclude
+        # patterns joined by "|" (ctest regex OR). Split the value back
+        # into its component patterns so the assertion matches logical
+        # excludes rather than the emitted -LE arg string.
         le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
-        le_values = [cmd[i + 1] for i in le_indices]
-        self.assertIn("quick_exclude", le_values)
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertIn("quick_exclude", le_patterns)
 
     def test_category_exclude_label_not_applied_when_absent(self):
         exclude_labels = {"standard_exclude"}
         cmd = self._build("quick", "generic", set(), exclude_labels)
         le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
-        le_values = [cmd[i + 1] for i in le_indices]
-        self.assertNotIn("quick_exclude", le_values)
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertNotIn("quick_exclude", le_patterns)
 
     def test_comprehensive_category(self):
         cmd = self._build("comprehensive", "", set())
