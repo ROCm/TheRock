@@ -88,10 +88,10 @@ jobs:
         run: |
           # Install the needed tools for creating rpm / deb packages
           # Also install tools for creating repo files
-          apt-get update
-          apt-get install -y llvm-20
-          apt-get install -y rpm debhelper-compat build-essential
-          apt-get install -y dpkg-dev createrepo-c
+          sudo apt-get update
+          sudo apt-get install -y llvm-20
+          sudo apt-get install -y rpm debhelper-compat build-essential
+          sudo apt-get install -y dpkg-dev createrepo-c
 
       - name: Fetch Artifacts for all GPU families
         run: |
