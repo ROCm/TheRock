@@ -59,5 +59,7 @@ therock_cmake_subproject_declare(therock-grpc
 )
 therock_cmake_subproject_provide_package(therock-grpc gRPC lib/cmake/grpc)
 therock_cmake_subproject_provide_package(therock-grpc protobuf lib/cmake/protobuf)
+therock_cmake_subproject_provide_package(therock-grpc absl lib/cmake/absl)
+therock_cmake_subproject_provide_package(therock-grpc utf8_range lib/cmake/utf8_range)
 therock_cmake_subproject_activate(therock-grpc)
 add_dependencies(therock-third-party therock-grpc)
