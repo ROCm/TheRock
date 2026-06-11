@@ -453,6 +453,7 @@ function(therock_cmake_subproject_declare target_name)
   list(REMOVE_DUPLICATES _interface_install_rpath_dirs)
   list(REMOVE_DUPLICATES _private_install_rpath_dirs)
 
+  message("!!!!!: _interface_install_rpath_dirs: ${_interface_install_rpath_dirs}")
   # RPATH Executable and Library dir.
   if(NOT ARG_INSTALL_RPATH_EXECUTABLE_DIR)
     if(ARG_INSTALL_DESTINATION)

@@ -23,6 +23,13 @@ THEROCK_LLVM_BIN_PATH = THEROCK_PATH / "llvm" / "bin"
 THEROCK_CLANG_PATH = THEROCK_LLVM_BIN_PATH / "amdclang"
 THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
 
+# Determine host triple
+host_triple = subprocess.check_output(
+    [str(THEROCK_CLANG_PATH), "--print-target-triple"], text=True
+).strip()
+
+THE_ROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
+
 # SDK Paths
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
@@ -39,7 +46,7 @@ def setup_env():
 
     old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
     environ_vars["LD_LIBRARY_PATH"] = ":".join(
-        [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"] + old_ld_lib_path
+        [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}", f"${THE_ROCK_LLVM_LIB_HOST_TRIPLE_PATH}"] + old_ld_lib_path
     )
 
 

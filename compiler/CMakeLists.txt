@@ -5,7 +5,58 @@ if(THEROCK_ENABLE_COMPILER)
   if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
     set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
   endif()
-
+  # We need to determine LLVM_HOST_TRIPLE to include this triple
+  # in the RPATH when LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON. This path
+  # needs to be registered with the subproject so it will be included
+  # on dependent subprojects.
+  # TODO: This needs guarded by something like THEROCK_ENABLE_PER_TARGET_DIR
+  if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake")
+    set(LLVM_MAIN_SRC_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm")
+    include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake")
+    get_host_triple(LLVM_HOST_TRIPLE)
+    if(DEFINED LLVM_HOST_TRIPLE)
+      set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}")
+      set(THEROCK_LLVM_RPATH_WITH_TRIPLE "lib/llvm/lib/${THEROCK_LLVM_HOST_TRIPLE}")
+    else()
+      message(STATUS "Warning: LLVM_HOST_TRIPLE Not found!")
+    endif()
+  else()
+    message(STATUS "Warning: ${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake Not found!")
+  endif()
+  if(EXISTS "${THEROCK_DIR}")
+    message(STATUS "!!!THEROCK_DIR FOUND: ${THEROCK_DIR}")
+    if(EXISTS "${THEROCK_DIR}/build/compiler/amd-llvm/stage/lib/llvm/bin")
+      message(STATUS "!!!THEROCK_DIR compiler location: ${THEROCK_DIR}/build/compiler/amd-llvm/stage/lib/llvm/bin FOUND")
+    endif()
+  else()
+    message(STATUS "!!!THEROCK_DIR NOT FOUND")
+  endif()
+  if(EXISTS "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin")
+    message(STATUS "!!!CMAKE_BNARY_DIR: ${CMAKE_BINARY_DIR}")
+    message(STATUS "!!!CMAKE_BNARY_DIR compiler path: ${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin")
+    if(EXISTS "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang" AND NOT DEFINED LLVM_HOST_TRIPLE)
+      message(STATUS "!!!Grepping for clang target")
+      set(LLVM_HOST_TRIPLE "")
+      execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
+        "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang"
+        --print-target-triple
+        OUTPUT_VARIABLE LLVM_HOST_TRIPLE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY
+      )
+      message(STATUS "!! Execute process returned: ${LLVM_HOST_TRIPLE}")
+      if(LLVM_HOST_TRIPLE)
+        set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}")
+        set(THEROCK_LLVM_RPATH_WITH_TRIPLE "lib/llvm/lib/${THEROCK_LLVM_HOST_TRIPLE}")
+      endif()
+    endif()
+  else()
+    message(STATUS "!! CMAKE_BINARY_DIR NOT FOUND")
+  endif()
+  message(STATUS "!!!THEROCK_LLVM_RPATH_WITH_TRIPLE: ${THEROCK_LLVM_RPATH_WITH_TRIPLE}")
+  message(STATUS "!!!LLVM_HOST_TRIPLE: ${LLVM_HOST_TRIPLE}")
   ##############################################################################
   # amd-llvm
   # Everything built as part of LLVM installs to lib/llvm
@@ -110,8 +161,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
       -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
+      -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
@@ -137,8 +187,10 @@ if(THEROCK_ENABLE_COMPILER)
     INSTALL_DESTINATION "lib/llvm"
     INTERFACE_LINK_DIRS
       "lib/llvm/lib"
+      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/llvm/lib"
+      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
   )
   # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
   if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
@@ -149,6 +201,9 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
   therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
+  if(THEROCK_CONDITION_IS_NON_WINDOWS)
+    therock_cmake_subproject_provide_package(amd-llvm OpenMP lib/llvm/lib/cmake/openmp)
+  endif()
   therock_cmake_subproject_activate(amd-llvm)
 
 
