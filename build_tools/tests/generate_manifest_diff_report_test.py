@@ -221,8 +221,8 @@ class ResolveCommitsTest(unittest.TestCase):
             "generate_manifest_diff_report.gha_query_workflow_run_by_id"
         ) as mock_query:
             mock_query.side_effect = [
+                {"head_sha": "789xyz000111"},  # end workflow (resolved first)
                 {"head_sha": "abc123def456"},  # start workflow
-                {"head_sha": "789xyz000111"},  # end workflow
             ]
             start_sha, end_sha = resolve_commits(args)
 
@@ -230,21 +230,88 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(end_sha, "789xyz000111")
         self.assertEqual(mock_query.call_count, 2)
 
-    def test_find_last_successful_resolves_start(self):
-        """--find-last-successful finds last successful run for start commit."""
+    def test_find_last_run_resolves_start(self):
+        """--find-last-run finds the most recent matching run for start commit."""
+        args = parse_args(["--end", "def456", "--find-last-run", "multi_arch_ci.yml"])
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_query_last_workflow_run"
+        ) as mock_query:
+            mock_query.return_value = {"head_sha": "last_matching_sha"}
+            start_sha, end_sha = resolve_commits(args)
+
+        self.assertEqual(start_sha, "last_matching_sha")
+        self.assertEqual(end_sha, "def456")
+        mock_query.assert_called_once()
+
+    def test_find_last_run_uses_terminal_statuses(self):
+        """--find-last-run hardcodes accepted statuses to {success, failure}."""
+        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_query_last_workflow_run"
+        ) as mock_query:
+            mock_query.return_value = {"head_sha": "abc"}
+            resolve_commits(args)
+
+        _, kwargs = mock_query.call_args
+        self.assertEqual(kwargs["accepted_statuses"], {"success", "failure"})
+
+    def test_pr_base_ref_resolves_start_via_compare(self):
+        """--pr-base-ref resolves start as the merge-base via the Compare API."""
+        args = parse_args(["--end", "deadbeef", "--pr-base-ref", "main"])
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_send_request"
+        ) as mock_request:
+            mock_request.return_value = {"merge_base_commit": {"sha": "base_sha_xyz"}}
+            start_sha, end_sha = resolve_commits(args)
+
+        self.assertEqual(start_sha, "base_sha_xyz")
+        self.assertEqual(end_sha, "deadbeef")
+        # Verify the URL hit Compare API with base...end ordering.
+        called_url = mock_request.call_args.args[0]
+        self.assertIn("/compare/main...deadbeef", called_url)
+
+    def test_find_last_run_no_match_returns_none(self):
+        """--find-last-run with no matching prior run → (None, None)."""
+        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
+        with mock.patch(
+            "generate_manifest_diff_report.gha_query_last_workflow_run",
+            return_value=None,
+        ):
+            self.assertEqual(resolve_commits(args), (None, None))
+
+    def test_pr_base_ref_takes_precedence_over_find_last_run(self):
+        """When both --pr-base-ref and --find-last-run are set, Compare wins.
+
+        This pins the precedence ladder documented in resolve_commits():
+        pr_base_ref > find_last_run > workflow_mode/start_ref. If a future
+        refactor reorders the branches, this test catches it.
+        """
         args = parse_args(
-            ["--end", "def456", "--find-last-successful", "multi_arch_ci.yml"]
+            [
+                "--end",
+                "deadbeef",
+                "--pr-base-ref",
+                "main",
+                "--find-last-run",
+                "ci.yml",
+            ]
         )
 
         with mock.patch(
-            "generate_manifest_diff_report.gha_query_last_successful_workflow_run"
-        ) as mock_query:
-            mock_query.return_value = {"head_sha": "last_successful_sha"}
+            "generate_manifest_diff_report.gha_send_request"
+        ) as mock_compare, mock.patch(
+            "generate_manifest_diff_report.gha_query_last_workflow_run"
+        ) as mock_last_run:
+            mock_compare.return_value = {"merge_base_commit": {"sha": "merge_base"}}
             start_sha, end_sha = resolve_commits(args)
 
-        self.assertEqual(start_sha, "last_successful_sha")
-        self.assertEqual(end_sha, "def456")
-        mock_query.assert_called_once()
+        self.assertEqual(start_sha, "merge_base")
+        self.assertEqual(end_sha, "deadbeef")
+        mock_compare.assert_called_once()
+        mock_last_run.assert_not_called()
 
     def test_direct_commit_shas_no_api_calls(self):
         """Direct commit SHAs don't require API calls."""

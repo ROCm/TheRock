@@ -164,9 +164,9 @@ if(THEROCK_ENABLE_ROCSHMEM)
       rocm-cmake
       therock-fmt
       therock-googletest
-      ${THEROCK_BUNDLED_NUMACTL}
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_NUMACTL}
   )
   therock_cmake_subproject_glob_c_sources(rocshmem
     SUBDIRS
