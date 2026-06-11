@@ -604,7 +604,9 @@ class PopulatedDistPackage:
             kpack_link = package_path / ".kpack"
             if not kpack_link.exists():
                 kpack_link.symlink_to(libraries_platform_dir / ".kpack")
-                log(f"::: Created .kpack symlink in devel: {kpack_link} -> {libraries_platform_dir / '.kpack'}")
+                log(
+                    f"::: Created .kpack symlink in devel: {kpack_link} -> {libraries_platform_dir / '.kpack'}"
+                )
 
             rocblas_library_link = package_path / "lib" / "rocblas" / "library"
             if not rocblas_library_link.exists():
@@ -612,7 +614,9 @@ class PopulatedDistPackage:
                 rocblas_library_link.symlink_to(
                     libraries_platform_dir / "lib" / "rocblas" / "library"
                 )
-                log(f"::: Created rocblas/library symlink in devel: {rocblas_library_link}")
+                log(
+                    f"::: Created rocblas/library symlink in devel: {rocblas_library_link}"
+                )
 
         # For packaging, the devel platform/ contents are not wheel safe, so we
         # store them into their own tarball and dynamically decompress at runtime.
