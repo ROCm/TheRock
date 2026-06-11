@@ -226,6 +226,10 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
     record_path is that wheel's RECORD (so newly materialized devel links can be
     recorded against the wheel that owns the underlying device files).
     """
+    # importlib.metadata caches path scans by directory mtime. On filesystems with
+    # coarse mtime resolution, a device wheel installed immediately after a prior
+    # scan may otherwise be missed.
+    md.MetadataPathFinder.invalidate_caches()
     plans = []
     for dist in md.distributions(path=[str(site_lib_path)]):
         name = dist.metadata["Name"]

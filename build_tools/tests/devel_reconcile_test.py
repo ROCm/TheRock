@@ -163,12 +163,16 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         self._add_device_wheel(
             "gfx950", {".kpack/blas_lib_gfx950.kpack": "gfx950 kpack"}
         )
+        cached_site_mtime = self.site.stat().st_mtime
         self.assertEqual(self._reconcile(), 1)
 
         # gfx942 installed afterwards: re-running reconcile links only gfx942.
         self._add_device_wheel(
             "gfx942", {".kpack/blas_lib_gfx942.kpack": "gfx942 kpack"}
         )
+        # Simulate a filesystem with coarse directory mtime resolution, where
+        # importlib.metadata's path cache would not otherwise notice the new dist.
+        os.utime(self.site, (cached_site_mtime, cached_site_mtime))
         self.assertEqual(self._reconcile(), 1)
 
         self.assertTrue((self.devel_dir / ".kpack/blas_lib_gfx950.kpack").is_file())
