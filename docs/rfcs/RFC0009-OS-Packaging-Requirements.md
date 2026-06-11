@@ -230,3 +230,7 @@ Note: Product management would like to follow upstream packaging structrures in 
 ## Versioning Requirements
 
 For versioning requirements on packaging, see the following documentation: [TheRock package versioning](/docs/packaging/versioning.md)
+
+## Dependency Requirements
+
+For dependency requirements on packaging, see the following documentation: [TheRock package dependency](/docs/packaging/nativepackage_dependency_tree.md)

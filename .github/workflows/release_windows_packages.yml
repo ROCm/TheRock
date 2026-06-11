@@ -72,14 +72,14 @@ on:
 permissions:
   contents: read
 
-run-name: Release Windows packages (${{ inputs.release_type || 'nightly' }}, ${{ inputs.families || 'default' }})
+run-name: Release Windows packages (${{ github.event_name == 'schedule' && 'nightly' || inputs.release_type }}, ${{ inputs.families || 'default' }})
 
 jobs:
   setup_metadata:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     env:
-      release_type: ${{ inputs.release_type || 'nightly' }}
+      release_type: ${{ github.event_name == 'schedule' && 'nightly' || inputs.release_type }}
     outputs:
       version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       release_type: ${{ env.release_type }}
@@ -89,7 +89,7 @@ jobs:
       s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -173,7 +173,7 @@ jobs:
 
     steps:
       - name: "Checking out repository"
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -198,10 +198,9 @@ jobs:
           choco install --no-progress -y strawberryperl
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
           choco install --no-progress -y awscli
-          choco install --no-progress -y pkgconfiglite
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
-      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
+      - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
         with:
           version: '3.62.0'
 
@@ -238,11 +237,8 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-dist
-
-      - name: Build therock-archives
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives
+      - name: Build therock-artifacts and therock-dist
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-artifacts therock-dist
 
       - name: Compress dist folder
         run: |
@@ -276,11 +272,19 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
           special-characters-workaround: true
+
+      - name: Push artifacts
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+        run: |
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
+            --build-dir ${{ env.BUILD_DIR }} \
+            --stage all
 
       - name: Post Build Upload
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
@@ -314,7 +318,7 @@ jobs:
 
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
-        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: release_windows_pytorch_wheels.yml
           inputs: |

@@ -172,7 +172,7 @@ test_matrix = {
         "job_name": "rocroller",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocroller.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 5,
@@ -194,16 +194,36 @@ test_matrix = {
             ],
         },
     },
+    "tensilelite": {
+        "job_name": "tensilelite",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_tensilelite.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipblas.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         # TODO(#2616): Enable full tests once known machine issues are resolved
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+    },
+    "amdsmi": {
+        "job_name": "amdsmi",
+        "fetch_artifact_args": "--base-only",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_amdsmi.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
     "hipblaslt": {
@@ -222,7 +242,7 @@ test_matrix = {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_hipsolver.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -232,10 +252,12 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
+        # test_runner.py drives ctest category labels, so it runs a filtered
+        # subset rather than the full ~5 hr extended suite.
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
         # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocsolver.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
@@ -247,8 +269,8 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_rocprim.py')}",
+        "timeout_minutes": 45,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 2,
@@ -258,7 +280,7 @@ test_matrix = {
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -291,7 +313,7 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 45,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -304,7 +326,7 @@ test_matrix = {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -314,8 +336,8 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocsparse.py')}",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -401,7 +423,11 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --rand --tests",
-        "timeout_minutes": 60,
+        # GHA step timeout: sized to allow nightly comprehensive runs (~2 hr).
+        # Per-test CTest TIMEOUT in rocm-libraries/projects/miopen/test/gtest/
+        # test_categories.yaml bounds individual tests (quick: 10 min,
+        # standard: 60 min, etc).
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -443,7 +469,7 @@ test_matrix = {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -461,6 +487,21 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # !! DISABLED because of https://github.com/ROCm/TheRock/issues/5689
+    # !! Windows loading of the python bindings require special LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
+    # !! We need AddDllDirectory. Commenting out to unblock CI issues.
+    # hipDNN Python bindings wheel build + install + pytest
+    # "hipdnn_python_bindings": {
+    #     "job_name": "hipdnn_python_bindings",
+    #     "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+    #     "timeout_minutes": 30,
+    #     "test_script": f"python {_get_script_path('test_hipdnn_frontend_python.py')}",
+    #     "platform": ["linux", "windows"],
+    #     "total_shards_dict": {
+    #         "linux": 1,
+    #         "windows": 1,
+    #     },
+    # },
     # hipDNN integration tests (unit tests for the integration test harness)
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",
@@ -497,14 +538,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-    "fusilliprovider": {
-        "job_name": "fusilliprovider",
-        "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler  --hipdnn-integration-tests --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {"linux": 1},
-    },
     # hipBLASLt provider tests
     "hipblasltprovider": {
         "job_name": "hipblasltprovider",
@@ -517,25 +550,24 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # Disabled until rocm-libraries bump that has hip-kernel-provider passing
-    # "hipkernelprovider": {
-    #     "job_name": "hipkernelprovider",
-    #     "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
-    #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
-    #     "platform": ["linux", "windows"],
-    #     "total_shards_dict": {
-    #         "linux": 1,
-    #         "windows": 1,
-    #     },
-    # },
+    "hipkernelprovider": {
+        "job_name": "hipkernelprovider",
+        "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
         # Headroom above typical shard runtime; per-test CTest timeouts fail fast on hangs (ROCM-24171).
         "timeout_minutes": 90,
-        "test_script": f"python {_get_script_path('test_rocwmma.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 5,
@@ -557,13 +589,15 @@ test_matrix = {
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+        "timeout_minutes": 60,
+        "additional_requirements_files": [
+            "share/rocprofiler-systems/tests/requirements.txt",
+        ],
         "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 1,
         },
     },
     # libhipcxx hipcc tests
@@ -645,7 +679,7 @@ def run():
     platform = os.getenv("RUNNER_OS").lower()
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    test_type = os.getenv("TEST_TYPE", "full")
+    test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))

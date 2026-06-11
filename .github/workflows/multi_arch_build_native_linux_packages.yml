@@ -26,10 +26,10 @@ on:
         type: string
         default: ""
       release_type:
-        description: "The type of release to build ('dev', 'nightly', or 'release'). Empty string for CI builds."
+        description: "Release type: 'ci', 'dev', 'nightly', or 'prerelease'"
         required: false
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`"
         type: string
@@ -70,7 +70,7 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -92,26 +92,6 @@ jobs:
           apt-get install -y llvm-20
           apt-get install -y rpm debhelper-compat build-essential
           apt-get install -y dpkg-dev createrepo-c
-
-      - name: Determine IAM role
-        id: iam_role
-        run: |
-          # ================================================================
-          # IAM Role Selection Logic
-          # ================================================================
-          # CI builds (empty RELEASE_TYPE) use therock-ci role for the
-          # artifacts bucket. Release builds (dev/nightly/prerelease) use
-          # the matching therock-{type} role for the packages bucket.
-          # ================================================================
-          RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
-          if [ -z "${RELEASE_TYPE}" ]; then
-            IAM_ROLE="arn:aws:iam::692859939525:role/therock-ci"
-            echo "✓ Using CI role: ${IAM_ROLE}"
-          else
-            IAM_ROLE="arn:aws:iam::692859939525:role/therock-${RELEASE_TYPE}"
-            echo "✓ Using release-type role: ${IAM_ROLE}"
-          fi
-          echo "iam_role=${IAM_ROLE}" >> $GITHUB_OUTPUT
 
       - name: Fetch Artifacts for all GPU families
         run: |
@@ -139,14 +119,18 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
 
-      - name: Configure AWS Credentials
-        # Only assume OIDC role for authorized repositories (ROCm/TheRock, ROCm/rockrel).
-        # Allowing both CI builds (TheRock) and release builds (rockrel) to upload packages.
-        if: ${{ (github.repository == 'ROCm/TheRock' || github.repository == 'ROCm/rockrel') && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+      - name: Simulated install Test
+        id: test-packages
+        run: |
+          python ./build_tools/packaging/linux/native_linux_package_install_test.py \
+            --test-type simulate \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --pkg-type ${{ inputs.native_package_type }}
+
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
-          aws-region: us-east-2
-          role-to-assume: ${{ steps.iam_role.outputs.iam_role }}
+          release_type: ${{ inputs.release_type }}
 
       - name: Upload Package repo to S3
         id: upload-packages
