@@ -578,6 +578,24 @@ class PopulatedDistPackage:
                 dir_entry,
             )
 
+        # In kpack-split mode, kpack-transformed libraries (e.g. librocblas.so.5.5)
+        # are loaded by the dynamic linker from _rocm_sdk_devel/lib/ because that
+        # package holds the versioned symlinks. Their embedded kpack search path
+        # resolves to ../.kpack/ relative to the loaded .so location, which lands
+        # in _rocm_sdk_devel/.kpack/ — but the actual .kpack archives live in
+        # _rocm_sdk_libraries/.kpack/. Without this symlink, kpack silently fails
+        # to find the archive and rocBLAS falls back to direct Tensile loading,
+        # which then fails with hipErrorInvalidImage on gfx942 (bare arch code
+        # objects rejected by CLR against gfx942:sramecc+:xnack- hardware ISA).
+        if self.params.kpack_split:
+            libraries_entry = self.params.dist_info.ALL_PACKAGES["libraries"]
+            libraries_pkg_name = libraries_entry.get_py_package_name(target_family=None)
+            libraries_platform_dir = package_path.parent / libraries_pkg_name
+            kpack_link = package_path / ".kpack"
+            if not kpack_link.exists():
+                kpack_link.symlink_to(libraries_platform_dir / ".kpack")
+                log(f"::: Created .kpack symlink in devel: {kpack_link} -> {libraries_platform_dir / '.kpack'}")
+
         # For packaging, the devel platform/ contents are not wheel safe, so we
         # store them into their own tarball and dynamically decompress at runtime.
         # The tarball will contain as its first path component the top level
