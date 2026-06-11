@@ -120,7 +120,6 @@ jobs:
           choco install --no-progress -y ninja --version 1.12.1
           choco install --no-progress -y strawberryperl
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
-          choco install --no-progress -y pkgconfiglite
 
       - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
         with:

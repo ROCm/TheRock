@@ -239,4 +239,22 @@ jobs:
               "python_version": "${{ inputs.python_version }}"
             }
 
-  # TODO: trigger_build_jax_wheels (release_portable_linux_jax_wheels.yml or equivalent)
+  trigger_release_jax_wheels:
+    needs: [build_artifacts, build_tarballs]
+    name: Trigger Release JAX Wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger JAX Build
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: multi_arch_release_linux_jax_wheels.yml
+          inputs: |
+            {
+              "release_type": "${{ inputs.release_type }}",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "tar_url": "${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref || '' }}"
+            }

@@ -252,9 +252,12 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        # Extended tests on math-ci take approx 5 hrs (as of May 5, 2026)
-        "timeout_minutes": 120,
-        "test_script": f"python {_get_script_path('test_rocsolver.py')}",
+        # test_runner.py drives ctest category labels, so it runs a filtered
+        # subset rather than the full ~5 hr extended suite.
+        # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
+        # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
@@ -466,7 +469,7 @@ test_matrix = {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
