@@ -57,6 +57,10 @@ ENV GOOGLE_TEST_VERSION="1.16.0"
 COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
 
+######## ROCm Repository Setup #######
+# Install ROCm repo for llvm-cov and llvm-profdata (needed for code coverage)
+RUN echo -e "[ROCm]\nname=ROCm\nbaseurl=https://repo.radeon.com/rocm/rhel9/6.4/main\nenabled=1\ngpgcheck=1\ngpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" > /etc/yum.repos.d/rocm.repo
+
 ######## Yum Packages #######
 # We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest
 # manylinux containers use gcc-toolset-14 or later, which is not yet compatible
@@ -67,6 +71,7 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 #
 # Development tool dependencies:
 #   texinfo, flag: rocprofiler-systems
+#   rocm-llvm-dev: provides llvm-cov and llvm-profdata for code coverage
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
@@ -81,6 +86,7 @@ RUN yum install -y epel-release && \
     && yum install -y \
       texinfo \
       flex \
+      rocm-llvm-dev \
     && yum clean all && \
     rm -rf /var/cache/yum
 

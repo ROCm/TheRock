@@ -957,6 +957,16 @@ function(therock_cmake_subproject_activate target_name)
       "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
     )
 
+    # Passthrough -D<PROJECT_NAME>_ENABLE_COVERAGE=ON to the subproject
+    # Convert logical target name to uppercase (e.g., hipDNN -> HIPDNN_ENABLE_COVERAGE)
+    set(_coverage_arg)
+    string(TOUPPER "${_logical_target_name}" _coverage_project_name)
+    set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
+
+    if(DEFINED ${_coverage_var_name})
+      set(_coverage_arg "-D${_coverage_var_name}=${${_coverage_var_name}}")
+    endif()
+
     # Configure command.
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
@@ -972,6 +982,7 @@ function(therock_cmake_subproject_activate target_name)
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
         "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
+        ${_coverage_arg}
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
       # the build graph sane.
