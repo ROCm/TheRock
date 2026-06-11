@@ -34,7 +34,7 @@ host_triple = subprocess.check_output(
     [str(THEROCK_CLANG_PATH), "--print-target-triple"], text=True
 ).strip()
 
-THE_ROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
+THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
 
 # SDK Paths
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
