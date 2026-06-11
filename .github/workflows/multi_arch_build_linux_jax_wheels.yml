@@ -98,8 +98,10 @@ jobs:
           python-version: ${{ inputs.python_version }}
 
       - name: Determine build arguments
+        env:
+          BUILD_JAXLIB: ${{ inputs.build_jaxlib }}
         run: |
-          if [ "${{ inputs.build_jaxlib }}" = "true" ]; then
+          if [ "$BUILD_JAXLIB" = "true" ]; then
             echo "SOURCE_ARG=--jax-source-dir=$GITHUB_WORKSPACE/jax" >> "$GITHUB_ENV"
           else
             echo "SOURCE_ARG=" >> "$GITHUB_ENV"
