@@ -66,6 +66,32 @@ skip_tests = {
             "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_float32)",
             "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_float16)",
         ],
+        "decomp": [
+            # Run 27361388921 default shard 4/10, job 80849478614:
+            # TestDecompCUDA adaptive_max_pool comprehensive tests return tuple length
+            # 2 instead of 1 on ROCm (output length mismatch: 2 != 1).
+            "(TestDecompCUDA and test_comprehensive_nn_functional_adaptive_max_pool)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # HasDecompTest::test_has_decomposition fails because ROCm exposes
+            # aten::_foreach_mm in the decomposition table list diff.
+            "(HasDecompTest and test_has_decomposition)",
+        ],
+        "compiled_autograd": [
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # Compiled-autograd bytecode/graph text mismatches and accumulate_grad
+            # signature errors on ROCm.
+            "(TestCompiledAutograd and test_checkpointing_simple_reentrant)",
+            "(TestCompiledAutograd and test_inputs_aliasing_bytecode_attr_mutations)",
+            "(TestCompiledAutograd and test_tensor_subclass_basic)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # FuncTorch HOP compiled-autograd expecttests differ from ROCm graphs.
+            "(FuncTorchHigherOrderOpTestsWithCompiledAutograd and test_hessian)",
+            "(FuncTorchHigherOrderOpTestsWithCompiledAutograd and test_jacfwd)",
+            "(FuncTorchHigherOrderOpTestsWithCompiledAutograd and test_jacrev)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # register_hook HOP is unsupported under compiled autograd on ROCm.
+            "(TestCompiledAutogradOpInfoCUDA and test_hops_in_bwd_register_hook_simple_cuda_float32)",
+        ],
         "custom_operator": [
             # Run 27228539427 default shard 7/10:
             # TestInferSchemaWithAnnotation::test_name_error_hint failed
@@ -95,6 +121,23 @@ skip_tests = {
             # singular linalg.inv under aot_eager does not raise _LinAlgError
             # on ROCm.
             "(ReproTests and test_linalg_inv_singular_aot_eager_raises)",
+            # Run 27361388921 default shard 3/10, job 80849478629:
+            # NestedGraphBreaksMiscTests::test_unpack_tensor_shape_mismatch_nested_graph_breaks
+            # fails with ValueError: not enough values to unpack (expected 2, got 1)
+            # under torch.compile nested graph breaks on ROCm.
+            "(NestedGraphBreaksMiscTests and test_unpack_tensor_shape_mismatch_nested_graph_breaks)",
+            # Run 27361388921 default shard 2/10, job 80849478676:
+            # MiscTests::test_unpack_tensor_shape_mismatch fails with ValueError:
+            # not enough values to unpack (expected 2, got 1) under torch.compile on ROCm.
+            "(MiscTests and test_unpack_tensor_shape_mismatch)",
+            # Run 27361388921 default shard 2/10, job 80849478676:
+            # UnspecTests::test_prune_torch_check expects torch._check to be pruned
+            # from the exported graph, but ROCm keeps the assert_scalar nodes.
+            "(UnspecTests and test_prune_torch_check)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # DynamicShapesMiscTests::test_unpack_tensor_shape_mismatch_dynamic_shapes
+            # fails with ValueError: not enough values to unpack (expected 2, got 1).
+            "(DynamicShapesMiscTests and test_unpack_tensor_shape_mismatch_dynamic_shapes)",
         ],
         "export": [
             # Run 27246343570 default shard 10/10, job 80461205617:
@@ -109,12 +152,52 @@ skip_tests = {
             "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
             "test_fake_export_nonzero_cuda_float32",
             "test_preserve_original_behavior_cuda",
+            # Run 27361388921 default shard 10/10, job 80849478637:
+            # RetraceExportNonStrictTestExport::test_opaque_obj_retraceability_nonstrict
+            # fails after the strict retrace variant registers MyInput as opaque in
+            # the same process: RuntimeError: Type '...MyInput' is already registered.
+            "(RetraceExportNonStrictTestExport and test_opaque_obj_retraceability_nonstrict)",
+            # Run 27361388921 default shard 2/10, job 80849478676:
+            # TestConverter quantized TS->EP converter tests fail because ROCm wheels
+            # lack torch.ops.prepacked.linear_clamp_prepack.
+            "(TestConverter and test_ts2ep_convert_quantized_model_with_opcontext)",
+            "(TestConverter and test_ts2ep_convert_quantized_model_with_opcontext_and_constant)",
+        ],
+        "fake_tensor": [
+            # Run 27361388921 default shard 7/10, job 80849478660:
+            # FakeTensor cross-device propagation tests expect the legacy
+            # "Unhandled FakeTensor Device Propagation" error text but ROCm raises
+            # FakeTensorDeviceMismatchError instead.
+            "(FakeTensorTest and test_add_one_dim_single_elem_cpu_with_cuda_tensor)",
+            "(FakeTensorTest and test_op_with_zero_dim_bypassed)",
+            "(FakeTensorPreferDeviceType and test_fake_tensor_prefer_device_type)",
+        ],
+        "fx": [
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # TestFXAPIBackwardCompatibility::test_class_member_back_compat fails because
+            # GraphModule public member list differs (create_size_node, etc.).
+            "(TestFXAPIBackwardCompatibility and test_class_member_back_compat)",
         ],
         "functorch": [
             # Run 27228539427 default shard 7/10:
             # TestOperatorsCUDA::test_grad_unbind_copy_cuda_float32 hit a GPU
             # hang followed by Fatal Python error: Aborted.
             "(TestOperatorsCUDA and test_grad_unbind_copy_cuda_float32)",
+            # Run 27361388921 default shard 3/10, job 80849478629:
+            # TestControlFlow::test_scan_* parametrized variants fail consistently
+            # with transposed-shape assertEqual mismatches (e.g. [6, 1] vs [1, 6]),
+            # Dynamo fake-tensor size mismatches, and scan dim expand errors on ROCm.
+            "(TestControlFlow and test_scan)",
+            # Run 27361388921 default shard 7/10, job 80849478660:
+            # TestPartitioning::test_compiled_backward_rejects_non_list_args fails with
+            # TypeError: _codegen_compiled_backward() missing inputs_require_grad on ROCm.
+            "(TestPartitioning and test_compiled_backward_rejects_non_list_args)",
+        ],
+        "linalg": [
+            # Run 27361388921 default shard 7/10, job 80849478660:
+            # TestLinalgCUDA::test_cholesky_solve_batched_many_batches_* dtypes fail
+            # consistently with 6/3276800 element mismatches at batch boundary indices.
+            "(TestLinalgCUDA and test_cholesky_solve_batched_many_batches)",
         ],
         "modules": [
             # Run 27228539427 inductor shard 1/4:
@@ -171,6 +254,55 @@ skip_tests = {
             "(SaveGpuKernelSchemaTest and test_schema_path_reads_entry_name)",
             "(SaveGpuKernelSchemaTest and test_schema_path_reads_num_warps)",
             "(SaveGpuKernelSchemaTest and test_schema_path_reads_shared_mem)",
+            # Run 27361388921 default shard 5/10, job 80849478569:
+            # TestInductorOpInfoCUDA::test_comprehensive_new_zeros_cuda_float32 hit
+            # HW Exception GPU Hang and Fatal Python error: Aborted.
+            "(TestInductorOpInfoCUDA and test_comprehensive_new_zeros_cuda_float32)",
+            # Run 27361388921 default shard 10/10, job 80849478637:
+            # TestOpInfoPropertiesCUDA::test_batch_invariance_log1p_backend_inductor_default_cuda_float16
+            # hit HW Exception GPU Hang and Fatal Python error: Aborted.
+            "(TestOpInfoPropertiesCUDA and test_batch_invariance_log1p_backend_inductor_default_cuda_float16)",
+            # Run 27361388921 default shard 1/10, job 80849478791:
+            # TestMaxAutotuneAsyncPipelined::test_triton_error_precompilation_and_autotuning
+            # failed consistently after reruns with NoValidChoicesError instead of the
+            # expected ATen fallback when all simulated Triton choices fail on ROCm.
+            "(TestMaxAutotuneAsyncPipelined and test_triton_error_precompilation_and_autotuning)",
+            # Run 27361388921 default shard 1/10, job 80849478791:
+            # DynamicShapesCodegenGPUTests::test_scalar_cpu_tensor_arg_dynamic_shapes_cuda
+            # hit HW Exception GPU Hang and Fatal Python error: Aborted.
+            "(DynamicShapesCodegenGPUTests and test_scalar_cpu_tensor_arg_dynamic_shapes_cuda)",
+            # Run 27361388921 default shard 8/10, job 80849478727:
+            # TestInductorOpInfoCUDA::test_comprehensive_nn_functional_cosine_similarity_cuda_float32
+            # hit HW Exception GPU Hang and Fatal Python error: Aborted.
+            "(TestInductorOpInfoCUDA and test_comprehensive_nn_functional_cosine_similarity_cuda_float32)",
+            # Run 27361388921 default shard 7/10, job 80849478660:
+            # TestInductorDynamicCUDA::test_embedding_backward_dynamic_shapes_large_grid_cuda
+            # exceeds ROCm total-threads grid limit (2400000000 > 2147483647).
+            "(TestInductorDynamicCUDA and test_embedding_backward_dynamic_shapes_large_grid_cuda)",
+            # Run 27361388921 default shard 4/10, job 80849478614:
+            # GPUTests::test_dropout2_cuda fails with Scalars are not equal (Expected 1 but got 0).
+            "(GPUTests and test_dropout2_cuda)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # GPUTests::test_dropout3_cuda fails with Scalars are not equal (Expected 2 but got 0).
+            "(GPUTests and test_dropout3_cuda)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # DynamicShapesGPUTests::test_dropout2_dynamic_shapes_cuda fails like static dropout2.
+            "(DynamicShapesGPUTests and test_dropout2_dynamic_shapes_cuda)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # DynamicShapesCpuTests::test_tmp_not_defined_issue3_dynamic_shapes_cpu grad mismatch.
+            "(DynamicShapesCpuTests and test_tmp_not_defined_issue3_dynamic_shapes_cpu)",
+        ],
+        "extension_backend": [
+            # Run 27361388921 default shard 4/10, job 80849478614:
+            # ExtensionBackendTests::test_open_device_registration expects CPU-style
+            # inductor_cpp_wrapper source but ROCm generates privateuse1 AOTI glue.
+            "(ExtensionBackendTests and test_open_device_registration)",
+        ],
+        "invoke_subgraph": [
+            # Run 27361388921 default shard 4/10, job 80849478614:
+            # TestInvokeSubgraphCompile::test_input_mutation_mutiple_times_fake_tensor_cahche_hit
+            # fails with AttributeError: 'AutoFunctionalizedV2' object has no attribute '_schema'.
+            "(TestInvokeSubgraphCompile and test_input_mutation_mutiple_times_fake_tensor_cahche_hit)",
         ],
         "jit_fuser_te": [
             # Run 27246343570 default shard 3/10, job 80461205622:
@@ -212,6 +344,27 @@ skip_tests = {
             # test_out_nn_functional_hardshrink float32 aborts after ROCm GPU
             # hang under --inductor.
             "(TestCommonCUDA and test_out_nn_functional_hardshrink_cuda_float32)",
+            # Run 27361388921 default shard 9/10, job 80849478632:
+            # TestCommonCUDA::test_dtypes_baddbmm_cuda hit HW Exception GPU Hang and
+            # Fatal Python error: Aborted.
+            "(TestCommonCUDA and test_dtypes_baddbmm_cuda)",
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # TestCommonCUDA::test_reduction_ops_reduce_std_cuda hits ZeroDivisionError
+            # during std reduction on ROCm.
+            "(TestCommonCUDA and test_reduction_ops_reduce_std_cuda)",
+        ],
+        "pattern_matcher": [
+            # Run 27361388921 default shard 6/10, job 80849478677:
+            # TestPatternMatcher pointless-convert and unfuse-bias tests fail scalar
+            # equality / pattern-match expectations on ROCm.
+            "(TestPatternMatcher and test_pointless_convert_float32_float16_emulate_precision_casts_False_expected_calls_1)",
+            "(TestPatternMatcher and test_unfuse_bias_addmm_half_dtypes_narrowing_cast)",
+        ],
+        "public_bindings": [
+            # Run 27361388921 default shard 2/10, job 80849478676:
+            # TestPublicBindings::test_modules_can_be_imported fails because optional
+            # CUDA-only native modules nvmath and cutlass are absent on ROCm wheels.
+            "(TestPublicBindings and test_modules_can_be_imported)",
         ],
         "privateuseone_python_backend": [
             # Run 27228539427 default shard 2/10:
