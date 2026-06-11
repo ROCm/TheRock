@@ -21,6 +21,8 @@ include = [
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
 ]
+# Exclude python frontend from the test artifact; ships with a dead CI RPATH
+# and is ABI-locked to cp312. See https://github.com/ROCm/TheRock/issues/5678
 exclude = [
   "share/hipdnn/python/**",
 ]
