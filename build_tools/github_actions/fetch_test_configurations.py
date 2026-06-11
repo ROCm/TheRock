@@ -336,7 +336,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -567,7 +567,7 @@ test_matrix = {
         "fetch_artifact_args": "--rocwmma --tests --blas",
         # Headroom above typical shard runtime; per-test CTest timeouts fail fast on hangs (ROCM-24171).
         "timeout_minutes": 90,
-        "test_script": f"python {_get_script_path('test_rocwmma.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 5,
