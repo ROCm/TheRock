@@ -660,6 +660,16 @@ Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
 These contents are useful for using the package outside of Python and _lazily_ expanded on the
 first use when used from Python.
 
+> [!NOTE]
+> The devel tree is expanded (and its device files linked) only once - on the
+> first `rocm-sdk init` or the first use of a devel tool such as `hipcc`. If you
+> install or remove a `rocm-sdk-device-*` wheel (for example, adding a second GPU
+> target) **after** that first expansion, re-run `rocm-sdk init` to link the new
+> device files into the devel tree. The compiler tools do not re-scan on their
+> own, so a device wheel added later is not picked up until you run
+> `rocm-sdk init` (or any `rocm-sdk path`) again. Uninstalling a `rocm-sdk-device-*`
+> wheel removes its devel files automatically via `pip`.
+
 Once you have verified your installation, you can continue to use it for
 standard ROCm development or install PyTorch, JAX, or another supported Python ML
 framework.
