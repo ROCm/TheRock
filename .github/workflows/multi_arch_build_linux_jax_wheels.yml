@@ -109,10 +109,11 @@ jobs:
         working-directory: rocm-jax
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
         run: |
           python3 build/ci_build \
             --compiler=clang \
-            --python-versions="${{ inputs.python_version }}" \
+            --python-versions="${PYTHON_VERSION}" \
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
             ${SOURCE_ARG} \
