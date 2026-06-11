@@ -679,3 +679,56 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
       hipTensor
   )
 endif()
+
+if(THEROCK_ENABLE_HIPTHREADS)
+  ##############################################################################
+  # hipthreads
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipthreads
+    # TODO: use this in case hipthreads is moved to e.g. rocm-libraries
+    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipthreads"
+    EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/hipthreads"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipthreads"
+    BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx1201  # Fixes issue with empty target list for unsupported architectures.
+    CMAKE_ARGS
+      -DHIPTHREADS_COPY_TO_BUILD=ON
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_CXX_STANDARD=17
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+      hipcc
+    BUILD_DEPS
+      rocm-cmake
+      libhipcxx
+    RUNTIME_DEPS
+      amd-llvm
+      hip-clr
+      hipcc
+      libhipcxx
+  )
+  therock_cmake_subproject_glob_c_sources(hipthreads
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_require_host_program(hipthreads lit)
+  therock_cmake_subproject_activate(hipthreads)
+
+  therock_provide_artifact(hipthreads
+    DESCRIPTOR artifact-hipthreads.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipthreads
+  )
+endif(THEROCK_ENABLE_HIPTHREADS)
