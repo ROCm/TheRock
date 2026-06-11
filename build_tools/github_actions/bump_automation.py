@@ -242,7 +242,13 @@ def create_therock_bump(submodule, token):
             token,
             f"repos/{THEROCK_REPO}/pulls",
             method="POST",
-            data={"title": title, "head": branch_name, "base": "main", "body": body},
+            data={
+                "title": title,
+                "head": branch_name,
+                "base": "main",
+                "body": body,
+                "labels": ["ci:run-all-archs"],
+            },
         )
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)

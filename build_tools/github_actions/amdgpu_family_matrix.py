@@ -245,51 +245,6 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
-    "gfx900": {
-        "linux": {
-            # Disabled due to hardware availability
-            "test-runs-on": "",
-            "family": "gfx900",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx900",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx101x": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx101X-dgpu",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx101X-dgpu",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx103x": {
-        "linux": {
-            "test-runs-on": "linux-gfx1030-gpu-rocm",
-            "family": "gfx103X-all",
-            "fetch-gfx-targets": ["gfx1030"],
-            "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "windows-gfx1030-gpu-rocm",
-            "family": "gfx103X-all",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
-        },
-    },
 }
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
