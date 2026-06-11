@@ -659,6 +659,17 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hipthreads lit tests
+    "hipthreads": {
+        "job_name": "hipthreads",
+        "fetch_artifact_args": "--hipthreads --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipthreads.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     "rocdecode": {
         "job_name": "rocdecode",
         "fetch_artifact_args": "--rocdecode --tests",

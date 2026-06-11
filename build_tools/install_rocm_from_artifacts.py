@@ -47,6 +47,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocwmma | --no-rocwmma]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
+    [--hipthreads | --no-hipthreads]
     [--tests | --no-tests]
     [--base-only]
 
@@ -399,6 +400,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocalution,
             args.rocwmma,
             args.libhipcxx,
+            args.hipthreads,
         ]
     ):
         argv.extend(base_artifact_patterns)
@@ -518,6 +520,17 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocwmma_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
+            argv.append("base_dev_generic")
+        if args.hipthreads:
+            extra_artifacts.append("hipthreads")
+            # hipthreads ships a static library (libhipthreads.a) and headers in
+            # its _dev component, and its lit suite includes the libhipcxx
+            # headers, so both _dev artifacts are required at test time.
+            argv.append("hipthreads_dev")
+            extra_artifacts.append("libhipcxx")
+            argv.append("libhipcxx_dev")
             argv.append("amd-llvm_dev")
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
@@ -911,6 +924,13 @@ def main(argv):
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipthreads",
+        default=False,
+        help="Include 'hipthreads' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
