@@ -443,7 +443,6 @@ if(THEROCK_BUNDLE_SYSDEPS)
     # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
     # Core sysdeps
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
-    set(THEROCK_BUNDLED_BINUTILS therock-binutils)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
