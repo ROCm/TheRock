@@ -180,6 +180,51 @@ if ($currentUser -match "NT AUTHORITY") {
     echo "[*] Not Running as a Windows Service (NT AUTHORITY\*) - skipping system environment cleanup"
 }
 
+#### Cleanup stale git submodule working trees ####
+# These runners are non-ephemeral and shared across super-repos whose checkouts
+# pin DIFFERENT submodule commits. `actions/checkout` runs
+# `git submodule foreach --recursive` during its auth setup/teardown, descending
+# into leftover submodule working trees from a prior job.
+# `git reset --hard` does not clear nested submodule working trees, so a newer
+# nested submodule left on disk can remain under an older superproject whose
+# .gitmodules lacks that URL. The recursive foreach then aborts with
+# `fatal: No url found for submodule path ...` (exit 128) and the job dies
+# before its own checkout begins.
+#
+# We cannot rely on `git submodule deinit`: a prior job can leave the workspace
+# partially corrupted (e.g. submodule.<name>.url registered in .git/config while
+# .git/modules/<name> is missing), which makes deinit abort with
+# `could not lock config file .git/modules/<name>/config`. Instead we physically
+# empty the top-level submodule working trees listed in .gitmodules. The
+# recursive foreach only descends into populated submodule dirs, so emptying them
+# leaves nothing for it to enter, independent of .git/modules health. We keep
+# .git/modules objects (repopulation stays a local checkout, no network re-clone)
+# and never touch ccache/deps (those are not submodule paths).
+$workspaceRepo = $env:GITHUB_WORKSPACE
+$gitmodulesPath = if ($workspaceRepo) { Join-Path $workspaceRepo ".gitmodules" } else { $null }
+if ($workspaceRepo -and (Test-Path (Join-Path $workspaceRepo ".git")) -and $gitmodulesPath -and (Test-Path $gitmodulesPath)) {
+    echo "[*] Clearing stale git submodule working trees in workspace: $workspaceRepo"
+    # Read submodule paths via `git config -f`, which parses .gitmodules as a
+    # standalone config file without touching repo state (no index, no
+    # .git/modules), so it cannot trip on the corruption we are cleaning up.
+    $submodulePaths = git config -f $gitmodulesPath --get-regexp '^submodule\..*\.path$' |
+        ForEach-Object { ($_ -split '\s+', 2)[1].Trim() }
+    foreach ($subPath in $submodulePaths) {
+        $fullSubPath = Join-Path $workspaceRepo $subPath
+        if (Test-Path $fullSubPath) {
+            echo "      removing $subPath"
+            try {
+                Remove-Item -Recurse -Force -LiteralPath $fullSubPath -ErrorAction Stop
+            } catch {
+                echo "      WARNING: could not fully remove ${subPath}: $_"
+            }
+        }
+    }
+    echo "[*] >> Submodule working-tree cleanup finished"
+} else {
+    echo "[*] No git repo / .gitmodules at workspace root, skipping submodule cleanup"
+}
+
 #### Cleanup Processes ####
 echo "[*] Cleaning up processes..."
 

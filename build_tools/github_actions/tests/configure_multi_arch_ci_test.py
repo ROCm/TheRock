@@ -127,13 +127,13 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "LINUX_TEST_LABELS": "test:rocprim",
                 "WINDOWS_AMDGPU_FAMILIES": "",
                 "WINDOWS_TEST_LABELS": "",
-                "PREBUILT_STAGES": "foundation,compiler-runtime",
+                "PREBUILT_STAGES": "compiler-runtime,runtime-tests",
                 "BASELINE_RUN_ID": "12345",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
         self.assertEqual(inputs.linux_test_labels, ["test:rocprim"])
-        self.assertEqual(inputs.prebuilt_stages, "foundation,compiler-runtime")
+        self.assertEqual(inputs.prebuilt_stages, "compiler-runtime,runtime-tests")
         self.assertEqual(inputs.baseline_run_id, "12345")
 
     def test_pull_request_extracts_labels(self):
@@ -324,7 +324,7 @@ class TestDecideJobs(unittest.TestCase):
             submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         result = cm.decide_jobs(self._inputs(), git_context=git)
-        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertEqual(result.test_rocm.test_type, "standard")
         self.assertIn("submodule", result.test_rocm.test_type_reason)
 
     def test_no_submodule_change_stays_quick(self):
@@ -402,13 +402,13 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                prebuilt_stages="foundation,compiler-runtime",
+                prebuilt_stages="compiler-runtime,runtime-tests",
             ),
             git_context=cm.GitContext(),
         )
         self.assertEqual(
             sorted(result.build_rocm.prebuilt_stages),
-            ["compiler-runtime", "foundation"],
+            ["compiler-runtime", "runtime-tests"],
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
@@ -423,14 +423,14 @@ class TestDecideJobs(unittest.TestCase):
         decision = cm.BuildRocmDecision(
             action=cm.JobAction.RUN,
             stage_decisions={
-                "foundation": cm.JobAction.PREBUILT,
                 "compiler-runtime": cm.JobAction.PREBUILT,
                 "math-libs": cm.JobAction.RUN,
+                "profiler-apps": cm.JobAction.PREBUILT,
             },
         )
         self.assertEqual(
             sorted(decision.prebuilt_stages),
-            ["compiler-runtime", "foundation"],
+            ["compiler-runtime", "profiler-apps"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
 
@@ -779,7 +779,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
@@ -820,7 +823,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         targets = cm.select_targets(inputs)
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=inputs, test_type="quick"
+            targets=targets,
+            ci_inputs=inputs,
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
         required_keys = {
             "amdgpu_family",
@@ -870,7 +876,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
 
         # All target families that support the variant appear in output.
@@ -902,6 +911,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(build_variant="asan"),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -934,6 +944,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     targets=targets,
                     ci_inputs=ci_inputs,
                     test_type="quick",
+                    git_context=cm.GitContext(),
                 )
                 # Only gfx94x on linux survives.
                 self.assertIsNotNone(result.linux)
@@ -963,6 +974,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=ci_inputs,
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         # Verify it's a host-asan build
@@ -982,6 +994,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -995,6 +1008,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1004,7 +1018,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Without test_runner: label, default runner labels are used."""
         targets = cm.TargetSelection(linux_families=["gfx908"])
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1022,6 +1039,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
@@ -1031,6 +1049,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
@@ -1260,12 +1279,13 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         # Verify we have 3 labels for 1-gpu
         labels = gfx94x_linux["test-runs-on-labels"]
-        self.assertEqual(len(labels), 2)
+        self.assertEqual(len(labels), 3)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
         # Verify weights sum to ~1.0
         total_weight = sum(l["weight"] for l in labels)
@@ -1304,7 +1324,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         # Mock random.random() to return 0.1 (< 0.369 first weight)
         with patch("random.random", return_value=0.1):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
+            builds = cm.expand_build_configs(
+                targets, ci_inputs, test_type="quick", git_context=cm.GitContext()
+            )
 
         self.assertIsNotNone(builds.linux)
         # Check that the first label was selected
@@ -1326,7 +1348,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
         with patch("random.random", return_value=0.4):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
+            builds = cm.expand_build_configs(
+                targets, ci_inputs, test_type="quick", git_context=cm.GitContext()
+            )
 
         self.assertIsNotNone(builds.linux)
         # Check that the second label was selected
@@ -1346,16 +1370,15 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
-        with patch("random.random", return_value=0.5):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
+        with patch("random.random", return_value=0.9):
+            builds = cm.expand_build_configs(
+                targets, ci_inputs, test_type="quick", git_context=cm.GitContext()
+            )
 
         self.assertIsNotNone(builds.linux)
         # Check that the third label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
-        )
+        self.assertEqual(gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_families_without_multi_label_use_primary_only(self):
         """Families without multi-label config should only use primary label."""
@@ -1371,7 +1394,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         # Run multiple times to ensure consistency
         for _ in range(10):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="full")
+            builds = cm.expand_build_configs(
+                targets, ci_inputs, test_type="full", git_context=cm.GitContext()
+            )
             if builds.linux and builds.linux.per_family_info:
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
