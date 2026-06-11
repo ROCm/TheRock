@@ -134,6 +134,9 @@ class CIInputs:
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
 
+    # True if PR is in draft state (only meaningful for pull_request events)
+    is_draft_pr: bool = False
+
     # Per-platform workflow_dispatch overrides (parsed from comma-separated input)
     linux_amdgpu_families: list[str] = field(default_factory=list)
     windows_amdgpu_families: list[str] = field(default_factory=list)
@@ -184,12 +187,14 @@ class CIInputs:
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
+        is_draft_pr = False
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
             #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
             pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
+            is_draft_pr = pr_obj.get("draft", False)
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -216,6 +221,7 @@ class CIInputs:
             build_variant=build_variant,
             release_type=release_type,
             pr_labels=pr_labels,
+            is_draft_pr=is_draft_pr,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
@@ -273,6 +279,18 @@ class GitContext:
             print(f"  {path}")
         if len(self.changed_files) > 20:
             print(f"  ... and {len(self.changed_files) - 20} more")
+
+    def is_submodule_only_change(self) -> bool:
+        """Return True if all changed files are submodule paths.
+
+        This is used to detect PRs that only bump submodule versions,
+        which should trigger comprehensive testing across all architectures.
+        """
+        if self.changed_files is None or self.submodule_paths is None:
+            return False
+        if not self.changed_files:
+            return False
+        return set(self.changed_files).issubset(set(self.submodule_paths))
 
 
 @dataclass(frozen=True)
@@ -706,14 +724,15 @@ def _filter_families_by_platform(
     ]
 
 
-def select_targets(ci_inputs: CIInputs) -> TargetSelection:
+def select_targets(ci_inputs: CIInputs, git_context: GitContext) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
     Trigger types run progressively larger sets of builds and tests:
 
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (ci:run-all-archs).
+      families (gfx* labels) or the full set (ci:run-all-archs). Non-draft
+      PRs with submodule-only changes automatically get all families.
     - push: Broader coverage (presubmit + postsubmit families). Runs on
       code that has landed, so we want more thorough validation than PRs
       without paying the full nightly cost.
@@ -772,24 +791,33 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
-    # PR labels can extend the family set (both platforms)
+    # PR labels and submodule-only changes can extend the family set (both platforms)
     if ci_inputs.is_pull_request:
-        for label in ci_inputs.pr_labels:
-            if label == "ci:run-all-archs":
-                # Override to all families.
-                linux_names = list(all_families.keys())
-                windows_names = list(all_families.keys())
-                print("  Label 'ci:run-all-archs' -> all families")
-                break
-            if label.startswith("gfx"):
-                # Trim suffixes from labels since amdgpu_family_matrix.py
-                # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
-                # Note: labels are normalized to lowercase during parsing.
-                target = label.split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                print(f"  Label '{label}' -> adding target {target}")
+        # Auto-enable all archs for submodule-only PRs (non-draft).
+        # This ensures comprehensive testing when library code changes.
+        if not ci_inputs.is_draft_pr and git_context.is_submodule_only_change():
+            linux_names = list(all_families.keys())
+            windows_names = list(all_families.keys())
+            print(
+                "  Submodule-only change detected -> all families (equivalent to ci:run-all-archs)"
+            )
+        else:
+            for label in ci_inputs.pr_labels:
+                if label == "ci:run-all-archs":
+                    # Override to all families.
+                    linux_names = list(all_families.keys())
+                    windows_names = list(all_families.keys())
+                    print("  Label 'ci:run-all-archs' -> all families")
+                    break
+                if label.startswith("gfx"):
+                    # Trim suffixes from labels since amdgpu_family_matrix.py
+                    # specifies families with no suffix (e.g. `gfx94x`) but
+                    # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
+                    # Note: labels are normalized to lowercase during parsing.
+                    target = label.split("-")[0]
+                    linux_names.append(target)
+                    windows_names.append(target)
+                    print(f"  Label '{label}' -> adding target {target}")
 
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
@@ -941,14 +969,21 @@ def _expand_build_config_for_platform(
                 f"disabling test runner for non-scheduled runs"
             )
 
+        # sanity_check_only_for_family applies to presubmit/postsubmit ONLY.
+        # On scheduled (nightly) runs, we run the full test suite.
+        sanity_check_only = platform_info.get("sanity_check_only_for_family", False)
+        if sanity_check_only and is_schedule:
+            sanity_check_only = False
+            print(
+                f"  {family_name}: sanity_check_only_for_family ignored for schedule runs"
+            )
+
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
                 "test-runs-on": test_runs_on,
-                "sanity_check_only_for_family": platform_info.get(
-                    "sanity_check_only_for_family", False
-                ),
+                "sanity_check_only_for_family": sanity_check_only,
             }
         )
 
@@ -1124,7 +1159,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     jobs.log()
 
     print("\n=== Selecting GPU target families ===")
-    targets = select_targets(ci_inputs)
+    targets = select_targets(ci_inputs, git_context)
     targets.log()
 
     print("\n=== Building per-platform configs ===")

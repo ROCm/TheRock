@@ -178,6 +178,43 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.base_ref, "abc123def456")
 
+    def test_pull_request_extracts_draft_status(self):
+        """PR draft status is extracted from event.pull_request.draft."""
+        # Test draft PR
+        draft_inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "draft": True,
+                    "labels": [],
+                }
+            },
+        )
+        self.assertTrue(draft_inputs.is_draft_pr)
+
+        # Test non-draft PR
+        non_draft_inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "draft": False,
+                    "labels": [],
+                }
+            },
+        )
+        self.assertFalse(non_draft_inputs.is_draft_pr)
+
+        # Test PR with no draft field (defaults to False)
+        no_draft_field_inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [],
+                }
+            },
+        )
+        self.assertFalse(no_draft_field_inputs.is_draft_pr)
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI
@@ -494,7 +531,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         # gfx950 is postsubmit-only, should be present for push
         self.assertIn("gfx950", result.linux_families)
 
@@ -507,7 +544,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         # Schedule should have more families than push (nightly families added)
         push_inputs = cm.CIInputs(
             run_id="12345",
@@ -516,7 +553,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        push_result = cm.select_targets(push_inputs)
+        push_result = cm.select_targets(push_inputs, cm.GitContext())
         self.assertGreater(len(result.linux_families), len(push_result.linux_families))
 
     def test_pull_request_defaults_to_presubmit_only(self):
@@ -528,7 +565,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         self.assertGreater(len(result.linux_families), 0)
         # gfx950 is postsubmit-only, should NOT be in PR defaults
         self.assertNotIn("gfx950", result.linux_families)
@@ -551,8 +588,8 @@ class TestSelectTargets(unittest.TestCase):
             # gfx906 is nightly-only, not in presubmit+postsubmit defaults
             pr_labels=["gfx906"],
         )
-        result_without = cm.select_targets(inputs_without)
-        result_with = cm.select_targets(inputs_with)
+        result_without = cm.select_targets(inputs_without, cm.GitContext())
+        result_with = cm.select_targets(inputs_with, cm.GitContext())
         self.assertNotIn("gfx906", result_without.linux_families)
         self.assertIn("gfx906", result_with.linux_families)
 
@@ -566,7 +603,7 @@ class TestSelectTargets(unittest.TestCase):
             build_variant="release",
             pr_labels=["ci:run-all-archs"],
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         # Should include nightly-only families
         self.assertIn("gfx906", result.linux_families)
 
@@ -581,7 +618,7 @@ class TestSelectTargets(unittest.TestCase):
             pr_labels=["gfx9999"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
-            cm.select_targets(inputs)
+            cm.select_targets(inputs, cm.GitContext())
 
     def test_workflow_dispatch_per_platform(self):
         """workflow_dispatch selects families per platform."""
@@ -594,7 +631,7 @@ class TestSelectTargets(unittest.TestCase):
             linux_amdgpu_families=["gfx94x", "gfx110x"],
             windows_amdgpu_families=["gfx110x"],
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         self.assertIn("gfx94x", result.linux_families)
         self.assertIn("gfx110x", result.linux_families)
         self.assertIn("gfx110x", result.windows_families)
@@ -610,7 +647,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         self.assertEqual(result.linux_families, [])
         self.assertEqual(result.windows_families, [])
 
@@ -625,7 +662,7 @@ class TestSelectTargets(unittest.TestCase):
             linux_amdgpu_families=["gfx_bogus"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
-            cm.select_targets(inputs)
+            cm.select_targets(inputs, cm.GitContext())
 
     @unittest.skip(
         "TODO: workflow_dispatch should reject families unavailable on the requested platform"
@@ -642,7 +679,7 @@ class TestSelectTargets(unittest.TestCase):
             windows_amdgpu_families=["gfx950"],
         )
         with self.assertRaises(ValueError):
-            cm.select_targets(inputs)
+            cm.select_targets(inputs, cm.GitContext())
 
     def test_workflow_dispatch_all_expands_to_all_families(self):
         """workflow_dispatch with 'all' expands to all known families."""
@@ -656,7 +693,7 @@ class TestSelectTargets(unittest.TestCase):
             linux_amdgpu_families=["all"],
             windows_amdgpu_families=["all"],
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         all_families = get_all_families_for_trigger_types(
             ["presubmit", "postsubmit", "nightly"]
         )
@@ -686,7 +723,7 @@ class TestSelectTargets(unittest.TestCase):
             linux_amdgpu_families=["none"],
             # (windows omitted)
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         self.assertEqual(len(result.linux_families), 0)
         self.assertEqual(len(result.windows_families), 0)
 
@@ -701,7 +738,7 @@ class TestSelectTargets(unittest.TestCase):
             release_type="dev",
             linux_amdgpu_families=["gfx94x"],
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         self.assertIn("gfx94x", [f.split("-")[0] for f in result.linux_families])
         # Should NOT include all families — explicit list takes precedence
         self.assertLessEqual(len(result.linux_families), 2)
@@ -716,7 +753,7 @@ class TestSelectTargets(unittest.TestCase):
             build_variant="release",
         )
         with self.assertRaises(ValueError, msg="Unsupported event type"):
-            cm.select_targets(inputs)
+            cm.select_targets(inputs, cm.GitContext())
 
     def test_platform_filtering(self):
         """Families without a platform entry are excluded from that platform."""
@@ -727,10 +764,116 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        result = cm.select_targets(inputs)
+        result = cm.select_targets(inputs, cm.GitContext())
         # gfx94x is linux-only (no windows entry in presubmit matrix)
         self.assertIn("gfx94x", result.linux_families)
         self.assertNotIn("gfx94x", result.windows_families)
+
+    def test_submodule_only_non_draft_pr_enables_all_archs(self):
+        """Non-draft PR with only submodule changes enables all families."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            is_draft_pr=False,
+        )
+        git_context = cm.GitContext(
+            changed_files=["compiler", "core"],
+            submodule_paths=["compiler", "core", "math-libs"],
+        )
+        result = cm.select_targets(inputs, git_context)
+        # Should include nightly-only families (like gfx906)
+        self.assertIn("gfx906", result.linux_families)
+
+    def test_submodule_only_draft_pr_uses_defaults(self):
+        """Draft PR with only submodule changes uses default families, not all."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            is_draft_pr=True,
+        )
+        git_context = cm.GitContext(
+            changed_files=["compiler"],
+            submodule_paths=["compiler", "core"],
+        )
+        result = cm.select_targets(inputs, git_context)
+        # gfx906 is nightly-only, should NOT be included for draft PRs
+        self.assertNotIn("gfx906", result.linux_families)
+
+    def test_mixed_changes_pr_uses_defaults(self):
+        """PR with mixed changes (submodule + other) uses default families."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            is_draft_pr=False,
+        )
+        git_context = cm.GitContext(
+            changed_files=["compiler", "README.md"],
+            submodule_paths=["compiler", "core"],
+        )
+        result = cm.select_targets(inputs, git_context)
+        # gfx906 is nightly-only, should NOT be included for mixed changes
+        self.assertNotIn("gfx906", result.linux_families)
+
+
+class TestGitContextSubmoduleOnly(unittest.TestCase):
+    """Test GitContext.is_submodule_only_change() method."""
+
+    def test_submodule_only_returns_true(self):
+        """All changed files are submodules -> True."""
+        ctx = cm.GitContext(
+            changed_files=["compiler", "core"],
+            submodule_paths=["compiler", "core", "math-libs"],
+        )
+        self.assertTrue(ctx.is_submodule_only_change())
+
+    def test_mixed_changes_returns_false(self):
+        """Changed files include non-submodule files -> False."""
+        ctx = cm.GitContext(
+            changed_files=["compiler", "README.md"],
+            submodule_paths=["compiler", "core"],
+        )
+        self.assertFalse(ctx.is_submodule_only_change())
+
+    def test_empty_changed_files_returns_false(self):
+        """No changed files -> False."""
+        ctx = cm.GitContext(
+            changed_files=[],
+            submodule_paths=["compiler", "core"],
+        )
+        self.assertFalse(ctx.is_submodule_only_change())
+
+    def test_none_changed_files_returns_false(self):
+        """changed_files is None -> False."""
+        ctx = cm.GitContext(
+            changed_files=None,
+            submodule_paths=["compiler", "core"],
+        )
+        self.assertFalse(ctx.is_submodule_only_change())
+
+    def test_none_submodule_paths_returns_false(self):
+        """submodule_paths is None -> False."""
+        ctx = cm.GitContext(
+            changed_files=["compiler"],
+            submodule_paths=None,
+        )
+        self.assertFalse(ctx.is_submodule_only_change())
+
+    def test_single_submodule_change(self):
+        """Single submodule change -> True."""
+        ctx = cm.GitContext(
+            changed_files=["compiler"],
+            submodule_paths=["compiler", "core"],
+        )
+        self.assertTrue(ctx.is_submodule_only_change())
 
 
 # ---------------------------------------------------------------------------
@@ -821,7 +964,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
         )
-        targets = cm.select_targets(inputs)
+        targets = cm.select_targets(inputs, cm.GitContext())
         result = cm.expand_build_configs(
             targets=targets,
             ci_inputs=inputs,
@@ -1054,6 +1197,34 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
+    def test_sanity_check_only_for_family_on_non_schedule(self):
+        """sanity_check_only_for_family is True on presubmit/postsubmit for families that have it set."""
+        # gfx906 has sanity_check_only_for_family=True in the matrix
+        targets = cm.TargetSelection(linux_families=["gfx906"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="push"),
+            test_type="quick",
+            git_context=cm.GitContext(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertTrue(entry["sanity_check_only_for_family"])
+
+    def test_sanity_check_only_for_family_ignored_on_schedule(self):
+        """sanity_check_only_for_family is False on schedule, even for families that have it set."""
+        # gfx906 has sanity_check_only_for_family=True in the matrix, but schedule ignores it
+        targets = cm.TargetSelection(linux_families=["gfx906"])
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(event_name="schedule"),
+            test_type="comprehensive",
+            git_context=cm.GitContext(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertFalse(entry["sanity_check_only_for_family"])
+
 
 # ---------------------------------------------------------------------------
 # Step 6: Format Outputs
@@ -1241,8 +1412,8 @@ class TestFamilyTestFilters(unittest.TestCase):
             build_variant="release",
             pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
         )
-        targets = cm.select_targets(ci_inputs)
         git_context = cm.GitContext.empty()
+        targets = cm.select_targets(ci_inputs, git_context)
         outputs = cm.configure(ci_inputs, git_context)
 
         # Find gfx90a in the linux build config

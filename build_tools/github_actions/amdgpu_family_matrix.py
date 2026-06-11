@@ -140,7 +140,7 @@ amdgpu_family_info_matrix dictionary fields:
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
-- sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
+- sanity_check_only_for_family: (optional) if enabled, only run sanity check tests on presubmit/postsubmit. On nightly (schedule) runs, full tests are executed.
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 """
