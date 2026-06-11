@@ -256,6 +256,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
+            # Build-only on PRs (including ci:run-all-archs); tests run on push and nightly
+            "postsubmit_check_only_for_family": True,
         }
     },
 }

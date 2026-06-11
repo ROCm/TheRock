@@ -941,6 +941,17 @@ def _expand_build_config_for_platform(
                 f"disabling test runner for non-scheduled runs"
             )
 
+        # If postsubmit_check_only_for_family is set, skip tests on PRs only
+        if (
+            platform_info.get("postsubmit_check_only_for_family", False)
+            and not (is_push or is_schedule)
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: postsubmit_check_only_for_family flag set, "
+                f"disabling test runner for pull request runs"
+            )
+
         per_family_info.append(
             {
                 "amdgpu_family": platform_info["family"],
