@@ -1,18 +1,6 @@
 # CI Behavior Manipulation
 
-TheRock has two CI pipelines:
-
-- **CI** ([`ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/ci.yml)): single-arch builds, configured by [`configure_ci.py`](../../build_tools/github_actions/configure_ci.py)
-- **Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)): multi-arch builds, configured by [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py)
-
-Both read GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
-
-> [!IMPORTANT]
-> "Multi-arch CI" is set to replace "CI". See these issues for details:
->
-> - [[Multi-arch] Extend and improve multi-arch CI (#3336)](https://github.com/ROCm/TheRock/issues/3336)
-> - [[Multi-arch] Enable multi-arch CI on pre-submit (#3337)](https://github.com/ROCm/TheRock/issues/3337)
-> - [[Multi-arch] Remove single stage (non-multi-arch) CI (#3340)](https://github.com/ROCm/TheRock/issues/3340)
+**Multi-Arch CI** ([`multi_arch_ci.yml`](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)) is configured by [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py) and reads GPU family definitions from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py).
 
 ## Trigger behavior
 
@@ -47,25 +35,20 @@ CI runs on pushes to `main` if modified files pass the filters in
 
 ### Schedule
 
-<!-- TODO: replace with https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml? -->
-
 The
-[`CI Nightly`](https://github.com/ROCm/TheRock/blob/main/.github/workflows/ci_nightly.yml)
-workflow runs once a day. It selects _all_ families (even those which may fail
-to build) and runs comprehensive tests.
+[`multi_arch_release.yml`](https://github.com/ROCm/rockrel/blob/main/.github/workflows/multi_arch_release.yml)
+workflow in https://github.com/ROCm/rockrel runs once a day. It selects _all_
+families, builds release artifacts, and runs comprehensive tests.
 
 ### Workflow dispatch
 
-The CI and Multi-Arch CI pipelines can be triggered manually from their GitHub
-Actions workflow pages:
+The Multi-Arch CI pipeline can be triggered manually from its GitHub
+Actions workflow page:
+\[\[ [Multi-Arch CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) \]\]
+Inputs allow per-platform family selection, test label filtering, and prebuilt
+stage configuration.
 
-- [CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/ci.yml) — click "Run workflow" and fill in the fields:
-
-  <img src="./assets/ci_workflow_dispatch.png" />
-
-- [Multi-Arch CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) — inputs allow per-platform family selection, test label filtering, and prebuilt stage configuration.
-
-## Prebuilt stages (Multi-Arch CI)
+## Prebuilt stages
 
 > [!NOTE]
 > This feature is under active development and will evolve as
