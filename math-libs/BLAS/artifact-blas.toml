@@ -85,6 +85,8 @@ include = [
   "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
+  # TensileLite Python test artifacts
+  "share/hipblaslt/tensilelite/**",
 ]
 
 # rocBLAS
@@ -128,6 +130,8 @@ optional = true
 [components.test."math-libs/BLAS/rocSOLVER/stage"]
 include = [
   "bin/rocsolver-bench*",
+  # Clients tests (test_runner runs ctest from bin/rocsolver/; needs CTestTestfile.cmake)
+  "bin/rocsolver/**",
   "bin/rocsolver-test*",
   "share/rocsolver/test/**",
 ]
@@ -148,6 +152,8 @@ optional = true
 [components.test."math-libs/BLAS/hipSOLVER/stage"]
 include = [
   "bin/hipsolver-bench*",
+  # Clients tests (test_runner runs ctest from bin/hipsolver/; needs CTestTestfile.cmake)
+  "bin/hipsolver/**",
   "bin/hipsolver-test*",
   "lib/libhipsolver_fortran.so*",
   "share/hipsolver/test/**",
@@ -176,6 +182,7 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
+  "bin/rocsparse/**",
   "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
@@ -202,11 +209,13 @@ include = [
 ]
 exclude = [
   "share/hipsparse/test/**",
+  "bin/hipsparse/**",
 ]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
+  "bin/hipsparse/**",
   "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",

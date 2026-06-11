@@ -378,6 +378,13 @@ artifact_deps = []
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-util-linux]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.sysdeps-libnl]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
@@ -643,7 +650,6 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
-# Disabled until rocm-libraries bump that has hip-kernel-provider passing
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"

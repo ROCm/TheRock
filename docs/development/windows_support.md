@@ -106,8 +106,16 @@ These instructions mostly mirror the instructions in the root
 Before diving into the full setup, you can run the environment validation script
 to check that all prerequisites are met:
 
-```powershell
-.\build_tools\validate_windows_install.ps1
+```bash
+powershell.exe .\build_tools\validate_windows_install.ps1
+```
+
+To get correct results you may need to set all Visual Studio specific paths and pre-configured Python's environment (see below), in such case you need to run few commands before:
+
+```bash
+vcvarsall.bat x64
+.venv\Scripts\Activate.bat
+powershell.exe .\build_tools\validate_windows_install.ps1
 ```
 
 The script checks RAM, disk space, long path support, symlink capability, MSVC,
@@ -184,7 +192,7 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
 > winget install cmake
-> winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
+> winget install ninja-build.ninja ccache python strawberryperl
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 

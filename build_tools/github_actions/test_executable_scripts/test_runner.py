@@ -37,6 +37,7 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 COMPONENT_DIR_MAPPING = {
     "miopen": "MIOpen",
     "rocblas": "rocblas",
+    "rocsolver": "rocsolver",
     "rocrand": "rocRAND",
     "hiprand": "hipRAND",
     "rocthrust": "rocthrust",
@@ -46,6 +47,8 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn": "hipdnn",
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
+    "rocsparse": "rocsparse",
+    "hipsparse": "hipsparse",
     "hipsparselt": "hipsparselt",
     "rocroller": "rocroller",
     "hipblas": "hipblas",

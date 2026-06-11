@@ -178,7 +178,7 @@ def run(args: argparse.Namespace):
         stage_name=args.stage,
         amdgpu_family=args.amdgpu_family,
     )
-    if args.stage == "foundation":
+    if args.stage == "compiler-runtime":
         upload_manifest(
             build_dir=args.build_dir,
             output_root=output_root,

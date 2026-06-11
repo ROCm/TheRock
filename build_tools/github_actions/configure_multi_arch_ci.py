@@ -129,7 +129,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
-    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
+    release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -180,7 +180,7 @@ class CIInputs:
         # setup_multi_arch.yml. GitHub-specific context (PR labels,
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
-        release_type = os.environ.get("RELEASE_TYPE", "")
+        release_type = os.environ.get("RELEASE_TYPE", "ci")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -614,7 +614,7 @@ def _determine_test_type(
     ):
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
         if matching:
-            return "full", f"submodule(s) changed: {sorted(matching)}"
+            return "standard", f"submodule(s) changed: {sorted(matching)}"
 
     # Default: quick tests for fast CI feedback.
     return "quick", "default"
@@ -823,6 +823,7 @@ def _expand_build_config_for_platform(
     pr_labels: list[str],
     is_schedule: bool,
     is_workflow_dispatch: bool,
+    git_context: GitContext,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -871,6 +872,18 @@ def _expand_build_config_for_platform(
             test_runs_on = select_weighted_label(
                 platform_info["test-runs-on-labels"], family_name
             )
+
+        # TODO: use hard-coded label (vultr machines) as we try to determine core42 regression
+        # This is a temporary measure to get good signal for submodule bumps while we determine core42 issues
+        if (
+            platform == "linux"
+            and family_name == "gfx94x"
+            and git_context.changed_files is not None
+            and git_context.submodule_paths is not None
+        ):
+            matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+            if matching:
+                test_runs_on = "linux-gfx942-1gpu-ossci-rocm"
 
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
@@ -972,6 +985,7 @@ def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
     test_type: str,
+    git_context: GitContext,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -1014,6 +1028,7 @@ def expand_build_configs(
             is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
+            git_context=git_context,
         )
         if platform == "linux":
             linux_config = config
@@ -1119,6 +1134,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        git_context=git_context,
     )
     builds.log()
 
