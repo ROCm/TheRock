@@ -98,7 +98,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
-      RELEASE_TYPE: ${{ inputs.release_type || '' }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
       S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
     steps:
       - name: "Checking out repository"
