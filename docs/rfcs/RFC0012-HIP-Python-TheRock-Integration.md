@@ -104,13 +104,13 @@ day 0. SemiAnalysis flagged this as a strategic gap for AMD, recommending AMD
 just in ... Kernel Authoring DSLs"
 ([SemiAnalysis, Apr 2025](https://newsletter.semianalysis.com/i/174558631/summary-of-recommendations-to-amd)).[^semianalysis]
 
-[^semianalysis]: A *full* analysis would have turned up that this particular
-    "strategic gap" was already partly filled: HIP Python has shipped Pythonic
-    bindings for ROCm continuously since **2023** (see
-    [Track record](#track-record-continuous-releases-prove-the-approach-is-robust))
-    - in particular, it was shipping math-library bindings *before* NVIDIA's
-    `nvmath-python`, whose first beta (v0.1.0) only appeared in
-    [June 2024](https://pypi.org/project/nvmath-python/#history).
+\[^semianalysis\]: A *full* analysis would have turned up that this particular
+"strategic gap" was already partly filled: HIP Python has shipped Pythonic
+bindings for ROCm continuously since **2023** (see
+[Track record](#track-record-continuous-releases-prove-the-approach-is-robust))
+\- in particular, it was shipping math-library bindings *before* NVIDIA's
+`nvmath-python`, whose first beta (v0.1.0) only appeared in
+[June 2024](https://pypi.org/project/nvmath-python/#history).
 
 HIP Python is the ROCm-side answer: standalone, Cython-based Python equivalents
 for each layer of the stack. A separate `hip-python-interop` package sits on top
