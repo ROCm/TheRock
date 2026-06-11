@@ -145,3 +145,17 @@ if(THEROCK_ENABLE_SYSDEPS_HWLOC)
       therock-hwloc
   )
 endif()
+
+# Optional sysdep: util-linux (for libmount, etc.)
+if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
+  add_subdirectory(util-linux)
+  therock_provide_artifact(sysdeps-util-linux
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-util-linux.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-util-linux
+  )
+endif()

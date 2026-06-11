@@ -3,6 +3,7 @@ import platform
 import subprocess
 import sys
 import logging
+from pathlib import Path
 
 
 def prepend_env_path(env: dict, var_name: str, new_path: str):
@@ -14,6 +15,22 @@ def prepend_env_path(env: dict, var_name: str, new_path: str):
         env[var_name] = f"{new_path}{os.pathsep}{existing}"
     else:
         env[var_name] = new_path
+
+
+def build_rocm_loader_env(artifacts_path: Path) -> dict:
+    """Return a copy of os.environ with the ROCm shared-library loader path
+    prepended to the platform-appropriate variable.
+
+    Linux prepends ``<artifacts_path>/lib`` to ``LD_LIBRARY_PATH``.
+    Windows prepends ``<artifacts_path>/bin`` to ``PATH`` (ROCm DLLs live in
+    ``bin/`` on Windows).
+    """
+    env = os.environ.copy()
+    if platform.system() == "Windows":
+        prepend_env_path(env, "PATH", str(artifacts_path / "bin"))
+    else:
+        prepend_env_path(env, "LD_LIBRARY_PATH", str(artifacts_path / "lib"))
+    return env
 
 
 def get_gpu_architecture_portable(therock_build_dir):

@@ -20,6 +20,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1)) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
@@ -159,6 +160,10 @@ def execute_tests(env):
         CATCH_TESTS_PATH,
         "--output-on-failure",
     ]
+
+    # If quick tests are enabled, run only the smoke test subset
+    if TEST_TYPE == "quick":
+        cmd.extend(["-L", "smoke"])
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
         ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
