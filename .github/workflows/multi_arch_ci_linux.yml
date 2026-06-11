@@ -54,19 +54,17 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    container:
+      image: python:3.12-slim
+      options: -v /runner/config:/home/awsconfig/
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /runner/config/credentials.ini
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checking out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
 
       - name: Install artifact manager dependencies
         run: pip install boto3
