@@ -109,7 +109,7 @@ submodules = ["rocm-libraries"]
 
 [source_sets.math-libs]
 description = "Additional math library submodules"
-submodules = ["libhipcxx"]
+submodules = ["libhipcxx", "hipthreads"]
 
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
