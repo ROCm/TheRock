@@ -937,6 +937,7 @@ def main(argv):
         type=str,
         default=[
             "libhipcxx",
+            "hipthreads",
         ],
     )
     args = parser.parse_args(argv)

@@ -34,6 +34,10 @@
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
 	branch = amd-develop
+[submodule "hipthreads"]
+	path = math-libs/hipthreads
+	url = https://github.com/ROCm/hipThreads.git
+	branch = develop
 [submodule "rocgdb"]
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
