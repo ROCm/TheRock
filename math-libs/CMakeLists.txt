@@ -350,7 +350,18 @@ if(THEROCK_ENABLE_BLAS)
   add_subdirectory(BLAS)
 endif()
 
-if(THEROCK_ENABLE_ROCWMMA)
+set(_rocwmma_enabled ${THEROCK_ENABLE_ROCWMMA})
+if(_rocwmma_enabled)
+  therock_filter_amdgpu_targets(_rocwmma_targets rocWMMA ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _rocwmma_targets)
+    message(STATUS
+      "rocWMMA: no supported gfx targets remain after filtering "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+    set(_rocwmma_enabled OFF)
+  endif()
+endif()
+
+if(_rocwmma_enabled)
   ##############################################################################
   # rocWMMA
   ##############################################################################
@@ -405,7 +416,7 @@ if(THEROCK_ENABLE_ROCWMMA)
     SUBPROJECT_DEPS
       rocWMMA
   )
-endif(THEROCK_ENABLE_ROCWMMA)
+endif()
 
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
