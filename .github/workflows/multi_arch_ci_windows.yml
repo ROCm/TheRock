@@ -192,6 +192,8 @@ jobs:
       # Windows runs natively without a container image.
       container_image_name: native
       container_image_url: ""
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   # Multi-arch PyTorch build: one fat wheel covering every target, then
   # split into a host wheel + per-gfx device wheels via rocm-kpack.
