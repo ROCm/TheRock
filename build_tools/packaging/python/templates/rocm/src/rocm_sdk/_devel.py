@@ -313,6 +313,11 @@ def _reconcile_device_links(
     Idempotent and safe to call on every `get_devel_root()`: links already in
     place are left untouched and add nothing to RECORD. Returns the number of
     links created during this call.
+
+    Note: the core CLI trampolines (hipcc etc., see rocm_sdk_core._cli) only
+    reach `get_devel_root()` on the FIRST devel expansion, so a device wheel
+    installed after that is linked by an explicit `rocm-sdk init` / `rocm-sdk
+    path`, not by subsequent compiler invocations.
     """
     plans = _discover_device_link_plans(site_lib_path, expected_version)
     if not plans:
