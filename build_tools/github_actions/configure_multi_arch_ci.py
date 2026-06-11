@@ -942,9 +942,8 @@ def _expand_build_config_for_platform(
             )
 
         # If postsubmit_check_only_for_family is set, skip tests on PRs only
-        if (
-            platform_info.get("postsubmit_check_only_for_family", False)
-            and not (is_push or is_schedule)
+        if platform_info.get("postsubmit_check_only_for_family", False) and not (
+            is_push or is_schedule
         ):
             test_runs_on = ""
             print(
