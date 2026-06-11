@@ -40,8 +40,7 @@ class StageImpactTest(unittest.TestCase):
 
     def test_rocm_libraries_maps_to_math_libs(self):
         """A rocm-libraries submodule change should impact math-libs."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
@@ -59,8 +58,7 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.prim]
             artifact_group = "math-libs"
             type = "target-specific"
-            """
-        )
+            """)
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["rocm-libraries"], topology=topology)
@@ -74,8 +72,7 @@ class StageImpactTest(unittest.TestCase):
 
     def test_llvm_project_maps_to_compiler_runtime(self):
         """An llvm-project submodule change should impact compiler-runtime."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
             submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
@@ -92,8 +89,7 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.amd-llvm]
             artifact_group = "compiler"
             type = "target-neutral"
-            """
-        )
+            """)
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["llvm-project"], topology=topology)
@@ -107,8 +103,7 @@ class StageImpactTest(unittest.TestCase):
 
     def write_narrow_topology(self) -> None:
         """Topology with several independent stages for narrow-impact tests."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
             submodules = ["llvm-project"]
@@ -178,8 +173,7 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.rocgdb]
             artifact_group = "debug-tools"
             type = "target-neutral"
-            """
-        )
+            """)
 
     def test_rocm_libraries_is_narrow(self):
         """rocm-libraries should only rebuild math-libs, not every stage."""
@@ -234,13 +228,11 @@ class StageImpactTest(unittest.TestCase):
 
     def test_unknown_input_forces_full_fallback(self):
         """Unknown input should force a conservative full-CI fallback."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
-            """
-        )
+            """)
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["some-random-dir"], topology=topology)
@@ -252,13 +244,11 @@ class StageImpactTest(unittest.TestCase):
 
     def test_topology_file_change_forces_full_fallback(self):
         """A BUILD_TOPOLOGY.toml change should force full CI fallback."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
-            """
-        )
+            """)
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(["BUILD_TOPOLOGY.toml"], topology=topology)
@@ -269,13 +259,11 @@ class StageImpactTest(unittest.TestCase):
 
     def test_build_tools_change_forces_full_fallback(self):
         """A build_tools change should force full CI fallback."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
             submodules = ["rocm-libraries"]
-            """
-        )
+            """)
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
@@ -288,8 +276,7 @@ class StageImpactTest(unittest.TestCase):
 
     def test_multiple_inputs_deduplicate_impacted_stages(self):
         """Multiple changed inputs should union their impacted stages without duplicates."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
             submodules = ["llvm-project"]
@@ -324,8 +311,7 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.prim]
             artifact_group = "math-libs"
             type = "target-specific"
-            """
-        )
+            """)
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
@@ -341,8 +327,7 @@ class StageImpactTest(unittest.TestCase):
 
     def test_platform_disabled_source_set_is_ignored(self):
         """Source sets disabled for the target platform should not contribute."""
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.common]
             description = "Common"
             submodules = ["common"]
@@ -364,8 +349,7 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.runtime-artifact]
             artifact_group = "runtime"
             type = "target-neutral"
-            """
-        )
+            """)
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
@@ -377,15 +361,16 @@ class StageImpactTest(unittest.TestCase):
         self.assertIn("windows-only", result.unmatched_inputs)
 
     def write_nested_path_topology(self) -> None:
-        self.write_topology(
-            """
+        self.write_topology("""
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
-            submodules = ["amd-llvm"]
+            submodules = ["llvm-project", "HIPIFY"]
+            path_prefixes = ["compiler/amd-llvm", "compiler/hipify"]
 
             [source_sets.math-libs]
             description = "Math libraries"
             submodules = ["libhipcxx"]
+            path_prefixes = ["math-libs/libhipcxx"]
 
             [artifact_groups.compiler]
             description = "Compiler"
@@ -413,8 +398,7 @@ class StageImpactTest(unittest.TestCase):
             [artifacts.prim]
             artifact_group = "math-libs"
             type = "target-specific"
-        """
-        )
+            """)
 
     def test_nested_math_libs_path_maps_to_math_libs(self):
         self.write_nested_path_topology()
@@ -430,12 +414,12 @@ class StageImpactTest(unittest.TestCase):
         self.assertIn("math-libs", result.impacted_artifact_groups)
         self.assertIn("math-libs", result.rebuild_stages)
 
-    def test_root_level_path_still_maps(self):
+    def test_nested_hipify_path_maps_to_compiler_runtime(self):
         self.write_nested_path_topology()
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
-            ["amd-llvm/src/foo.cpp"],
+            ["compiler/hipify/src/foo.cpp"],
             topology=topology,
         )
 

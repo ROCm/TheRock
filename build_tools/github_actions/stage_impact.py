@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from sys import platform
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from _therock_utils.build_topology import BuildTopology, SourceSet
@@ -104,9 +103,7 @@ class StageImpactAnalyzer:
             reasons.append("No changed input could be mapped to a known source set")
 
         impacted_artifact_groups = self._resolve_artifact_groups(matched_source_sets)
-        impacted_stages = self._resolve_stages(
-            impacted_artifact_groups, platform=platform
-        )
+        impacted_stages = self._resolve_stages(impacted_artifact_groups)
 
         # Conservative downstream expansion: if a stage is impacted, any stage
         # that consumes its produced artifact groups is also impacted.
@@ -182,6 +179,10 @@ class StageImpactAnalyzer:
         if source_set is not None:
             return source_set
 
+        source_set = self.topology.get_source_set_for_path(item, platform=platform)
+        if source_set is not None:
+            return source_set
+
         # Then try each path component as a possible submodule root.
         for part in PurePosixPath(item).parts:
             source_set = self.topology.get_source_set_for_submodule(
@@ -200,9 +201,7 @@ class StageImpactAnalyzer:
             groups.update(source_set_to_groups.get(source_set_name, []))
         return groups
 
-    def _resolve_stages(
-        self, artifact_groups: Set[str], platform: Optional[str]
-    ) -> Set[str]:
+    def _resolve_stages(self, artifact_groups: Set[str]) -> Set[str]:
         stages_by_group = self.topology.get_artifact_group_to_build_stages()
         impacted_stages: Set[str] = set()
 

@@ -76,6 +76,7 @@ class SourceSet:
     submodules: List[Submodule] = field(default_factory=list)
     external_git_sources: List[ExternalGitSource] = field(default_factory=list)
     disable_platforms: List[str] = field(default_factory=list)
+    path_prefixes: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -176,6 +177,7 @@ class BuildTopology:
                 submodules=submodules,
                 external_git_sources=external_git_sources,
                 disable_platforms=set_data.get("disable_platforms", []),
+                path_prefixes=set_data.get("path_prefixes", []),
             )
 
         # Parse build stages
@@ -489,6 +491,24 @@ class BuildTopology:
                             f"External git source '{source.name}' path '{source.path}' "
                             "must be under optional-sources/"
                         )
+            for prefix in source_set.path_prefixes:
+                if not prefix:
+                    errors.append(
+                        f"Source set '{source_set_name}' has an empty path_prefix"
+                    )
+                    continue
+
+                prefix_path = Path(prefix)
+                if prefix_path.is_absolute():
+                    errors.append(
+                        f"Source set '{source_set_name}' path_prefix '{prefix}' "
+                        "must be relative"
+                    )
+                if ".." in prefix_path.parts:
+                    errors.append(
+                        f"Source set '{source_set_name}' path_prefix '{prefix}' "
+                        "must not contain '..'"
+                    )
 
         return errors
 
@@ -621,6 +641,21 @@ class BuildTopology:
                     )
                 else:
                     submodule_owner[submodule.name] = source_set.name
+
+        # Check for conflicting path prefix ownership.
+        path_prefix_owner: Dict[str, str] = {}
+        for source_set in self.source_sets.values():
+            for prefix in source_set.path_prefixes:
+                normalized_prefix = prefix.rstrip("/")
+                previous_source_set = path_prefix_owner.get(normalized_prefix)
+
+                if previous_source_set and previous_source_set != source_set.name:
+                    errors.append(
+                        f"Path prefix '{normalized_prefix}' is used by both "
+                        f"source sets '{previous_source_set}' and '{source_set.name}'"
+                    )
+                else:
+                    path_prefix_owner[normalized_prefix] = source_set.name
 
         return errors
 
@@ -846,6 +881,27 @@ class BuildTopology:
 
             for submodule in source_set.submodules:
                 if submodule.name == submodule_name:
+                    return source_set
+
+        return None
+
+    def get_source_set_for_path(
+        self, path: str, platform: Optional[str] = None
+    ) -> Optional[SourceSet]:
+        """
+        Return the first source set whose path_prefixes match the given path.
+        """
+        normalized_path = path.strip().lstrip("./")
+
+        for source_set in self.source_sets.values():
+            if platform and platform in source_set.disable_platforms:
+                continue
+
+            for prefix in source_set.path_prefixes:
+                prefix = prefix.rstrip("/")
+                if normalized_path == prefix or normalized_path.startswith(
+                    prefix + "/"
+                ):
                     return source_set
 
         return None
