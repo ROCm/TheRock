@@ -25,4 +25,6 @@ include = [
 [components.test."math-libs/hipFFT/stage"]
 include = [
   "bin/hipfft-test*",
+  # ctest discovery (test_runner.py runs ctest from bin/hipfft/; needs CTestTestfile.cmake)
+  "bin/hipfft/**",
 ]

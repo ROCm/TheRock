@@ -419,6 +419,28 @@ test_matrix = {
             "windows": 2,
         },
     },
+    # hipFFT multi-GPU subset: only the *multi_gpu* hipfft tests, scheduled on
+    # 8-GPU runners. Shares the hipfft-test binary/artifacts with the single-GPU
+    # "hipfft" job above. test_runner.py rewrites the ctest label to
+    # "multigpu_<category>" for this job (see MULTI_GPU_COMPONENTS), so it selects
+    # only the multigpu_* labelled tests from hipfft's test_categories.yaml.
+    "hipfft-multi-gpu": {
+        "job_name": "hipfft-multi-gpu",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        # Only schedule on tiers that define multigpu_<tier> labels in hipfft's
+        # test_categories.yaml (multigpu_comprehensive/full). This keeps the scarce
+        # 8-GPU runner from being claimed by "quick"/"standard" runs that have no
+        # multi-GPU tests.
+        "run_for_test_types": ["comprehensive", "full"],
+        # Architectures that we have multi GPU setup for testing.
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
@@ -731,6 +753,18 @@ def run():
         parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
         if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
+        # Some components only make sense for certain test tiers (e.g. multi-GPU
+        # split jobs whose tests are only labelled for standard/comprehensive/full).
+        # Skip the component when the workflow TEST_TYPE is not one of its declared
+        # run_for_test_types. This avoids scheduling a scarce multi-GPU runner for a
+        # "quick" run that has no multi-GPU tests to execute.
+        run_for_test_types = selected_matrix[key].get("run_for_test_types")
+        if run_for_test_types is not None and test_type not in run_for_test_types:
+            logging.info(
+                f"Excluding job {job_name}: test_type '{test_type}' not in {run_for_test_types}"
+            )
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.

@@ -46,6 +46,12 @@ if TEST_TYPE not in VALID_TEST_CATEGORIES:
     TEST_TYPE = "quick"
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
+# Job names (TEST_COMPONENT values) that run the multi-GPU only subset of a
+# component's tests. For these, the ctest label queried is "multigpu_<category>"
+# (e.g. multigpu_full) instead of the base "<category>" label, so the job selects
+# only the multi-GPU tests defined in the component's test_categories.yaml.
+MULTI_GPU_COMPONENTS = {"hipfft-multi-gpu"}
+
 # Map job names to actual test directory names
 # The job names come from TEST_COMPONENT env var (set by GitHub Actions workflow)
 # and need to be mapped to the actual directory names in THEROCK_BIN_DIR
@@ -67,6 +73,8 @@ COMPONENT_DIR_MAPPING = {
     "hipsparselt": "hipsparselt",
     "rocroller": "rocroller",
     "hipblas": "hipblas",
+    # Multi-GPU split jobs reuse the single-GPU component's test directory/binary.
+    "hipfft-multi-gpu": "hipfft",
     # Add more mappings as needed
 }
 
@@ -350,10 +358,18 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
     # a single -LE regex.  Multiple -LE flags are ANDed by ctest, which would
     # only exclude tests matching ALL patterns.  We need OR semantics instead.
     le_patterns = []
-    include_labels = [category]
+    # Multi-GPU split components select the namespaced "multigpu_<category>" label
+    # (e.g. multigpu_full) so they run only the multi-GPU subset. Single-GPU jobs
+    # use the base "<category>" label, which never matches multigpu_* tests, so no
+    # extra exclusion is needed on the single-GPU side.
+    if test_component_job_name in MULTI_GPU_COMPONENTS:
+        primary_label = f"multigpu_{category}"
+    else:
+        primary_label = category
+    include_labels = [primary_label]
 
-    # Exclude tests labeled with {category}_exclude if that label exists
-    category_exclude_label = f"{category}_exclude"
+    # Exclude tests labeled with {primary_label}_exclude if that label exists
+    category_exclude_label = f"{primary_label}_exclude"
     if category_exclude_label in exclude_labels:
         le_patterns.append(category_exclude_label)
         print(f"# Excluding tests with label: {category_exclude_label}")
