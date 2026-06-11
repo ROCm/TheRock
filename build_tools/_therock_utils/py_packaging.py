@@ -601,18 +601,27 @@ class PopulatedDistPackage:
             libraries_pkg_name = libraries_entry.get_py_package_name(target_family=None)
             libraries_platform_dir = package_path.parent / libraries_pkg_name
 
+            # Use relative symlinks so they survive tarball extraction at any
+            # install prefix. Both devel and libraries platform dirs are siblings
+            # under site-packages/, so "../<libraries_pkg_name>/..." is correct.
             kpack_link = package_path / ".kpack"
             if not kpack_link.exists():
-                kpack_link.symlink_to(libraries_platform_dir / ".kpack")
+                kpack_link.symlink_to(Path("..") / libraries_pkg_name / ".kpack")
                 log(
-                    f"::: Created .kpack symlink in devel: {kpack_link} -> {libraries_platform_dir / '.kpack'}"
+                    f"::: Created .kpack symlink in devel: {kpack_link} -> ../{libraries_pkg_name}/.kpack"
                 )
 
             rocblas_library_link = package_path / "lib" / "rocblas" / "library"
             if not rocblas_library_link.exists():
                 rocblas_library_link.parent.mkdir(parents=True, exist_ok=True)
                 rocblas_library_link.symlink_to(
-                    libraries_platform_dir / "lib" / "rocblas" / "library"
+                    Path("..")
+                    / ".."
+                    / ".."
+                    / libraries_pkg_name
+                    / "lib"
+                    / "rocblas"
+                    / "library"
                 )
                 log(
                     f"::: Created rocblas/library symlink in devel: {rocblas_library_link}"
