@@ -79,6 +79,12 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
 
   workflow_call:
     inputs:

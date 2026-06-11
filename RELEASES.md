@@ -180,6 +180,22 @@ After installing, verify your installation:
 rocm-sdk test
 ```
 
+The `rocm-sdk-devel` development files (headers, CMake config, and the device
+`.kpack`/kernel files from your `rocm-sdk-device-*` wheels) are expanded on first
+use. To expand them eagerly, run `rocm-sdk init`.
+
+> [!NOTE]
+> The devel tree is expanded - and its device files linked from the installed
+> `rocm-sdk-device-*` wheels - only once: on the first `rocm-sdk init` /
+> `rocm-sdk test`, or the first use of a devel tool such as `hipcc`. If you
+> install or remove a `rocm-sdk-device-*` wheel (for example, adding a second GPU
+> target) **after** that first expansion, re-run `rocm-sdk init` or `rocm-sdk test`
+> to link the new device files. The compiler tools do not re-scan on their own,
+> so a device wheel added later is not picked up until you run one of those again.
+> Uninstalling a `rocm-sdk-device-*` wheel removes its devel files automatically
+> via `pip`. If the devel tree ever ends up in a bad state, recreate the virtual
+> environment.
+
 #### Supported Python `[device-*]` install extras
 
 For packages which include device-specific code (such as `rocm`, `torch`, and
