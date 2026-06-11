@@ -155,6 +155,8 @@ jobs:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       rocm_version: ${{ inputs.rocm_deb_package_version || inputs.rocm_package_version }}
       native_package_type: deb
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -168,6 +170,8 @@ jobs:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       rocm_version: ${{ inputs.rocm_rpm_package_version || inputs.rocm_package_version }}
       native_package_type: rpm
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
