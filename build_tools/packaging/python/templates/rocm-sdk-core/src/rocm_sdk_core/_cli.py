@@ -85,7 +85,8 @@ def _get_module_path(expand_devel: bool) -> Path:
     `rocm_sdk._devel._reconcile_device_links` (only `_expand_devel_module()` /
     `rocm-sdk init` does that). So a `rocm-sdk-device-*` wheel installed or
     removed after the first expansion is NOT picked up by these trampolines
-    (e.g. hipcc); refresh it with an explicit `rocm-sdk init` / `rocm-sdk path`.
+    (e.g. hipcc); refresh it with an explicit
+    `rocm-sdk init` / `rocm-sdk path` / `rocm-sdk test`.
     This is intentional: reconciling on every compiler invocation would add a
     subprocess + metadata scan to a build hot path.
     """

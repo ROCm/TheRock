@@ -14,18 +14,15 @@ We generate the following types of packages:
   evaluated at the point of install, allowing it to perform some selection logic
   to detect dependencies and needs. Most other packages are installed by
   asking to install extras of this one (i.e. `rocm[libraries]`, etc).
-
   - The `rocm` package provides the `rocm-sdk` tool.
   - The `rocm` package uses the `import rocm_sdk` Python namespace as we do
     not want a barename `rocm`.
-
 - Runtime packages: Most packages are runtime packages. These are wheel files
   that are ready to be expanded directly into a site-lib directory. They contain
   only the minimal set of files needed to run. Critically, they do not contain
   symlinks (instead, only SONAME libraries are included, and any executable
   symlinks are emitted by dynamically compiling an executable that can execle
   a relative binary).
-
 - Device packages: When kpack artifact splitting is enabled
   (`KPACK_SPLIT_ARTIFACTS` flag in `therock_manifest.json`), per-ISA device
   wheels (`rocm-sdk-device-{target}`) are produced alongside an arch-neutral
@@ -35,7 +32,6 @@ We generate the following types of packages:
   site-packages. Each device wheel declares `Requires-Dist` on the matching
   version of `rocm-sdk-libraries`. Users install only the device wheels for
   their GPU target(s).
-
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
   For any file already populated in a runtime package, it will include it as
   a relative symlink in the tarball. During extraction, file symlinks are
@@ -45,17 +41,6 @@ We generate the following types of packages:
   wheel file, the platform contents are stored in a `_devel.tar` or `_devel.tar.xz`
   file. The installed package is extended in response to requesting a path to it
   via the `rocm-sdk` tool.
-
-  In kpack-split mode the devel tree is arch-neutral and does not itself contain
-  per-ISA device files. Instead, each installed `rocm-sdk-device-{target}` wheel
-  carries a manifest, and `rocm-sdk init` (which also runs on the first use of a
-  devel tool such as `hipcc`) hardlinks that wheel's device files from
-  `rocm-sdk-libraries` into the devel tree, recording them in the device wheel's
-  `RECORD` so `pip uninstall` removes them. Because the compiler trampolines only
-  trigger this on the first expansion, **after installing or removing a
-  `rocm-sdk-device-*` wheel into an already-initialized environment, run
-  `rocm-sdk init` (or any `rocm-sdk path`) to refresh the device files in the
-  devel tree.**
 
 ### Legacy vs kpack-split packaging modes
 
@@ -71,6 +56,16 @@ The packaging pipeline supports two modes, selected automatically based on the
   via separate `rocm-sdk-device-{target}` wheels, one per GFX ISA target.
   The devel package is also arch-neutral and excludes test binaries (which
   require device code to run).
+
+In kpack-split mode the arch-neutral `rocm-sdk-devel` tree does not itself contain
+per-ISA device files. Each installed `rocm-sdk-device-{target}` wheel ships a
+manifest, and `rocm-sdk init` - which also runs on the first use of a devel tool
+such as `hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries`
+into the devel tree, recording them in the device wheel's `RECORD` so
+`pip uninstall` removes them. Because the compiler trampolines only trigger this
+on the first expansion, after installing or removing a `rocm-sdk-device-*` wheel
+in an already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test`
+to refresh the device files in the devel tree.
 
 It is expected that all packages are installed in the same site-lib, as they use
 relative symlinks and RPATHs that cross the top-level package boundary. The

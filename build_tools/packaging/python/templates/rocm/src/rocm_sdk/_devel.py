@@ -450,7 +450,12 @@ class FileLock:
 
     def __init__(self, file: io.TextIOWrapper):
         self.file = file
-        self.original_file_size = os.path.getsize(file.name)
+        # Lock at least one byte. On Windows, msvcrt.locking treats a zero-length
+        # range as a no-op (a lock on an empty file does not block), so a lock
+        # file that starts empty - like the reconcile sentinel - would not
+        # actually serialize callers. Locking one byte at offset 0 is valid even
+        # when the file is empty.
+        self.lock_size = max(os.path.getsize(file.name), 1)
 
         if _is_windows():
             # The Windows APIs for file locking apply to only a given range
@@ -462,7 +467,7 @@ class FileLock:
 
             original_position = self.file.tell()
             self.file.seek(0)
-            msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, self.original_file_size)
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, self.lock_size)
             self.file.seek(original_position)
         else:
             # The Unix APIs for file locking apply to the entire file descriptor.
@@ -476,7 +481,7 @@ class FileLock:
 
             original_position = self.file.tell()
             self.file.seek(0)
-            msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, self.original_file_size)
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, self.lock_size)
             self.file.seek(original_position)
         else:
             import fcntl

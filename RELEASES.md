@@ -180,6 +180,22 @@ After installing, verify your installation:
 rocm-sdk test
 ```
 
+The `rocm-sdk-devel` development files (headers, CMake config, and the device
+`.kpack`/kernel files from your `rocm-sdk-device-*` wheels) are expanded on first
+use. To expand them eagerly, run `rocm-sdk init`.
+
+> [!NOTE]
+> The devel tree is expanded - and its device files linked from the installed
+> `rocm-sdk-device-*` wheels - only once: on the first `rocm-sdk init` /
+> `rocm-sdk test`, or the first use of a devel tool such as `hipcc`. If you
+> install or remove a `rocm-sdk-device-*` wheel (for example, adding a second GPU
+> target) **after** that first expansion, re-run `rocm-sdk init` or `rocm-sdk test`
+> to link the new device files. The compiler tools do not re-scan on their own,
+> so a device wheel added later is not picked up until you run one of those again.
+> Uninstalling a `rocm-sdk-device-*` wheel removes its devel files automatically
+> via `pip`. If the devel tree ever ends up in a bad state, recreate the virtual
+> environment.
+
 #### Supported Python `[device-*]` install extras
 
 For packages which include device-specific code (such as `rocm`, `torch`, and
@@ -659,16 +675,6 @@ Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
 
 These contents are useful for using the package outside of Python and _lazily_ expanded on the
 first use when used from Python.
-
-> [!NOTE]
-> The devel tree is expanded (and its device files linked) only once - on the
-> first `rocm-sdk init` or the first use of a devel tool such as `hipcc`. If you
-> install or remove a `rocm-sdk-device-*` wheel (for example, adding a second GPU
-> target) **after** that first expansion, re-run `rocm-sdk init` to link the new
-> device files into the devel tree. The compiler tools do not re-scan on their
-> own, so a device wheel added later is not picked up until you run
-> `rocm-sdk init` (or any `rocm-sdk path`) again. Uninstalling a `rocm-sdk-device-*`
-> wheel removes its devel files automatically via `pip`.
 
 Once you have verified your installation, you can continue to use it for
 standard ROCm development or install PyTorch, JAX, or another supported Python ML
