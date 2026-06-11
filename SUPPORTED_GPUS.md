@@ -34,9 +34,8 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
-| **CDNA5**    | **gfx1250** |               |               |               |
 | **CDNA4**    | **gfx950**  | ✅            |               |               |
-| **CDNA3**    | **gfx942**  | ✅            | ✅            | ✅            |
+| **CDNA3**    | **gfx942**  | ✅            | ✅            | ✅           |
 | CDNA2        | gfx90a      | ✅            |               |               |
 | CDNA         | gfx908      | ✅            |               |               |
 | GCN5.1       | gfx906      | ✅            |               |               |
