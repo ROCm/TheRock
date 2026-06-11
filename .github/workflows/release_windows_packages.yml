@@ -40,11 +40,9 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
-        type: choice
-        options:
-          - dev
-        default: dev
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+        type: string
+        default: "dev"
       package_suffix:
         type: string
       s3_subdir:

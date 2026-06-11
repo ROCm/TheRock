@@ -48,6 +48,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -91,6 +95,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        type: boolean
+        default: false
 
 run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -137,3 +145,101 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
+
+  dispatch_pytorch_wheels_full_test:
+    name: Dispatch PyTorch Full Test | gfx94X-dcgpu | torch ${{ matrix.pytorch_git_ref }}
+    # Existing rockrel wrappers do not pass run_full_pytorch_tests, so this
+    # remains a no-op until the companion rockrel wrapper PR enables the flag
+    # and provides test_pytorch_wheels_full.yml in that repository.
+    if: >-
+      ${{
+        inputs.run_full_pytorch_tests &&
+        inputs.release_type == 'nightly' &&
+        needs.build_pytorch_wheels.result == 'success'
+      }}
+    needs: [build_pytorch_wheels]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pytorch_git_ref: release/2.9
+            pytorch_git_repo: ROCm/pytorch
+            torch_package: "torch==2.9.*"
+            dispatch_on: daily
+          - pytorch_git_ref: release/2.10
+            pytorch_git_repo: ROCm/pytorch
+            torch_package: "torch==2.10.*"
+            dispatch_on: daily
+          - pytorch_git_ref: release/2.11
+            pytorch_git_repo: ROCm/pytorch
+            torch_package: "torch==2.11.*"
+            dispatch_on: daily
+          - pytorch_git_ref: nightly
+            pytorch_git_repo: pytorch/pytorch
+            torch_package: "torch"
+            dispatch_on: sunday
+    env:
+      PACKAGE_INDEX_URL: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+      PYTHON_VERSION: "3.12"
+      TORCH_PACKAGE: ${{ matrix.torch_package }}
+    steps:
+      - name: Check full test cadence
+        id: cadence
+        run: |
+          if [ "${{ matrix.dispatch_on }}" = "daily" ] || [ "$(date -u +%u)" = "7" ]; then
+            echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve torch version
+        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
+        id: resolve
+        run: |
+          REPORT_PATH="${RUNNER_TEMP}/torch-install-report.json"
+
+          python -m pip install "${TORCH_PACKAGE}" \
+            --dry-run \
+            --ignore-installed \
+            --no-deps \
+            --only-binary=:all: \
+            --pre \
+            --index-url "${PACKAGE_INDEX_URL}" \
+            --python-version "${PYTHON_VERSION}" \
+            --platform linux_x86_64 \
+            --report "${REPORT_PATH}"
+
+          TORCH_VERSION=$(python -c 'import json, sys; print(json.load(open(sys.argv[1]))["install"][0]["metadata"]["version"])' "${REPORT_PATH}")
+
+          if [ -z "${TORCH_VERSION}" ]; then
+            echo "::error::Failed to resolve ${TORCH_PACKAGE} from ${PACKAGE_INDEX_URL}"
+            exit 1
+          fi
+
+          echo "torch_version=${TORCH_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved torch_version: ${TORCH_VERSION}"
+
+      - name: Dispatch full PyTorch test workflow
+        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        with:
+          workflow: test_pytorch_wheels_full.yml
+          inputs: |
+            { "amdgpu_family": "gfx94X-dcgpu",
+              "test_runs_on": "linux-gfx942-1gpu-ossci-rocm",
+              "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
+              "package_index_url": "${{ env.PACKAGE_INDEX_URL }}",
+              "python_version": "3.12",
+              "torch_version": "${{ steps.resolve.outputs.torch_version }}",
+              "pytorch_git_ref": "${{ matrix.pytorch_git_ref }}",
+              "pytorch_git_repo": "${{ matrix.pytorch_git_repo }}",
+              "test_configs": "default distributed inductor",
+              "tests_to_include": "",
+              "multi_arch": true,
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref }}"
+            }
