@@ -188,9 +188,8 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
-      # Skip sccache for external repos - OIDC trust policy only covers TheRock.
       - name: Configure AWS Credentials for sccache
-        if: ${{ inputs.cache_type == 'sccache' && inputs.repository == '' }}
+        if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         with:
           aws-region: us-east-1
@@ -225,14 +224,11 @@ jobs:
       # TODO(#4687): Make --pytorch-rocm-arch required here once every
       # caller plumbs the value through and the fallback in
       # build_prod_wheels.py::get_rocm_sdk_targets is removed.
-      #
-      # External repos (inputs.repository != '') skip sccache since OIDC
-      # trust policy only covers TheRock repo.
       - name: Build PyTorch wheels
         shell: cmd
         run: |
           set "CACHE_FLAG="
-          if "${{ inputs.cache_type }}"=="sccache" if "${{ inputs.repository }}"=="" set "CACHE_FLAG=--use-sccache"
+          if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
 
           set "PYTORCH_ROCM_ARCH_FLAG="
