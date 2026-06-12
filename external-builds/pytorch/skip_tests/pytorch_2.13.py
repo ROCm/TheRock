@@ -44,27 +44,9 @@ skip_tests = {
             # expected device-assert stderr signature; FAILED CONSISTENTLY.
             "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float16)",
             "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float32)",
-            # Run 27228539427 default shard 8/10:
-            # Conv2d deterministic cudnn dilation=2 bf16 hangs GPU in backward
-            # after MIOpen GemmFwdRest workspace warning.
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_bfloat16)",
-            # Run 27246343570 default shard 8/10, job 80461205597:
-            # Conv2d deterministic cudnn dilation=2 complex64 exceeds the
-            # TheRock command watchdog; dilation=3 bf16 hits a MIOpen GPU hang.
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_complex64)",
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_3_cuda_bfloat16)",
-            # Run 27228539427 default shard 10/10:
-            # Conv2d deterministic cudnn dilation=1 variants exceed TheRock's
-            # command watchdog on gfx94X; float16 was active when GitHub
-            # cancelled at 6h.
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_bfloat16)",
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_complex64)",
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_float16)",
-            # Run 27246343570 default shard 10/10, job 80461205617:
-            # Additional deterministic convolution variants repeatedly hit
-            # TheRock 30-minute watchdogs before the job's 6h cancellation.
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_1_cuda_float32)",
-            "(TestConvolutionNNDeviceTypeCUDA and test_Conv2d_deterministic_cudnn_dilation_2_cuda_float16)",
+            # nn/test_convolution.py: module-excluded in run_pytorch_tests_full.py
+            # (MIOpen deterministic conv watchdog/hangs). Triage evidence lives in
+            # pytorch-ci-triage-results.md, not per-test skips here.
         ],
         "decomp": [
             # Run 27361388921 default shard 4/10, job 80849478614:
@@ -291,6 +273,17 @@ skip_tests = {
             # Run 27361388921 default shard 6/10, job 80849478677:
             # DynamicShapesCpuTests::test_tmp_not_defined_issue3_dynamic_shapes_cpu grad mismatch.
             "(DynamicShapesCpuTests and test_tmp_not_defined_issue3_dynamic_shapes_cpu)",
+            # Run 27373187888 default shard 4/10, job 80890658592:
+            # CompiledOptimizerTests::test_adam_tensor_lr_amsgrad_capturable_cuda_steplr hit
+            # HW Exception GPU Hang and Fatal Python error: Aborted in
+            # inductor/test_compiled_optimizers.py (shard 2/2). Intermittent on gfx942
+            # (same test passed in run 27361388921 shard 4/10); provisional skip pending ROCm issue.
+            "(CompiledOptimizerTests and test_adam_tensor_lr_amsgrad_capturable_cuda_steplr)",
+            # Run 27373187888 default shard 3/10, job 80890658562:
+            # TestInductorOpInfoCUDA::test_comprehensive_masked_mean_cuda_float32 hit
+            # HW Exception GPU Hang and Fatal Python error: Aborted in
+            # inductor/test_torchinductor_opinfo.py (shard 6/9). Provisional skip pending ROCm issue.
+            "(TestInductorOpInfoCUDA and test_comprehensive_masked_mean_cuda_float32)",
         ],
         "extension_backend": [
             # Run 27361388921 default shard 4/10, job 80849478614:
@@ -348,6 +341,10 @@ skip_tests = {
             # TestCommonCUDA::test_dtypes_baddbmm_cuda hit HW Exception GPU Hang and
             # Fatal Python error: Aborted.
             "(TestCommonCUDA and test_dtypes_baddbmm_cuda)",
+            # Run 27373187888 default shard 9/10, job 80890658618:
+            # TestCompositeComplianceCUDA::test_forward_ad_nn_functional_group_norm_cuda_float32
+            # hit HW Exception GPU Hang after baddbmm skip; provisional ROCm hang.
+            "(TestCompositeComplianceCUDA and test_forward_ad_nn_functional_group_norm_cuda_float32)",
             # Run 27361388921 default shard 6/10, job 80849478677:
             # TestCommonCUDA::test_reduction_ops_reduce_std_cuda hits ZeroDivisionError
             # during std reduction on ROCm.
