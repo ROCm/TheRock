@@ -146,13 +146,13 @@ jobs:
 
   setup_full_test_matrix:
     name: Setup Full PyTorch Test Matrix
-    # Only relevant for scheduled nightly runs that opt into full tests. The
-    # matrix is derived from the requested AMDGPU families so coverage tracks
-    # what was built instead of a single hardcoded family (#5755).
+    # Only relevant for scheduled runs that opt into full tests. The matrix is
+    # derived from the requested AMDGPU families so coverage tracks what was
+    # built instead of a single hardcoded family (#5755).
     if: >-
       ${{
         inputs.run_full_pytorch_tests &&
-        inputs.release_type == 'nightly'
+        (inputs.release_type == 'nightly' || inputs.release_type == 'dev')
       }}
     runs-on: ubuntu-24.04
     permissions:
@@ -160,6 +160,7 @@ jobs:
     outputs:
       enabled: ${{ steps.matrix.outputs.enabled }}
       matrix: ${{ steps.matrix.outputs.matrix }}
+      package_index_url: ${{ steps.index_url.outputs.package_index_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -177,6 +178,12 @@ jobs:
             --include-multi-gpu \
             --default-test-configs "default distributed inductor"
 
+      - name: Resolve package index URL
+        id: index_url
+        run: |
+          python ./build_tools/github_actions/multi_arch_release_urls.py \
+            --release-type "${{ inputs.release_type }}"
+
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | ${{ matrix.family.amdgpu_family }} | torch ${{ matrix.pytorch.pytorch_git_ref }}
     # Existing rockrel wrappers do not pass run_full_pytorch_tests, so this
@@ -185,7 +192,7 @@ jobs:
     if: >-
       ${{
         inputs.run_full_pytorch_tests &&
-        inputs.release_type == 'nightly' &&
+        (inputs.release_type == 'nightly' || inputs.release_type == 'dev') &&
         needs.build_pytorch_wheels.result == 'success' &&
         needs.setup_full_test_matrix.outputs.enabled == 'true'
       }}
@@ -219,7 +226,7 @@ jobs:
             torch_package: "torch"
             dispatch_on: sunday
     env:
-      PACKAGE_INDEX_URL: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+      PACKAGE_INDEX_URL: ${{ needs.setup_full_test_matrix.outputs.package_index_url }}
       PYTHON_VERSION: "3.12"
       TORCH_PACKAGE: ${{ matrix.pytorch.torch_package }}
     steps:
