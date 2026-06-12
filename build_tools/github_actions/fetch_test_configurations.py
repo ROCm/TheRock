@@ -281,7 +281,7 @@ test_matrix = {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_hipcub.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -314,7 +314,7 @@ test_matrix = {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_rocthrust.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
