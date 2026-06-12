@@ -31,6 +31,18 @@ There are a few modes this can be used in:
     python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
     deactivate
     ```
+
+Some automated workflows using this script to install packages can run shortly
+after other workflows uploads those packages. In these cases server-side index
+generation may not have completed yet and installs can fail for 1-3 minutes.
+Package installs are retried by default to cover that transient window. This
+behavior can be adjusted with the `--install-retry-seconds` and
+`--install-retry-delay-seconds` arguments.
+See https://github.com/ROCm/TheRock/issues/5455 for more details.
+
+TODO: update docs and args for multi-arch
+   * --index-url https://rocm.nightlies.amd.com/whl-multi-arch/
+   * refresh ROCM_INDEX_URLS_MAP
 """
 
 import argparse
