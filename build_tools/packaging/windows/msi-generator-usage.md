@@ -1,49 +1,97 @@
 # generate_msi_wxs.py — Usage Guide
 
-`build_tools/generate_msi_wxs.py` inspects the built ROCm distribution tree
-and produces a WiX v4 `.wxs` source file describing every file, directory,
-component, and feature needed to build a silent MSI installer.
+`build_tools/packaging/windows/generate_msi_wxs.py` reads artifact TOML
+descriptors to determine which files each MSI should include, then produces a
+WiX v4 `.wxs` source file.  Using artifact TOMLs as the source of truth means
+the MSI file lists automatically track the build system's own packaging rules
+with no separate manifest to maintain.
 
 ## Prerequisites
 
 | Requirement | Notes |
 |---|---|
-| Python 3.9+ | Required for `xml.etree.ElementTree.indent()` |
-| [WiX Toolset v4](https://wixtoolset.org/) | `winget install WiXToolset.WiX` |
-| Completed TheRock build | `build/dist/rocm/bin/` and `build/dist/rocm/lib/` must exist |
+| Python 3.11+ | Or Python 3.9+ with `pip install tomli` |
+| [WiX Toolset v4](https://wixtoolset.org/) | `dotnet tool install --global wix --version "4.*"` |
+| `pyzstd` | Required for `--artifacts-url`: `pip install pyzstd` |
+| Built TheRock or artifact URL | Local build or remote `.tar.zst` artifacts |
 
 ## Quick Start
 
-```bat
-:: 1. Generate the WiX source file
-python build_tools\generate_msi_wxs.py
+### From a remote artifact URL (recommended)
 
-:: 2. Compile to MSI
-wix build build\amdrocm-runtimes.wxs -o build\amdrocm-runtimes.msi
+```bat
+:: Generate the WiX source from nightly artifacts
+python build_tools\packaging\windows\generate_msi_wxs.py ^
+    --package hip-runtime ^
+    --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
+
+:: Compile to MSI
+wix build build_tools\packaging\windows\amdrocm-hip-runtime.wxs ^
+    -o build_tools\packaging\windows\amdrocm-hip-runtime.msi
 ```
+
+### From a local build
+
+```bat
+:: Generate (uses build/dist/rocm and build/<component>/stage/ automatically)
+python build_tools\packaging\windows\generate_msi_wxs.py --package hip-runtime
+
+:: Compile to MSI
+wix build build_tools\packaging\windows\amdrocm-hip-runtime.wxs ^
+    -o build_tools\packaging\windows\amdrocm-hip-runtime.msi
+```
+
+## Available Packages
+
+```bat
+python build_tools\packaging\windows\generate_msi_wxs.py --list
+```
+
+| Package | Output stem | Contents |
+|---|---|---|
+| `hip-runtime` | `amdrocm-hip-runtime` | HIP runtime DLLs, hipcc, hipconfig, kernel package support |
+| `runtimes` | `amdrocm-runtimes` | HIP runtime + AMD LLVM compiler runtime (hipcc, comgr, device libs) |
 
 ## Options
 
-### Source and output
+### Package selection
+
+| Flag | Description |
+|---|---|
+| `--package NAME` | Package to generate (required). Use `--list` to see options. |
+| `--list` | Print available package names and descriptions, then exit. |
+
+### Artifact source
 
 | Flag | Default | Description |
 |---|---|---|
-| `--dist-root PATH` | `build/dist/rocm` | Root of the built ROCm distribution tree. Must contain `bin/` and `lib/`. |
-| `--output PATH` | `build/amdrocm-runtimes.wxs` | Destination path for the generated `.wxs` file. |
+| `--artifacts-url URL` | *(none)* | Base URL of a TheRock artifact storage directory containing `{name}_{component}_generic.tar.zst` files. When set, artifacts are downloaded, extracted, and used as precise stage trees. |
+| `--artifacts-cache-dir PATH` | `<script-dir>/.artifact-cache` | Cache directory for downloaded and extracted artifacts. Reuse across runs to avoid re-downloading. |
+| `--build-root PATH` | `build/` | CMake build directory containing per-component stage trees (`build/<basedir>/stage/`). Ignored when `--artifacts-url` is set. |
+| `--dist-root PATH` | `build/dist/rocm` | Merged ROCm distribution tree. Used as the fallback search root when stage dirs are absent, and for resolving `Source=` paths in the generated WXS. |
+
+### Output
+
+| Flag | Default | Description |
+|---|---|---|
+| `--output PATH` | `<script-dir>/<output-stem>.wxs` | Destination path for the generated `.wxs` file. |
 
 ### Install location
 
-The default install path is assembled from three flags:
+The default install path is assembled as:
 
 ```
-[install-root] \ [product-dir] \ [version-dir] \ runtimes-[package-version] \
+[install-root] \ [product-dir] \ [version-dir] \ <package-subdir>-<version> \
 ```
+
+For example: `C:\Program Files\AMD\ROCm\hip-runtime-7.14.0\`
 
 | Flag | Default | Description |
 |---|---|---|
-| `--install-root ROOT` | `ProgramFilesFolder` | Root of the install tree. Accepts a Windows Installer standard-directory token or an absolute path. |
+| `--install-root ROOT` | `ProgramFilesFolder` | Root of the install tree. Accepts a Windows Installer standard-directory token or an absolute path (e.g. `C:\AMD`). |
 | `--product-dir NAME` | `AMD` | First subdirectory under `--install-root`. |
 | `--version-dir NAME` | `ROCm` | Second subdirectory under `--product-dir`. |
+| `--package-version X.Y.Z` | From `version.json` | MSI version string. Auto-detected from the repo's `version.json`. |
 
 **Standard-directory tokens** resolve at install time on the target machine:
 
@@ -51,67 +99,62 @@ The default install path is assembled from three flags:
 |---|---|
 | `ProgramFilesFolder` *(default)* | `C:\Program Files\` |
 | `ProgramFiles64Folder` | `C:\Program Files\` (always 64-bit view) |
-| `SystemFolder` | `C:\Windows\System32\` |
 
 **Absolute paths** (e.g. `C:\AMD`) bake a fixed default into the MSI.
 
-#### Examples
+### `--repo-root PATH`
+
+Used to locate `artifact-{name}.toml` descriptor files. Defaults to the repo
+root inferred from the script location. Override only if running from an
+unusual directory.
+
+## How File Collection Works
+
+For each artifact in a package, the generator:
+
+1. Locates `artifact-{name}.toml` under `--repo-root`.
+2. For each `run` and `lib` component entry, reads `include`, `exclude`, and
+   `force_include` glob patterns.
+3. Globs patterns against the artifact's **stage directory**
+   (`build_root / basedir`) when available — this is the precise scope used by
+   the build system's own artifact builder.
+4. Falls back to `--dist-root` when stage dirs are absent (e.g. dist-only
+   builds), applying `fallback_excludes` to suppress known noise from other
+   artifacts present in the merged tree.
+5. When `--artifacts-url` is set, downloads and extracts `.tar.zst` archives
+   into `--artifacts-cache-dir` and uses those as the stage trees, bypassing
+   both `--build-root` and the fallback entirely.
+
+Files are installed **flat** — `bin/`, `lib/`, and `share/` are direct
+children of `InstallDir`, regardless of the `basedir` path in the build tree.
+
+## MSI Install Options
 
 ```bat
-:: Default:  C:\Program Files\AMD\ROCm\runtimes-7.13.0\
-python build_tools\generate_msi_wxs.py
+:: Silent install to default location
+msiexec /i amdrocm-hip-runtime.msi /qn
 
-:: Custom product name and version label
-python build_tools\generate_msi_wxs.py --product-dir ROCm-HIP --version-dir 7.2
+:: Override install directory at install time
+msiexec /i amdrocm-hip-runtime.msi /qn INSTALLFOLDER="C:\MyROCm"
 
-:: Fixed absolute root
-python build_tools\generate_msi_wxs.py --install-root "C:\AMD"
+:: Enable Windows long-path support
+msiexec /i amdrocm-hip-runtime.msi /qn ENABLE_LONG_PATHS=1
 
-:: All three overridden
-python build_tools\generate_msi_wxs.py --install-root "C:\AMD" --product-dir HIP --version-dir 7
+:: Silent install with a log file
+msiexec /i amdrocm-hip-runtime.msi /qn /l*v "%TEMP%\rocm-install.log"
 ```
 
-### Package metadata
+## Registry Entries
 
-| Flag | Default | Description |
-|---|---|---|
-| `--package-version X.Y.Z` | `7.13.0` | Version string embedded in the MSI. Windows Installer uses the first three parts for upgrade comparisons. |
+| Key | Name | Value | Condition |
+|---|---|---|---|
+| `HKLM\Software\AMD\ROCm\<package>\<version>` | `InstallDir` | Install path | Always |
+| `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem` | `LongPathsEnabled` | `1` | Only if `ENABLE_LONG_PATHS=1` |
 
-## What the Generated MSI Does
+Standard MSI uninstall entries are also written under
+`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`.
 
-### Files installed
-
-All regular files found under `bin/` and `lib/` in the dist tree are packaged.
-Subdirectories and files under `include/` and `lib/cmake/` are not included.
-
-| Content | Installed to |
-|---|---|
-| Runtime DLLs, executables, scripts | `[InstallDir]\bin\` |
-| Import libraries (`.lib`) | `[InstallDir]\lib\` |
-
-### Side effects
-
-| Effect | Detail |
-|---|---|
-| System PATH | `[InstallDir]\bin` appended to the machine-wide PATH; removed on uninstall |
-| Registry marker | `HKLM\Software\AMD\ROCm\<version>\InstallDir` = install path; removed on uninstall |
-
-### Legacy System32 cleanup
-
-Before copying files, the MSI deletes any legacy ROCm DLLs found in
-`C:\Windows\System32\` matching:
-
-- `amdhip64_*.dll`
-- `amd_comgr_*.dll`
-
-Older ROCm installers placed these directly in System32, where they shadow the
-versioned copies in Program Files via DLL search order. A missing match is
-silently ignored and does not fail the install.
-
-### Upgrade policy
-
-The MSI embeds a fixed `UpgradeCode` GUID that identifies the ROCm Runtime
-product family across all versions:
+## Upgrade Policy
 
 | Scenario | Behaviour |
 |---|---|
@@ -120,33 +163,29 @@ product family across all versions:
 | Same version present | Repairs in place |
 | Newer version present | Blocked with an error message |
 
-### Optional: long-path support
+## Adding a New Package
 
-The MSI includes a `LongPaths` feature that writes
-`HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled=1`.
-It is disabled by default and enabled at install time by passing
-`ENABLE_LONG_PATHS=1` to `msiexec`:
+Add an entry to the `PACKAGES` dict in `generate_msi_wxs.py`:
 
-```bat
-msiexec /i amdrocm-runtimes.msi /qn ENABLE_LONG_PATHS=1
+```python
+"my-package": PackageDef(
+    description="One-line description for --list",
+    product_name="AMD ROCm My Package",
+    artifacts=["artifact-name-1", "artifact-name-2"],
+    output_stem="amdrocm-my-package",
+    install_subdir="my-package-{version}",
+    upgrade_code="<new unique GUID>",        # never reuse an existing GUID
+    feature_id="MyPackage",
+    feature_title="AMD ROCm My Package",
+    registry_key="Software\\AMD\\ROCm\\my-package\\{version}",
+),
 ```
 
-See [amdrocm-runtimes-msi-usage.md](amdrocm-runtimes-msi-usage.md) for full
-MSI installation instructions.
+Each package must have a unique `upgrade_code` GUID, `feature_id`, and
+`output_stem`.
 
-## Rebuilding After Source Changes
+## Running the Tests
 
 ```bat
-:: 1. Rebuild the ROCm distribution tree
-ninja -C build
-
-:: 2. Regenerate the .wxs (picks up new/removed files automatically)
-python build_tools\generate_msi_wxs.py
-
-:: 3. Recompile the MSI
-wix build build\amdrocm-runtimes.wxs -o build\amdrocm-runtimes.msi
+python -m unittest discover -s build_tools\packaging\windows -p "*_test.py" -v
 ```
-
-Component GUIDs are derived deterministically from each file's relative install
-path, so GUIDs for unchanged files remain stable across regenerations. This is
-required for correct upgrade behaviour in Windows Installer.
