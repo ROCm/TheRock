@@ -101,14 +101,14 @@ install_python_runtime() {
 
     if [[ "$os_profile" == ubuntu* ]] || [[ "$os_profile" == debian* ]]; then
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq >&2
+        sudo apt-get update -qq >&2
         if [[ -n "$PY_MM" ]]; then
-            apt-get install -y --no-install-recommends \
+            sudo apt-get install -y --no-install-recommends \
                 "python${PY_MM}" \
                 "python${PY_MM}-venv" \
                 "python${PY_MM}-pip" >&2
         else
-            apt-get install -y --no-install-recommends \
+            sudo apt-get install -y --no-install-recommends \
                 python3 \
                 python3-venv \
                 python3-pip >&2
