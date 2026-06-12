@@ -3,6 +3,7 @@
 
 import logging
 import os
+import platform
 import shlex
 import subprocess
 from pathlib import Path
@@ -36,6 +37,33 @@ logging.basicConfig(level=logging.INFO)
 environ_vars = os.environ.copy()
 
 
+def get_asan_runtime_library():
+    """Return the clang AddressSanitizer runtime path."""
+    machine = platform.machine()
+    if machine in ("x86_64", "AMD64"):
+        arch = "x86_64"
+    elif machine == "aarch64":
+        arch = "aarch64"
+    else:
+        raise RuntimeError(f"Unsupported ASan runtime architecture: {machine}")
+
+    asan_lib = f"libclang_rt.asan-{arch}.so"
+    result = subprocess.run(
+        [str(THEROCK_CLANG_PLUS_PATH), f"-print-file-name={asan_lib}"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environ_vars,
+    )
+    resolved = result.stdout.strip()
+    if not resolved or resolved == asan_lib or not Path(resolved).is_file():
+        raise FileNotFoundError(
+            f"Could not locate ASan runtime '{asan_lib}' via {THEROCK_CLANG_PLUS_PATH} "
+            f"(got: '{resolved}')"
+        )
+    return str(Path(resolved).resolve())
+
+
 def setup_env():
     environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
     environ_vars["HIP_PATH"] = str(THEROCK_PATH)
@@ -46,6 +74,14 @@ def setup_env():
     environ_vars["LD_LIBRARY_PATH"] = ":".join(
         [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"] + old_ld_lib_path
     )
+
+    if is_asan():
+        # Match rocprofiler-sdk sanitizer defaults for launchers.
+        existing_asan_options = os.getenv("ASAN_OPTIONS", "")
+        asan_options = "detect_leaks=0:use_sigaltstack=0"
+        if existing_asan_options:
+            asan_options = f"{asan_options}:{existing_asan_options}"
+        environ_vars["ASAN_OPTIONS"] = asan_options
 
 
 def cmake_config():
@@ -62,7 +98,13 @@ def cmake_config():
         f"-DPython3_EXECUTABLE={sys.executable}",
     ]
     if is_asan():
-        cmake_config_cmd.append("-DROCPROFILER_MEMCHECK=AddressSanitizer")
+        # Preload ASan for standalone tests loading instrumented ROCm libraries.
+        asan_runtime_library = get_asan_runtime_library()
+        cmake_config_cmd += [
+            "-DROCPROFILER_MEMCHECK=AddressSanitizer",
+            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={asan_runtime_library}",
+            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV_VALUE={asan_runtime_library}",
+        ]
 
     logging.info(
         f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(cmake_config_cmd)}"
