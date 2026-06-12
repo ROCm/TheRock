@@ -75,6 +75,10 @@ def setup_env():
         [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"] + old_ld_lib_path
     )
 
+    # Avoid conflicting agent visibility; HIP_VISIBLE_DEVICES supersedes.
+    if environ_vars.get("HIP_VISIBLE_DEVICES"):
+        environ_vars.pop("GPU_DEVICE_ORDINAL", None)
+
     if is_asan():
         # Match rocprofiler-sdk sanitizer defaults for launchers.
         existing_asan_options = os.getenv("ASAN_OPTIONS", "")
