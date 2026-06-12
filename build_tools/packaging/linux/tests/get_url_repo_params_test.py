@@ -333,11 +333,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prereleases",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/packages/ubuntu2404",
+            "https://repo_url.com/packages/ubuntu2404",
         )
 
     def test_prerelease_deb(self):
@@ -346,11 +346,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/packages/ubuntu2404",
+            "https://repo_url.com/packages/ubuntu2404",
         )
 
     def test_prerelease_rpm(self):
@@ -358,11 +358,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="rpm",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="rhel8",
                 repo_sub_folder="",
             ),
-            "https://x.com/packages/rhel8/x86_64/",
+            "https://repo_url.com/packages/rhel8/x86_64/",
         )
 
     def test_release_deb_matches_native_packaging_doc(self):
@@ -395,11 +395,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260204-12345",
             ),
-            "https://x.com/deb/20260204-12345/",
+            "https://repo_url.com/deb/20260204-12345/",
         )
 
     def test_nightly_rpm(self):
@@ -408,11 +408,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="rpm",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="rhel8",
                 repo_sub_folder="20260204-12345",
             ),
-            "https://x.com/rpm/20260204-12345/x86_64/",
+            "https://repo_url.com/rpm/20260204-12345/x86_64/",
         )
 
     def test_non_prerelease_empty_repo_subfolder_no_double_slash_deb(self):
@@ -445,11 +445,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="deb",
-                repo_base_url="https://x.com/",
+                repo_base_url="https://repo_url.com/",
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/packages/ubuntu2404",
+            "https://repo_url.com/packages/ubuntu2404",
         )
 
     def test_explicit_per_family_layout_matches_default(self):
@@ -457,7 +457,7 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260204-12345",
                 layout="per_family",
@@ -465,7 +465,7 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260204-12345",
             ),
@@ -503,7 +503,7 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
 
     def test_os_profile_ignored_for_multi_arch(self):
         deb_url = get_url_repo_params.get_repo_url_multi_arch(
-            repo_base_url="https://x.com",
+            repo_base_url="https://repo_url.com",
             native_package_type="deb",
             repo_sub_folder="20260204-1",
         )
@@ -511,7 +511,7 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://repo_url.com",
                 os_profile="rhel10",
                 repo_sub_folder="20260204-1",
                 layout="multi_arch",
@@ -521,12 +521,12 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
 
     def test_empty_release_id_index_urls(self):
         self.assertEqual(
-            get_url_repo_params.get_repo_url_multi_arch("https://x.com", "deb", ""),
-            "https://x.com/packages-multi-arch/deb",
+            get_url_repo_params.get_repo_url_multi_arch("https://repo_url.com", "deb", ""),
+            "https://repo_url.com/packages-multi-arch/deb",
         )
         self.assertEqual(
-            get_url_repo_params.get_repo_url_multi_arch("https://x.com/", "rpm", ""),
-            "https://x.com/packages-multi-arch/rpm/x86_64",
+            get_url_repo_params.get_repo_url_multi_arch("https://repo_url.com/", "rpm", ""),
+            "https://repo_url.com/packages-multi-arch/rpm/x86_64",
         )
 
 
@@ -652,7 +652,7 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--native-package-type",
                 "deb",
                 "--repo-base-url",
-                "https://x.com",
+                "https://repo_url.com",
                 "--os-profile",
                 "ubuntu2404",
                 "--repo-sub-folder",
@@ -660,7 +660,7 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn("repo_url=https://x.com/packages/ubuntu2404", output)
+        self.assertIn("repo_url=https://repo_url.com/packages/ubuntu2404", output)
         self.assertIn(
             "gpg_key_url=https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg",
             output,
@@ -720,7 +720,7 @@ class MainSubcommandsTest(unittest.TestCase):
                         "--native-package-type",
                         "deb",
                         "--repo-base-url",
-                        "https://x.com",
+                        "https://repo_url.com",
                         "--os-profile",
                         "ubuntu2404",
                         "--repo-sub-folder",
