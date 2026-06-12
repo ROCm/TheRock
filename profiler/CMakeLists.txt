@@ -94,10 +94,12 @@ if(THEROCK_ENABLE_ROCPROFV3)
     set(_rocprofiler_sdk_sanitizer "${rocprofiler-sdk_SANITIZER}")
   endif()
 
-  set(_rocprofiler_sdk_memcheck_args)
+  set(_rocprofiler_sdk_sanitizer_args)
   if(_rocprofiler_sdk_sanitizer STREQUAL "ASAN")
-    list(APPEND _rocprofiler_sdk_memcheck_args
-      -DROCPROFILER_MEMCHECK=AddressSanitizer
+    set(_rocprofiler_sdk_asan_build_flags "-Og -g3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-inline-functions")
+    list(APPEND _rocprofiler_sdk_sanitizer_args
+      "-DCMAKE_C_FLAGS_RELWITHDEBINFO=${_rocprofiler_sdk_asan_build_flags}"
+      "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=${_rocprofiler_sdk_asan_build_flags}"
     )
   endif()
 
@@ -117,7 +119,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
-      ${_rocprofiler_sdk_memcheck_args}
+      ${_rocprofiler_sdk_sanitizer_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     IGNORE_PACKAGES
