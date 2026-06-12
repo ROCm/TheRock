@@ -230,6 +230,12 @@ def is_gfxarch_package(pkg_info, enable_kpack=False):
         if pkgname in ["amdrocm-rccl", "amdrocm-rccl-test"]:
             return True
 
+        # Override CK Gfxarch behavior in kpack mode
+        # When --enable-kpack is used, CK should look for generic artifacts
+        # Root Cause: CK provides generic artifacts only
+        if pkgname in ["amdrocm-ck"]:
+            return False
+
     return is_key_defined(pkg_info, "Gfxarch")
 
 
