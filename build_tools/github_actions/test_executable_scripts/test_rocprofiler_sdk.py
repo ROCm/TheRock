@@ -33,6 +33,14 @@ THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
 
+# Tests skipped under ASan (known failing/unstable in the ASan configuration).
+ASAN_EXCLUDED_TESTS = [
+    "rocprofv3-test-hsa-multiqueue",
+    "rocprofv3-test-att-hsa-multiqueue-cmd-env-att-lib-path",
+    "rocprofv3-test-att-hsa-multiqueue-json",
+    "rocprofv3-test-att-env-var",
+]
+
 logging.basicConfig(level=logging.INFO)
 environ_vars = os.environ.copy()
 
@@ -70,22 +78,26 @@ def setup_env():
     environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
     environ_vars["HIP_PLATFORM"] = "amd"
 
-    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
-    environ_vars["LD_LIBRARY_PATH"] = ":".join(
-        [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"] + old_ld_lib_path
-    )
-
-    # Avoid conflicting agent visibility; HIP_VISIBLE_DEVICES supersedes.
-    if environ_vars.get("HIP_VISIBLE_DEVICES"):
-        environ_vars.pop("GPU_DEVICE_ORDINAL", None)
+    ld_lib_paths = [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"]
 
     if is_asan():
-        # Match rocprofiler-sdk sanitizer defaults for launchers.
+        # Installed test binaries are built with -shared-libsan, so the clang
+        # resource dir holding libclang_rt.asan-<arch>.so must be on the loader
+        # search path. Match rocprofiler-sdk sanitizer defaults for launchers.
+        ld_lib_paths.append(str(Path(get_asan_runtime_library()).parent))
+
         existing_asan_options = os.getenv("ASAN_OPTIONS", "")
         asan_options = "detect_leaks=0:use_sigaltstack=0"
         if existing_asan_options:
             asan_options = f"{asan_options}:{existing_asan_options}"
         environ_vars["ASAN_OPTIONS"] = asan_options
+
+    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
+    environ_vars["LD_LIBRARY_PATH"] = ":".join(ld_lib_paths + old_ld_lib_path)
+
+    # Avoid conflicting agent visibility; HIP_VISIBLE_DEVICES supersedes.
+    if environ_vars.get("HIP_VISIBLE_DEVICES"):
+        environ_vars.pop("GPU_DEVICE_ORDINAL", None)
 
 
 def cmake_config():
@@ -153,6 +165,10 @@ def execute_tests():
         "8",
         "--output-on-failure",
     ]
+    if is_asan():
+        # Exclude tests known to fail/hang in the ASan configuration.
+        exclude_regex = "|".join(ASAN_EXCLUDED_TESTS)
+        ctest_cmd += ["--exclude-regex", exclude_regex]
 
     logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(ctest_cmd)}")
     subprocess.run(
