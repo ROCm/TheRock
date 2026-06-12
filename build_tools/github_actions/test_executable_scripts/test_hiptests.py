@@ -87,6 +87,15 @@ TEST_TO_IGNORE = {
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
         ]
     },
+    "gfx125X-dcgpu": {
+        "linux": [
+            # Runtime-compiles and launches kernels from combinatorial compiler
+            # option sets; on gfx1250 bringup this triggers an unrecoverable GPU
+            # fault/hang that escalates to a full node reboot. Disable until the
+            # backend/firmware mature.
+            "Unit_hiprtcCombiComplrOptnTst",
+        ]
+    },
 }
 
 
