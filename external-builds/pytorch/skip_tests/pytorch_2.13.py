@@ -354,6 +354,12 @@ skip_tests = {
             # test_lognormal_kstest float16 aborts after ROCm GPU hang under
             # --inductor.
             "(TestTorchDeviceTypeCUDA and test_lognormal_kstest_cuda_float16)",
+            # Run 27433143875 default shard 2/10, job 81088448462:
+            # TestTorchDeviceTypeCUDA::test_masked_scatter_large_tensor_cuda hit
+            # HW Exception GPU Hang in test/test_torch.py (~63% through module).
+            # Prior shard-2 hang (graph_partition_refcount) was already skipped and
+            # compile_subprocess finished green; this is a separate default-lane hang.
+            "(TestTorchDeviceTypeCUDA and test_masked_scatter_large_tensor_cuda)",
         ],
         "ops": [
             # Run 27238010876 inductor shard 4/4:
