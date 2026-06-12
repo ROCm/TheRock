@@ -313,6 +313,24 @@ skip_tests = {
             "(TestTEFuserDynamic and test_binary_ops)",
             "(TestTEFuserDynamic and test_binary_tensor_scalar_ops)",
             "(TestTEFuserDynamic and test_ternary_norm_ops)",
+            # Run 27390088455 default shard 5/10, job 80945585188:
+            # Remaining TestTEFuserDynamic bfloat16 CUDA failures (static variants
+            # already skipped above): lerp (ternary), lgamma (unary), where.
+            "(TestTEFuserDynamic and test_ternary_ops)",
+            "(TestTEFuserDynamic and test_unary_ops)",
+            "(TestTEFuserDynamic and test_where_ops)",
+        ],
+        "foreach": [
+            # Run 27390088455 default shard 3/10, job 80945585182:
+            # ForeachTests::test_kernel_split_arg_limit_list__foreach_sub hit
+            # HW Exception GPU Hang in inductor/test_foreach.py (~42% through module).
+            "(ForeachTests and test_kernel_split_arg_limit_list__foreach_sub)",
+        ],
+        "serialization": [
+            # Mirrored from pytorch_2.12.py — TestSerialization/TestOldSerialization
+            # expect debug env flags set in CI; TheRock wheel CI does not enable them.
+            # Run 27390088455 default shard 1/10, job 80945585178: FAILED CONSISTENTLY.
+            "test_debug_set_in_ci",
         ],
         "ops_gradients": [
             # Run 27228539427 inductor shard 3/4:
@@ -349,6 +367,10 @@ skip_tests = {
             # TestCommonCUDA::test_reduction_ops_reduce_std_cuda hits ZeroDivisionError
             # during std reduction on ROCm.
             "(TestCommonCUDA and test_reduction_ops_reduce_std_cuda)",
+            # Run 27390088455 default shard 4/10, job 80945585179:
+            # TestCommonCUDA::test_out__refs_atan_cuda_float32 hit HW Exception GPU Hang
+            # in test/test_ops.py (~16% through ops shard 4.5); intermittent on gfx942.
+            "(TestCommonCUDA and test_out__refs_atan_cuda_float32)",
         ],
         "pattern_matcher": [
             # Run 27361388921 default shard 6/10, job 80849478677:

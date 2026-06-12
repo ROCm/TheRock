@@ -118,6 +118,10 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # 27373187888 shards 8/10 and 10/10). Per-test skips are insufficient; see
     # pytorch_2.13.py nn bucket and triage GPU Hang backlog for ROCm filing.
     "nn/test_convolution",
+    # Wheel test source is newer than installed torch: test imports STATIC from
+    # torch.fx.experimental.dynamic_spec but the wheel lacks it (run 27390088455
+    # shard 10/10 ImportError at collection time).
+    "dynamo/test_dynamic_spec",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
