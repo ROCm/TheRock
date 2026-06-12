@@ -41,6 +41,7 @@ import shutil
 import subprocess
 import sys
 import re
+import time
 
 from github_actions.github_actions_api import *
 
@@ -63,6 +64,35 @@ def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+
+
+def run_command_with_retries(
+    args: list[str | Path],
+    cwd: Path = Path.cwd(),
+    *,
+    retry_seconds: int,
+    retry_delay_seconds: int,
+):
+    deadline = time.monotonic() + retry_seconds
+    attempt = 1
+    while True:
+        try:
+            run_command(args, cwd)
+            return
+        except subprocess.CalledProcessError as e:
+            if retry_seconds == 0 or time.monotonic() + retry_delay_seconds > deadline:
+                log(
+                    "Command failed after "
+                    f"{attempt} attempt(s); no retry time remains"
+                )
+                raise
+            log(
+                "Command failed "
+                f"(attempt {attempt}, exit code {e.returncode}); "
+                f"retrying in {retry_delay_seconds}s..."
+            )
+            time.sleep(retry_delay_seconds)
+            attempt += 1
 
 
 def find_venv_python_exe(venv_path: Path) -> Path | None:
@@ -157,6 +187,9 @@ def install_packages_into_venv(
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
+    *,
+    install_retry_seconds: int,
+    install_retry_delay_seconds: int,
 ):
     """Installs packages into venv_dir using the provided options.
 
@@ -170,6 +203,8 @@ def install_packages_into_venv(
         find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
+        install_retry_seconds: Maximum retry window for the package install command
+        install_retry_delay_seconds: Delay between package install retries
     """
     log("")
 
@@ -206,7 +241,11 @@ def install_packages_into_venv(
 
     pip_install_cmd.extend(packages)
 
-    run_command(pip_install_cmd)
+    run_command_with_retries(
+        pip_install_cmd,
+        retry_seconds=install_retry_seconds,
+        retry_delay_seconds=install_retry_delay_seconds,
+    )
 
 
 def log_venv_activate_instructions(venv_dir: Path):
@@ -241,6 +280,8 @@ def run(args: argparse.Namespace):
             find_links=args.find_links,
             pre=args.pre,
             disable_cache=args.disable_cache,
+            install_retry_seconds=args.install_retry_seconds,
+            install_retry_delay_seconds=args.install_retry_delay_seconds,
         )
 
     if args.activate_in_future_github_actions_steps:
@@ -311,6 +352,21 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         help="Uses uv instead of pip/venv, see more at: https://docs.astral.sh/uv/",
     )
+    general_options.add_argument(
+        "--install-retry-seconds",
+        type=int,
+        default=180,
+        help=(
+            "Maximum retry window for package install failures in seconds "
+            "(default: 180; 0 disables retries)"
+        ),
+    )
+    general_options.add_argument(
+        "--install-retry-delay-seconds",
+        type=int,
+        default=15,
+        help=("Seconds to wait between package install retries " "(default: 15)"),
+    )
 
     install_options = p.add_argument_group("Install options")
 
@@ -357,6 +413,12 @@ def main(argv: list[str]):
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
     if args.index_name and not args.index_subdir:
         p.error("--index-subdir must be set when using --index-name")
+    if args.install_retry_seconds < 0:
+        p.error("--install-retry-seconds must be non-negative")
+    if args.install_retry_seconds > 0 and args.install_retry_delay_seconds <= 0:
+        p.error(
+            "--install-retry-delay-seconds must be positive when retries are enabled"
+        )
 
     run(args)
 

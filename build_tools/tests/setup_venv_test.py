@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -27,12 +28,19 @@ class InstallPackagesTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.venv_dir, ignore_errors=True)
 
+    def install_packages(self, **kwargs):
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            install_retry_seconds=0,
+            install_retry_delay_seconds=30,
+            **kwargs,
+        )
+
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
     def test_basic_pip_usage(self, mock_run, mock_find_python):
         """The most basic usage should run `python -m pip install [packages]`"""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
         )
 
@@ -47,8 +55,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_basic_uv_usage(self, mock_run, mock_find_python):
         """Using uv generates a different command structure."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             use_uv=True,
         )
@@ -64,8 +71,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_multiple_packages(self, mock_run, mock_find_python):
         """Multiple packages can be installed at once."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["torch", "torchaudio"],
         )
 
@@ -77,8 +83,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_pre_flag_pip(self, mock_run, mock_find_python):
         """--pre flag uses pip syntax."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             pre=True,
         )
@@ -90,8 +95,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_pre_flag_uv(self, mock_run, mock_find_python):
         """--pre flag uses uv syntax when use_uv=True."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             use_uv=True,
             pre=True,
@@ -104,8 +108,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_index_url_complete(self, mock_run, mock_find_python):
         """Passing index_url without index_subdir uses the URL as-is."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             index_url="https://example.com/full/path/",
         )
@@ -117,8 +120,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_index_name_with_subdir(self, mock_run, mock_find_python):
         """Passing index_name with index_subdir constructs full URL."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             index_name="stable",
             index_subdir="gfx110X-all",
@@ -131,8 +133,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_index_url_with_subdir(self, mock_run, mock_find_python):
         """Passing index_url with index_subdir constructs full URL."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             index_url="https://example.com/base",
             index_subdir="gfx94X-dcgpu",
@@ -145,8 +146,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_find_links_only(self, mock_run, mock_find_python):
         """Passing just find_links uses it."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             find_links="https://bucket/run-123/index.html",
         )
@@ -159,8 +159,7 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.run_command")
     def test_index_url_and_find_links(self, mock_run, mock_find_python):
         """Both index_url and find_links can be used together."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
+        self.install_packages(
             packages=["rocm"],
             index_url="https://deps/simple/",
             find_links="https://bucket/run-123/index.html",
@@ -169,6 +168,48 @@ class InstallPackagesTest(unittest.TestCase):
         cmd = mock_run.call_args[0][0]
         self.assertIn("--index-url=https://deps/simple/", cmd)
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
+
+    @patch("setup_venv.time.sleep")
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_package_install_retries_then_succeeds(
+        self, mock_run, mock_find_python, mock_sleep
+    ):
+        """Transient package install failures are retried."""
+        mock_run.side_effect = [
+            subprocess.CalledProcessError(1, ["pip"]),
+            None,
+        ]
+
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            install_retry_seconds=60,
+            install_retry_delay_seconds=30,
+        )
+
+        self.assertEqual(mock_run.call_count, 2)
+        mock_sleep.assert_called_once_with(30)
+
+    @patch("setup_venv.time.sleep")
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_package_install_retries_can_be_disabled(
+        self, mock_run, mock_find_python, mock_sleep
+    ):
+        """Setting the retry window to zero preserves fail-fast behavior."""
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["pip"])
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            install_packages_into_venv(
+                venv_dir=self.venv_dir,
+                packages=["rocm"],
+                install_retry_seconds=0,
+                install_retry_delay_seconds=30,
+            )
+
+        self.assertEqual(mock_run.call_count, 1)
+        mock_sleep.assert_not_called()
 
 
 class GfxRegexPatternTest(unittest.TestCase):
