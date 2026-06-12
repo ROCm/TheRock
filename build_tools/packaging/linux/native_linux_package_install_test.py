@@ -36,6 +36,8 @@ closure for DEB; ``rpm -qR`` / ``rpm -q --whatprovides`` closure for RPM) unless
 ``NATIVE_LINUX_SKIP_DEP_VERIFY=1``. The resolved dependency closure is rendered as an indented
 tree with summary counts (packages in closure / dependency edges / roots), printed to the
 console and written to ``NATIVE_LINUX_DEP_REPORT_FILE`` (default ``rocm_dependency_report.txt``).
+A flat JSON summary (status, roots, closure/edge counts, and a flat errors list) is written
+alongside it to ``NATIVE_LINUX_DEP_REPORT_JSON_FILE`` (default ``rocm_dependency_report.json``).
 
 Prerequisites:
 - This script does NOT start Docker or a VM. You must run it inside an existing
@@ -137,6 +139,7 @@ Example invocations:
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -190,6 +193,12 @@ ENV_NATIVE_LINUX_SKIP_DEP_VERIFY = "NATIVE_LINUX_SKIP_DEP_VERIFY"
 # Path of the transitive-dependency report written after verification; overridable.
 ENV_NATIVE_LINUX_DEP_REPORT_FILE = "NATIVE_LINUX_DEP_REPORT_FILE"
 DEFAULT_DEP_REPORT_FILE = "rocm_dependency_report.txt"
+
+# Path of a flat, machine-readable JSON summary written alongside the text report;
+# overridable. Shallow on purpose (status + counts + flat errors list) so CI gating
+# can parse it without walking a nested tree.
+ENV_NATIVE_LINUX_DEP_REPORT_JSON_FILE = "NATIVE_LINUX_DEP_REPORT_JSON_FILE"
+DEFAULT_DEP_REPORT_JSON_FILE = "rocm_dependency_report.json"
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -251,12 +260,31 @@ class DependencyReport:
     roots: list[str] = field(default_factory=list)
     edges: dict[str, list[str]] = field(default_factory=dict)
     closure: list[str] = field(default_factory=list)
+    # Verification errors captured for the walk (empty => OK). Populated from the
+    # verifier's returned error list; surfaced flat in the JSON summary.
+    errors: list[str] = field(default_factory=list)
 
     def package_count(self) -> int:
         return len(self.closure)
 
     def edge_count(self) -> int:
         return sum(len(deps) for deps in self.edges.values())
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a flat, JSON-serializable summary of the report.
+
+        Intentionally shallow (no nested dependency tree): overall ``status``, the
+        ``roots``, closure/edge counts, and a flat list of verification ``errors``.
+        ``status`` is ``"BROKEN"`` when any error was captured, else ``"OK"``.
+        """
+        return {
+            "package_type": self.package_type,
+            "status": "BROKEN" if self.errors else "OK",
+            "roots": list(self.roots),
+            "packages": self.package_count(),
+            "edges": self.edge_count(),
+            "errors": list(self.errors),
+        }
 
     def _render_node(
         self,
@@ -1281,15 +1309,22 @@ gpgcheck=0
         report = DependencyReport(package_type=self.package_type)
         self.last_dependency_report = report
         if self.package_type == "deb":
-            return verify_debian_transitive_dependencies(
+            ok, errors = verify_debian_transitive_dependencies(
                 self.package_names, report=report
             )
-        return verify_rpm_transitive_dependencies(self.package_names, report=report)
+        else:
+            ok, errors = verify_rpm_transitive_dependencies(
+                self.package_names, report=report
+            )
+        report.errors = list(errors)
+        return ok, errors
 
     def _write_dependency_report(self, report: "DependencyReport") -> str | None:
-        """Render the dependency report to console and write it to the report file.
+        """Render the dependency report to console and write the text + JSON report files.
 
-        Returns the path written, or None if writing failed (a warning is printed).
+        Writes the human-readable text report and a flat JSON summary alongside it.
+        Returns the text report path written, or None if writing the text report failed
+        (a warning is printed). A JSON write failure is non-fatal (warning only).
         """
         rendered = report.render()
         print("\n" + rendered)
@@ -1303,6 +1338,20 @@ gpgcheck=0
             print(f" [WARN] Could not write dependency report file: {e}")
             return None
         print(f"\nDependency report written to: {report_path}")
+
+        json_path = Path(
+            _env(ENV_NATIVE_LINUX_DEP_REPORT_JSON_FILE, DEFAULT_DEP_REPORT_JSON_FILE)
+        )
+        try:
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            json_path.write_text(
+                json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            print(f"JSON summary written to: {json_path}")
+        except OSError as e:
+            print(f" [WARN] Could not write JSON dependency report file: {e}")
+
         return str(report_path)
 
     def run_repo_setup_and_install(self) -> bool:

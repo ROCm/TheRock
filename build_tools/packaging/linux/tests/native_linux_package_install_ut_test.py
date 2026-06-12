@@ -7,6 +7,7 @@
 
 import contextlib
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -875,6 +876,7 @@ class RunTestsTestTypeTest(unittest.TestCase):
             release_type="dev",
             install_prefix="/opt/rocm/core",
             gfx_arch=["gfx94x"],
+            rocm_version=None,
             gpg_key_url=None,
             packages_dir=None,
             pkg_type=None,
@@ -1951,6 +1953,116 @@ class VerifyTransitiveDependenciesInstalledTest(unittest.TestCase):
             ok, _ = t._verify_transitive_dependencies_installed()
         self.assertTrue(ok)
         mock_rpm.assert_called_once_with(t.package_names, report=ANY)
+
+
+class DependencyReportToDictTest(unittest.TestCase):
+    """Tests for DependencyReport.to_dict() (flat JSON summary)."""
+
+    def test_ok_status_and_counts(self):
+        # Test that a clean report serializes status OK with flat counts and empty errors.
+        report = native_linux_package_install_test.DependencyReport(
+            package_type="deb",
+            roots=["amdrocm-gfx94x"],
+            closure=["amdrocm-gfx94x", "rocm-core"],
+            edges={"amdrocm-gfx94x": ["rocm-core"], "rocm-core": []},
+        )
+        self.assertEqual(
+            report.to_dict(),
+            {
+                "package_type": "deb",
+                "status": "OK",
+                "roots": ["amdrocm-gfx94x"],
+                "packages": 2,
+                "edges": 1,
+                "errors": [],
+            },
+        )
+
+    def test_broken_status_when_errors_present(self):
+        # Test that captured errors flip status to BROKEN and are surfaced flat.
+        report = native_linux_package_install_test.DependencyReport(
+            package_type="rpm",
+            roots=["amdrocm-gfx94x"],
+            closure=["amdrocm-gfx94x"],
+            errors=["no installed package provides 'libfoo'"],
+        )
+        d = report.to_dict()
+        self.assertEqual(d["status"], "BROKEN")
+        self.assertEqual(d["errors"], ["no installed package provides 'libfoo'"])
+
+    def test_to_dict_is_json_serializable(self):
+        # Test that the summary round-trips through json without error.
+        report = native_linux_package_install_test.DependencyReport(
+            package_type="deb",
+            roots=["amdrocm-gfx94x"],
+            closure=["amdrocm-gfx94x"],
+            edges={"amdrocm-gfx94x": []},
+        )
+        encoded = json.dumps(report.to_dict())
+        self.assertEqual(json.loads(encoded)["status"], "OK")
+
+
+class WriteDependencyReportTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest._write_dependency_report()."""
+
+    def _make_tester(self):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+
+    def test_writes_text_and_json_reports(self):
+        # Test that both the text and JSON files are written with matching flat data.
+        report = native_linux_package_install_test.DependencyReport(
+            package_type="deb",
+            roots=["amdrocm-gfx94x"],
+            closure=["amdrocm-gfx94x", "rocm-core"],
+            edges={"amdrocm-gfx94x": ["rocm-core"], "rocm-core": []},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            txt_path = Path(tmp) / "report.txt"
+            json_path = Path(tmp) / "report.json"
+            env = {
+                native_linux_package_install_test.ENV_NATIVE_LINUX_DEP_REPORT_FILE: str(
+                    txt_path
+                ),
+                native_linux_package_install_test.ENV_NATIVE_LINUX_DEP_REPORT_JSON_FILE: str(
+                    json_path
+                ),
+            }
+            with patch.dict(os.environ, env, clear=False), _suppress_script_output():
+                returned = self._make_tester()._write_dependency_report(report)
+
+            self.assertEqual(returned, str(txt_path))
+            self.assertTrue(txt_path.is_file())
+            self.assertTrue(json_path.is_file())
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "OK")
+            self.assertEqual(data["package_type"], "deb")
+            self.assertEqual(data["packages"], 2)
+            self.assertEqual(data["edges"], 1)
+
+    def test_json_write_failure_is_non_fatal(self):
+        # Test that a JSON write error still returns the text report path (warning only).
+        report = native_linux_package_install_test.DependencyReport(package_type="deb")
+        with tempfile.TemporaryDirectory() as tmp:
+            txt_path = Path(tmp) / "report.txt"
+            env = {
+                native_linux_package_install_test.ENV_NATIVE_LINUX_DEP_REPORT_FILE: str(
+                    txt_path
+                ),
+                native_linux_package_install_test.ENV_NATIVE_LINUX_DEP_REPORT_JSON_FILE: str(
+                    Path(tmp) / "report.json"
+                ),
+            }
+            with patch.dict(os.environ, env, clear=False), _suppress_script_output():
+                with patch.object(
+                    native_linux_package_install_test.Path,
+                    "write_text",
+                    side_effect=[None, OSError("disk full")],
+                ):
+                    returned = self._make_tester()._write_dependency_report(report)
+            self.assertEqual(returned, str(txt_path))
 
 
 if __name__ == "__main__":
