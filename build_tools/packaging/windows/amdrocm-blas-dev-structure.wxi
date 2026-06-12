@@ -4,9 +4,7 @@
     <Directory Id="amdrocm_blas_dev_i" Name="include">
       <Directory Id="amdrocm_blas_dev_ih" Name="hipblas" />
       <Directory Id="amdrocm_blas_dev_inhi" Name="hipblaslt" />
-      <Directory Id="amdrocm_blas_dev_ir" Name="rocblas">
-        <Directory Id="amdrocm_blas_dev_iri" Name="internal" />
-      </Directory>
+      <Directory Id="amdrocm_blas_dev_ir" Name="rocblas" />
     </Directory>
     <Directory Id="amdrocm_blas_dev_l" Name="lib">
       <Directory Id="amdrocm_blas_dev_lc" Name="cmake">

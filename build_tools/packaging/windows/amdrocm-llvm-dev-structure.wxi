@@ -6,60 +6,14 @@
         <Directory Id="amdrocm_llvm_dev_lli" Name="include">
           <Directory Id="amdrocm_llvm_dev_lliL" Name="LLVMSPIRVLib" />
           <Directory Id="amdrocm_llvm_dev_llicc" Name="clang-c" />
-          <Directory Id="amdrocm_llvm_dev_llict" Name="clang-tidy">
-            <Directory Id="amdrocm_llvm_dev_llicta" Name="abseil" />
-            <Directory Id="amdrocm_llvm_dev_lillincltial" Name="altera" />
-            <Directory Id="amdrocm_llvm_dev_lillincltian" Name="android" />
-            <Directory Id="amdrocm_llvm_dev_llictb" Name="boost" />
-            <Directory Id="amdrocm_llvm_dev_lillincltibu" Name="bugprone" />
-            <Directory Id="amdrocm_llvm_dev_llictc" Name="concurrency" />
-            <Directory Id="amdrocm_llvm_dev_lillinclticp" Name="cppcoreguidelines" />
-            <Directory Id="amdrocm_llvm_dev_lillinclticu" Name="custom" />
-            <Directory Id="amdrocm_llvm_dev_llictd" Name="darwin" />
-            <Directory Id="amdrocm_llvm_dev_llictf" Name="fuchsia" />
-            <Directory Id="amdrocm_llvm_dev_llictg" Name="google" />
-            <Directory Id="amdrocm_llvm_dev_llicth" Name="hicpp" />
-            <Directory Id="amdrocm_llvm_dev_llictl" Name="linuxkernel" />
-            <Directory Id="amdrocm_llvm_dev_lillincltill" Name="llvm" />
-            <Directory Id="amdrocm_llvm_dev_libllvincclatidllv" Name="llvmlibc" />
-            <Directory Id="amdrocm_llvm_dev_llictm" Name="misc" />
-            <Directory Id="amdrocm_llvm_dev_lillincltimo" Name="modernize" />
-            <Directory Id="amdrocm_llvm_dev_lillincltimp" Name="mpi" />
-            <Directory Id="amdrocm_llvm_dev_llicto" Name="objc" />
-            <Directory Id="amdrocm_llvm_dev_lillincltiop" Name="openmp" />
-            <Directory Id="amdrocm_llvm_dev_llictp" Name="performance" />
-            <Directory Id="amdrocm_llvm_dev_lillincltipo" Name="portability" />
-            <Directory Id="amdrocm_llvm_dev_llictr" Name="readability" />
-            <Directory Id="amdrocm_llvm_dev_llictt" Name="tool" />
-            <Directory Id="amdrocm_llvm_dev_llictu" Name="utils" />
-          </Directory>
+          <Directory Id="amdrocm_llvm_dev_llict" Name="clang-tidy" />
           <Directory Id="amdrocm_llvm_dev_llic" Name="clang">
             <Directory Id="amdrocm_llvm_dev_llicA" Name="APINotes" />
             <Directory Id="amdrocm_llvm_dev_lillinclAS" Name="AST" />
-            <Directory Id="amdrocm_llvm_dev_libllvincclaAST" Name="ASTMatchers">
-              <Directory Id="amdrocm_llvm_dev_llicAD" Name="Dynamic" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinclAn" Name="Analysis">
-              <Directory Id="amdrocm_llvm_dev_llicAA" Name="Analyses">
-                <Directory Id="amdrocm_llvm_dev_llicAAL" Name="LifetimeSafety" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_lillinclAnDo" Name="DomainSpecific" />
-              <Directory Id="amdrocm_llvm_dev_llicAF" Name="FlowSensitive">
-                <Directory Id="amdrocm_llvm_dev_llicAFM" Name="Models" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llicAS" Name="Support" />
-            </Directory>
+            <Directory Id="amdrocm_llvm_dev_libllvincclaAST" Name="ASTMatchers" />
+            <Directory Id="amdrocm_llvm_dev_lillinclAn" Name="Analysis" />
             <Directory Id="amdrocm_llvm_dev_llicB" Name="Basic" />
-            <Directory Id="amdrocm_llvm_dev_llicC" Name="CIR">
-              <Directory Id="amdrocm_llvm_dev_llicCD" Name="Dialect">
-                <Directory Id="amdrocm_llvm_dev_llicCDB" Name="Builder" />
-                <Directory Id="amdrocm_llvm_dev_llicCDI" Name="IR" />
-                <Directory Id="amdrocm_llvm_dev_llicCDO" Name="OpenACC" />
-                <Directory Id="amdrocm_llvm_dev_lillinclCIDiOp" Name="OpenMP" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llicCF" Name="FrontendAction" />
-              <Directory Id="amdrocm_llvm_dev_llicCI" Name="Interfaces" />
-            </Directory>
+            <Directory Id="amdrocm_llvm_dev_llicC" Name="CIR" />
             <Directory Id="amdrocm_llvm_dev_lillinclCo" Name="CodeGen" />
             <Directory Id="amdrocm_llvm_dev_libllvincclaCon" Name="Config" />
             <Directory Id="amdrocm_llvm_dev_lillinclCr" Name="CrossTU" />
@@ -67,9 +21,7 @@
             <Directory Id="amdrocm_llvm_dev_lillinclDi" Name="DirectoryWatcher" />
             <Directory Id="amdrocm_llvm_dev_lillinclDr" Name="Driver" />
             <Directory Id="amdrocm_llvm_dev_llicE" Name="Edit" />
-            <Directory Id="amdrocm_llvm_dev_lillinclEx" Name="ExtractAPI">
-              <Directory Id="amdrocm_llvm_dev_llicES" Name="Serialization" />
-            </Directory>
+            <Directory Id="amdrocm_llvm_dev_lillinclEx" Name="ExtractAPI" />
             <Directory Id="amdrocm_llvm_dev_llicF" Name="Format" />
             <Directory Id="amdrocm_llvm_dev_lillinclFr" Name="Frontend" />
             <Directory Id="amdrocm_llvm_dev_libllvincclaFro" Name="FrontendTool" />
@@ -80,210 +32,19 @@
             <Directory Id="amdrocm_llvm_dev_llicL" Name="Lex" />
             <Directory Id="amdrocm_llvm_dev_llicO" Name="Options" />
             <Directory Id="amdrocm_llvm_dev_llicP" Name="Parse" />
-            <Directory Id="amdrocm_llvm_dev_llicR" Name="Rewrite">
-              <Directory Id="amdrocm_llvm_dev_llicRC" Name="Core" />
-              <Directory Id="amdrocm_llvm_dev_llicRF" Name="Frontend" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_llicS" Name="ScalableStaticAnalysisFramework">
-              <Directory Id="amdrocm_llvm_dev_llicSA" Name="Analyses">
-                <Directory Id="amdrocm_llvm_dev_llicSAC" Name="CallGraph" />
-                <Directory Id="amdrocm_llvm_dev_llicSAU" Name="UnsafeBufferUsage" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llicSC" Name="Core">
-                <Directory Id="amdrocm_llvm_dev_llicSCE" Name="EntityLinker" />
-                <Directory Id="amdrocm_llvm_dev_llicSCM" Name="Model" />
-                <Directory Id="amdrocm_llvm_dev_llicSCS" Name="Serialization" />
-                <Directory Id="amdrocm_llvm_dev_lillinclScCoSu" Name="SummaryData" />
-                <Directory Id="amdrocm_llvm_dev_libllvincclaScaCorSup" Name="Support" />
-                <Directory Id="amdrocm_llvm_dev_llicSCT" Name="TUSummary" />
-                <Directory Id="amdrocm_llvm_dev_llicSCW" Name="WholeProgramAnalysis" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llicSF" Name="Frontend" />
-              <Directory Id="amdrocm_llvm_dev_llicST" Name="Tool" />
-            </Directory>
+            <Directory Id="amdrocm_llvm_dev_llicR" Name="Rewrite" />
+            <Directory Id="amdrocm_llvm_dev_llicS" Name="ScalableStaticAnalysisFramework" />
             <Directory Id="amdrocm_llvm_dev_lillinclSe" Name="Sema" />
             <Directory Id="amdrocm_llvm_dev_libllvincclaSer" Name="Serialization" />
-            <Directory Id="amdrocm_llvm_dev_lillinclSt" Name="StaticAnalyzer">
-              <Directory Id="amdrocm_llvm_dev_lillinclStCh" Name="Checkers" />
-              <Directory Id="amdrocm_llvm_dev_lillinclStCo" Name="Core">
-                <Directory Id="amdrocm_llvm_dev_llicSCB" Name="BugReporter" />
-                <Directory Id="amdrocm_llvm_dev_llicSCP" Name="PathSensitive" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_lillinclStFr" Name="Frontend" />
-            </Directory>
+            <Directory Id="amdrocm_llvm_dev_lillinclSt" Name="StaticAnalyzer" />
             <Directory Id="amdrocm_llvm_dev_lillinclSu" Name="Support" />
             <Directory Id="amdrocm_llvm_dev_llicT" Name="Testing" />
-            <Directory Id="amdrocm_llvm_dev_lillinclTo" Name="Tooling">
-              <Directory Id="amdrocm_llvm_dev_llicTA" Name="ASTDiff" />
-              <Directory Id="amdrocm_llvm_dev_llicTC" Name="Core" />
-              <Directory Id="amdrocm_llvm_dev_llicTI" Name="Inclusions" />
-              <Directory Id="amdrocm_llvm_dev_llicTR" Name="Refactoring">
-                <Directory Id="amdrocm_llvm_dev_llicTRE" Name="Extract" />
-                <Directory Id="amdrocm_llvm_dev_llicTRR" Name="Rename" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llicTS" Name="Syntax" />
-              <Directory Id="amdrocm_llvm_dev_llicTT" Name="Transformer" />
-            </Directory>
+            <Directory Id="amdrocm_llvm_dev_lillinclTo" Name="Tooling" />
             <Directory Id="amdrocm_llvm_dev_llicU" Name="UnifiedSymbolResolution" />
           </Directory>
-          <Directory Id="amdrocm_llvm_dev_llil" Name="lld">
-            <Directory Id="amdrocm_llvm_dev_llilC" Name="Common" />
-          </Directory>
-          <Directory Id="amdrocm_llvm_dev_llilc" Name="llvm-c">
-            <Directory Id="amdrocm_llvm_dev_llilcT" Name="Transforms" />
-          </Directory>
-          <Directory Id="amdrocm_llvm_dev_lillinll" Name="llvm">
-            <Directory Id="amdrocm_llvm_dev_llilA" Name="ABI" />
-            <Directory Id="amdrocm_llvm_dev_lillinllAD" Name="ADT" />
-            <Directory Id="amdrocm_llvm_dev_lillinllAn" Name="Analysis">
-              <Directory Id="amdrocm_llvm_dev_llilAU" Name="Utils" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinllAs" Name="AsmParser" />
-            <Directory Id="amdrocm_llvm_dev_llilB" Name="BinaryFormat">
-              <Directory Id="amdrocm_llvm_dev_llilBE" Name="ELFRelocs" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinllBi" Name="Bitcode" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvBit" Name="Bitstream" />
-            <Directory Id="amdrocm_llvm_dev_lillinllCA" Name="CAS" />
-            <Directory Id="amdrocm_llvm_dev_lillinllCG" Name="CGData" />
-            <Directory Id="amdrocm_llvm_dev_lillinllCo" Name="CodeGen">
-              <Directory Id="amdrocm_llvm_dev_llilCG" Name="GlobalISel" />
-              <Directory Id="amdrocm_llvm_dev_llilCM" Name="MIRParser" />
-              <Directory Id="amdrocm_llvm_dev_llilCP" Name="PBQP" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_libllvincllvCod" Name="CodeGenTypes" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvCon" Name="Config" />
-            <Directory Id="amdrocm_llvm_dev_llilD" Name="DTLTO" />
-            <Directory Id="amdrocm_llvm_dev_lillinllDW" Name="DWARFCFIChecker" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvDWA" Name="DWARFLinker">
-              <Directory Id="amdrocm_llvm_dev_llilDC" Name="Classic" />
-              <Directory Id="amdrocm_llvm_dev_llilDP" Name="Parallel" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_libllvincllvDWP" Name="DWP" />
-            <Directory Id="amdrocm_llvm_dev_lillinllDe" Name="DebugInfo">
-              <Directory Id="amdrocm_llvm_dev_llilDB" Name="BTF" />
-              <Directory Id="amdrocm_llvm_dev_lillinllDeCo" Name="CodeView" />
-              <Directory Id="amdrocm_llvm_dev_llilDD" Name="DWARF">
-                <Directory Id="amdrocm_llvm_dev_llilDDL" Name="LowLevel" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llilDG" Name="GSYM" />
-              <Directory Id="amdrocm_llvm_dev_llilDL" Name="LogicalView">
-                <Directory Id="amdrocm_llvm_dev_llilDLC" Name="Core" />
-                <Directory Id="amdrocm_llvm_dev_llilDLR" Name="Readers" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llilDM" Name="MSF" />
-              <Directory Id="amdrocm_llvm_dev_lillinllDePD" Name="PDB">
-                <Directory Id="amdrocm_llvm_dev_llilDPD" Name="DIA" />
-                <Directory Id="amdrocm_llvm_dev_llilDPN" Name="Native" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llilDS" Name="Symbolize" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_libllvincllvDeb" Name="Debuginfod" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvDem" Name="Demangle" />
-            <Directory Id="amdrocm_llvm_dev_llilE" Name="ExecutionEngine">
-              <Directory Id="amdrocm_llvm_dev_llilEJ" Name="JITLink" />
-              <Directory Id="amdrocm_llvm_dev_llilEO" Name="Orc">
-                <Directory Id="amdrocm_llvm_dev_llilEOD" Name="Debugging" />
-                <Directory Id="amdrocm_llvm_dev_llilEOS" Name="Shared" />
-                <Directory Id="amdrocm_llvm_dev_llilEOT" Name="TargetProcess" />
-              </Directory>
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_llilF" Name="FileCheck" />
-            <Directory Id="amdrocm_llvm_dev_lillinllFr" Name="Frontend">
-              <Directory Id="amdrocm_llvm_dev_llilFA" Name="Atomic" />
-              <Directory Id="amdrocm_llvm_dev_llilFD" Name="Debug" />
-              <Directory Id="amdrocm_llvm_dev_lillinllFrDi" Name="Directive" />
-              <Directory Id="amdrocm_llvm_dev_lillinllFrDr" Name="Driver" />
-              <Directory Id="amdrocm_llvm_dev_llilFH" Name="HLSL" />
-              <Directory Id="amdrocm_llvm_dev_llilFO" Name="Offloading" />
-              <Directory Id="amdrocm_llvm_dev_lillinllFrOp" Name="OpenACC" />
-              <Directory Id="amdrocm_llvm_dev_libllvincllvFroOpe" Name="OpenMP" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinllFu" Name="FuzzMutate" />
-            <Directory Id="amdrocm_llvm_dev_llilI" Name="IR" />
-            <Directory Id="amdrocm_llvm_dev_lillinllIR" Name="IRPrinter" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvIRR" Name="IRReader" />
-            <Directory Id="amdrocm_llvm_dev_lillinllIn" Name="InterfaceStub" />
-            <Directory Id="amdrocm_llvm_dev_llilL" Name="LTO">
-              <Directory Id="amdrocm_llvm_dev_llilLl" Name="legacy" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinllLi" Name="LineEditor" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvLin" Name="Linker" />
-            <Directory Id="amdrocm_llvm_dev_llilM" Name="MC">
-              <Directory Id="amdrocm_llvm_dev_llilMM" Name="MCDisassembler" />
-              <Directory Id="amdrocm_llvm_dev_lillinllMCMC" Name="MCParser" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinllMC" Name="MCA">
-              <Directory Id="amdrocm_llvm_dev_llilMH" Name="HardwareUnits" />
-              <Directory Id="amdrocm_llvm_dev_llilMS" Name="Stages" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_llilO" Name="ObjCopy">
-              <Directory Id="amdrocm_llvm_dev_llilOC" Name="COFF" />
-              <Directory Id="amdrocm_llvm_dev_llilOD" Name="DXContainer" />
-              <Directory Id="amdrocm_llvm_dev_llilOE" Name="ELF" />
-              <Directory Id="amdrocm_llvm_dev_llilOM" Name="MachO" />
-              <Directory Id="amdrocm_llvm_dev_llilOX" Name="XCOFF" />
-              <Directory Id="amdrocm_llvm_dev_llilOw" Name="wasm" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinllOb" Name="Object" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvObj" Name="ObjectYAML" />
-            <Directory Id="amdrocm_llvm_dev_lillinllOp" Name="Option" />
-            <Directory Id="amdrocm_llvm_dev_llilP" Name="Passes" />
-            <Directory Id="amdrocm_llvm_dev_lillinllPl" Name="Plugins" />
-            <Directory Id="amdrocm_llvm_dev_lillinllPr" Name="ProfileData">
-              <Directory Id="amdrocm_llvm_dev_llilPC" Name="Coverage" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_llilR" Name="Remarks" />
-            <Directory Id="amdrocm_llvm_dev_llilS" Name="SandboxIR" />
-            <Directory Id="amdrocm_llvm_dev_lillinllSu" Name="Support">
-              <Directory Id="amdrocm_llvm_dev_llilSF" Name="FileSystem" />
-              <Directory Id="amdrocm_llvm_dev_llilSH" Name="HTTP" />
-              <Directory Id="amdrocm_llvm_dev_llilSL" Name="LSP" />
-              <Directory Id="amdrocm_llvm_dev_llilSS" Name="Solaris">
-                <Directory Id="amdrocm_llvm_dev_llilSSs" Name="sys" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_lillinllSuSy" Name="SystemZ">
-                <Directory Id="amdrocm_llvm_dev_llilSSzw" Name="zos_wrappers" />
-              </Directory>
-              <Directory Id="amdrocm_llvm_dev_llilSW" Name="Windows" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_llilT" Name="TableGen" />
-            <Directory Id="amdrocm_llvm_dev_lillinllTa" Name="Target">
-              <Directory Id="amdrocm_llvm_dev_llilTG" Name="GlobalISel" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_libllvincllvTar" Name="TargetParser" />
-            <Directory Id="amdrocm_llvm_dev_lillinllTe" Name="Telemetry" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvTes" Name="Testing">
-              <Directory Id="amdrocm_llvm_dev_llilTA" Name="ADT" />
-              <Directory Id="amdrocm_llvm_dev_lillinllTeAn" Name="Annotations" />
-              <Directory Id="amdrocm_llvm_dev_llilTD" Name="Demangle" />
-              <Directory Id="amdrocm_llvm_dev_llilTS" Name="Support" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_libllvincllvTex" Name="TextAPI" />
-            <Directory Id="amdrocm_llvm_dev_lillinllTo" Name="ToolDrivers">
-              <Directory Id="amdrocm_llvm_dev_llilTld" Name="llvm-dlltool" />
-              <Directory Id="amdrocm_llvm_dev_llilTll" Name="llvm-lib" />
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_lillinllTr" Name="Transforms">
-              <Directory Id="amdrocm_llvm_dev_lillinllTrAg" Name="AggressiveInstCombine" />
-              <Directory Id="amdrocm_llvm_dev_llilTC" Name="Coroutines" />
-              <Directory Id="amdrocm_llvm_dev_llilTH" Name="HipStdPar" />
-              <Directory Id="amdrocm_llvm_dev_llilTI" Name="IPO" />
-              <Directory Id="amdrocm_llvm_dev_lillinllTrIn" Name="InstCombine" />
-              <Directory Id="amdrocm_llvm_dev_libllvincllvTraIns" Name="Instrumentation" />
-              <Directory Id="amdrocm_llvm_dev_lillinllTrSc" Name="Scalar" />
-              <Directory Id="amdrocm_llvm_dev_llilTU" Name="Utils" />
-              <Directory Id="amdrocm_llvm_dev_llilTV" Name="Vectorize">
-                <Directory Id="amdrocm_llvm_dev_llilTVS" Name="SandboxVectorizer">
-                  <Directory Id="amdrocm_llvm_dev_llilTVSP" Name="Passes" />
-                </Directory>
-              </Directory>
-            </Directory>
-            <Directory Id="amdrocm_llvm_dev_llilW" Name="WindowsDriver" />
-            <Directory Id="amdrocm_llvm_dev_lillinllWi" Name="WindowsManifest" />
-            <Directory Id="amdrocm_llvm_dev_libllvincllvWin" Name="WindowsResource" />
-            <Directory Id="amdrocm_llvm_dev_llilX" Name="XRay" />
-          </Directory>
+          <Directory Id="amdrocm_llvm_dev_llil" Name="lld" />
+          <Directory Id="amdrocm_llvm_dev_llilc" Name="llvm-c" />
+          <Directory Id="amdrocm_llvm_dev_lillinll" Name="llvm" />
         </Directory>
         <Directory Id="amdrocm_llvm_dev_lll" Name="lib">
           <Directory Id="amdrocm_llvm_dev_lllc" Name="clang">

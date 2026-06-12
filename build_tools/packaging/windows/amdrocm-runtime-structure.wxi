@@ -2,12 +2,6 @@
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
 <!-- Directory map -->
     <Directory Id="amdrocm_runtime_b" Name="bin" />
-    <Directory Id="amdrocm_runtime_i" Name="include">
-      <Directory Id="amdrocm_runtime_iac" Name="amd_comgr" />
-    </Directory>
-    <Directory Id="amdrocm_runtime_s" Name="share">
-      <Directory Id="amdrocm_runtime_sd" Name="doc">
-        <Directory Id="amdrocm_runtime_sdac" Name="amd_comgr" />
-      </Directory>
-    </Directory>
+    <Directory Id="amdrocm_runtime_i" Name="include" />
+    <Directory Id="amdrocm_runtime_s" Name="share" />
 </Include>

@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
 <!-- Directory map -->
-    <Directory Id="amdrocm_runtime_dev_c" Name="cmake">
-      <Directory Id="amdrocm_runtime_dev_cF" Name="FindHIP" />
-    </Directory>
+    <Directory Id="amdrocm_runtime_dev_c" Name="cmake" />
     <Directory Id="amdrocm_runtime_dev_i" Name="include">
-      <Directory Id="amdrocm_runtime_dev_ih" Name="hip">
-        <Directory Id="amdrocm_runtime_dev_ihad" Name="amd_detail" />
-        <Directory Id="amdrocm_runtime_dev_ihcg" Name="cooperative_groups" />
-      </Directory>
+      <Directory Id="amdrocm_runtime_dev_ih" Name="hip" />
       <Directory Id="amdrocm_runtime_dev_irk" Name="rocm_kpack" />
     </Directory>
     <Directory Id="amdrocm_runtime_dev_l" Name="lib">

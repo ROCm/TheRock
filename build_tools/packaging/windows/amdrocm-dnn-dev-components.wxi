@@ -19,12 +19,7 @@
 
   <!-- Contents of directory include\flatbuffers -->
   <ComponentGroup Id="cg_amdrocm_dnn_dev_if" Directory="amdrocm_dnn_dev_if">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/flatbuffers/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\flatbuffers\pch -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ifp" Directory="amdrocm_dnn_dev_ifp">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/flatbuffers/pch/*.*" />
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/flatbuffers/**/*.*" />
   </ComponentGroup>
 
   <!-- Contents of directory include\half -->
@@ -37,54 +32,21 @@
     <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/backend/*.*" />
   </ComponentGroup>
 
-  <!-- Contents of directory include\hipdnn\data_sdk\hipdnn_data_sdk -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihdshds" Directory="amdrocm_dnn_dev_ihdshds">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/hipdnn_data_sdk/*.*" />
+  <!-- Contents of directory include\hipdnn\data_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihds" Directory="amdrocm_dnn_dev_ihds">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/**/*.*" />
   </ComponentGroup>
 
-  <!-- Contents of directory include\hipdnn\data_sdk\hipdnn_data_sdk\logging -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihdshdsl" Directory="amdrocm_dnn_dev_ihdshdsl">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/hipdnn_data_sdk/logging/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\data_sdk\hipdnn_data_sdk\types -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihdshdst" Directory="amdrocm_dnn_dev_ihdshdst">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/hipdnn_data_sdk/types/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\data_sdk\hipdnn_data_sdk\utilities -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihdshdsu" Directory="amdrocm_dnn_dev_ihdshdsu">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/hipdnn_data_sdk/utilities/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\flatbuffers_sdk\hipdnn_flatbuffers_sdk -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfshfs" Directory="amdrocm_dnn_dev_ihfshfs">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\flatbuffers_sdk\hipdnn_flatbuffers_sdk\data_objects -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfshfsdo" Directory="amdrocm_dnn_dev_ihfshfsdo">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/data_objects/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\flatbuffers_sdk\hipdnn_flatbuffers_sdk\flatbuffer_utilities -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfshfsfu" Directory="amdrocm_dnn_dev_ihfshfsfu">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/flatbuffer_utilities/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\flatbuffers_sdk\hipdnn_flatbuffers_sdk\utilities -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfshfsu" Directory="amdrocm_dnn_dev_ihfshfsu">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\flatbuffers_sdk\hipdnn_flatbuffers_sdk\utilities\json -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfshfsuj" Directory="amdrocm_dnn_dev_ihfshfsuj">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/flatbuffers_sdk/hipdnn_flatbuffers_sdk/utilities/json/*.*" />
+  <!-- Contents of directory include\hipdnn\flatbuffers_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfs" Directory="amdrocm_dnn_dev_ihfs">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/flatbuffers_sdk/**/*.*" />
   </ComponentGroup>
 
   <!-- Contents of directory include\hipdnn\frontend -->
   <ComponentGroup Id="cg_amdrocm_dnn_dev_ihf" Directory="amdrocm_dnn_dev_ihf">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/*.*" />
+    <Component Id="c_amdrocm_dnn_dev_ihf_hf.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihf_hf.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend.hpp" KeyPath="yes" />
+    </Component>
   </ComponentGroup>
 
   <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend -->
@@ -132,22 +94,12 @@
 
   <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend\node -->
   <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfhfn" Directory="amdrocm_dnn_dev_ihfhfn">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/node/*.*" />
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/node/**/*.*" />
   </ComponentGroup>
 
-  <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend\node\detail -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfhfnd" Directory="amdrocm_dnn_dev_ihfhfnd">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/node/detail/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\plugin_sdk\hipdnn_plugin_sdk -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihpshps" Directory="amdrocm_dnn_dev_ihpshps">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\plugin_sdk\hipdnn_plugin_sdk\interfaces -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihpshpsi" Directory="amdrocm_dnn_dev_ihpshpsi">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/plugin_sdk/hipdnn_plugin_sdk/interfaces/*.*" />
+  <!-- Contents of directory include\hipdnn\plugin_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihps" Directory="amdrocm_dnn_dev_ihps">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/plugin_sdk/**/*.*" />
   </ComponentGroup>
 
   <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk -->
@@ -164,27 +116,7 @@
 
   <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk\utilities -->
   <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshtsu" Directory="amdrocm_dnn_dev_ihtshtsu">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk\utilities\cpu_graph_executor -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshtsucge" Directory="amdrocm_dnn_dev_ihtshtsucge">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk\utilities\cpu_graph_executor\detail -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshtsucged" Directory="amdrocm_dnn_dev_ihtshtsucged">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/cpu_graph_executor/detail/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk\utilities\detail -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshtsud" Directory="amdrocm_dnn_dev_ihtshtsud">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/detail/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk\utilities\pointwise -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshtsup" Directory="amdrocm_dnn_dev_ihtshtsup">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/pointwise/*.*" />
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/**/*.*" />
   </ComponentGroup>
 
   <!-- Contents of directory include\miopen -->
@@ -194,47 +126,7 @@
 
   <!-- Contents of directory include\nlohmann -->
   <ComponentGroup Id="cg_amdrocm_dnn_dev_in" Directory="amdrocm_dnn_dev_in">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\detail -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_ind" Directory="amdrocm_dnn_dev_ind">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/detail/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\detail\conversions -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_indc" Directory="amdrocm_dnn_dev_indc">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/detail/conversions/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\detail\input -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_indi" Directory="amdrocm_dnn_dev_indi">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/detail/input/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\detail\iterators -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_innldeit" Directory="amdrocm_dnn_dev_innldeit">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/detail/iterators/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\detail\meta -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_indm" Directory="amdrocm_dnn_dev_indm">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/detail/meta/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\detail\meta\call_std -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_indmcs" Directory="amdrocm_dnn_dev_indmcs">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/detail/meta/call_std/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\detail\output -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_indo" Directory="amdrocm_dnn_dev_indo">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/detail/output/*.*" />
-  </ComponentGroup>
-
-  <!-- Contents of directory include\nlohmann\thirdparty\hedley -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_inth" Directory="amdrocm_dnn_dev_inth">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/thirdparty/hedley/*.*" />
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/**/*.*" />
   </ComponentGroup>
 
   <!-- Contents of directory lib -->
@@ -332,9 +224,9 @@
     <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/pkgconfig/*.*" />
   </ComponentGroup>
 
-  <!-- Contents of directory share\cmake\nlohmann_json -->
-  <ComponentGroup Id="cg_amdrocm_dnn_dev_scnj" Directory="amdrocm_dnn_dev_scnj">
-    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/share/cmake/nlohmann_json/*.*" />
+  <!-- Contents of directory share\cmake -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_sc" Directory="amdrocm_dnn_dev_sc">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/share/cmake/**/*.*" />
   </ComponentGroup>
 
   <!-- Contents of directory share\doc\miopen-hip -->

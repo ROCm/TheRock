@@ -15,14 +15,14 @@
     </Component>
   </ComponentGroup>
 
-  <!-- Contents of directory include\amd_comgr -->
-  <ComponentGroup Id="cg_amdrocm_runtime_iac" Directory="amdrocm_runtime_iac">
-    <Files Include="$(var.BuildRoot)/compiler/amd-comgr/dist/include/amd_comgr/*.*" />
+  <!-- Contents of directory include -->
+  <ComponentGroup Id="cg_amdrocm_runtime_i" Directory="amdrocm_runtime_i">
+    <Files Include="$(var.BuildRoot)/compiler/amd-comgr/dist/include/**/*.*" />
   </ComponentGroup>
 
-  <!-- Contents of directory share\doc\amd_comgr -->
-  <ComponentGroup Id="cg_amdrocm_runtime_sdac" Directory="amdrocm_runtime_sdac">
-    <Files Include="$(var.BuildRoot)/compiler/amd-comgr/dist/share/doc/amd_comgr/*.*" />
+  <!-- Contents of directory share -->
+  <ComponentGroup Id="cg_amdrocm_runtime_s" Directory="amdrocm_runtime_s">
+    <Files Include="$(var.BuildRoot)/compiler/amd-comgr/dist/share/**/*.*" />
   </ComponentGroup>
 
 </Include>
