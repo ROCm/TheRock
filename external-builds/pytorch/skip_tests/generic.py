@@ -257,6 +257,9 @@ skip_tests = {
             "test_streams",
         ],
         "nn": [
+            # Hangs on some Windows ROCm runners until the job hits the 6h limit.
+            # https://github.com/ROCm/TheRock/issues/5565
+            "test_cross_entropy_loss_2d_out_of_bounds_class_index",
             # RuntimeError: miopenStatusUnknownError
             "test_cudnn_weight_format",
             "test_rnn_retain_variables_cuda_float16",
