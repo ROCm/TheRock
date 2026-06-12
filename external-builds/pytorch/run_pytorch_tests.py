@@ -50,6 +50,10 @@ Pass additional pytest arguments after "--":
     $ python run_pytorch_tests.py -- -m "slow"
     $ python run_pytorch_tests.py -- --tb=short -x
 
+GPU selection options:
+    $ python run_pytorch_tests.py --gpu-policy all --device-query all
+    $ python run_pytorch_tests.py --gpu-policy single --device-query all
+
 Exit Codes
 ----------
 0 : All tests passed
@@ -78,7 +82,7 @@ import pytest
 
 from pytorch_utils import (
     check_pytorch_source_version,
-    set_gpu_execution_policy,
+    configure_gpu_visibility,
     detect_pytorch_version,
 )
 
@@ -196,6 +200,29 @@ By default the pytorch directory is determined based on this script's location
         help="""Enable pytest caching (default). Use --no-cache when only having read-only access to pytorch directory""",
     )
 
+    # GPU selection happens in two stages:
+    #   1. --device-query  decides which GPUs enter the candidate set.
+    #   2. --gpu-policy    decides how many candidates are made visible to tests.
+    parser.add_argument(
+        "--device-query",
+        type=str,
+        choices=["unique", "all"],
+        default="unique",
+        help="""Stage 1: which GPUs enter the candidate set (see --gpu-policy for stage 2).
+- "unique": one device per architecture (default). E.g. {gfx942:[0], gfx1100:[2]}.
+- "all": every device of each architecture. E.g. {gfx942:[0,1], gfx1100:[2]}.""",
+    )
+
+    parser.add_argument(
+        "--gpu-policy",
+        type=str,
+        choices=["single", "all"],
+        default="single",
+        help="""Stage 2: how many candidate GPUs to make visible (see --device-query for stage 1).
+- "single": one GPU visible at a time (default). Suitable for most unit tests.
+- "all": all candidate GPUs visible at once. Useful for multi-GPU tests.""",
+    )
+
     parser.add_argument(
         "--allow-version-mismatch",
         default=False,
@@ -231,14 +258,9 @@ def main() -> int:
         # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
         # changing HIP_VISIBLE_DEVICES has no effect.
-        # For unit tests, run only on the first supported device (policy="single")
-        ((first_arch, _),) = set_gpu_execution_policy(
-            args.amdgpu_family, policy="single"
+        selected_archs = configure_gpu_visibility(
+            args.amdgpu_family, args.device_query, args.gpu_policy
         )
-        print(f"Using AMDGPU family: {first_arch}")
-
-        # get_tests amdgpu_family requires list[str]
-        first_arch = [first_arch]
 
         # Determine PyTorch version
         pytorch_version = args.pytorch_version
@@ -248,7 +270,7 @@ def main() -> int:
 
         # Get tests to skip
         tests_to_skip = get_tests(
-            amdgpu_family=first_arch,
+            amdgpu_family=selected_archs,
             pytorch_version=pytorch_version,
             platform=platform.system(),
             create_skip_list=not args.debug,

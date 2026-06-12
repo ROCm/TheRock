@@ -29,6 +29,18 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly PyTorch wheel builds complete.
+        type: boolean
+        default: false
+      build_pytorch:
+        description: "Build PyTorch wheels (defaults to true for workflow_call)"
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -126,7 +138,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -155,7 +167,6 @@ jobs:
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
     name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
-    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -181,11 +192,40 @@ jobs:
               "ref": "${{ inputs.ref }}"
             }
 
+  # Install tests are dispatched asynchronously (sanity) so publish
+  # is not blocked on GPU runner queues. See https://github.com/ROCm/TheRock/issues/5212
+  trigger_test_native_install:
+    needs: [build_native_deb_packages, build_native_rpm_packages]
+    name: Trigger Native Install Test - ${{ matrix.os_profile }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os_profile: [ubuntu2404, rhel10, sles16]
+    steps:
+      - name: Trigger test_native_linux_packages_install
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        with:
+          workflow: test_native_linux_packages_install.yml
+          inputs: |
+            { "package_install_url": "${{ matrix.os_profile == 'ubuntu2404' && needs.build_native_deb_packages.outputs.package_repository_url || needs.build_native_rpm_packages.outputs.package_repository_url }}",
+              "release_type": "${{ inputs.release_type }}",
+              "os_profile": "${{ matrix.os_profile }}",
+              "artifact_group": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
+              "test_type": "${{ inputs.test_type }}",
+              "repository": "${{ inputs.repository }}",
+              "ref": "${{ inputs.ref }}"
+            }
+
+
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
   #   bucket if the job order is not altered.
   trigger_release_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
     name: Trigger Release PyTorch Wheels
+    if: ${{ inputs.build_pytorch != false }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -199,7 +239,27 @@ jobs:
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "release_type": "${{ inputs.release_type }}",
-              "ref": "${{ inputs.ref || '' }}"
+              "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
+              "ref": "${{ inputs.ref || '' }}",
+              "python_version": "${{ inputs.python_version }}"
             }
 
-  # TODO: trigger_build_jax_wheels (release_portable_linux_jax_wheels.yml or equivalent)
+  trigger_release_jax_wheels:
+    needs: [build_artifacts, build_tarballs]
+    name: Trigger Release JAX Wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger JAX Build
+        uses: benc-uk/workflow-dispatch@7a027648b88c2413826b6ddd6c76114894dc5ec4 # v1.3.1
+        with:
+          workflow: multi_arch_release_linux_jax_wheels.yml
+          inputs: |
+            {
+              "release_type": "${{ inputs.release_type }}",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "tar_url": "${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref || '' }}"
+            }

@@ -63,7 +63,7 @@ jobs:
     name: Build (xfail ${{ inputs.expect_failure }})
     # azure-linux-scale-rocm are used for regular CI builds
     # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN and TSAN builds)
-    runs-on: ${{ (contains(inputs.build_variant_label, 'asan') || contains(inputs.build_variant_label, 'tsan')) && 'azure-linux-scale-rocm-heavy-ramdisk' || 'azure-linux-scale-rocm' }}
+    runs-on: ${{ contains(inputs.build_variant_label, 'san') && 'azure-linux-scale-rocm-heavy-ramdisk' || 'azure-linux-scale-rocm' }}
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
     permissions:
@@ -84,7 +84,7 @@ jobs:
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Install python deps
         run: |
@@ -124,9 +124,9 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
-      - name: Build therock-archives and therock-dist
+      - name: Build therock-artifacts and therock-dist
         run: |
-          cmake --build build --target therock-archives therock-dist -- -k 0
+          cmake --build build --target therock-artifacts therock-dist -- -k 0
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
@@ -141,9 +141,6 @@ jobs:
             echo "Full SDK du:"
             echo "------------"
             du -h -d 1 build/dist/rocm
-            echo "Artifact Archives:"
-            echo "------------------"
-            ls -lh build/artifacts/*.tar.xz
             echo "Artifacts:"
             echo "----------"
             du -h -d 1 build/artifacts
@@ -167,6 +164,13 @@ jobs:
       - name: Configure AWS Credentials
         if: ${{ always() }}
         uses: ./.github/actions/configure_aws_artifacts_credentials
+
+      - name: Push artifacts
+        run: |
+          python build_tools/artifact_manager.py push \
+            --run-id ${{ github.run_id }} \
+            --build-dir build \
+            --stage all
 
       - name: Post Build Upload
         if: always()
