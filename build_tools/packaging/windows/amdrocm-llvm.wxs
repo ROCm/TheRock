@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<?include common.wxi ?>
+<Package Name="amdrocm-llvm" Version="$(var.ProductVersion).0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="2E93D7A3-3319-4E39-A824-7199EBCC3628" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="AMDDir" Name="AMD">
+      <Directory Id="ProductDir" Name="$(var.ProductName)">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductVersion)">
+    <?include amdrocm-llvm-content.wxi ?>
+
+        </Directory>
+      </Directory>
+    </Directory>
+  </StandardDirectory>
+  <Feature Id="amdrocm_llvm_files" Title="ROCm LLVM Package" Level="1" Display="expand">
+  <?include amdrocm-llvm-features.wxi ?>
+
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+  </Package>
+</Wix>

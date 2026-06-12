@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<?include common.wxi ?>
+<Package Name="amdrocm-blas" Version="$(var.ProductVersion).0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="60FF2D81-EFC5-4C0F-9888-3B387367732F" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="AMDDir" Name="AMD">
+      <Directory Id="ProductDir" Name="$(var.ProductName)">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductVersion)">
+    <?include amdrocm-blas-content.wxi ?>
+
+        </Directory>
+      </Directory>
+    </Directory>
+  </StandardDirectory>
+  <Feature Id="amdrocm_blas_files" Title="ROCm BLAS Runtime" Level="1" Display="expand">
+  <?include amdrocm-blas-features.wxi ?>
+
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+  </Package>
+</Wix>

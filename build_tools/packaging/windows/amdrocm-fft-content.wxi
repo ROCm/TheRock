@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <Directory Id="amdrocm_fft_b" Name="bin">
+      <Component Id="c_amdrocm_fft_b_h.dll" Guid="*">
+        <File Id="f_amdrocm_fft_b_h.dll" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/hipfft.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="c_amdrocm_fft_b_hi.dll" Guid="*">
+        <File Id="f_amdrocm_fft_b_hi.dll" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/hipfftw.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="c_amdrocm_fft_b_r.dll" Guid="*">
+        <File Id="f_amdrocm_fft_b_r.dll" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/rocfft.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="c_amdrocm_fft_b_rrh.exe" Guid="*">
+        <File Id="f_amdrocm_fft_b_rrh.exe" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/bin/rocfft_rtc_helper.exe" KeyPath="yes" />
+      </Component>
+    </Directory>
+    <Directory Id="amdrocm_fft_s" Name="share">
+      <Directory Id="amdrocm_fft_sd" Name="doc">
+        <Directory Id="amdrocm_fft_sdh" Name="hipfft">
+          <Component Id="c_amdrocm_fft_sdh_L.md" Guid="*">
+            <File Id="f_amdrocm_fft_sdh_L.md" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/share/doc/hipfft/LICENSE.md" KeyPath="yes" />
+          </Component>
+        </Directory>
+        <Directory Id="amdrocm_fft_sdr" Name="rocfft">
+          <Component Id="c_amdrocm_fft_sdr_L.md" Guid="*">
+            <File Id="f_amdrocm_fft_sdr_L.md" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/share/doc/rocfft/LICENSE.md" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+</Include>

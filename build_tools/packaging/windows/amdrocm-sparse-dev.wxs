@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<?include common.wxi ?>
+<Package Name="amdrocm-sparse-dev" Version="$(var.ProductVersion).0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="DC3730B9-2C88-43B6-B904-C9DB341FA68A" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="AMDDir" Name="AMD">
+      <Directory Id="ProductDir" Name="$(var.ProductName)">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductVersion)">
+    <?include amdrocm-sparse-dev-content.wxi ?>
+
+        </Directory>
+      </Directory>
+    </Directory>
+  </StandardDirectory>
+  <Feature Id="amdrocm_sparse_dev_files" Title="ROCm Sparse Dev Package" Level="1" Display="expand">
+  <?include amdrocm-sparse-dev-features.wxi ?>
+
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+  </Package>
+</Wix>

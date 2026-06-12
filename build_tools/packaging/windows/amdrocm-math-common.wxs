@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<?include common.wxi ?>
+<Package Name="amdrocm-math-common" Version="$(var.ProductVersion).0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="DCD4E8B8-C07F-44AE-8FF4-7F589484087D" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="AMDDir" Name="AMD">
+      <Directory Id="ProductDir" Name="$(var.ProductName)">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductVersion)">
+    <?include amdrocm-math-common-content.wxi ?>
+
+        </Directory>
+      </Directory>
+    </Directory>
+  </StandardDirectory>
+  <Feature Id="amdrocm_math_common_files" Title="ROCm Common Math Package" Level="1" Display="expand">
+  <?include amdrocm-math-common-features.wxi ?>
+
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+  </Package>
+</Wix>

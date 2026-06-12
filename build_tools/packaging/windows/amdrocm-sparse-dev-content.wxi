@@ -1,0 +1,692 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <Directory Id="amdrocm_sparse_dev_b" Name="bin">
+      <Directory Id="amdrocm_sparse_dev_bh" Name="hipsparse">
+        <Component Id="c_amdrocm_sparse_dev_bh_C.cmake" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_bh_C.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/bin/hipsparse/CTestTestfile.cmake" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_sparse_dev_i" Name="include">
+      <Directory Id="amdrocm_sparse_dev_ih" Name="hipsparse">
+        <Component Id="c_amdrocm_sparse_dev_ih_ha.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_ha.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-auxiliary.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_hb.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_hb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-bfloat16.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_he.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_he.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-export.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_hf.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_hf.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-float16.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_hga.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_hga.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-generic-auxiliary.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_hgt.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_hgt.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-generic-types.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_ht.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_ht.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-types.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_hv.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_hv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse-version.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ih_h.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ih_h.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/hipsparse.h" KeyPath="yes" />
+        </Component>
+        <Directory Id="amdrocm_sparse_dev_ihi" Name="internal">
+          <Directory Id="amdrocm_sparse_dev_ihic" Name="conversion">
+            <Component Id="c_amdrocm_sparse_dev_ihic_hb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_bsr2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_coo2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hico.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hico.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_coosort.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hcip.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hcip.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_create_identity_permutation.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hics.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hics.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csc2dense.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipcsc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipcsc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_cscsort.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipcsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipcsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2bsr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipscsr2.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipscsr2.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2coo.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipspcsr2c.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipspcsr2c.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2csc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hcc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hcc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2csr_compress.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipspacsr2cs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipspacsr2cs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2csru.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipspcsr2d.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipspcsr2d.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2dense.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipspcsr2g.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipspcsr2g.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2gebsr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipspcsr2h.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipspcsr2h.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csr2hyb.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipscsrs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipscsrs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csrsort.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipscsru.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipscsru.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_csru2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_dense2csc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hide.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hide.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_dense2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_gebsr2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hige.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hige.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_gebsr2gebsc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hipgeb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hipgeb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_gebsr2gebsr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hh.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hh.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_hyb2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hn.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hn.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_nnz.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hnc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hnc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_nnz_compress.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hpc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hpc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_prune_csr2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hpcbp.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hpcbp.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_prune_csr2csr_by_percentage.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hpd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hpd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_prune_dense2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihic_hpdbp.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihic_hpdbp.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/conversion/hipsparse_prune_dense2csr_by_percentage.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_ihie" Name="include\hipsparse\internal\extra">
+            <Component Id="c_amdrocm_sparse_dev_ihie_hc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihie_hc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/extra/hipsparse_csrgeam.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihie_hics.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihie_hics.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/extra/hipsparse_csrgemm.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_ihig" Name="include\hipsparse\internal\generic">
+            <Component Id="c_amdrocm_sparse_dev_ihig_ha.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_ha.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_axpby.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_dense2sparse.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_gather.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_rot.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_scatter.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hisd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hisd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_sddmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hisp.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hisp.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_sparse2dense.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hipspg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hipspg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_spgemm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_spgemm_reuse.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hipspm.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hipspm.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_spmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hipsspmv.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hipsspmv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_spmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hipsps.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hipsps.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_spsm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hipsspsv.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hipsspsv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_spsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihig_hipspv.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihig_hipspv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/generic/hipsparse_spvv.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_ihil" Name="include\hipsparse\internal\level1">
+            <Component Id="c_amdrocm_sparse_dev_ihil_ha.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihil_ha.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/hipsparse_axpyi.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihil_hd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihil_hd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/hipsparse_dotci.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihil_hido.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihil_hido.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/hipsparse_doti.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihil_hg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihil_hg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/hipsparse_gthr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihil_higt.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihil_higt.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/hipsparse_gthrz.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihil_hr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihil_hr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/hipsparse_roti.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihil_hs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihil_hs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level1/hipsparse_sctr.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_inhiinle" Name="include\hipsparse\internal\level2">
+            <Component Id="c_amdrocm_sparse_dev_inhiinle_hb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inhiinle_hb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/hipsparse_bsrmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inhiinle_hibs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inhiinle_hibs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/hipsparse_bsrsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inhiinle_hipbsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inhiinle_hipbsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/hipsparse_bsrxmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inhiinle_hc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inhiinle_hc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/hipsparse_csrmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inhiinle_hics.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inhiinle_hics.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/hipsparse_csrsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inhiinle_hg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inhiinle_hg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/hipsparse_gemvi.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inhiinle_hh.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inhiinle_hh.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level2/hipsparse_hybmv.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_inchipintlev" Name="include\hipsparse\internal\level3">
+            <Component Id="c_amdrocm_sparse_dev_inchipintlev_hb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inchipintlev_hb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level3/hipsparse_bsrmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inchipintlev_hibs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inchipintlev_hibs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level3/hipsparse_bsrsm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inchipintlev_hc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inchipintlev_hc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level3/hipsparse_csrmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inchipintlev_hics.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inchipintlev_hics.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level3/hipsparse_csrsm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inchipintlev_hg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inchipintlev_hg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/level3/hipsparse_gemmi.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_ihip" Name="include\hipsparse\internal\precond">
+            <Component Id="c_amdrocm_sparse_dev_ihip_hb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_bsric0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_hibs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hibs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_bsrilu0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_hc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_csric0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_hics.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hics.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_csrilu0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_hgib.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hgib.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_gpsv_interleaved_batch.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_hg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_gtsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_higtinba.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_higtinba.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_gtsv_interleaved_batch.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_hgn.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hgn.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_gtsv_nopivot.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_ihip_hgsb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihip_hgsb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/precond/hipsparse_gtsv_strided_batch.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_ihir" Name="include\hipsparse\internal\reorder">
+            <Component Id="c_amdrocm_sparse_dev_ihir_hc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_ihir_hc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/internal/reorder/hipsparse_csrcolor.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="amdrocm_sparse_dev_ir" Name="include\rocsparse">
+        <Component Id="c_amdrocm_sparse_dev_ir_ra.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_ra.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-auxiliary.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_rct.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_rct.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-complex-types.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_rd.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_rd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-debugging.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_re.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_re.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-export.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_rf.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_rf.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-functions.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_rr.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_rr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-roctx.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_rt.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_rt.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-types.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_rv.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_rv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse-version.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_r.f90" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_r.f90" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse.f90" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_r.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_r.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_rb.h" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_rb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse_bfloat16.h" KeyPath="yes" />
+        </Component>
+        <Component Id="c_amdrocm_sparse_dev_ir_re.f90" Guid="*">
+          <File Id="f_amdrocm_sparse_dev_ir_re.f90" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/rocsparse_enums.f90" KeyPath="yes" />
+        </Component>
+        <Directory Id="amdrocm_sparse_dev_iri" Name="include\rocsparse\internal">
+          <Component Id="c_amdrocm_sparse_dev_iri_rc.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_rc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-conversion.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_re.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_re.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-extra.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_rg.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_rg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-generic.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_rl.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_rl.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-level1.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_role.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_role.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-level2.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_roclev.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_roclev.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-level3.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_rp.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_rp.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-precond.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_rr.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_rr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-reordering.h" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_iri_ru.h" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_iri_ru.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/rocsparse-util.h" KeyPath="yes" />
+          </Component>
+          <Directory Id="amdrocm_sparse_dev_iric" Name="include\rocsparse\internal\conversion">
+            <Component Id="c_amdrocm_sparse_dev_iric_rb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_bsr2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rbv.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rbv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_bsrpad_value.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_coo2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_roco.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_roco.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_coo2dense.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_roccoo.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_roccoo.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_coosort.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csc2dense.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_roccsc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_roccsc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_cscsort.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_roccsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_roccsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2bsr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocscsr2.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocscsr2.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2coo.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocspcsr2c.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocspcsr2c.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2csc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rcc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rcc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2csr_compress.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocspcsr2d.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocspcsr2d.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2dense.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocspcsr2e.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocspcsr2e.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2ell.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocspcsr2g.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocspcsr2g.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2gebsr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocspcsr2h.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocspcsr2h.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csr2hyb.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocscsrs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocscsrs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_csrsort.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_dense2coo.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rode.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rode.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_dense2csc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocden.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocden.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_dense2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_re.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_re.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_ell2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_gebsr2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_roge.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_roge.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_gebsr2gebsc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rocgeb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rocgeb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_gebsr2gebsr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rh.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rh.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_hyb2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rip.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rip.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_inverse_permutation.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rn.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rn.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_nnz.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rnc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rnc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_nnz_compress.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rpc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rpc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_prune_csr2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rpcbp.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rpcbp.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_prune_csr2csr_by_percentage.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rpd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rpd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_prune_dense2csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iric_rpdbp.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iric_rpdbp.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/conversion/rocsparse_prune_dense2csr_by_percentage.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_irie" Name="include\rocsparse\internal\extra">
+            <Component Id="c_amdrocm_sparse_dev_irie_rb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irie_rb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/extra/rocsparse_bsrgeam.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irie_robs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irie_robs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/extra/rocsparse_bsrgemm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irie_rc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irie_rc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/extra/rocsparse_csrgeam.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irie_rocs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irie_rocs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/extra/rocsparse_csrgemm.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_irig" Name="include\rocsparse\internal\generic">
+            <Component Id="c_amdrocm_sparse_dev_irig_ra.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_ra.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_axpby.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rcs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rcs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_check_spmat.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rdts.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rdts.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_dense_to_sparse.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_re.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_re.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_extract.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_gather.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_rot.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_scatter.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rosd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rosd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_sddmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rstd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rstd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_sparse_to_dense.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rsts.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rsts.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_sparse_to_sparse.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rosp.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rosp.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spgeam.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocspg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocspg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spgemm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocspi.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocspi.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spic0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocsspil.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocsspil.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spilu0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocsspit.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocsspit.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spitsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocspm.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocspm.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocsspmv.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocsspmv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocsps.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocsps.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spsm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocsspsv.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocsspsv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocspt.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocspt.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_sptrsm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocssptr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocssptr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_sptrsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rocspv.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rocspv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_spvv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irig_rvs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irig_rvs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/generic/rocsparse_v2_spmv.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_iril" Name="include\rocsparse\internal\level1">
+            <Component Id="c_amdrocm_sparse_dev_iril_ra.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iril_ra.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level1/rocsparse_axpyi.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iril_rd.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iril_rd.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level1/rocsparse_dotci.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iril_rodo.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iril_rodo.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level1/rocsparse_doti.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iril_rg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iril_rg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level1/rocsparse_gthr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iril_rogt.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iril_rogt.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level1/rocsparse_gthrz.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iril_rr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iril_rr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level1/rocsparse_roti.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iril_rs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iril_rs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level1/rocsparse_sctr.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_inroinle" Name="include\rocsparse\internal\level2">
+            <Component Id="c_amdrocm_sparse_dev_inroinle_rb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_rb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_bsrmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_robs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_robs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_bsrsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_rocbsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_rocbsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_bsrxmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_rc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_rc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_coomv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_rocs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_rocs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_csritsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_roccsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_roccsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_csrmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_rocscsrs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_rocscsrs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_csrsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_re.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_re.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_ellmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_rg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_rg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_gebsrmv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_roge.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_roge.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_gemvi.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_inroinle_rh.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_inroinle_rh.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level2/rocsparse_hybmv.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_incrocintlev" Name="include\rocsparse\internal\level3">
+            <Component Id="c_amdrocm_sparse_dev_incrocintlev_rb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_incrocintlev_rb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level3/rocsparse_bsrmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_incrocintlev_robs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_incrocintlev_robs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level3/rocsparse_bsrsm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_incrocintlev_rc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_incrocintlev_rc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level3/rocsparse_csrmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_incrocintlev_rocs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_incrocintlev_rocs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level3/rocsparse_csrsm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_incrocintlev_rg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_incrocintlev_rg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level3/rocsparse_gebsrmm.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_incrocintlev_roge.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_incrocintlev_roge.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/level3/rocsparse_gemmi.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_irip" Name="include\rocsparse\internal\precond">
+            <Component Id="c_amdrocm_sparse_dev_irip_rb.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irip_rb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/precond/rocsparse_bsric0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irip_robs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irip_robs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/precond/rocsparse_bsrilu0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irip_rc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irip_rc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/precond/rocsparse_csric0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irip_rocs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irip_rocs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/precond/rocsparse_csrilu0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irip_roccsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irip_roccsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/precond/rocsparse_csritilu0.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irip_rg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irip_rg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/precond/rocsparse_gpsv.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_irip_rogt.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irip_rogt.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/precond/rocsparse_gtsv.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_irir" Name="include\rocsparse\internal\reordering">
+            <Component Id="c_amdrocm_sparse_dev_irir_rc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_irir_rc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/reordering/rocsparse_csrcolor.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+          <Directory Id="amdrocm_sparse_dev_iriu" Name="include\rocsparse\internal\util">
+            <Component Id="c_amdrocm_sparse_dev_iriu_rcmc.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iriu_rcmc.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/util/rocsparse_check_matrix_coo.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iriu_rochmacs.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iriu_rochmacs.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/util/rocsparse_check_matrix_csc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iriu_rocchematcsr.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iriu_rocchematcsr.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/util/rocsparse_check_matrix_csr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iriu_rcme.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iriu_rcme.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/util/rocsparse_check_matrix_ell.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iriu_rcmg.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iriu_rcmg.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/util/rocsparse_check_matrix_gebsc.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iriu_rochmage.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iriu_rochmage.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/util/rocsparse_check_matrix_gebsr.h" KeyPath="yes" />
+            </Component>
+            <Component Id="c_amdrocm_sparse_dev_iriu_rcmh.h" Guid="*">
+              <File Id="f_amdrocm_sparse_dev_iriu_rcmh.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/include/rocsparse/internal/util/rocsparse_check_matrix_hyb.h" KeyPath="yes" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_sparse_dev_l" Name="lib">
+      <Component Id="c_amdrocm_sparse_dev_l_h.lib" Guid="*">
+        <File Id="f_amdrocm_sparse_dev_l_h.lib" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/hipsparse.lib" KeyPath="yes" />
+      </Component>
+      <Component Id="c_amdrocm_sparse_dev_l_r.lib" Guid="*">
+        <File Id="f_amdrocm_sparse_dev_l_r.lib" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/lib/rocsparse.lib" KeyPath="yes" />
+      </Component>
+      <Directory Id="amdrocm_sparse_dev_lc" Name="lib\cmake">
+        <Directory Id="amdrocm_sparse_dev_lch" Name="lib\cmake\hipsparse">
+          <Component Id="c_amdrocm_sparse_dev_lch_hcv.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lch_hcv.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/cmake/hipsparse/hipsparse-config-version.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_lch_hc.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lch_hc.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/cmake/hipsparse/hipsparse-config.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_lch_htr.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lch_htr.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/cmake/hipsparse/hipsparse-targets-release.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_lch_ht.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lch_ht.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/cmake/hipsparse/hipsparse-targets.cmake" KeyPath="yes" />
+          </Component>
+        </Directory>
+        <Directory Id="amdrocm_sparse_dev_lcr" Name="lib\cmake\rocsparse">
+          <Component Id="c_amdrocm_sparse_dev_lcr_rcv.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lcr_rcv.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/lib/cmake/rocsparse/rocsparse-config-version.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_lcr_rc.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lcr_rc.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/lib/cmake/rocsparse/rocsparse-config.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_lcr_rtr.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lcr_rtr.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/lib/cmake/rocsparse/rocsparse-targets-release.cmake" KeyPath="yes" />
+          </Component>
+          <Component Id="c_amdrocm_sparse_dev_lcr_rt.cmake" Guid="*">
+            <File Id="f_amdrocm_sparse_dev_lcr_rt.cmake" Source="$(var.BuildRoot)/math-libs/BLAS/hipSOLVER/dist/lib/cmake/rocsparse/rocsparse-targets.cmake" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+</Include>
