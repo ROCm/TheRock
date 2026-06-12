@@ -486,13 +486,22 @@
           {
             "Name": "rocFFT",
             "Components": [
-              "test"
+              "test",
+              "dev"
             ]
           },
           {
             "Name": "hipFFT",
             "Components": [
-              "test"
+              "test",
+              "dev"
+            ]
+          },
+          {
+            "Name": "fftw3_lib_generic",
+            "Components": [
+              "test",
+              "dev"
             ]
           }
         ]
