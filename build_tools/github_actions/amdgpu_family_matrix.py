@@ -259,6 +259,15 @@ amdgpu_family_info_matrix_postsubmit = {
             "build_variants": ["release", "asan", "tsan"],
         }
     },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
 }
 
 # The 'nightly' matrix runs on 'schedule' triggers.
