@@ -1,661 +1,843 @@
 #!/usr/bin/env python3
-"""Generate a WiX v4 .wxs file for the ROCm runtime MSI installer.
+"""Generate WiX v4 .wxs files for ROCm Windows MSI installers.
 
-This script inspects the built ROCm distribution tree (build/dist/rocm/) and
-produces a WiX v4 XML source file (.wxs) that describes every file, component,
-directory, and feature needed to build a silent MSI installer.
+Reads artifact TOML descriptors to determine which files each MSI should
+include, then produces a WiX v4 XML source file (.wxs).  Using artifact
+TOMLs as the source of truth means the MSI file lists automatically track
+the build system's own packaging rules with no separate manifest to maintain.
 
-The generated .wxs is then compiled into an MSI by running:
-    wix build amdrocm-runtimes.wxs -o amdrocm-runtimes.msi
+Usage
+-----
+List available packages:
+    python generate_msi_wxs.py --list
+
+Generate a specific package:
+    python generate_msi_wxs.py --package hip-runtime
+    python generate_msi_wxs.py --package runtimes
+
+The generated .wxs is compiled into an MSI by running:
+    wix build <name>.wxs -o <name>.msi
 
 The resulting MSI requires no user interaction (no UI sequences are defined),
 making it suitable for scripted or enterprise deployments:
-    msiexec /i amdrocm-runtimes.msi /qn
+    msiexec /i <name>.msi /qn
 
 Installation location
 ---------------------
-The default install path is controlled at build time via this script's flags
-(--install-root, --product-dir, --version-dir).  See --help for details.
+The default install path is:
+    C:\\Program Files\\AMD\\ROCm\\{package-subdir}-{version}\\
+
+Override at build time via --install-root, --product-dir, --version-dir.
 """
 
 import argparse
-import os
+import hashlib
+import json
+import sys
+import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
 from pathlib import Path
 
-
-# ---------------------------------------------------------------------------
-# Package scope — which subdirectories of dist/rocm/ to include
-# ---------------------------------------------------------------------------
-
-# "bin" contains runtime DLLs (.dll) and executables (.exe, .bat, scripts).
-# "lib" contains import libraries (.lib) needed to link against the DLLs at
-# build time. Both are considered part of the "runtime" package; dev headers
-# and CMake config files (include/, lib/cmake/) are excluded.
-RUNTIME_DIRS = ["bin", "lib"]
-
-# Some files in the dist tree are internal build bookkeeping artifacts that
-# have no meaning outside the source tree and should not be shipped.
-SKIP_FILES: set[str] = set()
-
-# Wildcard patterns for DLLs that legacy ROCm/HIP installers placed directly
-# into C:\Windows\System32\.  They shadow the versioned DLLs installed by this
-# package into Program Files, so they must be removed before InstallFiles runs.
-LEGACY_SYSTEM32_PATTERNS = [
-    "amdhip64_*.dll",
-    "amd_comgr_*.dll",
-]
-
-# The UpgradeCode GUID identifies this product family across all versions.
-# Windows Installer matches it during upgrades to find prior installations.
-# It must NEVER change between releases of the same product line.
-UPGRADE_CODE = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        sys.exit(
+            "Python < 3.11 requires the 'tomli' package: pip install tomli"
+        )
 
 
 # ---------------------------------------------------------------------------
-# Helper: stable WiX element IDs
+# Package definitions
 # ---------------------------------------------------------------------------
+
+@dataclass
+class PackageDef:
+    """Definition of one distributable MSI package."""
+
+    # Display name shown in Add/Remove Programs.
+    product_name: str
+
+    # Artifact descriptor names to include (searched as artifact-{name}.toml).
+    artifacts: list[str]
+
+    # Default output filename stem (without extension).
+    output_stem: str
+
+    # Versioned install subdirectory name (formatted with version=X.Y.Z).
+    install_subdir: str
+
+    # Fixed GUID for MajorUpgrade matching across versions.  Must never change.
+    upgrade_code: str
+
+    # WiX Feature Id and Title for the primary feature.
+    feature_id: str
+    feature_title: str
+
+    # Registry key written under HKLM to record the install location.
+    registry_key: str
+
+    # One-line description for --list output.
+    description: str
+
+    # Glob patterns excluded only in dist fallback mode (when stage dirs are
+    # absent).  Stage scoping would naturally prevent these files from being
+    # included; this list approximates that filtering without stage dirs.
+    fallback_excludes: list[str] = field(default_factory=list)
+
+
+# Keys are the --package selector values.
+PACKAGES: dict[str, PackageDef] = {
+    "hip-runtime": PackageDef(
+        description="HIP runtime DLLs, hipcc, hipconfig, kernel package support",
+        product_name="AMD ROCm HIP Runtime",
+        artifacts=[
+            "core-hip",      # HIP runtime DLLs, hipcc, hipconfig, roc-obj, etc.
+            "core-kpack",    # Kernel package support (rocm_kpack.dll)
+            "core-hipinfo",  # Windows-only: bin/hipInfo*
+        ],
+        output_stem="amdrocm-hip-runtime",
+        install_subdir="hip-runtime-{version}",
+        upgrade_code="B2C3D4E5-F6A7-8901-BCDE-F12345678901",
+        feature_id="HIPRuntime",
+        feature_title="ROCm HIP Runtime",
+        registry_key="Software\\AMD\\ROCm\\hip-runtime\\{version}",
+        fallback_excludes=[
+            # Kernel databases from math libs (rocBLAS, hipBLASLt, MIOpen, etc.)
+            "**/*.dat",
+            "**/*.co",
+            "**/*.hsaco",
+            "**/*.model",
+            # Math/ML lib subdirectories under bin/ and lib/
+            "bin/rocblas/**",
+            "bin/hipblaslt/**",
+            "bin/hipblaslt_plugin/**",
+            "bin/MIOpen/**",
+            "bin/miopen_plugin/**",
+            "bin/hipdnn/**",
+            "bin/hipdnn_plugins/**",
+            "bin/hipdnn_integration_tests_ctest/**",
+            "bin/hipdnn_samples/**",
+            "bin/hip_kernel_provider/**",
+            "bin/hipkernelprovider/**",
+            "bin/test_plugins/**",
+            "bin/rocwmma/**",
+            "bin/hipcub/**",
+            "bin/rocprim/**",
+            "bin/rocthrust/**",
+            "bin/hipblas/**",
+            "bin/hipRAND/**",
+            "bin/rocRAND/**",
+            "bin/hipsparse/**",
+            "bin/rocsparse/**",
+            # Test assets under share/
+            "share/hip/catch_tests/**",
+        ],
+    ),
+    "runtimes": PackageDef(
+        description="HIP runtime + AMD LLVM compiler runtime (hipcc, comgr, device libs)",
+        product_name="AMD ROCm Runtimes",
+        artifacts=[
+            "core-hip",      # HIP runtime DLLs, hipcc, hipconfig, roc-obj, etc.
+            "core-kpack",    # Kernel package support (rocm_kpack.dll)
+            "core-hipinfo",  # Windows-only: bin/hipInfo*
+            "amd-llvm",      # LLVM/Clang, comgr, hipcc, device libs
+        ],
+        output_stem="amdrocm-runtimes",
+        install_subdir="runtimes-{version}",
+        upgrade_code="C3D4E5F6-A7B8-9012-CDEF-123456789012",
+        feature_id="ROCmRuntimes",
+        feature_title="AMD ROCm Runtimes",
+        registry_key="Software\\AMD\\ROCm\\runtimes\\{version}",
+        fallback_excludes=[
+            # Kernel databases from math libs (rocBLAS, hipBLASLt, MIOpen, etc.)
+            "**/*.dat",
+            "**/*.co",
+            "**/*.hsaco",
+            "**/*.model",
+            # Math/ML lib subdirectories under bin/ and lib/
+            "bin/rocblas/**",
+            "bin/hipblaslt/**",
+            "bin/hipblaslt_plugin/**",
+            "bin/MIOpen/**",
+            "bin/miopen_plugin/**",
+            "bin/hipdnn/**",
+            "bin/hipdnn_plugins/**",
+            "bin/hipdnn_integration_tests_ctest/**",
+            "bin/hipdnn_samples/**",
+            "bin/hip_kernel_provider/**",
+            "bin/hipkernelprovider/**",
+            "bin/test_plugins/**",
+            "bin/rocwmma/**",
+            "bin/hipcub/**",
+            "bin/rocprim/**",
+            "bin/rocthrust/**",
+            "bin/hipblas/**",
+            "bin/hipRAND/**",
+            "bin/rocRAND/**",
+            "bin/hipsparse/**",
+            "bin/rocsparse/**",
+            # Test assets under share/
+            "share/hip/catch_tests/**",
+        ],
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Component default include patterns (Windows-only subset)
+# ---------------------------------------------------------------------------
+
+# Mirrors the Windows-relevant subset of artifact_builder.py ComponentDefaults.
+# Applied when a component section in an artifact TOML has no explicit "include"
+# list and default_patterns is not disabled.
+COMPONENT_DEFAULT_INCLUDES: dict[str, list[str]] = {
+    "lib": ["**/*.dll"],
+    "run": [],  # no default patterns; a bare run entry claims all unclaimed files
+}
+
+# Only package runtime-relevant components; exclude dev headers, debug
+# symbols, and docs from the MSI.
+PACKAGE_COMPONENTS: set[str] = {"run", "lib"}
+
+STANDARD_DIR_TOKENS: set[str] = {
+    "ProgramFilesFolder",
+    "ProgramFiles64Folder",
+    "SystemFolder",
+    "System64Folder",
+    "WindowsFolder",
+    "TempFolder",
+    "DesktopFolder",
+    "AppDataFolder",
+    "LocalAppDataFolder",
+    "CommonAppDataFolder",
+}
+
+
+# ---------------------------------------------------------------------------
+# Artifact download and extraction
+# ---------------------------------------------------------------------------
+
+
+def fetch_artifacts(
+    artifacts_url: str,
+    artifact_names: list[str],
+    components: set[str],
+    dest_dir: Path,
+) -> Path:
+    """Download and extract artifact tarballs from a remote URL into dest_dir.
+
+    For each (artifact, component) pair, downloads:
+        {artifacts_url}/{artifact}_{component}_generic.tar.zst
+    and extracts it into dest_dir using ArtifactPopulator, producing a
+    layout that mirrors what a local build's stage trees would look like.
+
+    Returns dest_dir (usable as build_root for collect_files_from_artifacts).
+    """
+    # Import here so the rest of the script works without _therock_utils on path.
+    script_dir = Path(__file__).parent
+    build_tools_dir = script_dir.parent.parent
+    if str(build_tools_dir) not in sys.path:
+        sys.path.insert(0, str(build_tools_dir))
+
+    try:
+        from _therock_utils.artifacts import ArtifactPopulator
+        from _therock_utils.archive_util import open_archive_for_read
+    except ImportError as e:
+        sys.exit(f"Error: could not import _therock_utils: {e}")
+
+    artifacts_url = artifacts_url.rstrip("/")
+    download_dir = dest_dir / "_downloads"
+    extract_dir = dest_dir / "_extracted"
+    download_dir.mkdir(parents=True, exist_ok=True)
+    extract_dir.mkdir(parents=True, exist_ok=True)
+
+    for artifact_name in artifact_names:
+        for component in sorted(components):
+            filename = f"{artifact_name}_{component}_generic.tar.zst"
+            url = f"{artifacts_url}/{filename}"
+            local_path = download_dir / filename
+
+            if local_path.exists():
+                print(f"  Cached:    {filename}")
+            else:
+                print(f"  Fetching:  {filename}")
+                try:
+                    urllib.request.urlretrieve(url, local_path)
+                except urllib.error.HTTPError as e:
+                    if e.code == 404:
+                        print(f"  Skipped:   {filename} (not found)")
+                        continue
+                    sys.exit(f"Error fetching {url}: {e}")
+
+            artifact_out = extract_dir / f"{artifact_name}_{component}_generic"
+            if artifact_out.exists():
+                print(f"  Extracted: {filename} (cached)")
+                continue
+            print(f"  Extracting {filename}...")
+            artifact_out.mkdir(parents=True, exist_ok=True)
+            populator = ArtifactPopulator(output_path=artifact_out, flatten=False)
+            populator(local_path)
+
+    return extract_dir
+
+
+# ---------------------------------------------------------------------------
+# TOML descriptor parsing
+# ---------------------------------------------------------------------------
+
+
+def find_descriptor(artifact_name: str, repo_root: Path) -> Path:
+    """Return the path to artifact-{name}.toml by searching under repo_root."""
+    matches = list(repo_root.rglob(f"artifact-{artifact_name}.toml"))
+    if not matches:
+        sys.exit(
+            f"Error: could not find artifact-{artifact_name}.toml under {repo_root}"
+        )
+    if len(matches) > 1:
+        sys.exit(
+            f"Error: found multiple descriptors for '{artifact_name}':\n"
+            + "\n".join(f"  {p}" for p in matches)
+        )
+    return matches[0]
+
+
+def collect_files_from_artifacts(
+    dist_root: Path,
+    artifact_names: list[str],
+    repo_root: Path,
+    components: set[str],
+    build_root: Path,
+    fallback_excludes: list[str] = (),
+) -> list[tuple[Path, Path]]:
+    """Return a sorted, deduplicated list of (install_rel, source) pairs.
+
+    install_rel: path relative to the install root (e.g. bin/amdhip64.dll)
+    source:      absolute path to the file on disk (for WiX Source=)
+
+    Patterns are globbed against the artifact's own stage directory
+    (build_root / basedir) so that "bin/**" only sees that artifact's bin/,
+    not the entire merged dist tree.
+
+    When stage dirs are absent, falls back to dist_root with fallback_excludes
+    applied to compensate for the lack of scoping.
+
+    force_include patterns bypass excludes and are always added if matched.
+    When a component has no explicit include list and default_patterns is not
+    disabled, COMPONENT_DEFAULT_INCLUDES provides the fallback patterns.
+    """
+    # Keyed by install_rel to deduplicate across artifacts.
+    seen: dict[Path, Path] = {}
+
+    def _add(install_rel: Path, source: Path) -> None:
+        if install_rel not in seen:
+            seen[install_rel] = source
+
+    for artifact_name in artifact_names:
+        descriptor = find_descriptor(artifact_name, repo_root)
+        with open(descriptor, "rb") as f:
+            data = tomllib.load(f)
+
+        components_data: dict = data.get("components", {})
+
+        for comp_type, basedirs in components_data.items():
+            if comp_type not in components:
+                continue
+            if not isinstance(basedirs, dict):
+                continue
+
+            for basedir, spec in basedirs.items():
+                if not isinstance(spec, dict):
+                    continue
+
+                stage_dir = build_root / basedir
+
+                use_defaults = spec.get("default_patterns", True)
+                explicit_includes: list[str] = spec.get("include", [])
+                force_includes: list[str] = spec.get("force_include", [])
+                excludes: list[str] = spec.get("exclude", [])
+
+                if explicit_includes:
+                    includes = explicit_includes
+                elif use_defaults:
+                    includes = COMPONENT_DEFAULT_INCLUDES.get(comp_type, [])
+                else:
+                    includes = []
+
+                # Glob against the stage dir when available (precise scoping),
+                # falling back to dist_root when the stage dir wasn't built.
+                if stage_dir.is_dir():
+                    search_root = stage_dir
+                    extra_excludes: list[str] = []
+                else:
+                    print(
+                        f"Warning: stage dir not found, falling back to dist root: {stage_dir}",
+                        file=sys.stderr,
+                    )
+                    search_root = dist_root
+                    extra_excludes = list(fallback_excludes)
+
+                def _collect(pattern: str, bypass_excludes: bool = False) -> None:
+                    for match in sorted(search_root.glob(pattern)):
+                        if not match.is_file():
+                            continue
+                        # install_rel is relative to the search root (stage or
+                        # dist), giving the flattened install layout.
+                        install_rel = match.relative_to(search_root)
+                        rel_posix = install_rel.as_posix()
+                        if not bypass_excludes:
+                            all_excludes = excludes + extra_excludes
+                            if any(
+                                match.match(ex) or rel_posix == ex
+                                for ex in all_excludes
+                            ):
+                                continue
+                        # Resolve the source path: prefer the dist_root copy
+                        # when available (hard-linked, same inode), otherwise
+                        # use the stage path directly.
+                        dist_path = dist_root / install_rel
+                        source = dist_path if dist_path.is_file() else match
+                        _add(install_rel, source)
+
+                for pattern in includes:
+                    _collect(pattern)
+                for pattern in force_includes:
+                    _collect(pattern, bypass_excludes=True)
+
+    return sorted(seen.items())
+
+
+# ---------------------------------------------------------------------------
+# Stable WiX element ID generation
+# ---------------------------------------------------------------------------
+
 
 def make_id(path: Path, prefix: str) -> str:
     """Return a stable, WiX-legal element ID derived from a relative file path.
 
-    WiX v4 imposes two constraints on element IDs:
-      - Characters must be alphanumeric or underscores (no dots, hyphens, etc.)
-      - Maximum length is 72 characters
-
-    Strategy:
-      1. Replace every non-alphanumeric character in the path with an underscore.
-      2. Prepend a short prefix ("f" for File elements, "c" for Component
-         elements) so file and component IDs for the same path are distinct.
-      3. Append an 8-hex-digit hash of the original path string so that even
-         after truncation to 55 characters the ID remains unique across files
-         whose sanitised names would otherwise collide (e.g. foo-bar vs foo_bar).
-
-    The hash uses Python's built-in hash() masked to 32 bits. This is NOT
-    cryptographic — it only needs to be collision-resistant across the ~40 files
-    in this package.
+    WiX v4 requires alphanumeric or underscore characters only, max 72 chars.
+    An 8-hex-digit SHA-256 digest of the normalized path is appended to prevent
+    collisions after sanitization (e.g. foo-bar vs foo_bar would otherwise
+    collide).  The digest is deterministic across interpreter runs.
     """
-    # Replace every character that WiX does not allow in identifiers
-    safe = str(path).replace("\\", "_").replace("/", "_").replace(".", "_").replace("-", "_")
-
-    # Build the full candidate identifier with its prefix
-    ident = f"{prefix}_{safe}"
-
-    # Compute a short hash of the original (unsanitised) path for uniqueness
-    h = format(hash(str(path)) & 0xFFFFFFFF, "08x")
-
-    # Keep the total length at or below 72 chars: 55 body chars + "_" + 8 hash
-    return f"{ident[:55]}_{h}"
+    safe = "".join(
+        c if c.isalnum() or c == "_" else "_"
+        for c in str(path).replace("\\", "/")
+    )
+    h = hashlib.sha256(str(path).encode()).hexdigest()[:8]
+    return f"{prefix}_{safe}"[:55] + f"_{h}"
 
 
 # ---------------------------------------------------------------------------
-# Helper: load the explicit file allowlist
+# CLI
 # ---------------------------------------------------------------------------
 
-def load_file_list(path: Path) -> set[str]:
-    """Return the set of allowed relative paths from a file-list text file.
 
-    Each non-blank, non-comment line is a forward-slash relative path from the
-    dist root (e.g. 'bin/amdhip64_7.dll').  Lines starting with '#' are ignored.
-    Backslashes are normalised to forward slashes so the file is
-    platform-neutral.
-    """
-    allowed: set[str] = set()
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                allowed.add(line.replace("\\", "/"))
-    return allowed
+def _read_rocm_version(repo_root: Path) -> str:
+    version_file = repo_root / "version.json"
+    try:
+        data = json.loads(version_file.read_text())
+        return data["rocm-version"]
+    except (OSError, KeyError, json.JSONDecodeError):
+        return "7.0.0"
 
-
-# ---------------------------------------------------------------------------
-# Helper: enumerate installable files in a dist subdirectory
-# ---------------------------------------------------------------------------
-
-def collect_files(dist_root: Path, subdir: str, allowed: set[str]) -> list[Path]:
-    """Return a sorted list of allowed files in dist_root/<subdir>.
-
-    Only files whose forward-slash path relative to dist_root appears in
-    `allowed` are returned.  Returns an empty list if the directory does not
-    exist.
-    """
-    d = dist_root / subdir
-    if not d.is_dir():
-        return []
-
-    files = []
-    for f in sorted(d.iterdir()):
-        if not f.is_file():
-            continue
-        rel = f.relative_to(dist_root)
-        if str(rel).replace("\\", "/") in allowed:
-            files.append(f)
-    return files
-
-
-# ---------------------------------------------------------------------------
-# CLI argument parsing
-# ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
-    """Define and parse command-line arguments.
-
-    Installation location flags
-    ---------------------------
-    The default install path is assembled from three independent pieces so that
-    each can be overridden without affecting the others:
-
-        [install-root] \\ [product-dir] \\ [version-dir] \\
-
-    Examples:
-        Default (no flags):
-            C:\\Program Files\\ROCm\\7.13\\
-
-        --product-dir ROCm-HIP --version-dir 7.2:
-            C:\\Program Files\\ROCm-HIP\\7.2\\
-
-        --install-root "C:\\AMD":
-            C:\\AMD\\ROCm\\7.13\\
-
-        --install-root "C:\\AMD" --product-dir HIP --version-dir 7:
-            C:\\AMD\\HIP\\7\\
-
-    The install-root flag accepts either a Windows Installer standard-directory
-    token (e.g. "ProgramFilesFolder", "ProgramFiles64Folder") or an absolute
-    path (e.g. "C:\\AMD").  When an absolute path is given, the MSI uses it as
-    a fixed default baked into the directory tree.
-    """
-    # Script-relative defaults so the script is location-independent.
-    # Script lives at build_tools/packaging/windows/ — go up three levels to
-    # reach the repo root.
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent.parent.parent
-    default_dist = repo_root / "build" / "dist" / "rocm"
-    default_output = script_dir / "amdrocm-runtimes.wxs"
-    default_file_list = script_dir / "amdrocm-runtimes-artifacts.txt"
+    default_build = repo_root / "build"
+    default_dist = default_build / "dist" / "rocm"
+    default_version = _read_rocm_version(repo_root)
 
     parser = argparse.ArgumentParser(
-        description="Generate a WiX v4 .wxs for the ROCm runtime MSI installer.",
+        description="Generate WiX v4 .wxs files for ROCm Windows MSI installers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-
-    # -- Source / output paths -----------------------------------------------
-
+    parser.add_argument(
+        "--package",
+        metavar="NAME",
+        choices=list(PACKAGES),
+        help="Package to generate. Use --list to see available packages.",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available package names and exit.",
+    )
+    parser.add_argument(
+        "--artifacts-url",
+        default=None,
+        metavar="URL",
+        help=(
+            "Base URL of a TheRock artifact storage directory containing "
+            "{name}_{component}_generic.tar.zst files. When set, artifacts "
+            "are downloaded and extracted into --artifacts-cache-dir and used "
+            "as stage trees instead of --build-root. "
+            "Example: https://therock-nightly-artifacts.s3.amazonaws.com/27315369389-windows"
+        ),
+    )
+    parser.add_argument(
+        "--artifacts-cache-dir",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Directory for downloaded and extracted artifacts when using "
+            "--artifacts-url. Defaults to <script-dir>/.artifact-cache. "
+            "Reuse this dir across runs to avoid re-downloading."
+        ),
+    )
+    parser.add_argument(
+        "--build-root",
+        type=Path,
+        default=default_build,
+        metavar="PATH",
+        help=(
+            "CMake build directory (contains per-component stage trees). "
+            f"Default: {default_build}. Ignored when --artifacts-url is set."
+        ),
+    )
     parser.add_argument(
         "--dist-root",
         type=Path,
         default=default_dist,
         metavar="PATH",
         help=(
-            "Root of the built ROCm distribution tree to harvest files from. "
-            "Must contain bin/ and lib/ subdirectories. "
+            "Root of the merged ROCm distribution tree (build/dist/rocm/). "
             f"Default: {default_dist}"
         ),
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=default_output,
+        default=None,
         metavar="PATH",
         help=(
             "Destination path for the generated .wxs file. "
-            f"Default: {default_output}"
+            "Default: <script-dir>/<output-stem>.wxs"
         ),
     )
     parser.add_argument(
-        "--file-list",
+        "--repo-root",
         type=Path,
-        default=default_file_list,
+        default=repo_root,
         metavar="PATH",
         help=(
-            "Text file listing the dist-root-relative paths of files to include "
-            "in the MSI, one per line (forward slashes, '#' comments ignored). "
-            "Only files present in both this list and the dist tree are packaged. "
-            f"Default: {default_file_list}"
+            "Repo root used to locate artifact-*.toml descriptor files. "
+            f"Default: {repo_root}"
         ),
     )
-
-    # -- Install location ----------------------------------------------------
-
     parser.add_argument(
         "--install-root",
         default="ProgramFilesFolder",
         metavar="ROOT",
         help=(
-            "Where to root the install tree. Accepts either a Windows Installer "
-            "standard-directory token or an absolute path.\n\n"
-            "Standard-directory tokens resolve at install time to system "
-            "directories, making the MSI portable across machines:\n"
-            "  ProgramFilesFolder   -> C:\\Program Files\\ (default)\n"
-            "  ProgramFiles64Folder -> C:\\Program Files\\ (always 64-bit)\n"
-            "  SystemFolder         -> C:\\Windows\\System32\\\n\n"
-            "An absolute path (e.g. C:\\AMD) bakes a fixed default into the MSI.\n\n"
-            "Default: ProgramFilesFolder"
+            "Where to root the install tree. Accepts a Windows Installer "
+            "standard-directory token (e.g. ProgramFilesFolder) or an "
+            "absolute path (e.g. C:\\AMD). Default: ProgramFilesFolder"
         ),
     )
     parser.add_argument(
         "--product-dir",
         default="AMD",
         metavar="NAME",
-        help=(
-            "Name of the first subdirectory created under --install-root. "
-            "Default: AMD  ->  [install-root]\\AMD\\"
-        ),
+        help="First subdirectory under --install-root. Default: AMD",
     )
     parser.add_argument(
         "--version-dir",
         default="ROCm",
         metavar="NAME",
-        help=(
-            "Name of the second subdirectory created under --product-dir. "
-            "A runtimes-{package-version} subdirectory is always appended beneath it. "
-            "Default: ROCm  ->  [install-root]\\AMD\\ROCm\\runtimes-{package-version}\\"
-        ),
+        help="Second subdirectory under --product-dir. Default: ROCm",
     )
-
-    # -- Package metadata ----------------------------------------------------
-
     parser.add_argument(
         "--package-version",
-        default="7.13.0",
+        default=default_version,
         metavar="X.Y.Z",
         help=(
-            "Four-part MSI version string (only the first three parts are used "
-            "by Windows Installer for upgrade comparisons). "
-            "Default: 7.13.0"
+            f"MSI version string. Default: {default_version} (from version.json)"
         ),
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.list:
+        print("Available packages:")
+        for name, pkg in PACKAGES.items():
+            print(f"  {name:<20} {pkg.description}")
+        sys.exit(0)
+
+    if not args.package:
+        parser.error("--package is required (use --list to see options)")
+
+    if args.output is None:
+        pkg = PACKAGES[args.package]
+        args.output = script_dir / f"{pkg.output_stem}.wxs"
+
+    if args.artifacts_cache_dir is None:
+        args.artifacts_cache_dir = script_dir / ".artifact-cache"
+
+    return args
 
 
 # ---------------------------------------------------------------------------
-# Main WXS builder
+# WXS builder
 # ---------------------------------------------------------------------------
+
 
 def build_wxs(args: argparse.Namespace) -> None:
-    """Build the complete WiX XML document and write it to args.output.
-
-    WiX v4 document structure overview
-    ------------------------------------
-    <Wix>                        — root namespace declaration
-      <Package>                  — MSI package metadata (name, version, upgrade
-                                   code, compression, etc.)
-        <SummaryInformation>     — populates the MSI property table shown in
-                                   Programs and Features / Add-Remove Programs
-        <MajorUpgrade>           — automatic upgrade/downgrade policy
-        <MediaTemplate>          — how files are stored inside the MSI
-                                   (EmbedCab="yes" -> single self-contained file)
-        <StandardDirectory|      — anchors the install tree; either a well-known
-         Directory (TARGETDIR)>    token or a custom absolute-path root
-          <Directory> ...        — nested directory structure under that root
-            <Component>          — atomic install unit; each file gets its own
-              <File>             — the actual file to copy to disk
-        <Feature>                — top-level install feature referencing all
-          <ComponentRef>           components; Windows Installer requires every
-                                   component to belong to at least one feature
-    """
-
-    # Determine whether --install-root is a known WI standard-directory token
-    # or an arbitrary absolute path the user wants as the fixed default root.
-    # Known tokens are passed verbatim as StandardDirectory/@Id; absolute paths
-    # require a TARGETDIR -> custom-root -> product -> version directory chain.
-    STANDARD_DIR_TOKENS = {
-        "ProgramFilesFolder",
-        "ProgramFiles64Folder",
-        "SystemFolder",
-        "System64Folder",
-        "WindowsFolder",
-        "TempFolder",
-        "DesktopFolder",
-        "AppDataFolder",
-        "LocalAppDataFolder",
-        "CommonAppDataFolder",
-    }
+    pkg_def = PACKAGES[args.package]
+    version = args.package_version
     use_standard_dir = args.install_root in STANDARD_DIR_TOKENS
 
-    # Load the explicit file allowlist — only files listed here are packaged.
-    allowed = load_file_list(args.file_list)
+    build_root = args.build_root
+    if getattr(args, "artifacts_url", None):
+        print(f"Fetching artifacts from {args.artifacts_url} ...")
+        extracted = fetch_artifacts(
+            artifacts_url=args.artifacts_url,
+            artifact_names=pkg_def.artifacts,
+            components=PACKAGE_COMPONENTS,
+            dest_dir=args.artifacts_cache_dir,
+        )
+        # ArtifactPopulator extracts into {artifact}_{component}_generic/
+        # Each archive contains paths like {basedir}/... matching the TOML keys.
+        # We need build_root such that build_root / basedir resolves correctly.
+        # ArtifactPopulator with flatten=False preserves the manifest relpaths,
+        # so extracted/{artifact}_{component}_generic/{basedir}/... exists.
+        # Merge all extracted artifact dirs into a single stage tree that
+        # mirrors the layout the TOML basedir keys expect.  Each extracted
+        # archive already contains paths like {basedir}/... so we can use
+        # the merged dir directly as build_root.  We also use it as dist_root
+        # so WiX Source= paths resolve correctly without a separate build.
+        build_root = args.artifacts_cache_dir / "_stage"
+        build_root.mkdir(parents=True, exist_ok=True)
+        for artifact_dir in extracted.iterdir():
+            if not artifact_dir.is_dir():
+                continue
+            for src in artifact_dir.rglob("*"):
+                if not src.is_file():
+                    continue
+                rel = src.relative_to(artifact_dir)
+                dst = build_root / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if not dst.exists():
+                    dst.hardlink_to(src)
+        # When using downloaded artifacts, stage and dist are the same tree.
+        args = argparse.Namespace(**{**vars(args), "dist_root": build_root})
 
-    # Register the WiX v4 namespace as the default so ET does not emit "ns0:"
-    # prefixes throughout the generated XML.
+    files = collect_files_from_artifacts(
+        dist_root=args.dist_root,
+        artifact_names=pkg_def.artifacts,
+        repo_root=args.repo_root,
+        components=PACKAGE_COMPONENTS,
+        build_root=build_root,
+        fallback_excludes=pkg_def.fallback_excludes,
+    )
+    if not files:
+        print(
+            "Warning: no files collected. "
+            "Run a Windows build or provide --artifacts-url.",
+            file=sys.stderr,
+        )
+
     ET.register_namespace("", "http://wixtoolset.org/schemas/v4/wxs")
     ns = "http://wixtoolset.org/schemas/v4/wxs"
 
     # -----------------------------------------------------------------------
-    # Root element
+    # Root and Package
     # -----------------------------------------------------------------------
     root = ET.Element(f"{{{ns}}}Wix")
 
-    # -----------------------------------------------------------------------
-    # Package element — core MSI metadata
-    # -----------------------------------------------------------------------
-    # UpgradeCode: a fixed GUID that identifies this product across versions.
-    # Windows Installer uses it to detect prior installations during upgrades.
-    # It must NEVER change between releases of the same product line.
-    #
-    # InstallerVersion="500" requires Windows Installer 5.0 (Windows 7+), which
-    # enables per-machine installation and 64-bit support without extra flags.
-    #
-    # Compressed="yes" instructs WiX to embed all files in a cabinet (.cab)
-    # stored inside the MSI itself rather than as loose files alongside it.
-    pkg = ET.SubElement(root, f"{{{ns}}}Package",
-        Name="ROCm Runtime",
-        Version=args.package_version,
+    pkg = ET.SubElement(
+        root,
+        f"{{{ns}}}Package",
+        Name=pkg_def.product_name,
+        Version=version,
         Manufacturer="Advanced Micro Devices, Inc.",
-        UpgradeCode=UPGRADE_CODE,
-        Language="1033",        # English (United States)
-        Codepage="1252",        # Western European / Windows-1252
+        UpgradeCode=pkg_def.upgrade_code,
+        Language="1033",
+        Codepage="1252",
         InstallerVersion="500",
         Compressed="yes",
     )
 
-    # -----------------------------------------------------------------------
-    # SummaryInformation — MSI property stream metadata
-    # -----------------------------------------------------------------------
-    # This populates the summary property stream embedded in every MSI.  The
-    # Description field appears in Programs and Features under "Comment".
-    # No UI sequences are referenced anywhere in this file — the MSI is
-    # intentionally headless and must be invoked with /qn for silent install.
-    ET.SubElement(pkg, f"{{{ns}}}SummaryInformation",
-        Keywords="ROCm HIP AMD GPU runtime",
-        Description=f"ROCm {args.package_version} Runtime (bin + lib)",
+    ET.SubElement(
+        pkg,
+        f"{{{ns}}}SummaryInformation",
+        Keywords="ROCm AMD GPU",
+        Description=f"{pkg_def.product_name} {version}",
     )
 
-    # -----------------------------------------------------------------------
-    # MajorUpgrade — upgrade / downgrade policy
-    # -----------------------------------------------------------------------
-    # Tells Windows Installer to automatically uninstall any previously
-    # installed version of this product (matched by UpgradeCode) before
-    # installing the new one.  This covers both in-place upgrades (higher
-    # version) and the downgrade guard (DowngradeErrorMessage is surfaced by
-    # msiexec if a user tries to install an older version over a newer one).
-    ET.SubElement(pkg, f"{{{ns}}}MajorUpgrade",
-        DowngradeErrorMessage="A newer version of ROCm Runtime is already installed.",
+    ET.SubElement(
+        pkg,
+        f"{{{ns}}}MajorUpgrade",
+        DowngradeErrorMessage=f"A newer version of {pkg_def.product_name} is already installed.",
     )
 
-    # -----------------------------------------------------------------------
-    # MediaTemplate — cabinet (CAB) embedding strategy
-    # -----------------------------------------------------------------------
-    # EmbedCab="yes" merges the cabinet into the MSI stream so the installer
-    # is a single portable file.  WiX will automatically split into multiple
-    # cabinets if the content exceeds the MSI stream size limit (~2 GB).
     ET.SubElement(pkg, f"{{{ns}}}MediaTemplate", EmbedCab="yes")
-
-    # -----------------------------------------------------------------------
-    # Public properties
-    # -----------------------------------------------------------------------
-    # ENABLE_LONG_PATHS: pass on the msiexec command line to opt in to setting
-    # HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled=1.
-    # Secure="yes" marks it as a public property so Windows Installer allows
-    # it to be passed on the command line:
-    #     msiexec /i amdrocm-runtimes.msi /qn ENABLE_LONG_PATHS=1
-    ET.SubElement(pkg, f"{{{ns}}}Property",
-        Id="ENABLE_LONG_PATHS",
-        Secure="yes",
+    ET.SubElement(pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Secure="yes")
+    ET.SubElement(pkg, f"{{{ns}}}Property", Id="INSTALLFOLDER", Secure="yes")
+    # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
+    # Runs in both UI and execute sequences so repair/modify picks it up too.
+    ET.SubElement(
+        pkg,
+        f"{{{ns}}}SetDirectory",
+        Id="InstallDir",
+        Value="[INSTALLFOLDER]",
+        Sequence="both",
+        Condition="INSTALLFOLDER",
     )
 
     # -----------------------------------------------------------------------
-    # Legacy System32 cleanup — remove old ROCm DLLs before installing
+    # Directory tree
     # -----------------------------------------------------------------------
-    # Older ROCm/HIP Windows installers dropped versioned DLLs (e.g.
-    # amdhip64_6.dll, amd_comgr_2.dll) directly into C:\Windows\System32\.
-    # Those files take DLL search-order priority over Program Files and will
-    # shadow this package's DLLs if left in place.
-    #
-    # Two-action pattern to reliably delete files from System32 under elevation:
-    #
-    # 1. SetProperty (immediate, execute sequence):
-    #    Runs during the script-generation phase when session properties ARE
-    #    available.  Captures [System64Folder]cmd.exe into CMD_EXE so the
-    #    resolved path is ready for the deferred action below.
-    #
-    # 2. CustomAction Type 50 (Property + ExeCommand, deferred):
-    #    Property    — CMD_EXE, read from the session at script-generation time
-    #                  and embedded in the deferred script as the executable path.
-    #    ExeCommand  — del arguments with fully-qualified [System64Folder] paths.
-    #                  Property references are formatted at script-generation time
-    #                  (immediate phase) so the absolute paths are baked into the
-    #                  script before the deferred action runs.
-    #    Execute     — "deferred" runs in the elevated Windows Installer service.
-    #    Impersonate — "no" retains the SYSTEM token; required for System32 writes.
-    #    Return      — "ignore" tolerates "no matching files" exit codes from del.
-    #
-    # Using Type 34 (Directory + ExeCommand) was previously attempted but the
-    # working directory property is not reliably resolved at deferred-execution
-    # time, so relative del patterns ran against the wrong directory.
-    ET.SubElement(pkg, f"{{{ns}}}SetProperty",
-        Id="CMD_EXE",
-        Value="[System64Folder]cmd.exe",
-        Before="RemoveLegacyROCmDlls",
-        Sequence="execute",
-    )
-
-    del_args = " ".join(
-        f'"[System64Folder]{p}"' for p in LEGACY_SYSTEM32_PATTERNS
-    )
-    ET.SubElement(pkg, f"{{{ns}}}CustomAction",
-        Id="RemoveLegacyROCmDlls",
-        Property="CMD_EXE",
-        ExeCommand=f"/c del /f /q {del_args} 2>nul",
-        Execute="deferred",
-        Impersonate="no",
-        Return="ignore",
-    )
-
-    # Schedule RemoveLegacyROCmDlls after InstallInitialize (elevated execute
-    # sequence) and before InstallFiles so System32 is clean before new DLLs
-    # are written.  SetProperty is ordered Before="RemoveLegacyROCmDlls" above.
-    seq = ET.SubElement(pkg, f"{{{ns}}}InstallExecuteSequence")
-    ET.SubElement(seq, f"{{{ns}}}Custom",
-        Action="RemoveLegacyROCmDlls",
-        After="InstallInitialize",
-    )
-
-    # -----------------------------------------------------------------------
-    # Directory tree — install location
-    # -----------------------------------------------------------------------
-    # Two cases depending on whether --install-root is a standard-directory
-    # token or an absolute path:
-    #
-    # Case A — standard-directory token (e.g. ProgramFilesFolder):
-    #   <StandardDirectory Id="ProgramFilesFolder">
-    #     <Directory Id="ROCmDir"       Name="AMD">
-    #       <Directory Id="ROCmVerDir"  Name="ROCm">
-    #         <Directory Id="RuntimeDir" Name="runtimes-7.13.0">
-    #
-    # Case B — absolute path (e.g. C:\AMD):
-    #   <Directory Id="TARGETDIR" Name="SourceDir">   ← WI root anchor (required)
-    #     <Directory Id="CustomRoot" Name="C:\AMD">   ← fixed absolute root
-    #       <Directory Id="ROCmDir"       Name="AMD">
-    #         <Directory Id="ROCmVerDir"  Name="ROCm">
-    #           <Directory Id="RuntimeDir" Name="runtimes-7.13.0">
-    #
-    # In both cases RuntimeDir is the deepest directory — the one that bin/ and
-    # lib/ live under — and its Id is referenced by the PATH component below.
     if use_standard_dir:
-        # Anchor to a well-known system directory resolved by Windows Installer.
-        install_dir = ET.SubElement(pkg, f"{{{ns}}}StandardDirectory",
-            Id=args.install_root)
-        rocm_dir = ET.SubElement(install_dir, f"{{{ns}}}Directory",
-            Id="ROCmDir", Name=args.product_dir)
+        install_dir = ET.SubElement(
+            pkg, f"{{{ns}}}StandardDirectory", Id=args.install_root
+        )
+        rocm_dir = ET.SubElement(
+            install_dir, f"{{{ns}}}Directory", Id="ROCmDir", Name=args.product_dir
+        )
     else:
-        # Anchor to TARGETDIR (mandatory WI root), then add the absolute-path
-        # custom root as a child directory.  The Name attribute on a TARGETDIR
-        # child that starts with a drive letter is treated as an absolute path
-        # by Windows Installer.
-        targetdir = ET.SubElement(pkg, f"{{{ns}}}Directory",
-            Id="TARGETDIR", Name="SourceDir")
-        custom_root = ET.SubElement(targetdir, f"{{{ns}}}Directory",
-            Id="CustomInstallRoot", Name=args.install_root)
-        rocm_dir = ET.SubElement(custom_root, f"{{{ns}}}Directory",
-            Id="ROCmDir", Name=args.product_dir)
+        targetdir = ET.SubElement(
+            pkg, f"{{{ns}}}Directory", Id="TARGETDIR", Name="SourceDir"
+        )
+        custom_root = ET.SubElement(
+            targetdir,
+            f"{{{ns}}}Directory",
+            Id="CustomInstallRoot",
+            Name=args.install_root,
+        )
+        rocm_dir = ET.SubElement(
+            custom_root, f"{{{ns}}}Directory", Id="ROCmDir", Name=args.product_dir
+        )
 
-    # Product subdirectory — common to both cases
-    ver_dir = ET.SubElement(rocm_dir, f"{{{ns}}}Directory",
-        Id="ROCmVerDir", Name=args.version_dir)
-
-    # Runtimes subdirectory — appended beneath the product dir, named
-    # "runtimes-{package_version}" so that multiple package types (e.g. dev,
-    # runtimes) can coexist under the same ROCm product directory side by side.
-    runtime_dir_name = f"runtimes-{args.package_version}"
-    runtime_dir = ET.SubElement(ver_dir, f"{{{ns}}}Directory",
-        Id="RuntimeDir", Name=runtime_dir_name)
-
-    # -----------------------------------------------------------------------
-    # Feature — top-level install feature
-    # -----------------------------------------------------------------------
-    # Windows Installer requires all components to be attached to at least one
-    # feature.  Level="1" means the feature is selected by default.  Because
-    # there is no UI, the feature selection state is never shown to the user;
-    # all Level=1 features are always installed.
-    feature = ET.SubElement(pkg, f"{{{ns}}}Feature",
-        Id="Runtime", Title="ROCm Runtime", Level="1")
+    ver_dir = ET.SubElement(
+        rocm_dir, f"{{{ns}}}Directory", Id="ROCmVerDir", Name=args.version_dir
+    )
+    install_subdir_name = pkg_def.install_subdir.format(version=version)
+    install_dir_el = ET.SubElement(
+        ver_dir, f"{{{ns}}}Directory", Id="InstallDir", Name=install_subdir_name
+    )
 
     # -----------------------------------------------------------------------
-    # Components — one per file
+    # Feature
     # -----------------------------------------------------------------------
-    # Windows Installer's reference-counting and repair mechanisms operate at
-    # the Component granularity.  Best practice (and the WiX recommendation)
-    # is one file per component so that each file can be independently tracked,
-    # repaired, or removed.
-    #
-    # Each Component needs:
-    #   Guid  — a stable per-component UUID.  We derive it deterministically
-    #           from the relative install path using uuid5 (SHA-1 in the URL
-    #           namespace) so it remains the same across script runs, which is
-    #           required for upgrades to work correctly.
-    #   KeyPath="yes" on the File — tells Windows Installer to use this file's
-    #           presence/version as the authoritative indicator of whether the
-    #           component is installed.
-    for subdir in RUNTIME_DIRS:
-        files = collect_files(args.dist_root, subdir, allowed)
-        if not files:
-            continue  # skip silently if a subdir doesn't exist in this build
+    feature = ET.SubElement(
+        pkg,
+        f"{{{ns}}}Feature",
+        Id=pkg_def.feature_id,
+        Title=pkg_def.feature_title,
+        Level="1",
+    )
 
-        # Create the <Directory> node for this subdir under the runtimes dir
-        dir_id = f"Dir_{subdir.replace('-', '_')}"
-        sub_dir_el = ET.SubElement(runtime_dir, f"{{{ns}}}Directory",
-            Id=dir_id, Name=subdir)
+    # -----------------------------------------------------------------------
+    # Components — one per file, grouped by parent directory
+    # -----------------------------------------------------------------------
+    dir_elements: dict[str, ET.Element] = {}
 
-        for fpath in files:
-            # Paths relative to dist_root are used as the stable identity for
-            # ID and GUID generation (e.g. "bin\amdhip64_7.dll")
-            rel = fpath.relative_to(args.dist_root)
+    for install_rel, source in files:
+        parent_rel = install_rel.parent
 
-            file_id = make_id(rel, "f")   # unique ID for the <File> element
-            comp_id = make_id(rel, "c")   # unique ID for the <Component> element
+        current_parent = install_dir_el
+        accumulated = Path()
+        for part in parent_rel.parts:
+            accumulated = accumulated / part
+            dir_key = str(accumulated)
+            if dir_key not in dir_elements:
+                dir_id = "Dir_" + (
+                    dir_key
+                    .replace("\\", "_")
+                    .replace("/", "_")
+                    .replace("-", "_")
+                    .replace(".", "_")
+                )
+                dir_elements[dir_key] = ET.SubElement(
+                    current_parent,
+                    f"{{{ns}}}Directory",
+                    Id=dir_id,
+                    Name=part,
+                )
+            current_parent = dir_elements[dir_key]
 
-            # uuid5 produces a deterministic UUID from a name string.
-            # Using NAMESPACE_URL is conventional; the actual namespace URI
-            # does not matter as long as it is consistent.
-            guid = str(uuid.uuid5(uuid.NAMESPACE_URL, str(rel))).upper()
+        file_id = make_id(install_rel, "f")
+        comp_id = make_id(install_rel, "c")
+        guid = str(uuid.uuid5(uuid.NAMESPACE_URL, str(install_rel))).upper()
 
-            comp_el = ET.SubElement(sub_dir_el, f"{{{ns}}}Component",
-                Id=comp_id,
-                Guid=guid,
-            )
-            ET.SubElement(comp_el, f"{{{ns}}}File",
-                Id=file_id,
-                # Source is resolved by WiX relative to the working directory
-                # from which `wix build` is invoked (the repo root), so use
-                # a CWD-relative path rather than an absolute one.
-                Source=os.path.relpath(fpath),
-                Name=fpath.name,
-                KeyPath="yes",
-            )
-
-            # Wire this component into the feature so Windows Installer knows
-            # to install it when the "Runtime" feature is selected.
-            ET.SubElement(feature, f"{{{ns}}}ComponentRef", Id=comp_id)
+        comp_el = ET.SubElement(
+            current_parent, f"{{{ns}}}Component", Id=comp_id, Guid=guid
+        )
+        ET.SubElement(
+            comp_el,
+            f"{{{ns}}}File",
+            Id=file_id,
+            Source=str(source.resolve()),
+            Name=source.name,
+            KeyPath="yes",
+        )
+        ET.SubElement(feature, f"{{{ns}}}ComponentRef", Id=comp_id)
 
     # -----------------------------------------------------------------------
     # PATH environment variable + registry install-dir marker
     # -----------------------------------------------------------------------
-    # A dedicated lightweight component handles two post-install side effects:
-    #
-    #   1. Environment / PATH:
-    #      Appends [ROCmVerDir]bin to the system PATH so that hipcc.exe,
-    #      hipconfig.exe, clinfo.exe, etc. are discoverable from any command
-    #      prompt after installation.
-    #        Part="last"    -> append rather than prepend
-    #        Permanent="no" -> remove the entry on uninstall
-    #        System="yes"   -> modify the machine-wide PATH (HKLM), not per-user
-    #
-    #   2. Registry key:
-    #      Records the install directory under HKLM\Software\AMD\ROCm\<version>
-    #      so that other software (e.g. IDEs, build systems) can discover the
-    #      ROCm root without parsing PATH.  This registry value also serves as
-    #      the KeyPath for the component, which is the recommended pattern when
-    #      a component does not contain a File element.
-    bin_files = collect_files(args.dist_root, "bin", allowed)
-    if bin_files:
-        env_comp_id = "EnvPath"
-        env_comp = ET.SubElement(runtime_dir, f"{{{ns}}}Component",
-            Id=env_comp_id,
-            # Stable GUID derived from a fixed string — must not change between
-            # versions so Windows Installer can track this component correctly.
-            Guid=str(uuid.uuid5(uuid.NAMESPACE_URL, "ROCm_PATH_component")).upper(),
+    has_bin = any(install_rel.parts[0] == "bin" for install_rel, _ in files)
+    if has_bin:
+        env_comp = ET.SubElement(
+            install_dir_el,
+            f"{{{ns}}}Component",
+            Id="EnvPath",
+            Guid=str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"ROCm_{pkg_def.feature_id}_PATH_component",
+                )
+            ).upper(),
         )
-
-        # Append [RuntimeDir]\bin to the system PATH.
-        # [RuntimeDir] is a Windows Installer directory property that resolves
-        # to the actual install path at runtime (e.g. C:\Program Files\AMD\ROCm\runtimes-7.13.0\).
-        ET.SubElement(env_comp, f"{{{ns}}}Environment",
+        ET.SubElement(
+            env_comp,
+            f"{{{ns}}}Environment",
             Id="ROCmBinPath",
             Name="PATH",
-            Value="[RuntimeDir]bin",
-            Permanent="no",   # undo on uninstall
-            Part="last",      # append to existing PATH entries
+            Value="[InstallDir]bin",
+            Permanent="no",
+            Part="last",
             Action="set",
-            System="yes",     # system-wide (HKLM), not per-user (HKCU)
+            System="yes",
         )
-
-        # Registry value: install directory marker + component KeyPath.
-        # KeyPath="yes" on a RegistryValue means Windows Installer checks for
-        # this key's existence (not a file) to decide if the component is
-        # already installed.  The registry key path includes the version subdir
-        # name so that multiple ROCm versions can coexist in the registry.
-        ET.SubElement(env_comp, f"{{{ns}}}RegistryValue",
+        reg_key = pkg_def.registry_key.format(version=version)
+        ET.SubElement(
+            env_comp,
+            f"{{{ns}}}RegistryValue",
             Root="HKLM",
-            Key=f"Software\\AMD\\ROCm\\{args.package_version}",
+            Key=reg_key,
             Name="InstallDir",
-            Value="[RuntimeDir]",
+            Value="[InstallDir]",
             Type="string",
             KeyPath="yes",
         )
-
-        ET.SubElement(feature, f"{{{ns}}}ComponentRef", Id=env_comp_id)
+        ET.SubElement(feature, f"{{{ns}}}ComponentRef", Id="EnvPath")
 
     # -----------------------------------------------------------------------
-    # Long-paths enablement (optional)
+    # Optional long-path support
     # -----------------------------------------------------------------------
-    # Windows 10 1607+ supports paths longer than MAX_PATH (260 characters)
-    # via a single DWORD registry value.  ROCm build trees and Python paths
-    # frequently exceed 260 characters, so this is strongly recommended.
-    #
-    # The value is written under HKLM and requires elevation, which this
-    # per-machine MSI already runs with.  A reboot is needed for the setting
-    # to take effect in all processes, but most new processes launched after
-    # the installer exits will already see it.
-    #
-    # The component lives in a dedicated Feature with Level="0" (off by default).
-    # A Condition child raises the level to 1 (on) when ENABLE_LONG_PATHS=1 is
-    # passed on the msiexec command line:
-    #     msiexec /i amdrocm-runtimes.msi /qn ENABLE_LONG_PATHS=1
-    # This is the WiX v4 idiomatic way to make a component install-time optional
-    # without using the removed <Condition> child of <Component>.
-    lp_comp_id = "LongPathsEnable"
-    lp_comp = ET.SubElement(runtime_dir, f"{{{ns}}}Component",
-        Id=lp_comp_id,
-        Guid=str(uuid.uuid5(uuid.NAMESPACE_URL, "ROCm_LongPaths_component")).upper(),
+    lp_comp = ET.SubElement(
+        install_dir_el,
+        f"{{{ns}}}Component",
+        Id="LongPathsEnable",
+        Guid=str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"ROCm_{pkg_def.feature_id}_LongPaths_component",
+            )
+        ).upper(),
     )
-    # KeyPath="yes" — Windows Installer uses this registry value's presence
-    # to determine whether the component is installed or needs repair.
-    ET.SubElement(lp_comp, f"{{{ns}}}RegistryValue",
+    ET.SubElement(
+        lp_comp,
+        f"{{{ns}}}RegistryValue",
         Root="HKLM",
         Key="SYSTEM\\CurrentControlSet\\Control\\FileSystem",
         Name="LongPathsEnabled",
@@ -663,53 +845,29 @@ def build_wxs(args: argparse.Namespace) -> None:
         Type="integer",
         KeyPath="yes",
     )
-
-    # Separate feature, off by default (Level="0"), turned on by the Level child.
-    # In WiX v4 the old <Condition Level="N"> child is replaced by
-    # <Level Value="N" Condition="..."/> — when the condition is true at install
-    # time Windows Installer raises the feature level from 0 (absent) to 1 (install).
-    lp_feature = ET.SubElement(pkg, f"{{{ns}}}Feature",
-        Id="LongPaths", Title="Enable Long Paths", Level="0")
-    ET.SubElement(lp_feature, f"{{{ns}}}Level",
-        Value="1", Condition="ENABLE_LONG_PATHS")
-    ET.SubElement(lp_feature, f"{{{ns}}}ComponentRef", Id=lp_comp_id)
+    lp_feature = ET.SubElement(
+        pkg, f"{{{ns}}}Feature", Id="LongPaths", Title="Enable Long Paths", Level="0"
+    )
+    ET.SubElement(lp_feature, f"{{{ns}}}Level", Value="1", Condition="ENABLE_LONG_PATHS")
+    ET.SubElement(lp_feature, f"{{{ns}}}ComponentRef", Id="LongPathsEnable")
 
     # -----------------------------------------------------------------------
-    # Serialise the XML document to disk
+    # Serialize
     # -----------------------------------------------------------------------
-    # ET.indent() (Python 3.9+) adds whitespace text nodes for human-readable
-    # formatting.  The indent() stub below is a no-op kept for compatibility
-    # documentation; the actual formatting is done by ET.indent().
-    indent(root)
     tree = ET.ElementTree(root)
     ET.indent(tree, space="  ")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write a proper XML declaration separately because ElementTree's built-in
-    # xml_declaration=True uses single quotes around the encoding value, which
-    # some older MSI tooling rejects.  Writing it manually guarantees standard
-    # double-quoted form: <?xml version="1.0" encoding="UTF-8"?>
     with open(args.output, "wb") as f:
         f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
         tree.write(f, encoding="utf-8", xml_declaration=False)
 
-    # Report the effective default install path so it's visible in CI logs
-    print(f"Written: {args.output}")
-    print(f"Default install root : {args.install_root}")
-    print(f"Default install path : [install-root]\\{args.product_dir}\\{args.version_dir}\\runtimes-{args.package_version}\\")
-
-
-def indent(elem: ET.Element, level: int = 0) -> None:
-    """No-op stub retained for documentation purposes.
-
-    Python 3.9 introduced ET.indent() which is called directly in build_wxs().
-    This function exists only to make it explicit that pretty-printing is
-    intentionally delegated to the standard library rather than implemented
-    here.  On Python < 3.9 the output would be a single long line, but WiX
-    does not require formatted input so the MSI build would still succeed.
-    """
-    pass  # ET.indent() in build_wxs() handles all formatting
+    print(f"Written:  {args.output}")
+    print(f"Files:    {len(files)}")
+    print(
+        f"Install:  [{args.install_root}]\\{args.product_dir}"
+        f"\\{args.version_dir}\\{install_subdir_name}\\"
+    )
 
 
 if __name__ == "__main__":
