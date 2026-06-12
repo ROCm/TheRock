@@ -429,8 +429,14 @@ def main(argv=None):
         # Extract projects from external_repo JSON if provided
         projects = ""
         if args.external_repo_json:
-            external_repo = json.loads(args.external_repo_json)
-            projects = external_repo.get("projects", "")
+            try:
+                external_repo = json.loads(args.external_repo_json)
+                projects = external_repo.get("projects", "")
+            except json.JSONDecodeError as e:
+                print(
+                    f"Warning: failed to parse external_repo_json: {e}",
+                    file=sys.stderr,
+                )
 
         config_json = {
             "repository": final_source_repo,

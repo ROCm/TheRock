@@ -114,7 +114,8 @@ def main():
         type=str,
         nargs="*",
         metavar="PROJECT",
-        help="Project(s) to test. Accepts 'rocblas' or 'projects/rocblas' format.",
+        help="Project(s) to test. Accepts space-separated or comma-separated list. "
+        "Supports 'rocblas' or 'projects/rocblas' format.",
     )
     parser.add_argument(
         "--list-subprojects", action="store_true", help="List all subprojects"
@@ -145,10 +146,18 @@ def main():
         print(json.dumps(result, indent=2))
         return
 
-    # Normalize path format (projects/rocblas -> rocblas)
+    # Parse changed_projects: handle comma-separated and space-separated input
     changed = args.changed_projects
     if changed:
-        changed = [Path(p).name for p in changed]
+        # Flatten comma-separated values (e.g., "rocblas,hipblas" -> ["rocblas", "hipblas"])
+        flattened = []
+        for item in changed:
+            flattened.extend(p.strip() for p in item.split(",") if p.strip())
+        changed = flattened
+
+    # Normalize path format: "projects/rocblas" -> "rocblas"
+    if changed:
+        changed = [p.removeprefix("projects/") for p in changed]
 
     # If no projects specified, output "*" for all tests
     if not changed:
