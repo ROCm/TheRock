@@ -279,6 +279,10 @@ skip_tests = {
             # inductor/test_compiled_optimizers.py (shard 2/2). Intermittent on gfx942
             # (same test passed in run 27361388921 shard 4/10); provisional skip pending ROCm issue.
             "(CompiledOptimizerTests and test_adam_tensor_lr_amsgrad_capturable_cuda_steplr)",
+            # Run 27420816170 default shard 2/10, job 81045685954:
+            # GPUTests::test_graph_partition_refcount_cuda hit HW Exception GPU Hang in
+            # inductor/test_compile_subprocess.py (~55% through module).
+            "(GPUTests and test_graph_partition_refcount)",
             # Run 27373187888 default shard 3/10, job 80890658562:
             # TestInductorOpInfoCUDA::test_comprehensive_masked_mean_cuda_float32 hit
             # HW Exception GPU Hang and Fatal Python error: Aborted in
@@ -320,11 +324,12 @@ skip_tests = {
             "(TestTEFuserDynamic and test_unary_ops)",
             "(TestTEFuserDynamic and test_where_ops)",
         ],
-        "foreach": [
-            # Run 27390088455 default shard 3/10, job 80945585182:
-            # ForeachTests::test_kernel_split_arg_limit_list__foreach_sub hit
-            # HW Exception GPU Hang in inductor/test_foreach.py (~42% through module).
-            "(ForeachTests and test_kernel_split_arg_limit_list__foreach_sub)",
+        # inductor/test_foreach: module-excluded (runs 27390088455, 27420816170 shard 3/10).
+        "control_flow": [
+            # Run 27420816170 default shard 5/10, job 81045685919:
+            # ScanTests::test_cond_in_scan_* parametrized variants hit HW Exception GPU
+            # Hang in inductor/test_control_flow.py (~23% through module).
+            "(ScanTests and test_cond_in_scan)",
         ],
         "serialization": [
             # Mirrored from pytorch_2.12.py — TestSerialization/TestOldSerialization

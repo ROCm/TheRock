@@ -122,6 +122,10 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # torch.fx.experimental.dynamic_spec but the wheel lacks it (run 27390088455
     # shard 10/10 ImportError at collection time).
     "dynamo/test_dynamic_spec",
+    # Run 27420816170 default shard 3/10, job 81045685858:
+    # inductor/test_foreach.py finished 588 passed / 26 skipped then hit GPU Hang on
+    # pytest teardown (per-test skip on foreach_sub alone is insufficient).
+    "inductor/test_foreach",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
