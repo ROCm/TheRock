@@ -17,6 +17,15 @@ import compute_rocm_package_version
 
 
 class DetermineVersionTest(unittest.TestCase):
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*\.dev0\+[0-9a-z]+$")
+
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
             release_type="dev",
@@ -94,6 +103,16 @@ class DetermineVersionTest(unittest.TestCase):
 class DebPackageVersionTest(unittest.TestCase):
     """Tests for Debian package version computation."""
 
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="deb",
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*~dev[0-9]{8}$")
+
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
             package_type="deb",
@@ -163,6 +182,16 @@ class DebPackageVersionTest(unittest.TestCase):
 
 class RpmPackageVersionTest(unittest.TestCase):
     """Tests for RPM package version computation."""
+
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}g[0-9a-z]{8}$")
 
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(

@@ -3134,6 +3134,45 @@
     "Gfxarch": "True"
   },
   {
+    "Package": "amdrocm-emulation",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm emulation tools",
+    "Description_Long": "emulation, virtualization, and instrumentation tools for AMD GPU applications",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "rocjitsu",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjitsu",
+            "Components": [
+              "lib",
+              "run"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-developer-tools",
     "Version": "",
     "Architecture": "amd64",
@@ -3142,13 +3181,15 @@
       "amdrocm-base",
       "amdrocm-amdsmi",
       "amdrocm-profiler-base",
-      "amdrocm-profiler"
+      "amdrocm-profiler",
+      "amdrocm-emulation"
     ],
     "RPMRequires": [
       "amdrocm-base",
       "amdrocm-amdsmi",
       "amdrocm-profiler-base",
-      "amdrocm-profiler"
+      "amdrocm-profiler",
+      "amdrocm-emulation"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm development tools metapackage",
