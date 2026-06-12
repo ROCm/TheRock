@@ -54,6 +54,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # Run in container to access AWS credentials mounted from the host runner.
     container:
       image: python:3.12-slim
       options: -v /runner/config:/home/awsconfig/
