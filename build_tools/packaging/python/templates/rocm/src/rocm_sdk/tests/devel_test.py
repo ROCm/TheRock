@@ -197,3 +197,89 @@ class ROCmDevelTest(unittest.TestCase):
                 )
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])
+
+    def testLibrariesMirroredIntoDevel(self):
+        """Every file in the libraries platform tree must also appear in the
+        devel tree as the same (hardlinked) file.
+
+        Host libraries are mirrored when the devel tree is expanded; per-ISA
+        device payloads (.kpack archives, Tensile/MIOpen kernels, per-arch .so)
+        are mirrored by `_devel._reconcile_device_links`. Walking libraries and
+        checking each entry exists in devel is sufficient because devel is a
+        superset - extra devel files (headers, cmake, soname aliases, other
+        arches) are irrelevant. The only libraries entry with no devel
+        counterpart by design is the `.devel_links/` manifest dir, which drives
+        the reconcile rather than being a payload.
+        """
+        target_family = di.determine_target_family()
+        try:
+            libraries_mod = importlib.import_module(
+                di.ALL_PACKAGES["libraries"].get_py_package_name(
+                    target_family=target_family
+                )
+            )
+        except ModuleNotFoundError:
+            self.skipTest("rocm-sdk-libraries is not installed")
+
+        # Expand the devel tree and reconcile device links before comparing.
+        utils.run_command(
+            [sys.executable, "-m", "rocm_sdk", "path", "--root"], capture=True
+        )
+        try:
+            devel_mod = importlib.import_module(
+                di.ALL_PACKAGES["devel"].get_py_package_name(
+                    target_family=target_family
+                )
+            )
+        except ModuleNotFoundError:
+            self.skipTest("rocm[devel] is not installed")
+
+        def _platform_dir(mod) -> Path:
+            # In kpack-split mode `_rocm_sdk_libraries` is a namespace package
+            # (no __init__.py) so the libraries and device wheels can share the
+            # directory; __file__ is then None, so fall back to __path__.
+            if mod.__file__ is not None:
+                return Path(mod.__file__).parent
+            return Path(next(iter(mod.__path__)))
+
+        libraries_dir = _platform_dir(libraries_mod)
+        devel_dir = _platform_dir(devel_mod)
+
+        def _skip(rel: Path) -> bool:
+            # Each platform package has its own independent __init__.py marker.
+            if rel == Path("__init__.py"):
+                return True
+            if "__pycache__" in rel.parts:
+                return True
+            # Device-wheel manifest dir: drives the reconcile, not a payload.
+            return rel.parts[0] == ".devel_links"
+
+        missing = []
+        not_hardlinked = []
+        for libs_file in libraries_dir.rglob("*"):
+            if not libs_file.is_file():
+                continue
+            rel = libs_file.relative_to(libraries_dir)
+            if _skip(rel):
+                continue
+            devel_file = devel_dir / rel
+            if not devel_file.is_file():
+                missing.append(rel)
+            elif not devel_file.samefile(libs_file):
+                not_hardlinked.append(rel)
+
+        def _fmt(items: list) -> str:
+            shown = ", ".join(str(p) for p in items[:10])
+            return shown + (f" (+{len(items) - 10} more)" if len(items) > 10 else "")
+
+        self.assertFalse(
+            missing,
+            msg=f"{len(missing)} libraries file(s) missing from devel: {_fmt(missing)}",
+        )
+        self.assertFalse(
+            not_hardlinked,
+            msg=(
+                f"{len(not_hardlinked)} libraries file(s) present in devel but not "
+                f"hardlinked (different inode): {_fmt(not_hardlinked)}"
+            ),
+        )

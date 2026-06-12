@@ -29,6 +29,7 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import platform as platform_module
 import sys
@@ -39,8 +40,80 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions_api import gha_set_output
 
 logger = logging.getLogger(__name__)
+
+
+def run(
+    input_tarballs_dir: Path,
+    run_id: str,
+    platform: str,
+    release_type: str,
+    output_dir: Path | None = None,
+    dry_run: bool = False,
+) -> int:
+    tarballs_dir = input_tarballs_dir.resolve()
+    if not tarballs_dir.is_dir():
+        raise FileNotFoundError(f"Tarballs directory not found: {tarballs_dir}")
+
+    tarball_files = sorted(tarballs_dir.glob("*.tar.gz"))
+    if not tarball_files:
+        raise FileNotFoundError(f"No .tar.gz files found in {tarballs_dir}")
+
+    logger.info("Found %d tarballs in %s:", len(tarball_files), tarballs_dir)
+    for f in tarball_files:
+        size_mb = f.stat().st_size / (1024 * 1024)
+        logger.info("  %s (%.1f MB)", f.name, size_mb)
+
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=run_id,
+        platform=platform,
+        release_type=release_type or None,
+    )
+
+    dest = output_root.tarballs()
+    logger.info("Destination: %s", dest.s3_uri)
+
+    backend = create_storage_backend(
+        staging_dir=output_dir,
+        dry_run=dry_run,
+    )
+    count = backend.upload_directory(
+        tarballs_dir,
+        dest,
+        include=["*.tar.gz"],
+    )
+
+    logger.info("Uploaded %d files", count)
+
+    shared_tarball_url: str | None = None
+
+    for f in tarball_files:
+        name = f.name
+
+        if name.startswith(f"therock-dist-{platform}-multiarch-"):
+            shared_tarball_url = output_root.tarball(name).https_url
+            break
+
+        prefix = f"therock-dist-{platform}-"
+        suffix = ".tar.gz"
+
+        if name.startswith(prefix) and name.endswith(suffix):
+            stem = name[len(prefix) : -len(suffix)]
+
+            if "-" not in stem:
+                shared_tarball_url = output_root.tarball(name).https_url
+                break
+
+    if not shared_tarball_url:
+        raise ValueError(
+            "No shared tarball URL was produced; check tarball naming and upload logic"
+        )
+
+    gha_set_output({"tarball_urls": json.dumps({"multiarch": shared_tarball_url})})
+
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -74,32 +147,14 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    tarballs_dir = args.input_tarballs_dir.resolve()
-    if not tarballs_dir.is_dir():
-        raise FileNotFoundError(f"Tarballs directory not found: {tarballs_dir}")
-
-    tarball_files = sorted(tarballs_dir.glob("*.tar.gz"))
-    if not tarball_files:
-        raise FileNotFoundError(f"No .tar.gz files found in {tarballs_dir}")
-
-    logger.info("Found %d tarballs in %s:", len(tarball_files), tarballs_dir)
-    for f in tarball_files:
-        size_mb = f.stat().st_size / (1024 * 1024)
-        logger.info("  %s (%.1f MB)", f.name, size_mb)
-
-    output_root = WorkflowOutputRoot.from_workflow_run(
+    return run(
+        input_tarballs_dir=args.input_tarballs_dir,
         run_id=args.run_id,
         platform=args.platform,
         release_type=args.release_type,
+        output_dir=args.output_dir,
+        dry_run=args.dry_run,
     )
-    dest = output_root.tarballs()
-    logger.info("Destination: %s", dest.s3_uri)
-
-    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
-    count = backend.upload_directory(tarballs_dir, dest, include=["*.tar.gz"])
-
-    logger.info("Uploaded %d files", count)
-    return 0
 
 
 if __name__ == "__main__":
