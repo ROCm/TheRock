@@ -848,6 +848,9 @@ def _expand_build_config_for_platform(
             test_runner_kernel = label.split(":")[1]
             break
 
+    # Select build runner using weighted distribution (same for all families)
+    build_runs_on = select_build_runner(platform, build_variant)
+
     per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
@@ -946,6 +949,7 @@ def _expand_build_config_for_platform(
                 "amdgpu_family": platform_info["family"],
                 "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
                 "test-runs-on": test_runs_on,
+                "build-runs-on": build_runs_on,
                 "sanity_check_only_for_family": platform_info.get(
                     "sanity_check_only_for_family", False
                 ),
@@ -959,9 +963,6 @@ def _expand_build_config_for_platform(
     expect_failure = variant_config.get("expect_failure", False)
     expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
-
-    # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, build_variant)
 
     return BuildConfig(
         per_family_info=per_family_info,

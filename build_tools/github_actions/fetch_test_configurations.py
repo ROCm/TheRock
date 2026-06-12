@@ -676,7 +676,17 @@ test_matrix = {
 
 
 def run():
-    platform = os.getenv("RUNNER_OS").lower()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=os.getenv("RUNNER_OS", "linux").lower(),
+        help="Platform to configure tests for (linux or windows)",
+    )
+    args = parser.parse_args()
+    platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "standard")

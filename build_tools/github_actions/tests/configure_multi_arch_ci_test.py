@@ -832,6 +832,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "amdgpu_family",
             "amdgpu_targets",
             "test-runs-on",
+            "build-runs-on",
             "sanity_check_only_for_family",
         }
         for config in [result.linux, result.windows]:
