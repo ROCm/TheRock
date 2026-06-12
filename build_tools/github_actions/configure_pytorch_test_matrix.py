@@ -29,7 +29,7 @@ def split_families(value: str) -> list[str]:
     return list(dict.fromkeys(f.strip() for f in value.split(";") if f.strip()))
 
 
-def find_test_runs_on(*, amdgpu_family: str, platform: str) -> str:
+def _find_platform_info(*, amdgpu_family: str, platform: str) -> dict[str, object]:
     matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
     for info_for_key in matrix.values():
         platform_info = info_for_key.get(platform)
@@ -38,15 +38,44 @@ def find_test_runs_on(*, amdgpu_family: str, platform: str) -> str:
 
         family = platform_info["family"]
         if amdgpu_family.lower() == family.lower():
-            return platform_info["test-runs-on"]
+            return platform_info
 
     raise ValueError(f"No {platform} AMDGPU family entry found for {amdgpu_family!r}")
+
+
+def find_test_runs_on(*, amdgpu_family: str, platform: str) -> str:
+    platform_info = _find_platform_info(amdgpu_family=amdgpu_family, platform=platform)
+    return platform_info["test-runs-on"]
+
+
+def find_multi_gpu_runs_on(*, amdgpu_family: str, platform: str) -> str:
+    """Return the multi-GPU runner label for a family, or "" if none exists.
+
+    Only data-center families (e.g. gfx942, gfx950) currently have multi-GPU
+    runner pools; consumer families have single-GPU runners only.
+    """
+    platform_info = _find_platform_info(amdgpu_family=amdgpu_family, platform=platform)
+    return str(platform_info.get("test-runs-on-multi-gpu") or "")
+
+
+def select_test_configs(*, default_test_configs: str, has_multi_gpu: bool) -> str:
+    """Drop multi-GPU-only configs when a family has no multi-GPU runner.
+
+    `distributed` requires more than one GPU, so families without a multi-GPU
+    runner can only run the single-GPU configs.
+    """
+    configs = [c for c in default_test_configs.split() if c]
+    if not has_multi_gpu:
+        configs = [c for c in configs if c != "distributed"]
+    return " ".join(configs)
 
 
 def build_test_matrix(
     *,
     amdgpu_families: list[str],
     platform: str,
+    include_multi_gpu: bool = False,
+    default_test_configs: str = "",
 ) -> dict[str, list[dict[str, str]]]:
     print(f"Requested {platform} AMDGPU families: {amdgpu_families}")
     include: list[dict[str, str]] = []
@@ -62,13 +91,32 @@ def build_test_matrix(
             )
             continue
 
-        print(f"Including {requested_family}: testing on {test_runs_on}")
-        include.append(
-            {
-                "amdgpu_family": requested_family,
-                "test_runs_on": test_runs_on,
-            }
+        entry: dict[str, str] = {
+            "amdgpu_family": requested_family,
+            "test_runs_on": test_runs_on,
+        }
+
+        if include_multi_gpu:
+            multi_gpu_runs_on = find_multi_gpu_runs_on(
+                amdgpu_family=requested_family,
+                platform=platform,
+            )
+            entry["test_runs_on_multi_gpu"] = multi_gpu_runs_on
+            entry["test_configs"] = select_test_configs(
+                default_test_configs=default_test_configs,
+                has_multi_gpu=bool(multi_gpu_runs_on),
+            )
+
+        print(
+            f"Including {requested_family}: testing on {test_runs_on}"
+            + (
+                f" (multi-GPU: {entry['test_runs_on_multi_gpu'] or 'none'}, "
+                f"configs: {entry['test_configs'] or 'none'})"
+                if include_multi_gpu
+                else ""
+            )
         )
+        include.append(entry)
 
     return {"include": include}
 
@@ -103,6 +151,23 @@ def main(argv: list[str]) -> None:
         default=platform_module.system().lower(),
         help="Test platform (default: current system).",
     )
+    parser.add_argument(
+        "--include-multi-gpu",
+        action="store_true",
+        help=(
+            "Also emit 'test_runs_on_multi_gpu' and 'test_configs' per family. "
+            "Families without a multi-GPU runner drop multi-GPU-only configs "
+            "(e.g. 'distributed')."
+        ),
+    )
+    parser.add_argument(
+        "--default-test-configs",
+        default="",
+        help=(
+            "Space-separated test configs to request when --include-multi-gpu "
+            "is set (e.g. 'default distributed inductor')."
+        ),
+    )
     args = parser.parse_args(argv)
 
     built_families = split_families(args.build_amdgpu_families)
@@ -123,6 +188,8 @@ def main(argv: list[str]) -> None:
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
         platform=args.platform,
+        include_multi_gpu=args.include_multi_gpu,
+        default_test_configs=args.default_test_configs,
     )
     emit_outputs(matrix)
 

@@ -35,6 +35,13 @@ FAKE_FAMILY_MATRIX: FamilyMatrix = {
             "test-runs-on": "",
         }
     },
+    "gfxmulti": {
+        "linux": {
+            "family": "gfxmulti-dcgpu",
+            "test-runs-on": "linux-multi-1gpu",
+            "test-runs-on-multi-gpu": "linux-multi-8gpu",
+        },
+    },
 }
 
 
@@ -159,6 +166,84 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         outputs = gha_set_output.call_args.args[0]
         self.assertEqual(outputs["enabled"], "false")
         self.assertEqual(json.loads(outputs["matrix"]), {"include": []})
+
+    def test_include_multi_gpu_keeps_distributed_for_multi_gpu_family(self) -> None:
+        with mock.patch.object(
+            m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
+        ):
+            matrix = m.build_test_matrix(
+                amdgpu_families=["gfxmulti-dcgpu"],
+                platform="linux",
+                include_multi_gpu=True,
+                default_test_configs="default distributed inductor",
+            )
+        self.assertEqual(
+            matrix["include"],
+            [
+                {
+                    "amdgpu_family": "gfxmulti-dcgpu",
+                    "test_runs_on": "linux-multi-1gpu",
+                    "test_runs_on_multi_gpu": "linux-multi-8gpu",
+                    "test_configs": "default distributed inductor",
+                }
+            ],
+        )
+
+    def test_include_multi_gpu_drops_distributed_without_multi_gpu(self) -> None:
+        with mock.patch.object(
+            m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
+        ):
+            matrix = m.build_test_matrix(
+                amdgpu_families=["gfxalpha-all"],
+                platform="linux",
+                include_multi_gpu=True,
+                default_test_configs="default distributed inductor",
+            )
+        self.assertEqual(
+            matrix["include"],
+            [
+                {
+                    "amdgpu_family": "gfxalpha-all",
+                    "test_runs_on": "linux-alpha",
+                    "test_runs_on_multi_gpu": "",
+                    "test_configs": "default inductor",
+                }
+            ],
+        )
+
+    def test_select_test_configs_drops_distributed_only(self) -> None:
+        self.assertEqual(
+            m.select_test_configs(
+                default_test_configs="default distributed inductor",
+                has_multi_gpu=False,
+            ),
+            "default inductor",
+        )
+        self.assertEqual(
+            m.select_test_configs(
+                default_test_configs="default distributed inductor",
+                has_multi_gpu=True,
+            ),
+            "default distributed inductor",
+        )
+
+    def test_default_matrix_omits_multi_gpu_fields(self) -> None:
+        with mock.patch.object(
+            m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
+        ):
+            matrix = m.build_test_matrix(
+                amdgpu_families=["gfxmulti-dcgpu"],
+                platform="linux",
+            )
+        self.assertEqual(
+            matrix["include"],
+            [
+                {
+                    "amdgpu_family": "gfxmulti-dcgpu",
+                    "test_runs_on": "linux-multi-1gpu",
+                }
+            ],
+        )
 
     def test_real_family_matrix_finds_gfx950_runner(self) -> None:
         matrix = m.build_test_matrix(

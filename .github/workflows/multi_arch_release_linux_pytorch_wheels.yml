@@ -29,7 +29,7 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type; selects the S3 bucket'
+        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
         type: string
         required: true
       repository:
@@ -70,11 +70,9 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
-        type: choice
-        options:
-          - dev
-        default: dev
+        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        type: string
+        required: true
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -146,8 +144,41 @@ jobs:
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
 
+  setup_full_test_matrix:
+    name: Setup Full PyTorch Test Matrix
+    # Only relevant for scheduled nightly runs that opt into full tests. The
+    # matrix is derived from the requested AMDGPU families so coverage tracks
+    # what was built instead of a single hardcoded family (#5755).
+    if: >-
+      ${{
+        inputs.run_full_pytorch_tests &&
+        inputs.release_type == 'nightly'
+      }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.matrix.outputs.enabled }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Generate full test matrix
+        id: matrix
+        run: |
+          python ./build_tools/github_actions/configure_pytorch_test_matrix.py \
+            --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
+            --test-amdgpu-families auto \
+            --platform linux \
+            --include-multi-gpu \
+            --default-test-configs "default distributed inductor"
+
   dispatch_pytorch_wheels_full_test:
-    name: Dispatch PyTorch Full Test | gfx94X-dcgpu | torch ${{ matrix.pytorch_git_ref }}
+    name: Dispatch PyTorch Full Test | ${{ matrix.family.amdgpu_family }} | torch ${{ matrix.pytorch.pytorch_git_ref }}
     # Existing rockrel wrappers do not pass run_full_pytorch_tests, so this
     # remains a no-op until the companion rockrel wrapper PR enables the flag
     # and provides test_pytorch_wheels_full.yml in that repository.
@@ -155,9 +186,10 @@ jobs:
       ${{
         inputs.run_full_pytorch_tests &&
         inputs.release_type == 'nightly' &&
-        needs.build_pytorch_wheels.result == 'success'
+        needs.build_pytorch_wheels.result == 'success' &&
+        needs.setup_full_test_matrix.outputs.enabled == 'true'
       }}
-    needs: [build_pytorch_wheels]
+    needs: [build_pytorch_wheels, setup_full_test_matrix]
     runs-on: ubuntu-24.04
     permissions:
       actions: write
@@ -165,7 +197,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
+        # AMDGPU families resolved from the build inputs; each entry carries its
+        # single-GPU runner, optional multi-GPU runner, and the test configs it
+        # can run (families without a multi-GPU runner drop 'distributed').
+        family: ${{ fromJSON(needs.setup_full_test_matrix.outputs.matrix).include }}
+        pytorch:
           - pytorch_git_ref: release/2.9
             pytorch_git_repo: ROCm/pytorch
             torch_package: "torch==2.9.*"
@@ -185,12 +221,12 @@ jobs:
     env:
       PACKAGE_INDEX_URL: "https://rocm.nightlies.amd.com/whl-multi-arch/"
       PYTHON_VERSION: "3.12"
-      TORCH_PACKAGE: ${{ matrix.torch_package }}
+      TORCH_PACKAGE: ${{ matrix.pytorch.torch_package }}
     steps:
       - name: Check full test cadence
         id: cadence
         run: |
-          if [ "${{ matrix.dispatch_on }}" = "daily" ] || [ "$(date -u +%u)" = "7" ]; then
+          if [ "${{ matrix.pytorch.dispatch_on }}" = "daily" ] || [ "$(date -u +%u)" = "7" ]; then
             echo "dispatch=true" >> "$GITHUB_OUTPUT"
           else
             echo "dispatch=false" >> "$GITHUB_OUTPUT"
@@ -229,15 +265,15 @@ jobs:
         with:
           workflow: test_pytorch_wheels_full.yml
           inputs: |
-            { "amdgpu_family": "gfx94X-dcgpu",
-              "test_runs_on": "linux-gfx942-1gpu-ossci-rocm",
-              "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
+            { "amdgpu_family": "${{ matrix.family.amdgpu_family }}",
+              "test_runs_on": "${{ matrix.family.test_runs_on }}",
+              "test_runs_on_multi_gpu": "${{ matrix.family.test_runs_on_multi_gpu }}",
               "package_index_url": "${{ env.PACKAGE_INDEX_URL }}",
               "python_version": "3.12",
               "torch_version": "${{ steps.resolve.outputs.torch_version }}",
-              "pytorch_git_ref": "${{ matrix.pytorch_git_ref }}",
-              "pytorch_git_repo": "${{ matrix.pytorch_git_repo }}",
-              "test_configs": "default distributed inductor",
+              "pytorch_git_ref": "${{ matrix.pytorch.pytorch_git_ref }}",
+              "pytorch_git_repo": "${{ matrix.pytorch.pytorch_git_repo }}",
+              "test_configs": "${{ matrix.family.test_configs }}",
               "tests_to_include": "",
               "multi_arch": true,
               "repository": "${{ inputs.repository || github.repository }}",
