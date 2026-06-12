@@ -703,6 +703,10 @@ if(THEROCK_ENABLE_HIPTHREADS)
       -DROCM_DIR=
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
       -DCMAKE_CXX_STANDARD=17
+      # hipThreads compiles with -Werror plus strict warnings (-Wshadow,
+      # -Wold-style-cast, ...). The HIP runtime headers are included with -I
+      # (not -isystem) and trip those warnings, so disable -Werror here.
+      -DDISABLE_WERROR=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
