@@ -28,7 +28,7 @@ Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --os-profile ubuntu2404
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --layout multi_arch --release-type nightly --os-profile ubuntu2404 --repo-sub-folder 20260501-25200531110
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
+  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://repo_url.com --os-profile ubuntu2404 --repo-sub-folder ''
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group gfx94X-dcgpu
   python build_tools/packaging/linux/get_url_repo_params.py get-container-image --os-profile ubuntu2404
 """
