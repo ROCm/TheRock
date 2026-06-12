@@ -89,6 +89,18 @@ if(THEROCK_ENABLE_ROCPROFV3)
     list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
   endif()
 
+  set(_rocprofiler_sdk_sanitizer "${THEROCK_SANITIZER}")
+  if(DEFINED "rocprofiler-sdk_SANITIZER")
+    set(_rocprofiler_sdk_sanitizer "${rocprofiler-sdk_SANITIZER}")
+  endif()
+
+  set(_rocprofiler_sdk_memcheck_args)
+  if(_rocprofiler_sdk_sanitizer STREQUAL "ASAN")
+    list(APPEND _rocprofiler_sdk_memcheck_args
+      -DROCPROFILER_MEMCHECK=AddressSanitizer
+    )
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-sdk
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
@@ -105,6 +117,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
+      ${_rocprofiler_sdk_memcheck_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     IGNORE_PACKAGES
