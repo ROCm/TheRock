@@ -113,6 +113,11 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
+    # MIOpen deterministic Conv2d variants burn 30-minute command watchdog windows
+    # repeatedly and can hang for hours on gfx94X (runs 27228539427, 27246343570,
+    # 27373187888 shards 8/10 and 10/10). Per-test skips are insufficient; see
+    # pytorch_2.13.py nn bucket and triage GPU Hang backlog for ROCm filing.
+    "nn/test_convolution",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
