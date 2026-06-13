@@ -10,8 +10,28 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
-THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
+THEROCK_LIB_PATH = THEROCK_PATH / "lib"
+THEROCK_CLANG_PATH = THEROCK_LIB_PATH / "llvm" / "bin" / "amdclang"
 ROCPROFSYS_TEST_DIR = THEROCK_PATH / "share" / "rocprofiler-systems" / "tests"
+
+# Determine host triple
+if THEROCK_CLANG_PATH.exists():
+    try:
+        host_triple = subprocess.run(
+            [str(THEROCK_CLANG_PATH), "--print-target-triple"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise RuntimeError(
+            f"'{THEROCK_CLANG_PATH} --print-target-triple' failed; "
+            "this suggests a broken toolchain."
+        ) from exc
+
+if host_triple:
+  THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
 
 # These tests are always excluded until the relevant issue is fixed (AIPROFSYST-441)
 EXCLUDED_TESTS = [
@@ -71,6 +91,8 @@ def setup_env():
     ld_paths = [
         str(THEROCK_PATH / "share" / "rocprofiler-systems" / "examples" / "lib"),
     ]
+    if host_triple:
+        ld_paths += [f"{THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}"]
     ld_paths_str = ":".join(ld_paths)
     old_ld_path = os.getenv("LD_LIBRARY_PATH", "")
     environ_vars["LD_LIBRARY_PATH"] = (
