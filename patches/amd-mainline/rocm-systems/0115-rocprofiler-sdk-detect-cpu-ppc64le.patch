@@ -1,67 +1,30 @@
-From 3e9059ba5b45d83dc67d62e60693ac76e35d8aa8 Mon Sep 17 00:00:00 2001
+From a22c536fea8682d687199d85dd7449c88fb14c4f Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Tue, 12 May 2026 20:15:15 +0000
-Subject: [PATCH] rocprofiler-sdk ppc64le
+Date: Fri, 12 Jun 2026 23:41:37 +0000
+Subject: [PATCH] [rocprofiler-sdk] Add CPU detection for ppc64le
 
 ---
- projects/rocprofiler-sdk/CMakeLists.txt       |  3 ++
- .../rocprofiler-sdk/source/lib/CMakeLists.txt |  7 ++--
- .../source/lib/rocprofiler-sdk/agent.cpp      | 33 +++++++++++++++++--
- 3 files changed, 38 insertions(+), 5 deletions(-)
+ .../platform/gnulinux/agent.cpp               | 31 +++++++++++++++++--
+ 1 file changed, 28 insertions(+), 3 deletions(-)
 
-diff --git a/projects/rocprofiler-sdk/CMakeLists.txt b/projects/rocprofiler-sdk/CMakeLists.txt
-index 25f335afb3..32f3f1bf9f 100644
---- a/projects/rocprofiler-sdk/CMakeLists.txt
-+++ b/projects/rocprofiler-sdk/CMakeLists.txt
-@@ -121,7 +121,10 @@ add_subdirectory(source)
- include(rocprofiler_config_install)
- include(rocprofiler_config_install_roctx)
- include(rocprofiler_config_install_rocpd)
-+# rocattach is only supported on x86_64 for now
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
- include(rocprofiler_config_install_rocattach)
-+endif()
- include(rocprofiler_config_install_tests)
- 
- # ROCPROFILER_BUILD_INTEGRATION_TESTS is not a standard option. If not defined, set it as
-diff --git a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
-index 82bdfe466e..06175bc47e 100644
---- a/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
-+++ b/projects/rocprofiler-sdk/source/lib/CMakeLists.txt
-@@ -16,8 +16,11 @@ add_subdirectory(rocprofiler-sdk-roctx)
- set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocpd")
- add_subdirectory(rocprofiler-sdk-rocpd)
- 
--set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocattach")
--add_subdirectory(rocprofiler-sdk-rocattach)
-+# rocattach is only supported on x86_64 for now
-+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-+  set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "rocattach")
-+  add_subdirectory(rocprofiler-sdk-rocattach)
-+endif()
- 
- set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "tools")
- add_subdirectory(att-tool)
-diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
-index 025594cb07..2a9170b058 100644
---- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
-+++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/agent.cpp
-@@ -89,8 +89,14 @@ struct cpu_info
+diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp
+index 3b42648b8c..ede1ade355 100644
+--- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp
++++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp
+@@ -95,8 +95,12 @@ struct cpu_info
  
      bool is_valid() const
      {
 +#if defined(__x86_64__) || defined(_M_X64)
          return !(processor < 0 || family < 0 || model < 0 || physical_id < 0 || core_id < 0 ||
                   apicid < 0 || vendor_id.empty() || model_name.empty());
-+#elif defined(__powerpc64__) || defined(__PPC64__)
-+        return !(processor < 0 || model_name.empty());
 +#else
 +        return !(processor < 0 || model_name.empty());
 +#endif
      }
  };
  
-@@ -172,7 +178,10 @@ parse_cpu_info()
+@@ -178,7 +182,10 @@ parse_cpu_info()
                      }
                  }
  
@@ -73,7 +36,7 @@ index 025594cb07..2a9170b058 100644
                      info_v.vendor_id = value;
                  else if(itr.find("model name") == 0)
                  {
-@@ -181,8 +190,6 @@ parse_cpu_info()
+@@ -187,8 +194,6 @@ parse_cpu_info()
                      info_v.model_name =
                          sdk::parse::strip(std::string{info_v.model_name}, " \t\n\v\f\r");
                  }
@@ -82,7 +45,7 @@ index 025594cb07..2a9170b058 100644
                  else if(itr.find("cpu family") == 0)
                      info_v.family = get_stol(value);
                  else if(itr.find("model") == 0 && itr.find("model name") != 0)
-@@ -193,6 +200,15 @@ parse_cpu_info()
+@@ -199,6 +204,15 @@ parse_cpu_info()
                      info_v.core_id = get_stol(value);
                  else if(itr.find("apicid") == 0)
                      info_v.apicid = get_stol(value);
@@ -98,7 +61,7 @@ index 025594cb07..2a9170b058 100644
              }
              else
              {
-@@ -207,6 +223,17 @@ parse_cpu_info()
+@@ -213,6 +227,17 @@ parse_cpu_info()
              }
          }
  
@@ -117,5 +80,5 @@ index 025594cb07..2a9170b058 100644
              processor_info.emplace_back(info_v);
          else
 -- 
-2.47.3
+2.52.0
 
