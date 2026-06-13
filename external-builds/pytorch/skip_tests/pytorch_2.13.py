@@ -24,6 +24,10 @@ skip_tests = {
             # TestMemPool - RuntimeError: Error building extension
             # 'dummy_allocator_v1' (same hipblas.h include error)
             "test_mempool_limited_memory_with_allocator",
+            # Run 27473608564 default shard 5/10, job 81208818459 and shard 2/10, job 81208818462:
+            # TestCudaAllocator::test_allocator_backend subprocess fails to launch venv python
+            # (libpython3.12.so.1.0 missing) in test/test_cuda.py and test_cuda_expandable_segments.py.
+            "(TestCudaAllocator and test_allocator_backend)",
         ],
         "nn": [
             # TestNNDeviceTypeCUDA - AssertionError: Scalars are not close!
@@ -44,6 +48,10 @@ skip_tests = {
             # expected device-assert stderr signature; FAILED CONSISTENTLY.
             "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float16)",
             "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float32)",
+            # Run 27473608564 default shard 9/10, job 81208818474:
+            # TestNNDeviceTypeCUDA::test_linear_cross_entropy_loss_default_bias_False_cuda_float32
+            # input-grad ULP worst case 952 > 854 on ROCm June 12 wheel.
+            "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
             # nn/test_convolution.py: module-excluded in run_pytorch_tests_full.py
             # (MIOpen deterministic conv watchdog/hangs). Triage evidence lives in
             # pytorch-ci-triage-results.md, not per-test skips here.
@@ -288,6 +296,10 @@ skip_tests = {
             # HW Exception GPU Hang and Fatal Python error: Aborted in
             # inductor/test_torchinductor_opinfo.py (shard 6/9). Provisional skip pending ROCm issue.
             "(TestInductorOpInfoCUDA and test_comprehensive_masked_mean_cuda_float32)",
+            # Run 27473608564 default shard 1/10, job 81208818457:
+            # TestGpuWrapper::test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code
+            # expects at::vec:: in generated cpp wrapper; ROCm codegen omits CPU vec ISA.
+            "(TestGpuWrapper and test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code)",
         ],
         "extension_backend": [
             # Run 27361388921 default shard 4/10, job 80849478614:
