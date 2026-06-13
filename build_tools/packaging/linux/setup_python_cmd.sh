@@ -102,8 +102,8 @@ install_python_runtime() {
 
     if [[ "$os_profile" == ubuntu* ]] || [[ "$os_profile" == debian* ]]; then
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq >&2
-        apt-get install -y --no-install-recommends \
+        sudo apt-get update -qq >&2
+        sudo apt-get install -y --no-install-recommends \
             "$PYTHON_CMD" \
             "${PYTHON_CMD}-venv" \
             "${PYTHON_CMD}-pip" >&2

@@ -444,7 +444,7 @@ class NativeLinuxPackageInstallTest:
                 # Create keyring directory
                 print(f"\nCreating keyring directory: {keyring_dir}...")
                 subprocess.run(
-                    ["mkdir", "--parents", "--mode=0755", str(keyring_dir)],
+                    ["sudo", "mkdir", "--parents", "--mode=0755", str(keyring_dir)],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -453,12 +453,12 @@ class NativeLinuxPackageInstallTest:
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
                 # Download, dearmor, and write GPG key using pipeline
-                # wget URL -O - | gpg --dearmor | tee keyring_file > /dev/null
+                # wget URL -O - | gpg --dearmor | sudo tee keyring_file > /dev/null
                 print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
                 pipeline_cmd = (
                     f"wget -q -O - {self.gpg_key_url} | "
                     f"gpg --dearmor | "
-                    f"tee {keyring_file} > /dev/null"
+                    f"sudo tee {keyring_file} > /dev/null"
                 )
 
                 subprocess.run(
@@ -471,7 +471,12 @@ class NativeLinuxPackageInstallTest:
                 )
 
                 # Set proper permissions on the keyring file
-                keyring_file.chmod(0o644)
+                subprocess.run(
+                    ["sudo", "chmod", "0644", str(keyring_file)],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
                 print(f"[PASS] GPG key imported to {keyring_file}")
                 return True
 
@@ -520,10 +525,16 @@ class NativeLinuxPackageInstallTest:
             repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
 
         try:
-            sources_list.write_text(repo_entry, encoding="utf-8")
+            subprocess.run(
+                ["sudo", "tee", str(sources_list)],
+                input=repo_entry.encode(),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
             print(f"[PASS] Repository added to {sources_list}")
             print(f" {repo_entry.strip()}")
-        except OSError as e:
+        except (OSError, subprocess.CalledProcessError) as e:
             print(f"[FAIL] Failed to add repository: {e}")
             return False
 
@@ -531,7 +542,9 @@ class NativeLinuxPackageInstallTest:
         print("\nUpdating package lists...")
         print("=" * 80)
         try:
-            return_code = _run_streaming(["apt", "update"], APT_UPDATE_TIMEOUT_SEC)
+            return_code = _run_streaming(
+                ["sudo", "apt", "update"], APT_UPDATE_TIMEOUT_SEC
+            )
             if return_code == 0:
                 print("\n[PASS] Package lists updated")
                 return True
@@ -736,7 +749,7 @@ gpgcheck=0
         print(f"\nPackages to install (in order): {self.package_names}")
 
         # Install using apt (packages in list order)
-        cmd = ["apt", "install", "-y"] + self.package_names
+        cmd = ["sudo", "apt", "install", "-y"] + self.package_names
         print(f"\nRunning: {' '.join(cmd)}")
         print("=" * 80)
         print("Installation progress (streaming output):\n")
