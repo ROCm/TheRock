@@ -45,11 +45,11 @@ ASAN_EXCLUDED_TESTS = [
     "memory-allocation-tracing",
     "test-scratch-memory-tracing",
     "rocjpeg-tracing",
-    "rocprofv3-test-hsa-multiqueue",
-    "rocprofv3-test-att-hsa-multiqueue-cmd",
-    "rocprofv3-test-att-hsa-multiqueue-cmd-env-att-lib-path",
-    "rocprofv3-test-att-hsa-multiqueue-json",
-    "rocprofv3-test-att-env-var",
+    # "rocprofv3-test-hsa-multiqueue",
+    # "rocprofv3-test-att-hsa-multiqueue-cmd",
+    # "rocprofv3-test-att-hsa-multiqueue-cmd-env-att-lib-path",
+    # "rocprofv3-test-att-hsa-multiqueue-json",
+    # "rocprofv3-test-att-env-var",
     "rocprofv3-test-hip-graph-bubbles-k2000-i200",
 ]
 
