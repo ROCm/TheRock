@@ -35,22 +35,22 @@ ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
 
 # Tests skipped under ASan (known failing/unstable in the ASan configuration).
 ASAN_EXCLUDED_TESTS = [
-    # "rocprofiler_sdk.unit.spm_core.check_packet_generation",
-    # "rocprofiler_sdk.unit.spm_core.check_callbacks",
-    # "rocprofiler_sdk.unit.rocprofiler_lib.callback_external_correlation",
-    # "rocprofiler_sdk.unit.rocprofiler_lib.buffered_external_correlation",
-    # "rocprofiler_sdk.unit.rocprofiler_lib.callback_registration_lambda_with_result",
-    # "rocprofiler_sdk.unit.rocprofiler_lib.buffer_registration_lambda_with_result",
-    # "async-copy-tracing",
-    # "memory-allocation-tracing",
-    # "test-scratch-memory-tracing",
-    # "rocjpeg-tracing",
+    "rocprofiler_sdk.unit.spm_core.check_packet_generation",
+    "rocprofiler_sdk.unit.spm_core.check_callbacks",
+    "rocprofiler_sdk.unit.rocprofiler_lib.callback_external_correlation",
+    "rocprofiler_sdk.unit.rocprofiler_lib.buffered_external_correlation",
+    "rocprofiler_sdk.unit.rocprofiler_lib.callback_registration_lambda_with_result",
+    "rocprofiler_sdk.unit.rocprofiler_lib.buffer_registration_lambda_with_result",
+    "async-copy-tracing",
+    "memory-allocation-tracing",
+    "test-scratch-memory-tracing",
+    "rocjpeg-tracing",
     "rocprofv3-test-hsa-multiqueue",
     "rocprofv3-test-att-hsa-multiqueue-cmd",
     "rocprofv3-test-att-hsa-multiqueue-cmd-env-att-lib-path",
     "rocprofv3-test-att-hsa-multiqueue-json",
     "rocprofv3-test-att-env-var",
-    # "rocprofv3-test-hip-graph-bubbles-k2000-i200",
+    "rocpd-api-python-interface-test",
 ]
 
 logging.basicConfig(level=logging.INFO)
