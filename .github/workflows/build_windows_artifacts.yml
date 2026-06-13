@@ -58,7 +58,7 @@ permissions:
 jobs:
   build_windows_artifacts:
     name: Build ${{ inputs.build_variant_label }} (xfail ${{ inputs.expect_failure }})
-    runs-on: azure-windows-scale-rocm
+    runs-on: aws-windows-scale-rocm-customer-dev
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
     permissions:

@@ -66,7 +66,7 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: azure-windows-scale-rocm
+    runs-on: aws-windows-scale-rocm-customer-dev
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
