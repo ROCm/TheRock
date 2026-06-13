@@ -1,0 +1,96 @@
+From 049a864757dd9e9336e8c7f8a80f1f7ad45e326a Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 11 Jun 2026 18:51:15 +0000
+Subject: [PATCH] gallium/auxiliary: guard TGSI calls with HAVE_GFX_COMPUTE
+
+dd_draw.c and u_dump_state.c call tgsi_scan_shader(), tgsi_free_tokens(),
+tgsi_dup_tokens(), and tgsi_dump_to_file() which are only compiled when
+with_gfx_compute is true (i.e. when OpenGL, Vulkan, or encode-capable VA
+is enabled). dd_draw.c itself must remain unconditionally compiled because
+si_debug.c calls dd_get_debug_file() and dd_write_header() directly.
+
+On x86, --gc-sections prunes the dead TGSI-calling functions before the
+linker sees the undefined symbols. On ppc64le, the TOC (Table of Contents)
+aggregates all external symbol references from dd_draw.c into a single
+.toc section; when any live symbol references the TOC the entire section
+is kept, pulling in undefined TGSI references and causing a link failure.
+
+Guard the four TGSI call sites with #if HAVE_GFX_COMPUTE to fix the
+ppc64le link failure when building with decode-only VA (no gfx/compute).
+---
+ src/gallium/auxiliary/driver_ddebug/dd_draw.c | 12 ++++++++++++
+ src/gallium/auxiliary/util/u_dump_state.c     |  2 ++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/src/gallium/auxiliary/driver_ddebug/dd_draw.c b/src/gallium/auxiliary/driver_ddebug/dd_draw.c
+index 36bf5b03da0..4ff53be270c 100644
+--- a/src/gallium/auxiliary/driver_ddebug/dd_draw.c
++++ b/src/gallium/auxiliary/driver_ddebug/dd_draw.c
+@@ -150,6 +150,7 @@ dd_dump_dmesg(FILE *f)
+ #endif
+ }
+ 
++#if HAVE_GFX_COMPUTE
+ static unsigned
+ dd_num_active_viewports(struct dd_draw_state *dstate)
+ {
+@@ -173,6 +174,7 @@ dd_num_active_viewports(struct dd_draw_state *dstate)
+ 
+    return 1;
+ }
++#endif /* HAVE_GFX_COMPUTE */
+ 
+ #define COLOR_RESET	"\033[0m"
+ #define COLOR_SHADER	"\033[1;32m"
+@@ -288,7 +290,11 @@ dd_dump_shader(struct dd_draw_state *dstate, mesa_shader_stage sh, FILE *f)
+ 
+    if (sh == MESA_SHADER_FRAGMENT)
+       if (dstate->rs) {
++#if HAVE_GFX_COMPUTE
+          unsigned num_viewports = dd_num_active_viewports(dstate);
++#else
++         unsigned num_viewports = 1;
++#endif
+ 
+          if (dstate->rs->state.rs.clip_plane_enable)
+             DUMP(clip_state, &dstate->clip_state);
+@@ -871,7 +877,9 @@ dd_unreference_copy_of_draw_state(struct dd_draw_state_copy *state)
+ 
+    for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
+       if (dst->shaders[i])
++#if HAVE_GFX_COMPUTE
+          tgsi_free_tokens(dst->shaders[i]->state.shader.tokens);
++#endif
+ 
+       for (j = 0; j < PIPE_MAX_CONSTANT_BUFFERS; j++)
+          pipe_resource_reference(&dst->constant_buffers[i][j].buffer, NULL);
+@@ -918,8 +926,12 @@ dd_copy_draw_state(struct dd_draw_state *dst, struct dd_draw_state *src)
+       if (src->shaders[i]) {
+          dst->shaders[i]->state.shader = src->shaders[i]->state.shader;
+          if (src->shaders[i]->state.shader.tokens) {
++#if HAVE_GFX_COMPUTE
+             dst->shaders[i]->state.shader.tokens =
+                tgsi_dup_tokens(src->shaders[i]->state.shader.tokens);
++#else
++            dst->shaders[i]->state.shader.tokens = NULL;
++#endif
+          } else {
+             dst->shaders[i]->state.shader.ir.nir = NULL;
+          }
+diff --git a/src/gallium/auxiliary/util/u_dump_state.c b/src/gallium/auxiliary/util/u_dump_state.c
+index 5a966830f63..000c707b688 100644
+--- a/src/gallium/auxiliary/util/u_dump_state.c
++++ b/src/gallium/auxiliary/util/u_dump_state.c
+@@ -517,7 +517,9 @@ util_dump_shader_state(FILE *stream, const struct pipe_shader_state *state)
+    if (state->type == PIPE_SHADER_IR_TGSI) {
+       util_dump_member_begin(stream, "tokens");
+       fprintf(stream, "\"\n");
++#if HAVE_GFX_COMPUTE
+       tgsi_dump_to_file(state->tokens, 0, stream);
++#endif
+       fprintf(stream, "\"");
+       util_dump_member_end(stream);
+    }
+-- 
+2.52.0
+
