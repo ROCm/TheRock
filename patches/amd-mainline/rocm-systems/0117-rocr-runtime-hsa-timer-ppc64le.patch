@@ -1,0 +1,101 @@
+From 12550bb2863cb96aafe81e63599f546f71e20332 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Sat, 13 Jun 2026 03:37:41 +0000
+Subject: [PATCH] rocr-runtime ppc64le-specific changes
+
+---
+ .../rocr-runtime/rocrtst/common/hsatimer.cc   | 28 ++++++++++++++-----
+ .../hsa-runtime/core/util/lnx/os_linux.cpp    |  2 +-
+ .../runtime/hsa-runtime/core/util/utils.h     |  6 ++++
+ 3 files changed, 28 insertions(+), 8 deletions(-)
+
+diff --git a/projects/rocr-runtime/rocrtst/common/hsatimer.cc b/projects/rocr-runtime/rocrtst/common/hsatimer.cc
+index 2610ecdd06..6705eba1c4 100755
+--- a/projects/rocr-runtime/rocrtst/common/hsatimer.cc
++++ b/projects/rocr-runtime/rocrtst/common/hsatimer.cc
+@@ -44,7 +44,11 @@
+  */
+ 
+ #include "common/hsatimer.h"
++#if defined(__x86_64__) || defined(_M_X64)
+ #include <x86intrin.h>
++#elif defined(__powerpc64__) || defined(__PPC64__)
++#include <sys/platform/ppc.h>
++#endif
+ 
+ namespace rocrtst {
+ 
+@@ -167,23 +171,33 @@ uint64_t PerfTimer::CoarseTimestampUs() {
+ }
+ 
+ uint64_t PerfTimer::MeasureTSCFreqHz() {
+-  // Make a coarse interval measurement of TSC ticks for 1 gigacycles.
+   unsigned int unused;
+-  uint64_t tscTicksEnd;
+-
++  uint64_t tscTicksBegin, tscTicksEnd;
+   uint64_t coarseBeginUs = CoarseTimestampUs();
+-  uint64_t tscTicksBegin = __rdtscp(&unused);
+ 
++//  --- Architecture Specific Read ---
++#if defined(__x86_64__) || defined(_M_X64)
++  tscTicksBegin = __rdtscp(&unused);
++#elif defined(__powerpc64__) || defined(__PPC64__)
++// __ppc_get_timebase() is the standard way to read TB on POWER
++  tscTicksBegin = __ppc_get_timebase();
++#else
++  #error "Unsupported architecture"
++#endif
+   do {
++#if defined(__x86_64__) || defined(_M_X64)
+     tscTicksEnd = __rdtscp(&unused);
++#elif defined(__powerpc64__) || defined(__PPC64__)
++    tscTicksEnd = __ppc_get_timebase();
++#endif
+   } while (tscTicksEnd - tscTicksBegin < 1000000000);
+-
+   uint64_t coarseEndUs = CoarseTimestampUs();
+ 
+-  // Compute the TSC frequency and round to nearest 100MHz.
++  // Compute the frequency
+   uint64_t coarseIntervalNs = (coarseEndUs - coarseBeginUs) * 1000;
+   uint64_t tscIntervalTicks = tscTicksEnd - tscTicksBegin;
+-  return (tscIntervalTicks * 10 + (coarseIntervalNs / 2)) / coarseIntervalNs;
++  // Frequency in Hz, rounded
++  return (tscIntervalTicks * 1000000000 + (coarseIntervalNs / 2)) / coarseIntervalNs;
+ }
+ 
+ }  // namespace rocrtst
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
+index d43b06d025..d3d6311bea 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
+@@ -345,7 +345,7 @@ static int callback(struct dl_phdr_info* info, size_t size, void* data) {
+    */
+ 
+   if ((info) && (info->dlpi_name) && (info->dlpi_name[0] != '\0')) {
+-    if (std::string(info->dlpi_name).find("vdso.so") != std::string::npos) return 0;
++    if (std::string(info->dlpi_name).find("vdso64.so") != std::string::npos || std::string(info->dlpi_name).find("vdso.so") != std::string::npos) return 0;
+ 
+     /*
+      * Iterate through the program headers of the loaded lib and check for PT_DYNAMIC program
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
+index 1839bacb68..452c0148d0 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
+@@ -83,6 +83,12 @@ typedef uint64_t uint64;
+ void log_printf(const char* file, int line, const char* format, ...);
+ 
+ #if defined(__GNUC__)
++#if defined(__i386__) || defined(__x86_64__)
++#include <x86intrin.h>
++#elif defined(__powerpc__) || defined(__powerpc64__)            
++#define NO_WARN_X86_INTRINSICS 1
++#include <emmintrin.h>
++#endif
+ 
+ #define __forceinline __inline__ __attribute__((always_inline))
+ #define __declspec(x) __attribute__((x))
+-- 
+2.52.0
+
