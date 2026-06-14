@@ -170,6 +170,15 @@ def _is_current_run_pr_from_fork() -> bool:
     )
 
 
+def is_current_run_pr_from_fork() -> bool:
+    """Whether the current workflow run is a pull request from a fork.
+
+    Public wrapper around the module-internal implementation, for reuse by
+    other build scripts.
+    """
+    return _is_current_run_pr_from_fork()
+
+
 def get_artifacts_bucket_config_for_workflow_run(
     github_repository: str,
     release_type: str | None = None,
