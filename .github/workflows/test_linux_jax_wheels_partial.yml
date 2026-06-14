@@ -1,0 +1,183 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Multi-Arch Linux JAX Wheels
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        required: true
+        type: string
+      package_index_url:
+        description: Base URL for the multi-arch Python package index
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version
+        required: true
+        type: string
+      tar_url:
+        description: URL to TheRock tarball
+        required: true
+        type: string
+      python_version:
+        description: Python version to test
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        required: true
+        type: string
+      jax_version:
+        description: "Built JAX version"
+        required: false
+        type: string
+      jaxlib_version:
+        description: "Built jaxlib version"
+        required: false
+        type: string
+      jax_plugin_version:
+        description: "Built jax_rocm7_plugin version"
+        required: false
+        type: string
+      jax_pjrt_version:
+        description: "Built jax_rocm7_pjrt version"
+        required: false
+        type: string
+      test_runs_on:
+        description: Runner label to execute tests on
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        type: string
+        default: "gfx94X-dcgpu"
+      package_index_url:
+        description: Base URL for the multi-arch Python package index
+        type: string
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+      rocm_version:
+        description: ROCm version
+        type: string
+        default: "7.14.0.dev0"
+      tar_url:
+        description: URL to TheRock tarball
+        type: string
+        default: ""
+      python_version:
+        description: Python version to test
+        type: string
+        default: "3.13"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        type: string
+        default: "rocm-jaxlib-v0.9.1"
+      jax_version:
+        description: "Built JAX version"
+        type: string
+        default: ""
+      jaxlib_version:
+        description: "Built jaxlib version"
+        type: string
+        default: ""
+      jax_plugin_version:
+        description: "Built jax_rocm7_plugin version"
+        type: string
+        default: ""
+      jax_pjrt_version:
+        description: "Built jax_rocm7_pjrt version"
+        type: string
+        default: ""
+      test_runs_on:
+        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
+        type: string
+        default: "linux-gfx942-1gpu-core42-ossci-rocm"
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  test_jax_wheels:
+    name: Test JAX Wheels | Python ${{ inputs.python_version }}
+    runs-on: ${{ inputs.test_runs_on }}
+
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      options: >-
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add render
+        --group-add video
+        --user root
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --dns 8.8.8.8
+        --dns 8.8.4.4
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      VIRTUAL_ENV: ${{ github.workspace }}/.venv
+      THEROCK_TAR_URL: ${{ inputs.tar_url }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.3
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Checkout rocm-jax
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.3
+        with:
+          path: rocm-jax
+          repository: ROCm/rocm-jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Checkout JAX
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.3
+        with:
+          path: jax
+          repository: ROCm/jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python_version }}
+          check-latest: true
+
+      - name: System deps, venv configure
+        run: |
+          python3 -m venv "${VIRTUAL_ENV}"
+          echo "PATH=${VIRTUAL_ENV}/bin:${PATH}" >> "$GITHUB_ENV"
+          python3 build_tools/setup_venv.py \
+            "${VIRTUAL_ENV}" \
+            --activate-in-future-github-actions-steps
+
+      - name: Install base JAX test requirements
+        run: |
+          pip install -r external-builds/jax/requirements-jax.txt

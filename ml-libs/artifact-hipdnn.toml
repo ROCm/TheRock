@@ -20,8 +20,11 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-  "share/hipdnn/python/**/*.py",
-  "share/hipdnn/python/**/*.so",
-  "share/hipdnn/python/**/*.pyd",
-  "share/hipdnn/tests/python/**/*.py",
+]
+# Exclude python frontend from the test artifact; ships with a dead CI RPATH
+# and is ABI-locked to cp312. See https://github.com/ROCm/TheRock/issues/5678
+# Needed because single-arch builds don't exclude test artifacts (multi-arch
+# does); remove this once single-arch is removed.
+exclude = [
+  "share/hipdnn/python/**",
 ]

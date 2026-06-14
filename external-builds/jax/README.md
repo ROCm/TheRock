@@ -43,7 +43,7 @@ Support for JAX is provided via stable release branches of
 See also:
 
 - Workflow source code:
-  [`build_linux_jax_wheels.yml`](/.github/workflows/build_linux_jax_wheels.yml)
+  [`multi_arch_build_linux_jax_wheels.yml`](/.github/workflows/multi_arch_build_linux_jax_wheels.yml)
 
 ## Build instructions
 

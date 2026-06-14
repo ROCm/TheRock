@@ -17,6 +17,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def setUp(self):
         # Save environment so tests don't leak state
         self._orig_env = os.environ.copy()
+        # Save sys.argv so tests don't leak state
+        self._orig_argv = sys.argv.copy()
         # Save module-level attributes that tests may change
         self._orig_functional_matrix = fetch_test_configurations.functional_matrix
         self._orig_benchmark_matrix = fetch_test_configurations.benchmark_matrix
@@ -24,11 +26,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fetch_test_configurations.get_all_families_for_trigger_types
         )
 
-        os.environ["RUNNER_OS"] = "Linux"
         os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
+
+        # Default to linux platform
+        sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
 
         # Capture gha_set_output instead of writing to GitHub
         self.gha_output = {}
@@ -41,6 +45,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def tearDown(self):
         os.environ.clear()
         os.environ.update(self._orig_env)
+        sys.argv = self._orig_argv
         # Restore module-level attributes
         fetch_test_configurations.functional_matrix = self._orig_functional_matrix
         fetch_test_configurations.benchmark_matrix = self._orig_benchmark_matrix
@@ -135,7 +140,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
         hipblaslt_linux = components[0]
 
-        os.environ["RUNNER_OS"] = "Windows"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         fetch_test_configurations.run()
         components = self._get_components()
         hipblaslt_windows = components[0]
@@ -313,7 +318,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_windows_hip_tests_default_emits_pal_only(self):
         """On Windows, hip-tests emits only PAL by default (WINDOWS_HIP_ROCR_TESTS off)."""
-        os.environ["RUNNER_OS"] = "Windows"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
 
         fetch_test_configurations.run()
@@ -328,7 +333,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows with WINDOWS_HIP_ROCR_TESTS=true, hip-tests runs PAL and ROCR."""
-        os.environ["RUNNER_OS"] = "Windows"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
         os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
 
@@ -354,7 +359,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_windows_hip_tests_quick_uses_single_shard(self):
         """On Windows with test_type=quick and ROCR enabled, PAL/ROCR each use 1 shard."""
-        os.environ["RUNNER_OS"] = "Windows"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
         os.environ["TEST_TYPE"] = "quick"
         os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
