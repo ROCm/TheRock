@@ -457,6 +457,23 @@ skip_tests = {
             "(TestFullyShardHSDP3DTraining and test_3d_mlp_with_nd_mesh)",
             # fp32 gradient mismatch in FSDP activation checkpointing; 1/128 elements exceed tolerance
             "(TestFullyShard1DTrainingCompose and test_train_parity_with_activation_checkpointing)",
+            # Run 27480021236 distributed shard 1/3, job 81226065498:
+            # ComposabilityTest::test_replicate_pp_ScheduleClass3_bfloat16 hits NCCL
+            # /dev/shm exhaustion (ncclSystemError: No space left on device) under
+            # 8-rank pipeline-parallel reduce-grad; recovered on subprocess retry in
+            # the same job but blocks shard when /dev/shm is already warm.
+            "(ComposabilityTest and test_replicate_pp_ScheduleClass3_bfloat16)",
+            # Run 27480021236 distributed shard 1/3, job 81226065498:
+            # TestStateDict::test_shared_weight fails consistently after reruns with
+            # AssertionError: Tensor-likes are not close! on optimizer state_dict after
+            # save/load with shared-weight DDP/FSDP models on June 12 ROCm wheel.
+            "(TestStateDict and test_shared_weight)",
+            # Run 27480021236 distributed shard 1/3, job 81226065498:
+            # TestDistBackendWithSpawn::test_ddp_apply_optim_in_backward fails with
+            # Tensor-likes are not close! (10/1048576 elements; rel diff ~0.045 vs
+            # 1.3e-06) at iteration 2; also failed on June 1 stack (FLAKY_TESTS.md).
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward)",
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward_grad_as_bucket_view_false)",
         ],
     },
 }
