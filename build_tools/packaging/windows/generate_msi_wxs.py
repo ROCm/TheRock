@@ -90,6 +90,92 @@ class PackageDef:
     fallback_excludes: list[str] = field(default_factory=list)
 
 
+# Fallback exclude patterns shared across all packages.
+# Applied when stage dirs are absent and the full merged dist tree is used.
+# Suppresses test/benchmark binaries, dev-only files, and math/ML components
+# that bleed into the dist tree from other artifacts.
+_COMMON_FALLBACK_EXCLUDES: list[str] = [
+    # Kernel databases from math libs (rocBLAS, hipBLASLt, MIOpen, etc.)
+    "**/*.dat",
+    "**/*.co",
+    "**/*.hsaco",
+    "**/*.model",
+    # Test and benchmark binaries
+    "bin/test_*",
+    "bin/benchmark_*",
+    "bin/*.hip.exe",
+    # Math/ML runtime bins and subdirectories
+    "bin/rocblas/**",
+    "bin/rocblas*",
+    "bin/hipblaslt/**",
+    "bin/hipblaslt*",
+    "bin/hipblaslt_plugin/**",
+    "bin/MIOpen/**",
+    "bin/MIOpen*",
+    "bin/miopen_plugin/**",
+    "bin/miopen_plugin*",
+    "bin/hipdnn/**",
+    "bin/hipdnn*",
+    "bin/hipdnn_plugins/**",
+    "bin/hipdnn_integration_tests_ctest/**",
+    "bin/hipdnn_samples/**",
+    "bin/hip_kernel_provider/**",
+    "bin/hipkernelprovider/**",
+    "bin/test_plugins/**",
+    "bin/rocwmma/**",
+    "bin/rocwmma*",
+    "bin/hipcub/**",
+    "bin/rocprim/**",
+    "bin/rocthrust/**",
+    "bin/hipblas/**",
+    "bin/hipblas*",
+    "bin/hipRAND/**",
+    "bin/hiprand*",
+    "bin/rocRAND/**",
+    "bin/rocrand*",
+    "bin/hipsparse/**",
+    "bin/hipsparse*",
+    "bin/rocsparse/**",
+    "bin/rocsparse*",
+    "bin/hipsolver*",
+    "bin/rocsolver*",
+    "bin/hipfft*",
+    "bin/rocfft*",
+    "bin/dyna-rocfft*",
+    "bin/flatc*",
+    "bin/fftw3*",
+    "bin/rocm-openblas*",
+    "bin/cltrace*",
+    "bin/clinfo*",
+    # Misc test/sample assets
+    "bin/**/*.yaml",
+    "bin/**/*.py",
+    "bin/**/*.data",
+    "bin/**/*.txt",
+    "bin/**/*.xml",
+    "bin/perf_*",
+    "bin/simple_*",
+    "bin/*_test*",
+    "bin/*-validate*",
+    "bin/*-bench*",
+    "bin/*Driver*",
+    "bin/gemm_*",
+    "bin/dlrm_*",
+    "bin/hipRTC_gemm*",
+    "bin/libhipblaslt*",
+    "bin/sequence.yaml",
+    # libexec: exclude samples, test scripts, and Linux-only utilities
+    "libexec/hipblaslt-samples/**",
+    "libexec/hipsparse/**",
+    "libexec/rocsparse/**",
+    "libexec/hipify/**",
+    "libexec/rocm-core/**",
+    # Test assets under share/
+    "share/hip/catch_tests/**",
+    "share/hip/CTestTestfile.cmake",
+    "share/hip/catchInfo.txt",
+]
+
 # Keys are the --package selector values.
 PACKAGES: dict[str, PackageDef] = {
     "hip-runtime": PackageDef(
@@ -106,37 +192,7 @@ PACKAGES: dict[str, PackageDef] = {
         feature_id="HIPRuntime",
         feature_title="ROCm HIP Runtime",
         registry_key="Software\\AMD\\ROCm\\hip-runtime\\{version}",
-        fallback_excludes=[
-            # Kernel databases from math libs (rocBLAS, hipBLASLt, MIOpen, etc.)
-            "**/*.dat",
-            "**/*.co",
-            "**/*.hsaco",
-            "**/*.model",
-            # Math/ML lib subdirectories under bin/ and lib/
-            "bin/rocblas/**",
-            "bin/hipblaslt/**",
-            "bin/hipblaslt_plugin/**",
-            "bin/MIOpen/**",
-            "bin/miopen_plugin/**",
-            "bin/hipdnn/**",
-            "bin/hipdnn_plugins/**",
-            "bin/hipdnn_integration_tests_ctest/**",
-            "bin/hipdnn_samples/**",
-            "bin/hip_kernel_provider/**",
-            "bin/hipkernelprovider/**",
-            "bin/test_plugins/**",
-            "bin/rocwmma/**",
-            "bin/hipcub/**",
-            "bin/rocprim/**",
-            "bin/rocthrust/**",
-            "bin/hipblas/**",
-            "bin/hipRAND/**",
-            "bin/rocRAND/**",
-            "bin/hipsparse/**",
-            "bin/rocsparse/**",
-            # Test assets under share/
-            "share/hip/catch_tests/**",
-        ],
+        fallback_excludes=_COMMON_FALLBACK_EXCLUDES,
     ),
     "runtimes": PackageDef(
         description="HIP runtime + AMD LLVM compiler runtime (hipcc, comgr, device libs)",
@@ -153,36 +209,35 @@ PACKAGES: dict[str, PackageDef] = {
         feature_id="ROCmRuntimes",
         feature_title="AMD ROCm Runtimes",
         registry_key="Software\\AMD\\ROCm\\runtimes\\{version}",
-        fallback_excludes=[
-            # Kernel databases from math libs (rocBLAS, hipBLASLt, MIOpen, etc.)
-            "**/*.dat",
-            "**/*.co",
-            "**/*.hsaco",
-            "**/*.model",
-            # Math/ML lib subdirectories under bin/ and lib/
-            "bin/rocblas/**",
-            "bin/hipblaslt/**",
-            "bin/hipblaslt_plugin/**",
-            "bin/MIOpen/**",
-            "bin/miopen_plugin/**",
-            "bin/hipdnn/**",
-            "bin/hipdnn_plugins/**",
-            "bin/hipdnn_integration_tests_ctest/**",
-            "bin/hipdnn_samples/**",
-            "bin/hip_kernel_provider/**",
-            "bin/hipkernelprovider/**",
-            "bin/test_plugins/**",
-            "bin/rocwmma/**",
-            "bin/hipcub/**",
-            "bin/rocprim/**",
-            "bin/rocthrust/**",
-            "bin/hipblas/**",
-            "bin/hipRAND/**",
-            "bin/rocRAND/**",
-            "bin/hipsparse/**",
-            "bin/rocsparse/**",
-            # Test assets under share/
-            "share/hip/catch_tests/**",
+        fallback_excludes=_COMMON_FALLBACK_EXCLUDES,
+    ),
+    "core": PackageDef(
+        description="ROCm core runtime redistributable (ROCR, HIP, AMDsmi, OpenCL)",
+        product_name="AMD ROCm Core Runtime",
+        artifacts=[
+            "core-runtime",  # ROCR-Runtime + rocminfo
+            "core-hip",      # HIP runtime DLLs, hipcc, hipconfig, roc-obj, etc.
+            "core-kpack",    # Kernel package support (rocm_kpack.dll)
+            "core-hipinfo",  # Windows-only: bin/hipInfo*
+            "core-amdsmi",   # AMD System Management Interface
+            "core-ocl-icd",  # OpenCL ICD loader (bin/OpenCL.dll on Windows)
+        ],
+        output_stem="amdrocm-core",
+        install_subdir="core-{version}",
+        upgrade_code="A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+        feature_id="ROCmCore",
+        feature_title="AMD ROCm Core Runtime",
+        registry_key="Software\\AMD\\ROCm\\core\\{version}",
+        fallback_excludes=_COMMON_FALLBACK_EXCLUDES + [
+            # LLVM dev tree — not part of core runtime
+            "lib/llvm/**",
+            # Dev-only: cmake configs, import libs, pkgconfig, host-math, sysdeps
+            "lib/cmake/**",
+            "lib/pkgconfig/**",
+            "lib/host-math/**",
+            "lib/rocm_sysdeps/**",
+            "lib/*.lib",
+            "lib/*.a",
         ],
     ),
 }
@@ -246,7 +301,6 @@ def fetch_artifacts(
 
     try:
         from _therock_utils.artifacts import ArtifactPopulator
-        from _therock_utils.archive_util import open_archive_for_read
     except ImportError as e:
         sys.exit(f"Error: could not import _therock_utils: {e}")
 
@@ -368,11 +422,27 @@ def collect_files_from_artifacts(
                 else:
                     includes = []
 
-                # Glob against the stage dir when available (precise scoping),
-                # falling back to dist_root when the stage dir wasn't built.
+                # Glob against the stage dir when available (precise scoping).
+                # When dist_root == build_root (artifact URL mode), the merged
+                # _stage tree contains per-component stage dirs directly, so
+                # also check dist_root/basedir before falling back.
+                # Never fall back to the full dist_root in artifact URL mode
+                # (dist_root == build_root) — that would pick up files from
+                # unrelated artifacts with wrong install_rel paths.
+                dist_stage_dir = dist_root / basedir
                 if stage_dir.is_dir():
                     search_root = stage_dir
                     extra_excludes: list[str] = []
+                elif dist_stage_dir.is_dir():
+                    search_root = dist_stage_dir
+                    extra_excludes: list[str] = []
+                elif dist_root == build_root:
+                    # Artifact URL mode: artifact not available, skip silently.
+                    print(
+                        f"Warning: stage dir not found, skipping: {stage_dir}",
+                        file=sys.stderr,
+                    )
+                    continue
                 else:
                     print(
                         f"Warning: stage dir not found, falling back to dist root: {stage_dir}",
@@ -392,7 +462,12 @@ def collect_files_from_artifacts(
                         if not bypass_excludes:
                             all_excludes = excludes + extra_excludes
                             if any(
-                                match.match(ex) or rel_posix == ex
+                                match.match(ex)
+                                or rel_posix == ex
+                                or (
+                                    ex.endswith("/**")
+                                    and rel_posix.startswith(ex[:-3] + "/")
+                                )
                                 for ex in all_excludes
                             ):
                                 continue
