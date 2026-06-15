@@ -1,6 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Most libraries need to depend on the profiler, but is conditionally only used
+# on Posix.
+set(optional_profiler_deps)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
+  list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+endif()
+
 if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # rocRAND
