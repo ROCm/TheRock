@@ -42,6 +42,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
+    [--rocalution | --no-rocalution]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
@@ -367,6 +368,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems_examples,
             args.rocrtst,
             args.rocwmma,
+            args.rocalution,
             args.libhipcxx,
         ]
     ):
@@ -474,6 +476,8 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.rocalution:
+            extra_artifacts.append("rocalution")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
@@ -834,6 +838,13 @@ def main(argv):
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocalution",
+        default=False,
+        help="Include 'rocalution' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

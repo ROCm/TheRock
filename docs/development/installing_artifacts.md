@@ -45,6 +45,7 @@ Choose one of these options to specify where to install from:
 | `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
 | `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
+| `--rocalution`  | Flag | Include rocALUTION artifacts                        |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
 > [!NOTE]
