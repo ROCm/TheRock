@@ -33,8 +33,8 @@ if is_asan():
     environ_vars["OMP_NUM_THREADS"] = "1"
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
+# Otherwise, we run the standard test suite.
+test_type = os.getenv("TEST_TYPE", "standard")
 
 # Only run quick tests (less memory intensive) for Windows strix-halo, issue: https://github.com/ROCm/TheRock/issues/1750
 if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
@@ -43,8 +43,6 @@ if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
 test_filter = []
 if test_type == "quick":
     test_filter.append("--gtest_filter=*smoke*")
-elif test_type == "quick":
-    test_filter.append("--gtest_filter=*quick*")
 
 cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test"] + test_filter
 
