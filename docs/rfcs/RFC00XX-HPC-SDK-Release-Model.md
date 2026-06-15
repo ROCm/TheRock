@@ -49,7 +49,7 @@ install locations, and versioning are all inherited from the Core SDK
 - **Versioning:** the HPC SDK and its components carry the **same
   version as the ROCm Core SDK release they are built in** (`<X.Y>`,
   e.g. `7.14`; patch releases `<X.Y>.N`, e.g. `7.14.1`). There is no
-  separate HPC version number.
+  separate HPC version number. This applies to packages only. The individual components still version their APIs and ABIs independently from the package version that follows the ROCm Core SDK.
 - **Streams:** the HPC SDK is present on the same streams as Core
   (`dev`, `nightly`, `rc`, `stable`) by virtue of being built with
   Core. It does not define its own streams or retention rules.
