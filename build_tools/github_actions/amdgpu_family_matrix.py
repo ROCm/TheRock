@@ -194,6 +194,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
@@ -213,6 +214,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
@@ -222,6 +224,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
             # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
+            "nightly_check_only_for_family": True,
         },
     },
     "gfx120x": {
@@ -231,6 +234,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",
@@ -238,6 +242,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
     },
 }
@@ -314,6 +319,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -342,12 +348,14 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
     },
     "gfx1150": {
@@ -356,6 +364,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx1150",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -384,6 +393,7 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx1153",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
