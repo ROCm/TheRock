@@ -494,12 +494,6 @@
             "Components": [
               "test"
             ]
-          },
-          {
-            "Name": "fftw3",
-            "Components": [
-              "test"
-            ]
           }
         ]
       },
