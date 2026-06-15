@@ -486,22 +486,19 @@
           {
             "Name": "rocFFT",
             "Components": [
-              "test",
-              "dev"
+              "test"
             ]
           },
           {
             "Name": "hipFFT",
             "Components": [
-              "test",
-              "dev"
+              "test"
             ]
           },
           {
-            "Name": "fftw3_lib_generic",
+            "Name": "fftw3",
             "Components": [
-              "test",
-              "dev"
+              "test"
             ]
           }
         ]
@@ -513,7 +510,8 @@
           {
             "Name": "fftw3",
             "Components": [
-              "lib"
+              "lib",
+              "dev"
             ]
           }
         ]
