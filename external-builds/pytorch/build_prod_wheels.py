@@ -469,11 +469,14 @@ def _setup_common_build_env(
     is_windows: bool,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
+    def resolve_env_path(path: Path) -> str:
+        return path.as_posix() if is_windows else str(path)
+
     env: dict[str, str] = {
         "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
-        "CMAKE_PREFIX_PATH": str(cmake_prefix),
-        "ROCM_HOME": str(rocm_dir),
-        "ROCM_PATH": str(rocm_dir),
+        "CMAKE_PREFIX_PATH": resolve_env_path(cmake_prefix),
+        "ROCM_HOME": resolve_env_path(rocm_dir),
+        "ROCM_PATH": resolve_env_path(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
@@ -505,9 +508,9 @@ def _setup_common_build_env(
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
         env.update(
             {
-                "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
-                "CC": str((llvm_dir / "clang-cl.exe").resolve()),
-                "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
+                "HIP_CLANG_PATH": resolve_env_path(llvm_dir.resolve()),
+                "CC": resolve_env_path((llvm_dir / "clang-cl.exe").resolve()),
+                "CXX": resolve_env_path((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
     else:
@@ -537,7 +540,7 @@ def _setup_common_build_env(
             "clang heuristics which are known to be buggy in this configuration"
         )
     else:
-        env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+        env["HIP_DEVICE_LIB_PATH"] = resolve_env_path(hip_device_lib_path)
 
     # OpenBLAS path setup
     host_math_path = rocm_dir / "lib" / "host-math"
@@ -548,7 +551,7 @@ def _setup_common_build_env(
         )
     else:
         env["BLAS"] = "OpenBLAS"
-        env["OpenBLAS_HOME"] = str(host_math_path)
+        env["OpenBLAS_HOME"] = resolve_env_path(host_math_path)
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
     return env
