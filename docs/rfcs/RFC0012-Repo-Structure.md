@@ -22,9 +22,7 @@ repo.amd.com's open source software release publications need standardization. I
   - weekly - weekly promotion of a nightly build, retained on a
     longer horizon than `nightly` for integration testing and as a
     stable target for downstream CI that does not need per-day churn.
-    Cadence: one promotion per ISO calendar week (cut Monday
-    00:00 UTC). Bar: must have passed the nightly promotion gate;
-    no additional QA gate beyond that.
+    Cadence: one promotion per ISO calendar week.
   - rc - release candidate builds for the next stable release
   - stable - GA releases of ROCm with a short term support lifecycle, tagged as ROCm releases.
   - ltsrc - *(future)* release candidate builds for the next LTS release
