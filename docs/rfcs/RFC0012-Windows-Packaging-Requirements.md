@@ -264,7 +264,7 @@ When HIP 8 ships:
 
 ### Versioned DLL Naming
 
-Windows ROCm runtime DLLs must use ABI-versioned filenames to prevent loader collisions when multiple ROCm versions coexist in a single process or on a single system.
+Windows HIP Runtime and hipRTC DLLs must use ABI-versioned filenames to prevent loader collisions when multiple ROCm versions coexist in a single process or on a single system.
 
 The Windows PE loader resolves transitive DLL dependencies by basename through a global per-process module list. If two ROCm installations ship the same unversioned DLL name (e.g., `amdhip64.dll`), the loader may bind to whichever copy was loaded first, regardless of version compatibility.
 
