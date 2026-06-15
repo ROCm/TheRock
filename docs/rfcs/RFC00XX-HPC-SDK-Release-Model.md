@@ -1,107 +1,95 @@
 ---
 author: Saad Rahim (saadrahim)
-created: 2026-06-02
+created: 2026-06-08
 modified: 2026-06-08
 status: draft
 ---
 
-# AMD HPC SDK release model
+# AMD HPC SDK release model (v2 — Core extra meta-package)
+
+> **Scope change (2026-06-08).** The HPC SDK is no longer a separately
+> released expansion with its own cadence, streams, and top-level
+> `hpc-sdk/` folder. It is now built **along with ROCm Core**, shipped
+> as an **extra meta-package** (`amdrocm-hpc`) that is **not** part of
+> the default `amdrocm` meta-package. The independent-cadence model is
+> preserved in `RFC00YY-HPC-SDK-Release-Model.md` for reference.
 
 ## Related RFCs
 
 - **RFC00XX** — ROCm software ecosystem package repository structure
-  (defines the stream subdomains, the `rocm/` tree layout, and the
-  `amdrocm-repo` package family that this RFC builds on). The HPC SDK
-  is hosted as a top-level peer to `core/`, `pytorch/`, `jax/`, and
-  `onnx-runtime/` under each stream subdomain's `rocm/` tree.
+  (stream subdomains, the `rocm/` tree layout, and the `amdrocm-repo`
+  package family). The HPC SDK now rides on the Core SDK's existing
+  placement rather than occupying its own peer folder.
 - **RFC0009** — native packaging conventions (source of the
   `amdrocm<major>-<project>` naming family that HPC SDK component
-  packages follow).
-- **RFC00XX** — end-user projects independent release lifecycle
-  (general model for components shipped on a cadence aligned with
-  ROCm; HPC SDK is the first umbrella release that aggregates such
-  components under a single ROCm-aligned version).
+  packages follow, the same as every other Core SDK component).
 
 ## Overview
 
-The AMD HPC SDK is a ROCm expansion released on its own cadence,
-aligned with the ROCm 6-week release train. This RFC defines the
-versioning, stream layout, ROCm pinning rule, meta-packaging, and
-release flow for the HPC SDK.
+The AMD HPC SDK is built and released **together with the ROCm Core
+SDK**. Its components are built on the same release train, carry the
+same version as Core, ship on the same streams, and install to the
+same locations as any other Core SDK component.
+
+The only thing that sets the HPC SDK apart from the rest of Core is
+packaging: its components are grouped into a separate **`amdrocm-hpc`
+meta-package** that is **not** pulled in by the default `amdrocm`
+meta-package. Users who want the HPC SDK opt in by installing
+`amdrocm-hpc`; a default ROCm install does not include it.
 
 Repository hierarchy, stream subdomains, `amdrocm-repo` packaging,
-and concurrent stream installation are defined in RFC00XX and are
-not redefined here.
+install locations, and versioning are all inherited from the Core SDK
+(RFC00XX / RFC0009) and are not redefined here.
 
-## Versioning and pinning
+## Versioning and cadence
 
-- **Cadence:** approximately 4 releases per year. Not every ROCm
-  release has a corresponding HPC SDK release.
-- **Versioning:** the HPC SDK release reuses the version of its
-  pinned ROCm Core SDK release — `<X.Y>` (e.g. `7.14`). This makes
-  the pinned ROCm release obvious from the version string alone.
-- **ROCm pinning:** each HPC SDK release is pinned to exactly one
-  stable ROCm Core SDK release.
-- **Patch releases:** bug fixes are delivered as patch releases
-  (`<X.Y>.N`, e.g. `7.14.1`) against the pinned ROCm version.
+- **Cadence:** the HPC SDK ships with every ROCm Core SDK release —
+  it is built on the same train. There is no separate HPC SDK
+  cadence, schedule, or promotion flow.
+- **Versioning:** the HPC SDK and its components carry the **same
+  version as the ROCm Core SDK release they are built in** (`<X.Y>`,
+  e.g. `7.14`; patch releases `<X.Y>.N`, e.g. `7.14.1`). There is no
+  separate HPC version number.
+- **Streams:** the HPC SDK is present on the same streams as Core
+  (`dev`, `nightly`, `rc`, `stable`) by virtue of being built with
+  Core. It does not define its own streams or retention rules.
 
-## Streams and layout
+## Repo placement
 
-- **Streams (required in v1):** `dev`, `nightly`, `rc`, and
-  `stable` subdomains are all required at launch. Per-stream
-  retention and QA rules follow the global *Per-stream
-  specializations* in RFC00XX — the HPC SDK does not redefine them.
-  `dev` builds are per-commit / pre-nightly developer builds against
-  the develop ROCm branch with no QA gate (developer-testing and
-  infra dry-runs only, not end users); `nightly` builds against the
-  develop ROCm branch on the nightly schedule; `rc` is tested by QA
-  and mirrors `stable/` layout; `stable` GA releases are pinned to a
-  stable ROCm version.
-- **Layout:** published as
-  `<stream>.repo.amd.com/rocm/hpc-sdk/<X.Y>/` for `rc`/`stable`,
-  with release metadata recording the pinned ROCm version. `dev` and
-  `nightly` builds use a date-stamped folder directly under
-  `hpc-sdk/` —
-  `dev.repo.amd.com/rocm/hpc-sdk/<YYYYMMDD-sha>/` and
-  `nightly.repo.amd.com/rocm/hpc-sdk/<YYYYMMDD>/` — with no nested
-  `<stream>/` path segment (the stream subdomain already provides
-  the stream selector).
-- **Peer placement:** `hpc-sdk/` is a top-level peer to `core/`,
-  `pytorch/`, `jax/`, and `onnx-runtime/` under each stream
-  subdomain's `rocm/` tree. It is **not** placed under
-  `expansions/`. This makes the independent cadence visible in the
-  URL structure.
+The HPC SDK is **not** a top-level peer and has **no** dedicated
+`hpc-sdk/` folder or expansion path. Its component packages are
+published with the rest of the Core SDK's packages under the Core
+SDK's existing `core/` location on each stream subdomain. The
+`amdrocm-repo-<stream>` packages that already configure Core also
+surface the HPC SDK components — no additional repo wiring is needed.
 
 ## Install location
 
-Install at `/opt/rocm/hpc-<X.Y>` (e.g. `/opt/rocm/hpc-7.14`), the
-same scheme as the ROCm Core SDK (`/opt/rocm/core-<X.Y>`). Patch
-releases (`<X.Y>.N`) land in place inside the matching `hpc-<X.Y>`
-directory. `/opt/rocm/hpc/` → `/opt/rocm/hpc-<latest>` convenience
-symlink.
+No special install location. HPC SDK components install to the **same
+locations as every other ROCm Core SDK component** (the standard Core
+SDK install prefix). There is no `hpc-` prefix or separate directory
+tree.
 
 ## Meta-package
 
-Each release ships an installable umbrella package
-`amdrocm-hpc-<X.Y>` (rpm and deb) that depends on every HPC SDK
-component at the versions in that release, plus a hard dependency on
-the pinned ROCm Core SDK version. Installing the meta-package alone
-yields a complete, version-consistent HPC SDK on each supported
-distro:
+The HPC SDK ships a single meta-package, **`amdrocm-hpc`**, built and
+versioned with the Core SDK release. It depends on every HPC SDK
+component at the exact version shipped in that Core release.
 
-```
-yum install amdrocm-hpc-7.14
-apt install amdrocm-hpc-7.14
-```
+- It is a **standalone, opt-in** meta-package — the default `amdrocm`
+  meta-package does **not** depend on it, so a default ROCm install
+  does not pull in the HPC SDK.
+- Installing `amdrocm-hpc` adds the HPC SDK components on top of the
+  matching Core SDK install:
 
-Requirements:
+  ```
+  yum install amdrocm-hpc
+  apt install amdrocm-hpc
+  ```
 
-- Pulls in all HPC SDK components at the exact versions shipped in
-  that `<X.Y>` release.
-- Declares a hard dependency on the pinned ROCm Core SDK version per
-  the stream-matched pinning rule.
-- Patch releases (`<X.Y>.N`) update the meta-package's component
-  version pins without changing the meta-package name.
+- Because HPC components ship with Core, `amdrocm-hpc`'s component
+  dependencies resolve against the Core SDK version already on the
+  system (or are pulled from the same stream).
 - Available in both rpm and deb formats for every supported distro.
 - Component list is owned by the HPC SDK team and reviewed each
   release so new components are added to the meta-package
@@ -109,33 +97,20 @@ Requirements:
 
 ## Component versioning
 
-Individual packages inside the HPC SDK carry their own component
-version number in `<X.Y>.N` format — the same scheme as the umbrella
-release, with a per-component patch field. The leading `<X.Y>`
-always matches the umbrella release the component shipped in; `N`
-increments independently per component across patch releases.
-
-Naming follows the Core SDK component-package convention
+HPC SDK component packages follow the **same versioning and naming as
+all other Core SDK components** — there is no HPC-specific scheme.
+Naming follows the Core SDK convention
 (`amdrocm-<component>[-<target>]-<version>-<pkgrel>.<arch>.<ext>`,
-e.g. `amdrocm-sparse-gfx1152-7.13.0-2.x86_64.rpm`). For HPC SDK
-components the `<version>` field is `<X.Y>.N` — e.g.
-`amdrocm-rochpcg-gfx1152-7.14.0-1.x86_64.rpm` shipped in the
-`amdrocm-hpc-7.14` umbrella, then
-`amdrocm-rochpcg-gfx1152-7.14.1-1.x86_64.rpm` in the `7.14.1`
-patch release. The umbrella `amdrocm-hpc-<X.Y>[.N]` meta-package
-pins each component to its exact shipped `<X.Y>.N` version.
+e.g. `amdrocm-rochpcg-gfx1152-7.14.0-1.x86_64.rpm`), with `<version>`
+matching the Core SDK release.
 
 ## Components
 
-First release (pinned to ROCm 7.14):
+Initial release (ROCm 7.14):
 
-- rocHPCG
 - rocALUTION
-- hipFort
-- rocHPL
 - hipTensor
 
-Second release adds:
-
-- miniHPL
-- miniHPCG
+hipFort is planned for a **future** release. Other HPC components
+(rocHPCG, rocHPL, miniHPL, miniHPCG) are **not in scope** for the
+initial release.
