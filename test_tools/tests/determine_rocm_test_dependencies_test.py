@@ -14,6 +14,7 @@ sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
 from determine_rocm_test_dependencies import (
     parse_cmake_test_subprojects,
     get_subprojects_to_test,
+    list_subprojects,
 )
 
 
@@ -143,6 +144,27 @@ class TestDetermineRocmTestDependencies(unittest.TestCase):
         self.assertIn("rocblas", projects)
         self.assertIn("hipblas", projects)
         self.assertIn("rocsolver", projects)
+
+    def test_list_subprojects(self):
+        """list_subprojects returns names, and deps/'empty' when show_deps=True."""
+        names = list_subprojects(THEROCK_DIR, show_deps=False)
+        self.assertIn("rocblas", names)
+        self.assertIn("rocwmma", names)
+
+        deps = list_subprojects(THEROCK_DIR, show_deps=True)
+        self.assertEqual(set(deps["rocblas"]), {"hipblas", "rocsolver"})
+        self.assertEqual(deps["rocwmma"], "empty")
+
+    def test_unknown_project_warning(self):
+        """Unknown project names emit a warning to stderr."""
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--changed-projects", "rocblass"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Warning: unrecognized project", result.stderr)
+        self.assertIn("rocblass", result.stderr)
 
 
 if __name__ == "__main__":

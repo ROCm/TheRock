@@ -35,7 +35,7 @@ on:
         type: string
         default: 'false'
       changed_projects:
-        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
+        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
       release_type:
@@ -79,7 +79,7 @@ on:
         type: string
         default: 'false'
       changed_projects:
-        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
+        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
       release_type:
@@ -146,7 +146,7 @@ jobs:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
         run: |
           python ./test_tools/determine_rocm_test_dependencies.py \
-            --changed-projects $CHANGED_PROJECTS \
+            --changed-projects "$CHANGED_PROJECTS" \
             --gha-output
 
       - name: "Configuring CI options"

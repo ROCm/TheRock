@@ -158,6 +158,15 @@ def main():
     # Normalize path format: "projects/rocblas" -> "rocblas"
     if changed:
         changed = [p.removeprefix("projects/") for p in changed]
+        # Warn about unrecognized projects to catch typos (false-green risk)
+        known = set(parse_cmake_test_subprojects(therock_dir).keys())
+        unknown = [p for p in changed if p.lower() not in known]
+        if unknown:
+            print(
+                f"Warning: unrecognized project(s) {unknown}; "
+                "no tests will be selected for them",
+                file=sys.stderr,
+            )
 
     # If no projects specified, output "*" for all tests
     if not changed:

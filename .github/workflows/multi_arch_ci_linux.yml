@@ -35,7 +35,7 @@ on:
         type: string
         default: ""
       changed_projects:
-        description: 'Space-separated list of projects to test (e.g., "rocblas hipblas" or "projects/rocblas").'
+        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
       repository:
