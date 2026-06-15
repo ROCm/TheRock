@@ -7,47 +7,6 @@ status: draft
 
 # ROCm software ecosystem package repository structure
 
-## Related RFCs
-
-- **RFC0008** — multi-arch Python wheels and device extras (source of
-  the multi-arch wheel model; the two indices it describes are
-  published here as `whl/` (backward-compatible, all-arch) and
-  `whl-next/` (explicit device extras), following the PyTorch
-  `https://download.pytorch.org/whl/` naming convention).
-- **RFC0009** — native packaging conventions (source of the
-  `amdrocm<major>-<project>` package-naming family referenced for extras).
-- **RFC00XX** — *Repository Package* (`RFC00XX-Repository-Package.md`)
-  — defines the `amdrocm-repo-stable` / `amdrocm-repo-stablerc` /
-  `amdrocm-repo-nightly` / `amdrocm-repo-dev` tier packages, their
-  installed repo filenames (`/etc/yum.repos.d/`,
-  `/etc/apt/sources.list.d/`), default enablement, GPG handling,
-  amdgpu driver pinning, and the `amdgpu-install` conflict. This RFC
-  defers all repo-package mechanics to that document and only
-  references the tier packages by name.
-- **[ROCm/TheRock#4732](https://github.com/ROCm/TheRock/pull/4732) —
-  Proposal for Build and Release of user application/libraries of
-  ROCm** (branch `users/frepaul/ROCm-end-user-project-workflow`)
-  — the canonical **extras RFC**: defines how each end-user
-  project is built against a specific ROCm Core SDK version,
-  delivered in every packaging format (tar / rpm / deb / wheel),
-  versioned against ROCm Core to set the compatibility matrix, and
-  how user environments are configured to connect an installed ROCm
-  with the right tools/libraries (including the single-tree
-  install model under `/opt/rocm/extras/` with ROCm-major-suffixed
-  binaries). This RFC
-  defines only *where* those extras artifacts land on
-  `repo.amd.com` (the single `extras/` folder); the per-project
-  build/release/versioning model lives in PR #4732. *(Supersedes
-  the closed PR #4611, "End-User Projects Independent Release
-  Lifecycle.")*
-- **[ROCm/TheRock#5613](https://github.com/ROCm/TheRock/pull/5613) —
-  HPC SDK Release Model** — source of truth for HPC SDK
-  versioning (`<X.Y>`, reusing the pinned ROCm Core SDK version),
-  cadence (~4 releases/year), meta-packaging
-  (`amdrocm-hpc-<X.Y>`), and stream/layout rules. This RFC defers to
-  PR #5613 for everything HPC-SDK-specific and only specifies HPC
-  SDK's placement on `repo.amd.com`.
-
 ## Overview
 
 repo.amd.com's open source software release publications need standardization. In scope is the ROCm software ecosystem which spans the ROCm Core SDK, expansions like ROCm-DS, and standalone projects like RVS. Software packaging for this ecosystem needs a well defined hierarchy reflected in the package distribution folder structure. As software is published on repo.amd.com, the planned hierarchy must be extensible by other software ecosystem published by AMD. As a result, this proposal includes the ability to add the AMD GPU driver to this structure in the future.
