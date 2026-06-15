@@ -81,9 +81,8 @@ def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
 def run_command_with_retries(
     args: list[str | Path],
     cwd: Path = Path.cwd(),
-    *,
-    retry_timeout_seconds: int,
-    retry_wait_between_seconds: int,
+    retry_timeout_seconds: int = 0,
+    retry_wait_between_seconds: int = 0,
 ):
     deadline = time.monotonic() + retry_timeout_seconds
     attempt = 1
@@ -202,9 +201,8 @@ def install_packages_into_venv(
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
-    *,
-    install_retry_timeout_seconds: int,
-    install_retry_wait_between_seconds: int,
+    install_retry_timeout_seconds: int = 0,
+    install_retry_wait_between_seconds: int = 0,
 ):
     """Installs packages into venv_dir using the provided options.
 
