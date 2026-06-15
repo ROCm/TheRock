@@ -23,7 +23,7 @@ Our goals are to:
 ### In Scope
 
 - Archive layout and naming conventions for ROCm packages built with TheRock (ZIP on Windows, TAR on Linux).
-- Behavioral constraints on archive packages with respect to the host system.
+- Behavioural constraints on archive packages with respect to the host system.
 - SDK root portability requirements for tools and scripts contained within archives.
 - Distribution hosting on repo.amd.com for downstream automation.
 
@@ -86,7 +86,7 @@ rocm-sdk-gfx<target>-X.Y.Z-<os>.<ext>
 rocm-sdk-gfx<target>-X.Y.Z-<os>.<ext>.sha256
 ```
 
-> Note: This per-target scheme is the intended convergence point for ROCm archive naming and supersedes the existing nightly `therock-dist-*` tarball naming (which currently groups by GPU family, e.g. `therock-dist-linux-gfx110X-all`, via `build_tools/build_tarballs.py`). Aligning the existing tarball pipeline to this convention is tracked separately.
+> Note: This per-target scheme is the intended convergence point for ROCm archive naming and supersedes the existing nightly `therock-dist-*` tarball naming (which currently groups by GPU family, e.g., `therock-dist-linux-gfx110X-all`, via `build_tools/build_tarballs.py`). Aligning the existing tarball pipeline to this convention is tracked separately.
 
 ### Directory Layout
 
@@ -102,15 +102,15 @@ rocm-sdk-X.Y.Z-<os>.<ext>
   version.txt
 ```
 
-This preserves the "extract and point at it" pattern: the extracted contents are the SDK root for all tools and scripts in the archive, with no dynamically-named subfolder to navigate into.
+This preserves the "extract and point at it" pattern: the extracted contents are the SDK root for all tools and scripts in the archive, with no dynamically named subfolder to navigate into.
 
 The version is carried in the archive filename rather than an inner directory. When extracting multiple versions side by side, the caller is responsible for choosing distinct destination directories (e.g., `tar -C <dir>` or extracting into a named folder).
 
 ### Behavioural Requirements
 
-Extraction is the only action an archive performs. Unpacking an archive must not imply any system integration: all configuration of the host environment is the responsibility of the caller, whether that is the user, a CI script, or a higher-level installer such as the MSI package.
+An archive is an inert payload. The only operation performed on it is extraction by the caller — for example, double-clicking in the OS file manager, using a tool such as 7-Zip, or running a command such as `tar` or `Expand-Archive`. Extraction must yield nothing but the SDK file-tree on disk; it must not imply any system integration. All configuration of the host environment is the responsibility of the caller, whether that is the user, a CI script, or a higher-level installer such as the MSI package.
 
-Concretely, an archive does not:
+Concretely, extracting an archive does not:
 
 - Modify environment variables or `PATH`.
 - Run installation logic, pre/post-install scripts, or elevation prompts.
