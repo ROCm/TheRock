@@ -29,7 +29,7 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        description: 'Release type; selects the S3 bucket'
         type: string
         required: true
       repository:
@@ -44,6 +44,10 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -62,9 +66,11 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
-        type: string
-        required: true
+        description: 'Release type; developer-triggered jobs should use "dev"'
+        type: choice
+        options:
+          - dev
+        default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -81,6 +87,10 @@ on:
           - sccache
           - ccache
         default: sccache
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
+        type: string
+        default: ""
 
 run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -88,13 +98,31 @@ permissions:
   contents: read
 
 jobs:
+  setup_matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Generate PyTorch matrix
+        id: matrix
+        run: |
+          python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
+            --python-versions="${{ inputs.python_version }}" \
+            --platform=windows
+
   build_pytorch_wheels:
-    name: Release | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    needs: setup_matrix
+    name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        pytorch_git_ref: ["release/2.9", "release/2.10", "release/2.11", "release/2.12", "nightly"]
+        include: ${{ fromJSON(needs.setup_matrix.outputs.pytorch_matrix) }}
     permissions:
       id-token: write
       contents: read
