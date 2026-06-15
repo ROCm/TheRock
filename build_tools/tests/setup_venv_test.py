@@ -31,8 +31,8 @@ class InstallPackagesTest(unittest.TestCase):
     def install_packages(self, **kwargs):
         install_packages_into_venv(
             venv_dir=self.venv_dir,
-            install_retry_seconds=0,
-            install_retry_delay_seconds=30,
+            install_retry_timeout_seconds=0,
+            install_retry_wait_between_seconds=30,
             **kwargs,
         )
 
@@ -184,8 +184,8 @@ class InstallPackagesTest(unittest.TestCase):
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
-            install_retry_seconds=60,
-            install_retry_delay_seconds=30,
+            install_retry_timeout_seconds=60,
+            install_retry_wait_between_seconds=30,
         )
 
         self.assertEqual(mock_run.call_count, 2)
@@ -204,8 +204,8 @@ class InstallPackagesTest(unittest.TestCase):
             install_packages_into_venv(
                 venv_dir=self.venv_dir,
                 packages=["rocm"],
-                install_retry_seconds=0,
-                install_retry_delay_seconds=30,
+                install_retry_timeout_seconds=0,
+                install_retry_wait_between_seconds=30,
             )
 
         self.assertEqual(mock_run.call_count, 1)
