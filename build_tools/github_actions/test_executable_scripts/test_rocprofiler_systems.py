@@ -10,8 +10,16 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
-THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
+THEROCK_LIB_PATH = THEROCK_PATH / "lib"
+THEROCK_CLANG_PATH = THEROCK_LIB_PATH / "llvm" / "bin" / "amdclang"
 ROCPROFSYS_TEST_DIR = THEROCK_PATH / "share" / "rocprofiler-systems" / "tests"
+
+# Determine host triple
+host_triple = subprocess.check_output(
+    [str(THEROCK_CLANG_PATH), "--print-target-triple"], text=True
+).strip()
+
+THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
 
 # These tests are always excluded until the relevant issue is fixed (AIPROFSYST-441)
 EXCLUDED_TESTS = [
@@ -70,6 +78,7 @@ def setup_env():
 
     ld_paths = [
         str(THEROCK_PATH / "share" / "rocprofiler-systems" / "examples" / "lib"),
+        str(THEROCK_LLVM_LIB_HOST_TRIPLE_PATH),
     ]
     ld_paths_str = ":".join(ld_paths)
     old_ld_path = os.getenv("LD_LIBRARY_PATH", "")
