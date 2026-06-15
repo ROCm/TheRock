@@ -15,6 +15,8 @@ Requires a GPU and OUTPUT_ARTIFACTS_DIR pointing at the merged artifact tree.
 
 import logging
 import os
+import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -59,6 +61,38 @@ def _require_artifact_dir(
     if not candidate.is_dir():
         raise FileNotFoundError(f"{label} not found at: {candidate}\n{hint}")
     return candidate
+
+
+def _find_frontend_extension(artifacts_path: Path) -> Path:
+    """Locate the compiled extension, which is co-located with libhipdnn_backend
+    (lib/ on Linux, bin/ on Windows) rather than inside the share/ package dir, so
+    a bare dlopen resolves the backend as a sibling. The wheel reunites it with
+    the package's __init__.py at pack time.
+    """
+    subdir = "bin" if platform.system() == "Windows" else "lib"
+    search_dir = artifacts_path / subdir
+    matches = [
+        p
+        for p in search_dir.glob("hipdnn_frontend_python*")
+        if p.suffix in (".so", ".pyd")
+    ]
+    if not matches:
+        raise FileNotFoundError(
+            f"hipdnn_frontend_python extension not found in {search_dir}. "
+            "Expected it co-located with libhipdnn_backend (hipDNN built with "
+            "HIPDNN_BUILD_PYTHON_BINDINGS=ON)."
+        )
+    return matches[0]
+
+
+def stage_package(pkg_dir: Path, ext_path: Path, dest: Path) -> Path:
+    """Reunite the share/ package (pure-Python: __init__.py) with the co-located
+    extension into a single directory the wheel packer can consume.
+    """
+    staged = dest / pkg_dir.name
+    shutil.copytree(pkg_dir, staged)
+    shutil.copy2(ext_path, staged / ext_path.name)
+    return staged
 
 
 def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
@@ -135,6 +169,9 @@ if __name__ == "__main__":
     )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
+    ext_path = _find_frontend_extension(artifacts_path)
+    logging.info(f"Found hipdnn_frontend_python extension at: {ext_path}")
+
     env = build_rocm_loader_env(artifacts_path)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -143,7 +180,8 @@ if __name__ == "__main__":
         wheel_dir.mkdir()
         venv_dir = tmp_path / "venv"
 
-        wheel_path = build_wheel(pkg_dir, wheel_dir)
+        staged_pkg = stage_package(pkg_dir, ext_path, tmp_path / "pkg")
+        wheel_path = build_wheel(staged_pkg, wheel_dir)
         logging.info(f"Built wheel: {wheel_path.name}")
 
         create_venv(venv_dir)
