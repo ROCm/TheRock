@@ -37,7 +37,7 @@ on:
         description: "package_version to set on packages, e.g. '7.13.0.dev0+dbd7369489260265fc6ddfc9d0de1262a95fe974'"
         type: string
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        description: 'Release type: "ci" for CI, or "dev", "nightly", "prerelease".'
         type: string
         default: ""
       repository:
@@ -73,7 +73,7 @@ on:
         type: string
       release_type:
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -103,7 +103,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
       options: -v /runner/config:/home/awsconfig/
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}

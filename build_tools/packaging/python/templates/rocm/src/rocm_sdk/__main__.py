@@ -146,7 +146,12 @@ def main(argv: list[str] | None = None):
 
     # 'init' subcommand.
     init_p = sub_p.add_parser(
-        "init", help="Expand devel contents to initialize rocm[devel]"
+        "init",
+        help=(
+            "Expand devel contents to initialize rocm[devel] and link device "
+            "files from installed rocm-sdk-device-* wheels into the devel tree "
+            "(re-run after installing or removing a device wheel to refresh)"
+        ),
     )
     init_p.add_argument(
         "--quiet",
