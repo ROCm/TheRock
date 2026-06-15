@@ -484,6 +484,10 @@ if(_ck_enabled)
     set(_ck_enabled OFF)
   endif()
 endif()
+# composable_kernel now lives in math-libs but MIOpen (in ml-libs) gates its CK
+# usage on _ck_enabled. math-libs is configured before ml-libs, so push the
+# resolved value to the parent scope where ml-libs will inherit it.
+set(_ck_enabled ${_ck_enabled} PARENT_SCOPE)
 
 if(_ck_enabled)
   ##############################################################################
