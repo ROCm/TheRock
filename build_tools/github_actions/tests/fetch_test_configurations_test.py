@@ -288,9 +288,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
             rccl = next(j for j in components if j["job_name"] == "rccl")
             self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called
+            # Verify select_weighted_label was called with job-specific context
             self.assertEqual(len(selected_labels), 1)
-            self.assertEqual(selected_labels[0][1], "gfx94x-multi-gpu")
+            self.assertEqual(selected_labels[0][1], "rccl-multi-gpu")
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label

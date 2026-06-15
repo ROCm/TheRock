@@ -694,6 +694,20 @@ def run():
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
 
+    # Get runner config for per-component runner selection
+    # This enables better load distribution across runner pools
+    test_runs_on_labels = None
+    test_runs_on_default = None
+    if amdgpu_families:
+        shortened_family = amdgpu_families.split("-")[0].lower()
+        all_families = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        if shortened_family in all_families:
+            platform_info = all_families[shortened_family].get(platform, {})
+            test_runs_on_labels = platform_info.get("test-runs-on-labels")
+            test_runs_on_default = platform_info.get("test-runs-on", "")
+
     logging.info(f"Selecting projects: {projects_to_test}")
 
     # Build the selected test matrix:
@@ -759,6 +773,7 @@ def run():
                 total_shards = base.get("total_shards_dict", {}).get(platform, 1)
                 if test_type == "quick":
                     total_shards = 1
+
                 shard_arr = list(range(1, total_shards + 1))
 
                 pal_entry = {
@@ -828,10 +843,11 @@ def run():
                     ][platform]
 
                     # Use weighted random selection if test-runs-on-multi-gpu-labels is available
+                    # Each component gets its own independent random draw for better load distribution
                     if "test-runs-on-multi-gpu-labels" in platform_info:
                         multi_gpu_runner = select_weighted_label(
                             platform_info["test-runs-on-multi-gpu-labels"],
-                            f"{shortened_amdgpu_families_name}-multi-gpu",
+                            f"{job_name}-multi-gpu",
                         )
                     else:
                         multi_gpu_runner = platform_info["test-runs-on-multi-gpu"]
@@ -848,6 +864,18 @@ def run():
                     continue
 
             all_components.append(job_config_data)
+
+    # Per-component runner selection for better load distribution
+    # Each component gets its own independent random draw based on configured weights
+    for component in all_components:
+        if "test_runner" not in component and "multi_gpu_runner" not in component:
+            job_name = component.get("job_name", "unknown")
+            if test_runs_on_labels:
+                component["test_runner"] = select_weighted_label(
+                    test_runs_on_labels, job_name
+                )
+            elif test_runs_on_default:
+                component["test_runner"] = test_runs_on_default
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [_build_container_options(c, platform) for c in all_components]
