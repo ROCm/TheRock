@@ -11,9 +11,9 @@ on:
         description: >-
           JSON object with build configuration for this platform. Fields:
           artifact_group, per_family_info, dist_amdgpu_families,
-          build_variant_label, build_variant_cmake_preset,
-          build_variant_suffix, expect_failure, build_pytorch,
-          build_native_linux, prebuilt_stages, baseline_run_id.
+          pytorch_amdgpu_families, build_variant_label,
+          build_variant_cmake_preset, build_variant_suffix, expect_failure,
+          build_pytorch, build_native_linux, prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
       rocm_package_version:
@@ -302,9 +302,11 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: "3.12"
       pytorch_git_ref: "release/2.10"
+      # pytorch_amdgpu_families excludes families whose upstream PyTorch support
+      # is not yet merged (e.g. gfx125X). See https://github.com/ROCm/TheRock/issues/5833.
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
-      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      amdgpu_families: ${{ fromJSON(inputs.build_config).pytorch_amdgpu_families }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}

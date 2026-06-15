@@ -421,6 +421,10 @@ class BuildConfig:
 
     per_family_info: list[dict]  # Per-family metadata for test/artifact jobs
     dist_amdgpu_families: str  # Semicolon-separated
+    # Subset of dist_amdgpu_families for PyTorch builds; excludes families
+    # whose upstream PyTorch support is not yet merged. See:
+    # https://github.com/ROCm/TheRock/issues/5833
+    pytorch_amdgpu_families: str  # Semicolon-separated
     artifact_group: str
     build_variant_label: str
     build_variant_suffix: str
@@ -848,6 +852,7 @@ def _expand_build_config_for_platform(
             break
 
     per_family_info: list[dict] = []
+    pytorch_family_names: list[str] = []
     for family_name in families:
         # select_targets already validates family names and filters by
         # platform availability. Family name uniqueness is validated by
@@ -946,6 +951,8 @@ def _expand_build_config_for_platform(
                 ),
             }
         )
+        if not platform_info.get("skip_pytorch", False):
+            pytorch_family_names.append(platform_info["family"])
 
     if not per_family_info:
         return None
@@ -961,6 +968,7 @@ def _expand_build_config_for_platform(
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=";".join(family_names),
+        pytorch_amdgpu_families=";".join(pytorch_family_names),
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
