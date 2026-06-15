@@ -185,7 +185,6 @@ if(THEROCK_ENABLE_MIGRAPHX)
         rocBLAS
         rocRAND
         MIOpen
-        composable_kernel
     )
     therock_cmake_subproject_provide_package(MIGraphX migraphx lib/cmake/migraphx)
     therock_cmake_subproject_activate(MIGraphX)
