@@ -35,6 +35,22 @@ therock_declare_flag(
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
+# hipDNN SDPA feature flag (mirrors ROCm/TheRock#4621). Defaults OFF; it is
+# enabled for this branch via BRANCH_CONFIG.json (the supported branch-config
+# mechanism). When ON it injects HIPDNN_ENABLE_SDPA=ON into the hipDNN
+# subproject build, which exposes the SDPA frontend API (rocm-libraries#6647).
+# The hip-kernel-provider itself builds by default (THEROCK_ENABLE_HIPKERNELPROVIDER)
+# and its ASM SDPA engine is gated by ENABLE_ASM_SDPA_ENGINE (ON by default).
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_SDPA
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
+  CMAKE_VARS
+    HIPDNN_ENABLE_SDPA=ON
+  SUB_PROJECTS
+    hipDNN
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
