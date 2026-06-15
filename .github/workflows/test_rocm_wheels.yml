@@ -94,6 +94,14 @@ on:
           and native Linux runners).
         required: true
         type: string
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -125,6 +133,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python

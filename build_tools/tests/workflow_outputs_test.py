@@ -164,6 +164,10 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             "99999-linux/manifests/gfx94X-dcgpu/therock_manifest.json",
         )
 
+    def test_pytorch_manifest_dir(self):
+        loc = self.root.pytorch_manifest_dir()
+        self._assert_relative_path(loc, "99999-linux/manifests/pytorch")
+
     # -- Python packages --
 
     def test_python_packages(self):
