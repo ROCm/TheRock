@@ -185,6 +185,7 @@ jobs:
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --repository "${{ github.repository }}" \
             --amdgpu-family "${{ inputs.amdgpu_families }}" \
+            --amdgpu-targets "${{ inputs.amdgpu_targets }}" \
             --test-script "${{ fromJSON(inputs.component).test_script }}" \
             --shard-index "${{ matrix.shard }}" \
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
