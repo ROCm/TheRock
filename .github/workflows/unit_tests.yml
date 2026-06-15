@@ -48,6 +48,10 @@ jobs:
         python -m pytest -vv \
           --cov --cov-report=term-missing --cov-report=html
 
+    - name: Test scan_tools
+      working-directory: build_tools/scan_tools
+      run: python -m pytest -vv
+
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require
     #       a download step to view).
     #       We could also use https://about.codecov.io/ instead of custom infra.

@@ -210,6 +210,10 @@ class WorkflowOutputRoot:
             f"{self.prefix}/manifests/index.html",
         )
 
+    def pytorch_manifest_dir(self) -> StorageLocation:
+        """Location for multi-arch PyTorch source manifests."""
+        return StorageLocation(self.bucket, f"{self.prefix}/manifests/pytorch")
+
     # -- Native packages --------------------------------------------------------
 
     def native_linux_packages(self, pkg_type: str) -> StorageLocation:
@@ -249,6 +253,10 @@ class WorkflowOutputRoot:
         """Location for the tarballs directory."""
         return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
 
+    def tarball(self, filename: str) -> StorageLocation:
+        """Location for a specific tarball file."""
+        return StorageLocation(self.bucket, f"{self.prefix}/tarballs/{filename}")
+
     # -- Factories --------------------------------------------------------------
 
     @classmethod
@@ -279,7 +287,7 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
-            release_type: Release type override (e.g. "dev", "nightly"). If
+            release_type: Release type override (e.g. "ci", "dev", "nightly"). If
                 None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (

@@ -129,7 +129,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
-    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
+    release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -180,7 +180,7 @@ class CIInputs:
         # setup_multi_arch.yml. GitHub-specific context (PR labels,
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
-        release_type = os.environ.get("RELEASE_TYPE", "")
+        release_type = os.environ.get("RELEASE_TYPE", "ci")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
