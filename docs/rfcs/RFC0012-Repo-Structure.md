@@ -344,44 +344,46 @@ retention) are captured in *Per-stream specializations* further down.
 
     - packages
 
-      - **Linux Distros [a–z]** — one folder per supported distro
-        identifier, **alphabetized**. Each distro ships in two
-        package-type variants per the RFC0009 Repository Layout
-        rule (`Package-type = standard, asan, future variant`):
-        - `<distro>/` — **standard** packages (release builds; the
-          default install for end users).
-        - `<distro>-asan/` — **ASAN** packages (AddressSanitizer
-          builds of the same component set, for memory-error
-          debugging). ASAN packages are kept in a sibling folder
-          rather than mixed into the standard distro folder so they
-          remain invisible to package managers that have only added
-          the standard repo, and so that `dnf install rocm` from
-          `<distro>/` never accidentally pulls an ASAN build.
-        - *Future variants* follow the same `<distro>-<variant>/`
-          sibling-folder pattern. Reserved future variants include:
-          - `<distro>-rpath/` — **rpath** packages (the `$ORIGIN`-
-            based RPATH variant of the same component set, served
-            via the disabled-by-default `amdrocm-stable-rpath`
-            stanza shipped inside `amdrocm-repo-stable`; there is
-            no separate `amdrocm-repo-rpath` package). Currently
-            rpm-only per *Per-stream specializations*; reserved
-            here so the folder name is fixed when the variant
-            ships.
-          - `<distro>-debug/` — debug-symbols / unstripped builds.
-            Additional `-<variant>` siblings may be added later
-            without changing this naming rule.
-        - Example for RHEL 10:
-          ```
-          packages/
-            rhel10/         # standard release packages
-            rhel10-asan/    # ASAN-instrumented packages
-          ```
-        - The full set of distro identifiers (`debian12`,
-          `ubuntu2204`, `ubuntu2404`, `rhel8`, `rhel9`, `rhel10`,
-          `sles15`, `azl3`) is defined by RFC0009; every supported
-          distro gets at minimum a `<distro>/` folder, and a
-          `<distro>-asan/` sibling whenever ASAN builds are
-          published for that distro.
+      - **Layout under `packages/` is intentionally left to the
+        publishing implementation.** This RFC does **not** fix whether
+        packages are exposed as per-distro folders (`<distro>-*`) or
+        grouped by package family (`deb/`, `rpm/`), nor whether the
+        OS/distro profile is encoded in the directory tree at all or
+        surfaced only through the aggregated package index. Any of
+        these realizations is acceptable as long as the normative
+        requirements below hold; the goal is to keep the on-disk scheme
+        flexible so it can evolve with the packaging tooling.
+
+        The only **normative** requirements are:
+        - **Standard is the default.** A user who adds the standard
+          repo gets release builds by default; no extra opt-in is
+          needed for the ordinary install path.
+        - **Variant separation.** Non-standard build variants — `asan`
+          today, and reserved future `rpath` / `debug` variants — must
+          be separable so that a package manager pointed only at the
+          standard repo never accidentally resolves an ASAN or debug
+          build (e.g. `dnf install rocm` must not pull an ASAN build).
+          *How* that separation is realized — sibling folders, a
+          distinct index, or a disabled-by-default repo stanza such as
+          the `amdrocm-stable-rpath` stanza inside `amdrocm-repo-stable`
+          — is left to the implementation.
+        - **Defined variant and distro sets.** Build variants follow
+          the RFC0009 Repository Layout rule
+          (`Package-type = standard, asan, future variant`), and the
+          supported distro identifiers (`debian12`, `ubuntu2204`,
+          `ubuntu2404`, `rhel8`, `rhel9`, `rhel10`, `sles15`, `azl3`)
+          are defined by RFC0009.
+
+        *Illustrative only* — one valid per-distro realization for
+        RHEL 10:
+        ```
+        packages/
+          rhel10/         # standard release packages
+          rhel10-asan/    # ASAN-instrumented packages
+        ```
+        A `deb/` + `rpm/` grouping that carries the per-OS profiles in
+        the aggregated index is an equally acceptable realization. The
+        example is not prescriptive.
 
   - *(no separate top-level `windows/` folder — Windows artifacts
     live alongside their Linux siblings inside each component, e.g.
@@ -410,8 +412,8 @@ retention) are captured in *Per-stream specializations* further down.
       as `core/windows-installers/`),
       `linux-installers`, `whl/` + `whl-next/` (per the central
       indices; internal layout implementation-defined), and
-      `packages/` per distro (standard / asan / future variants
-      following the `<distro>-<variant>/` sibling-folder rule).
+      `packages/` (same implementation-defined layout as
+      `core/packages/` — see the `packages/` rules above).
     - **Cadence and pinning:** each expansion picks its own cadence
       and ROCm Core SDK pinning rule; that rule belongs in the
       per-expansion RFC, not here. HPC SDK (PR #5613) and the
