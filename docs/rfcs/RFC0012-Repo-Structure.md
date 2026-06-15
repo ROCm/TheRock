@@ -739,7 +739,7 @@ Rules:
 - The trailing version component is **always present** — there is no
   unversioned install directory. `/opt/rocm/core/` (with trailing
   slash) and `/opt/rocm/core-<major>` are reserved by RFC0009 as
-  **symlinks** to the latest installed core (e.g. `/opt/rocm/core/ → /opt/rocm/core-7.12` and `/opt/rocm/core-7 → /opt/rocm/core-7.12`); they are not RFC0011's to define. This RFC
+  **symlinks** to the latest installed core (e.g. `/opt/rocm/core/ → /opt/rocm/core-7.12` and `/opt/rocm/core-7 → /opt/rocm/core-7.12`); they are not RFC0012's to define. This RFC
   only specifies the per-stream install directory name; the symlink
   policy stays owned by RFC0009.
 - `dev`, `nightly`, `weekly`, and `rc` use distinct version syntaxes
