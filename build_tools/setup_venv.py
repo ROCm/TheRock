@@ -31,6 +31,18 @@ There are a few modes this can be used in:
     python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
     deactivate
     ```
+
+Some automated workflows using this script to install packages can run shortly
+after other workflows uploads those packages. In these cases server-side index
+generation may not have completed yet and installs can fail for 1-3 minutes.
+Package installs are retried by default to cover that transient window. This
+behavior can be adjusted with the `--install-retry-timeout-seconds` and
+`--install-retry-wait-between-seconds` arguments.
+See https://github.com/ROCm/TheRock/issues/5455 for more details.
+
+TODO: update docs and args for multi-arch
+   * --index-url https://rocm.nightlies.amd.com/whl-multi-arch/
+   * refresh ROCM_INDEX_URLS_MAP
 """
 
 import argparse
@@ -41,6 +53,7 @@ import shutil
 import subprocess
 import sys
 import re
+import time
 
 from github_actions.github_actions_api import *
 
@@ -63,6 +76,37 @@ def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+
+
+def run_command_with_retries(
+    args: list[str | Path],
+    cwd: Path = Path.cwd(),
+    retry_timeout_seconds: int = 0,
+    retry_wait_between_seconds: int = 0,
+):
+    deadline = time.monotonic() + retry_timeout_seconds
+    attempt = 1
+    while True:
+        try:
+            run_command(args, cwd)
+            return
+        except subprocess.CalledProcessError as e:
+            if (
+                retry_timeout_seconds == 0
+                or time.monotonic() + retry_wait_between_seconds > deadline
+            ):
+                log(
+                    "Command failed after "
+                    f"{attempt} attempt(s); no retry time remains"
+                )
+                raise
+            log(
+                "Command failed "
+                f"(attempt {attempt}, exit code {e.returncode}); "
+                f"retrying in {retry_wait_between_seconds}s..."
+            )
+            time.sleep(retry_wait_between_seconds)
+            attempt += 1
 
 
 def find_venv_python_exe(venv_path: Path) -> Path | None:
@@ -157,6 +201,8 @@ def install_packages_into_venv(
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
+    install_retry_timeout_seconds: int = 0,
+    install_retry_wait_between_seconds: int = 0,
 ):
     """Installs packages into venv_dir using the provided options.
 
@@ -170,6 +216,8 @@ def install_packages_into_venv(
         find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
+        install_retry_timeout_seconds: Maximum retry window for the install command
+        install_retry_wait_between_seconds: Delay between package install retries
     """
     log("")
 
@@ -206,7 +254,11 @@ def install_packages_into_venv(
 
     pip_install_cmd.extend(packages)
 
-    run_command(pip_install_cmd)
+    run_command_with_retries(
+        pip_install_cmd,
+        retry_timeout_seconds=install_retry_timeout_seconds,
+        retry_wait_between_seconds=install_retry_wait_between_seconds,
+    )
 
 
 def log_venv_activate_instructions(venv_dir: Path):
@@ -241,6 +293,8 @@ def run(args: argparse.Namespace):
             find_links=args.find_links,
             pre=args.pre,
             disable_cache=args.disable_cache,
+            install_retry_timeout_seconds=args.install_retry_timeout_seconds,
+            install_retry_wait_between_seconds=args.install_retry_wait_between_seconds,
         )
 
     if args.activate_in_future_github_actions_steps:
@@ -311,6 +365,22 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         help="Uses uv instead of pip/venv, see more at: https://docs.astral.sh/uv/",
     )
+    general_options.add_argument(
+        "--install-retry-timeout-seconds",
+        type=int,
+        default=180,
+        help=(
+            "Maximum wall-clock time to keep retrying failed package install "
+            "commands in seconds. This does not timeout an in-progress pip "
+            "command. (default: 180; 0 disables retries)"
+        ),
+    )
+    general_options.add_argument(
+        "--install-retry-wait-between-seconds",
+        type=int,
+        default=15,
+        help="Seconds to wait between failed package install attempts (default: 15)",
+    )
 
     install_options = p.add_argument_group("Install options")
 
@@ -357,6 +427,15 @@ def main(argv: list[str]):
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
     if args.index_name and not args.index_subdir:
         p.error("--index-subdir must be set when using --index-name")
+    if args.install_retry_timeout_seconds < 0:
+        p.error("--install-retry-timeout-seconds must be non-negative")
+    if (
+        args.install_retry_timeout_seconds > 0
+        and args.install_retry_wait_between_seconds <= 0
+    ):
+        p.error(
+            "--install-retry-wait-between-seconds must be positive when retries are enabled"
+        )
 
     run(args)
 

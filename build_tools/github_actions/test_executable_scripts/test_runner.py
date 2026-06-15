@@ -19,6 +19,7 @@ import sys
 import subprocess
 import re
 import os
+import platform
 
 import logging
 import shlex
@@ -338,7 +339,55 @@ def check_available_labels():
         sys.exit(1)
 
 
-def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels):
+def generate_resource_spec():
+    """Generate a CTest resource-spec file for components that ship the
+    `generate_resource_spec` helper (currently hipcub, rocthrust, rocprim).
+
+    These components pin each test to a GPU slot via the RESOURCE_GROUPS test
+    property, which CTest only honors when a resource spec file is supplied.
+    Returns the resource-spec filename to pass to ctest via --resource-spec-file.
+    """
+    exe_dir = Path(TEST_DIR).resolve()
+    exe_name = (
+        "generate_resource_spec.exe"
+        if platform.system() == "Windows"
+        else "generate_resource_spec"
+    )
+    gen_exe = exe_dir / exe_name
+    if not gen_exe.is_file():
+        # Component does not use CTest resource allocation; nothing to do.
+        return None
+
+    # generate_resource_spec links against the HIP runtime; prepend the ROCm
+    # bin/lib dirs so it resolves on every platform (Windows via PATH, Linux
+    # via LD_LIBRARY_PATH / RPATH).
+    gen_env = environ_vars.copy()
+    gen_env["PATH"] = os.pathsep.join(
+        filter(None, [str(Path(THEROCK_BIN_DIR).resolve()), gen_env.get("PATH", "")])
+    )
+    gen_env["LD_LIBRARY_PATH"] = os.pathsep.join(
+        filter(None, [str(ROCM_PATH / "lib"), gen_env.get("LD_LIBRARY_PATH", "")])
+    )
+
+    # Write resources.json into the test dir and pass it to ctest as a bare
+    # name; ctest changes into --test-dir, so it resolves to the same file.
+    resource_spec_file = "resources.json"
+    gen_cmd = [str(gen_exe), str(exe_dir / resource_spec_file)]
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(gen_cmd)}")
+    try:
+        subprocess.run(gen_cmd, cwd=THEROCK_DIR, check=True, env=gen_env)
+    except subprocess.CalledProcessError as e:
+        print(
+            f"Error generating CTest resource spec via {gen_exe}: {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return resource_spec_file
+
+
+def build_ctest_command(
+    category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file=None
+):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
 
@@ -394,6 +443,12 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
         ]
     )
 
+    # Constrain GPU tests to the available GPU slots when the component
+    # provides a resource spec. Without this, RESOURCE_GROUPS properties are
+    # ignored and GPU tests run unconstrained under --parallel.
+    if resource_spec_file:
+        cmd.extend(["--resource-spec-file", resource_spec_file])
+
     return cmd
 
 
@@ -432,8 +487,15 @@ def main():
         print(f"# Found exclude labels: {sorted(exclude_labels)}")
     print()
 
+    # Generate a CTest resource-spec file when the component provides the
+    # generate_resource_spec helper. Without a spec, CTest ignores each test's
+    # RESOURCE_GROUPS property and would run GPU tests unconstrained.
+    resource_spec_file = generate_resource_spec()
+
     # Build the ctest command
-    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
+    cmd = build_ctest_command(
+        category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file
+    )
 
     print(f"# Running: {' '.join(cmd)}")
     print()
