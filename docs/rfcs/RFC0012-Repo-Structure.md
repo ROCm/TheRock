@@ -1025,29 +1025,6 @@ Rules:
   inherit this rule and additionally declare their hard dependency
   on the pinned ROCm Core SDK version.
 
-## HPC SDK
-
-The HPC SDK is a **top-level peer** to `core/`, `pytorch/`, `jax/`,
-and `onnx-runtime/` under each stream subdomain's `rocm/` tree — it
-is published as its own top-level folder (there is no
-`expansions/` parent — see *Definitions* and *Structure on each
-`<stream>.repo.amd.com` subdomain*). Its release cadence
-(~4 releases/year), versioning (`<X.Y>` — reusing the pinned ROCm
-Core SDK release version, e.g. `7.14`), ROCm pinning rule,
-meta-package (`amdrocm-hpc-<X.Y>`, e.g. `amdrocm-hpc-7.14`), and
-component list are defined in a separate RFC — see
-**[ROCm/TheRock#5613](https://github.com/ROCm/TheRock/pull/5613) —
-HPC SDK Release Model**. This RFC covers only its placement on
-`repo.amd.com`; everything HPC-SDK specific lives in that PR.
-
-**Note on the prior `YYYY.MM` scheme:** earlier drafts of this RFC
-used a date-based `YYYY.MM` version for HPC SDK (e.g. `2026.06`).
-PR #5613 supersedes that scheme — HPC SDK now reuses its pinned
-ROCm Core SDK `<X.Y>` version everywhere (folder path under
-`hpc-sdk/`, on-disk install location `/opt/rocm/hpc-<X.Y>`,
-meta-package name `amdrocm-hpc-<X.Y>`). Any remaining `YYYY.MM`
-references in older documents should be updated to `<X.Y>`.
-
 ## Repository Package
 
 **Defined in a separate RFC** — see
