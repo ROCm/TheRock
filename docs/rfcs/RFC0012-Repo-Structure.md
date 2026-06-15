@@ -58,9 +58,10 @@ repo.amd.com's open source software release publications need standardization. I
     `computer-vision-sdk/`, `rocm-ds/`), with its own cadence and
     ROCm pinning rule defined in its own RFC. There is no
     `expansions/` parent folder.
-  - **Third-party AI frameworks** — `pytorch/`, `jax/`,
-    `onnx-runtime/`. Also top-level peers to `core/`; ROCm-built
-    wheels of upstream projects (see *Third Party AI Forks*).
+  - **Third-party AI forks** — `pytorch/`, `jax/`,
+    `onnx-runtime/`. Also top-level peers to `core/`; AMD/ROCm forks
+    of upstream third-party AI frameworks, published as ROCm-built
+    wheels (see *Third Party AI Forks*).
   - **Extras** — standalone components part of ROCm, released
     independently per ROCm major version; published under a **single
     `extras/` folder** (no `-<ROCm-major>` suffix). For **native
@@ -420,7 +421,7 @@ retention) are captured in *Per-stream specializations* further down.
     - **Naming and alphabetization:** expansion folder names use the
       project's canonical short name (`rocm-ds/`, `hpc-sdk/`,
       `computer-vision-sdk/`, …). Browsing the per-stream `rocm/`
-      tree, expansions and frameworks sort alphabetically alongside
+      tree, expansions and forks sort alphabetically alongside
       `core/`; there is no enforced grouping by category.
 
   - **extras/** — projects released independently per ROCm major
