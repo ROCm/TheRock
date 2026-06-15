@@ -31,7 +31,6 @@ include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
-include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Python is used throughout the build. Ensure it is initialized early.
@@ -45,8 +44,10 @@ find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
 # Track BUILD_TOPOLOGY.toml and related files for changes to trigger reconfigure
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_CONFIG.json"
   "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/build_topology.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/branch_config.py"
 )
 
 block(SCOPE_FOR VARIABLES)
@@ -55,12 +56,16 @@ block(SCOPE_FOR VARIABLES)
     COMMAND ${Python3_EXECUTABLE}
       "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
       "--topology" "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+      "--branch-config" "${CMAKE_CURRENT_SOURCE_DIR}/BRANCH_CONFIG.json"
       "--output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake"
+      "--branch-config-output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_branch_config.cmake"
     OUTPUT_VARIABLE _topology_output
     COMMAND_ERROR_IS_FATAL ANY  # Fail on any error
   )
   message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
 endblock()
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Notices
@@ -92,6 +97,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND NOT DEFINED THEROCK_BUILD_TESTIN
 endif()
 if(THEROCK_BUILD_TESTING)
   message(STATUS "Enabling building tests")
+  therock_add_convenience_target(build-tests)
 endif()
 
 ################################################################################
@@ -104,8 +110,6 @@ set(THEROCK_BACKGROUND_BUILD_JOBS "0" CACHE STRING "Number of jobs to reserve fo
 set(THEROCK_PACKAGE_VERSION "git" CACHE STRING "Sets the package version string")
 # Disable compatibility symlinks created in default ROCM cmake project wide
 set(ROCM_SYMLINK_LIBS OFF)
-
-set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
@@ -120,7 +124,6 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_BUILD_COMGR_TESTS "Enables building Comgr tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -242,10 +245,10 @@ option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABL
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
+option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
-# TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
-option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
@@ -386,6 +389,7 @@ set(THEROCK_BUNDLED_MPFR)
 set(THEROCK_BUNDLED_NCURSES)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
+set(THEROCK_BUNDLED_UTIL_LINUX)
 set(THEROCK_BUNDLED_ZLIB)
 set(THEROCK_BUNDLED_ZSTD)
 set(THEROCK_BUNDLED_AMDMESA)
@@ -429,6 +433,9 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
+      set(THEROCK_BUNDLED_UTIL_LINUX therock-util-linux)
     endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     find_program(MESON_BUILD meson)
@@ -494,12 +501,13 @@ add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
+# Emulation and instrumentation tools.
+add_subdirectory(emulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(iree-libs)
 add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)

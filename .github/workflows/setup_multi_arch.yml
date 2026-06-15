@@ -11,11 +11,10 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "" for CI builds, or "dev", "nightly", "prerelease"
-          for release builds. Controls artifact bucket selection, IAM role,
-          and package versioning.
+          Release type: "ci", "dev", "nightly", or "prerelease"; controls
+          artifact bucket selection, IAM role, and package versioning.
         type: string
-        default: ""
+        default: ci
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
@@ -52,6 +51,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      external_repo:
+        description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -74,6 +77,21 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
+      rocm_deb_package_version:
+        description: ROCm DEB package version for native packages.
+        value: ${{ jobs.setup.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version:
+        description: ROCm RPM package version for native packages.
+        value: ${{ jobs.setup.outputs.rocm_rpm_package_version }}
+      ref:
+        description: >-
+          Resolved commit SHA from checkout. Use this instead of the input ref
+          to ensure all downstream jobs use the same commit, even if the branch
+          HEAD moves during the workflow run.
+        value: ${{ jobs.setup.outputs.ref }}
+      external_repo_config:
+        description: "JSON config for external repo checkout (generated from external_repo_name)"
+        value: ${{ jobs.setup.outputs.external_repo_config }}
 
 permissions:
   contents: read
@@ -89,9 +107,14 @@ jobs:
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      ref: ${{ steps.checkout.outputs.commit }}
+      external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        id: checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -113,17 +136,19 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          # Skip path filtering for external repos (git sha won't exist in TheRock)
+          SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
       # Here we set to a "dev" package version even for CI builds:
       #
-      # type of build                         | package version | version example
-      # ------------------------------------- | --------------- | ------------------
-      # ci ("" empty string for release_type) | dev             | 7.10.0.dev0+f689a8
-      # dev                                   | dev             | 7.10.0.dev0+f689a8
-      # nightly                               | nightly         | 7.10.0a20251021
-      # prerelease                            | prerelease      | 7.10.0rc2
+      # release_type | package version | version example
+      # ------------ | --------------- | ------------------
+      # ci           | dev             | 7.10.0.dev0+f689a8
+      # dev          | dev             | 7.10.0.dev0+f689a8
+      # nightly      | nightly         | 7.10.0a20251021
+      # prerelease   | prerelease      | 7.10.0rc2
       #
       # Other scripts upload "ci" and "dev release" packages to different
       # buckets, use different ccache namespaces, etc.
@@ -131,5 +156,13 @@ jobs:
         id: rocm_package_version
         run: |
           python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ inputs.release_type || 'dev' }} \
-            --prerelease-version=${{ inputs.prerelease_version }}
+            --release-type=${{ inputs.release_type }} \
+            --prerelease-version=${{ inputs.prerelease_version }} \
+            --override-git-sha=${{ steps.checkout.outputs.commit }}
+
+      - name: Detect external repo config
+        id: external_repo_config
+        if: ${{ inputs.external_repo != '' }}
+        run: |
+          python ./build_tools/github_actions/detect_external_repo_config.py \
+            --external-repo-json='${{ inputs.external_repo }}'

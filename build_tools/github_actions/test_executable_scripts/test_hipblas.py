@@ -43,8 +43,8 @@ cmd = [
 ]
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
+# Otherwise, we run the standard test suite.
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     cmd += [
         "--yaml",
@@ -57,4 +57,4 @@ else:
 
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.check_call(cmd, cwd=THEROCK_DIR, env=environ_vars)
+subprocess.check_call(cmd, cwd=THEROCK_DIR, env=environ_vars, stderr=subprocess.STDOUT)

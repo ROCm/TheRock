@@ -125,9 +125,9 @@ Benefits:
 - **Developer-friendly:** Easy to use for common cases
 
 > [!NOTE]
-> Some workflows may be configured to have stricter security boundaries, such
-> as only accepting "nightly" release types from certain branches or from
-> certain repositories.
+> Release workflows in TheRock should only offer "dev" for manual dispatch.
+> CI-oriented build/test helpers may offer "ci" and "dev"; rockrel-owned
+> callers can pass "nightly" and "prerelease" through `workflow_call`.
 
 ✅ **Preferred:**
 
@@ -140,8 +140,6 @@ on:
         description: Type of release to create. All developer-triggered jobs should use "dev"!
         options:
           - dev
-          - nightly
-          - prerelease
         default: dev  # Safe: development releases don't affect production
 
       amdgpu_families:
@@ -197,7 +195,7 @@ jobs:
   test_artifacts:
     name: Test Artifacts
     needs: build_artifacts
-    runs-on: linux-mi325-1gpu-ossci-rocm  # Expensive GPU runner only for tests
+    runs-on: linux-gfx942-1gpu-ossci-rocm  # Expensive GPU runner only for tests
     steps:
       # ... Download artifacts, setup test environment, etc.
 
@@ -211,7 +209,7 @@ jobs:
 jobs:
   build_and_test:
     name: Build and Test
-    runs-on: linux-mi325-1gpu-ossci-rocm  # Expensive GPU runner
+    runs-on: linux-gfx942-1gpu-ossci-rocm  # Expensive GPU runner
     steps:
       # ...
 

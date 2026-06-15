@@ -1,5 +1,5 @@
 boto3==1.39.15
-pytest==9.0.0 # This versions has subtests built-in.
+pytest==9.0.3 # This versions has subtests built-in.
 pytest-check==2.5.3
 pytest-cov==6.0.0
 pytest-timeout==2.4.0
@@ -12,6 +12,14 @@ requests==2.33.0
 jsonschema==4.23.0
 packaging==25.0
 python-magic==0.4.27; sys_platform != "win32"
+
+# tensilelite/rocisa test requirements
+# TODO: Keep in sync with rocm-libraries/projects/hipblaslt/tensilelite/requirements.txt
+msgpack>=1.0.0
+joblib>=1.4.0
+numpy>=1.26.0
+filelock>=3.0.0
+hip-python; sys_platform != "win32"
 
 # libhipcxx test requirement
 lit==18.1.8

@@ -8,14 +8,21 @@ Full installation and simulate-install test script for ROCm native packages.
 Test modes (--test-type):
 - sanity: Basic test. Repo-based install plus basic verification only
   (steps 1 and 2).
+- quick / standard: CI aliases for sanity.
 - full: Full test. Repo-based install plus basic verification plus full
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
   1. Repo setup and install: set up package-manager repository and install
-     ROCm packages (amdrocm-{gfx_arch}, amdrocm-core-sdk-{gfx_arch}).
+     ROCm packages. Arch suffixes in metapackage names are used only when both
+     ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
+     With ``--rocm-version`` only: ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``.
+     With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
+- comprehensive: CI alias for full.
+- install: Repo-based install only (step 1). No rocminfo or component checks.
+  Used by release workflows that dispatch install tests off the critical path.
 - simulate: Dry-run only. Simulated install of local .deb or .rpm files
   (apt install --simulate or rpm -Uvh --test --nodeps). No repo setup or
   actual install. Requires --packages-dir.
@@ -40,47 +47,84 @@ Prerequisites:
   (or from build_tools/packaging/linux/tests: pip install -r requirements.txt).
   Equivalent one-liner: pip install pyelftools requests prettytable PyYAML
 
+CI typically runs this module under pytest (same file; reporting handled by pytest)::
+
+    pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=short
+
+Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
+For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
+For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``), semicolon-separated (e.g. ``gfx94x;gfx1100``), or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
+You can still invoke this file as a script for ad-hoc runs (no pytest required).
+
 Example invocations:
 
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
- --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
- --gfx-arch gfx94x \\
- --release-type nightly
+         --os-profile ubuntu2404 \\
+         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x \\
+         --release-type nightly
 
  # Prerelease DEB with GPG verification
  python3 native_linux_package_install_test.py \\
- --os-profile ubuntu2404 \\
- --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
- --release-type prerelease \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --os-profile ubuntu2404 \\
+         --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+         --release-type prerelease \\
+         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
  python3 native_linux_package_install_test.py \\
- --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
- --gfx-arch gfx94x \\
- --release-type nightly
+         --os-profile rhel8 \\
+         --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
+         --gfx-arch gfx94x \\
+         --release-type nightly
 
  # Prerelease RPM (SLES 16)
  python3 native_linux_package_install_test.py \\
- --os-profile sles16 \\
- --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
- --release-type prerelease \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --os-profile sles16 \\
+         --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+         --release-type prerelease \\
+         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
- --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
- --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+         --os-profile ubuntu2404 \\
+         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
- --os-profile ubuntu2404 \\
+         --os-profile ubuntu2404 \\
+         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type install: repo install only (no verification)
+ python3 native_linux_package_install_test.py --test-type install \\
+         --os-profile ubuntu2404 \\
+         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x --release-type nightly
+
+ # Versioned metapackages with multiple GPU architectures (requires --rocm-version for arch in names).
+ # Installs e.g. amdrocm7.13-gfx94x, amdrocm-core-sdk7.13-gfx94x, amdrocm7.13-gfx1100, ...
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
- --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+ --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Same semantics: comma- or semicolon-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.13 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Versioned generic metapackages (no arch suffix) when --rocm-version is set without --gfx-arch.
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
+ --rocm-version 7.13 --release-type dev --install-prefix /opt/rocm/core
 
  # Simulate install (dry-run) from local .deb or .rpm directory
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -89,11 +133,18 @@ Example invocations:
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from packaging_utils import normalize_target_list
 
 
 def _env(key: str, default: str) -> str:
@@ -123,6 +174,9 @@ VERIFY_KEY_COMPONENTS = [
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
+# Pytest/CI only: becomes ``--rocm-version``.
+ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
+
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
 GPG_KEY_TIMEOUT_SEC = 60
@@ -134,6 +188,32 @@ INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
 RDHC_TIMEOUT_SEC = 30
 VERIFY_MIN_COMPONENTS = 2
+_TEST_TYPE_MAP = {
+    "": "sanity",
+    "quick": "sanity",
+    "standard": "sanity",
+    "comprehensive": "full",
+    "full": "full",
+    "install": "install",
+    "sanity": "sanity",
+    "simulate": "simulate",
+}
+
+
+def _normalize_test_type(test_type: str | None) -> str:
+    """Map shared CI test types to native package install test modes.
+
+    quick/standard/empty -> sanity, comprehensive/full -> full.
+    Native modes (install/sanity/full/simulate) are also accepted directly.
+    """
+    normalized = (test_type or "").strip().lower()
+    try:
+        return _TEST_TYPE_MAP[normalized]
+    except KeyError as e:
+        valid = ", ".join(sorted(k or "<empty>" for k in _TEST_TYPE_MAP))
+        raise ValueError(
+            f"Unsupported test_type {test_type!r}. Expected one of: {valid}."
+        ) from e
 
 
 def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
@@ -238,6 +318,33 @@ class NativeLinuxPackageInstallTest:
                 "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
             )
 
+    @staticmethod
+    def _major_minor_rocm_version_from_input(rocm_version: str | None) -> str | None:
+        """Parse ROCm version for arch-specific package names: major.minor only.
+
+        Examples: ``7.13.1`` → ``7.13``, ``v7.13`` → ``7.13``,
+        ``7.14.0~20260520`` / ``7.14.0~rc1-123456`` → ``7.14``. Used when forming
+        names like ``amdrocm7.13-gfx1100``. Returns ``None`` if input is absent
+        or blank.
+
+        Raises:
+        ValueError: Non-empty input that does not start with a major.minor pattern.
+        """
+        if rocm_version is None:
+            return None
+        s = str(rocm_version).strip()
+        if not s:
+            return None
+        if s.lower().startswith("v"):
+            s = s[1:].lstrip()
+        m = re.match(r"^(\d+)\.(\d+)", s)
+        if not m:
+            raise ValueError(
+                "Invalid ROCm version "
+                f"{rocm_version!r}: expected major.minor (e.g. 7.13 or 7.13.1)."
+            )
+        return f"{int(m.group(1))}.{int(m.group(2))}"
+
     def _is_sles(self) -> bool:
         """Check if the OS profile is SLES (SUSE Linux Enterprise Server).
 
@@ -253,6 +360,7 @@ class NativeLinuxPackageInstallTest:
         release_type: str = "nightly",
         install_prefix: str | None = None,
         gfx_arch: str | list[str] | None = None,
+        rocm_version: str | None = None,
         gpg_key_url: str | None = None,
     ):
         """Initialize the native Linux package install test runner.
@@ -262,8 +370,14 @@ class NativeLinuxPackageInstallTest:
         os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3)
         release_type: Type of release ('nightly' or 'prerelease')
         install_prefix: Installation prefix (default: /opt/rocm/core)
-        gfx_arch: GPU architecture(s) as a single value or list (default: gfx94x).
-        Only the first element is used for package name and installation.
+        gfx_arch: Optional GPU architecture(s). Used in package names only
+        together with ``rocm_version``; otherwise ignored for install targets.
+        rocm_version: Optional ROCm release (e.g. ``7.13`` or ``7.13.1``).
+        Major.minor only is used in package names. With ``gfx_arch`` and
+        ``rocm_version``: ``amdrocm{version}-{arch}`` per arch. With
+        ``rocm_version`` only: ``amdrocm{version}`` / ``amdrocm-core-sdk{version}``.
+        If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
+        does not add arch suffixes).
         gpg_key_url: GPG key URL
         """
         self.os_profile = os_profile.lower()
@@ -271,23 +385,40 @@ class NativeLinuxPackageInstallTest:
         self.repo_url = repo_url.rstrip("/")
         self.release_type = release_type.lower()
         self.install_prefix = install_prefix
-        # Normalize to list; only the first element is used for now
-        if gfx_arch is None:
-            self.gfx_arch_list: list[str] = ["gfx94x"]
-        elif isinstance(gfx_arch, str):
-            self.gfx_arch_list = [gfx_arch] if gfx_arch.strip() else ["gfx94x"]
-        else:
-            self.gfx_arch_list = [a for a in gfx_arch if a and str(a).strip()] or [
-                "gfx94x"
-            ]
-        self.gfx_arch = self.gfx_arch_list[0].lower()
+        self.gfx_arch_list = normalize_target_list(
+            gfx_arch, lowercase=True, dedupe=True
+        )
+        self.rocm_version_major_minor = self._major_minor_rocm_version_from_input(
+            rocm_version
+        )
+        # Primary arch (compat / display): first listed after normalization, else unset
+        self.gfx_arch: str | None = (
+            self.gfx_arch_list[0] if self.gfx_arch_list else None
+        )
         self.gpg_key_url = gpg_key_url
 
-        # Packages to install, in order
-        self.package_names = [
-            f"amdrocm-{self.gfx_arch}",
-            f"amdrocm-core-sdk-{self.gfx_arch}",
-        ]
+        # Metapackage install targets (four combinations of optional inputs):
+        #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
+        #   gfx_arch only           -> amdrocm / amdrocm-core-sdk (arch not in name)
+        #   rocm_version only       -> amdrocm{major.minor} / amdrocm-core-sdk{major.minor}
+        #   neither                 -> unversioned amdrocm / amdrocm-core-sdk
+        ver = self.rocm_version_major_minor
+        if self.gfx_arch_list and ver:
+            self.package_names = []
+            for arch in self.gfx_arch_list:
+                self.package_names.extend(
+                    [
+                        f"amdrocm{ver}-{arch}",
+                        f"amdrocm-core-sdk{ver}-{arch}",
+                    ]
+                )
+        elif ver:
+            self.package_names = [
+                f"amdrocm{ver}",
+                f"amdrocm-core-sdk{ver}",
+            ]
+        else:
+            self.package_names = ["amdrocm", "amdrocm-core-sdk"]
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -313,7 +444,7 @@ class NativeLinuxPackageInstallTest:
                 # Create keyring directory
                 print(f"\nCreating keyring directory: {keyring_dir}...")
                 subprocess.run(
-                    ["mkdir", "--parents", "--mode=0755", str(keyring_dir)],
+                    ["sudo", "mkdir", "--parents", "--mode=0755", str(keyring_dir)],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -322,12 +453,12 @@ class NativeLinuxPackageInstallTest:
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
                 # Download, dearmor, and write GPG key using pipeline
-                # wget URL -O - | gpg --dearmor | tee keyring_file > /dev/null
+                # wget URL -O - | gpg --dearmor | sudo tee keyring_file > /dev/null
                 print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
                 pipeline_cmd = (
                     f"wget -q -O - {self.gpg_key_url} | "
                     f"gpg --dearmor | "
-                    f"tee {keyring_file} > /dev/null"
+                    f"sudo tee {keyring_file} > /dev/null"
                 )
 
                 subprocess.run(
@@ -340,7 +471,12 @@ class NativeLinuxPackageInstallTest:
                 )
 
                 # Set proper permissions on the keyring file
-                keyring_file.chmod(0o644)
+                subprocess.run(
+                    ["sudo", "chmod", "0644", str(keyring_file)],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
                 print(f"[PASS] GPG key imported to {keyring_file}")
                 return True
 
@@ -381,18 +517,24 @@ class NativeLinuxPackageInstallTest:
         sources_list = Path(APT_SOURCES_LIST)
 
         if self.gpg_key_url:
-            # Use GPG key verification
+            # Use GPG key verification (arch=amd64 matches ROCm Ubuntu install docs)
             apt_keyring = Path(APT_KEYRING_FILE)
             repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
-            # No GPG check (trusted=yes)
+            # No GPG check (trusted=yes; arch=amd64 matches install_rocm_packages.sh)
             repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
 
         try:
-            sources_list.write_text(repo_entry, encoding="utf-8")
+            subprocess.run(
+                ["sudo", "tee", str(sources_list)],
+                input=repo_entry.encode(),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
             print(f"[PASS] Repository added to {sources_list}")
             print(f" {repo_entry.strip()}")
-        except OSError as e:
+        except (OSError, subprocess.CalledProcessError) as e:
             print(f"[FAIL] Failed to add repository: {e}")
             return False
 
@@ -400,7 +542,9 @@ class NativeLinuxPackageInstallTest:
         print("\nUpdating package lists...")
         print("=" * 80)
         try:
-            return_code = _run_streaming(["apt", "update"], APT_UPDATE_TIMEOUT_SEC)
+            return_code = _run_streaming(
+                ["sudo", "apt", "update"], APT_UPDATE_TIMEOUT_SEC
+            )
             if return_code == 0:
                 print("\n[PASS] Package lists updated")
                 return True
@@ -605,7 +749,7 @@ gpgcheck=0
         print(f"\nPackages to install (in order): {self.package_names}")
 
         # Install using apt (packages in list order)
-        cmd = ["apt", "install", "-y"] + self.package_names
+        cmd = ["sudo", "apt", "install", "-y"] + self.package_names
         print(f"\nRunning: {' '.join(cmd)}")
         print("=" * 80)
         print("Installation progress (streaming output):\n")
@@ -694,6 +838,26 @@ gpgcheck=0
         print("=" * 80)
         print(f"\nOS Profile: {self.os_profile}")
         print(f"Package Type (derived): {self.package_type.upper()}")
+        # Log how GPU arch relates to package_names (same four cases as __init__).
+        if self.gfx_arch_list and self.rocm_version_major_minor:
+            print(f"GPU Architecture(s): {self.gfx_arch_list} (used in package names)")
+        elif self.gfx_arch_list:
+            print(
+                f"GPU Architecture(s): {self.gfx_arch_list} "
+                "(not used in package names without --rocm-version / "
+                f"{ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION})"
+            )
+        else:
+            ver = self.rocm_version_major_minor
+            if ver:
+                print(
+                    "GPU Architecture(s): (none — generic versioned packages "
+                    f"amdrocm{ver}, amdrocm-core-sdk{ver})"
+                )
+            else:
+                print(
+                    "GPU Architecture(s): (none — generic packages amdrocm, amdrocm-core-sdk)"
+                )
         print(f"Repository URL: {self.repo_url}")
         print(f"Packages (in order): {self.package_names}")
 
@@ -909,18 +1073,54 @@ Examples:
  --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
+ # --test-type install: install only
+ python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
+ --gfx-arch gfx94x --release-type dev --install-prefix /opt/rocm/core
+
+ # Versioned + multiple --gfx-arch (metapackages amdrocm7.13-<arch> per arch)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.12.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Comma-separated arches in one argument (equivalent normalization)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.12 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Semicolon-separated (quote for POSIX shells so ``;`` is not a command separator)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --rocm-version 7.12 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # --rocm-version without --gfx-arch: amdrocm7.13 / amdrocm-core-sdk7.13 only
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
+ --rocm-version 7.13 --release-type dev --install-prefix /opt/rocm/core
+
+ # without --rocm-version without --gfx-arch: amdrocm / amdrocm-core-sdk only
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
+ --release-type dev --install-prefix /opt/rocm/core
+
  # Simulate install (dry-run) from local packages
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
 
 
-def _build_argument_parser() -> ArgumentParser:
-    parser = ArgumentParser(
+def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
+    kwargs: dict = dict(
         description="Full installation and simulate-install test for ROCm native packages",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EXAMPLES_EPILOG,
     )
+    if sys.version_info >= (3, 9):
+        kwargs["exit_on_error"] = exit_on_error
+    parser = ArgumentParser(**kwargs)
     parser.add_argument(
         "--os-profile",
         type=str,
@@ -935,8 +1135,23 @@ def _build_argument_parser() -> ArgumentParser:
         "--gfx-arch",
         type=str,
         nargs="+",
+        default=None,
         metavar="ARCH",
-        help="GPU architecture(s) as a list. Only the first is used for now. Required for sanity/full; not used for simulate. Examples: gfx94x, gfx110x gfx1151",
+        help="GPU architecture(s), optional. Used in package names only with --rocm-version "
+        "(e.g. amdrocm7.13-gfx94x). Without --rocm-version, arch is ignored for install targets "
+        "(generic amdrocm / amdrocm-core-sdk). "
+        "Repeat flag or list; commas and semicolons split within each value. Not used for simulate.",
+    )
+    parser.add_argument(
+        "--rocm-version",
+        type=str,
+        default=None,
+        metavar="VER",
+        help=(
+            "ROCm release (major.minor only in package names). With --gfx-arch: amdrocm7.13-ARCH per arch; "
+            "without --gfx-arch: amdrocm7.13 and amdrocm-core-sdk7.13. Required for arch in package names. "
+            "Optional. Not used for simulate."
+        ),
     )
     parser.add_argument(
         "--release-type",
@@ -957,9 +1172,8 @@ def _build_argument_parser() -> ArgumentParser:
     parser.add_argument(
         "--test-type",
         type=str,
-        choices=["sanity", "full", "simulate"],
         default="sanity",
-        help="Test type: 'sanity' = basic test only; 'full' = basic + full test; 'simulate' = simulated install only (requires --packages-dir).",
+        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
     )
     parser.add_argument(
         "--packages-dir",
@@ -991,17 +1205,44 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
                 parser.error(str(e))
         return
     if not args.os_profile:
-        parser.error("--os-profile is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--os-profile is required when --test-type is 'install', 'sanity', or 'full'"
+        )
     if not args.repo_url:
-        parser.error("--repo-url is required when --test-type is 'sanity' or 'full'")
-    if not args.gfx_arch:
-        parser.error("--gfx-arch is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--repo-url is required when --test-type is 'install', 'sanity', or 'full'"
+        )
+    if args.rocm_version:
+        try:
+            NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
+                args.rocm_version
+            )
+        except ValueError as e:
+            parser.error(str(e))
 
 
-def parse_cli_arguments(argv: list[str] | None = None) -> Namespace:
-    """Build parser, parse argv, validate; may call parser.error (exits process)."""
-    parser = _build_argument_parser()
+def parse_cli_arguments(
+    argv: list[str] | None = None, *, raise_instead_of_exit: bool = False
+) -> Namespace:
+    """Build parser, parse argv, validate.
+
+    By default invalid input calls ``parser.error`` (exits the process). For pytest
+    or other callers, pass ``raise_instead_of_exit=True`` to get ``ValueError``
+    instead of ``sys.exit``.
+    """
+    exit_on_error = not raise_instead_of_exit
+    parser = _build_argument_parser(exit_on_error=exit_on_error)
+    if raise_instead_of_exit:
+
+        def _raise(msg: str) -> None:
+            raise ValueError(msg)
+
+        parser.error = _raise  # type: ignore[method-assign]
     args = parser.parse_args(argv)
+    try:
+        args.test_type = _normalize_test_type(args.test_type)
+    except ValueError as e:
+        parser.error(str(e))
     _validate_cli_args(parser, args)
     return args
 
@@ -1016,7 +1257,9 @@ def run_tests(args: Namespace) -> int:
         print("SIMULATED INSTALL TEST")
         print("=" * 80)
         ok = run_simulate_install_test(pkg_type, args.packages_dir)
-        return 0 if ok else 1
+        if ok:
+            return 0
+        return 1
 
     try:
         derived_package_type = NativeLinuxPackageInstallTest._derive_package_type(
@@ -1033,7 +1276,40 @@ def run_tests(args: Namespace) -> int:
     print(f"Package Type (derived): {derived_package_type}")
     print(f"Release Type: {args.release_type}")
     print(f"Repository URL: {args.repo_url}")
-    print(f"GPU Architecture(s): {args.gfx_arch} (using first: {args.gfx_arch[0]})")
+    # Preview package-name rules before NativeLinuxPackageInstallTest is constructed.
+    _norm = normalize_target_list(args.gfx_arch, lowercase=True, dedupe=True)
+    if _norm:
+        if args.rocm_version:
+            print(
+                f"GPU Architecture(s): {args.gfx_arch} "
+                f"(normalized: {_norm}; used in package names with --rocm-version)"
+            )
+        else:
+            print(
+                f"GPU Architecture(s): {args.gfx_arch} "
+                f"(normalized: {_norm}; not used in package names without --rocm-version)"
+            )
+    else:
+        if args.rocm_version:
+            _gv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
+                args.rocm_version
+            )
+            print(
+                "GPU Architecture(s): (none — generic versioned packages "
+                f"amdrocm{_gv}, amdrocm-core-sdk{_gv})"
+            )
+        else:
+            print("GPU Architecture(s): (none — generic amdrocm, amdrocm-core-sdk)")
+    if args.rocm_version:
+        _rv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
+            args.rocm_version
+        )
+        print(
+            f"ROCm version (for package names): {args.rocm_version} "
+            f"(major.minor: {_rv})"
+        )
+    else:
+        print("ROCm version (for package names): (not set)")
     print(f"Install Prefix: {args.install_prefix}")
     print(f"Test Type: {args.test_type}")
     if args.gpg_key_url:
@@ -1046,6 +1322,7 @@ def run_tests(args: Namespace) -> int:
         release_type=args.release_type,
         install_prefix=args.install_prefix,
         gfx_arch=args.gfx_arch,
+        rocm_version=args.rocm_version,
         gpg_key_url=args.gpg_key_url,
     )
 
@@ -1061,6 +1338,12 @@ def run_tests(args: Namespace) -> int:
         if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             return 1
+        if args.test_type == "install":
+            print("\n" + "=" * 80)
+            print("[PASS] INSTALLATION TEST PASSED")
+            print("(install: repo setup and package install completed)")
+            print("=" * 80 + "\n")
+            return 0
         if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
             return 1
@@ -1080,6 +1363,93 @@ def run_tests(args: Namespace) -> int:
         print(f"\n[FAIL] Error during installation test: {e}")
         traceback.print_exc()
         return 1
+
+
+def _argv_from_ci_env() -> list[str] | None:
+    """Build CLI argv from workflow/container env (see ``test_native_linux_packages_install.yml``).
+
+    Required for sanity/full: OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX.
+    Optional: GFX_ARCH, GPG_KEY_URL; ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` maps to ``--rocm-version``
+    only when versioned package names are needed (omit for unversioned installs).
+    """
+    test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
+
+    if test_type == "simulate":
+        packages_dir = (os.environ.get("PACKAGES_DIR") or "").strip()
+        if not packages_dir:
+            return None
+        argv: list[str] = [
+            "--test-type",
+            "simulate",
+            "--packages-dir",
+            packages_dir,
+        ]
+        os_profile = (os.environ.get("OS_PROFILE") or "").strip()
+        if os_profile:
+            argv.extend(["--os-profile", os_profile])
+        pkg_type = (os.environ.get("SIMULATE_PKG_TYPE") or "").strip()
+        if pkg_type in ("deb", "rpm"):
+            argv.extend(["--pkg-type", pkg_type])
+        prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
+        if prefix:
+            argv.extend(["--install-prefix", prefix])
+        return argv
+
+    os_profile = (os.environ.get("OS_PROFILE") or "").strip()
+    repo_url = (os.environ.get("REPO_URL") or "").strip()
+    gfx_raw = (os.environ.get("GFX_ARCH") or "").strip()
+    # Semicolons delimit arches in CI; normalize to whitespace so split() does not
+    # leave stray ';' on the first token (e.g. "gfx94x; gfx1100").
+    gfx_arch = gfx_raw.replace(";", " ").split() if gfx_raw else []
+    release_type = (os.environ.get("RELEASE_TYPE") or "").strip()
+    install_prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
+
+    if not (os_profile and repo_url and release_type and install_prefix):
+        return None
+
+    argv = [
+        "--test-type",
+        test_type,
+        "--os-profile",
+        os_profile,
+        "--repo-url",
+        repo_url,
+        "--release-type",
+        release_type,
+        "--install-prefix",
+        install_prefix,
+    ]
+    if gfx_arch:
+        argv.extend(["--gfx-arch", *gfx_arch])
+    rocm_version = (os.environ.get(ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION) or "").strip()
+    if rocm_version:
+        argv.extend(["--rocm-version", rocm_version])
+    gpg = (os.environ.get("GPG_KEY_URL") or "").strip()
+    if gpg:
+        argv.extend(["--gpg-key-url", gpg])
+    return argv
+
+
+def test_native_linux_package_install() -> None:
+    """Pytest entry: same run as CLI, driven by env vars in CI."""
+    import pytest
+
+    argv = _argv_from_ci_env()
+    if argv is None:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail(
+                "Missing required environment variables for native install test "
+                "(expected OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX; "
+                "optional GFX_ARCH, NATIVE_LINUX_INSTALL_ROCM_VERSION; or for simulate: PACKAGES_DIR)."
+            )
+        pytest.skip(
+            "Set workflow env vars (OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX); "
+            "optional GFX_ARCH and NATIVE_LINUX_INSTALL_ROCM_VERSION."
+        )
+
+    args = parse_cli_arguments(argv, raise_instead_of_exit=True)
+    rc = run_tests(args)
+    assert rc == 0, f"run_tests exited with code {rc}"
 
 
 def main() -> None:
