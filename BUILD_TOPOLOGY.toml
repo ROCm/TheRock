@@ -652,8 +652,9 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
-type = "target-neutral"
+type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
+split_databases = ["hip-kernel-provider-asm"]
 
 # --- Media Integration ---
 

@@ -1,6 +1,17 @@
 # hipkernelprovider
 [components.dbg."ml-libs/hipkernelprovider/stage"]
 [components.lib."ml-libs/hipkernelprovider/stage"]
+include = [
+  # AITER ASM SDPA kernel code objects (.co) install under the engine plugin
+  # tree in per-arch directories. They are GPU code objects, not host shared
+  # libraries, so the default 'lib' patterns (*.so/*.dll/*.dylib) do not match
+  # them and they would otherwise be dropped at populate. Claim the .co under
+  # hip_kernel_provider/asm_kernels/ so they land in the artifact and can be
+  # routed per-arch by the hip-kernel-provider-asm kpack split handler. (The
+  # AITER CSV registry is build-time-only codegen input and is not installed.)
+  # (Leading **/ covers the lib/ vs bin/ plugin root across Linux and Windows.)
+  "**/hip_kernel_provider/asm_kernels/**/*.co",
+]
 exclude = [
   "lib/*.a",
 ]
