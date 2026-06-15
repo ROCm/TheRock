@@ -349,11 +349,8 @@ retention) are captured in *Per-stream specializations* further down.
 
     - zip — **Windows only**; the `.zip` archive is the Windows
       equivalent of the Linux tarball and is not produced for Linux
-      distros. Per-OS-version artifacts (when distinct builds are
-      produced) are placed in OS subfolders mirroring the
-      `windows-installers/` layout below (e.g. `zip/win11/`,
-      `zip/server2025/`); a single OS-agnostic `.zip` may sit at
-      `zip/` directly when one build covers all supported Windows
+      distros. A single Windows OS variant agnostic `.zip`  is published in 
+      `zip/` as one build covers all supported Windows
       versions.
 
     - windows-installers — Windows installer artifacts (`.exe`,
