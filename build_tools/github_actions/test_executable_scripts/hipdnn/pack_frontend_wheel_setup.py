@@ -6,20 +6,28 @@
 Differs from the rocm-sdk-* templates: those templates ship loose ROCm shared
 libraries (not CPython extensions) and produce a `py3-none-<plat>` wheel via
 `include_package_data=True` + a `platform/<pkg>/` source layout. This wheel,
-in contrast, contains `hipdnn_frontend_python.so` — a nanobind extension
-linked to a specific CPython ABI — so it must install only on a matching
-interpreter.
+in contrast, contains the nanobind extension `hipdnn_frontend_python` built
+against the CPython Limited API (stable ABI), so it is a platform binary that
+installs on any interpreter at or above the ABI floor.
 
-`Distribution.has_ext_modules() -> True` forces bdist_wheel to emit the
-CPython-ABI tag `cp{X}{Y}-cp{X}{Y}-<plat>` even though we are not invoking
-any setuptools build extension (the .so is pre-built and staged into the
-package directory by the driver script).
+`Distribution.has_ext_modules() -> True` marks this as a platform wheel (so the
+tag carries `<plat>` rather than `any`) even though we invoke no setuptools
+build extension — the .so/.pyd is pre-built and staged into the package
+directory by the driver script. `bdist_wheel`'s `py_limited_api` then sets the
+ABI tag to `abi3` with the impl floor `cp{LIMITED}`, yielding
+`cp{LIMITED}-abi3-<plat>`. The floor must match the Limited-API version the
+extension was compiled against (hipDNN: Python 3.12, via STABLE_ABI +
+Development.SABIModule).
 """
 
 import os
 import sysconfig
 
 from setuptools import setup, find_packages, Distribution
+
+# CPython Limited-API floor the extension is built against. Must match the
+# `find_package(Python 3.12 ... Development.SABIModule)` + STABLE_ABI build.
+_PY_LIMITED_API = "cp312"
 
 
 class BinaryDistribution(Distribution):
@@ -50,6 +58,7 @@ setup(
             "plat_name": os.getenv(
                 "ROCM_SDK_WHEEL_PLATFORM_TAG", sysconfig.get_platform()
             ),
+            "py_limited_api": _PY_LIMITED_API,
         },
     },
 )

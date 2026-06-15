@@ -3,11 +3,11 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
-  # The hipDNN frontend Python bindings (prebuilt nanobind extension + test
-  # suite) ship only via the dedicated Python wheel, not the shared-library
-  # tarball. The prebuilt .so carries a CI-only RPATH, so it is not a
-  # user-loadable library here.
-  # See https://github.com/ROCm/TheRock/issues/5678
+  # Python package sources (__init__.py + pytest suite) ship via the test
+  # artifact and the dedicated wheel, not the runtime tree. The compiled
+  # extension is NOT under share/ — it installs to lib/ (Linux) / bin/ (Windows)
+  # co-located with libhipdnn_backend, so it ships with this component and a
+  # bare dlopen resolves the backend as a sibling.
   "share/hipdnn/python/**",
 ]
 [components.run."ml-libs/hipDNN/stage"]
@@ -17,11 +17,10 @@ include = [
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
 exclude = [
-  # The hipDNN frontend Python bindings (prebuilt nanobind extension + test
-  # suite) ship only via the dedicated Python wheel, not the devel component.
-  # The prebuilt .so carries a CI-only RPATH, so `rocm-sdk test` cannot load
-  # it from here.
-  # See https://github.com/ROCm/TheRock/issues/5678
+  # Python package sources (__init__.py + pytest suite) ship via the test
+  # artifact and the wheel, not the devel tree. The compiled extension installs
+  # to lib/ (mirrored into devel), co-located with libhipdnn_backend, so
+  # `rocm-sdk test` (devel_test) can dlopen it.
   "share/hipdnn/python/**",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
@@ -31,7 +30,5 @@ include = [
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
   "share/hipdnn/python/**/*.py",
-  "share/hipdnn/python/**/*.so",
-  "share/hipdnn/python/**/*.pyd",
   "share/hipdnn/tests/python/**/*.py",
 ]
