@@ -100,29 +100,13 @@ jobs:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
     # if there is a test machine available
     if: ${{ inputs.test_runs_on != '' }}
-    runs-on: ${{ inputs.test_runs_on }}
+    runs-on: ubuntu-24.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
-      - name: "Fetch 'build_tools' from repository"
-        if: ${{ runner.os == 'Windows' }}
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
-          sparse-checkout: build_tools
-          path: "prejob"
-
-      # Checkout failure is possible on Windows, as it's the first job on a GPU test runner.
-      # Post-job cleanup isn't necessary since no executables are launched in this job.
-      - name: Pre-job cleanup processes on Windows
-        if: ${{ runner.os == 'Windows' }}
-        shell: powershell
-        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
-
       - name: Checking out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -143,7 +127,9 @@ jobs:
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
-        run: python ./build_tools/github_actions/fetch_test_configurations.py
+        run: |
+          python ./build_tools/github_actions/fetch_test_configurations.py \
+            --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
 
   test_sanity_check:
     name: 'Test Sanity Check'
