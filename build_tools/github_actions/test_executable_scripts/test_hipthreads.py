@@ -55,6 +55,10 @@ environ_vars["HIP_DEVICE_LIB_PATH"] = str(
 environ_vars["HIP_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["HIP_PLATFORM"] = "amd"
 environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
+# Kill any individual test that hangs (e.g. a hip::thread scheduler deadlock)
+# after this many seconds, so one stuck test can't burn the whole job timeout.
+# Honored by the vendored test executor (test/utils/run.py).
+environ_vars["GPULIB_TEST_TIMEOUT"] = "20"
 
 # Add ROCm binaries to PATH
 rocm_bin = str(THEROCK_BIN_PATH)
