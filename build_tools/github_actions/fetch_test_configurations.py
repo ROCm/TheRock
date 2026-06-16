@@ -655,7 +655,7 @@ test_matrix = {
         "job_name": "aqlprofile",
         "fetch_artifact_args": "--aqlprofile --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,

@@ -186,6 +186,12 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # aqlprofile installs its tests (the legacy `ctrl` harness + run_tests.sh and
+    # the generated CTestTestfile.cmake) under share/hsa-amd-aqlprofile/ rather
+    # than bin/<component>/, so point ctest at that directory.
+    "aqlprofile": {
+        "test_dir": ["share", "hsa-amd-aqlprofile"],
+    },
 }
 
 
