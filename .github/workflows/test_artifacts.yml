@@ -34,6 +34,10 @@ on:
       windows_hip_rocr_tests:
         type: string
         default: 'false'
+      changed_projects:
+        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        type: string
+        default: ""
       release_type:
         description: 'Release type: "ci" or "dev".'
         type: choice
@@ -77,6 +81,10 @@ on:
       windows_hip_rocr_tests:
         type: string
         default: 'false'
+      changed_projects:
+        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        type: string
+        default: ""
       release_type:
         type: string
         default: ci
@@ -118,6 +126,16 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: "Determine test dependencies"
+        id: test_deps
+        shell: bash
+        env:
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+        run: |
+          python ./test_tools/determine_rocm_test_dependencies.py \
+            --changed-projects "$CHANGED_PROJECTS" \
+            --gha-output
+
       - name: "Configuring CI options"
         id: configure
         env:
@@ -127,6 +145,7 @@ jobs:
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
+          PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
@@ -140,7 +159,7 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      test_runs_on: ${{ inputs.test_runs_on }}
+      test_runs_on: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
       release_type: ${{ inputs.release_type }}
@@ -177,7 +196,7 @@ jobs:
       #   1. Benchmark components use the dedicated benchmark runner
       #   2. Multi-GPU components use the multi-GPU runner
       #   3. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
-      #   4. Everything else uses the standard test runner (GPU runners)
+      #   4. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
           (matrix.components.is_benchmark == true &&
@@ -187,7 +206,7 @@ jobs:
             matrix.components.multi_gpu_runner) ||
           (matrix.components.linux_cpu_runner == true &&
             'azure-linux-scale-rocm') ||
-          inputs.test_runs_on
+          matrix.components.test_runner
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}

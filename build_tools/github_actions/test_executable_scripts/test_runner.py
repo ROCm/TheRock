@@ -28,7 +28,17 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
+VALID_TEST_CATEGORIES = {
+    "quick",
+    "standard",
+    "comprehensive",
+    "full",
+    # ffm-specific categories
+    "ffm-quick",
+    "ffm-standard",
+    "ffm-comprehensive",
+    "ffm-full",
+}
 # Normalize + validate TEST_TYPE once at module load so all downstream
 # consumers (apply_component_overrides at import time, main() at run
 # time) see the same lower-cased, validated value. `or "quick"` covers

@@ -117,7 +117,7 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
             self._option_value(command, "--repo-hashtag"), manifest["pytorch"]["commit"]
         )
 
-    def test_projects_filter_and_checkout_options(self) -> None:
+    def test_projects_filter_and_no_hipify(self) -> None:
         manifest = {
             "pytorch": {
                 "repo": "https://github.com/ROCm/pytorch",
@@ -148,8 +148,6 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
                     "--projects",
                     "pytorch;pytorch_vision",
                     "--no-hipify",
-                    "--no-submodules",
-                    "--no-commit-hipify",
                 ]
             )
 
@@ -159,8 +157,6 @@ class PyTorchCheckoutFromManifestTest(unittest.TestCase):
         )
         for command in commands.values():
             self.assertIn("--no-hipify", command)
-            self.assertIn("--no-submodules", command)
-            self.assertIn("--no-commit-hipify", command)
             self.assertNotIn("--torch-dir", command)
 
     def test_unknown_requested_project_errors(self) -> None:

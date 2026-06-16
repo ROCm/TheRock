@@ -259,6 +259,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             return {
                 "gfx94x": {
                     "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-a", "weight": 0.5},
+                            {"label": "linux-gfx942-b", "weight": 0.5},
+                        ],
                         "test-runs-on-multi-gpu": "linux-mi300-mgpu-default",
                         "test-runs-on-multi-gpu-labels": [
                             {"label": "linux-mi300-mgpu-a", "weight": 0.5},
@@ -272,13 +277,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fake_get_all_families
         )
 
-        # Mock select_weighted_label to verify it's called and return a known label
+        # Mock select_weighted_label to verify it's called and return known labels
         original_select_weighted_label = fetch_test_configurations.select_weighted_label
         selected_labels = []
 
         def fake_select_weighted_label(labels_config, context_name):
             selected_labels.append((labels_config, context_name))
-            return "linux-mi300-mgpu-a"
+            # Return different labels based on whether it's multi-gpu
+            if "multi-gpu" in context_name:
+                return "linux-mi300-mgpu-a"
+            return "linux-gfx942-a"
 
         fetch_test_configurations.select_weighted_label = fake_select_weighted_label
 
@@ -288,9 +296,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
             rccl = next(j for j in components if j["job_name"] == "rccl")
             self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called
-            self.assertEqual(len(selected_labels), 1)
-            self.assertEqual(selected_labels[0][1], "gfx94x-multi-gpu")
+            # Verify select_weighted_label was called for rccl multi-gpu
+            multi_gpu_calls = [c for c in selected_labels if "multi-gpu" in c[1]]
+            self.assertEqual(len(multi_gpu_calls), 1)
+            self.assertEqual(multi_gpu_calls[0][1], "rccl-multi-gpu")
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label

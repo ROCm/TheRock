@@ -168,20 +168,12 @@ _SKIPPABLE_PATH_PATTERNS = [
 # unrelated workflows are never accidentally included.
 #
 # This list is maintained manually and a unit test verifies that every
-# workflow transitively called by ci.yml / multi_arch_ci.yml is listed here.
+# workflow transitively called by multi_arch_ci.yml is listed here.
 #
 # TODO: Compute this set dynamically by scanning workflow files for
 # ``uses: ./.github/workflows/...`` references instead of maintaining it
 # by hand.
 _GITHUB_WORKFLOWS_CI_FILENAMES = {
-    # ci.yml only
-    "ci.yml",
-    "setup.yml",
-    "ci_linux.yml",
-    "ci_windows.yml",
-    "build_native_linux_packages.yml",
-    "build_portable_linux_artifacts.yml",
-    "build_windows_artifacts.yml",
     # multi_arch_ci.yml only
     "multi_arch_ci.yml",
     "multi_arch_ci_linux.yml",
