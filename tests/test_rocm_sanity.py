@@ -82,10 +82,6 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
-    @pytest.mark.skipif(
-        is_asan(), reason="hipcc test fails with ASAN build, see TheRock#3313"
-    )
     # TODO(#4755): Re-enable test for windows once offload-arch.exe is fixed
     @pytest.mark.skipif(
         is_windows(),
