@@ -762,7 +762,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         config = cm.BuildConfig(
             per_family_info=[],
             dist_amdgpu_families="",
-            pytorch_amdgpu_families="",
             artifact_group="multi-arch-release",
             build_variant_label="release",
             build_variant_suffix="",
@@ -794,7 +793,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         config = cm.BuildConfig(
             per_family_info=[{"amdgpu_family": "gfx110x"}],
             dist_amdgpu_families="gfx110x",
-            pytorch_amdgpu_families="gfx110x",
             artifact_group="multi-arch-release",
             build_variant_label="release",
             build_variant_suffix="",

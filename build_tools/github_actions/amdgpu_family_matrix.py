@@ -406,13 +406,13 @@ amdgpu_family_info_matrix_nightly = {
     "gfx125x": {
         "linux": {
             # No hardware available for testing yet; build-only.
-            # PyTorch builds are skipped until gfx1250 support is upstreamed
-            # to pytorch/pytorch. See https://github.com/ROCm/TheRock/issues/5833.
+            # PyTorch builds are included — workflow_dispatch can be used
+            # to trigger manually; nightly schedule runs both ROCm stack
+            # and PyTorch builds.
             "test-runs-on": "",
             "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "skip_pytorch": True,
         },
     },
 }
