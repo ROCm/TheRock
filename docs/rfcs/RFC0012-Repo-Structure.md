@@ -395,6 +395,14 @@ retention) are captured in *Per-stream specializations* further down.
     not the folder path, so every major's packages coexist in one
     `extras/` tree with a single origin per package.
 
+    - **rvs/** — tarball, packages
+
+    - **rocoptiq/** — tarball, whl, whl-next, packages
+
+    - **omnistat/** — whl, whl-next
+
+    *Rationale (revised per PR #4414 review):*
+
     - **Decision (revised per
       [PR #4414 review](https://github.com/ROCm/TheRock/pull/4414#discussion_r3348478551)):**
       the earlier `extras-<ROCm-major>/` layout is dropped. Splitting
@@ -476,22 +484,6 @@ retention) are captured in *Per-stream specializations* further down.
     - **Versioning:** extras use **semver**
       (`<project>-<major>.<minor>.<patch>`, e.g. `rvs-1.2.0`) per
       RFC0013 §2.
-
-    - **Major-version compatibility:** the compatibility boundary is
-      the ROCm major, not a folder (since `extras/` is now a single
-      tree). For **native packages** it is embedded in the name
-      (`amdrocm<major>-<project>` / `rocm<major>-<project>`), so an
-      `amdrocm7-*` extra installs against any ROCm 7.x Core SDK
-      release; for **Python wheels** the binding is carried in package
-      metadata (see RFC0013 §5) rather than the name. In both cases
-      cross-major compatibility is not promised. See RFC0013 for the
-      full compat contract.
-
-    - **rvs/** — tarball, packages
-
-    - **rocoptiq/** — tarball, whl, whl-next, packages
-
-    - **omnistat/** — whl, whl-next
 
   - **pytorch/** — `whl/` + `whl-next/` (same rule as `core/`).
 
@@ -598,101 +590,6 @@ the archive subdomain.
 Layout is preserved historically per source and is not constrained by
 this RFC's per-subdomain tree. The retention horizon is **indefinite**
 — content is not removed once archived, only added.
-
-### Install Locations (ROCm Core SDK)
-
-Native packages install the ROCm Core SDK into a stream-scoped,
-version-scoped directory directly under `/opt/rocm/`, following the
-hyphenated `/opt/rocm/core-<ver>` naming convention defined in
-RFC0009 (*TheRock Software Packaging Requirements* — Directory
-Layout). The version component is **chosen per stream** so multiple
-streams can coexist on the same machine without colliding.
-
-| Stream    | Variant  | Install location                    | Example                              |
-| :-------- | :------- | :---------------------------------- | :----------------------------------- |
-| `dev`     | standard | `/opt/rocm/core-dev-<YYYYMMDD-sha>` | `/opt/rocm/core-dev-20260602-a3f1c9` |
-| `nightly` | standard | `/opt/rocm/core-<YYYYMMDD>`         | `/opt/rocm/core-20260602`            |
-| `weekly`  | standard | `/opt/rocm/core-<YYYY>W<WW>`        | `/opt/rocm/core-2026W23`             |
-| `rc`      | standard | `/opt/rocm/core-<X.Y>rc<N>`         | `/opt/rocm/core-7.12rc1`             |
-| `rc`      | asan     | `/opt/rocm/core-<X.Y>rc<N>-asan`    | `/opt/rocm/core-7.12rc1-asan`        |
-| `stable`  | standard | `/opt/rocm/core-<X.Y>`              | `/opt/rocm/core-7.12`                |
-| `stable`  | asan     | `/opt/rocm/core-<X.Y>-asan`         | `/opt/rocm/core-7.12-asan`           |
-| `ltsrc`   | standard | `/opt/rocm/core-<YYYY.MM>rc<N>`     | `/opt/rocm/core-2026.09rc1`          |
-| `lts`     | standard | `/opt/rocm/core-<YYYY.MM>`          | `/opt/rocm/core-2026.09`             |
-| `lts`     | asan     | `/opt/rocm/core-<YYYY.MM>-asan`     | `/opt/rocm/core-2026.09-asan`        |
-
-ASAN-instrumented builds are published only for `stable`, `rc`, and
-`lts` — the streams where memory-debug rebuilds are worth the build
-cost. `dev`, `nightly`, `weekly`, and `ltsrc` ship the standard
-variant only; users who need ASAN on a pre-release path should use
-the matching `rc` build.
-
-The `Variant` column matches the repo-side split from RFC0009 and the
-*Linux Distros* section above: `standard` packages come from
-`packages/<distro>/`, `asan` packages come from
-`packages/<distro>-asan/`. The two variants install to parallel sibling
-directories with the `-asan` suffix appended to the standard path, so
-they can coexist on disk. Future variants reserved by RFC0009 (e.g.
-`rpath`, `debug`) follow the same `-<variant>` suffix pattern
-(`/opt/rocm/core-<ver>-rpath`, `/opt/rocm/core-<ver>-debug`) when
-introduced.
-
-**Notes on the `weekly` version format (`YYYY'W'WW`):**
-
-- ISO 8601 calendar-week notation: `YYYY` is the **ISO year**
-  (which differs from the calendar year for a handful of dates in
-  early January / late December — using the ISO year here prevents
-  cross-year collisions like a phantom `2026W01` that actually maps
-  to 2025).
-- `WW` is the ISO week number, zero-padded, 01–53.
-- ISO weeks start on Monday; the cut for `weekly` is Monday 00:00 UTC.
-- The literal `W` separator visually distinguishes `weekly` paths
-  (`core-2026W23`) from `nightly` paths (`core-20260602`) so a glob
-  (`ls /opt/rocm/core-*`) makes the stream obvious without inspecting
-  metadata — same guarantee the existing `dev`/`nightly`/`rc`/`stable`
-  syntaxes already provide.
-
-Rules:
-
-- The trailing version component is **always present** — there is no
-  unversioned install directory. `/opt/rocm/core/` (with trailing
-  slash) and `/opt/rocm/core-<major>` are reserved by RFC0009 as
-  **symlinks** to the latest installed core (e.g. `/opt/rocm/core/ → /opt/rocm/core-7.12` and `/opt/rocm/core-7 → /opt/rocm/core-7.12`); they are not RFC0012's to define. This RFC
-  only specifies the per-stream install directory name; the symlink
-  policy stays owned by RFC0009.
-- `dev`, `nightly`, `weekly`, and `rc` use distinct version syntaxes
-  from `stable`/`lts` so a glob (`ls /opt/rocm/core-*`) makes the
-  stream obvious without inspecting metadata.
-- The `rc` and `ltsrc` directories are short-lived: they are removed
-  by the stable/LTS package's post-install (or by the user's package
-  manager when the matching final release supersedes them).
-- Extras install under a single `/opt/rocm/extras/` tree per RFC0013
-  (ROCm major carried by the binary suffix, e.g. `bin/rvs7`) and are
-  **not** stream-scoped on disk — the stream-scoped path applies to
-  Core SDK only. (Extras coexist across streams and ROCm majors through
-  their own versioning per RFC0013 §2.)
-- Patch releases land in-place under the same directory (`stable`
-  `7.12.1` overwrites `/opt/rocm/core-7.12`); they do not create a
-  new path. This matches RFC0009's "patch versions must be in place
-  within the existing X.Y folder" rule.
-
-> **Note — `dev` / `nightly` / `weekly` simplified layout (open option):**
-> as an alternative to the date-stamped / week-stamped paths above,
-> `dev`, `nightly`, and `weekly` may instead install at
-> `/opt/rocm/core-<X.Y>-dev`, where `<X.Y>` is the **next** ROCm Core
-> release the develop branch is targeting (e.g. if the next stable is
-> 7.14, develop-branch builds install at `/opt/rocm/core-7.14-dev`).
-> Under this option there is **no plan to support coexistence of
-> multiple `dev` / `nightly` / `weekly` builds on the same filesystem**
-> — each new build overwrites the previous one in-place inside
-> `core-<X.Y>-dev`, the same way patch releases overwrite a stable
-> directory. Only one `-dev` directory exists per target version; if
-> the develop branch retargets to a new `<X.Y>`, the previous `-dev`
-> directory is removed by the package upgrade. This trades the "every
-> build retained on disk" property for a simpler layout that matches
-> the stable scheme exactly. The date-stamped / week-stamped variants
-> in the table above remain the option for teams that need on-disk
-> coexistence of multiple develop-branch snapshots.
 
 ## Python Indices
 
@@ -857,7 +754,7 @@ placement-related and already covered elsewhere in this document:
 - **On-disk coexistence.** Streams installed via different tier
   packages coexist because each Core SDK build lands in a
   stream-distinct, version-scoped path under `/opt/rocm/` — see
-  *Install Locations (ROCm Core SDK)*.
+  *Install Locations (ROCm Core SDK)* in `RFC00XX-Repository-Package.md`.
 
 All other repo-package mechanics (filename scheme, deb822 stanza
 shape, default enablement table, rpath sibling, driver-pin churn
