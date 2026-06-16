@@ -221,12 +221,15 @@ if common_tests.is_dir() and "gfx1250" in amdgpu_family:
         f"=== Running TensileLite common gfx1250 tests (TEST_PROFILE={test_profile}) ==="
     )
     cxx = rocm_path / "bin" / "amdclang++"
+    num_workers = os.getenv("TENSILE_NUM_PYTEST_WORKERS", "16")
     common_cmd = [
         sys.executable,
         "-m",
         "pytest",
         "-v",
         "--durations=0",
+        "-n",
+        num_workers,
         str(common_tests),
         "-m",
         "gfx1250 or gfx12",
