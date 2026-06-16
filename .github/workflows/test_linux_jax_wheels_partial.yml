@@ -198,22 +198,17 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
-      - name: Install AWS CLI
-        run: |
-          bash ./dockerfiles/install_awscli.sh
 
-      # TODO: publish tarball_s3_uris from upload_tarballs.py and propagate them
-      # through the JAX workflows to eliminate the HTTPS->S3 URI conversion below.
+      # Download and unpack the published TheRock tarball directly.
       - name: Configure ROCm from TheRock tarball
         run: |
           DEST="/opt/rocm-${{ inputs.rocm_version }}"
           TARBALL="${RUNNER_TEMP}/therock.tar.gz"
-          S3_URI="$(printf '%s' "${THEROCK_TAR_URL}" | sed -E 's#^https://([^.]+)\.s3\.amazonaws\.com/#s3://\1/#')"
 
           rm -rf "${DEST}"
           mkdir -p "${DEST}"
 
-          aws s3 cp "${S3_URI}" "${TARBALL}"
+          curl -fsSL "${THEROCK_TAR_URL}" -o "${TARBALL}"
           tar -xzf "${TARBALL}" -C "${DEST}"
 
           ln -sfn "${DEST}" /opt/rocm
