@@ -33,7 +33,7 @@ repo.amd.com's open source software release publications need standardization. I
   sources. See *Stream Subdomains* and *Structure on
   `archives.repo.amd.com`* below.
 
-  > **Note on stream vocabulary:** RFC0013 does not define a strict
+  > **Note on stream vocabulary:** RFC0012 does not define a strict
   > stream taxonomy for extras — it only states that extras may publish
   > "nightly / pre-release builds … to a staging repository for early
   > validation" alongside ordinary releases. The canonical streams on
