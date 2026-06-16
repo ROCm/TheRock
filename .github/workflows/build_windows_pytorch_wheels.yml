@@ -221,13 +221,12 @@ jobs:
       # Checkout nightly sources from https://github.com/pytorch/pytorch
       # TODO: switch to 'nightly' to match our Linux workflows?
       - name: Checkout PyTorch source repos (nightly branch)
-        if: ${{ inputs.pytorch_git_ref == 'nightly' || inputs.pytorch_repo != '' }}
+        if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            ${{ inputs.pytorch_repo != '' && format('--gitrepo-origin https://github.com/{0}.git', inputs.pytorch_repo) || '' }} \
-            --repo-hashtag ${{ inputs.pytorch_git_ref }}
+            --repo-hashtag nightly
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
             --repo-hashtag nightly
@@ -235,14 +234,14 @@ jobs:
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
             --repo-hashtag nightly
 
-      # Checkout stable sources from https://github.com/ROCm/pytorch
+      # Checkout stable sources, optionally from a custom pytorch repo
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ inputs.pytorch_git_ref != 'nightly' && inputs.pytorch_repo == '' }}
+        if: ${{ inputs.pytorch_git_ref != 'nightly' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-              --gitrepo-origin https://github.com/ROCm/pytorch.git \
+              --gitrepo-origin https://github.com/${{ inputs.pytorch_repo || 'ROCm/pytorch' }}.git \
               --repo-hashtag ${{ inputs.pytorch_git_ref }}
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
