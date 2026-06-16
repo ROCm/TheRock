@@ -42,8 +42,10 @@ include = [
   "lib/python/hipdnn_frontend/__init__.py",
   # pytest suite run against the installed wheel.
   "lib/python/tests/**/*.py",
-  # STABLE_ABI compiled extension (Linux lib/, Windows bin/): reunited with
-  # __init__.py into the wheel by the test, and the sole place it ships.
+  # STABLE_ABI compiled extension, kept apart from __init__.py here (it sits in
+  # lib/ on Linux, bin/ on Windows as a libhipdnn_backend sibling). The test's
+  # stage_package step copies both into one dir to build the wheel. Excluded
+  # from lib/dev, so the test component is the only one that ships it.
   "lib/hipdnn_frontend_python.abi3.so",
   "bin/hipdnn_frontend_python.pyd",
 ]
