@@ -9,10 +9,11 @@
 # 3. wsl-rocdxg (generic) - WSL-only ROCDXG bridge library (after compiler-runtime)
 # 4. math-libs (per-arch) - BLAS, FFT, etc.
 # 5. comm-libs (per-arch) - RCCL, rocshmem (parallel to math-libs)
-# 6. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
-# 7. dctools-core (generic) - RDC (parallel to math-libs)
-# 8. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 9. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 6. storage-libs (generic) - hipfile (parallel to math-libs)
+# 7. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
+# 8. dctools-core (generic) - RDC (parallel to math-libs)
+# 9. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
+# 10. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -185,6 +186,32 @@ jobs:
     with:
       stage_name: comm-libs
       stage_display_name: "Stage - Comm Libs"
+      timeout_minutes: 240  # 4 hours
+      amdgpu_family: ""
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: storage-libs (generic, single job parallel to math-libs)
+  # hipFile is a TARGET_NEUTRAL artifact.
+  # ==========================================================================
+  storage-libs:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: storage-libs
+      stage_display_name: "Stage - Storage Libs"
       timeout_minutes: 240  # 4 hours
       amdgpu_family: ""
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}

@@ -50,10 +50,12 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import re
 import time
+from urllib.parse import urlparse
 
 from github_actions.github_actions_api import *
 
@@ -66,10 +68,90 @@ ROCM_INDEX_URLS_MAP = {
     "dev": "https://rocm.devreleases.amd.com/v2",
 }
 
+# Fallback mapping from CDN domains to direct S3 bucket URLs.
+# Used when DNS resolution fails for the CDN.
+CDN_TO_S3_FALLBACK_MAP = {
+    "rocm.devreleases.amd.com": "therock-dev-python.s3.amazonaws.com",
+    "rocm.nightlies.amd.com": "therock-nightly-python.s3.amazonaws.com",
+}
+
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
+
+
+def check_dns_resolution(hostname: str, timeout: float = 5.0) -> bool:
+    """Check if a hostname can be resolved via DNS."""
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.gethostbyname(hostname)
+        return True
+    except (socket.gaierror, socket.timeout):
+        return False
+
+
+def apply_url_fallback(url: str) -> tuple[str, bool]:
+    """If DNS fails for the URL's domain, substitute a fallback domain if configured."""
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+
+    if not hostname:
+        return url, False
+
+    # Check if we have a fallback configured for this domain.
+    fallback_hostname = CDN_TO_S3_FALLBACK_MAP.get(hostname)
+    if not fallback_hostname:
+        return url, False
+
+    # Check if the original domain is reachable.
+    if check_dns_resolution(hostname):
+        return url, False
+
+    # DNS failed, check if fallback is reachable.
+    log(f"[WARNING] DNS resolution failed for '{hostname}', trying fallback...")
+    if not check_dns_resolution(fallback_hostname):
+        log(
+            f"[WARNING] Fallback '{fallback_hostname}' also unreachable, using original URL"
+        )
+        return url, False
+
+    # Replace the hostname with the fallback.
+    fallback_url = url.replace(f"://{hostname}", f"://{fallback_hostname}", 1)
+    log(f"[INFO] Using fallback URL: {fallback_url}")
+    return fallback_url, True
+
+
+def scrape_package_names_from_index(index_url: str) -> list[str]:
+    """Scrape package names from the index.html at the given URL.
+
+    This dynamically fetches the list of available packages from the S3 bucket
+    index page, avoiding the need for a hardcoded package list.
+    Uses urllib.request (stdlib) to avoid external dependencies.
+    """
+    import urllib.request
+    import urllib.error
+
+    # Ensure URL ends with index.html for S3 bucket listing
+    if not index_url.endswith("/"):
+        index_url = index_url + "/"
+    index_html_url = index_url + "index.html"
+
+    try:
+        with urllib.request.urlopen(index_html_url, timeout=30) as response:
+            html_content = response.read().decode("utf-8")
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        log(f"[WARNING] Failed to fetch package index from {index_html_url}: {e}")
+        return []
+
+    # Extract package names from <a> tags in the index HTML
+    # Typical format: <a href="package-name/">package-name</a>
+    package_pattern = r'<a[^>]*href="([^"/]+)/?">.*?</a>'
+    matches = re.findall(package_pattern, html_content, re.IGNORECASE)
+
+    # Filter out non-package entries (like parent directory links)
+    packages = [m for m in matches if m and not m.startswith(".")]
+    return packages
 
 
 def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
@@ -154,9 +236,23 @@ def update_venv(venv_dir: Path, use_uv: bool = False):
         return
 
     # pip logs warnings about wanting to update, so we'll do that for it.
+    # Keep setuptools/wheel available so artifact-only installs of ROCm sdists
+    # can use --no-build-isolation without resolving build dependencies from
+    # the package index being tested.
     log("")
     python_exe = find_venv_python_exe(venv_dir)
-    run_command([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
+    run_command(
+        [
+            str(python_exe),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "pip",
+            "setuptools",
+            "wheel",
+        ]
+    )
 
 
 def activate_venv_in_gha(venv_dir: Path):
@@ -236,15 +332,42 @@ def install_packages_into_venv(
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
 
-    if index_url:
+    using_s3_fallback = False
+    if index_url == "":
+        pip_install_cmd.append("--no-index")
+        pip_install_cmd.append("--no-build-isolation")
+    elif index_url:
         # Join index with subdir.
         if index_subdir:
             index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
 
-        pip_install_cmd.append(f"--index-url={index_url}")
+        # Apply DNS fallback if needed (e.g., CDN domain unreachable).
+        index_url, using_s3_fallback = apply_url_fallback(index_url)
+
+        if using_s3_fallback:
+            # TODO(#5285): remove fallback once DNS issues on test machine are resolved
+            # Use --find-links with explicit index.html paths. S3 doesn't auto-serve
+            # index.html for directory URLs, so --index-url won't work.
+            # Dynamically scrape available packages from the fallback index.
+            pkg_names = scrape_package_names_from_index(index_url)
+            if not pkg_names:
+                log("[WARNING] No packages found in fallback index, install may fail")
+            for pkg_name in pkg_names:
+                pkg_find_links = f"{index_url.rstrip('/')}/{pkg_name}/index.html"
+                pip_install_cmd.append(f"--find-links={pkg_find_links}")
+        else:
+            pip_install_cmd.append(f"--index-url={index_url}")
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
+
+    # When using find-links without a valid index-url, prevent fallback to PyPI.
+    # This applies when:
+    # - find_links is provided without index_url (artifact-only installs)
+    # - S3 fallback is used (we switched from --index-url to --find-links)
+    if using_s3_fallback or (find_links and not index_url):
+        pip_install_cmd.append("--no-index")
+        pip_install_cmd.append("--no-build-isolation")
 
     if pre:
         pip_install_cmd.append("--prerelease=allow" if use_uv else "--pre")

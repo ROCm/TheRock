@@ -425,12 +425,26 @@ def main(argv=None):
             .replace("THEROCK_", "")
             .replace("_SOURCE_DIR", "")
         )
+
+        # Extract projects from external_repo JSON if provided
+        projects = ""
+        if args.external_repo_json:
+            try:
+                external_repo = json.loads(args.external_repo_json)
+                projects = external_repo.get("projects", "")
+            except json.JSONDecodeError as e:
+                print(
+                    f"Warning: failed to parse external_repo_json: {e}",
+                    file=sys.stderr,
+                )
+
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
             "checkout_path": checkout_path,
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "projects": projects,
         }
         config["config_json"] = json.dumps(config_json)
         print(
