@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Reusable multi-arch build variant of build_portable_linux_pytorch_wheels_ci.yml.
+# Reusable multi-arch PyTorch build workflow for Linux.
 #
 # Built shape:
 #   - One fat build_prod_wheels.py invocation for one python_version and
@@ -10,9 +10,10 @@
 #     triton, and apex in a single invocation.
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
-#     torchaudio, triton, and apex ship as-is.
+#     other packages ship as-is (nothing to split).
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl/
-#     (server-side indexing handles the index page).
+#     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
+#     happens server-side).
 #
 # For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
