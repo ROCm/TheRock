@@ -542,8 +542,7 @@ stream-specific differences are:
 - **`weekly.repo.amd.com`** — Retention: 52 weeks (one calendar year of
   weekly promotions). Promotion source: the latest `nightly` build at
   the cut time. Cadence: **one promotion per ISO calendar week**, cut
-  Monday 00:00 UTC; version stamped as ISO `YYYY'W'WW` (e.g.
-  `2026W23`, see *Install Locations*).
+  Monday 00:00 UTC.
   - **Repo layout:** `weekly.repo.amd.com/rocm/core/packages/<distro>/`
     is a **flat package repository**, identical in structure to
     `nightly`, `stable`, and `rc`. All retained weekly versions are
