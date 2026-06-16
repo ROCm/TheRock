@@ -6,7 +6,7 @@ name: Test Multi-Arch Linux JAX Wheels
 on:
   workflow_call:
     inputs:
-      amdgpu_family:
+      test_amdgpu_family:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         required: true
         type: string
@@ -64,7 +64,7 @@ on:
         type: string
   workflow_dispatch:
     inputs:
-      amdgpu_family:
+      test_amdgpu_family:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         type: string
         default: "gfx94X-dcgpu"
@@ -119,7 +119,7 @@ on:
         type: string
         default: ""
       test_runs_on:
-        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
         default: "linux-gfx942-1gpu-core42-ossci-rocm"
 permissions:
@@ -197,7 +197,6 @@ jobs:
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
           release_type: ${{ inputs.release_type }}
-
 
       # Download and unpack the published TheRock tarball directly.
       - name: Configure ROCm from TheRock tarball

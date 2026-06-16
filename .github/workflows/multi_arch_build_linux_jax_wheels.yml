@@ -17,10 +17,10 @@ name: Multi-Arch Build Linux JAX Wheels
 on:
   workflow_call:
     inputs:
-      amdgpu_family:
-        description: "Representative GPU family to use for JAX tests."
+      test_amdgpu_family:
+        description: "GPU family to use for JAX tests; empty means skip tests."
         type: string
-        default: "gfx94X-dcgpu"
+        default: ""
       python_version:
         description: "Python version to build wheels for."
         type: string
@@ -67,7 +67,7 @@ on:
         value: ${{ jobs.build_jax_wheels.outputs.jax_pjrt_version }}
   workflow_dispatch:
     inputs:
-      amdgpu_family:
+      test_amdgpu_family:
         description: "Representative GPU family to use for JAX tests."
         type: string
         default: "gfx94X-dcgpu"
@@ -205,6 +205,7 @@ jobs:
 
   generate_target_to_run:
     name: Generate target_to_run
+    if: ${{ inputs.test_amdgpu_family != '' }}
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
@@ -215,11 +216,12 @@ jobs:
       - name: Generating target to run
         id: configure
         env:
-          TARGET: ${{ inputs.amdgpu_family }}
+          TARGET: ${{ inputs.test_amdgpu_family }}
           PLATFORM: linux
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_jax_wheels:
+    if: ${{ inputs.test_amdgpu_family != '' }}
     needs: [build_jax_wheels, generate_target_to_run]
     name: Test JAX wheels | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
     permissions:
@@ -228,7 +230,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/test_linux_jax_wheels_partial.yml
     with:
-      amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
