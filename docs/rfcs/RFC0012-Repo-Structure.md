@@ -641,22 +641,6 @@ eventually make `whl/` unnecessary — `whl-next/` becomes the sole
 index once WheelNext is widely adopted. Until that lands, both
 variants must coexist.
 
-**Native multi-arch (parallel mechanism):** `whl/` and `whl-next/`
-cover the **wheel** side of ROCm. The **native-package**
-side is covered by `rocm-kpack` per RFC0008 — host and device code are
-split into separate packages, with device code shipped either as
-per-architecture packages (`amdrocm-<library>-gfx<arch>`) or loaded at
-runtime from kpack archives. These device packages and the
-architecture-family meta-packages that group them (`rocm-gfx94X`,
-`rocm-gfx90X`, etc.) are published under
-`rocm/<stream>/core/packages/<distro>/` alongside the host
-ROCm Core SDK packages — they are not a separate folder. Wheel
-multi-arch (via `whl/` + `whl-next/`) and native multi-arch (via
-`rocm-kpack`) are sibling mechanisms: wheel users go through whichever
-`--index-url` matches their workflow, native users install the
-matching device or `rocm-gfx<family>X` package from `core/packages/`.
-RFC0008 owns the full multi-arch contract for both sides.
-
 ## Third Party AI Forks
 
 `pytorch`, `jax`, and `onnx-runtime` are **ROCm forks/builds of upstream
