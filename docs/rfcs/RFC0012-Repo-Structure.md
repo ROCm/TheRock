@@ -477,16 +477,6 @@ retention) are captured in *Per-stream specializations* further down.
       (`<project>-<major>.<minor>.<patch>`, e.g. `rvs-1.2.0`) per
       RFC0013 §2.
 
-    - **Python wheels for extras:** unlike native packages, the wheel
-      name **does not embed the ROCm major** — there is one project
-      name `rocm-<project>` (e.g. `rocm-rvs`) across all majors. Wheels
-      are published through the central `whl/` and `whl-next/` indices
-      like all other ROCm wheels. (Native distro packages keep the
-      major in the name — `rocm<major>-<project>` — per RFC0009 /
-      RFC0013 §5.) The mechanism by which a wheel binds to a ROCm
-      major is defined in RFC0013 §5; it is out of scope for this
-      structure RFC.
-
     - **Major-version compatibility:** the compatibility boundary is
       the ROCm major, not a folder (since `extras/` is now a single
       tree). For **native packages** it is embedded in the name
