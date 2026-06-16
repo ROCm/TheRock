@@ -51,7 +51,7 @@ component-specific classes (and bind them to paths).
 | `build/ci`                    | Build/CI green on supported lanes; no behavior change expected                   |
 | `docs`                        | Doc/link validation only                                                         |
 | `revert`                      | Links the PR it reverts (self-evident "why"); regression test if reverting a fix |
-| `defect-fix`                  | M1: regression test or tracked two-PR plan + evidence                            |
+| `defect-fix`                  | M1: regression test or tracked two-PR plan, **plus reproduction evidence** — the new test is shown to **fail on the unpatched build (reproducing the cited defect) and pass with the fix**, with the run linked in the PR |
 | `regression-test-only`        | The test is the deliverable; must fail before / pass after the fix               |
 | `other`                       | Judgment call; default to stricter                                               |
 
