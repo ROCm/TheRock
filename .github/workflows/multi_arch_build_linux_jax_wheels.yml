@@ -216,17 +216,18 @@ jobs:
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import os
           from pathlib import Path
-          from urllib.parse import urlparse
+          from urllib.parse import quote, urlparse
 
           private_tar_url = os.environ["PRIVATE_TAR_URL"]
           package_index_url = os.environ["PACKAGE_INDEX_URL"]
 
           filename = Path(urlparse(private_tar_url).path).name
+          filename = quote(filename, safe="")
+
           public_tarball_base = package_index_url.replace(
               "/whl-multi-arch/",
               "/tarball-multi-arch/",
           )
-
           print(f"public_tarball_url={public_tarball_base}{filename}")
           PY
 
