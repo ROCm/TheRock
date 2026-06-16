@@ -3,12 +3,12 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
-  # Python package sources (__init__.py + pytest suite) ship via the test
-  # artifact and the dedicated wheel, not the runtime tree. The compiled
-  # extension is NOT under share/ — it installs to lib/ (Linux) / bin/ (Windows)
-  # co-located with libhipdnn_backend, so it ships with this component and a
-  # bare dlopen resolves the backend as a sibling.
-  "share/hipdnn/python/**",
+  # Python package sources (__init__.py + pytest suite) live under lib/python
+  # and ship via the test artifact and the dedicated wheel, not the runtime
+  # tree. The compiled extension installs to lib/ (Linux) / bin/ (Windows)
+  # co-located with libhipdnn_backend — it is NOT under lib/python, so it ships
+  # with this component and a bare dlopen resolves the backend as a sibling.
+  "lib/python/**",
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
@@ -17,11 +17,11 @@ include = [
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
 exclude = [
-  # Python package sources (__init__.py + pytest suite) ship via the test
-  # artifact and the wheel, not the devel tree. The compiled extension installs
-  # to lib/ (mirrored into devel), co-located with libhipdnn_backend, so
-  # `rocm-sdk test` (devel_test) can dlopen it.
-  "share/hipdnn/python/**",
+  # Python package sources (__init__.py + pytest suite) live under lib/python
+  # and ship via the test artifact and the wheel, not the devel tree. The
+  # compiled extension installs to lib/ (mirrored into devel), co-located with
+  # libhipdnn_backend, so `rocm-sdk test` (devel_test) can dlopen it.
+  "lib/python/**",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
@@ -29,6 +29,5 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-  "share/hipdnn/python/**/*.py",
-  "share/hipdnn/tests/python/**/*.py",
+  "lib/python/**/*.py",
 ]
