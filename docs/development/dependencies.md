@@ -47,6 +47,7 @@ project wide:
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
   - `THEROCK_BUNDLED_HWLOC`
+  - `THEROCK_BUNDLED_LIBATOMIC`
   - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
   - `THEROCK_BUNDLED_LIBLZMA`
@@ -107,6 +108,26 @@ Supported sub-libraries: `libelf`, `libdw`.
 - Canonical method: `find_package(libdw)`
 - Import library: `libdw::libdw`
 - Alternatives: `pkg_check_modules(DW libdw)`
+
+## libatomic
+
+Provides the out-of-line atomic helper routines (`__atomic_*`, including the
+16-byte `__atomic_*_16` variants) that the compiler cannot always lower inline
+on x86-64. A few ROCm libraries (e.g. `librocprofiler-sdk-rocattach`,
+`libroctracer_tool`) genuinely import these symbols and therefore carry a
+`NEEDED libatomic.so.1`. Clean distros that do not ship libatomic (RHEL,
+SLES, minimal images) cannot load those libraries unless it is bundled.
+
+Unlike other sysdeps, libatomic is part of the compiler runtime rather than an
+upstream project, so it is not fetched and built from source. Instead the
+toolchain copy is located via `${CMAKE_C_COMPILER} -print-file-name=libatomic.so.1`
+and staged into `lib/rocm_sysdeps/lib` with its original `libatomic.so.1`
+SONAME (no `rocm_sysdeps_` prefix), because consumers reference it by that
+name. Redistribution is permitted under the GCC Runtime Library Exception.
+
+- Canonical method: none; consumers link `-latomic` implicitly via the
+  compiler. Add `THEROCK_BUNDLED_LIBATOMIC` to `RUNTIME_DEPS` and ensure the
+  `lib/rocm_sysdeps/lib` RPATH is present.
 
 ## libcap
 
