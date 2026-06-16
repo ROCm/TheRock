@@ -210,10 +210,6 @@ class WorkflowOutputRoot:
             f"{self.prefix}/manifests/index.html",
         )
 
-    def pytorch_manifest_dir(self) -> StorageLocation:
-        """Location for multi-arch PyTorch source manifests."""
-        return StorageLocation(self.bucket, f"{self.prefix}/manifests/pytorch")
-
     # -- Native packages --------------------------------------------------------
 
     def native_linux_packages(self, pkg_type: str) -> StorageLocation:
