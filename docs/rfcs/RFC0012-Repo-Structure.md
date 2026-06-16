@@ -51,10 +51,10 @@ repo.amd.com's open source software release publications need standardization. I
   - **Core SDK** — the ROCm Core SDK; published under `core/` on
     every stream subdomain.
   - **Expansions** — SDKs built with dependencies on the ROCm Core
-    SDK (e.g. HPC SDK, Computer Vision SDK, ROCm-DS, future
+    SDK (e.g. Computer Vision SDK, ROCm-DS, future
     cadenced SDKs). **Expansions are not a folder.** Each expansion
     is published as a **top-level peer to `core/`** under each
-    stream subdomain's `rocm/` tree (e.g. `hpc-sdk/`,
+    stream subdomain's `rocm/` tree (e.g.
     `computer-vision-sdk/`, `rocm-ds/`), with its own cadence and
     ROCm pinning rule defined in its own RFC. There is no
     `expansions/` parent folder.
@@ -137,7 +137,7 @@ Rules:
   stream. There is no cross-stream pathing on a single subdomain.
 - The folder hierarchy under each stream subdomain matches the
   per-stream structure defined in the next section (e.g. `core/`,
-  per-expansion folders such as `hpc-sdk/` / `computer-vision-sdk/` /
+  per-expansion folders such as `computer-vision-sdk/` /
   `rocm-ds/`, `extras/`, `whl/`, `whl-next/`,
   `pytorch/`, etc. — every expansion is a top-level peer; there is
   no `expansions/` grouping folder).
@@ -163,43 +163,6 @@ Rules:
 - Reserved future subdomains (`ltsrc`, `lts`) must resolve before
   content is published, even if they initially serve an empty index,
   so that repo-package definitions referencing them do not break.
-- **Concurrent stream installation:** users are allowed to install
-  packages from different streams simultaneously on the same system —
-  e.g. a `stable` ROCm Core SDK alongside an `lts` ROCm Core SDK, or
-  `stable` + `nightly` side-by-side, or `nightly` + `weekly` for
-  integration testing. Package naming, install prefixes, and repo
-  definitions are designed to coexist without conflict.
-  - **Mechanism:** each tier repo package (`amdrocm-repo-stable`,
-    `amdrocm-repo-stablerc`, `amdrocm-repo-nightly`, `amdrocm-repo-dev`)
-    installs **one repo definition per stream it covers** (rpm:
-    distinct `.repo` files; deb: distinct deb822 `.sources` stanzas)
-    — *not* a single repo file templated by
-    `$amdrocm_release_stream`. Each stream's repo definition is
-    independently `enabled`/`disabled` within its tier. The
-    `$amdrocm_release_stream` variable selects the **default** stream
-    for unqualified `yum install` / `apt install`; users opt into a
-    second stream **in the same tier** by enabling its repo (`dnf --enablerepo=...`) or qualifying the package version. Crossing
-    tier boundaries (e.g. enabling `nightly` from a stable-only
-    install) requires installing the other tier's package — see
-    *Repository Package* for the no-accidental-opt-in guarantee.
-    This is the workflow that supports concurrent installs without
-    forcing the user to flip a single global variable.
-  - **Coexistence on disk:** every stream's Core SDK installs into a
-    stream-distinct, version-scoped path under `/opt/rocm/core/` (see
-    *Install Locations*), so `stable` 7.12 and `nightly` 20260602 and
-    `weekly` 2026W23 do not collide.
-  - **Compatibility caveat:** concurrent installs are supported by the
-    *packaging and on-disk layout*, but cross-stream **dependency
-    chains** (e.g. a `nightly` expansion linked against a `stable`
-    Core SDK) are not guaranteed to resolve — `nightly` / `weekly` are
-    typically one minor version ahead and may pin to ABIs that
-    `stable` does not yet ship. The reliable concurrent patterns are:
-    (a) full parallel stacks (`stable` Core + `stable` expansion next
-    to `nightly` Core + `nightly` expansion), and (b) Python wheels,
-    which carry explicit version constraints. Mixing native packages
-    across streams in a single dependency chain is **not** a supported
-    workflow.
-
 ## Repository Structure
 
 Hosting splits into three layers, each with its own structure:
@@ -286,7 +249,7 @@ retention) are captured in *Per-stream specializations* further down.
     stream — **backward-compatible / all-arch** variant. A single
     `whl/` serves wheels from every wheel-producing area in the
     stream (`core/`, every top-level expansion, wheel-producing extras,
-    `pytorch/`, `jax/`, `onnx-runtime/`, `hpc-sdk/`). `pip install rocm` (or `pip install torch`) against this index pulls in
+    `pytorch/`, `jax/`, `onnx-runtime/`). `pip install rocm` (or `pip install torch`) against this index pulls in
     **all** device extras automatically. Matches the PyTorch
     `download.pytorch.org/whl/` shape.
 
@@ -302,8 +265,7 @@ retention) are captured in *Per-stream specializations* further down.
 
   - **core/**
 
-    - tarball — Linux archive format, **`.tar.gz` only** (other
-      compression formats such as `.tar.xz` are not produced).
+    - tarball — Linux archive format, **primarily `.tar.gz`**.
 
     - zip — **Windows only**; the `.zip` archive is the Windows
       equivalent of the Linux tarball and is not produced for Linux
@@ -389,12 +351,12 @@ retention) are captured in *Per-stream specializations* further down.
     live alongside their Linux siblings inside each component, e.g.
     `core/zip`, `core/windows-installers`.)*
 
-  - **[expansion-name]/** *(top-level peer to `core/`, `hpc-sdk/`,
+  - **[expansion-name]/** *(top-level peer to `core/`,
     `pytorch/`, `jax/`, `onnx-runtime/`)* — each expansion (e.g.
     `rocm-ds/`, future SDKs built on the ROCm Core SDK) is published
     as its **own top-level folder** under each stream subdomain's
     `rocm/` tree, **not** grouped under an `expansions/` parent. This
-    matches the placement rule already used by HPC SDK and the
+    matches the placement rule already used by the
     third-party AI forks: every component with an independent
     release cadence gets a top-level peer so its cadence is visible
     in the URL and there is no intermediate namespace to navigate.
@@ -416,12 +378,11 @@ retention) are captured in *Per-stream specializations* further down.
       `core/packages/` — see the `packages/` rules above).
     - **Cadence and pinning:** each expansion picks its own cadence
       and ROCm Core SDK pinning rule; that rule belongs in the
-      per-expansion RFC, not here. HPC SDK (PR #5613) and the
-      forthcoming Computer Vision SDK
-      ([PR #5631](https://github.com/ROCm/TheRock/pull/5631)) are
-      examples of expansions that already own their own RFCs.
+      per-expansion RFC, not here. The forthcoming Computer Vision SDK
+      ([PR #5631](https://github.com/ROCm/TheRock/pull/5631)) is an
+      example of an expansion that already owns its own RFC.
     - **Naming and alphabetization:** expansion folder names use the
-      project's canonical short name (`rocm-ds/`, `hpc-sdk/`,
+      project's canonical short name (`rocm-ds/`,
       `computer-vision-sdk/`, …). Browsing the per-stream `rocm/`
       tree, expansions and forks sort alphabetically alongside
       `core/`; there is no enforced grouping by category.
@@ -521,9 +482,7 @@ retention) are captured in *Per-stream specializations* further down.
 
     - **Versioning:** extras use **semver**
       (`<project>-<major>.<minor>.<patch>`, e.g. `rvs-1.2.0`) per
-      RFC0013 §2. HPC SDK uses its own `<X.Y>` scheme (the pinned
-      ROCm Core SDK version, per PR #5613) which must not be applied
-      to extras.
+      RFC0013 §2.
 
     - **Python wheels for extras:** unlike native packages, the wheel
       name **does not embed the ROCm major** — there is one project
@@ -551,25 +510,6 @@ retention) are captured in *Per-stream specializations* further down.
 
     - **omnistat/** — whl, whl-next
 
-  - **hpc-sdk/** *(an expansion — top-level peer to `core/` per the
-    rule above; see HPC SDK section and
-    [ROCm/TheRock#5613](https://github.com/ROCm/TheRock/pull/5613))*
-    — released on its own cadence (~4 releases/year), pinned to a
-    single ROCm Core SDK release with the HPC SDK reusing that
-    release's `<X.Y>` version (e.g. `7.14`). Per PR #5613, the
-    `rc`/`stable` layout uses a version-named subfolder
-    (`<stream>.repo.amd.com/rocm/hpc-sdk/<X.Y>/`), and `dev`/`nightly`
-    use a date-stamped subfolder
-    (`dev.repo.amd.com/rocm/hpc-sdk/<YYYYMMDD-sha>/`,
-    `nightly.repo.amd.com/rocm/hpc-sdk/<YYYYMMDD>/`). `weekly`
-    placement follows the same date-stamped pattern as `nightly`
-    using the ISO-week stamp
-    (`weekly.repo.amd.com/rocm/hpc-sdk/<YYYY>W<WW>/`) when HPC SDK
-    publishes to `weekly` — confirm against PR #5613 before relying
-    on this. Contains tarball, installers, `whl/` + `whl-next/`
-    (same rule as `core/whl/` + `core/whl-next/`), and `packages/`
-    per distro.
-
   - **pytorch/** — `whl/` + `whl-next/` (same rule as `core/`).
 
   - **jax/** *(follows the same artifact rules as **pytorch**)*
@@ -589,9 +529,7 @@ stream-specific differences are:
   `stable`/`rc`). Retention is enforced by pruning old package
   versions from the flat tree, not by deleting date-stamped
   subfolders. Intended for developer-facing testing and infra
-  dry-runs; **not** for end users. No `rc`-style exclusivity applies
-  — `dev` is eligible for concurrent installation with other streams
-  on the same machine (see *Concurrent stream installation*).
+  dry-runs; **not** for end users. No `rc`-style exclusivity applies.
 - **`nightly.repo.amd.com`** — Retention: 120 nightly. Promoted
   builds from the develop branch (`dev` builds that passed the
   promotion gate).
@@ -627,9 +565,6 @@ stream-specific differences are:
   - **Intended consumers:** downstream CI pipelines, framework
     integrators, and partners who want one bump per week instead of
     one per night. Not a substitute for `rc`/`stable` for end users.
-  - **Concurrent install:** eligible for concurrent installation with
-    other streams; install path uses `core-<YYYY>W<WW>` so it does
-    not collide with nightly's `core-<YYYYMMDD>`.
 - **`rc.repo.amd.com`** — Retention: 2 years. Release-candidate builds
   for the next stable release; tested by QA. Must match `stable`
   layout.
@@ -689,8 +624,7 @@ version-scoped directory directly under `/opt/rocm/`, following the
 hyphenated `/opt/rocm/core-<ver>` naming convention defined in
 RFC0009 (*TheRock Software Packaging Requirements* — Directory
 Layout). The version component is **chosen per stream** so multiple
-streams can coexist on the same machine without colliding (see
-*Concurrent stream installation* in Stream Subdomains).
+streams can coexist on the same machine without colliding.
 
 | Stream    | Variant  | Install location                    | Example                              |
 | :-------- | :------- | :---------------------------------- | :----------------------------------- |
@@ -759,13 +693,6 @@ Rules:
   `7.12.1` overwrites `/opt/rocm/core-7.12`); they do not create a
   new path. This matches RFC0009's "patch versions must be in place
   within the existing X.Y folder" rule.
-- **HPC SDK** follows the same hyphenated convention from RFC0009 and
-  uses the `<X.Y>` version of its pinned ROCm Core SDK release per
-  [ROCm/TheRock#5613](https://github.com/ROCm/TheRock/pull/5613):
-  installs at `/opt/rocm/hpc-<X.Y>` (e.g. `/opt/rocm/hpc-7.14`) with
-  `/opt/rocm/hpc/ → /opt/rocm/hpc-<latest>` as the convenience
-  symlink. HPC SDK patch releases (`<X.Y>.N`, e.g. `7.14.1`) land
-  in-place inside the matching `hpc-<X.Y>` directory.
 
 > **Note — `dev` / `nightly` / `weekly` simplified layout (open option):**
 > as an alternative to the date-stamped / week-stamped paths above,
@@ -805,9 +732,9 @@ per stream, sitting directly under each subdomain's `rocm/` tree
 (`<stream>.repo.amd.com/rocm/whl/` and
 `<stream>.repo.amd.com/rocm/whl-next/`). Each index serves wheels
 from every wheel-producing area in that stream (`core/`,
-per-expansion folders (`hpc-sdk/`, `computer-vision-sdk/`,
+per-expansion folders (`computer-vision-sdk/`,
 `rocm-ds/`, …), any extras that ship wheels, `pytorch/`, `jax/`,
-`onnx-runtime/`, `hpc-sdk/`). There is no per-package central index
+`onnx-runtime/`). There is no per-package central index
 and no `pyindex/` wrapper. Centralizing the indices lets
 `pip install rocm` (and `pip install torch`, `pip install jax`, etc.)
 resolve cross-package dependencies in one resolution pass against a
@@ -861,36 +788,6 @@ exists), and both are built from the same underlying wheel set —
 `torchvision`, …) with `device-all` added as an automatic requirement,
 plus links to the unmodified device wheels in `whl-next/` so storage
 is not duplicated.
-
-**Wheel-only ROCm dependency rule (applies to every wheel published on
-`repo.amd.com`):** any package distributed as a Python wheel — Core
-SDK wheels, expansion wheels, extras wheels, third-party AI fork
-wheels — **must obtain its ROCm dependency exclusively through
-`whl{,-next}/`**. That is:
-
-- Wheel `install_requires` / `Requires-Dist` entries that resolve a
-  ROCm dependency must resolve to **other ROCm wheels served by
-  `whl/` or `whl-next/`**.
-- Wheels must not depend on, assume the presence of, or trigger the
-  installation of ROCm via any **non-wheel** channel: rpm/deb native
-  packages, tarballs, runfile installers, container base images,
-  out-of-band scripts, etc. If a wheel needs HIP, a ROCm library, or
-  any other ROCm component, that component must itself be available as
-  a wheel through one of the two central indices.
-- A `pip install <pkg> --index-url https://<stream>.repo.amd.com/rocm/whl{,-next}/`
-  must complete the entire ROCm install chain. The user must not be
-  required to run `yum`, `apt`, a `.run` installer, or extract a
-  tarball as a prerequisite.
-- Native package installs (rpm/deb/tar/runfile) remain the supported
-  path for users who want ROCm from native packages — but the **wheel
-  path is fully self-contained** and never crosses over into the
-  native-package world.
-
-This rule keeps every `pip`-driven install fully resolvable from a
-single `--index-url`, makes the wheel ecosystem reproducible across
-distros (and inside container images that have no system package
-manager), and ensures the central indices are the single source of
-truth for the wheel side of the ROCm ecosystem.
 
 Future direction: WheelNext (`uv pip install` with a wheel-variant
 provider backed by `rocm-bootstrap`) is the long-term plan and will
@@ -951,82 +848,6 @@ Rules that apply to all third-party AI forks:
 - **Coverage list:** `pytorch`, `jax`, `onnx-runtime`. New third-party
   forks added to `repo.amd.com` follow this same model by default.
 
-## Dependency Closure for Expansions and Extras
-
-Every package published under a top-level expansion folder
-(e.g. `hpc-sdk/`, `computer-vision-sdk/`, `rocm-ds/`) or under
-`extras/`
-must declare a **complete dependency chain**. The goal is that a single
-one-line install command for any expansion or extra pulls in every
-required component automatically, with no manual follow-up.
-
-Rules:
-
-- **Native packages (rpm/deb):** `Requires:` / `Depends:` must list every
-  ROCm Core SDK package, expansion, or extra the component needs at
-  runtime, at the exact (or minimum-compatible) versions. A `yum install <pkg>` or `apt install <pkg>` must succeed without the user adding
-  ROCm Core SDK packages by hand.
-
-- **Python wheels:** `install_requires` / `Requires-Dist` must list every
-  ROCm Core SDK wheel (and any other expansion wheel) the component
-  needs. A `pip install <pkg> --index-url <whl{,-next}>` must pull in the
-  full chain.
-
-- **Cross-format:** packages must not silently rely on a parallel
-  artifact in a different format (e.g. an rpm that quietly needs a wheel
-  to be installed, or vice versa). Each install path must be
-  self-sufficient.
-
-- **Host-only dependencies for extras (transitive chains stop at host
-  packages):** the **typical case** for extras (RFC0013 §5) is that
-  they call ROCm host APIs and do not ship their own GPU device code.
-  In that case, extras declare hard dependencies only on host-side ROCm
-  Core SDK packages (compilers, runtimes, host libraries). The
-  transitive dependency chain must terminate at host packages —
-  consuming-only extras must never pull in a specific GPU architecture
-  or any `amdrocm<major>-<library>-gfx*` device package as a hard
-  requirement, directly or transitively. Device coverage is the user's
-  choice at install time, selected via the multi-arch wheel index
-  (`whl-next/` with explicit `device-gfxNNNN` extras, or
-  `whl/` for automatic device coverage) or by
-  installing the matching device or architecture-family meta-packages
-  (e.g. `rocm-gfx94X`) alongside the extra. Recommended/suggested deps
-  (rpm `Recommends:`, deb `Recommends:`) are allowed for discoverability
-  but must remain non-hard.
-
-  - **Exception — extras that ship their own GPU kernels (RFC0013 §5,
-    "rare case"):** when an extra produces its own pre-compiled device
-    code, it must be split into per-architecture package variants named
-    `amdrocm<major>-<project>-gfx<arch>` (e.g.
-    `amdrocm7-mytool-gfx942`). Each architecture variant **may**
-    declare a hard dependency on the matching ROCm library device
-    package (e.g. `amdrocm-blas-gfx942`). The host-only rule applies
-    only to the consuming case; kernel-shipping extras are explicitly
-    exempt for their own device variants and only for them. The host
-    (non-`-gfx*`) package of such an extra still follows the host-only
-    rule.
-
-  - **CI enforcement:** the dependency-closure check runs in a
-    **host-only image** for every consuming extra; pulling in any
-    device package as a hard dep fails the publish. Kernel-shipping
-    `-gfx<arch>` variants are tested in an image with the matching
-    device packages installed.
-
-  This rule mirrors the device-extras model in RFC0008 and the
-  end-user-project dependency rules in RFC0013 §5, and applies to both
-  native packages and Python wheels.
-
-- **CI enforcement:** the publish pipeline runs a clean-environment
-  install test for every expansion and extra in each stream
-  (`dev`/`nightly`/`weekly`/`rc`/`stable`) on every supported distro.
-  Missing transitive dependencies fail the publish.
-
-- **Meta-packages:** umbrella packages such as `amdrocm-hpc-<X.Y>`
-  (HPC SDK; e.g. `amdrocm-hpc-7.14`, per
-  [ROCm/TheRock#5613](https://github.com/ROCm/TheRock/pull/5613))
-  inherit this rule and additionally declare their hard dependency
-  on the pinned ROCm Core SDK version.
-
 ## Repository Package
 
 **Defined in a separate RFC** — see
@@ -1050,9 +871,7 @@ placement-related and already covered elsewhere in this document:
 - **Stream-subdomain pointers.** Each tier package's installed
   `baseurl` / `URIs:` resolves to
   `https://<stream>.repo.amd.com/...` for the streams it covers
-  — see *Stream Subdomains* for the subdomain contract and
-  *Concurrent stream installation* for the one-file-per-stream
-  rule that lets tiers coexist on a single host.
+  — see *Stream Subdomains* for the subdomain contract.
 - **On-disk coexistence.** Streams installed via different tier
   packages coexist because each Core SDK build lands in a
   stream-distinct, version-scoped path under `/opt/rocm/` — see
