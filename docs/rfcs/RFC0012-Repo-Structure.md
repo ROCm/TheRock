@@ -352,7 +352,13 @@ retention) are captured in *Per-stream specializations* further down.
   - *(no separate top-level `windows/` folder — Windows artifacts
     live alongside their Linux siblings inside each component, e.g.
     `core/zip`, `core/windows-installers`.)*
+    
+  - **pytorch/** — `whl/` + `whl-next/` (same rule as `core/`).
 
+  - **jax/** *(follows the same artifact rules as **pytorch**)*
+
+  - **onnx-runtime/** *(follows the same artifact rules as **pytorch**)*
+  
   - **[expansion-name]/** *(top-level peer to `core/`,
     `pytorch/`, `jax/`, `onnx-runtime/`)* — each expansion (e.g.
     `rocm-ds/`, future SDKs built on the ROCm Core SDK) is published
@@ -451,45 +457,6 @@ retention) are captured in *Per-stream specializations* further down.
         `pip install "rocm-rvs==1.2.0+rocm7"` or a constraints file.
 
       The exclusion fallback in option (b) is unnecessary.
-
-    - **Distribution vs install layout — still separate concerns:**
-
-      - *Distribution layout* (this RFC, on `repo.amd.com`): a single
-        `extras/` folder with per-project subfolders; the ROCm major
-        is carried by the package name, not the path (e.g.
-        `stable.repo.amd.com/rocm/extras/rvs/`).
-      - *Install layout* (RFC0013, on the user's disk): **a single
-        `/opt/rocm/extras/` tree, no per-major directory.** Extras
-        install into one flat prefix
-        (`/opt/rocm/extras/bin/`, `/opt/rocm/extras/lib/`, …) —
-        binaries and public libraries from different extras live
-        side-by-side, not in per-project subdirectories. Side-by-side
-        across ROCm majors is achieved by **suffixing the binary** with
-        the ROCm major (`/opt/rocm/extras/bin/rvs7`,
-        `/opt/rocm/extras/bin/rvs8`) plus an unsuffixed `rvs` → latest
-        symlink. Public library SONAMEs do **not** carry the ROCm major;
-        they use ordinary project-version SONAMEs and coexist because
-        each extra bumps its own major when it retargets a new ROCm
-        major. (Revised per the PR #4414 review: the earlier per-major
-        `/opt/rocm/extras-<major>/` prefix is dropped in favor of the
-        single tree + versioned binary.)
-      - The two layouts are independent: the single `extras/` folder
-        on `repo.amd.com` is how artifacts are *published and
-        permissioned*; the single `/opt/rocm/extras/` tree is how they
-        are *installed and consumed*. Neither carries the ROCm major in
-        a directory path — the distribution side carries it in the
-        package name, the install side in the binary suffix. RFC0013 is
-        the source of truth for the install layout.
-
-    - **Versioning:** extras use **semver**
-      (`<project>-<major>.<minor>.<patch>`, e.g. `rvs-1.2.0`) per
-      RFC0013 §2.
-
-  - **pytorch/** — `whl/` + `whl-next/` (same rule as `core/`).
-
-  - **jax/** *(follows the same artifact rules as **pytorch**)*
-
-  - **onnx-runtime/** *(follows the same artifact rules as **pytorch**)*
 
 #### Per-stream specializations
 
