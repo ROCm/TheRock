@@ -238,7 +238,7 @@ def create_therock_bump(submodule, token):
         run(["git", "push", "origin", branch_name])
 
         # Create PR
-        gh_api(
+        pr = gh_api(
             token,
             f"repos/{THEROCK_REPO}/pulls",
             method="POST",
@@ -247,8 +247,15 @@ def create_therock_bump(submodule, token):
                 "head": branch_name,
                 "base": "main",
                 "body": body,
-                "labels": ["ci:run-all-archs"],
             },
+        )
+
+        # Add ci:run-all-archs label to the PR
+        gh_api(
+            token,
+            f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
+            method="POST",
+            data={"labels": ["ci:run-all-archs"]},
         )
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
