@@ -2,7 +2,7 @@
 author: Saad Rahim (saadrahim)
 created: 2026-04-08
 modified: 2026-06-09
-status: draft
+status: Approved
 ---
 
 # ROCm software ecosystem package repository structure
