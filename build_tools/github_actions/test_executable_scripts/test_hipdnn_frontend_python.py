@@ -35,9 +35,9 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from setup_venv import create_venv, find_venv_python_exe  # noqa: E402
 from libhipcxx_utils import build_rocm_loader_env  # noqa: E402
 
-_HIPDNN_SHARE_RELPATH = Path("share/hipdnn")
-_HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "tests" / "python"
-_HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "python" / "hipdnn_frontend"
+_HIPDNN_PY_RELPATH = Path("lib/python")
+_HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_PY_RELPATH / "tests"
+_HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_PY_RELPATH / "hipdnn_frontend"
 
 # Per-step timeouts (seconds). Bounded so a hung GPU / deadlocked pytest fails
 # the step instead of consuming the full CI matrix budget.
@@ -65,9 +65,9 @@ def _require_artifact_dir(
 
 def _find_frontend_extension(artifacts_path: Path) -> Path:
     """Locate the compiled extension, which is co-located with libhipdnn_backend
-    (lib/ on Linux, bin/ on Windows) rather than inside the share/ package dir, so
-    a bare dlopen resolves the backend as a sibling. The wheel reunites it with
-    the package's __init__.py at pack time.
+    (lib/ on Linux, bin/ on Windows) rather than inside the lib/python package
+    dir, so a bare dlopen resolves the backend as a sibling. The wheel reunites
+    it with the package's __init__.py at pack time.
     """
     subdir = "bin" if platform.system() == "Windows" else "lib"
     search_dir = artifacts_path / subdir
@@ -86,8 +86,8 @@ def _find_frontend_extension(artifacts_path: Path) -> Path:
 
 
 def stage_package(pkg_dir: Path, ext_path: Path, dest: Path) -> Path:
-    """Reunite the share/ package (pure-Python: __init__.py) with the co-located
-    extension into a single directory the wheel packer can consume.
+    """Reunite the lib/python package (pure-Python: __init__.py) with the
+    co-located extension into a single directory the wheel packer can consume.
     """
     staged = dest / pkg_dir.name
     shutil.copytree(pkg_dir, staged)
@@ -157,7 +157,7 @@ if __name__ == "__main__":
         artifacts_path,
         _HIPDNN_TESTS_ARTIFACT_RELPATH,
         "hipDNN upstream pytest directory",
-        "Ensure the hipDNN test artifact includes share/hipdnn/tests/python.",
+        "Ensure the hipDNN test artifact includes lib/python.",
     )
     logging.info(f"Using hipDNN pytest dir: {tests_dir}")
 
