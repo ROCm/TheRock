@@ -211,7 +211,11 @@ def kpack_gfx_probe_kwargs(
     artifacts_dir: Path | str | None,
     gfxarch_list: tuple | list | None,
 ) -> dict:
-    """Keyword args for is_gfxarch_package disk probe in kpack mode (empty if not applicable)."""
+    """Build optional kwargs for ``is_gfxarch_package`` so kpack can probe the artifact tree.
+
+    Returns ``{"artifacts_dir": ..., "gfxarch_list": ...}`` only when kpack is enabled
+    and both values are set; otherwise ``{}`` for safe ``**`` unpacking at call sites.
+    """
     if not enable_kpack or artifacts_dir is None or not gfxarch_list:
         return {}
     return {"artifacts_dir": artifacts_dir, "gfxarch_list": gfxarch_list}
@@ -222,12 +226,13 @@ def package_has_arch_specific_artifact_trees(
     artifacts_dir: Path,
     gfxarch_list: tuple | list,
 ) -> bool:
-    """True if package (Gfxarch per JSON) has per-arch artifact dirs for some target arch.
+    """Return whether this package has real per-arch (non-generic) artifact directories.
 
-    Mirrors layout rules in ``has_artifact_for_arch`` but uses only JSON ``Gfxarch`` /
-    per-artifact ``Artifact_Gfxarch`` — does **not** call ``is_gfxarch_package`` (avoids
-    circularity). Used in kpack to treat generic-only Gfxarch packages like non-gfxarch
-    for naming, dependencies, and artifact paths.
+    Scans ``artifacts_dir`` for ``{Artifact}_{Component}_{gfx}`` trees with a matching
+    ``artifact_manifest.txt`` entry, using the same suffix rules as ``has_artifact_for_arch``
+    but only JSON ``Gfxarch`` / ``Artifact_Gfxarch`` (never calls ``is_gfxarch_package``, so
+    ``has_artifact_for_arch`` / kpack layout logic can call it without circular calls
+    to ``is_gfxarch_package``.
     """
     pkg_info = get_package_info(pkg_name, raise_if_missing=False)
     if pkg_info is None or not is_key_defined(pkg_info, "Gfxarch"):
@@ -247,7 +252,9 @@ def package_has_arch_specific_artifact_trees(
         for artifact in artifactory:
             artifact_prefix = artifact["Artifact"]
             if "Artifact_Gfxarch" in artifact:
-                is_gfxarch_artifact = str(artifact["Artifact_Gfxarch"]).lower() == "true"
+                is_gfxarch_artifact = (
+                    str(artifact["Artifact_Gfxarch"]).lower() == "true"
+                )
                 artifact_suffix = gfx_arch if is_gfxarch_artifact else "generic"
             else:
                 artifact_suffix = gfx_arch
@@ -259,7 +266,9 @@ def package_has_arch_specific_artifact_trees(
                 artifact_subdir = subdir["Name"]
                 component_list = subdir["Components"]
                 for component in component_list:
-                    source_dir = root / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                    source_dir = (
+                        root / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                    )
                     if not source_dir.exists():
                         continue
                     manifest_file = source_dir / "artifact_manifest.txt"
@@ -286,14 +295,18 @@ def is_gfxarch_package(
     artifacts_dir: Path | str | None = None,
     gfxarch_list: tuple | list | None = None,
 ):
-    """Check whether the package is associated with a graphics architecture
+    """Check whether the package is associated with a graphics architecture.
+
+    In kpack mode, optional ``artifacts_dir`` and ``gfxarch_list`` enable a disk probe:
+    if JSON marks ``Gfxarch`` but ``package_has_arch_specific_artifact_trees`` finds no
+    per-arch trees, this returns False so naming, deps, and paths follow non-gfxarch kpack
+    rules (e.g. generic-only libraries). RCCL / non-meta ``-devel`` overrides still apply first.
 
     Parameters:
     pkg_info (dict): A dictionary containing package details.
     enable_kpack (bool): Enable multi-architecture support.
-    artifacts_dir: When set with ``gfxarch_list`` and ``enable_kpack``, used to detect
-        Gfxarch packages that only ship generic artifact trees (treat as non-gfxarch).
-    gfxarch_list: Target architectures for the above probe.
+    artifacts_dir: Artifact root for the generic-vs-per-arch probe (kpack only).
+    gfxarch_list: Architecture list for that probe (kpack only).
 
     Returns:
     bool : True if Gfxarch is set, else False.
@@ -941,7 +954,9 @@ def filter_components_fromartifactory(
     artifacts_dir : Directory where artifacts are saved
     gfx_arch : graphics architecture
     enable_kpack : enable multi-architecture support
-    gfxarch_list : targets for kpack generic-vs-arch probe (optional)
+    gfxarch_list : When kpack is enabled, pass the full target list so ``is_gfxarch_package``
+        can tell generic-only Gfxarch packages from per-arch layouts (same probe as
+        ``build_package`` / dependency resolution). Omit or leave None for callers without it.
 
     Returns: List of directories
     """
@@ -965,7 +980,9 @@ def filter_components_fromartifactory(
             dir_suffix = "generic"
     else:
         dir_suffix = (
-            gfx_arch if is_gfxarch_package(pkg_info, enable_kpack, **_probe) else "generic"
+            gfx_arch
+            if is_gfxarch_package(pkg_info, enable_kpack, **_probe)
+            else "generic"
         )
 
     artifactory = pkg_info.get("Artifactory")
@@ -1111,7 +1128,8 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch, gfxarch_list=None):
     pkg_name: Package name to check
     artifacts_dir: Directory where artifacts are stored
     gfx_arch: Graphics architecture to check for
-    gfxarch_list: Optional full arch list for kpack generic-vs-arch probe
+    gfxarch_list: When provided in kpack, forwarded into ``is_gfxarch_package`` so
+        generic-only Gfxarch packages resolve like non-gfxarch before checking this arch.
 
     Returns: True if artifacts exist for the architecture, False otherwise
     """
@@ -1243,7 +1261,8 @@ def filter_dependencies_by_artifacts(
     dep_list: List of dependency package names
     artifacts_dir: Directory where artifacts are stored
     gfx_arch: Target architecture to check
-    gfxarch_list: Full arch list for kpack generic-vs-arch probe (optional)
+    gfxarch_list: Full kpack target list for ``is_gfxarch_package`` probe (optional).
+        If omitted, gfxarch classification uses JSON only for that dependency check.
 
     Returns: Filtered dependency list
     """
