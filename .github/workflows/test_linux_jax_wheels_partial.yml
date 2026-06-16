@@ -212,7 +212,7 @@ jobs:
           import boto3
 
           url = os.environ["THEROCK_TAR_URL"]
-          dest = os.environ["TARBALL"]
+          dest = os.path.join(os.environ["RUNNER_TEMP"], "therock.tar.gz")
 
           parsed = urlparse(url)
           bucket = parsed.netloc.split(".s3.amazonaws.com")[0]
