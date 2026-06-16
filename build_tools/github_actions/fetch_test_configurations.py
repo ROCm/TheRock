@@ -835,35 +835,16 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
-                amdgpu_families_matrix = get_all_families_for_trigger_types(
-                    ["presubmit", "postsubmit", "nightly"]
-                )
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
                 ):
-                    # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
-                    shortened_amdgpu_families_name = amdgpu_families.split("-")[
-                        0
-                    ].lower()
-                    platform_info = amdgpu_families_matrix[
-                        shortened_amdgpu_families_name
-                    ][platform]
-
-                    # Use weighted random selection if test-runs-on-multi-gpu-labels is available
-                    # Each component gets its own independent random draw for better load distribution
-                    if "test-runs-on-multi-gpu-labels" in platform_info:
-                        multi_gpu_runner = select_weighted_label(
-                            platform_info["test-runs-on-multi-gpu-labels"],
-                            f"{job_name}-multi-gpu",
-                        )
-                    else:
-                        multi_gpu_runner = platform_info["test-runs-on-multi-gpu"]
-
+                    # Mark this component as needing a multi-GPU runner.
+                    # The actual runner selection is done in the per-component loop below.
+                    job_config_data["multi_gpu_runner"] = True
                     logging.info(
-                        f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
+                        f"Including job {job_name} for multi GPU testing with family {amdgpu_families}"
                     )
-                    job_config_data["multi_gpu_runner"] = multi_gpu_runner
                 else:
                     # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
                     logging.info(
