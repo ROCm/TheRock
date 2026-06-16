@@ -243,7 +243,7 @@ test_matrix = {
     "hipsolver": {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -271,7 +271,7 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 45,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -310,6 +310,15 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            # libhipcxx component build is disabled in NPI
+            "linux": [
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx1250",
+            ],
         },
     },
     "rocthrust": {
@@ -365,12 +374,16 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx90a",
+                "gfx1250",
             ],
             "windows": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx90a",
+                "gfx1250",
             ],
         },
     },
@@ -413,7 +426,7 @@ test_matrix = {
     "hipfft": {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hipfft.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -613,6 +626,17 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # libhipcxx component build is disabled in NPI
+            "linux": [
+                "gfx90a",
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx90a",
+                "gfx1250",
+            ],
+        },
     },
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
@@ -624,6 +648,17 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+        "exclude_family": {
+            # libhipcxx component build is disabled in NPI
+            "linux": [
+                "gfx90a",
+                "gfx1250",
+            ],
+            "windows": [
+                "gfx90a",
+                "gfx1250",
+            ],
         },
     },
     "rocdecode": {
@@ -739,6 +774,12 @@ def run():
             entry = deepcopy(value)
             entry["is_benchmark"] = True
             selected_matrix[key] = entry
+
+    # resetting all sharding to 1 for all tests for NPI case currently we have 1P1G system only
+    for key in selected_matrix:
+        selected_matrix[key]["total_shards_dict"] = {platform: 1}
+        selected_matrix[key]["shard_arr"] = [1]
+        selected_matrix[key]["total_shards"] = 1
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]

@@ -82,6 +82,12 @@ QUICK_TESTS = [
     "-*basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/10*",
 ]
 
+# Allow external consumers (e.g. FFM runners with tighter resource budgets) to
+# override ctest timeout and parallelism without modifying this script. Defaults
+# preserve the existing hardcoded values so TheRock's own CI is unaffected.
+ctest_timeout = int(os.getenv("CTEST_TIMEOUT_OVERRIDE", "900"))
+ctest_parallel = int(os.getenv("CTEST_PARALLEL_OVERRIDE", "8"))
+
 cmd = [
     "ctest",
     "--test-dir",
