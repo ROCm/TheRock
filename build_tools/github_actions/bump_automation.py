@@ -242,12 +242,7 @@ def create_therock_bump(submodule, token):
             token,
             f"repos/{THEROCK_REPO}/pulls",
             method="POST",
-            data={
-                "title": title,
-                "head": branch_name,
-                "base": "main",
-                "body": body,
-            },
+            data={"title": title, "head": branch_name, "base": "main", "body": body},
         )
 
         # Add ci:run-all-archs label to the PR
