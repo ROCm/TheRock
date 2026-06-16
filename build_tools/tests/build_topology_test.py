@@ -110,6 +110,61 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertEqual(hrx.commit, "e642a13425f46bcf909078459dd4e07df0723a0d")
         self.assertEqual(hrx.path, "optional-sources/hrx")
 
+    def test_get_source_set_for_submodule(self):
+        """Test looking up the owning source set for a submodule."""
+        self.write_topology(
+            """
+            [source_sets.compilers]
+            description = "Compiler toolchain submodules"
+            submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
+
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertEqual(
+            topology.get_source_set_for_submodule("llvm-project").name,
+            "compilers",
+        )
+        self.assertEqual(
+            topology.get_source_set_for_submodule("rocm-libraries").name,
+            "rocm-libraries",
+        )
+        self.assertIsNone(topology.get_source_set_for_submodule("unknown-submodule"))
+
+    def test_get_source_sets_for_submodules(self):
+        """Test batch lookup of source sets from submodule names."""
+        self.write_topology(
+            """
+            [source_sets.compilers]
+            description = "Compiler toolchain submodules"
+            submodules = ["llvm-project", "HIPIFY"]
+
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+
+            [source_sets.tests]
+            description = "Tests"
+            submodules = ["tests"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        source_sets = topology.get_source_sets_for_submodules(
+            ["rocm-libraries", "llvm-project", "llvm-project"]
+        )
+
+        self.assertEqual(
+            sorted(source_set.name for source_set in source_sets),
+            ["compilers", "rocm-libraries"],
+        )
+
     def test_validate_external_git_source_path(self):
         """Test validation rejects external sources outside optional-sources."""
         self.write_topology(
@@ -126,6 +181,27 @@ class BuildTopologyTest(unittest.TestCase):
         errors = topology.validate_topology()
 
         self.assertTrue(any("must be under optional-sources" in e for e in errors))
+
+    def test_validate_conflicting_submodule_ownership(self):
+        """Test validation rejects submodules owned by multiple source sets."""
+        self.write_topology(
+            """
+            [source_sets.set1]
+            description = "Set 1"
+            submodules = ["shared-submodule"]
+
+            [source_sets.set2]
+            description = "Set 2"
+            submodules = ["shared-submodule"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+
+        self.assertTrue(
+            any("Submodule 'shared-submodule' is used by both" in e for e in errors)
+        )
 
     def test_parse_artifact_groups(self):
         """Test parsing artifact groups."""
@@ -523,6 +599,15 @@ class BuildTopologyTest(unittest.TestCase):
                 "runtime": ["runtime"],
                 "tests": ["runtime"],
                 "unused": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_submodule_to_source_set(),
+            {
+                "base": "base",
+                "runtime": "runtime",
+                "tests": "tests",
+                "unused": "unused",
             },
         )
 

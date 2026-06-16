@@ -34,6 +34,10 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
+      changed_projects:
+        description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -54,14 +58,18 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # Run in container to access AWS credentials mounted from the host runner.
+    container:
+      image: python:3.12-slim
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checking out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: "3.12"
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Install artifact manager dependencies
         run: pip install boto3
@@ -117,6 +125,8 @@ jobs:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
@@ -129,14 +139,14 @@ jobs:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
-      # Use architecture-specific artifact group for fetching per-arch artifacts
-      artifact_group: ${{ matrix.family_info.amdgpu_family }}
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+      changed_projects: ${{ inputs.changed_projects }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -148,8 +158,10 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_deb_package_version }}
+      rocm_version: ${{ inputs.rocm_deb_package_version || inputs.rocm_package_version }}
       native_package_type: deb
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -161,8 +173,10 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_rpm_package_version }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version || inputs.rocm_package_version }}
       native_package_type: rpm
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -178,6 +192,8 @@ jobs:
       os_profile: ubuntu2404
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -193,6 +209,8 @@ jobs:
       os_profile: rhel10
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -208,6 +226,8 @@ jobs:
       os_profile: sles16
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -225,6 +245,8 @@ jobs:
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write
@@ -262,6 +284,8 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.image.name }}
       container_image_url: ${{ matrix.image.url }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
 
   # Multi-arch PyTorch build: one fat wheel covering every target, then
   # split into a host wheel + per-gfx device wheels via rocm-kpack.
@@ -284,6 +308,8 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
     permissions:
       contents: read
       id-token: write

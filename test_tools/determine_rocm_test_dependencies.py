@@ -5,7 +5,7 @@
 Compute subproject test dependencies by parsing CMakeLists.txt files.
 
 Example:
-$ python build_tools/determine_rocm_test_dependencies.py --projects rocSPARSE
+$ python test_tools/determine_rocm_test_dependencies.py --changed-projects rocSPARSE
 ["hipsparse", "rocsparse"]
 """
 
@@ -14,6 +14,11 @@ import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[1] / "build_tools" / "github_actions")
+)
+from github_actions_api import gha_set_output
 
 
 def parse_cmake_test_subprojects(therock_dir):
@@ -105,18 +110,12 @@ def main():
         "--therock-dir", type=str, default=".", help="TheRock directory"
     )
     parser.add_argument(
-        "--changed",
+        "--changed-projects",
         type=str,
-        nargs="+",
-        metavar="SUBPROJECT",
-        help="Changed subproject(s)",
-    )
-    parser.add_argument(
-        "--projects",
-        type=str,
-        nargs="+",
+        nargs="*",
         metavar="PROJECT",
-        help="Alias for --changed",
+        help="Project(s) to test. Accepts space-separated or comma-separated list. "
+        "Supports 'rocblas' or 'projects/rocblas' format.",
     )
     parser.add_argument(
         "--list-subprojects", action="store_true", help="List all subprojects"
@@ -132,6 +131,11 @@ def main():
         default="json",
         help="Output format: json (default) or list (newline-separated)",
     )
+    parser.add_argument(
+        "--gha-output",
+        action="store_true",
+        help="Write projects_to_test to GITHUB_OUTPUT",
+    )
 
     args = parser.parse_args()
 
@@ -142,15 +146,42 @@ def main():
         print(json.dumps(result, indent=2))
         return
 
-    changed = args.changed or args.projects
+    # Parse changed_projects: handle comma-separated and space-separated input
+    changed = args.changed_projects
+    if changed:
+        # Flatten comma-separated values (e.g., "rocblas,hipblas" -> ["rocblas", "hipblas"])
+        flattened = []
+        for item in changed:
+            flattened.extend(p.strip() for p in item.split(",") if p.strip())
+        changed = flattened
+
+    # Normalize path format: "projects/rocblas" -> "rocblas"
+    if changed:
+        changed = [p.removeprefix("projects/") for p in changed]
+        # Warn about unrecognized projects to catch typos (false-green risk)
+        known = set(parse_cmake_test_subprojects(therock_dir).keys())
+        unknown = [p for p in changed if p.lower() not in known]
+        if unknown:
+            print(
+                f"Warning: unrecognized project(s) {unknown}; "
+                "no tests will be selected for them",
+                file=sys.stderr,
+            )
+
+    # If no projects specified, output "*" for all tests
     if not changed:
-        parser.error(
-            "one of the following arguments is required: --changed, --projects"
-        )
+        if args.gha_output:
+            gha_set_output({"projects_to_test": "*"})
+        else:
+            print("*")
+        return
 
     result = get_subprojects_to_test(changed, therock_dir)
+    projects_to_test = ",".join(sorted(result))
 
-    if args.format == "json":
+    if args.gha_output:
+        gha_set_output({"projects_to_test": projects_to_test})
+    elif args.format == "json":
         print(json.dumps(sorted(result)))
     else:
         for item in sorted(result):

@@ -19,6 +19,45 @@ GFX_HOST = "gfx_host"
 # Used for creating versioned meta package in kpack mode (depends on host + devices)
 GFX_META = "gfx_meta"
 
+# Splits comma-, semicolon-, or whitespace-separated arch tokens in one string.
+_GFX_ARCH_SPLIT_RE = re.compile(r"[,;\s]+")
+
+
+def normalize_target_list(
+    value: str | list[str] | None,
+    *,
+    lowercase: bool = False,
+    dedupe: bool = False,
+) -> list[str]:
+    """Normalize GPU architecture tokens from CLI/env-style inputs.
+
+    Accepts a single string, list of strings, or None. Each token may use
+    comma, semicolon, or whitespace delimiters (including mixed, e.g.
+    ``gfx94x; gfx1100,gfx1200``).
+
+    Args:
+        value: Architecture spec(s). None or blank yields [].
+        lowercase: Lower-case each token (e.g. for install-test package names).
+        dedupe: Drop duplicates while preserving first-seen order.
+
+    Returns:
+        Flat list of non-empty architecture strings.
+    """
+    if value is None:
+        raw: list[str] = []
+    elif isinstance(value, str):
+        raw = [value]
+    else:
+        raw = [str(a) for a in value]
+
+    tokens = [
+        tok.lower() if lowercase else tok
+        for item in raw
+        for tok in _GFX_ARCH_SPLIT_RE.split(item)
+        if tok
+    ]
+    return list(dict.fromkeys(tokens)) if dedupe else tokens
+
 
 # User inputs required for packaging
 # dest_dir - For saving the rpm/deb packages

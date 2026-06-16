@@ -84,19 +84,13 @@ def latest_commit(repo, token):
 
 
 def generate_pr_body(repo, base, head):
-    compare = f"https://github.com/{repo}/compare/{base}...{head}"
+    base_url = f"https://github.com/{repo}/commit/{base}"
+    head_url = f"https://github.com/{repo}/commit/{head}"
+    compare_url = f"https://github.com/{repo}/compare/{base}...{head}"
     return f"""
-Bumps [{repo}](https://github.com/{repo}) from `{base[:7]}` to `{head[:7]}`.
+Bumps [{repo}](https://github.com/{repo}) from {base_url} to {head_url}.
 
-<details>
-<summary>Commits</summary>
-
-See full comparison here:
-
-{compare}
-
-</details>
-<br />
+See full comparison here: {compare_url}
 """
 
 
