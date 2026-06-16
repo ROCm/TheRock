@@ -193,7 +193,10 @@ jobs:
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
 
-      # Download and unpack the published TheRock tarball directly.
+      - name: Install boto3
+        run: |
+          python -m pip install boto3
+
       - name: Configure ROCm from TheRock tarball
         run: |
           DEST="/opt/rocm-${{ inputs.rocm_version }}"
@@ -202,7 +205,22 @@ jobs:
           rm -rf "${DEST}"
           mkdir -p "${DEST}"
 
-          curl -fsSL "${THEROCK_TAR_URL}" -o "${TARBALL}"
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          import boto3
+
+          url = os.environ["THEROCK_TAR_URL"]
+          dest = os.environ["TARBALL"]
+
+          parsed = urlparse(url)
+          bucket = parsed.netloc.split(".s3.amazonaws.com")[0]
+          key = parsed.path.lstrip("/")
+
+          boto3.client("s3").download_file(bucket, key, dest)
+          PY
+
           tar -xzf "${TARBALL}" -C "${DEST}"
 
           ln -sfn "${DEST}" /opt/rocm
