@@ -971,13 +971,18 @@ def do_build_pytorch(
         for arch in rocm_arch_list
     )
 
-    # CK-based SDPA and GEMM kernels not yet supported for gfx1250.
+    # CK-based SDPA and GEMM kernels must be disabled when gfx1250 is present
+    # in the build (single-arch or multi-arch). Even though release/2.11_gfx1250
+    # generates CK tiles for gfx1250, the engineer recommendation is to keep
+    # USE_ROCM_CK_SDPA and USE_ROCM_CK_GEMM OFF until fully validated.
     # See: https://github.com/ROCm/TheRock/issues/5833
     CK_SDPA_GEMM_UNSUPPORTED_ARCHS = ("gfx1250",)
-    has_ck_sdpa_gemm_supported_arch = any(
-        arch and not arch.startswith(CK_SDPA_GEMM_UNSUPPORTED_ARCHS)
+    has_ck_sdpa_gemm_unsupported_arch = any(
+        arch and arch.startswith(CK_SDPA_GEMM_UNSUPPORTED_ARCHS)
         for arch in rocm_arch_list
     )
+    # CK is enabled only when NO unsupported arch is present in the build
+    has_ck_sdpa_gemm_supported_arch = not has_ck_sdpa_gemm_unsupported_arch
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
