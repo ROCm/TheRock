@@ -69,6 +69,7 @@ on:
           - gfx90a
           - gfx94X-dcgpu
           - gfx950-dcgpu
+          - gfx1250
         default: gfx94X-dcgpu
       python_version:
         required: true
@@ -244,7 +245,10 @@ jobs:
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
+            --find-links "https://therock-ci-artifacts-external.s3.amazonaws.com/ROCm-TheRock/27586670592-linux/python/index.html" \
+            --pre \
+            --rocm-extras "device-gfx1250" \
+            --pytorch-rocm-arch gfx1250 \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
