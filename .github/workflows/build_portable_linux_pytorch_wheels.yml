@@ -248,6 +248,7 @@ jobs:
             --find-links "https://therock-ci-artifacts-external.s3.amazonaws.com/ROCm-TheRock/27471597719-linux/python/index.html" \
             --pre \
             --rocm-extras "device-gfx1250" \
+            --pytorch-rocm-arch gfx1250 \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
