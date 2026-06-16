@@ -3,12 +3,8 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
-  # The Python bindings ship only via the test artifact and the dedicated
-  # wheel, never the runtime tree: the package source
-  # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
-  # (lib/python/tests/*.py), and the STABLE_ABI compiled extension
-  # (hipdnn_frontend_python.abi3.so in lib/ on Linux,
-  # hipdnn_frontend_python.pyd in bin/ on Windows) are all excluded here.
+  # Python bindings (package, tests, extension) ship via the test artifact and
+  # the wheel only, never the runtime tree.
   "lib/python/hipdnn_frontend/__init__.py",
   "lib/python/tests/**/*.py",
   "lib/hipdnn_frontend_python.abi3.so",
@@ -21,12 +17,8 @@ include = [
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
 exclude = [
-  # The Python bindings ship only via the test artifact and the wheel, never
-  # the devel tree: the package source
-  # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
-  # (lib/python/tests/*.py), and the STABLE_ABI compiled extension
-  # (hipdnn_frontend_python.abi3.so in lib/ on Linux,
-  # hipdnn_frontend_python.pyd in bin/ on Windows) are all excluded here.
+  # Python bindings (package, tests, extension) ship via the test artifact and
+  # the wheel only, never the devel tree.
   "lib/python/hipdnn_frontend/__init__.py",
   "lib/python/tests/**/*.py",
   "lib/hipdnn_frontend_python.abi3.so",
@@ -38,14 +30,11 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-  # Python package source (__init__.py) staged into the wheel at pack time.
+  # Python bindings: package source, pytest suite, and the extension. The
+  # extension sits apart (as a libhipdnn_backend sibling); the test's
+  # stage_package step reunites it with __init__.py into the wheel.
   "lib/python/hipdnn_frontend/__init__.py",
-  # pytest suite run against the installed wheel.
   "lib/python/tests/**/*.py",
-  # STABLE_ABI compiled extension, kept apart from __init__.py here (it sits in
-  # lib/ on Linux, bin/ on Windows as a libhipdnn_backend sibling). The test's
-  # stage_package step copies both into one dir to build the wheel. Excluded
-  # from lib/dev, so the test component is the only one that ships it.
   "lib/hipdnn_frontend_python.abi3.so",
   "bin/hipdnn_frontend_python.pyd",
 ]
