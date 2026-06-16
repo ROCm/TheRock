@@ -69,6 +69,7 @@ on:
           - gfx90a
           - gfx94X-dcgpu
           - gfx950-dcgpu
+          - gfx125X-dcgpu
         default: gfx1151
       python_version:
         required: true
