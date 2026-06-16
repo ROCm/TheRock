@@ -1,9 +1,11 @@
 # composable-kernel
-[components.lib."ml-libs/composable_kernel/stage"]
-[components.dbg."ml-libs/composable_kernel/stage"]
-[components.dev."ml-libs/composable_kernel/stage"]
+[components.run."math-libs/composable_kernel/stage"]
+optional = true
+[components.lib."math-libs/composable_kernel/stage"]
+[components.dbg."math-libs/composable_kernel/stage"]
+[components.dev."math-libs/composable_kernel/stage"]
 include = [
   "include/ck/**",
   "lib/cmake/composable_kernel/*",
 ]
-[components.doc."ml-libs/composable_kernel/stage"]
+[components.doc."math-libs/composable_kernel/stage"]
