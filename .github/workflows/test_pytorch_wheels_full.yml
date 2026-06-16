@@ -326,17 +326,12 @@ jobs:
       - name: Install C++ build tools and register test library paths
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential cmake
-          ROCM_CORE="${ROCM_HOME%/*}/_rocm_sdk_core"
-          PY_LIBDIR="$(python -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
-          {
-            echo "${ROCM_HOME}/lib"
-            echo "${ROCM_CORE}/lib"
-            echo "${ROCM_HOME}/lib/host-math/lib"
-            echo "${ROCM_HOME}/lib/rocm_sysdeps/lib"
-            echo "${PY_LIBDIR}"
-          } > /etc/ld.so.conf.d/rocm-pytorch-tests.conf
-          ldconfig
+          apt-get install -y --no-install-recommends build-essential cmake pkg-config
+          PY_BIN="$(readlink -f "$(command -v python)")"
+          PY_LIBDIR="$(ldd "${PY_BIN}" 2>/dev/null | awk '/libpython/ {print $3}' | head -n1 | xargs -r dirname)"
+          if [ -n "${PY_LIBDIR}" ]; then
+            echo "LD_LIBRARY_PATH=${PY_LIBDIR}:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          fi
 
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
