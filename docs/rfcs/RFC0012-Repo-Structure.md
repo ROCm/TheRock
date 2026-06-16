@@ -75,7 +75,9 @@ repo.amd.com's open source software release publications need standardization. I
 
 - Python wheel indices — two **central** sibling PEP 503 indices per
   stream, sitting directly under each subdomain's `rocm/` tree (no
-  `pyindex/` wrapper). See "Python Indices" section:
+  `pyindex/` wrapper), per
+  [ROCm/TheRock#5289](https://github.com/ROCm/TheRock/pull/5289).
+  See "Python Indices" section:
 
   - `whl/` — backward-compatible / all-arch index where
     `pip install rocm` pulls in every device extra automatically.
