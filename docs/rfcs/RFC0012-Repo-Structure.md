@@ -165,6 +165,7 @@ Rules:
 - Reserved future subdomains (`ltsrc`, `lts`) must resolve before
   content is published, even if they initially serve an empty index,
   so that repo-package definitions referencing them do not break.
+
 ## Repository Structure
 
 Hosting splits into three layers, each with its own structure:
@@ -271,7 +272,7 @@ retention) are captured in *Per-stream specializations* further down.
 
     - zip — **Windows only**; the `.zip` archive is the Windows
       equivalent of the Linux tarball and is not produced for Linux
-      distros. A single Windows OS variant agnostic `.zip`  is published in 
+      distros. A single Windows OS variant agnostic `.zip` is published in
       `zip/` as one build covers all supported Windows
       versions.
 
@@ -319,6 +320,7 @@ retention) are captured in *Per-stream specializations* further down.
         flexible so it can evolve with the packaging tooling.
 
         The only **normative** requirements are:
+
         - **Standard is the default.** A user who adds the standard
           repo gets release builds by default; no extra opt-in is
           needed for the ordinary install path.
@@ -340,11 +342,13 @@ retention) are captured in *Per-stream specializations* further down.
 
         *Illustrative only* — one valid per-distro realization for
         RHEL 10:
+
         ```
         packages/
           rhel10/         # standard release packages
           rhel10-asan/    # ASAN-instrumented packages
         ```
+
         A `deb/` + `rpm/` grouping that carries the per-OS profiles in
         the aggregated index is an equally acceptable realization. The
         example is not prescriptive.
@@ -352,13 +356,13 @@ retention) are captured in *Per-stream specializations* further down.
   - *(no separate top-level `windows/` folder — Windows artifacts
     live alongside their Linux siblings inside each component, e.g.
     `core/zip`, `core/windows-installers`.)*
-    
+
   - **pytorch/** — `whl/` + `whl-next/` (same rule as `core/`).
 
   - **jax/** *(follows the same artifact rules as **pytorch**)*
 
   - **onnx-runtime/** *(follows the same artifact rules as **pytorch**)*
-  
+
   - **[expansion-name]/** *(top-level peer to `core/`,
     `pytorch/`, `jax/`, `onnx-runtime/`)* — each expansion (e.g.
     `rocm-ds/`, future SDKs built on the ROCm Core SDK) is published
