@@ -156,6 +156,10 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      - name: Install boto3
+        run: |
+          python -m pip install boto3
+
       - name: Determine build arguments
         env:
           BUILD_JAXLIB: ${{ inputs.build_jaxlib }}
@@ -186,10 +190,6 @@ jobs:
         run: |
           python3 ./build_tools/github_actions/write_jax_versions.py \
             --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
-
-      - name: Install boto3
-        run: |
-          python -m pip install boto3
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
