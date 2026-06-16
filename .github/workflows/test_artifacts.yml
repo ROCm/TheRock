@@ -192,7 +192,6 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      build_variant: ${{ inputs.build_variant }}
       # Route to the appropriate runner:
       #   1. Benchmark components use the dedicated benchmark runner
       #   2. Multi-GPU components use the multi-GPU runner

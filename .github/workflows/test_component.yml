@@ -25,10 +25,6 @@ on:
       release_type:
         type: string
         default: ci
-      build_variant:
-        description: 'Build variant (e.g., "release", "asan", "tsan")'
-        type: string
-        default: "release"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -82,7 +78,6 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
-      BUILD_VARIANT: ${{ inputs.build_variant }}
       # Benchmark results database API endpoints for performance metrics collection
       # NOTE: These secrets are only required for benchmark results submission in nightly CI runs.
       # For PR/push workflows, secret retrieval will fail gracefully and benchmarks will skip API submission.
@@ -153,7 +148,7 @@ jobs:
 
         # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
       - name: Enable sanitizer-specific test flags
-        if: ${{ contains(inputs.build_variant, 'asan') }}
+        if: ${{ contains(inputs.artifact_group, 'asan') }}
         run: |
           echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600:halt_on_error=0:exitcode=0" >> $GITHUB_ENV
           echo "LSAN_OPTIONS=exitcode=0:suppressions=$GITHUB_WORKSPACE/build_tools/github_actions/lsan_suppressions.txt" >> $GITHUB_ENV
