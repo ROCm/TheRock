@@ -15,13 +15,15 @@ Required environment variables:
   - RUNNER_OS (https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#detecting-the-operating-system)
 """
 
+import argparse
 import ast
 import json
 import logging
 import os
+import platform as platform_module
 import sys
-from pathlib import Path
 from copy import deepcopy
+from pathlib import Path
 
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
@@ -252,9 +254,12 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        # Extended tests on math-ci take approx 5 hrs (as of May 5, 2026)
-        "timeout_minutes": 120,
-        "test_script": f"python {_get_script_path('test_rocsolver.py')}",
+        # test_runner.py drives ctest category labels, so it runs a filtered
+        # subset rather than the full ~5 hr extended suite.
+        # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
+        # 24 mins + 20% margin = 30 mins => ~40 mins (considering gpu delays and lags)
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards_dict": {
@@ -278,7 +283,7 @@ test_matrix = {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_hipcub.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -311,7 +316,7 @@ test_matrix = {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_rocthrust.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -333,7 +338,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -374,7 +379,7 @@ test_matrix = {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocrand.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -385,7 +390,7 @@ test_matrix = {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_hiprand.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -466,7 +471,7 @@ test_matrix = {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -564,7 +569,7 @@ test_matrix = {
         "fetch_artifact_args": "--rocwmma --tests --blas",
         # Headroom above typical shard runtime; per-test CTest timeouts fail fast on hangs (ROCM-24171).
         "timeout_minutes": 90,
-        "test_script": f"python {_get_script_path('test_rocwmma.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 5,
@@ -673,7 +678,15 @@ test_matrix = {
 
 
 def run():
-    platform = os.getenv("RUNNER_OS").lower()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform_module.system().lower(),
+        help="Platform to configure tests for (linux or windows)",
+    )
+    args, _ = parser.parse_known_args()
+    platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "standard")

@@ -1,0 +1,29 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Weekly gitleaks scan: runs on a fixed cadence and pushes
+# SARIF findings to the repository's code-scanning Security tab.
+name: Gitleaks main
+
+on:
+  # Run every Saturday at 10:00 UTC.
+  schedule:
+    - cron: "0 10 * * 6"
+  # Allow re-running the weekly scan on demand, e.g. after
+  # tweaking `gitleaks.toml` or rotating the gitleaks version pin, so
+  # the Security tab can be refreshed without an unrelated commit.
+  workflow_dispatch:
+
+jobs:
+  gitleaks:
+    uses: ./.github/workflows/gitleaks.yml
+    with:
+      scan_mode: all
+      report_formats: sarif
+    permissions:
+      contents: read
+      # Required so the reusable workflow can call
+      # github/codeql-action/upload-sarif and have the findings
+      # appear under Security -> Code scanning, filterable by
+      # `Tool: gitleaks` separately from any other scanner.
+      security-events: write
