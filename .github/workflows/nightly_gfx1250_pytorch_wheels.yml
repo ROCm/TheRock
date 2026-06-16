@@ -1,0 +1,64 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Nightly PyTorch wheel build for gfx1250 (MI450/CDNA5).
+#
+# Uses release/2.11_gfx1250 PyTorch branch which contains gfx1250-specific
+# workarounds (USE_ROCM_CK_SDPA=OFF, USE_ROCM_CK_GEMM=OFF, aotriton disabled).
+# See: https://github.com/ROCm/TheRock/issues/5833
+#
+# This workflow is separate from the standard nightly because:
+#   1. gfx1250 requires a dedicated PyTorch branch (release/2.11_gfx1250)
+#   2. gfx1250 requires a custom find-links ROCm index (NPI artifacts)
+#   3. gfx1250 CK/aotriton workarounds must not affect other arch builds
+
+name: Nightly gfx1250 PyTorch Wheels
+
+on:
+  schedule:
+    # Runs at 06:00 AM UTC daily (after nightly ROCm build completes)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      rocm_package_find_links_url:
+        description: "pip --find-links URL for ROCm packages"
+        type: string
+        required: true
+        default: "https://rocm.nightlies.amd.com/whl/gfx1250/"
+      rocm_version:
+        description: "ROCm version to pin (e.g. 7.14.0.dev0+abc123). Leave blank to auto-detect."
+        type: string
+        default: ""
+      python_version:
+        description: "Python version"
+        type: string
+        default: "3.12"
+      cache_type:
+        description: "Compiler cache type"
+        type: choice
+        options:
+          - sccache
+          - none
+          - ccache
+        default: sccache
+
+permissions:
+  id-token: write
+  contents: read
+
+run-name: Nightly gfx1250 PyTorch Wheels (py${{ inputs.python_version || '3.12' }})
+
+jobs:
+  build_gfx1250_pytorch:
+    name: gfx1250 | py${{ inputs.python_version || '3.12' }} | torch release/2.11_gfx1250
+    uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
+    with:
+      amdgpu_families: "gfx1250"
+      python_version: ${{ inputs.python_version || '3.12' }}
+      pytorch_git_ref: "release/2.11_gfx1250"
+      rocm_version: ${{ inputs.rocm_version || '' }}
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url || 'https://rocm.nightlies.amd.com/whl/gfx1250/' }}
+      release_type: "dev"
+      ref: ${{ github.ref_name }}
+      cache_type: ${{ inputs.cache_type || 'sccache' }}
+    secrets: inherit
