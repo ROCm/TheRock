@@ -41,6 +41,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
+    [--rocalution | --no-rocalution]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
@@ -382,6 +383,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.rocalution,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -487,6 +489,8 @@ def retrieve_artifacts_by_run_id(args):
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
             extra_artifacts.append("sysdeps-hwloc")
             extra_artifacts.append("sysdeps-libpciaccess")
+        if args.rocalution:
+            extra_artifacts.append("rocalution")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -843,6 +847,13 @@ def main(argv):
         "--rocrtst",
         default=False,
         help="Include 'rocrtst' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocalution",
+        default=False,
+        help="Include 'rocalution' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
