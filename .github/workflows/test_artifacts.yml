@@ -51,6 +51,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      run_github_repo:
+        description: "owner/repo that produced the artifacts for artifact_run_id (cross-repo, e.g. 'ROCm/rocm-libraries'). Empty = current repo."
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -94,6 +98,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      run_github_repo:
+        description: "owner/repo that produced the artifacts for artifact_run_id (cross-repo, e.g. 'ROCm/rocm-libraries'). Empty = current repo."
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -165,6 +173,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      run_github_repo: ${{ inputs.run_github_repo }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -213,3 +222,4 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      run_github_repo: ${{ inputs.run_github_repo }}

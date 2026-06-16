@@ -26,6 +26,9 @@ inputs:
   RELEASE_TYPE:
     description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
     default: ci
+  RUN_GITHUB_REPO:
+    description: '(string) owner/repo that produced the artifacts for --run-id (e.g. "ROCm/rocm-libraries"). Empty = current repo.'
+    default: ""
 
 runs:
   using: "composite"
@@ -74,6 +77,7 @@ runs:
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         RELEASE_TYPE: ${{ inputs.RELEASE_TYPE }}
+        RUN_GITHUB_REPO: ${{ inputs.RUN_GITHUB_REPO }}
         GITHUB_TOKEN: ${{ github.token }}
         STEP_NAME: "Download and Unpack Artifacts"
         STEP_TIMEOUT_TOLERANCE: "2"
@@ -83,4 +87,5 @@ runs:
           --artifact-group=${ARTIFACT_GROUP} \
           --amdgpu-targets=${AMDGPU_TARGETS} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
+          ${RUN_GITHUB_REPO:+--run-github-repo=${RUN_GITHUB_REPO}} \
           ${FETCH_ARTIFACT_ARGS}
