@@ -46,18 +46,18 @@ on:
         description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
         type: string
         required: true
+      pytorch_git_repo:
+        description: PyTorch repository owner/name to checkout for non-nightly refs.
+        type: string
+        default: "ROCm/pytorch"
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
+        description: Python package index URL used to install ROCm packages
         type: string
-        default: ""
-      rocm_package_index_url:
-        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
-        type: string
-        default: ""
+        required: true
       release_type:
         description: 'Release type; selects the S3 bucket.'
         type: string
@@ -104,18 +104,18 @@ on:
         description: PyTorch ref to checkout (for example, "release/2.12").
         type: string
         default: "release/2.12"
+      pytorch_git_repo:
+        description: PyTorch repository owner/name to checkout for non-nightly refs.
+        type: string
+        default: "ROCm/pytorch"
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
+        description: Python package index URL used to install ROCm packages
         type: string
-        default: ""
-      rocm_package_index_url:
-        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
-        type: string
-        default: ""
+        required: true
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -230,7 +230,7 @@ jobs:
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
@@ -286,14 +286,10 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
-          # build_prod_wheels.py forwards each of these to pip and ignores an
-          # empty value, so pass both and supply whichever source applies:
-          # --index-url for a PEP 503 index, --find-links for a flat page.
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --index-url="${{ inputs.rocm_package_index_url }}" \
-            --find-links="${{ inputs.rocm_package_find_links_url }}" \
+            --index-url "${{ inputs.rocm_package_find_links_url }}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \

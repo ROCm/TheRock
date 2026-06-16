@@ -67,6 +67,7 @@ jobs:
             --python-version ${{ inputs.python_version }}
 
       - name: Copy ROCm packages between S3 buckets
+        if: ${{ !inputs.multi_arch }}
         run: |
           aws s3 cp \
             s3://therock-nightly-python/v4/whl/ \
@@ -75,7 +76,7 @@ jobs:
             --include "rocm*${{ inputs.rocm_version }}*"
 
       - name: Copy torch wheels between S3 buckets
-        if: ${{ inputs.include_torch }}
+        if: ${{ !inputs.multi_arch && inputs.include_torch }}
         run: |
           aws s3 cp \
             s3://therock-nightly-python/v4/whl/ \
