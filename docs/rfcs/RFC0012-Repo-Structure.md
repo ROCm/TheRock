@@ -473,15 +473,6 @@ retention) are captured in *Per-stream specializations* further down.
         package name, the install side in the binary suffix. RFC0013 is
         the source of truth for the install layout.
 
-    - **Package naming:** native packages for extras follow the
-      `amdrocm<major>-<project>` convention on `repo.amd.com` (e.g.
-      `amdrocm7-rvs`, `amdrocm7-rocoptiq`); the **distro-native**
-      equivalent shipped through distro repositories is
-      `rocm<major>-<project>` (e.g. `rocm7-rvs`). Optional `-devel` /
-      `-dev` sibling packages follow the same prefix when an extra
-      exposes a public API. See RFC0009 and RFC0013 §5 for the full
-      naming and split rules.
-
     - **Versioning:** extras use **semver**
       (`<project>-<major>.<minor>.<patch>`, e.g. `rvs-1.2.0`) per
       RFC0013 §2.
