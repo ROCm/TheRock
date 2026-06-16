@@ -64,6 +64,26 @@ PYTORCH_REFS_WINDOWS: list[dict] = [
     {"pytorch_git_ref": "nightly"},
 ]
 
+# PyTorch branches that include gfx1250 support (workaround or native).
+# When a branch is listed here, "gfx1250" is appended to the caller's
+# amdgpu_families so the multi-arch build includes gfx1250 automatically.
+#
+# Lifecycle — update this list as gfx1250 support lands upstream:
+#   TODAY:     "release/2.11_gfx1250" (workaround branch, parallel to 2.11)
+#   NEXT:      remove "release/2.11_gfx1250", uncomment "release/2.11"
+#              when gfx1250 changes merge into the 2.11 branch
+#   LATER:     uncomment "release/2.12" when gfx1250 merges there
+#   FINAL:     remove this list entirely and add gfx1250 to the global
+#              amdgpu_families input once all branches support it natively.
+#
+# See: https://github.com/ROCm/TheRock/issues/5833
+GFX1250_PYTORCH_REFS = [
+    "release/2.11_gfx1250",  # workaround branch — remove when merged to 2.11
+    # "release/2.11",         # uncomment when gfx1250 merged to release/2.11
+    # "release/2.12",         # uncomment when gfx1250 merged to release/2.12
+]
+GFX1250_EXTRA_FAMILIES = "gfx1250"
+
 
 def _filter_families(families_str: str, exclude: set[str]) -> str:
     """Remove excluded family names from a semicolon-separated families string.
@@ -92,19 +112,29 @@ def generate_pytorch_matrix(
     platform: str = "linux",
 ) -> list[dict]:
     versions = python_versions if python_versions else PYTHON_VERSIONS
-    pytorch_refs = PYTORCH_REFS_WINDOWS if platform == "windows" else PYTORCH_REFS_LINUX
+    base_refs = PYTORCH_REFS_WINDOWS if platform == "windows" else PYTORCH_REFS_LINUX
+
+    # Build full ref list: base refs + any gfx1250-specific refs not already present
+    all_refs = list(base_refs)
+    for ref in GFX1250_PYTORCH_REFS:
+        if ref not in all_refs:
+            all_refs.append(ref)
+
     matrix = []
     for py in versions:
-        for ref_cfg in pytorch_refs:
-            ref = ref_cfg["pytorch_git_ref"]
-            exclude = ref_cfg.get("exclude_amdgpu_families", set())
-            families = _filter_families(amdgpu_families, exclude)
-            row: dict = {
-                "python_version": py,
-                "pytorch_git_ref": ref,
-                "amdgpu_families": families,
-            }
-            matrix.append(row)
+        for ref_cfg in all_refs:
+            if isinstance(ref_cfg, dict):
+                ref = ref_cfg["pytorch_git_ref"]
+            else:
+                ref = ref_cfg
+            extra = GFX1250_EXTRA_FAMILIES if ref in GFX1250_PYTORCH_REFS else ""
+            matrix.append(
+                {
+                    "python_version": py,
+                    "pytorch_git_ref": ref,
+                    "extra_amdgpu_families": extra,
+                }
+            )
     return matrix
 
 
