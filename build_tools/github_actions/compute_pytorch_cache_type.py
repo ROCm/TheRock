@@ -26,8 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from _therock_utils.s3_buckets import is_current_run_pr_from_fork
-from github_actions_api import gha_set_output
+from github_actions_api import gha_set_output, is_current_run_pr_from_fork
 
 
 def compute_cache_type(cache_type: str, github_repository: str) -> str:
