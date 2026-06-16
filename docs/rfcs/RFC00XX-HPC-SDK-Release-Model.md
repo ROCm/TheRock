@@ -16,7 +16,7 @@ status: draft
 
 ## Related RFCs
 
-- **RFC00XX** — ROCm software ecosystem package repository structure
+- **RFC0012** — ROCm software ecosystem package repository structure
   (stream subdomains, the `rocm/` tree layout, and the `amdrocm-repo`
   package family). The HPC SDK now rides on the Core SDK's existing
   placement rather than occupying its own peer folder.
