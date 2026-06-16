@@ -47,6 +47,7 @@ project wide:
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
   - `THEROCK_BUNDLED_HWLOC`
+  - `THEROCK_BUNDLED_LIBATOMIC`
   - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
   - `THEROCK_BUNDLED_LIBLZMA`
@@ -107,6 +108,52 @@ Supported sub-libraries: `libelf`, `libdw`.
 - Canonical method: `find_package(libdw)`
 - Import library: `libdw::libdw`
 - Alternatives: `pkg_check_modules(DW libdw)`
+
+## libatomic
+
+Provides the out-of-line atomic helper routines (`__atomic_*`, including the
+16-byte `__atomic_*_16` variants) that the compiler cannot always lower inline
+on x86-64. A few ROCm libraries (e.g. `librocprofiler-sdk-rocattach`,
+`libroctracer_tool`) genuinely import these symbols and therefore carry a
+`NEEDED libatomic.so.1`. Clean distros that do not ship libatomic (RHEL,
+SLES, minimal images) cannot load those libraries unless it is bundled.
+
+Unlike other sysdeps, libatomic is part of the compiler runtime rather than an
+upstream project, so it is not fetched and built from source. Instead the
+toolchain copy is located via `${CMAKE_C_COMPILER} -print-file-name=libatomic.so.1`
+and staged into `lib/rocm_sysdeps/lib` with its original `libatomic.so.1`
+SONAME (no `rocm_sysdeps_` prefix), because consumers reference it by that
+name.
+
+Because it is a prebuilt binary from the compiler runtime, libatomic is the
+only sysdep that does not get the `rocm_sysdeps_` SONAME rewrite or the
+`AMDROCM_SYSDEPS_1.0` symbol versioning that the other bundled libraries use.
+This is intentional and safe: libatomic is ABI-stable and backward compatible,
+and keeping the canonical SONAME is required for the consumers' `NEEDED` entry
+to resolve.
+
+### Licensing
+
+libatomic is licensed **GPLv3 with the GCC Runtime Library Exception 3.1**.
+Redistributing the unmodified runtime is permitted under that Exception when it
+was produced by an Eligible Compilation Process — i.e. built by GCC. The sysdep
+therefore refuses to configure unless `CMAKE_C_COMPILER` is GCC, so it always
+ships the `gcc-toolset-13` build from the manylinux build container.
+
+To satisfy GPLv3 the following are shipped to `lib/rocm_sysdeps/share/doc/libatomic/`:
+
+- `COPYING.RUNTIME` — GCC Runtime Library Exception 3.1
+- `COPYING3` — GNU GPL version 3
+- `README.md` — points at the corresponding-source mirror
+
+The corresponding source (GPLv3 §6) is the `gcc-toolset-13` source mirrored in
+the `rocm-third-party-deps` S3 bucket. The pinned version must track the
+`gcc-toolset-13` package installed in
+`dockerfiles/build_manylinux_x86_64.Dockerfile`.
+
+- Canonical method: none; consumers link `-latomic` implicitly via the
+  compiler. Add `THEROCK_BUNDLED_LIBATOMIC` to `RUNTIME_DEPS` and ensure the
+  `lib/rocm_sysdeps/lib` RPATH is present.
 
 ## libcap
 

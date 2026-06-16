@@ -13,6 +13,15 @@ include = [
 ]
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 
+# libatomic (compiler runtime, bundled from the toolchain)
+# Also ship the GPLv3 + Runtime Library Exception texts and source notice that
+# are installed to share/doc/libatomic (the default 'lib' globs only match
+# shared libraries).
+[components.lib."third-party/sysdeps/linux/libatomic/build/stage"]
+include = [
+  "**/share/doc/libatomic/**",
+]
+
 # elfutils
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]

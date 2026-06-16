@@ -121,6 +121,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-register
       therock-yaml-cpp
       ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_LIBATOMIC}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
     INTERFACE_INCLUDE_DIRS
@@ -185,6 +186,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     RUNTIME_DEPS
       hip-clr
       ROCR-Runtime
+      ${THEROCK_BUNDLED_LIBATOMIC}
   )
   therock_cmake_subproject_glob_c_sources(roctracer
     SUBDIRS .
