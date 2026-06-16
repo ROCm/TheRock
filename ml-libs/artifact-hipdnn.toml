@@ -6,13 +6,13 @@ exclude = [
   # The Python bindings ship only via the test artifact and the dedicated
   # wheel, never the runtime tree: the package source
   # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
-  # (lib/python/tests/*.py), and the compiled extension
-  # (hipdnn_frontend_python.* in lib/ on Linux, bin/ on Windows) are all
-  # excluded here.
-  "lib/python/hipdnn_frontend/**",
-  "lib/python/tests/**",
-  "lib/hipdnn_frontend_python*",
-  "bin/hipdnn_frontend_python*",
+  # (lib/python/tests/*.py), and the STABLE_ABI compiled extension
+  # (hipdnn_frontend_python.abi3.so in lib/ on Linux,
+  # hipdnn_frontend_python.pyd in bin/ on Windows) are all excluded here.
+  "lib/python/hipdnn_frontend/__init__.py",
+  "lib/python/tests/**/*.py",
+  "lib/hipdnn_frontend_python.abi3.so",
+  "bin/hipdnn_frontend_python.pyd",
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
@@ -24,13 +24,13 @@ exclude = [
   # The Python bindings ship only via the test artifact and the wheel, never
   # the devel tree: the package source
   # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
-  # (lib/python/tests/*.py), and the compiled extension
-  # (hipdnn_frontend_python.* in lib/ on Linux, bin/ on Windows) are all
-  # excluded here.
-  "lib/python/hipdnn_frontend/**",
-  "lib/python/tests/**",
-  "lib/hipdnn_frontend_python*",
-  "bin/hipdnn_frontend_python*",
+  # (lib/python/tests/*.py), and the STABLE_ABI compiled extension
+  # (hipdnn_frontend_python.abi3.so in lib/ on Linux,
+  # hipdnn_frontend_python.pyd in bin/ on Windows) are all excluded here.
+  "lib/python/hipdnn_frontend/__init__.py",
+  "lib/python/tests/**/*.py",
+  "lib/hipdnn_frontend_python.abi3.so",
+  "bin/hipdnn_frontend_python.pyd",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
@@ -39,11 +39,11 @@ include = [
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
   # Python package source (__init__.py) staged into the wheel at pack time.
-  "lib/python/hipdnn_frontend/**/*.py",
+  "lib/python/hipdnn_frontend/__init__.py",
   # pytest suite run against the installed wheel.
   "lib/python/tests/**/*.py",
-  # Compiled extension (Linux lib/, Windows bin/): reunited with __init__.py
-  # into the wheel by the test, and the sole place it ships.
-  "lib/hipdnn_frontend_python*",
-  "bin/hipdnn_frontend_python*",
+  # STABLE_ABI compiled extension (Linux lib/, Windows bin/): reunited with
+  # __init__.py into the wheel by the test, and the sole place it ships.
+  "lib/hipdnn_frontend_python.abi3.so",
+  "bin/hipdnn_frontend_python.pyd",
 ]
