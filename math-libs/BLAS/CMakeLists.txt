@@ -133,7 +133,10 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIP_PLATFORM=amd
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
     -DTENSILELITE_BUILD_TESTING=OFF
+    -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${THEROCK_BUILD_TESTING}
+    -DROCISA_USE_STABLE_ABI=ON
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
     -DHIPBLASLT_ENABLE_THEROCK=ON
@@ -153,6 +156,9 @@ therock_cmake_subproject_declare(hipBLASLt
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
     ${optional_profiler_deps}
+  TEST_SUBPROJECTS
+    hipSPARSELt
+    MIOpen
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
   SUBDIRS
@@ -272,8 +278,9 @@ if(THEROCK_ENABLE_SPARSE)
       hip-clr
       ${optional_profiler_deps}
     TEST_SUBPROJECTS
-      rocSPARSE
       hipSPARSE
+      rocSOLVER
+      hipSOLVER
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS

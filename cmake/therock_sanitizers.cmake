@@ -58,19 +58,16 @@ function(therock_sanitizer_configure
     string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=${_sanitizer_string}>\n")
     string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
 
-    # For autotools-based builds (like rocgdb) that use CMAKE_*_LINKER_FLAGS directly,
-    # always include -fsanitize=<sanitizer> for linking. Also add -shared-libsan since
-    # we know we are dealing with a non-system compiler.
-    string(APPEND _stanza "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -fsanitize=${_sanitizer_string} -shared-libsan\")\n")
-    string(APPEND _stanza "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -fsanitize=${_sanitizer_string} -shared-libsan\")\n")
+    # Note: autotools-based subprojects (e.g. rocgdb) ignore add_link_options() because
+    # they pass CMAKE_*_LINKER_FLAGS directly to their configure script. Those subprojects
+    # are expected to handle sanitizer linker flags in their own pre_hook.
 
-    # Device-side ASAN: Only for full ASAN mode, not HOST_ASAN.
+    # Device-side instrumentation: applied for full ASAN and TSAN, not HOST_ASAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "TSAN")
-      # ASAN and TSAN.
       string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
       string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
-      string(APPEND _stanza "message(STATUS \"Override \${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
+      string(APPEND _stanza "message(STATUS \"Override ${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
       # HOST_ASAN.
       string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")

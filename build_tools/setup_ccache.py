@@ -43,7 +43,7 @@ CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:808
 # Bump this version when making hash-affecting config changes (sloppiness,
 # compiler_check, etc.) to logically isolate new cache entries from stale
 # ones on the shared remote cache server.
-CCACHE_NAMESPACE_VERSION = "v1"
+CCACHE_NAMESPACE_VERSION = "v2"
 
 DEFAULT_LOG_DIR = REPO_ROOT / "build" / "logs" / "ccache"
 
@@ -71,11 +71,17 @@ CONFIG_PRESETS_MAP = {
 }
 
 
+def _log(msg: str):
+    print(f"[setup_ccache] {msg}", file=sys.stderr)
+
+
 def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     lines = []
 
     config_preset: str = args.config_preset
     selected_config = CONFIG_PRESETS_MAP[config_preset]
+    _log(f"Config preset: {config_preset}")
+    _log(f"Platform: {'Windows' if IS_WINDOWS else 'POSIX'}")
     for k, v in selected_config.items():
         lines.append(f"{k} = {v}")
 
@@ -146,16 +152,18 @@ def run(args: argparse.Namespace):
 
     config_contents = gen_config(dir, compiler_check_file, args)
     if args.init or not config_file.exists():
-        print(f"Initializing ccache dir: {dir}", file=sys.stderr)
+        _log(f"Initializing ccache dir: {dir}")
         dir.mkdir(parents=True, exist_ok=True)
         config_file.write_text(config_contents)
+        _log(f"Wrote config: {config_file}")
         if not IS_WINDOWS:
             compiler_check_file.write_text(POSIX_COMPILER_CHECK_SCRIPT)
+            _log(f"Wrote compiler check script: {compiler_check_file}")
 
     else:
         # Check to see if updated.
         if config_file.read_text() != config_contents:
-            print(
+            _log(
                 f"NOTE: {config_file} does not match expected. Run with --init to regenerate",
                 file=sys.stderr,
             )
@@ -182,6 +190,12 @@ def run(args: argparse.Namespace):
                 f"ERROR! Zeroing statistic counters failed. Message: {proc_ccache.stderr}",
                 file=sys.stderr,
             )
+    # Print the generated config for visibility in CI logs.
+    _log("Generated ccache config:")
+    for line in config_contents.splitlines():
+        if line.strip():
+            _log(f"  {line}")
+
     # Output options.
     if IS_WINDOWS:
         print(f"set CCACHE_CONFIGPATH={config_file}")
@@ -242,14 +256,14 @@ def main(argv: list[str]):
     preset_group.add_argument(
         "--release-type",
         type=str,
-        choices=["", "dev", "nightly", "prerelease"],
-        help='Shorthand for --config-preset: "" and "dev" map to github-oss-dev, '
+        choices=["ci", "dev", "nightly", "prerelease"],
+        help='Shorthand for --config-preset: "ci" and "dev" map to github-oss-dev, '
         "others map to github-oss-release.",
     )
 
     args = p.parse_args(argv)
     if args.release_type is not None:
-        if args.release_type in ("", "dev"):
+        if args.release_type in ("ci", "dev"):
             args.config_preset = "github-oss-dev"
         else:
             args.config_preset = "github-oss-release"

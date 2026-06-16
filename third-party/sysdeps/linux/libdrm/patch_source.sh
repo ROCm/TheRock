@@ -32,4 +32,6 @@ cat >> "$AMDGPU_IDS" << 'EOF'
 75B0,	00,	AMD Instinct MI350X VF
 75B3,	00,	AMD Instinct MI355X VF
 75A8,	00,	AMD Instinct MI350P
+7551,	C1,	AMD Radeon AI Pro R9700S
+7551,	C8,	AMD Radeon AI Pro R9600D
 EOF

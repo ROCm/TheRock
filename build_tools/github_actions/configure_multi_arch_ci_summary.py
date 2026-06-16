@@ -75,8 +75,6 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
-    elif ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
-        reason = "PR does not have `ci:run-multi-arch` label"
     else:
         reason = "no CI-relevant files changed"
 
@@ -180,13 +178,13 @@ def _append_build_rocm(
             lines.append(f"| {platform} | {families} | `{config.artifact_group}` |")
     lines.append("")
 
-    # Link to log and artifact index pages
+    # Link to log, artifact, and manifest index pages
     lines.extend(
         [
             "## Build outputs",
             "",
-            "Platform | 📋 Logs | 📦 Artifacts",
-            "-- | -- | --",
+            "Platform | 📋 Logs | 📦 Artifacts | 📄 Manifests",
+            "-- | -- | -- | --",
         ]
     )
     for platform_name in ["linux", "windows"]:
@@ -195,7 +193,10 @@ def _append_build_rocm(
         )
         log_url = output_root.log_root_index().https_url
         artifact_url = output_root.artifact_index().https_url
-        lines.append(f"{platform_name.capitalize()} | {log_url} | {artifact_url}")
+        manifest_url = output_root.manifests_index().https_url
+        lines.append(
+            f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
+        )
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:

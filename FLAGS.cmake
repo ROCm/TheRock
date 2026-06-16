@@ -22,13 +22,11 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
-  NAME HIP_KERNEL_PROVIDER_ENABLE
+  NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
-  DESCRIPTION "Enable hip-kernel-provider plugin"
-  CMAKE_VARS
-    HIP_KERNEL_PROVIDER_ENABLE=ON
-  SUB_PROJECTS
-    hipkernelprovider
+  DESCRIPTION "Stamp library git revisions into generated version metadata"
+  ISSUE https://github.com/ROCm/TheRock/issues/5009
+  GLOBAL_PROPAGATE_FLAG
 )
 
 therock_declare_flag(

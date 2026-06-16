@@ -21,7 +21,7 @@ The CI pipeline is a DAG of job groups:
     build-rocm → test-rocm
                → build-rocm-python → build-pytorch → test-pytorch
                                    → build-jax     → test-jax (future)
-               → build-native-linux   → test-native-linux   (future)
+               → build-native-linux   → test-native-linux
                → build-native-windows → test-native-windows (future)
 
 Step 4 determines which job groups to run, skip, or satisfy with prebuilt
@@ -48,7 +48,7 @@ import enum
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
 # Add parent directory to path for _therock_utils imports
@@ -101,8 +101,8 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     Reads stage names from BUILD_TOPOLOGY.toml when 'all' is specified.
 
     Example:
-        "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
-        "all" → ["foundation", "compiler-runtime", "math-libs", ...]
+        "compiler-runtime,runtime-tests" → ["compiler-runtime", "runtime-tests"]
+        "all" → ["compiler-runtime", "runtime-tests", "math-libs", ...]
     """
     stages = _parse_comma_list(raw)
     if "all" in stages:
@@ -129,7 +129,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
-    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
+    release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -180,7 +180,7 @@ class CIInputs:
         # setup_multi_arch.yml. GitHub-specific context (PR labels,
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
-        release_type = os.environ.get("RELEASE_TYPE", "")
+        release_type = os.environ.get("RELEASE_TYPE", "ci")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -427,12 +427,16 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     expect_failure: bool
+    build_native_linux: bool
     build_pytorch: bool
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    # Cross-platform pair, populated identically in linux and windows configs.
+    linux_amdgpu_families: str = ""  # Semicolon-separated
+    windows_amdgpu_families: str = ""  # Semicolon-separated
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -500,6 +504,22 @@ def should_skip_ci(
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
+
+    # Skip ASAN on PRs unless submodule changes are present.
+    # This avoids running expensive ASAN builds on every PR while still
+    # catching ASAN issues when library code (submodules) changes.
+    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
+    #       If overly expensive, remove that option
+    if (
+        ci_inputs.is_pull_request
+        and ci_inputs.build_variant == "asan"
+        and git_context.changed_files is not None
+        and git_context.submodule_paths is not None
+    ):
+        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+        if not matching:
+            print("  Skipping: ASAN PR without submodule changes")
+            return True
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -571,12 +591,21 @@ def _determine_test_type(
     if _has_test_labels(ci_inputs):
         return "full", "test labels specified"
 
-    # Priority 3: schedule runs the full nightly suite — comprehensive
+    # Priority 3: release builds run deeper test suites than regular CI.
+    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
+    # * 'prerelease' gets full (exhaustive pre-release validation)
+    # * 'dev' falls through to later priorities so changes can be tested quickly
+    if ci_inputs.release_type == "nightly":
+        return "comprehensive", "release build (nightly)"
+    if ci_inputs.release_type == "prerelease":
+        return "full", "release build (prerelease)"
+
+    # Priority 4: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 4: a submodule change means actual library code changed
+    # Priority 5: a submodule change means actual library code changed
     # (e.g. rocBLAS, MIOpen). These need full testing since the change
     # could affect any downstream consumer.
     if (
@@ -585,7 +614,7 @@ def _determine_test_type(
     ):
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
         if matching:
-            return "full", f"submodule(s) changed: {sorted(matching)}"
+            return "standard", f"submodule(s) changed: {sorted(matching)}"
 
     # Default: quick tests for fast CI feedback.
     return "quick", "default"
@@ -622,6 +651,17 @@ def decide_jobs(
         test_type=test_type,
         test_type_reason=test_type_reason,
     )
+
+    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
+    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
+    if ci_inputs.build_variant == "asan":
+        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
+        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            test_rocm = TestRocmDecision(
+                action=JobAction.SKIP,
+                test_type=test_type,
+                test_type_reason="ASAN tests skipped due to non-nightly trigger",
+            )
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
@@ -777,10 +817,13 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
-    ci_inputs: CIInputs,
     all_families: dict[str, dict],
     variant_config: dict,
     test_type: str,
+    pr_labels: list[str],
+    is_schedule: bool,
+    is_workflow_dispatch: bool,
+    git_context: GitContext,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfig | None:
@@ -795,12 +838,12 @@ def _expand_build_config_for_platform(
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
     """
-    build_variant = ci_inputs.build_variant
+    build_variant = variant_config["build_variant_label"]
 
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
     test_runner_kernel = ""
-    for label in ci_inputs.pr_labels:
+    for label in pr_labels:
         if label.startswith("test_runner:"):
             test_runner_kernel = label.split(":")[1]
             break
@@ -830,6 +873,18 @@ def _expand_build_config_for_platform(
                 platform_info["test-runs-on-labels"], family_name
             )
 
+        # TODO: use hard-coded label (vultr machines) as we try to determine core42 regression
+        # This is a temporary measure to get good signal for submodule bumps while we determine core42 issues
+        if (
+            platform == "linux"
+            and family_name == "gfx94x"
+            and git_context.changed_files is not None
+            and git_context.submodule_paths is not None
+        ):
+            matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+            if matching:
+                test_runs_on = "linux-gfx942-1gpu-ossci-rocm"
+
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
@@ -848,10 +903,16 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove sandbox logic once ASAN tests are passing
-        # For ASAN builds, use sandbox runner to avoid impacting production
-        if build_variant == "asan":
-            if "test-runs-on-sandbox" in platform_info:
+        # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
+        if build_variant == "asan" or build_variant == "host-asan":
+            # Only run ASAN tests on scheduled or workflow_dispatch runs
+            if not (is_schedule or is_workflow_dispatch):
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
@@ -872,7 +933,7 @@ def _expand_build_config_for_platform(
         # If nightly_check_only_for_family is set for schedule runs only
         if (
             platform_info.get("nightly_check_only_for_family", False)
-            and not ci_inputs.is_schedule
+            and not is_schedule
         ):
             test_runs_on = ""
             print(
@@ -900,7 +961,7 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, ci_inputs.build_variant)
+    build_runs_on = select_build_runner(platform, build_variant)
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -910,7 +971,10 @@ def _expand_build_config_for_platform(
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
-        build_pytorch=not expect_failure and not expect_pytorch_failure,
+        build_native_linux=(not expect_failure and suffix != "asan"),
+        build_pytorch=(
+            not expect_failure and not expect_pytorch_failure and suffix != "asan"
+        ),
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
@@ -921,6 +985,7 @@ def expand_build_configs(
     targets: TargetSelection,
     ci_inputs: CIInputs,
     test_type: str,
+    git_context: GitContext,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -933,6 +998,10 @@ def expand_build_configs(
         ["presubmit", "postsubmit", "nightly"]
     )
     build_variant = ci_inputs.build_variant
+    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
+    # Otherwise, push events run "host-asan"
+    if build_variant == "asan" and ci_inputs.is_push:
+        build_variant = "host-asan"
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -951,17 +1020,38 @@ def expand_build_configs(
         config = _expand_build_config_for_platform(
             families=families,
             platform=platform,
-            ci_inputs=ci_inputs,
             all_families=all_families,
             variant_config=variant_config,
             test_type=test_type,
+            pr_labels=ci_inputs.pr_labels,
+            is_schedule=ci_inputs.is_schedule,
+            is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
+            git_context=git_context,
         )
         if platform == "linux":
             linux_config = config
         else:
             windows_config = config
+
+    # Stamp the cross-platform pair into both configs so each platform's
+    # build_python_packages step can produce a rocm sdist whose device
+    # extras advertise the union.
+    linux_families = linux_config.dist_amdgpu_families if linux_config else ""
+    windows_families = windows_config.dist_amdgpu_families if windows_config else ""
+    if linux_config is not None:
+        linux_config = replace(
+            linux_config,
+            linux_amdgpu_families=linux_families,
+            windows_amdgpu_families=windows_families,
+        )
+    if windows_config is not None:
+        windows_config = replace(
+            windows_config,
+            linux_amdgpu_families=linux_families,
+            windows_amdgpu_families=windows_families,
+        )
 
     return BuildConfigs(
         linux=linux_config,
@@ -1044,6 +1134,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         test_type=jobs.test_rocm.test_type,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        git_context=git_context,
     )
     builds.log()
 
