@@ -41,7 +41,7 @@ Based on upstream: AlmaLinux 8 with gcc toolset 13
 
 While this generally implies that the project should build on similarly versioned alternative EL distributions, do note that we install several upgraded tools (see dockerfile above) in our standard CI pipelines.
 
-Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421`
+Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6`
 
 ### Ubuntu 22.04
 
@@ -50,6 +50,89 @@ Reference image: `ubuntu:22.04`
 Workarounds:
 
 - Shipping CMake is too old (3.22): see above advice for CMake
+
+### Arch Linux / EndeavourOS
+
+Arch-based distributions ship the latest toolchain versions, which occasionally
+surface new failures. The following notes apply to rolling-release Arch,
+EndeavourOS, and similar derivatives.
+
+#### Required packages
+
+```bash
+sudo pacman -S cmake ninja patchelf ccache base-devel
+```
+
+#### GPU permissions
+
+After installing, ensure your user has access to the GPU by adding yourself to
+the `video` and `render` groups (required for ROCm to access the GPU at
+runtime). This matches the [upstream ROCm prerequisite][rocm-prereqs]:
+
+```bash
+sudo usermod -a -G video,render $LOGNAME
+# Log out and back in (or reboot) for the group change to take effect.
+groups  # verify 'video' and 'render' appear in the output
+```
+
+On Arch, these groups are typically created by the `amdgpu` kernel module but
+users are **not** added automatically. Without this step, ROCm will fail at
+runtime with permission errors (e.g., `hsaKmtInit` returning
+`HSA_STATUS_ERROR_NOT_INITIALIZED` or `HIP` returning `hipErrorNoDevice`).
+
+Arch provides `patchelf` via `pacman`. **Verify that the installed version
+includes the PHDR fix** (see [patchelf section](#patchelf) above) — without it,
+builds that invoke `patchelf` on split ELF binaries will produce corrupt output:
+
+```bash
+pacman -Q patchelf
+
+# After a build that uses patchelf, verify the fix is present:
+readelf -l build/dist/rocm/lib/libhsa-runtime64.so 2>/dev/null | grep -A1 PHDR
+# If VirtAddr is 0xfffffffffff79040 or similar, you have a broken patchelf.
+```
+
+If the fix is not present, build `patchelf` from source using the script above.
+On Arch, you will need the build tools:
+
+```bash
+sudo pacman -S curl autoconf automake
+sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
+```
+
+#### GCC version considerations
+
+Arch ships the latest stable GCC. As of GCC 15+, several TheRock subprojects
+(especially `rocprofiler-systems` and its bundled `dyninst`) fail to compile
+under the host GCC due to:
+
+- **`-Werror`-by-default dialect rules** — `incompatible-pointer-types`,
+  `discarded-qualifiers`, `unterminated-string-initialization`.
+- **`<cstdint>` no longer transitively included** — many subprojects rely on
+  the transitive include and fail without an explicit `#include <cstdint>`.
+
+**Workaround:** Disable components known to fail on GCC 15+ until upstream
+fixes land. See [TheRock issue #5540](https://github.com/ROCm/TheRock/issues/5540):
+
+```bash
+cmake -B build -GNinja \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1032 \
+  -DTHEROCK_ENABLE_DEBUG_TOOLS=OFF \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+```
+
+Setting `THEROCK_ENABLE_DEBUG_TOOLS=OFF` skips `rocprofiler-systems` (the
+primary GCC-15-sensitive component). Most other components compile cleanly
+because they are built with TheRock's bundled `amd-llvm` toolchain rather than
+the host GCC.
+
+#### Memory and parallelism
+
+Arch kernels ship with `systemd-oomd` enabled by default on many installations.
+Combined with high core counts (e.g., 14600K with 20 threads), this can kill
+the build during `amd-llvm` link steps. See [Resource Utilization](#resource-utilization)
+below for guidance — `-j8` is a safe starting point on a 32 GB system.
 
 ## Common Issues
 
@@ -135,6 +218,90 @@ Pick whichever applies to your host:
 
 ### Resource Utilization
 
-ROCm is a very resource hungry project to build. If running with high parallelism (i.e. on systems with a high core:memory ratio), it will likely use more memory than you have without special consideration. Sometimes this will result in a transient "resource exhausted" problem which clears on a restart. Sufficient swap and controlling concurrency may be necessary. TODO: Link to guide on how to control concurrency and resource utilization.
+ROCm is a very resource hungry project to build. The `compiler/amd-llvm` component alone involves linking multi-gigabyte binaries that can consume 4-8 GB of RAM per link job, and LLVM's configure+bootstrap phase is especially memory-intensive. On systems with a high core:memory ratio (e.g., 16+ cores with 32 GB RAM), Ninja's default `nproc`-level parallelism will frequently exceed available memory and get killed by `systemd-oomd` or the kernel OOM killer.
+
+#### Controlling Build Parallelism
+
+The most effective way to bound memory usage is to cap the number of concurrent build jobs. Note that `-j` passed to the outer Ninja/CMake invocation controls parallelism at the super-project level; subproject builds (e.g., `amd-llvm`) spawn their own Ninja instances and are not directly bounded by this setting. See [TheRock issue #XXXX](https://github.com/ROCm/TheRock/issues) for tracking a Ninja job server that would propagate limits into subprojects.
+
+1. **Per-invocation via `ninja -j`:**
+
+   ```bash
+   # Use only 8 concurrent jobs at the super-project level (safe for 32 GB RAM)
+   ninja -C build -j8
+
+   # Or even lower for very memory-constrained systems
+   ninja -C build -j4
+   ```
+
+1. **Via the `CMAKE_BUILD_PARALLEL_LEVEL` environment variable** (applies to any `cmake --build` invocation):
+
+   ```bash
+   CMAKE_BUILD_PARALLEL_LEVEL=8 cmake --build build
+
+   # Or export it persistently for the session:
+   export CMAKE_BUILD_PARALLEL_LEVEL=8
+   cmake --build build
+   ```
+
+1. **Via `NINJA_STATUS` to see real-time job counts** (helpful for debugging OOM):
+
+   ```bash
+   NINJA_STATUS="[%f/%t (%j running)] " ninja -C build
+   ```
+
+#### Choosing the right `-j` for your system
+
+| RAM    | Cores | Recommended `-j` | Notes                                |
+| ------ | ----- | ---------------- | ------------------------------------ |
+| 16 GB  | 8+    | `-j4`            | Link steps will saturate RAM         |
+| 32 GB  | 16    | `-j8`            | Leaves headroom for system + linker  |
+| 32 GB  | 20+   | `-j8` to `-j10`  | More cores than RAM can safely serve |
+| 64 GB+ | any   | `-j16` or higher | Link jobs still peak at ~8 GB each   |
+
+If you observe OOM kills during the `amd-llvm` build, drop `-j` further. The OOM typically manifests as `ninja: build stopped: subcommand failed` with no compiler error — check `dmesg | tail -50` for `Out of memory: Killed process` entries.
+
+#### Using ccache to reduce rebuild times
+
+`ccache` dramatically speeds up incremental rebuilds (common when iterating on a single component) by caching compilation results. TheRock ships a project-aware ccache configuration:
+
+```bash
+# Initialize project-local ccache config (stored in .ccache/ within the repo)
+eval "$(./build_tools/setup_ccache.py)"
+
+# Pass compiler launchers to CMake
+cmake -B build -GNinja \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1032
+
+# Build with limited parallelism
+ninja -C build -j8
+```
+
+Monitor ccache effectiveness with `ccache -s` — on subsequent rebuilds you should see cache hit rates of 60-90% for incremental work.
+
+#### Reducing build scope
+
+If memory is tight and you only need a specific component, build that target
+directly rather than the full stack. For example, to work on rocBLAS:
+
+```bash
+ninja -C build rocBLAS+build
+```
+
+Or configure with only the components you need enabled:
+
+```bash
+cmake -B build -GNinja \
+  -DTHEROCK_ENABLE_ALL=OFF \
+  -DTHEROCK_ENABLE_HIPIFY=ON \
+  -DTHEROCK_ENABLE_CORE=ON \
+  -DTHEROCK_ENABLE_MATH_LIBS=ON \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1032
+```
+
+See the top-level `CMakeLists.txt` for the full list of `THEROCK_ENABLE_*` options.
 
 [dockerfile]: ../dockerfiles/build_manylinux_x86_64.Dockerfile
+[rocm-prereqs]: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html

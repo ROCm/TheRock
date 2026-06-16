@@ -55,6 +55,14 @@ on:
         description: "'true' if this is a kpack-split flat build."
         type: string
         default: "false"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -114,6 +122,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Configure Git Identity
         run: |
@@ -129,6 +140,16 @@ jobs:
           python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }}
 
+      # sccache uses an S3 bucket reached via an OIDC-assumed IAM role, which
+      # fork PRs / external repos cannot assume. Compute the effective cache
+      # type once (downgrading sccache -> none on forks) so every sccache step
+      # below keys off a single decision instead of repeating fork checks.
+      - name: Determine cache type
+        id: cache
+        run: |
+          python build_tools/github_actions/compute_pytorch_cache_type.py \
+            --cache-type "${{ inputs.cache_type }}"
+
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
@@ -137,7 +158,7 @@ jobs:
           choco install --no-progress -y ninja --version 1.13.1
 
       - name: Install sccache
-        if: ${{ inputs.cache_type == 'sccache' }}
+        if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
         run: |
           choco install --no-progress -y sccache
           echo "sccache version: $(sccache --version)"
@@ -178,7 +199,7 @@ jobs:
             --rocm-version ${{ inputs.rocm_version }}
 
       - name: Configure AWS Credentials for sccache
-        if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
+        if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
         uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         with:
           aws-region: us-east-1
@@ -189,7 +210,7 @@ jobs:
           special-characters-workaround: true
 
       - name: Verify sccache
-        if: ${{ inputs.cache_type == 'sccache' }}
+        if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
         run: |
           echo "sccache version: $(sccache --version)"
           echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
@@ -217,13 +238,13 @@ jobs:
         shell: cmd
         run: |
           set "CACHE_FLAG="
-          if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
-          if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+          if "${{ steps.cache.outputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
+          if "${{ steps.cache.outputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
 
           set "PYTORCH_ROCM_ARCH_FLAG="
           if not "${{ steps.expand.outputs.targets }}"=="" set "PYTORCH_ROCM_ARCH_FLAG=--pytorch-rocm-arch ${{ steps.expand.outputs.targets }}"
 
-          echo "Building PyTorch wheels for ${{ inputs.artifact_group }} (cache: ${{ inputs.cache_type }})"
+          echo "Building PyTorch wheels for ${{ inputs.artifact_group }} (cache: ${{ steps.cache.outputs.cache_type }})"
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
@@ -237,13 +258,13 @@ jobs:
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
-        if: ${{ !cancelled() && inputs.cache_type != 'none' }}
+        if: ${{ !cancelled() && steps.cache.outputs.cache_type != 'none' }}
         run: |
-          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+          if [ "${{ steps.cache.outputs.cache_type }}" = "sccache" ]; then
             echo "sccache stats:"
             echo "--------------"
             sccache --show-stats || true
-          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+          elif [ "${{ steps.cache.outputs.cache_type }}" = "ccache" ]; then
             echo "ccache stats:"
             echo "-------------"
             ccache -s -v || true

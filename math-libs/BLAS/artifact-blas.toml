@@ -87,6 +87,8 @@ include = [
   "libexec/hipblaslt-samples/**",
   # TensileLite Python test artifacts
   "share/hipblaslt/tensilelite/**",
+  # TensileLite client binary (common/benchmark tests)
+  "libexec/hipblaslt/tensilelite/**",
 ]
 
 # rocBLAS

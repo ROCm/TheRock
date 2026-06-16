@@ -77,6 +77,8 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         f"--amdgpu-family {args.amdgpu_family} "
         f'--test-script "{args.test_script}" '
     )
+    if args.amdgpu_targets:
+        cmd += f" --amdgpu-targets {args.amdgpu_targets}"
     if args.shard_index != "1":
         cmd += f" --shard-index {args.shard_index}"
     if args.total_shards != "1":
@@ -100,6 +102,8 @@ def run_linux(args: argparse.Namespace) -> int:
         f"--run-id {args.run_id} "
         f"--amdgpu-family {args.amdgpu_family}"
     )
+    if args.amdgpu_targets:
+        fetch_cmd += f" --amdgpu-targets {args.amdgpu_targets}"
     if args.fetch_artifact_args:
         fetch_cmd += f" {args.fetch_artifact_args}"
 
@@ -218,6 +222,8 @@ def run_windows(args: argparse.Namespace) -> int:
         f"--run-id {args.run_id} "
         f"--amdgpu-family {args.amdgpu_family}"
     )
+    if args.amdgpu_targets:
+        fetch_cmd += f" --amdgpu-targets {args.amdgpu_targets}"
     if args.fetch_artifact_args:
         fetch_cmd += f" {args.fetch_artifact_args}"
 
@@ -343,6 +349,12 @@ def main() -> int:
     parser.add_argument("--run-id", required=True, help="GitHub Actions run ID")
     parser.add_argument("--repository", required=True, help="GitHub repository")
     parser.add_argument("--amdgpu-family", required=True, help="AMDGPU family")
+    parser.add_argument(
+        "--amdgpu-targets",
+        default="",
+        help="Comma-separated gfx targets (e.g. gfx942). Needed to fetch "
+        "per-target kpack-split shards; optional for monolithic runs.",
+    )
     parser.add_argument("--test-script", required=True, help="Test script to run")
     parser.add_argument("--shard-index", default="1", help="Shard index")
     parser.add_argument("--total-shards", default="1", help="Total shards")
