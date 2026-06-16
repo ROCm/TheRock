@@ -698,6 +698,8 @@ def run():
     # This enables better load distribution across runner pools
     test_runs_on_labels = None
     test_runs_on_default = None
+    test_runs_on_multi_gpu_labels = None
+    test_runs_on_multi_gpu_default = None
     if amdgpu_families:
         shortened_family = amdgpu_families.split("-")[0].lower()
         all_families = get_all_families_for_trigger_types(
@@ -707,6 +709,12 @@ def run():
             platform_info = all_families[shortened_family].get(platform, {})
             test_runs_on_labels = platform_info.get("test-runs-on-labels")
             test_runs_on_default = platform_info.get("test-runs-on", "")
+            test_runs_on_multi_gpu_labels = platform_info.get(
+                "test-runs-on-multi-gpu-labels"
+            )
+            test_runs_on_multi_gpu_default = platform_info.get(
+                "test-runs-on-multi-gpu", ""
+            )
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -868,8 +876,17 @@ def run():
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
     for component in all_components:
-        if "test_runner" not in component and "multi_gpu_runner" not in component:
-            job_name = component.get("job_name", "unknown")
+        job_name = component.get("job_name", "unknown")
+        if "multi_gpu_runner" in component:
+            # Multi-GPU components use multi-GPU runner labels
+            if test_runs_on_multi_gpu_labels:
+                component["multi_gpu_runner"] = select_weighted_label(
+                    test_runs_on_multi_gpu_labels, f"{job_name}-multi-gpu"
+                )
+            elif test_runs_on_multi_gpu_default:
+                component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
+        else:
+            # Regular components use standard runner labels
             if test_runs_on_labels:
                 component["test_runner"] = select_weighted_label(
                     test_runs_on_labels, job_name
