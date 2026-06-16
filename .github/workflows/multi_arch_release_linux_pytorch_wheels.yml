@@ -109,6 +109,7 @@ jobs:
   setup_matrix:
     runs-on: ubuntu-24.04
     outputs:
+      build_pytorch: ${{ steps.matrix.outputs.build_pytorch }}
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     steps:
       - name: Checkout
@@ -121,12 +122,15 @@ jobs:
         id: matrix
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
+            --release-type="${{ inputs.release_type }}" \
             --python-versions="${{ inputs.python_version }}" \
+            --amdgpu-families="${{ inputs.amdgpu_families }}" \
             --platform=linux
 
   build_pytorch_wheels:
     needs: setup_matrix
     name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    if: ${{ needs.setup_matrix.outputs.build_pytorch == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -136,7 +140,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
     with:
-      amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_families: ${{ matrix.amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}

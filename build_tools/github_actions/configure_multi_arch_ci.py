@@ -65,6 +65,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
+from configure_pytorch_release_matrix import generate_pytorch_matrix
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
@@ -428,6 +429,7 @@ class BuildConfig:
     expect_failure: bool
     build_native_linux: bool
     build_pytorch: bool
+    pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -818,6 +820,7 @@ def _expand_build_config_for_platform(
     platform: str,
     all_families: dict[str, dict],
     variant_config: dict,
+    release_type: str,
     test_type: str,
     pr_labels: list[str],
     is_schedule: bool,
@@ -954,6 +957,17 @@ def _expand_build_config_for_platform(
     expect_failure = variant_config.get("expect_failure", False)
     expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
+    build_pytorch = (
+        not expect_failure and not expect_pytorch_failure and suffix != "asan"
+    )
+    pytorch_build_matrix = []
+    if build_pytorch:
+        pytorch_build_matrix = generate_pytorch_matrix(
+            release_type=release_type,
+            platform=platform,
+            amdgpu_families=";".join(family_names),
+        )
+        build_pytorch = bool(pytorch_build_matrix)
 
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
@@ -967,9 +981,8 @@ def _expand_build_config_for_platform(
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         expect_failure=expect_failure,
         build_native_linux=(not expect_failure and suffix != "asan"),
-        build_pytorch=(
-            not expect_failure and not expect_pytorch_failure and suffix != "asan"
-        ),
+        build_pytorch=build_pytorch,
+        pytorch_build_matrix=pytorch_build_matrix,
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
@@ -1012,11 +1025,13 @@ def expand_build_configs(
                 f"{build_variant}, skipping"
             )
             continue
+        # TODO(scotttodd): pass ci_inputs here to avoid needing to extract so many args
         config = _expand_build_config_for_platform(
             families=families,
             platform=platform,
             all_families=all_families,
             variant_config=variant_config,
+            release_type=ci_inputs.release_type,
             test_type=test_type,
             pr_labels=ci_inputs.pr_labels,
             is_schedule=ci_inputs.is_schedule,

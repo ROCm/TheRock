@@ -68,6 +68,10 @@ def format_summary(
     lines.append("")
     _append_test_rocm(lines, outputs)
 
+    lines.append("### build-pytorch")
+    lines.append("")
+    _append_build_pytorch(lines, outputs)
+
     return "\n".join(lines)
 
 
@@ -197,6 +201,34 @@ def _append_build_rocm(
         lines.append(
             f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
         )
+    lines.append("")
+
+
+def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
+    rows: list[tuple[str, dict[str, str]]] = []
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None or not config.build_pytorch:
+            continue
+        for matrix_row in config.pytorch_build_matrix:
+            rows.append((platform, matrix_row))
+
+    if not rows:
+        lines.append("No PyTorch wheel builds selected.")
+        lines.append("")
+        return
+
+    lines.append("| Platform | Python version | PyTorch ref | AMDGPU families |")
+    lines.append("|----------|----------------|-------------|-----------------|")
+    for platform, matrix_row in rows:
+        families = matrix_row["amdgpu_families"].replace(";", ", ")
+        lines.append(
+            f"| {platform} | `{matrix_row['python_version']}` | "
+            f"`{matrix_row['pytorch_git_ref']}` | `{families}` |"
+        )
+    lines.append("")
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
