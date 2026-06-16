@@ -101,6 +101,7 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         build_config.artifacts_dir,
         build_config.gfx_arch,
         build_config.enable_kpack,
+        gfxarch_list=build_config.gfxarch_list,
     )
     sourcedir_list.extend(dir_list)
 
