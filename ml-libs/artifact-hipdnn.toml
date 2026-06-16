@@ -3,12 +3,16 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
-  # Python package sources (__init__.py + pytest suite) live under lib/python
-  # and ship via the test artifact and the dedicated wheel, not the runtime
-  # tree. The compiled extension installs to lib/ (Linux) / bin/ (Windows)
-  # co-located with libhipdnn_backend — it is NOT under lib/python, so it ships
-  # with this component and a bare dlopen resolves the backend as a sibling.
-  "lib/python/**",
+  # The Python bindings ship only via the test artifact and the dedicated
+  # wheel, never the runtime tree: the package source
+  # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
+  # (lib/python/tests/*.py), and the compiled extension
+  # (hipdnn_frontend_python.* in lib/ on Linux, bin/ on Windows) are all
+  # excluded here.
+  "lib/python/hipdnn_frontend/**",
+  "lib/python/tests/**",
+  "lib/hipdnn_frontend_python*",
+  "bin/hipdnn_frontend_python*",
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
@@ -17,11 +21,16 @@ include = [
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
 exclude = [
-  # Python package sources (__init__.py + pytest suite) live under lib/python
-  # and ship via the test artifact and the wheel, not the devel tree. The
-  # compiled extension installs to lib/ (mirrored into devel), co-located with
-  # libhipdnn_backend, so `rocm-sdk test` (devel_test) can dlopen it.
-  "lib/python/**",
+  # The Python bindings ship only via the test artifact and the wheel, never
+  # the devel tree: the package source
+  # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
+  # (lib/python/tests/*.py), and the compiled extension
+  # (hipdnn_frontend_python.* in lib/ on Linux, bin/ on Windows) are all
+  # excluded here.
+  "lib/python/hipdnn_frontend/**",
+  "lib/python/tests/**",
+  "lib/hipdnn_frontend_python*",
+  "bin/hipdnn_frontend_python*",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
@@ -29,5 +38,12 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-  "lib/python/**/*.py",
+  # Python package source (__init__.py) staged into the wheel at pack time.
+  "lib/python/hipdnn_frontend/**/*.py",
+  # pytest suite run against the installed wheel.
+  "lib/python/tests/**/*.py",
+  # Compiled extension (Linux lib/, Windows bin/): reunited with __init__.py
+  # into the wheel by the test, and the sole place it ships.
+  "lib/hipdnn_frontend_python*",
+  "bin/hipdnn_frontend_python*",
 ]
