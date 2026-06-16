@@ -3,6 +3,10 @@
 TheRock aims to support as many subprojects as possible on "native" Windows
 (as opposed to WSL 1 or WSL 2) using standard build tools like MSVC.
 
+> [!NOTE]
+> For the WSL-specific ROCDXG CI stage, see
+> [WSL ROCDXG CI Stage](wsl_rocdxg.md).
+
 > [!WARNING]
 > While Windows source builds of TheRock (including PyTorch!) are working for
 > some expert developers, this support is relatively new and is not yet mature.
@@ -50,7 +54,7 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo (hip-tests)](https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests)                              | rocm-systems   | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/rocm-systems/tree/develop/projects/clr)                                                    | rocm-systems   | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |                |           |                                               |
-| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ❌        | Unsupported                                   |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ✅        |                                               |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                   |
 | debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
@@ -102,8 +106,16 @@ These instructions mostly mirror the instructions in the root
 Before diving into the full setup, you can run the environment validation script
 to check that all prerequisites are met:
 
-```powershell
-.\build_tools\validate_windows_install.ps1
+```bash
+powershell.exe .\build_tools\validate_windows_install.ps1
+```
+
+To get correct results you may need to set all Visual Studio specific paths and pre-configured Python's environment (see below), in such case you need to run few commands before:
+
+```bash
+vcvarsall.bat x64
+.venv\Scripts\Activate.bat
+powershell.exe .\build_tools\validate_windows_install.ps1
 ```
 
 The script checks RAM, disk space, long path support, symlink capability, MSVC,
@@ -180,7 +192,7 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
 > winget install cmake
-> winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
+> winget install ninja-build.ninja ccache python strawberryperl
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 
@@ -299,8 +311,7 @@ If iterating and wishes to use ccache, see [CCache usage on Windows](../../READM
 ### CMake build usage
 
 ```bash
-cmake --build build --target therock-dist
-cmake --build build --target therock-archives
+cmake --build build --target therock-artifacts therock-dist
 ```
 
 This will start building using MSVC. Once the amd-llvm subproject is built,
@@ -315,7 +326,7 @@ outputs.
 #### Building ROCm Python wheels
 
 To build Python wheels, you will need an "artifacts" directory, either from a
-source build of `therock-archives` (see above) or by running the
+source build of `therock-artifacts` (see above) or by running the
 [`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
 artifacts from a CI run.
 

@@ -6,6 +6,8 @@
 from typing import Callable, Sequence
 
 import importlib.util
+import io
+import json
 import re
 import os
 from pathlib import Path
@@ -75,6 +77,8 @@ class Parameters:
         version_suffix: str,
         artifacts: ArtifactCatalog,
         kpack_split: bool = False,
+        linux_target_families: list[str] | None = None,
+        windows_target_families: list[str] | None = None,
     ):
         self.dest_dir = dest_dir
         self.version = version
@@ -82,10 +86,42 @@ class Parameters:
         self.artifacts = artifacts
         self.kpack_split = kpack_split
         self.all_target_families = artifacts.all_target_families
-        _sorted_families = sorted(self.all_target_families)
-        self.default_target_family: str | None = (
-            _sorted_families[0] if _sorted_families else None
+
+        # Cross-platform family view. When the multi-arch release pipeline
+        # passes per-platform family lists, the rocm sdist must advertise
+        # the union of both platforms' families and pick a
+        # DEFAULT_TARGET_FAMILY that resolves on either OS so a user
+        # without ROCM_SDK_TARGET_FAMILY / offload-arch lands on a family
+        # that has wheels for their platform - prefer the intersection.
+        # Without these kwargs the on-disk artifact view is used as
+        # before, preserving today's behavior for single-platform builds.
+        self.linux_target_families: list[str] = sorted(set(linux_target_families or []))
+        self.windows_target_families: list[str] = sorted(
+            set(windows_target_families or [])
         )
+        cross_platform_inputs = (
+            linux_target_families is not None or windows_target_families is not None
+        )
+        if cross_platform_inputs:
+            linux_set = set(self.linux_target_families)
+            windows_set = set(self.windows_target_families)
+            self.available_target_families: list[str] = sorted(linux_set | windows_set)
+            intersection = sorted(linux_set & windows_set)
+            if intersection:
+                self.default_target_family: str | None = intersection[0]
+            elif self.available_target_families:
+                self.default_target_family = self.available_target_families[0]
+            else:
+                self.default_target_family = None
+        else:
+            # Snapshot of the set; preserves prior set-iteration order so
+            # the generated _dist_info.py is byte-identical to before for
+            # single-platform builds.
+            self.available_target_families = list(self.all_target_families)
+            _sorted_families = sorted(self.all_target_families)
+            self.default_target_family = (
+                _sorted_families[0] if _sorted_families else None
+            )
         self.populated_packages: list["PopulatedDistPackage"] = []
         self.runtime_artifact_names: set[str] = set()
 
@@ -116,10 +152,14 @@ class Parameters:
             dist_info_contents += (
                 f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
             )
-        for target_family in self.all_target_families:
+        for target_family in self.available_target_families:
             dist_info_contents += (
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
             )
+        for target_family in self.linux_target_families:
+            dist_info_contents += f"LINUX_TARGET_FAMILIES.append('{target_family}')\n"
+        for target_family in self.windows_target_families:
+            dist_info_contents += f"WINDOWS_TARGET_FAMILIES.append('{target_family}')\n"
         self.dist_info_contents = dist_info_contents
 
         # And dynamically load it so that we have access to the same config during
@@ -277,7 +317,7 @@ class PopulatedDistPackage:
         dist_info_path = package_dest_dir / dist_info_relpath
         log(f"  Writing dist info: {dist_info_path}")
         dist_info_path.parent.mkdir(parents=True, exist_ok=True)
-        dist_info_path.write_text(dist_info_contents)
+        dist_info_path.write_text(dist_info_contents, newline="\n")
 
         return package_dest_dir
 
@@ -351,13 +391,47 @@ class PopulatedDistPackage:
             log(f"  + {an}: {an_path}")
 
         package_dest_dir = self.platform_dir
+        libraries_py_package_name = package_dest_dir.name
+        devel_links: list[dict[str, str]] = []
         for relpath, dir_entry in artifacts.pm.matches():
             if self.files.has(relpath):
                 continue
             dest_path = package_dest_dir / relpath
             self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
+            if not dir_entry.is_dir():
+                # Record the relative hardlink target into the libraries overlay
+                # so that `rocm-sdk init` can mirror this per-ISA device file into
+                # the generic rocm-sdk-devel tree. The backtrack count and target
+                # layout mirror _populate_devel_file()'s symlink computation.
+                backtrack = len(Path(relpath).parts)
+                target = "/".join(
+                    [".."] * backtrack + [libraries_py_package_name, relpath]
+                )
+                devel_links.append({"relpath": relpath, "target": target})
+        self._emit_devel_links_manifest(devel_links)
         self.params.populated_packages.append(self)
         return self
+
+    def _emit_devel_links_manifest(self, devel_links: list[dict[str, str]]):
+        """Writes the `_devel_links` manifest consumed by `rocm-sdk init`.
+
+        Each device wheel ships this manifest so that, at devel expansion time,
+        its per-ISA files are hardlinked from the rocm-sdk-libraries overlay into
+        the generic rocm-sdk-devel tree (and recorded in this wheel's RECORD so
+        that `pip uninstall` prunes them). Named per target family so that
+        multiple device wheels overlay the shared libraries dir without
+        colliding.
+        """
+        manifest_dir = self.platform_dir / ".devel_links"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = manifest_dir / f"{self.target_family}.json"
+        manifest_path.write_text(
+            json.dumps(
+                {"version": self.params.version, "links": devel_links},
+                indent=2,
+            ),
+            newline="\n",
+        )
 
     def _populate_runtime_symlink(
         self, relpath: str, dest_path: Path, src_entry: os.DirEntry[str]
@@ -758,3 +832,66 @@ def build_packages(
 
         log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
         subprocess.check_call(build_args, cwd=child_path, stderr=subprocess.STDOUT)
+
+        if child_name == "rocm":
+            # setuptools writes PKG-INFO / setup.cfg / egg-info in platform
+            # text mode, which yields CRLF on Windows. Normalize so the
+            # rocm sdist's text members are content-identical across Linux
+            # and Windows builds (tar metadata such as mtime may still
+            # differ).
+            sdists = list(effective_dist_dir.glob(f"{child_name}-*.tar.gz"))
+            if not sdists:
+                raise RuntimeError(
+                    f"No {child_name} sdist produced in {effective_dist_dir}"
+                )
+            for sdist in sdists:
+                _normalize_sdist_line_endings(sdist)
+
+
+_TEXT_SUFFIXES = frozenset({".py", ".md", ".toml", ".cfg", ".txt", ".rst", ".in"})
+
+
+def _is_text_member(name: str) -> bool:
+    base = name.rsplit("/", 1)[-1]
+    if base == "PKG-INFO":
+        return True
+    suffix = ("." + base.rsplit(".", 1)[-1].lower()) if "." in base else ""
+    return suffix in _TEXT_SUFFIXES
+
+
+def _normalize_sdist_line_endings(sdist_path: Path) -> None:
+    """Rewrite `sdist_path` in place with LF line endings on text members.
+
+    Preserves the original tar member order and per-file metadata
+    (mtime, mode, uid/gid) so the only delta vs. setuptools' output is
+    the byte content of text files.
+    """
+    with tarfile.open(sdist_path, "r:gz") as src:
+        members = src.getmembers()
+        payloads: dict[str, bytes] = {}
+        for member in members:
+            if not member.isfile():
+                continue
+            fp = src.extractfile(member)
+            if fp is None:
+                raise RuntimeError(
+                    f"Could not extract regular file {member.name} from {sdist_path}"
+                )
+            data = fp.read()
+            if _is_text_member(member.name):
+                data = data.replace(b"\r\n", b"\n")
+            payloads[member.name] = data
+
+    tmp_path = sdist_path.with_suffix(sdist_path.suffix + ".tmp")
+    with tarfile.open(tmp_path, "w:gz") as dst:
+        for member in members:
+            if member.isfile() and member.name in payloads:
+                data = payloads[member.name]
+                member.size = len(data)
+                dst.addfile(member, fileobj=io.BytesIO(data))
+            else:
+                dst.addfile(member)
+    tmp_path.replace(sdist_path)
+
+    if not sdist_path.exists() or sdist_path.stat().st_size == 0:
+        raise RuntimeError(f"Normalized sdist missing or empty: {sdist_path}")

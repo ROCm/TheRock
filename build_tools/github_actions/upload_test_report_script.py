@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family or report type.
+Uploads test reports to AWS S3 bucket for a GitHub run ID, under a caller-named subfolder.
 
 TODO: Migrate to StorageBackend (like post_build_upload.py) to replace the
 raw `aws s3 cp` calls and gain --output-dir / --dry-run support.
@@ -103,14 +103,12 @@ def run(args: argparse.Namespace):
         base_uri = f"s3://{output_root.bucket}/{output_root.prefix}"
         dest_s3_uri = f"{base_uri.rstrip('/')}/{log_dest.lstrip('/')}"
     else:
-        dest_s3_uri = output_root.log_dir(args.amdgpu_family).s3_uri
+        dest_s3_uri = output_root.log_dir(args.subfolder).s3_uri
 
     create_index_file(args)
     upload_test_report(args.report_path, dest_s3_uri)
 
-    report_url = output_root.log_file(
-        args.amdgpu_family, args.index_file_name
-    ).https_url
+    report_url = output_root.log_file(args.subfolder, args.index_file_name).https_url
     gha_append_step_summary(f"[Report (S3)]({report_url})")
 
 
@@ -121,10 +119,13 @@ def main(argv):
     )
 
     parser.add_argument(
-        "--amdgpu-family",
+        "--subfolder",
         type=str,
         required=True,
-        help="AMD GPU family or report/artifact group for log dir (e.g. gfx950-dcgpu or manifest-diff).",
+        help=(
+            "Subfolder name under the run's S3 log dir (e.g. 'gfx950-dcgpu' for "
+            "per-family test reports, 'manifest-diff' for the manifest diff report)."
+        ),
     )
 
     parser.add_argument(
@@ -139,8 +140,8 @@ def main(argv):
         type=str,
         default=None,
         help=(
-            "Subdirectory in S3 to upload reports (legacy). If omitted, destination "
-            "is derived from WorkflowOutputRoot.log_dir(amdgpu_family) per workflow_outputs."
+            "Explicit subdirectory in S3 to upload reports (legacy). If omitted, "
+            "destination is derived from WorkflowOutputRoot.log_dir(subfolder)."
         ),
     )
 

@@ -111,8 +111,6 @@ set(THEROCK_PACKAGE_VERSION "git" CACHE STRING "Sets the package version string"
 # Disable compatibility symlinks created in default ROCM cmake project wide
 set(ROCM_SYMLINK_LIBS OFF)
 
-set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
-
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
 # TODO: Set default to true for Linux branch after necessary changes land
@@ -126,7 +124,6 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_BUILD_COMGR_TESTS "Enables building Comgr tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -248,9 +245,9 @@ option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABL
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
-option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" "${THEROCK_ENABLE_ALL}")
-option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" OFF)
+option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
+option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
 ################################################################################
@@ -392,6 +389,7 @@ set(THEROCK_BUNDLED_MPFR)
 set(THEROCK_BUNDLED_NCURSES)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
+set(THEROCK_BUNDLED_UTIL_LINUX)
 set(THEROCK_BUNDLED_ZLIB)
 set(THEROCK_BUNDLED_ZSTD)
 set(THEROCK_BUNDLED_AMDMESA)
@@ -435,6 +433,9 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
+      set(THEROCK_BUNDLED_UTIL_LINUX therock-util-linux)
     endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     find_program(MESON_BUILD meson)
@@ -507,7 +508,6 @@ add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(iree-libs)
 add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
