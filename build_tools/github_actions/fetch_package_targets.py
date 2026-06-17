@@ -66,7 +66,6 @@ from github_actions_api import *
 def determine_package_targets(args):
     amdgpu_families = args.get("AMDGPU_FAMILIES")
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
-    test_harness_target_fetch = args.get("TEST_HARNESS_TARGET_FETCH", False)
 
     # Use trigger-specific matrix lookup with presubmit priority.
     # When a family appears in multiple trigger types (e.g., gfx110x in both presubmit and nightly),
@@ -107,17 +106,6 @@ def determine_package_targets(args):
                 platform_for_key["test-runs-on-labels"], family
             )
 
-        sanity_check_only_for_family = platform_for_key.get(
-            "sanity_check_only_for_family", False
-        )
-
-        # Due to the long test times for the test harness, we only want to use highly available test machines.
-        # TODO(#1920): Remove this logic and use direct communication with test machines (instead of using GH runners)
-        if (test_harness_target_fetch and not test_machine) or (
-            test_harness_target_fetch and sanity_check_only_for_family
-        ):
-            continue
-
         expect_failure = platform_for_key.get("expect_failure", False)
         expect_pytorch_failure = platform_for_key.get("expect_pytorch_failure", False)
 
@@ -142,5 +130,4 @@ if __name__ == "__main__":
     args = {}
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
     args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
-    args["TEST_HARNESS_TARGET_FETCH"] = str2bool(os.getenv("TEST_HARNESS_TARGET_FETCH"))
     main(args)
