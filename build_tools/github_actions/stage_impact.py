@@ -45,7 +45,18 @@ class StageImpactRuleSet:
 
 @dataclass(frozen=True)
 class StageImpactResult:
-    """Result of stage-impact analysis."""
+    """Result of stage-impact analysis.
+
+    Fields:
+        changed_inputs: Normalized changed paths or submodule names.
+        matched_source_sets: Source sets matched from the changed inputs.
+        impacted_artifact_groups: Artifact groups directly impacted.
+        rebuild_stages: Stages that must rebuild.
+        copy_stages: Stages that can be reused/copied.
+        full_rebuild_required: Whether conservative fallback was triggered.
+        reasons: Why full CI or a broader rebuild was selected.
+        unmatched_inputs: Inputs that could not be mapped to a source set.
+    """
 
     changed_inputs: Tuple[str, ...]
     matched_source_sets: Tuple[str, ...]
@@ -55,6 +66,18 @@ class StageImpactResult:
     full_rebuild_required: bool
     reasons: Tuple[str, ...] = ()
     unmatched_inputs: Tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "changed_inputs": self.changed_inputs,
+            "matched_source_sets": self.matched_source_sets,
+            "impacted_artifact_groups": self.impacted_artifact_groups,
+            "rebuild_stages": self.rebuild_stages,
+            "copy_stages": self.copy_stages,
+            "full_rebuild_required": self.full_rebuild_required,
+            "reasons": self.reasons,
+            "unmatched_inputs": self.unmatched_inputs,
+        }
 
 
 class StageImpactAnalyzer:
