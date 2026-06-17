@@ -5,9 +5,7 @@
 """Generate PyTorch source manifests.
 
 Resolves PyTorch ecosystem refs and pin files to exact commit SHAs and records
-expected package versions in manifest JSON files. With ``--upload``, uploads
-the generated manifests to the workflow output location and emits GitHub Actions
-outputs with their URLs.
+expected package versions in manifest JSON files.
 
 Usage::
 
@@ -28,14 +26,9 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.github_actions_api import (
-    gha_append_step_summary,
     gha_fetch_text_file_contents,
     gha_resolve_git_ref,
-    gha_set_output,
 )
 from github_actions.determine_version import derive_version_suffix
 from github_actions.manifest_utils import (
@@ -151,60 +144,6 @@ def write_manifest_file(path: Path, manifest: Manifest) -> None:
     )
     if not path.is_file() or path.stat().st_size == 0:
         raise RuntimeError(f"Failed to write manifest: {path}")
-
-
-def make_output_root(
-    *,
-    run_id: str,
-    platform: str,
-    release_type: str,
-    bucket_override: str | None,
-) -> WorkflowOutputRoot:
-    if bucket_override:
-        return WorkflowOutputRoot(
-            bucket=bucket_override,
-            external_repo="",
-            run_id=run_id,
-            platform=platform,
-        )
-    return WorkflowOutputRoot.from_workflow_run(
-        run_id=run_id,
-        platform=platform,
-        release_type=release_type or None,
-    )
-
-
-def upload_manifest_file(
-    *,
-    manifest_path: Path,
-    output_root: WorkflowOutputRoot,
-    backend: StorageBackend,
-) -> str:
-    if not manifest_path.is_file():
-        raise FileNotFoundError(f"Manifest not found: {manifest_path}")
-
-    manifest_dir = output_root.pytorch_manifest_dir()
-    manifest_location = StorageLocation(
-        manifest_dir.bucket,
-        f"{manifest_dir.relative_path}/{manifest_path.name}",
-    )
-
-    backend.upload_file(manifest_path, manifest_location)
-    return manifest_location.https_url
-
-
-def append_upload_summary(*, manifest_urls: dict[str, str], rocm_version: str) -> None:
-    lines = [
-        "## PyTorch Manifests",
-        "",
-        f"* ROCm version: `{rocm_version}`",
-        "",
-        "| PyTorch ref | Manifest |",
-        "| --- | --- |",
-    ]
-    for pytorch_ref, manifest_url in manifest_urls.items():
-        lines.append(f"| `{pytorch_ref}` | {manifest_url} |")
-    gha_append_step_summary("\n".join(lines) + "\n")
 
 
 def _parse_related_commits(content: str) -> dict[str, dict[str, str]]:
@@ -352,8 +291,6 @@ def resolve_sources(
 
     # Resolve pytorch first — other repos depend on it for pin files.
     pytorch_config = REPOS["pytorch"]
-    # TODO: Add an explicit PyTorch repo selector so direct workflow dispatch
-    # can resolve non-nightly refs from either ROCm/pytorch or pytorch/pytorch.
     pytorch_repo = (
         pytorch_config.nightly_repo if nightly else pytorch_config.stable_repo
     )
@@ -532,41 +469,12 @@ def main(argv: list[str]) -> None:
         default="",
         help="Semicolon- or space-separated pytorch refs (empty = all defaults)",
     )
-    parser.add_argument(
-        "--upload",
-        action="store_true",
-        help="Upload generated manifests to the workflow output location.",
-    )
-    parser.add_argument(
-        "--run-id",
-        default="",
-        help="GitHub Actions run ID used for uploaded manifest layout.",
-    )
-    parser.add_argument(
-        "--release-type",
-        default="",
-        help='Release type ("dev", "nightly", or "prerelease") for artifact bucket selection.',
-    )
-    parser.add_argument("--bucket", default=None, help="Override artifact bucket.")
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=None,
-        help="Output uploaded files to a local directory instead of S3.",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print upload plan without actually uploading.",
-    )
     args = parser.parse_args(argv)
 
     refs = _split_words(args.pytorch_git_refs) or DEFAULT_PYTORCH_GIT_REFS
 
     if args.output and len(refs) != 1:
         parser.error("--output requires exactly one --pytorch-git-refs entry")
-    if args.upload and not args.run_id:
-        parser.error("--run-id is required with --upload")
     explicit_projects = _split_words(args.projects) or None
     version_suffix = args.version_suffix or derive_version_suffix(args.rocm_version)
 
@@ -585,22 +493,6 @@ def main(argv: list[str]) -> None:
     log(f"TheRock: {therock_commit[:12]} ({therock_branch})")
     log(f"PyTorch refs: {refs}")
     log("")
-
-    upload_context: tuple[WorkflowOutputRoot, StorageBackend] | None = None
-    uploaded_manifest_urls: dict[str, str] = {}
-    if args.upload:
-        upload_context = (
-            make_output_root(
-                run_id=args.run_id,
-                platform=args.platform,
-                release_type=args.release_type,
-                bucket_override=args.bucket,
-            ),
-            create_storage_backend(
-                staging_dir=args.output_dir,
-                dry_run=args.dry_run,
-            ),
-        )
 
     for ref in refs:
         projects = explicit_projects or default_projects_for_pytorch_ref(
@@ -628,23 +520,6 @@ def main(argv: list[str]) -> None:
         write_manifest_file(out_path, manifest)
         log(f"Wrote {out_path}")
         log(out_path.read_text(encoding="utf-8"))
-        if upload_context:
-            output_root, backend = upload_context
-            uploaded_manifest_urls[ref] = upload_manifest_file(
-                manifest_path=out_path,
-                output_root=output_root,
-                backend=backend,
-            )
-
-    if uploaded_manifest_urls:
-        outputs = {"manifest_urls": json.dumps(uploaded_manifest_urls)}
-        if len(uploaded_manifest_urls) == 1:
-            outputs["manifest_url"] = next(iter(uploaded_manifest_urls.values()))
-        gha_set_output(outputs)
-        append_upload_summary(
-            manifest_urls=uploaded_manifest_urls,
-            rocm_version=args.rocm_version,
-        )
 
 
 if __name__ == "__main__":
