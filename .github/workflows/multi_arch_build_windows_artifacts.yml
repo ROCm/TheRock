@@ -47,9 +47,9 @@ on:
         required: true
         description: "ROCm package version string"
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease"'
+        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
         type: string
-        required: true
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
