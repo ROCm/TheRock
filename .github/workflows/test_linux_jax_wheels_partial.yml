@@ -150,7 +150,7 @@ jobs:
 
     env:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
-      THEROCK_TAR_URL: ${{ inputs.tar_url }}
+      TAR_URL: ${{ inputs.tar_url }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
 
@@ -201,7 +201,7 @@ jobs:
           rm -rf "${DEST}"
           mkdir -p "${DEST}"
 
-          wget -O "${TARBALL}" "${THEROCK_TAR_URL}"
+          wget -O "${TARBALL}" "${TAR_URL}"
           tar -xzf "${TARBALL}" -C "${DEST}"
 
           ln -sfn "${DEST}" /opt/rocm
