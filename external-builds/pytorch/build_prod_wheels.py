@@ -96,18 +96,21 @@ python build_prod_wheels.py build ^
 # Use ccache:
 python build_prod_wheels.py build --use-ccache --output-dir ...
 
-# Use sccache with ROCm compiler wrapping (caches host + HIP device code):
+# Use sccache (caches host + HIP device code via HIP_CLANG_LAUNCHER):
 python build_prod_wheels.py build --use-sccache --output-dir ...
 
-# Use sccache without compiler wrapping (caches host C/C++ only):
+# Use sccache for host C/C++ only (no HIP device code caching):
 python build_prod_wheels.py build --use-sccache --sccache-no-wrap --output-dir ...
 ```
 
 ``--use-ccache`` and ``--use-sccache`` are mutually exclusive.
-``--sccache-no-wrap`` is a modifier for ``--use-sccache`` that skips ROCm compiler
-wrapping — useful for developers who want basic caching without modifying compiler
-binaries. See ``build_tools/setup_sccache_rocm.py`` for details on the wrapping
-mechanism.
+``--use-sccache`` sets the CMake C/C++ compiler launchers and, on Linux, the
+``HIP_CLANG_LAUNCHER`` environment variable so that ``hipcc`` routes its clang
+invocations — including the ``-x hip --offload-arch`` device passes — through
+sccache. The real clang binary is left in place, so compiler-detection probes
+work normally. ``--sccache-no-wrap`` skips ``HIP_CLANG_LAUNCHER`` (host C/C++
+caching only), for toolchains whose hipcc predates HIP_CLANG_LAUNCHER support
+(ROCm < 7.13). See ``build_tools/setup_sccache_rocm.py``.
 
 ## Building Linux portable wheels
 
@@ -475,9 +478,7 @@ def _setup_common_build_env(
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
 
-    # GLOO enabled for only Linux
-    if not is_windows:
-        env["USE_GLOO"] = "ON"
+    env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
@@ -681,11 +682,7 @@ def do_build(args: argparse.Namespace):
         build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
         sys.path.insert(0, str(build_tools_dir))
 
-        from setup_sccache_rocm import (
-            find_sccache,
-            restore_rocm_compilers,
-            setup_rocm_sccache,
-        )
+        from setup_sccache_rocm import find_sccache, sccache_build_env
 
         sccache_path = find_sccache()
         if not sccache_path:
@@ -696,18 +693,18 @@ def do_build(args: argparse.Namespace):
                 "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
             )
 
-        sccache_wrapped = False
-        if args.sccache_no_wrap:
-            print("Setting up sccache (CMAKE launchers only, no compiler wrapping)...")
-        else:
-            print("Setting up sccache with ROCm compiler wrapping...")
-            setup_rocm_sccache(rocm_dir, sccache_path)
-            sccache_wrapped = True
-
     try:
         if args.use_sccache:
-            env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
-            env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+            # sccache_build_env sets the CMake C/C++ launchers and, unless
+            # disabled, HIP_CLANG_LAUNCHER so hipcc routes its clang calls
+            # (incl. the -x hip --offload-arch device passes) through sccache
+            # without replacing the clang binary. See setup_sccache_rocm.py.
+            hip_launcher = not args.sccache_no_wrap
+            env.update(sccache_build_env(sccache_path, hip_launcher=hip_launcher))
+            if hip_launcher and not is_windows:
+                print(f"Setting up sccache via HIP_CLANG_LAUNCHER={sccache_path}")
+            else:
+                print("Setting up sccache (CMAKE launchers only)...")
 
             try:
                 run_command(
@@ -729,12 +726,6 @@ def do_build(args: argparse.Namespace):
         )
     finally:
         if args.use_sccache:
-            if sccache_wrapped:
-                print("Restoring ROCm compilers after sccache build...")
-                try:
-                    restore_rocm_compilers(rocm_dir)
-                except Exception as e:
-                    print(f"Warning: Failed to restore compilers: {e}")
             sccache_stats = capture(
                 [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
             )
@@ -927,6 +918,18 @@ def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(omp_path, target_lib)
 
 
+def copy_libuv_to_torch_lib(pytorch_dir: Path):
+    libuv_root = os.environ.get("libuv_ROOT", "")
+    if not libuv_root:
+        return
+    uv_dll = Path(libuv_root) / "bin" / "uv.dll"
+    if not uv_dll.exists():
+        raise RuntimeError(f"Did not find uv.dll at '{uv_dll}'")
+    target_lib = pytorch_dir / "torch" / "lib"
+    print(f"Copying libuv from '{uv_dll}' to '{target_lib}'")
+    shutil.copy2(uv_dll, target_lib)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -1056,6 +1059,7 @@ def do_build_pytorch(
     # Windows-specific settings.
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
+        copy_libuv_to_torch_lib(pytorch_dir)
 
         use_flash_attention = (
             "1"
@@ -1338,14 +1342,19 @@ def main(argv: list[str]):
         "--use-sccache",
         action="store_true",
         default=False,
-        help="Use sccache as the compiler launcher (with ROCm compiler wrapping on Linux)",
+        help="Use sccache as the compiler launcher. Sets the CMake C/C++ "
+        "launchers and (on Linux) HIP_CLANG_LAUNCHER so hipcc routes its clang "
+        "invocations -- including the HIP device passes -- through sccache, "
+        "caching host and device code. Requires hipcc with HIP_CLANG_LAUNCHER "
+        "support (ROCm 7.13+).",
     )
     build_p.add_argument(
         "--sccache-no-wrap",
         action="store_true",
         default=False,
-        help="With --use-sccache: skip compiler wrapping, only set CMAKE launchers "
-        "(caches host C/C++ but not HIP device code)",
+        help="With --use-sccache: set only the CMake C/C++ launchers and skip "
+        "HIP_CLANG_LAUNCHER (caches host C/C++ but not HIP device code). Use "
+        "when hipcc lacks HIP_CLANG_LAUNCHER support.",
     )
     build_p.add_argument(
         "--pytorch-dir",

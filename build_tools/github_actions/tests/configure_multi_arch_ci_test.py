@@ -324,7 +324,7 @@ class TestDecideJobs(unittest.TestCase):
             submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         result = cm.decide_jobs(self._inputs(), git_context=git)
-        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertEqual(result.test_rocm.test_type, "standard")
         self.assertIn("submodule", result.test_rocm.test_type_reason)
 
     def test_no_submodule_change_stays_quick(self):
@@ -779,7 +779,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
@@ -820,7 +823,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         targets = cm.select_targets(inputs)
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=inputs, test_type="quick"
+            targets=targets,
+            ci_inputs=inputs,
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
         required_keys = {
             "amdgpu_family",
@@ -870,7 +876,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
 
         # All target families that support the variant appear in output.
@@ -902,6 +911,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(build_variant="asan"),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -934,6 +944,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     targets=targets,
                     ci_inputs=ci_inputs,
                     test_type="quick",
+                    git_context=cm.GitContext(),
                 )
                 # Only gfx94x on linux survives.
                 self.assertIsNotNone(result.linux)
@@ -963,6 +974,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=ci_inputs,
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         # Verify it's a host-asan build
@@ -982,6 +994,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -995,6 +1008,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1004,7 +1018,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Without test_runner: label, default runner labels are used."""
         targets = cm.TargetSelection(linux_families=["gfx908"])
         result = cm.expand_build_configs(
-            targets=targets, ci_inputs=self._inputs(), test_type="quick"
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1022,6 +1039,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
@@ -1031,6 +1049,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             targets=targets,
             ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
             test_type="quick",
+            git_context=cm.GitContext(),
         )
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
@@ -1260,12 +1279,13 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         # Verify we have 3 labels for 1-gpu
         labels = gfx94x_linux["test-runs-on-labels"]
-        self.assertEqual(len(labels), 2)
+        self.assertEqual(len(labels), 3)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
         # Verify weights sum to ~1.0
         total_weight = sum(l["weight"] for l in labels)
@@ -1291,8 +1311,12 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         total_weight = sum(l["weight"] for l in labels)
         self.assertAlmostEqual(total_weight, 1.0, places=1)
 
-    def test_first_label_selected_when_random_low(self):
-        """When random() < first weight, first label should be selected."""
+    def test_expand_build_configs_uses_default_runner(self):
+        """expand_build_configs uses the default test-runs-on label.
+
+        Note: Per-component weighted runner selection is handled in
+        fetch_test_configurations.py, not in expand_build_configs.
+        """
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
@@ -1302,57 +1326,13 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
-        # Mock random.random() to return 0.1 (< 0.369 first weight)
-        with patch("random.random", return_value=0.1):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
+        builds = cm.expand_build_configs(
+            targets, ci_inputs, test_type="quick", git_context=cm.GitContext()
+        )
 
         self.assertIsNotNone(builds.linux)
-        # Check that the first label was selected
         gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-ossci-rocm"
-        )
-
-    def test_second_label_selected_when_random_medium(self):
-        """When random() is in second range, second label should be selected."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
-        with patch("random.random", return_value=0.4):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
-
-        self.assertIsNotNone(builds.linux)
-        # Check that the second label was selected
-        gfx94x_info = builds.linux.per_family_info[0]
-        self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
-        )
-
-    def test_third_label_selected_when_random_high(self):
-        """When random() >= first two weights, third label should be selected."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Mock random.random() to return 0.5 (>= 0.369+0.086=0.455)
-        with patch("random.random", return_value=0.5):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="quick")
-
-        self.assertIsNotNone(builds.linux)
-        # Check that the third label was selected
-        gfx94x_info = builds.linux.per_family_info[0]
+        # Should use the default test-runs-on label (core42)
         self.assertEqual(
             gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
         )
@@ -1371,7 +1351,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         # Run multiple times to ensure consistency
         for _ in range(10):
-            builds = cm.expand_build_configs(targets, ci_inputs, test_type="full")
+            builds = cm.expand_build_configs(
+                targets, ci_inputs, test_type="full", git_context=cm.GitContext()
+            )
             if builds.linux and builds.linux.per_family_info:
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
@@ -1387,17 +1369,17 @@ class TestBuildRunnerSelection(unittest.TestCase):
     """Test weighted random selection of build runners (Azure vs AWS)."""
 
     def test_select_build_runner_weighted_selection(self):
-        """Test weighted selection: Azure (80%) vs AWS (20%) for default builds."""
+        """Test weighted selection: Azure (50%) vs AWS (50%) for default builds."""
         from amdgpu_family_matrix import select_build_runner
 
-        # Random < 0.8 should select Azure
-        with patch("random.random", return_value=0.5):
+        # Random < 0.5 should select Azure
+        with patch("random.random", return_value=0.3):
             self.assertEqual(
                 select_build_runner("linux", "release"), "azure-linux-scale-rocm"
             )
 
-        # Random >= 0.8 should select AWS
-        with patch("random.random", return_value=0.95):
+        # Random >= 0.5 should select AWS
+        with patch("random.random", return_value=0.75):
             self.assertEqual(
                 select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
             )

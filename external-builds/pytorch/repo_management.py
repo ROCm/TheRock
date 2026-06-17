@@ -13,6 +13,31 @@ TAG_HIPIFY_DIFFBASE = "THEROCK_HIPIFY_DIFFBASE"
 HIPIFY_COMMIT_MESSAGE = "DO NOT SUBMIT: HIPIFY"
 
 
+def add_checkout_options(
+    command_parser: argparse.ArgumentParser, *, default_hipify: bool
+) -> None:
+    command_parser.add_argument("--depth", type=int, help="Fetch depth")
+    command_parser.add_argument("--jobs", type=int, help="Number of fetch jobs")
+    command_parser.add_argument(
+        "--submodules",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Checkout git submodules",
+    )
+    command_parser.add_argument(
+        "--hipify",
+        action=argparse.BooleanOptionalAction,
+        default=default_hipify,
+        help="Run hipify",
+    )
+    command_parser.add_argument(
+        "--commit-hipify",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Commit HIPIFY changes after running hipify",
+    )
+
+
 def run_command(args: list[str | Path], cwd: Path, *, stdout_devnull: bool = False):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
@@ -179,7 +204,7 @@ def commit_hipify_module(module_path: Path):
 
 def commit_hipify(args: argparse.Namespace):
     repo_dir: Path = args.checkout_dir
-    all_paths = get_all_repositories(repo_dir)
+    all_paths = get_all_repositories(repo_dir) if args.submodules else [repo_dir]
     for module_path in all_paths:
         commit_hipify_module(module_path)
 
@@ -207,36 +232,40 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         fetch_args.extend(["--depth", str(args.depth)])
     if args.jobs:
         fetch_args.extend(["-j", str(args.jobs)])
+    if not args.submodules:
+        fetch_args.extend(["--no-recurse-submodules"])
     run_command(
         ["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir
     )
     run_command(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     run_command(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
-    try:
+    if args.submodules:
+        try:
+            run_command(
+                ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
+                cwd=repo_dir,
+            )
+        except subprocess.CalledProcessError:
+            print("Failed to fetch git submodules")
+            sys.exit(1)
         run_command(
-            ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
+            [
+                "git",
+                "submodule",
+                "foreach",
+                "--recursive",
+                f"git tag -f {TAG_UPSTREAM_DIFFBASE} --no-sign",
+            ],
             cwd=repo_dir,
+            stdout_devnull=True,
         )
-    except subprocess.CalledProcessError:
-        print("Failed to fetch git submodules")
-        sys.exit(1)
-    run_command(
-        [
-            "git",
-            "submodule",
-            "foreach",
-            "--recursive",
-            f"git tag -f {TAG_UPSTREAM_DIFFBASE} --no-sign",
-        ],
-        cwd=repo_dir,
-        stdout_devnull=True,
-    )
-    git_config_ignore_submodules(repo_dir)
+        git_config_ignore_submodules(repo_dir)
 
     # Hipify.
     if args.hipify:
         custom_hipify(args)
-        commit_hipify(args)
+        if args.commit_hipify:
+            commit_hipify(args)
 
 
 # Reads the ROCm maintained "related_commits" file from the given pytorch dir.
