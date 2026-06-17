@@ -102,7 +102,7 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
-        default: "release/2.10"
+        default: "release/2.11_gfx1250"
       cache_type:
         description: "Compiler cache type"
         type: choice
@@ -245,7 +245,7 @@ jobs:
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --find-links "https://therock-ci-artifacts-external.s3.amazonaws.com/ROCm-TheRock/27586670592-linux/python/index.html" \
+            --find-links "https://therock-ci-artifacts-external.s3.amazonaws.com/ROCm-TheRock/27666963163-linux/python/index.html" \
             --pre \
             --rocm-extras "device-gfx1250" \
             --pytorch-rocm-arch gfx1250 \
