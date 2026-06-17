@@ -53,6 +53,12 @@ _amdgpu = {
     "gfx1153": [
         "AMD Radeon 820M",
     ],
+    # CDNA 5 / gfx125X
+    "gfx1250": [
+        "AMD Instinct MI450",
+        "AMD Instinct MI450X",
+        "AMD Instinct MI455X",
+    ],
     # RDNA 4
     "gfx1201": [
         "AMD Radeon RX 9070 XT",
