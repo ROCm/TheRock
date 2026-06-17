@@ -17,6 +17,11 @@ skip_tests = {
             # TestCudaAllocator::test_allocator_backend subprocess fails to launch venv python
             # (libpython3.12.so.1.0 missing) in test/test_cuda.py and test_cuda_expandable_segments.py.
             "(TestCudaAllocator and test_allocator_backend)",
+            # Run 27662748552 default shard 6/10, job 81810307258:
+            # test_cuda_expandable_segments.py::TestCuda::test_cudnn_multiple_threads_same_device
+            # crashes consistently with pure virtual method called / SIGSEGV
+            # while expandable_segments is enabled.
+            "(test_cuda_expandable_segments and TestCuda and test_cudnn_multiple_threads_same_device)",
         ],
         "nn": [
             # TestNNDeviceTypeCUDA - AssertionError: Scalars are not close!
