@@ -49,6 +49,12 @@ Follow these steps:
 
    ![multi_arch_find_links_url](assets/multi_arch_find_links_url.jpg)
 
+1. Copy the rocm packages for that version from the "nightly" release bucket to
+   the "dev" release bucket by triggering
+   https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml.
+
+   ![copy_release_workflow_dispatch](assets/copy_release_workflow_dispatch.jpg)
+
 1. Trigger
    https://github.com/ROCm/TheRock/actions/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
    from the branch you want and enter those inputs along with a list of GPU
