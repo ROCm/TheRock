@@ -245,9 +245,7 @@ class S3Index:
         self.html_name = "index.html"
         # should dynamically grab subdirectories like whl/test/cu101
         # so we don't need to add them manually anymore
-        self.subdirs = {
-            path.dirname(obj.key) for obj in objects if path.dirname(obj.key) != prefix
-        }
+        self.subdirs = {path.dirname(obj.key) for obj in objects}
 
     def nightly_packages_to_show(self: S3IndexType) -> List[S3Object]:
         """Finding packages to show based on a threshold we specify
