@@ -150,7 +150,8 @@ jobs:
       - name: Enable sanitizer-specific test flags
         if: ${{ contains(inputs.artifact_group, 'asan') }}
         run: |
-          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600:halt_on_error=0:exitcode=0" >> $GITHUB_ENV
+          # echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600:halt_on_error=0:exitcode=0" >> $GITHUB_ENV
+          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
           # echo "LSAN_OPTIONS=exitcode=0:suppressions=$GITHUB_WORKSPACE/build_tools/github_actions/lsan_suppressions.txt" >> $GITHUB_ENV
           echo "LSAN_OPTIONS=suppressions=$GITHUB_WORKSPACE/build_tools/github_actions/lsan_suppressions.txt" >> $GITHUB_ENV
           echo "HSA_XNACK=1" >> $GITHUB_ENV
