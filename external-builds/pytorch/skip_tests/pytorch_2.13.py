@@ -13,17 +13,6 @@ skip_tests = {
             # TestCuda - conflicts with how our test script and runners are
             # configured.
             "test_hip_device_count",
-            # TestCudaAllocator - passes on single run, crashes if run in a
-            # group. TypeError: 'CustomDecompTable' object is not a mapping
-            "test_memory_compile_regions",
-            # TestMemPool - RuntimeError: Error building extension
-            # 'dummy_allocator'. The hipblas.h include error persists in the
-            # ROCm SDK environment:
-            #   fatal error: 'hipblas/hipblas.h' file not found
-            "test_mempool_empty_cache_inactive",
-            # TestMemPool - RuntimeError: Error building extension
-            # 'dummy_allocator_v1' (same hipblas.h include error)
-            "test_mempool_limited_memory_with_allocator",
             # Run 27473608564 default shard 5/10, job 81208818459 and shard 2/10, job 81208818462:
             # TestCudaAllocator::test_allocator_backend subprocess fails to launch venv python
             # (libpython3.12.so.1.0 missing) in test/test_cuda.py and test_cuda_expandable_segments.py.
@@ -35,36 +24,10 @@ skip_tests = {
             # Absolute difference: 0.0008928775787353516 (up to 1e-05 allowed)
             # Relative difference: 0.0002304106921389532 (up to 1.3e-06 allowed)
             "test_CTCLoss_cudnn_cuda",
-            # TestNNDeviceTypeCUDA - cudnn CTC loss numerical mismatch
-            "test_ctc_loss_cudnn_tensor_cuda_cuda",
-            # TestNNDeviceTypeCUDA - per-call dropout randomness mismatch
-            "test_LSTM_dropout_per_call_randomness_dropout_p_0_5_training_True_cuda",
-            # TestNNDeviceTypeCUDA - upsampling launch failure on gfx950
-            # Separately tracked in https://github.com/ROCm/TheRock/issues/5270
-            "test_upsamplingNearest2d_launch_rocm_cuda",
-            # Run 27246343570 default shard 1/10, job 80461205629:
-            # CrossEntropyLoss 2d out-of-bounds device assert reports HIP
-            # visibility warning / GPU memory fault text instead of the
-            # expected device-assert stderr signature; FAILED CONSISTENTLY.
-            "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float16)",
-            "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float32)",
             # Run 27473608564 default shard 9/10, job 81208818474:
             # TestNNDeviceTypeCUDA::test_linear_cross_entropy_loss_default_bias_False_cuda_float32
             # input-grad ULP worst case 952 > 854 on ROCm June 12 wheel.
             "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
-            # nn/test_convolution.py: module-excluded in run_pytorch_tests_full.py
-            # (MIOpen deterministic conv watchdog/hangs). Triage evidence lives in
-            # pytorch-ci-triage-results.md, not per-test skips here.
-        ],
-        "decomp": [
-            # Run 27361388921 default shard 4/10, job 80849478614:
-            # TestDecompCUDA adaptive_max_pool comprehensive tests return tuple length
-            # 2 instead of 1 on ROCm (output length mismatch: 2 != 1).
-            "(TestDecompCUDA and test_comprehensive_nn_functional_adaptive_max_pool)",
-            # Run 27361388921 default shard 6/10, job 80849478677:
-            # HasDecompTest::test_has_decomposition fails because ROCm exposes
-            # aten::_foreach_mm in the decomposition table list diff.
-            "(HasDecompTest and test_has_decomposition)",
         ],
         "compiled_autograd": [
             # Run 27361388921 default shard 6/10, job 80849478677:
@@ -82,53 +45,6 @@ skip_tests = {
             # register_hook HOP is unsupported under compiled autograd on ROCm.
             "(TestCompiledAutogradOpInfoCUDA and test_hops_in_bwd_register_hook_simple_cuda_float32)",
         ],
-        "custom_operator": [
-            # Run 27228539427 default shard 7/10:
-            # TestInferSchemaWithAnnotation::test_name_error_hint failed
-            # consistently due to an error-message regex mismatch around
-            # `from __future__ import annotations`.
-            "(TestInferSchemaWithAnnotation and test_name_error_hint)",
-        ],
-        "dynamo": [
-            # Run 27228539427 default shard 3/10:
-            # LoggingTests::test_logs_out fails consistently because a ROCm
-            # HIP visibility warning is injected into Dynamo's exact
-            # log-output comparison.
-            "(LoggingTests and test_logs_out)",
-            # Run 27228539427 default shard 6/10:
-            # linalg_inv_ex AOT dynamic-shapes graph does not preserve the
-            # expected error behavior on ROCm.
-            "(DynamicShapesReproTests and test_linalg_inv_check_errors_preserved_in_aot_graph_dynamic_shapes)",
-            # Run 27228539427 default shard 6/10:
-            # singular linalg.inv under aot_eager dynamic shapes does not
-            # raise _LinAlgError on ROCm.
-            "(DynamicShapesReproTests and test_linalg_inv_singular_aot_eager_raises_dynamic_shapes)",
-            # Run 27228539427 default shard 1/10:
-            # linalg_inv_ex AOT graph does not preserve expected error behavior
-            # on ROCm.
-            "(ReproTests and test_linalg_inv_check_errors_preserved_in_aot_graph)",
-            # Run 27228539427 default shard 1/10:
-            # singular linalg.inv under aot_eager does not raise _LinAlgError
-            # on ROCm.
-            "(ReproTests and test_linalg_inv_singular_aot_eager_raises)",
-            # Run 27361388921 default shard 3/10, job 80849478629:
-            # NestedGraphBreaksMiscTests::test_unpack_tensor_shape_mismatch_nested_graph_breaks
-            # fails with ValueError: not enough values to unpack (expected 2, got 1)
-            # under torch.compile nested graph breaks on ROCm.
-            "(NestedGraphBreaksMiscTests and test_unpack_tensor_shape_mismatch_nested_graph_breaks)",
-            # Run 27361388921 default shard 2/10, job 80849478676:
-            # MiscTests::test_unpack_tensor_shape_mismatch fails with ValueError:
-            # not enough values to unpack (expected 2, got 1) under torch.compile on ROCm.
-            "(MiscTests and test_unpack_tensor_shape_mismatch)",
-            # Run 27361388921 default shard 2/10, job 80849478676:
-            # UnspecTests::test_prune_torch_check expects torch._check to be pruned
-            # from the exported graph, but ROCm keeps the assert_scalar nodes.
-            "(UnspecTests and test_prune_torch_check)",
-            # Run 27361388921 default shard 6/10, job 80849478677:
-            # DynamicShapesMiscTests::test_unpack_tensor_shape_mismatch_dynamic_shapes
-            # fails with ValueError: not enough values to unpack (expected 2, got 1).
-            "(DynamicShapesMiscTests and test_unpack_tensor_shape_mismatch_dynamic_shapes)",
-        ],
         "export": [
             # Run 27246343570 default shard 10/10, job 80461205617:
             # TestExportOnFakeCudaCUDA subprocesses exit 127 because
@@ -142,46 +58,13 @@ skip_tests = {
             "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
             "test_fake_export_nonzero_cuda_float32",
             "test_preserve_original_behavior_cuda",
-            # Run 27361388921 default shard 10/10, job 80849478637:
-            # RetraceExportNonStrictTestExport::test_opaque_obj_retraceability_nonstrict
-            # fails after the strict retrace variant registers MyInput as opaque in
-            # the same process: RuntimeError: Type '...MyInput' is already registered.
-            "(RetraceExportNonStrictTestExport and test_opaque_obj_retraceability_nonstrict)",
-            # Run 27361388921 default shard 2/10, job 80849478676:
-            # TestConverter quantized TS->EP converter tests fail because ROCm wheels
-            # lack torch.ops.prepacked.linear_clamp_prepack.
-            "(TestConverter and test_ts2ep_convert_quantized_model_with_opcontext)",
-            "(TestConverter and test_ts2ep_convert_quantized_model_with_opcontext_and_constant)",
-        ],
-        "fake_tensor": [
-            # Run 27361388921 default shard 7/10, job 80849478660:
-            # FakeTensor cross-device propagation tests expect the legacy
-            # "Unhandled FakeTensor Device Propagation" error text but ROCm raises
-            # FakeTensorDeviceMismatchError instead.
-            "(FakeTensorTest and test_add_one_dim_single_elem_cpu_with_cuda_tensor)",
-            "(FakeTensorTest and test_op_with_zero_dim_bypassed)",
-            "(FakeTensorPreferDeviceType and test_fake_tensor_prefer_device_type)",
-        ],
-        "fx": [
-            # Run 27361388921 default shard 6/10, job 80849478677:
-            # TestFXAPIBackwardCompatibility::test_class_member_back_compat fails because
-            # GraphModule public member list differs (create_size_node, etc.).
-            "(TestFXAPIBackwardCompatibility and test_class_member_back_compat)",
         ],
         "functorch": [
-            # Run 27228539427 default shard 7/10:
-            # TestOperatorsCUDA::test_grad_unbind_copy_cuda_float32 hit a GPU
-            # hang followed by Fatal Python error: Aborted.
-            "(TestOperatorsCUDA and test_grad_unbind_copy_cuda_float32)",
             # Run 27361388921 default shard 3/10, job 80849478629:
             # TestControlFlow::test_scan_* parametrized variants fail consistently
             # with transposed-shape assertEqual mismatches (e.g. [6, 1] vs [1, 6]),
             # Dynamo fake-tensor size mismatches, and scan dim expand errors on ROCm.
             "(TestControlFlow and test_scan)",
-            # Run 27361388921 default shard 7/10, job 80849478660:
-            # TestPartitioning::test_compiled_backward_rejects_non_list_args fails with
-            # TypeError: _codegen_compiled_backward() missing inputs_require_grad on ROCm.
-            "(TestPartitioning and test_compiled_backward_rejects_non_list_args)",
         ],
         "linalg": [
             # Run 27361388921 default shard 7/10, job 80849478660:
@@ -211,13 +94,6 @@ skip_tests = {
             # Run 27228539427 default shard 1/10:
             # diagonal_scatter backward dynamic-shapes codegen grad mismatch on ROCm Inductor.
             "(DynamicShapesCodegenGPUTests and test_diagonal_scatter_backward_dynamic_shapes_cuda)",
-            # Run 27228539427 default shard 9/10:
-            # diagonal_scatter backward dynamic-shapes CPU grad mismatch on ROCm Inductor.
-            "(DynamicShapesCodegenCpuTests and test_diagonal_scatter_backward_dynamic_shapes_cpu)",
-            # Run 27246343570 default shard 7/10, job 80461205591:
-            # diagonal_scatter backward dynamic-shapes CPU mismatch on ROCm
-            # Inductor in the non-codegen CPU class; FAILED CONSISTENTLY.
-            "(DynamicShapesCpuTests and test_diagonal_scatter_backward_dynamic_shapes_cpu)",
             # Run 27228539427 default shard 8/10:
             # test_triton_kernels expects max helper reuse removal, but ROCm
             # generated source still contains triton_helpers.max2.
@@ -336,7 +212,6 @@ skip_tests = {
             "(TestTEFuserDynamic and test_unary_ops)",
             "(TestTEFuserDynamic and test_where_ops)",
         ],
-        # inductor/test_foreach: module-excluded (runs 27390088455, 27420816170 shard 3/10).
         "control_flow": [
             # Run 27420816170 default shard 5/10, job 81045685919:
             # ScanTests::test_cond_in_scan_* parametrized variants hit HW Exception GPU

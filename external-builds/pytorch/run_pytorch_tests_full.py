@@ -108,24 +108,10 @@ THEROCK_ENV_VARS = [
 
 PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 
-# Test modules excluded at the run_test.py level (--exclude).  These are
-# modules that hang or crash the subprocess in ways that pytest-timeout
-# cannot catch (e.g. hanging during import or in C extensions).
-# TODO: investigate the root cause and narrow the exclusions.
+# Test modules excluded at the run_test.py level (--exclude).  Keep this scoped
+# to modules that hang or crash the subprocess in ways pytest-timeout cannot
+# catch (e.g. hanging during import or in C extensions).
 EXCLUDED_TEST_MODULES: list[str] = [
-    # MIOpen deterministic Conv2d variants burn 30-minute command watchdog windows
-    # repeatedly and can hang for hours on gfx94X (runs 27228539427, 27246343570,
-    # 27373187888 shards 8/10 and 10/10). Per-test skips are insufficient; see
-    # pytorch_2.13.py nn bucket and triage GPU Hang backlog for ROCm filing.
-    "nn/test_convolution",
-    # Wheel test source is newer than installed torch: test imports STATIC from
-    # torch.fx.experimental.dynamic_spec but the wheel lacks it (run 27390088455
-    # shard 10/10 ImportError at collection time).
-    "dynamo/test_dynamic_spec",
-    # Run 27420816170 default shard 3/10, job 81045685858:
-    # inductor/test_foreach.py finished 588 passed / 26 skipped then hit GPU Hang on
-    # pytest teardown (per-test skip on foreach_sub alone is insufficient).
-    "inductor/test_foreach",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
