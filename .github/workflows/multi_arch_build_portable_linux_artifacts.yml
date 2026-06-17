@@ -50,7 +50,7 @@ on:
         default: ""
         description: "CMake preset name for this build variant (optional)"
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+        description: 'Release type; controls artifact bucket and IAM role'
         type: string
         default: ci
       build_runs_on:
