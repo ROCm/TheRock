@@ -2,6 +2,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Test: Verify fork PR skips OIDC and uses runner base credentials (issue #5654)
+
 """Configures CI matrix and job decisions for multi-arch workflows.
 
 This script is a pipeline of data transformations:
