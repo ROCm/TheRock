@@ -150,10 +150,10 @@ jobs:
       #     torchvision_version: 0.24.0+rocm7.10.0a20251120
       # Future jobs can use these version outputs to identify newly built
       # packages, for example via `pip install torch==${TORCH_VERSION}`.
-      torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
-      torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
-      torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
-      triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
+      torch_version: ${{ steps.pytorch-versions.outputs.torch_version }}
+      torchaudio_version: ${{ steps.pytorch-versions.outputs.torchaudio_version }}
+      torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
+      triton_version: ${{ steps.pytorch-versions.outputs.triton_version }}
 
     defaults:
       run:
@@ -299,7 +299,17 @@ jobs:
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^
             ${{ env.optional_build_prod_arguments }}
-          python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
+
+      # Write GITHUB_OUTPUT in a bash step so torch/triton versions reliably
+      # propagate to job outputs (cmd + nested Python can omit step outputs).
+      - name: Write PyTorch package version outputs
+        id: pytorch-versions
+        run: |
+          # Single-quote Windows paths: in bash, "\r" inside double quotes is a
+          # carriage return (e.g. C:\runner\... breaks); job outputs must be
+          # correct so the test job can prepend the triton_windows wheel URL.
+          python ./build_tools/github_actions/write_torch_versions.py \
+            --dist-dir '${{ env.PACKAGE_DIST_DIR }}'
 
       - name: Report cache stats
         if: ${{ !cancelled() && inputs.cache_type != 'none' }}
@@ -323,7 +333,7 @@ jobs:
         shell: bash
         run: |
           python build_tools/github_actions/generate_pytorch_manifest.py \
-            --manifest-dir "${PACKAGE_DIST_DIR}/manifests" \
+            --manifest-dir '${{ env.PACKAGE_DIST_DIR }}/manifests' \
             --python-version "${{ inputs.python_version }}" \
             --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
             --pytorch-dir "${CHECKOUT_ROOT}/torch" \
@@ -353,7 +363,7 @@ jobs:
         shell: bash
         run: |
           python build_tools/github_actions/upload_pytorch_manifest.py \
-            --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --dist-dir '${{ env.PACKAGE_DIST_DIR }}' \
             --run-id "${{ github.run_id }}" \
             --amdgpu-family "${{ inputs.amdgpu_family }}" \
             --python-version "${{ inputs.python_version }}" \
@@ -394,6 +404,7 @@ jobs:
       package_index_url: ${{ inputs.cloudfront_staging_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+      triton_version: ${{ needs.build_pytorch_wheels.outputs.triton_version }}
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
