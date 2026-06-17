@@ -12,43 +12,60 @@ from collections import defaultdict, deque
 TOPOLOGY_FILE = "BUILD_TOPOLOGY.toml"
 
 def git(*args: str) -> str:
-    return subprocess.check_output(
-        ["git", *args],
-        text=True,
-    ).strip()
+    return subprocess.check_output(["git", *args], text=True).strip()
 
 
 def changed_files(base: str, head: str) -> list[str]:
-    diff = git("diff", "--name-only", f"{base}...{head}")
-    return [x for x in diff.splitlines() if x.strip()]
-
+    out = git("diff", "--name-only", f"{base}...{head}")
+    return [x for x in out.splitlines() if x.strip()]
 
 def load_topology():
     with open(TOPOLOGY_FILE, "rb") as f:
         return tomllib.load(f)
 
+def build_source_set_index(topo):
+    """
+    submodule -> source_set mapping
+    """
+    index = {}
 
-def build_group_graph(topology):
-    groups = topology["artifact_groups"]
+    for set_name, meta in topo["source_sets"].items():
+        for sm in meta.get("submodules", []):
+            index[sm] = set_name
 
+    return index
+
+
+def build_source_set_to_groups(topo):
+    """
+    source_set -> artifact_groups
+    """
+    mapping = defaultdict(set)
+
+    for gname, gmeta in topo["artifact_groups"].items():
+        for ss in gmeta.get("source_sets", []):
+            mapping[ss].add(gname)
+
+    return mapping
+
+
+def build_group_deps(topo):
     deps = defaultdict(set)
     reverse = defaultdict(set)
 
-    for name, meta in groups.items():
+    for g, meta in topo["artifact_groups"].items():
         for d in meta.get("artifact_group_deps", []):
-            deps[name].add(d)
-            reverse[d].add(name)
+            deps[g].add(d)
+            reverse[d].add(g)
 
     return deps, reverse
 
 
-def build_stage_map(topology):
-    stages = topology["build_stages"]
-
+def build_stage_map(topo):
     group_to_stage = {}
     stage_to_groups = {}
 
-    for stage, meta in stages.items():
+    for stage, meta in topo["build_stages"].items():
         stage_to_groups[stage] = set(meta["artifact_groups"])
         for g in meta["artifact_groups"]:
             group_to_stage[g] = stage
@@ -56,90 +73,52 @@ def build_stage_map(topology):
     return group_to_stage, stage_to_groups
 
 
-# ----------------------------
-# naive path → group mapping
-# ----------------------------
-
-def map_path_to_groups(path: str) -> set[str]:
-    p = path.lower()
-
-    if "llvm-project" in p or "hipify" in p:
-        return {"compiler"}
-
-    if "rocm-libraries" in p:
-        return {"math-libs", "ml-libs"}
-
-    if "rocm-systems" in p:
-        # affects almost everything
-        return {
-            "base",
-            "core-runtime",
-            "hip-runtime",
-            "opencl-runtime",
-            "runtime-tests",
-            "profiler-core",
-            "comm-libs",
-            "storage-libs",
-            "debug-tools",
-            "dctools-core",
-            "profiler-apps",
-            "media-libs",
-            "rocjitsu",
-        }
-
-    return set()
-
-
-# ----------------------------
-# propagate dependencies
-# ----------------------------
+def extract_submodule(path: str) -> str | None:
+    parts = path.split("/")
+    return parts[0] if parts else None
 
 def closure(seed: set[str], reverse_deps: dict[str, set[str]]) -> set[str]:
     q = deque(seed)
     out = set(seed)
 
     while q:
-        g = q.popleft()
-        for dep in reverse_deps.get(g, []):
-            if dep not in out:
-                out.add(dep)
-                q.append(dep)
+        x = q.popleft()
+        for n in reverse_deps.get(x, []):
+            if n not in out:
+                out.add(n)
+                q.append(n)
 
     return out
 
-
-# ----------------------------
-# main
-# ----------------------------
-
 def main():
     ap = argparse.ArgumentParser()
-
     ap.add_argument("--base", required=True)
     ap.add_argument("--head", required=True)
-
     args = ap.parse_args()
 
     topo = load_topology()
 
-    group_deps, reverse_deps = build_group_graph(topo)
+    submodule_to_source_set = build_source_set_index(topo)
+    source_set_to_groups = build_source_set_to_groups(topo)
+    _, group_reverse_deps = build_group_deps(topo)
     group_to_stage, stage_to_groups = build_stage_map(topo)
 
     files = changed_files(args.base, args.head)
 
-    if not files:
-        print(json.dumps({"stages": []}, indent=2))
-        return
-
     impacted_groups = set()
 
     for f in files:
-        impacted_groups |= map_path_to_groups(f)
+        sm = extract_submodule(f)
+        if not sm:
+            continue
 
-    # propagate group-level dependencies
-    impacted_groups = closure(impacted_groups, reverse_deps)
+        source_set = submodule_to_source_set.get(sm)
+        if not source_set:
+            continue
 
-    # map to stages
+        impacted_groups |= source_set_to_groups.get(source_set, set())
+
+    impacted_groups = closure(impacted_groups, group_reverse_deps)
     impacted_stages = set()
 
     for g in impacted_groups:
