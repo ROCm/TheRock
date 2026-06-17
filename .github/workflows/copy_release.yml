@@ -26,6 +26,7 @@ on:
           - gfx90a
           - gfx94X-dcgpu
           - gfx950-dcgpu
+          - gfx125X-dcgpu
         default: gfx94X-dcgpu
       python_version:
         type: choice

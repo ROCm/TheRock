@@ -75,8 +75,6 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
-    elif ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
-        reason = "PR does not have `ci:run-multi-arch` label"
     else:
         reason = "no CI-relevant files changed"
 

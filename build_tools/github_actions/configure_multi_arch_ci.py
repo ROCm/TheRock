@@ -59,7 +59,6 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
     select_build_runner,
-    select_weighted_label,
 )
 from configure_ci_path_filters import (
     get_git_modified_paths,
@@ -864,14 +863,10 @@ def _expand_build_config_for_platform(
             continue
 
         # Determine test runner label.
+        # Note: Per-component weighted runner selection is handled in
+        # fetch_test_configurations.py for better load distribution.
+        # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
-
-        # Handle multi-label configuration with weighted random selection.
-        # Some families (e.g. gfx94x) have multiple runner labels available.
-        if "test-runs-on-labels" in platform_info:
-            test_runs_on = select_weighted_label(
-                platform_info["test-runs-on-labels"], family_name
-            )
 
         # TODO: use hard-coded label (vultr machines) as we try to determine core42 regression
         # This is a temporary measure to get good signal for submodule bumps while we determine core42 issues

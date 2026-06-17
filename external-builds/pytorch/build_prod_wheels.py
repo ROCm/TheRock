@@ -478,9 +478,7 @@ def _setup_common_build_env(
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
 
-    # GLOO enabled for only Linux
-    if not is_windows:
-        env["USE_GLOO"] = "ON"
+    env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
@@ -920,6 +918,18 @@ def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(omp_path, target_lib)
 
 
+def copy_libuv_to_torch_lib(pytorch_dir: Path):
+    libuv_root = os.environ.get("libuv_ROOT", "")
+    if not libuv_root:
+        return
+    uv_dll = Path(libuv_root) / "bin" / "uv.dll"
+    if not uv_dll.exists():
+        raise RuntimeError(f"Did not find uv.dll at '{uv_dll}'")
+    target_lib = pytorch_dir / "torch" / "lib"
+    print(f"Copying libuv from '{uv_dll}' to '{target_lib}'")
+    shutil.copy2(uv_dll, target_lib)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -1049,6 +1059,7 @@ def do_build_pytorch(
     # Windows-specific settings.
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
+        copy_libuv_to_torch_lib(pytorch_dir)
 
         use_flash_attention = (
             "1"

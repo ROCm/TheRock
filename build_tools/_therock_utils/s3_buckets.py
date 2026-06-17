@@ -142,34 +142,6 @@ def get_release_bucket_config(
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
-def _is_current_run_pr_from_fork() -> bool:
-    """Check if the current workflow run is a pull request from a fork.
-
-    Reads the GitHub event payload to check the .fork property on the
-    head repo, matching the behavior of the GitHub Actions expression
-    ``github.event.pull_request.head.repo.fork``.
-
-    Returns False for non-pull_request events or if the event payload
-    is not available (e.g. local development).
-    """
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    if event_name != "pull_request":
-        return False
-
-    if not os.environ.get("GITHUB_EVENT_PATH"):
-        return False
-
-    # Deferred import: github_actions is optional in some environments; only
-    # needed when resolving fork state from the on-disk event payload.
-    from github_actions.github_actions_api import gha_load_github_event
-
-    event = gha_load_github_event()
-
-    return bool(
-        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
-    )
-
-
 def get_artifacts_bucket_config_for_workflow_run(
     github_repository: str,
     release_type: str | None = None,
@@ -202,9 +174,26 @@ def get_artifacts_bucket_config_for_workflow_run(
     # Deferred import: github_actions is an optional dependency not available in
     # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
-        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+        from github_actions.github_actions_api import (
+            GitHubAPIError,
+            gha_query_workflow_run_by_id,
+        )
 
-        workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
+        try:
+            workflow_run = gha_query_workflow_run_by_id(
+                github_repository, workflow_run_id
+            )
+        except GitHubAPIError as e:
+            run_url = (
+                f"https://github.com/{github_repository}/actions/runs/{workflow_run_id}"
+            )
+            raise GitHubAPIError(
+                f"Failed to query workflow run {workflow_run_id} in repository "
+                f"{github_repository}: {run_url}\n"
+                f"  {e}\n"
+                f"Hint: Did you mean to specify a different repository with "
+                f"--run-github-repo?"
+            ) from e
 
     # Extract metadata from workflow_run if available
     if workflow_run is not None:
@@ -214,7 +203,11 @@ def get_artifacts_bucket_config_for_workflow_run(
         _log(f"  head_github_repository: {head_github_repository}")
         _log(f"  is_pr_from_fork: {is_pr_from_fork}")
     else:
-        is_pr_from_fork = _is_current_run_pr_from_fork()
+        # Deferred import: github_actions is optional in some environments;
+        # only needed when resolving fork state from the on-disk event payload.
+        from github_actions.github_actions_api import is_current_run_pr_from_fork
+
+        is_pr_from_fork = is_current_run_pr_from_fork()
         _log(f"  is_pr_from_fork: {is_pr_from_fork}")
 
     config = get_artifacts_bucket_config(
