@@ -65,6 +65,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
+from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
@@ -428,6 +429,7 @@ class BuildConfig:
     expect_failure: bool
     build_native_linux: bool
     build_pytorch: bool
+    test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -958,6 +960,14 @@ def _expand_build_config_for_platform(
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
 
+    test_python_packages_matrix = build_rocm_python_test_matrix(
+        per_family_info=per_family_info,
+        platform=platform,
+    )
+    # TODO: Thread jobs.build_rocm_python into expand_build_configs() so this
+    # matrix is empty when the ROCm Python package build is disabled. Then
+    # multi_arch_ci_* can also condition build_python_packages on that decision.
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=";".join(family_names),
@@ -970,6 +980,7 @@ def _expand_build_config_for_platform(
         build_pytorch=(
             not expect_failure and not expect_pytorch_failure and suffix != "asan"
         ),
+        test_python_packages_matrix=test_python_packages_matrix,
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
