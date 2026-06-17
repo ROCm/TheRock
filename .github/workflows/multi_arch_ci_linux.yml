@@ -253,12 +253,13 @@ jobs:
 
   test_python_packages_per_family:
     needs: [build_python_packages]
-    name: Test Python ${{ matrix.family_info.amdgpu_family }} | ${{ matrix.image.name }}
+    name: Test Python
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
     strategy:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+        python_version: ["3.10", "3.11", "3.12"]
         # Fan out wheel tests across multiple base images to catch distro-specific regressions.
         image:
           - name: ubuntu24.04
@@ -279,7 +280,7 @@ jobs:
               needs.build_python_packages.outputs.package_find_links_url,
               matrix.family_info.amdgpu_family)
         }}
-      python_version: "3.12"
+      python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.image.name }}

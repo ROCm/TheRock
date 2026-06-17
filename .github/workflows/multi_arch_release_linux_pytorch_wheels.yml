@@ -122,7 +122,8 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${{ inputs.python_version }}" \
-            --platform=linux
+            --platform=linux \
+            --amdgpu-families="${{ inputs.amdgpu_families }}"
 
   build_pytorch_wheels:
     needs: setup_matrix
@@ -136,7 +137,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
     with:
-      amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_families: ${{ matrix.amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
