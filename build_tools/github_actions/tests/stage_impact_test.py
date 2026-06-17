@@ -503,5 +503,6 @@ class StageImpactTest(unittest.TestCase):
         self.assertEqual(payload["matched_source_sets"], ("rocm-libraries",))
         self.assertFalse(payload["full_rebuild_required"])
 
+
 if __name__ == "__main__":
     unittest.main()
