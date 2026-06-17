@@ -500,6 +500,8 @@ class StageImpactTest(unittest.TestCase):
             },
         )
         self.assertEqual(payload["changed_inputs"], ("rocm-libraries",))
+        self.assertEqual(payload["reasons"], ())
+        self.assertEqual(payload["unmatched_inputs"], ())
         self.assertEqual(payload["matched_source_sets"], ("rocm-libraries",))
         self.assertFalse(payload["full_rebuild_required"])
 
