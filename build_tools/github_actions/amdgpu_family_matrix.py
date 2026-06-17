@@ -149,20 +149,12 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            "test-runs-on": "linux-gfx942-1gpu-core42-ossci-rocm",
+            "test-runs-on": "linux-rocm-mi300-1gpu.test",
             "test-runs-on-labels": [
                 {
-                    "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.117,
+                    "label": "linux-rocm-mi300-1gpu.test",
+                    "weight": 1.0,
                 },  # cirrascale (4/34)
-                {
-                    "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.736,
-                },  # core42 (25/34)
-                {
-                    "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.147,
-                },  # vultr (5/34)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
