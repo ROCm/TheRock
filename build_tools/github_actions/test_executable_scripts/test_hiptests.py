@@ -151,6 +151,41 @@ def setup_env(env):
         copy_dlls_exe_path()
 
 
+def catch_tests_has_smoke_ctest_label(env):
+    """Return True if the catch_tests tree exposes a ctest label named ``smoke``."""
+    cmd = [
+        "ctest",
+        "--print-labels",
+        "--test-dir",
+        CATCH_TESTS_PATH,
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=THEROCK_DIR,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+    except OSError as exc:
+        logging.info(
+            "++ Could not query ctest labels (%s); skipping -L smoke for quick", exc
+        )
+        return False
+    if result.returncode != 0:
+        logging.info(
+            "++ ctest --print-labels failed (rc=%s); stderr=%s; skipping -L smoke for quick",
+            result.returncode,
+            (result.stderr or "").strip(),
+        )
+        return False
+    for line in result.stdout.splitlines():
+        if line.strip() == "smoke":
+            return True
+    return False
+
+
 def execute_tests(env):
     cmd = [
         "ctest",
@@ -161,9 +196,16 @@ def execute_tests(env):
         "--output-on-failure",
     ]
 
-    # If quick tests are enabled, run only the smoke test subset
+    # Quick runs prefer the ctest ``smoke`` label when this build defines it.
+    # Some NPI install trees omit that label; ``-L smoke`` would then match zero tests.
     if TEST_TYPE == "quick":
-        cmd.extend(["-L", "smoke"])
+        if catch_tests_has_smoke_ctest_label(env):
+            cmd.extend(["-L", "smoke"])
+        else:
+            logging.info(
+                "++ TEST_TYPE=quick but catch_tests has no ctest 'smoke' label; "
+                "running shard without -L smoke"
+            )
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
         ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
