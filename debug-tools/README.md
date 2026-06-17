@@ -525,3 +525,7 @@ Usage: `-DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON`
 Use this when building a rocgdb source tree (e.g. upstream master) that is not part of the branches exercised by TheRock CI.
 
 Usage: `-DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON`
+
+**Note:** `curl` must be available on the system when this option is enabled, as
+it is used to download `test_rocgdb.py` at configure time. Most environments
+provide `curl` by default, but it may need to be installed otherwise.
