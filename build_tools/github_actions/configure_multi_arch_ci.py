@@ -616,7 +616,7 @@ def _determine_test_type(
             return "standard", f"submodule(s) changed: {sorted(matching)}"
 
     # Default: quick tests for fast CI feedback.
-    return "quick", "default"
+    return "comprehensive", "default"
 
 
 def decide_jobs(
