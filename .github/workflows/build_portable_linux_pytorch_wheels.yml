@@ -245,7 +245,7 @@ jobs:
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --find-links "https://therock-ci-artifacts-external.s3.amazonaws.com/ROCm-TheRock/27666963163-linux/python/index.html" \
+            --find-links "https://therock-nightly-artifacts.s3.amazonaws.com/27657263001-linux/python/index.html" \
             --pre \
             --rocm-extras "device-gfx1250" \
             --pytorch-rocm-arch gfx1250 \
