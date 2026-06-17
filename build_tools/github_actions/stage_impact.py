@@ -45,7 +45,7 @@ class StageImpactRuleSet:
 
 @dataclass(frozen=True)
 class StageImpactResult:
-    """Stable result of stage-impact analysis.
+    """Result of stage-impact analysis.
 
     Fields:
         changed_inputs: Normalized changed paths or submodule names.
