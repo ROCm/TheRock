@@ -72,6 +72,7 @@ amdgpu_family_predefined_groups = {
         "gfx1150",
         "gfx1152",
         "gfx1153",
+        "gfx125X-dcgpu",
     ],
 }
 
@@ -387,6 +388,25 @@ amdgpu_family_info_matrix_all = {
                 },
                 "release": {
                     "push_on_success": True,
+                    "bypass_tests_for_releases": True,
+                },
+            },
+        }
+    },
+    "gfx125X": {
+        "dcgpu": {
+            "linux": {
+                "build": {
+                    "build_variants": ["release"],
+                },
+                "test": {
+                    # No gfx1250 hardware available for testing yet.
+                    "run_tests": False,
+                    "runs_on": {},
+                    "fetch-gfx-targets": [],
+                },
+                "release": {
+                    "push_on_success": False,
                     "bypass_tests_for_releases": True,
                 },
             },

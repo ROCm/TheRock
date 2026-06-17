@@ -1,0 +1,12 @@
+# hipfile
+[components.lib."storage-libs/hipfile/stage"]
+include = [
+  "share/hipfile/**",
+]
+[components.dbg."storage-libs/hipfile/stage"]
+[components.dev."storage-libs/hipfile/stage"]
+[components.doc."storage-libs/hipfile/stage"]
+
+# Tests
+[components.test."storage-libs/hipfile/stage"]
+optional = true
