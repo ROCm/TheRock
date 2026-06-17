@@ -111,13 +111,6 @@ def _emit_non_sarif_reports(non_sarif: list[_ReportTarget]) -> None:
 
 
 def _ensure_zizmor() -> Path:
-    """Install the pinned zizmor release and return its CLI path.
-
-    Always re-runs `pip install` so the version pin is enforced even
-    when an older zizmor is already on PATH; pip is fast when the
-    requested version is already installed. Smoke-tests the binary
-    afterwards so we fail fast if the install left a half-broken state.
-    """
     spec = f"zizmor=={_ZIZMOR_VERSION}"
     log.info("Installing %s", spec)
     try:
@@ -159,11 +152,7 @@ def _ensure_zizmor() -> Path:
 
 
 def _parse_report_formats(raw: str) -> list[_ReportTarget]:
-    """Parse a comma-separated `report_formats` value into report targets.
-
-    Whitespace is trimmed, duplicates collapse to the first occurrence,
-    and unknown formats raise :class:`ValueError`.
-    """
+    """Parse a comma-separated `report_formats` value into report targets."""
     targets: list[_ReportTarget] = []
     seen: set[str] = set()
     for raw_fmt in raw.split(","):
@@ -197,12 +186,8 @@ def _resolve_config_path() -> str:
 
 
 def _diff_range(event_name: str, event: dict[str, Any]) -> tuple[str, str] | None:
-    """Return `(base_sha, head_sha)` for the calling event, or `None`.
+    """Return `(base_sha, head_sha)` for the calling event, or `None`."""
 
-    `None` means "no diff range applicable" (workflow_dispatch,
-    schedule, new ref push, missing SHAs, etc.) and instructs callers
-    to fall back to a full scan.
-    """
     if event_name in ("pull_request", "pull_request_target"):
         pr = event.get("pull_request") or {}
         base = ((pr.get("base") or {}).get("sha")) or ""
@@ -230,17 +215,10 @@ def _diff_range(event_name: str, event: dict[str, Any]) -> tuple[str, str] | Non
 
 
 def _is_audited_path(relpath: str) -> bool:
-    """Return True if `relpath` matches an audited file pattern.
-
-    Mirrors zizmor's own `--collect=default` set: workflow files
-    under `.github/workflows/`, `action.yml`/`action.yaml`
-    anywhere in the tree, and the top-level Dependabot config.
-    """
     norm = relpath.replace(os.sep, "/")
     for pattern in _AUDITED_PATTERNS:
         if fnmatch.fnmatchcase(norm, pattern):
             return True
-        # fnmatch's `**` doesn't recurse; also match the bare basename.
         if pattern.startswith("**/") and fnmatch.fnmatchcase(
             norm, pattern[len("**/"):]
         ):
@@ -259,14 +237,6 @@ def _determine_changed_audited_files(
     `--collect=default` walker accepts (`_AUDITED_PATTERNS`);
     everything else (Python, Markdown, dotfiles, etc.) is silently
     skipped. So both scan modes look at the same set of files.
-
-    Semantics:
-
-    * `None` - no usable diff range; caller should fall back to a
-      full recursive scan of `scan_path`.
-    * `[]` - diff range was usable but contained no audited files
-      under `scan_path`; caller should treat this as a clean no-op.
-    * `[paths...]` - exact set of files for zizmor to audit.
     """
     diff = _diff_range(event_name, event)
     if diff is None:
@@ -310,7 +280,6 @@ def _determine_changed_audited_files(
         if not relpath or not _is_audited_path(relpath):
             continue
         candidate = Path(relpath)
-        # Skip files resolving outside scan_path.
         try:
             candidate.resolve().relative_to(scan_root)
         except ValueError:
@@ -332,17 +301,6 @@ def _run_zizmor(
 ) -> Path:
     """Run zizmor for each user target plus an internal JSON tally pass
     if the user didn't already request one.
-
-    Returns the path to a JSON report containing every finding;
-    callers feed it to :func:`_tally_findings_by_severity` to take
-    the threshold-based job-fail decision. `--no-exit-codes` is
-    always passed so zizmor doesn't fail the run on findings: zizmor
-    normally maps highest-severity-finding to exit codes 11-14, but
-    we own that decision via the tallied JSON.
-
-    Raises :class:`RuntimeError` for unexpected zizmor exit codes
-    (anything non-zero with `--no-exit-codes` indicates an internal
-    audit failure, not a finding).
     """
     base_args: list[str] = [
         str(binary),
@@ -357,7 +315,6 @@ def _run_zizmor(
     else:
         base_args.extend(str(p) for p in files)
 
-    # Reuse a user-requested JSON report for the tally, else add one.
     user_json = next((t for t in user_targets if t.fmt == "json"), None)
     if user_json is not None:
         tally_path = user_json.path
@@ -366,7 +323,6 @@ def _run_zizmor(
         tally_path = Path(_INTERNAL_TALLY_PATH)
         runs = [*user_targets, _ReportTarget(fmt="json", path=tally_path)]
 
-    # zizmor writes to stdout (no --output flag), so we capture and write.
     for tgt in runs:
         cmd = [*base_args, "--format", tgt.fmt]
         log.info("Running: %s > %s", " ".join(cmd), tgt.path)
@@ -406,15 +362,6 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
     """Inject `security-severity` into each SARIF result so the
     GitHub Security tab tiers zizmor findings the same way it tiers
     CodeQL.
-
-    Reads zizmor's per-result `properties["zizmor/severity"]` (set
-    by zizmor v1.23.0+; we pin a newer release) and maps it through
-    `_ZIZMOR_SECURITY_SEVERITY` to the numeric
-    `properties.security-severity` GitHub code scanning uses to
-    drive its severity dropdown and alert rules. Failures during
-    enrichment are logged at WARNING and don't propagate: `level`
-    still drives the Security tab tier on its own, so we'd rather
-    emit a slightly-less-rich SARIF than fail the scan job.
     """
     try:
         with open(sarif_path, encoding="utf-8") as f:
@@ -474,17 +421,7 @@ def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
 
 
 def _tally_findings_by_severity(json_path: Path) -> dict[str, int]:
-    """Read zizmor's JSON output and tally findings by severity.
-
-    Zizmor's `--format=json` (aliased to the current `json-v1`
-    schema) emits a flat array of findings, each with
-    `determinations.severity` as a Title-case string ("High",
-    "Medium", "Low", "Informational", "Unknown"). Returns a dict
-    with at minimum the keys in `_SEVERITY_ORDER` (each
-    `int >= 0`); any other `severity` value zizmor emits (e.g.
-    `UNKNOWN`) is preserved verbatim under that key but doesn't
-    participate in the threshold decision.
-    """
+    """Read zizmor's JSON output and tally findings by severity."""
     try:
         with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -641,12 +578,10 @@ def main(argv: list[str]) -> int:
     sarif_target = next((t for t in targets if t.fmt == "sarif"), None)
     non_sarif = [t for t in targets if t.fmt != "sarif"]
 
-    # 'changed' mode with nothing audited: emit empty paths so uploads skip.
     if files is not None and not files:
         gha_set_output({"sarif_path": "", "non_sarif_paths": ""})
         return 0
 
-    # Emit outputs up-front so uploads run even if zizmor fails partway.
     gha_set_output(
         {
             "sarif_path": "" if sarif_target is None else str(sarif_target.path),
