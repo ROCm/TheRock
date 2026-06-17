@@ -376,7 +376,7 @@ class TestRocmDecision(JobGroupDecision):
     - "full"          — submodule changes, test:* labels, or test_filter:full
     """
 
-    test_type: str = "quick"
+    test_type: str = "comprehensive"
     test_type_reason: str = "default"
     # TODO: Consolidate test_type, test labels, and run_functional_tests
     # (from the single-arch pipeline) into a per-platform test config object
