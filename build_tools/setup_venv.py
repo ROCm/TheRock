@@ -31,6 +31,18 @@ There are a few modes this can be used in:
     python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
     deactivate
     ```
+
+Some automated workflows using this script to install packages can run shortly
+after other workflows uploads those packages. In these cases server-side index
+generation may not have completed yet and installs can fail for 1-3 minutes.
+Package installs are retried by default to cover that transient window. This
+behavior can be adjusted with the `--install-retry-timeout-seconds` and
+`--install-retry-wait-between-seconds` arguments.
+See https://github.com/ROCm/TheRock/issues/5455 for more details.
+
+TODO: update docs and args for multi-arch
+   * --index-url https://rocm.nightlies.amd.com/whl-multi-arch/
+   * refresh ROCM_INDEX_URLS_MAP
 """
 
 import argparse
@@ -38,9 +50,12 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import re
+import time
+from urllib.parse import urlparse
 
 from github_actions.github_actions_api import *
 
@@ -53,16 +68,127 @@ ROCM_INDEX_URLS_MAP = {
     "dev": "https://rocm.devreleases.amd.com/v2",
 }
 
+# Fallback mapping from CDN domains to direct S3 bucket URLs.
+# Used when DNS resolution fails for the CDN.
+CDN_TO_S3_FALLBACK_MAP = {
+    "rocm.devreleases.amd.com": "therock-dev-python.s3.amazonaws.com",
+    "rocm.nightlies.amd.com": "therock-nightly-python.s3.amazonaws.com",
+}
+
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
 
 
+def check_dns_resolution(hostname: str, timeout: float = 5.0) -> bool:
+    """Check if a hostname can be resolved via DNS."""
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.gethostbyname(hostname)
+        return True
+    except (socket.gaierror, socket.timeout):
+        return False
+
+
+def apply_url_fallback(url: str) -> tuple[str, bool]:
+    """If DNS fails for the URL's domain, substitute a fallback domain if configured."""
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+
+    if not hostname:
+        return url, False
+
+    # Check if we have a fallback configured for this domain.
+    fallback_hostname = CDN_TO_S3_FALLBACK_MAP.get(hostname)
+    if not fallback_hostname:
+        return url, False
+
+    # Check if the original domain is reachable.
+    if check_dns_resolution(hostname):
+        return url, False
+
+    # DNS failed, check if fallback is reachable.
+    log(f"[WARNING] DNS resolution failed for '{hostname}', trying fallback...")
+    if not check_dns_resolution(fallback_hostname):
+        log(
+            f"[WARNING] Fallback '{fallback_hostname}' also unreachable, using original URL"
+        )
+        return url, False
+
+    # Replace the hostname with the fallback.
+    fallback_url = url.replace(f"://{hostname}", f"://{fallback_hostname}", 1)
+    log(f"[INFO] Using fallback URL: {fallback_url}")
+    return fallback_url, True
+
+
+def scrape_package_names_from_index(index_url: str) -> list[str]:
+    """Scrape package names from the index.html at the given URL.
+
+    This dynamically fetches the list of available packages from the S3 bucket
+    index page, avoiding the need for a hardcoded package list.
+    Uses urllib.request (stdlib) to avoid external dependencies.
+    """
+    import urllib.request
+    import urllib.error
+
+    # Ensure URL ends with index.html for S3 bucket listing
+    if not index_url.endswith("/"):
+        index_url = index_url + "/"
+    index_html_url = index_url + "index.html"
+
+    try:
+        with urllib.request.urlopen(index_html_url, timeout=30) as response:
+            html_content = response.read().decode("utf-8")
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        log(f"[WARNING] Failed to fetch package index from {index_html_url}: {e}")
+        return []
+
+    # Extract package names from <a> tags in the index HTML
+    # Typical format: <a href="package-name/">package-name</a>
+    package_pattern = r'<a[^>]*href="([^"/]+)/?">.*?</a>'
+    matches = re.findall(package_pattern, html_content, re.IGNORECASE)
+
+    # Filter out non-package entries (like parent directory links)
+    packages = [m for m in matches if m and not m.startswith(".")]
+    return packages
+
+
 def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+
+
+def run_command_with_retries(
+    args: list[str | Path],
+    cwd: Path = Path.cwd(),
+    retry_timeout_seconds: int = 0,
+    retry_wait_between_seconds: int = 0,
+):
+    deadline = time.monotonic() + retry_timeout_seconds
+    attempt = 1
+    while True:
+        try:
+            run_command(args, cwd)
+            return
+        except subprocess.CalledProcessError as e:
+            if (
+                retry_timeout_seconds == 0
+                or time.monotonic() + retry_wait_between_seconds > deadline
+            ):
+                log(
+                    "Command failed after "
+                    f"{attempt} attempt(s); no retry time remains"
+                )
+                raise
+            log(
+                "Command failed "
+                f"(attempt {attempt}, exit code {e.returncode}); "
+                f"retrying in {retry_wait_between_seconds}s..."
+            )
+            time.sleep(retry_wait_between_seconds)
+            attempt += 1
 
 
 def find_venv_python_exe(venv_path: Path) -> Path | None:
@@ -110,9 +236,23 @@ def update_venv(venv_dir: Path, use_uv: bool = False):
         return
 
     # pip logs warnings about wanting to update, so we'll do that for it.
+    # Keep setuptools/wheel available so artifact-only installs of ROCm sdists
+    # can use --no-build-isolation without resolving build dependencies from
+    # the package index being tested.
     log("")
     python_exe = find_venv_python_exe(venv_dir)
-    run_command([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
+    run_command(
+        [
+            str(python_exe),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "pip",
+            "setuptools",
+            "wheel",
+        ]
+    )
 
 
 def activate_venv_in_gha(venv_dir: Path):
@@ -157,6 +297,8 @@ def install_packages_into_venv(
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
+    install_retry_timeout_seconds: int = 0,
+    install_retry_wait_between_seconds: int = 0,
 ):
     """Installs packages into venv_dir using the provided options.
 
@@ -170,6 +312,8 @@ def install_packages_into_venv(
         find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
+        install_retry_timeout_seconds: Maximum retry window for the install command
+        install_retry_wait_between_seconds: Delay between package install retries
     """
     log("")
 
@@ -188,15 +332,42 @@ def install_packages_into_venv(
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
 
-    if index_url:
+    using_s3_fallback = False
+    if index_url == "":
+        pip_install_cmd.append("--no-index")
+        pip_install_cmd.append("--no-build-isolation")
+    elif index_url:
         # Join index with subdir.
         if index_subdir:
             index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
 
-        pip_install_cmd.append(f"--index-url={index_url}")
+        # Apply DNS fallback if needed (e.g., CDN domain unreachable).
+        index_url, using_s3_fallback = apply_url_fallback(index_url)
+
+        if using_s3_fallback:
+            # TODO(#5285): remove fallback once DNS issues on test machine are resolved
+            # Use --find-links with explicit index.html paths. S3 doesn't auto-serve
+            # index.html for directory URLs, so --index-url won't work.
+            # Dynamically scrape available packages from the fallback index.
+            pkg_names = scrape_package_names_from_index(index_url)
+            if not pkg_names:
+                log("[WARNING] No packages found in fallback index, install may fail")
+            for pkg_name in pkg_names:
+                pkg_find_links = f"{index_url.rstrip('/')}/{pkg_name}/index.html"
+                pip_install_cmd.append(f"--find-links={pkg_find_links}")
+        else:
+            pip_install_cmd.append(f"--index-url={index_url}")
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
+
+    # When using find-links without a valid index-url, prevent fallback to PyPI.
+    # This applies when:
+    # - find_links is provided without index_url (artifact-only installs)
+    # - S3 fallback is used (we switched from --index-url to --find-links)
+    if using_s3_fallback or (find_links and not index_url):
+        pip_install_cmd.append("--no-index")
+        pip_install_cmd.append("--no-build-isolation")
 
     if pre:
         pip_install_cmd.append("--prerelease=allow" if use_uv else "--pre")
@@ -206,7 +377,11 @@ def install_packages_into_venv(
 
     pip_install_cmd.extend(packages)
 
-    run_command(pip_install_cmd)
+    run_command_with_retries(
+        pip_install_cmd,
+        retry_timeout_seconds=install_retry_timeout_seconds,
+        retry_wait_between_seconds=install_retry_wait_between_seconds,
+    )
 
 
 def log_venv_activate_instructions(venv_dir: Path):
@@ -241,6 +416,8 @@ def run(args: argparse.Namespace):
             find_links=args.find_links,
             pre=args.pre,
             disable_cache=args.disable_cache,
+            install_retry_timeout_seconds=args.install_retry_timeout_seconds,
+            install_retry_wait_between_seconds=args.install_retry_wait_between_seconds,
         )
 
     if args.activate_in_future_github_actions_steps:
@@ -311,6 +488,22 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         help="Uses uv instead of pip/venv, see more at: https://docs.astral.sh/uv/",
     )
+    general_options.add_argument(
+        "--install-retry-timeout-seconds",
+        type=int,
+        default=180,
+        help=(
+            "Maximum wall-clock time to keep retrying failed package install "
+            "commands in seconds. This does not timeout an in-progress pip "
+            "command. (default: 180; 0 disables retries)"
+        ),
+    )
+    general_options.add_argument(
+        "--install-retry-wait-between-seconds",
+        type=int,
+        default=15,
+        help="Seconds to wait between failed package install attempts (default: 15)",
+    )
 
     install_options = p.add_argument_group("Install options")
 
@@ -357,6 +550,15 @@ def main(argv: list[str]):
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
     if args.index_name and not args.index_subdir:
         p.error("--index-subdir must be set when using --index-name")
+    if args.install_retry_timeout_seconds < 0:
+        p.error("--install-retry-timeout-seconds must be non-negative")
+    if (
+        args.install_retry_timeout_seconds > 0
+        and args.install_retry_wait_between_seconds <= 0
+    ):
+        p.error(
+            "--install-retry-wait-between-seconds must be positive when retries are enabled"
+        )
 
     run(args)
 

@@ -9,6 +9,7 @@ These tests cover:
   - params.populated_packages: registration and cross-package search helpers
 """
 
+import json
 import os
 import tempfile
 import unittest
@@ -524,6 +525,52 @@ class DevicePackagingTest(TmpDirTestCase):
         self.assertTrue(
             (platform_dir / "lib" / "rocblas" / "library" / "Foo_gfx942.co").exists()
         )
+
+    def test_populate_device_files_emits_devel_links_manifest(self):
+        """Device wheel must ship a `_devel_links` manifest mapping each device
+        file to its relative hardlink target into the libraries overlay dir.
+
+        This manifest is what `rocm-sdk init` consumes to mirror per-ISA device
+        files (.kpack/.co/.dat/...) into the generic rocm-sdk-devel tree.
+        """
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+        dev.populate_device_files(
+            params.filter_artifacts(
+                lambda an: an.name == "blas"
+                and an.component == "lib"
+                and an.target_family == "gfx942"
+            )
+        )
+
+        libs_name = dev._platform_dir.name
+        manifest_path = dev._platform_dir / ".devel_links" / "gfx942.json"
+        self.assertTrue(
+            manifest_path.is_file(),
+            "device wheel must emit a .devel_links/<target>.json manifest",
+        )
+
+        data = json.loads(manifest_path.read_text())
+        self.assertEqual(data["version"], "0.0.1.test")
+        links = {entry["relpath"]: entry["target"] for entry in data["links"]}
+
+        # Every device file must have an entry with a relative target that
+        # backtracks out of the devel tree and into the libraries overlay.
+        self.assertEqual(
+            links[".kpack/blas_lib_gfx942.kpack"],
+            f"../../{libs_name}/.kpack/blas_lib_gfx942.kpack",
+        )
+        self.assertEqual(
+            links["lib/rocblas/library/Foo_gfx942.co"],
+            f"../../../../{libs_name}/lib/rocblas/library/Foo_gfx942.co",
+        )
+
+        # The manifest must not list itself as a device file to link.
+        self.assertNotIn(".devel_links/gfx942.json", links)
 
     def test_device_platform_dir_overlays_libraries(self):
         """Device package platform dir must match libraries package platform dir name."""

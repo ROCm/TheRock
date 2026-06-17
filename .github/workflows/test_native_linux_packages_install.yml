@@ -150,8 +150,8 @@ jobs:
           echo "Installing prerequisites for ${{ env.PKG_TYPE }} on container"
 
           if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
-            apt update
-            apt install -y \
+            sudo apt update
+            sudo apt install -y \
               wget \
               curl \
               ca-certificates \
@@ -159,7 +159,7 @@ jobs:
               lsb-release
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
-              apt install -y pciutils kmod apt-utils
+              sudo apt install -y pciutils kmod apt-utils
             fi
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
             # SLES prerequisites (uses BCI base - zypper)

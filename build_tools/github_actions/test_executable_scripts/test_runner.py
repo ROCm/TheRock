@@ -19,6 +19,7 @@ import sys
 import subprocess
 import re
 import os
+import platform
 
 import logging
 import shlex
@@ -27,8 +28,33 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
-TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+VALID_TEST_CATEGORIES = {
+    "quick",
+    "standard",
+    "comprehensive",
+    "full",
+    # ffm-specific categories
+    "ffm-quick",
+    "ffm-standard",
+    "ffm-comprehensive",
+    "ffm-full",
+}
+# Normalize + validate TEST_TYPE once at module load so all downstream
+# consumers (apply_component_overrides at import time, main() at run
+# time) see the same lower-cased, validated value. `or "quick"` covers
+# both unset env var and explicitly-empty env var (which is what
+# GitHub Actions inputs default to when the workflow input is left
+# blank). Invalid values fall back to "quick" with an error.
+_raw_test_type = os.getenv("TEST_TYPE") or "quick"
+TEST_TYPE = _raw_test_type.lower()
+if TEST_TYPE not in VALID_TEST_CATEGORIES:
+    print(
+        f"ERROR: Invalid TEST_TYPE '{_raw_test_type}'. "
+        f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
+        f"Falling back to 'quick'.",
+        file=sys.stderr,
+    )
+    TEST_TYPE = "quick"
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # Map job names to actual test directory names
@@ -97,6 +123,15 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   If any component needs to override the default TEST_DIR, it can use test_dir
 #   by specifying the path parts relative to ROCM_PATH.
 #
+# - test_dir_by_type: Optional dict mapping TEST_TYPE (quick/standard/
+#   comprehensive/full) -> path components relative to ROCM_PATH. When the
+#   current TEST_TYPE matches a key here, this takes precedence over the
+#   plain test_dir above. Used when a component installs its ctest
+#   fragments under multiple subdirectories and the routing depends on
+#   the test tier (e.g. rocwmma: quick/regression run from bin/rocwmma/
+#   regression to preserve the per-target emulation regression entries
+#   that legacy test_rocwmma.py used).
+#
 # - additional_env_paths: Additional paths to prepend to the existing PATH,
 #   LD_LIBRARY_PATH, etc. The path parts are relative to ROCM_PATH.
 #
@@ -117,6 +152,26 @@ COMPONENT_OVERRIDES = {
                 ["lib"],
                 ["lib", "rocm_sysdeps", "lib"],
             ],
+        },
+    },
+    # rocwmma installs three independent CTestTestfile.cmake fragments:
+    #   bin/rocwmma/             - per-target plain runs + regression_tests
+    #   bin/rocwmma/smoke/       - per-target "<target> smoke" emulation
+    #   bin/rocwmma/regression/  - per-target "<target> regression" emulation
+    #                              + regression_tests
+    # Legacy test_rocwmma.py routed TEST_TYPE=quick (and the alias
+    # TEST_TYPE=regression, which the module-level validator now folds
+    # back to "quick") to the regression fragment so the per-target
+    # emulation regression runs (gemm/unit/dlrm) were exercised. Mirror
+    # that here so swapping to test_runner.py preserves coverage. Pairs
+    # with the rocm-libraries PR that tags the "<target> regression"
+    # entries with the `quick` label in bin/rocwmma/regression/
+    # CTestTestfile.cmake.
+    # Other TEST_TYPEs (standard/comprehensive/full) fall through to the
+    # default bin/rocwmma/ fragment, matching legacy behaviour.
+    "rocwmma": {
+        "test_dir_by_type": {
+            "quick": ["bin", "rocwmma", "regression"],
         },
     },
     # rocroller's gtests link against shared libraries that live in the
@@ -152,13 +207,22 @@ def _prepend_env_paths(env, base_path, additional_paths_dict):
         env[env_key] = ":".join(filter(None, new_paths + [existing_path]))
 
 
-def apply_component_overrides(job_name, rocm_path, therock_dir, default_test_dir, env):
+def apply_component_overrides(
+    job_name, test_type, rocm_path, therock_dir, default_test_dir, env
+):
     """Apply component-specific overrides for test_dir and environment variables.
 
-    - 'test_dir' (path parts relative to rocm_path) overrides the default
-      test directory.
-    - 'additional_env_paths' prepends ROCM_PATH-relative paths to env vars.
-    - 'env_prepend_from_therock' prepends THEROCK_DIR-relative (build tree)
+    Precedence for test_dir resolution (highest -> lowest):
+      1. test_dir_by_type[test_type] - TEST_TYPE-aware route (e.g. rocwmma
+         quick/regression -> bin/rocwmma/regression).
+      2. test_dir - fixed override (path parts relative to rocm_path),
+         applied regardless of TEST_TYPE (e.g. rocprofiler-compute ->
+         libexec/rocprofiler-compute).
+      3. default_test_dir - THEROCK_BIN_DIR/TEST_COMPONENT.
+
+    Environment paths:
+    - 'additional_env_paths' prepends rocm_path-relative paths to env vars.
+    - 'env_prepend_from_therock' prepends therock_dir-relative (build tree)
       paths to env vars. Used by components like rocroller that load shared
       libraries straight out of the build tree.
     """
@@ -167,7 +231,10 @@ def apply_component_overrides(job_name, rocm_path, therock_dir, default_test_dir
         return default_test_dir
 
     test_dir = default_test_dir
-    if "test_dir" in overrides:
+    by_type = overrides.get("test_dir_by_type") or {}
+    if test_type and test_type in by_type:
+        test_dir = str(rocm_path.joinpath(*by_type[test_type]))
+    elif "test_dir" in overrides:
         test_dir = str(rocm_path.joinpath(*overrides["test_dir"]))
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
@@ -177,7 +244,12 @@ def apply_component_overrides(job_name, rocm_path, therock_dir, default_test_dir
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
 TEST_DIR = apply_component_overrides(
-    test_component_job_name, ROCM_PATH, THEROCK_DIR, TEST_DIR, environ_vars
+    test_component_job_name,
+    TEST_TYPE,
+    ROCM_PATH,
+    THEROCK_DIR,
+    TEST_DIR,
+    environ_vars,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -277,7 +349,55 @@ def check_available_labels():
         sys.exit(1)
 
 
-def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels):
+def generate_resource_spec():
+    """Generate a CTest resource-spec file for components that ship the
+    `generate_resource_spec` helper (currently hipcub, rocthrust, rocprim).
+
+    These components pin each test to a GPU slot via the RESOURCE_GROUPS test
+    property, which CTest only honors when a resource spec file is supplied.
+    Returns the resource-spec filename to pass to ctest via --resource-spec-file.
+    """
+    exe_dir = Path(TEST_DIR).resolve()
+    exe_name = (
+        "generate_resource_spec.exe"
+        if platform.system() == "Windows"
+        else "generate_resource_spec"
+    )
+    gen_exe = exe_dir / exe_name
+    if not gen_exe.is_file():
+        # Component does not use CTest resource allocation; nothing to do.
+        return None
+
+    # generate_resource_spec links against the HIP runtime; prepend the ROCm
+    # bin/lib dirs so it resolves on every platform (Windows via PATH, Linux
+    # via LD_LIBRARY_PATH / RPATH).
+    gen_env = environ_vars.copy()
+    gen_env["PATH"] = os.pathsep.join(
+        filter(None, [str(Path(THEROCK_BIN_DIR).resolve()), gen_env.get("PATH", "")])
+    )
+    gen_env["LD_LIBRARY_PATH"] = os.pathsep.join(
+        filter(None, [str(ROCM_PATH / "lib"), gen_env.get("LD_LIBRARY_PATH", "")])
+    )
+
+    # Write resources.json into the test dir and pass it to ctest as a bare
+    # name; ctest changes into --test-dir, so it resolves to the same file.
+    resource_spec_file = "resources.json"
+    gen_cmd = [str(gen_exe), str(exe_dir / resource_spec_file)]
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(gen_cmd)}")
+    try:
+        subprocess.run(gen_cmd, cwd=THEROCK_DIR, check=True, env=gen_env)
+    except subprocess.CalledProcessError as e:
+        print(
+            f"Error generating CTest resource spec via {gen_exe}: {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return resource_spec_file
+
+
+def build_ctest_command(
+    category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file=None
+):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
 
@@ -333,19 +453,18 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
         ]
     )
 
+    # Constrain GPU tests to the available GPU slots when the component
+    # provides a resource spec. Without this, RESOURCE_GROUPS properties are
+    # ignored and GPU tests run unconstrained under --parallel.
+    if resource_spec_file:
+        cmd.extend(["--resource-spec-file", resource_spec_file])
+
     return cmd
 
 
 def main():
-    category = TEST_TYPE.lower() if TEST_TYPE else "quick"
-    if category not in VALID_TEST_CATEGORIES:
-        print(
-            f"ERROR: Invalid TEST_TYPE '{TEST_TYPE}'. "
-            f"Must be one of: {', '.join(sorted(VALID_TEST_CATEGORIES))}. "
-            f"Falling back to 'quick'.",
-            file=sys.stderr,
-        )
-        category = "quick"
+    # TEST_TYPE was normalized + validated at module load.
+    category = TEST_TYPE
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
@@ -378,8 +497,15 @@ def main():
         print(f"# Found exclude labels: {sorted(exclude_labels)}")
     print()
 
+    # Generate a CTest resource-spec file when the component provides the
+    # generate_resource_spec helper. Without a spec, CTest ignores each test's
+    # RESOURCE_GROUPS property and would run GPU tests unconstrained.
+    resource_spec_file = generate_resource_spec()
+
     # Build the ctest command
-    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
+    cmd = build_ctest_command(
+        category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file
+    )
 
     print(f"# Running: {' '.join(cmd)}")
     print()

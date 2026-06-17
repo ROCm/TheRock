@@ -189,6 +189,7 @@ math-libs/      # rocBLAS, rocFFT, etc.
 media-libs/     # rocDecode, rocJPEG
 ml-libs/        # MIOpen, composable_kernel
 comm-libs/      # RCCL, rocSHMEM
+storage-libs/   # hipFile
 profiler/       # rocprofiler, roctracer
 build_tools/    # Python build scripts
 cmake/          # CMake infrastructure

@@ -229,6 +229,7 @@ jobs:
             -v
 
       - name: Run PyTorch tests
+        timeout-minutes: 120
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py \
             --device-query "${{ inputs.device_query }}" \

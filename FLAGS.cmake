@@ -22,6 +22,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPDNN_ENABLE_SDPA
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
+  CMAKE_VARS
+    HIPDNN_ENABLE_SDPA=ON
+  SUB_PROJECTS
+    hipDNN
+)
+
+therock_declare_flag(
   NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
   DESCRIPTION "Stamp library git revisions into generated version metadata"
