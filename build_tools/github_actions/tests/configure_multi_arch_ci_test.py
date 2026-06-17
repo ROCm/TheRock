@@ -1412,17 +1412,17 @@ class TestBuildRunnerSelection(unittest.TestCase):
     """Test weighted random selection of build runners (Azure vs AWS)."""
 
     def test_select_build_runner_weighted_selection(self):
-        """Test weighted selection: Azure (80%) vs AWS (20%) for default builds."""
+        """Test weighted selection: Azure (50%) vs AWS (50%) for default builds."""
         from amdgpu_family_matrix import select_build_runner
 
-        # Random < 0.8 should select Azure
-        with patch("random.random", return_value=0.5):
+        # Random < 0.5 should select Azure
+        with patch("random.random", return_value=0.3):
             self.assertEqual(
                 select_build_runner("linux", "release"), "azure-linux-scale-rocm"
             )
 
-        # Random >= 0.8 should select AWS
-        with patch("random.random", return_value=0.95):
+        # Random >= 0.5 should select AWS
+        with patch("random.random", return_value=0.75):
             self.assertEqual(
                 select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
             )

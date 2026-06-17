@@ -443,13 +443,14 @@ sudo dnf install amdrocm-core-sdk
 
 ## Per-family releases
 
-Per-family releases use **GPU-family-specific index URLs** — you choose the
+Per-family releases use **GPU-family-specific index URLs** - you choose the
 index URL that matches your GPU family, and all packages for that family are
 served from that URL.
 
-> [!NOTE]
-> Multi-arch releases (above) are the newer approach and will soon replace
-> per-family releases. Both are available during the transition.
+> [!CAUTION]
+> Multi-arch releases (above) are the newer approach and have replaced
+> per-family releases. Historical per-family releases are still available but
+> no new per-family releases will be generated.
 
 ### Installing per-family releases using pip
 
