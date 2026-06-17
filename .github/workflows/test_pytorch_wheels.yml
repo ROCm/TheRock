@@ -61,14 +61,6 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
-      triton_version:
-        description: >-
-          triton_windows wheel version (Windows only). When set with a Windows
-          runner, install that wheel by direct URL before torch so pip can
-          satisfy torch's Requires-Dist (ROCm indexes omit triton_windows from
-          the simple API listing).
-        type: string
-        default: ""
 
   workflow_call:
     inputs:
@@ -108,12 +100,6 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
-      triton_version:
-        description: >-
-          triton_windows wheel version for Windows per-family tests (see
-          workflow_dispatch triton_version).
-        type: string
-        default: ""
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -193,7 +179,8 @@ jobs:
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/pytorch/pytorch.git \
             --repo-hashtag nightly \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
@@ -201,15 +188,11 @@ jobs:
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15
-        env:
-          THEROCK_TRITON_VER: ${{ inputs.triton_version }}
-          THEROCK_INDEX_BASE: ${{ inputs.package_index_url }}
-          THEROCK_AMDGPU_FAM: ${{ inputs.amdgpu_family }}
-          THEROCK_PY_VER: ${{ inputs.python_version }}
         run: |
           if [ "${{ inputs.multi_arch }}" = "true" ]; then
             python build_tools/setup_venv.py ${VENV_DIR} \
@@ -217,16 +200,8 @@ jobs:
               --index-url=${{ inputs.package_index_url }} \
               --activate-in-future-github-actions-steps
           else
-            PKG_PREFIX=""
-            if [ -n "${{ inputs.triton_version }}" ] && echo "${{ inputs.test_runs_on }}" | grep -qi windows; then
-              TRITON_URL="$(PYTHONPATH=build_tools/github_actions python -c 'import os; from urllib.parse import quote; from python_to_cp_version import transform_python_version; b=os.environ["THEROCK_INDEX_BASE"].rstrip("/"); f=os.environ["THEROCK_AMDGPU_FAM"].strip("/"); ver=os.environ["THEROCK_TRITON_VER"]; cp=transform_python_version(os.environ["THEROCK_PY_VER"]); fn=f"triton_windows-{ver}-{cp}-win_amd64.whl"; print(f"{b}/{f}/{quote(fn)}")')"
-              echo "Installing triton_windows first (direct URL; index simple API omits this project): ${TRITON_URL}"
-              PKG_PREFIX="${TRITON_URL} "
-            elif echo "${{ inputs.test_runs_on }}" | grep -qi windows; then
-              echo "WARN: Windows test job but inputs.triton_version is empty; torch may fail to resolve triton_windows from --index-url alone."
-            fi
             python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${PKG_PREFIX}torch==${{ inputs.torch_version }}" \
+              --packages torch==${{ inputs.torch_version }} \
               --index-url=${{ inputs.package_index_url }} \
               --index-subdir=${{ inputs.amdgpu_family }} \
               --activate-in-future-github-actions-steps
@@ -250,7 +225,6 @@ jobs:
             -v
 
       - name: Run PyTorch tests
-        timeout-minutes: 120
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py \
             --device-query "${{ inputs.device_query }}" \

@@ -61,6 +61,12 @@ def do_checkout(args: argparse.Namespace):
         if args.gitrepo_origin == ROCM_TRITON_ORIGIN:
             args.gitrepo_origin = TRITON_WINDOWS_ORIGIN
 
+        # PyTorch nightly CI passes --repo-hashtag nightly for every sibling repo.
+        # triton-windows does not mirror PyTorch's nightly branch name; the pin
+        # lives in ci_commit_pins/triton-windows.txt (or we fall back to main-windows).
+        if args.repo_hashtag == "nightly":
+            args.repo_hashtag = None
+
         if args.repo_hashtag is None:
             triton_windows_pin = get_triton_windows_pin()
             if triton_windows_pin:
