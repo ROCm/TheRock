@@ -218,7 +218,7 @@ jobs:
             --repo-hashtag nightly
           python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
             --repo-hashtag nightly \
             --no-commit-hipify
 
