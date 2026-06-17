@@ -405,7 +405,7 @@
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
-    "License": "MIT",
+    "License": "MIT AND GPL",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
