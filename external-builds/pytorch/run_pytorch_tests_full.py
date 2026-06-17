@@ -117,11 +117,6 @@ EXCLUDED_TEST_MODULES: list[str] = [
     "inductor/test_max_autotune",
     "inductor/test_torchinductor_opinfo_properties",
     "inductor/test_compiled_autograd",
-    "distributed/_composable/fsdp/test_fully_shard_autograd",
-    "distributed/_composable/test_composability/test_2d_composability",
-    "distributed/_composable/test_composability/test_pp_composability",
-    "distributed/_composable/test_replicate",
-    "distributed/tensor/test_view_ops",
     "dynamo/test_dynamic_shapes",
     "functorch/test_control_flow",
 ]

@@ -1,0 +1,93 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+name: Gitleaks
+
+on:
+  workflow_call:
+    inputs:
+      scan_mode:
+        description: >-
+          'changed' (default) scans only commits introduced by the calling
+          event; requires a pull_request or push
+          event payload and hard-fails otherwise. 'all' scans the full
+          repository history and is required for schedule,
+          workflow_dispatch, release, and any other event type.
+        required: false
+        type: string
+        default: changed
+      report_formats:
+        description: >-
+          Comma-separated list of gitleaks report formats to produce. Allowed
+          values: 'sarif' (default), 'json', 'csv', 'junit'. SARIF outputs are
+          uploaded to GitHub code scanning via github/codeql-action/upload-sarif;
+          all other formats are uploaded as build artifacts via
+          actions/upload-artifact. Example: 'sarif,json'.
+        required: false
+        type: string
+        default: sarif
+      scan_path:
+        description: >-
+          Path (relative to the repository root) to scan. Defaults to '.' so
+          the entire superproject checkout is scanned; set to a subdirectory
+          (e.g. 'src/' or 'services/api/') to restrict the scan to that
+          subtree. The path MUST exist after checkout or the scan job fails.
+          Submodules are NOT scanned: the checkout step leaves them
+          uninitialized (its default), and each submodule is a separately
+          versioned ROCm or third-party repo with its own gitleaks coverage.
+          A PR that bumps a submodule SHA surfaces as a one-line change in
+          the superproject diff and is reviewable on its own.
+        required: false
+        type: string
+        default: "."
+# Reusable workflows declare the *minimum* permissions every caller
+# must grant.
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Gitleaks scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Bootstrap checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Compute checkout fetch-depth
+        id: depth
+        uses: ./.github/actions/compute_pr_fetch_depth
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: ${{ steps.depth.outputs.value }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Run gitleaks
+        id: scan
+        env:
+          GITLEAKS_SCAN_MODE: ${{ inputs.scan_mode }}
+          GITLEAKS_REPORT_FORMATS: ${{ inputs.report_formats }}
+          GITLEAKS_SOURCE_DIR: ${{ inputs.scan_path }}
+        run: python build_tools/scan_tools/github_actions/gitleaks.py
+
+      - name: Upload SARIF report to code scanning
+        if: always() && steps.scan.outputs.sarif_path != ''
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif_path }}
+          category: gitleaks
+
+      - name: Upload non-SARIF reports
+        if: always() && steps.scan.outputs.non_sarif_paths != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-report
+          path: ${{ steps.scan.outputs.non_sarif_paths }}
+          if-no-files-found: ignore
