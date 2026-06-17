@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """Generate WiX v4 .wxs files for ROCm Windows MSI installers.
 
-Reads artifact TOML descriptors to determine which files each MSI should
-include, then produces a WiX v4 XML source file (.wxs).  Using artifact
-TOMLs as the source of truth means the MSI file lists automatically track
-the build system's own packaging rules with no separate manifest to maintain.
+Uses artifact archives (or a local build's artifact directories) as the source
+of truth for which files each MSI package should include.  The artifact
+manifest embedded in each archive already encodes the correct file set, so no
+separate TOML descriptor or glob patterns are needed at generation time.
 
 Usage
 -----
 List available packages:
     python generate_msi_wxs.py --list
 
-Generate a specific package:
-    python generate_msi_wxs.py --package hip-runtime
-    python generate_msi_wxs.py --package runtimes
+Generate from CI artifacts (recommended):
+    python generate_msi_wxs.py --package hip-runtime \\
+        --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
+
+Generate from a local build:
+    python generate_msi_wxs.py --package hip-runtime --build build/
 
 The generated .wxs is compiled into an MSI by running:
     wix build <name>.wxs -o <name>.msi
@@ -33,22 +36,13 @@ Override at build time via --install-root, --product-dir, --version-dir.
 import argparse
 import hashlib
 import json
+import os
 import sys
 import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomli as tomllib
-    except ImportError:
-        sys.exit(
-            "Python < 3.11 requires the 'tomli' package: pip install tomli"
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +56,7 @@ class PackageDef:
     # Display name shown in Add/Remove Programs.
     product_name: str
 
-    # Artifact descriptor names to include (searched as artifact-{name}.toml).
+    # Artifact names to include (matched against ArtifactName.name, e.g. "core-hip").
     artifacts: list[str]
 
     # Default output filename stem (without extension).
@@ -84,97 +78,16 @@ class PackageDef:
     # One-line description for --list output.
     description: str
 
-    # Glob patterns excluded only in dist fallback mode (when stage dirs are
-    # absent).  Stage scoping would naturally prevent these files from being
-    # included; this list approximates that filtering without stage dirs.
-    fallback_excludes: list[str] = field(default_factory=list)
+    # Per-artifact file include overrides. Keys are artifact names; values are
+    # glob patterns passed to ArtifactCatalog as includes, restricting which
+    # files are collected from that artifact. Artifacts not listed are
+    # collected without restriction.
+    per_artifact_includes: dict[str, list[str]] = None
 
+    def __post_init__(self):
+        if self.per_artifact_includes is None:
+            self.per_artifact_includes = {}
 
-# Fallback exclude patterns shared across all packages.
-# Applied when stage dirs are absent and the full merged dist tree is used.
-# Suppresses test/benchmark binaries, dev-only files, and math/ML components
-# that bleed into the dist tree from other artifacts.
-_COMMON_FALLBACK_EXCLUDES: list[str] = [
-    # Kernel databases from math libs (rocBLAS, hipBLASLt, MIOpen, etc.)
-    "**/*.dat",
-    "**/*.co",
-    "**/*.hsaco",
-    "**/*.model",
-    # Test and benchmark binaries
-    "bin/test_*",
-    "bin/benchmark_*",
-    "bin/*.hip.exe",
-    # Math/ML runtime bins and subdirectories
-    "bin/rocblas/**",
-    "bin/rocblas*",
-    "bin/hipblaslt/**",
-    "bin/hipblaslt*",
-    "bin/hipblaslt_plugin/**",
-    "bin/MIOpen/**",
-    "bin/MIOpen*",
-    "bin/miopen_plugin/**",
-    "bin/miopen_plugin*",
-    "bin/hipdnn/**",
-    "bin/hipdnn*",
-    "bin/hipdnn_plugins/**",
-    "bin/hipdnn_integration_tests_ctest/**",
-    "bin/hipdnn_samples/**",
-    "bin/hip_kernel_provider/**",
-    "bin/hipkernelprovider/**",
-    "bin/test_plugins/**",
-    "bin/rocwmma/**",
-    "bin/rocwmma*",
-    "bin/hipcub/**",
-    "bin/rocprim/**",
-    "bin/rocthrust/**",
-    "bin/hipblas/**",
-    "bin/hipblas*",
-    "bin/hipRAND/**",
-    "bin/hiprand*",
-    "bin/rocRAND/**",
-    "bin/rocrand*",
-    "bin/hipsparse/**",
-    "bin/hipsparse*",
-    "bin/rocsparse/**",
-    "bin/rocsparse*",
-    "bin/hipsolver*",
-    "bin/rocsolver*",
-    "bin/hipfft*",
-    "bin/rocfft*",
-    "bin/dyna-rocfft*",
-    "bin/flatc*",
-    "bin/fftw3*",
-    "bin/rocm-openblas*",
-    "bin/cltrace*",
-    "bin/clinfo*",
-    # Misc test/sample assets
-    "bin/**/*.yaml",
-    "bin/**/*.py",
-    "bin/**/*.data",
-    "bin/**/*.txt",
-    "bin/**/*.xml",
-    "bin/perf_*",
-    "bin/simple_*",
-    "bin/*_test*",
-    "bin/*-validate*",
-    "bin/*-bench*",
-    "bin/*Driver*",
-    "bin/gemm_*",
-    "bin/dlrm_*",
-    "bin/hipRTC_gemm*",
-    "bin/libhipblaslt*",
-    "bin/sequence.yaml",
-    # libexec: exclude samples, test scripts, and Linux-only utilities
-    "libexec/hipblaslt-samples/**",
-    "libexec/hipsparse/**",
-    "libexec/rocsparse/**",
-    "libexec/hipify/**",
-    "libexec/rocm-core/**",
-    # Test assets under share/
-    "share/hip/catch_tests/**",
-    "share/hip/CTestTestfile.cmake",
-    "share/hip/catchInfo.txt",
-]
 
 # Keys are the --package selector values.
 PACKAGES: dict[str, PackageDef] = {
@@ -192,16 +105,15 @@ PACKAGES: dict[str, PackageDef] = {
         feature_id="HIPRuntime",
         feature_title="ROCm HIP Runtime",
         registry_key="Software\\AMD\\ROCm\\hip-runtime\\{version}",
-        fallback_excludes=_COMMON_FALLBACK_EXCLUDES,
     ),
     "runtimes": PackageDef(
-        description="HIP runtime + AMD LLVM compiler runtime (hipcc, comgr, device libs)",
+        description="ROCm runtime redistributable (HIP runtime + amd_comgr.dll)",
         product_name="AMD ROCm Runtimes",
         artifacts=[
             "core-hip",      # HIP runtime DLLs, hipcc, hipconfig, roc-obj, etc.
             "core-kpack",    # Kernel package support (rocm_kpack.dll)
             "core-hipinfo",  # Windows-only: bin/hipInfo*
-            "amd-llvm",      # LLVM/Clang, comgr, hipcc, device libs
+            "amd-llvm",      # comgr only — see per_artifact_includes
         ],
         output_stem="amdrocm-runtimes",
         install_subdir="runtimes-{version}",
@@ -209,7 +121,9 @@ PACKAGES: dict[str, PackageDef] = {
         feature_id="ROCmRuntimes",
         feature_title="AMD ROCm Runtimes",
         registry_key="Software\\AMD\\ROCm\\runtimes\\{version}",
-        fallback_excludes=_COMMON_FALLBACK_EXCLUDES,
+        per_artifact_includes={
+            "amd-llvm": ["bin/amd_comgr.dll"],
+        },
     ),
     "core": PackageDef(
         description="ROCm core runtime redistributable (ROCR, HIP, AMDsmi, OpenCL)",
@@ -228,32 +142,9 @@ PACKAGES: dict[str, PackageDef] = {
         feature_id="ROCmCore",
         feature_title="AMD ROCm Core Runtime",
         registry_key="Software\\AMD\\ROCm\\core\\{version}",
-        fallback_excludes=_COMMON_FALLBACK_EXCLUDES + [
-            # LLVM dev tree — not part of core runtime
-            "lib/llvm/**",
-            # Dev-only: cmake configs, import libs, pkgconfig, host-math, sysdeps
-            "lib/cmake/**",
-            "lib/pkgconfig/**",
-            "lib/host-math/**",
-            "lib/rocm_sysdeps/**",
-            "lib/*.lib",
-            "lib/*.a",
-        ],
     ),
 }
 
-
-# ---------------------------------------------------------------------------
-# Component default include patterns (Windows-only subset)
-# ---------------------------------------------------------------------------
-
-# Mirrors the Windows-relevant subset of artifact_builder.py ComponentDefaults.
-# Applied when a component section in an artifact TOML has no explicit "include"
-# list and default_patterns is not disabled.
-COMPONENT_DEFAULT_INCLUDES: dict[str, list[str]] = {
-    "lib": ["**/*.dll"],
-    "run": [],  # no default patterns; a bare run entry claims all unclaimed files
-}
 
 # Only package runtime-relevant components; exclude dev headers, debug
 # symbols, and docs from the MSI.
@@ -274,8 +165,15 @@ STANDARD_DIR_TOKENS: set[str] = {
 
 
 # ---------------------------------------------------------------------------
-# Artifact download and extraction
+# Artifact download, extraction, and file collection
 # ---------------------------------------------------------------------------
+
+
+def _import_therock_utils() -> None:
+    """Add build_tools/ to sys.path so _therock_utils can be imported."""
+    build_tools_dir = Path(__file__).parent.parent.parent
+    if str(build_tools_dir) not in sys.path:
+        sys.path.insert(0, str(build_tools_dir))
 
 
 def fetch_artifacts(
@@ -288,21 +186,27 @@ def fetch_artifacts(
 
     For each (artifact, component) pair, downloads:
         {artifacts_url}/{artifact}_{component}_generic.tar.zst
-    and extracts it into dest_dir using ArtifactPopulator, producing a
-    layout that mirrors what a local build's stage trees would look like.
+    and extracts it into dest_dir/_extracted/{artifact}_{component}_generic/,
+    preserving the internal layout (basedir paths from artifact_manifest.txt).
+    The artifact_manifest.txt is also written to disk so ArtifactCatalog can
+    read it.
 
-    Returns dest_dir (usable as build_root for collect_files_from_artifacts).
+    Returns the _extracted/ directory.
     """
-    # Import here so the rest of the script works without _therock_utils on path.
-    script_dir = Path(__file__).parent
-    build_tools_dir = script_dir.parent.parent
-    if str(build_tools_dir) not in sys.path:
-        sys.path.insert(0, str(build_tools_dir))
-
+    _import_therock_utils()
     try:
         from _therock_utils.artifacts import ArtifactPopulator
     except ImportError as e:
         sys.exit(f"Error: could not import _therock_utils: {e}")
+
+    import tarfile
+
+    def _open_zst(path: Path):
+        try:
+            import pyzstd
+        except ModuleNotFoundError:
+            sys.exit("pyzstd is required for --artifacts-url: pip install pyzstd")
+        return tarfile.TarFile(fileobj=pyzstd.ZstdFile(path, "rb"), mode="r")
 
     artifacts_url = artifacts_url.rstrip("/")
     download_dir = dest_dir / "_downloads"
@@ -329,161 +233,98 @@ def fetch_artifacts(
                     sys.exit(f"Error fetching {url}: {e}")
 
             artifact_out = extract_dir / f"{artifact_name}_{component}_generic"
-            if artifact_out.exists():
+            manifest_path = artifact_out / "artifact_manifest.txt"
+            already_extracted = artifact_out.exists()
+            if already_extracted and manifest_path.exists():
                 print(f"  Extracted: {filename} (cached)")
                 continue
-            print(f"  Extracting {filename}...")
             artifact_out.mkdir(parents=True, exist_ok=True)
-            populator = ArtifactPopulator(output_path=artifact_out, flatten=False)
-            populator(local_path)
+            # Read manifest from first tar member and write it to disk so
+            # ArtifactCatalog can find it, then extract the rest of the files.
+            with _open_zst(local_path) as tf:
+                manifest_member = tf.next()
+                if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
+                    sys.exit(f"Archive {filename} missing artifact_manifest.txt as first member")
+                manifest_text = tf.extractfile(manifest_member).read().decode()
+                manifest_path.write_text(manifest_text)
+            if already_extracted:
+                print(f"  Manifest:  {filename} (files already present)")
+            else:
+                print(f"  Extracting {filename}...")
+                populator = ArtifactPopulator(output_path=artifact_out, flatten=False)
+                populator(local_path)
 
     return extract_dir
 
 
-# ---------------------------------------------------------------------------
-# TOML descriptor parsing
-# ---------------------------------------------------------------------------
-
-
-def find_descriptor(artifact_name: str, repo_root: Path) -> Path:
-    """Return the path to artifact-{name}.toml by searching under repo_root."""
-    matches = list(repo_root.rglob(f"artifact-{artifact_name}.toml"))
-    if not matches:
-        sys.exit(
-            f"Error: could not find artifact-{artifact_name}.toml under {repo_root}"
-        )
-    if len(matches) > 1:
-        sys.exit(
-            f"Error: found multiple descriptors for '{artifact_name}':\n"
-            + "\n".join(f"  {p}" for p in matches)
-        )
-    return matches[0]
-
-
-def collect_files_from_artifacts(
-    dist_root: Path,
-    artifact_names: list[str],
-    repo_root: Path,
-    components: set[str],
-    build_root: Path,
-    fallback_excludes: list[str] = (),
+def collect_files_from_catalog(
+    artifact_dir: Path,
+    pkg_def: "PackageDef",
 ) -> list[tuple[Path, Path]]:
     """Return a sorted, deduplicated list of (install_rel, source) pairs.
 
-    install_rel: path relative to the install root (e.g. bin/amdhip64.dll)
+    Reads artifact_manifest.txt files from extracted artifact subdirectories
+    in artifact_dir, filters to the package's artifact names and runtime
+    components (run, lib), and enumerates files directly.
+
+    install_rel: flat path relative to the install root (e.g. bin/amdhip64.dll)
     source:      absolute path to the file on disk (for WiX Source=)
-
-    Patterns are globbed against the artifact's own stage directory
-    (build_root / basedir) so that "bin/**" only sees that artifact's bin/,
-    not the entire merged dist tree.
-
-    When stage dirs are absent, falls back to dist_root with fallback_excludes
-    applied to compensate for the lack of scoping.
-
-    force_include patterns bypass excludes and are always added if matched.
-    When a component has no explicit include list and default_patterns is not
-    disabled, COMPONENT_DEFAULT_INCLUDES provides the fallback patterns.
     """
-    # Keyed by install_rel to deduplicate across artifacts.
-    seen: dict[Path, Path] = {}
+    if not artifact_dir.is_dir():
+        print(
+            f"Warning: artifact directory not found: {artifact_dir}\n"
+            "Run a Windows build or provide --artifacts-url.",
+            file=sys.stderr,
+        )
+        return []
 
-    def _add(install_rel: Path, source: Path) -> None:
-        if install_rel not in seen:
-            seen[install_rel] = source
+    _import_therock_utils()
+    try:
+        from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
+    except ImportError as e:
+        sys.exit(f"Error: could not import _therock_utils: {e}")
 
-    for artifact_name in artifact_names:
-        descriptor = find_descriptor(artifact_name, repo_root)
-        with open(descriptor, "rb") as f:
-            data = tomllib.load(f)
+    artifact_set = set(pkg_def.artifacts)
+    overrides = pkg_def.per_artifact_includes  # {artifact_name: [glob, ...]}
 
-        components_data: dict = data.get("components", {})
+    # Artifacts with per-artifact include overrides get their own catalog so
+    # the include patterns are scoped to just those artifacts.
+    # All other artifacts share a single unrestricted catalog.
+    restricted = {name for name in artifact_set if name in overrides}
+    unrestricted = artifact_set - restricted
 
-        for comp_type, basedirs in components_data.items():
-            if comp_type not in components:
+    seen: dict[str, Path] = {}
+
+    def _collect_catalog(catalog: "ArtifactCatalog") -> None:
+        for relpath, direntry in catalog.pm.matches():
+            if direntry.is_dir():
                 continue
-            if not isinstance(basedirs, dict):
-                continue
+            if relpath not in seen:
+                seen[relpath] = Path(direntry.path)
 
-            for basedir, spec in basedirs.items():
-                if not isinstance(spec, dict):
-                    continue
+    if unrestricted:
+        def _filter_unrestricted(name: ArtifactName) -> bool:
+            return name.name in unrestricted and name.component in PACKAGE_COMPONENTS
+        catalog = ArtifactCatalog(artifact_dir, filter=_filter_unrestricted)
+        _collect_catalog(catalog)
 
-                stage_dir = build_root / basedir
+    for artifact_name in restricted:
+        includes = overrides[artifact_name]
+        def _filter_restricted(name: ArtifactName, _a=artifact_name) -> bool:
+            return name.name == _a and name.component in PACKAGE_COMPONENTS
+        catalog = ArtifactCatalog(
+            artifact_dir, filter=_filter_restricted, includes=includes
+        )
+        _collect_catalog(catalog)
 
-                use_defaults = spec.get("default_patterns", True)
-                explicit_includes: list[str] = spec.get("include", [])
-                force_includes: list[str] = spec.get("force_include", [])
-                excludes: list[str] = spec.get("exclude", [])
+    if not seen:
+        print(
+            f"Warning: no matching artifacts found in {artifact_dir}",
+            file=sys.stderr,
+        )
+        return []
 
-                if explicit_includes:
-                    includes = explicit_includes
-                elif use_defaults:
-                    includes = COMPONENT_DEFAULT_INCLUDES.get(comp_type, [])
-                else:
-                    includes = []
-
-                # Glob against the stage dir when available (precise scoping).
-                # When dist_root == build_root (artifact URL mode), the merged
-                # _stage tree contains per-component stage dirs directly, so
-                # also check dist_root/basedir before falling back.
-                # Never fall back to the full dist_root in artifact URL mode
-                # (dist_root == build_root) — that would pick up files from
-                # unrelated artifacts with wrong install_rel paths.
-                dist_stage_dir = dist_root / basedir
-                if stage_dir.is_dir():
-                    search_root = stage_dir
-                    extra_excludes: list[str] = []
-                elif dist_stage_dir.is_dir():
-                    search_root = dist_stage_dir
-                    extra_excludes: list[str] = []
-                elif dist_root == build_root:
-                    # Artifact URL mode: artifact not available, skip silently.
-                    print(
-                        f"Warning: stage dir not found, skipping: {stage_dir}",
-                        file=sys.stderr,
-                    )
-                    continue
-                else:
-                    print(
-                        f"Warning: stage dir not found, falling back to dist root: {stage_dir}",
-                        file=sys.stderr,
-                    )
-                    search_root = dist_root
-                    extra_excludes = list(fallback_excludes)
-
-                def _collect(pattern: str, bypass_excludes: bool = False) -> None:
-                    for match in sorted(search_root.glob(pattern)):
-                        if not match.is_file():
-                            continue
-                        # install_rel is relative to the search root (stage or
-                        # dist), giving the flattened install layout.
-                        install_rel = match.relative_to(search_root)
-                        rel_posix = install_rel.as_posix()
-                        if not bypass_excludes:
-                            all_excludes = excludes + extra_excludes
-                            if any(
-                                match.match(ex)
-                                or rel_posix == ex
-                                or (
-                                    ex.endswith("/**")
-                                    and rel_posix.startswith(ex[:-3] + "/")
-                                )
-                                for ex in all_excludes
-                            ):
-                                continue
-                        # Resolve the source path: prefer the dist_root copy
-                        # when available (hard-linked, same inode), otherwise
-                        # use the stage path directly.
-                        dist_path = dist_root / install_rel
-                        source = dist_path if dist_path.is_file() else match
-                        _add(install_rel, source)
-
-                for pattern in includes:
-                    _collect(pattern)
-                for pattern in force_includes:
-                    _collect(pattern, bypass_excludes=True)
-
-    return sorted(seen.items())
+    return sorted((Path(r), s) for r, s in seen.items())
 
 
 # ---------------------------------------------------------------------------
@@ -525,7 +366,6 @@ def parse_args() -> argparse.Namespace:
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent.parent.parent
     default_build = repo_root / "build"
-    default_dist = default_build / "dist" / "rocm"
     default_version = _read_rocm_version(repo_root)
 
     parser = argparse.ArgumentParser(
@@ -573,18 +413,8 @@ def parse_args() -> argparse.Namespace:
         default=default_build,
         metavar="PATH",
         help=(
-            "CMake build directory (contains per-component stage trees). "
+            "CMake build directory. Artifacts are read from <build-root>/artifacts/. "
             f"Default: {default_build}. Ignored when --artifacts-url is set."
-        ),
-    )
-    parser.add_argument(
-        "--dist-root",
-        type=Path,
-        default=default_dist,
-        metavar="PATH",
-        help=(
-            "Root of the merged ROCm distribution tree (build/dist/rocm/). "
-            f"Default: {default_dist}"
         ),
     )
     parser.add_argument(
@@ -595,16 +425,6 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Destination path for the generated .wxs file. "
             "Default: <script-dir>/<output-stem>.wxs"
-        ),
-    )
-    parser.add_argument(
-        "--repo-root",
-        type=Path,
-        default=repo_root,
-        metavar="PATH",
-        help=(
-            "Repo root used to locate artifact-*.toml descriptor files. "
-            f"Default: {repo_root}"
         ),
     )
     parser.add_argument(
@@ -669,55 +489,19 @@ def build_wxs(args: argparse.Namespace) -> None:
     version = args.package_version
     use_standard_dir = args.install_root in STANDARD_DIR_TOKENS
 
-    build_root = args.build_root
     if getattr(args, "artifacts_url", None):
         print(f"Fetching artifacts from {args.artifacts_url} ...")
-        extracted = fetch_artifacts(
+        artifact_dir = fetch_artifacts(
             artifacts_url=args.artifacts_url,
             artifact_names=pkg_def.artifacts,
             components=PACKAGE_COMPONENTS,
             dest_dir=args.artifacts_cache_dir,
         )
-        # ArtifactPopulator extracts into {artifact}_{component}_generic/
-        # Each archive contains paths like {basedir}/... matching the TOML keys.
-        # We need build_root such that build_root / basedir resolves correctly.
-        # ArtifactPopulator with flatten=False preserves the manifest relpaths,
-        # so extracted/{artifact}_{component}_generic/{basedir}/... exists.
-        # Merge all extracted artifact dirs into a single stage tree that
-        # mirrors the layout the TOML basedir keys expect.  Each extracted
-        # archive already contains paths like {basedir}/... so we can use
-        # the merged dir directly as build_root.  We also use it as dist_root
-        # so WiX Source= paths resolve correctly without a separate build.
-        build_root = args.artifacts_cache_dir / "_stage"
-        build_root.mkdir(parents=True, exist_ok=True)
-        for artifact_dir in extracted.iterdir():
-            if not artifact_dir.is_dir():
-                continue
-            for src in artifact_dir.rglob("*"):
-                if not src.is_file():
-                    continue
-                rel = src.relative_to(artifact_dir)
-                dst = build_root / rel
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                if not dst.exists():
-                    dst.hardlink_to(src)
-        # When using downloaded artifacts, stage and dist are the same tree.
-        args = argparse.Namespace(**{**vars(args), "dist_root": build_root})
+    else:
+        # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
+        artifact_dir = args.build_root / "artifacts"
 
-    files = collect_files_from_artifacts(
-        dist_root=args.dist_root,
-        artifact_names=pkg_def.artifacts,
-        repo_root=args.repo_root,
-        components=PACKAGE_COMPONENTS,
-        build_root=build_root,
-        fallback_excludes=pkg_def.fallback_excludes,
-    )
-    if not files:
-        print(
-            "Warning: no files collected. "
-            "Run a Windows build or provide --artifacts-url.",
-            file=sys.stderr,
-        )
+    files = collect_files_from_catalog(artifact_dir, pkg_def)
 
     ET.register_namespace("", "http://wixtoolset.org/schemas/v4/wxs")
     ns = "http://wixtoolset.org/schemas/v4/wxs"
