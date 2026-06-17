@@ -14,14 +14,10 @@ Outputs written to GITHUB_OUTPUT:
             {
                 "amdgpu_family": "gfx94X-dcgpu",
                 "test_machine": "linux-mi300-1gpu-ossci-rocm",
-                "expect_failure": false,
-                "expect_pytorch_failure": false
             },
             {
                 "amdgpu_family": "gfx110X-all",
                 "test_machine": "",
-                "expect_failure": false,
-                "expect_pytorch_failure": true
             }
         ]
 
@@ -118,15 +114,10 @@ def determine_package_targets(args):
         ):
             continue
 
-        expect_failure = platform_for_key.get("expect_failure", False)
-        expect_pytorch_failure = platform_for_key.get("expect_pytorch_failure", False)
-
         package_targets.append(
             {
                 "amdgpu_family": family,
                 "test_machine": test_machine,
-                "expect_failure": expect_failure,
-                "expect_pytorch_failure": expect_pytorch_failure,
             }
         )
 

@@ -742,8 +742,8 @@ class TestExpandBuildConfigs(unittest.TestCase):
     """Test expand_build_configs: TargetSelection × CIInputs → BuildConfigs.
 
     Tests verify structural properties of the output, not specific data values
-    from amdgpu_family_matrix.py. Changing a runner label or flipping
-    expect_failure in the matrix data should not require test updates here.
+    from amdgpu_family_matrix.py. Changing a runner label should not require
+    test updates here.
     """
 
     def _inputs(self, **kwargs):
@@ -766,7 +766,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="",
-            expect_failure=False,
             build_pytorch=True,
             build_native_linux=True,
         )
@@ -797,7 +796,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="release",
-            expect_failure=False,
             build_pytorch=True,
             build_native_linux=True,
         )
@@ -897,7 +895,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         config = result.linux
         self.assertTrue(len(config.build_variant_label) > 0)
         self.assertIn("release", config.artifact_group)
-        self.assertIsInstance(config.expect_failure, bool)
         self.assertIsInstance(config.build_pytorch, bool)
 
     def test_variant_filters_by_platform_and_family_support(self):
