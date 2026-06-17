@@ -55,6 +55,10 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, or none)"
+        type: string
+        default: "sccache"
   workflow_dispatch:
     inputs:
       release_type:
@@ -89,6 +93,14 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, or none)"
+        type: choice
+        options:
+          - sccache
+          - ccache
+          - none
+        default: sccache
 
 permissions:
   contents: read
@@ -128,6 +140,7 @@ jobs:
       run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -148,6 +161,7 @@ jobs:
       ref: ${{ needs.setup.outputs.ref }}
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows

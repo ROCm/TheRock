@@ -46,9 +46,9 @@ on:
       rocm_package_version:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+        description: 'Release type: "dev", "nightly", or "prerelease"'
         type: string
-        default: ci
+        required: true
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -61,6 +61,10 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         type: string
         default: ""
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, or none)"
+        type: string
+        default: "sccache"
 
 permissions:
   contents: read
@@ -84,6 +88,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
@@ -107,6 +112,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
@@ -140,6 +146,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
@@ -163,6 +170,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write

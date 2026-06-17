@@ -41,6 +41,10 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, or none)"
+        type: string
+        default: "sccache"
 
 permissions:
   contents: read
@@ -61,6 +65,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
