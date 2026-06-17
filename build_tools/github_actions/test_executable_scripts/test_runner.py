@@ -117,6 +117,23 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
+# Memory-constrained Windows runners (gfx110X-all = 4 GB) OOM on the large
+# single-process sparse suites. rocSPARSE/hipSPARSE allocate temporaries via
+# hipMallocAsync/hipFreeAsync on the device default pool; on Windows the freed
+# blocks are cached rather than returned to the device (Linux reclaims them
+# because its pool release threshold defaults to 0), so reserved VRAM grows
+# monotonically across the suite and eventually exhausts the card. Enable the
+# opt-in per-test pool trim (and VRAM logging) implemented in the
+# rocSPARSE/hipSPARSE gtest listeners for the sparse components on this family.
+# Trimming is a near-noop where the pool already reclaims, so it is safe.
+if test_component_job_name in ("rocsparse", "hipsparse") and (
+    AMDGPU_FAMILIES and "gfx110X" in AMDGPU_FAMILIES
+):
+    environ_vars["ROCSPARSE_TEST_TRIM_POOL"] = "1"
+    environ_vars["ROCSPARSE_TEST_VRAM_LOG"] = "1"
+    environ_vars["HIPSPARSE_TEST_TRIM_POOL"] = "1"
+    environ_vars["HIPSPARSE_TEST_VRAM_LOG"] = "1"
+
 # Component-specific ENV VARs/PATHs applied on top of defaults.
 #
 # - test_dir: The default TEST_DIR for ctest is THEROCK_BIN_DIR/TEST_COMPONENT.
