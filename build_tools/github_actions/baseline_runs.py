@@ -22,9 +22,12 @@ Example:
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 import sys
 from urllib.parse import urlencode, quote
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for artifact and _therock_utils imports.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -58,7 +61,13 @@ class ArtifactAvailability:
 
     @property
     def is_valid(self) -> bool:
-        return not self.missing_artifacts
+        if self.age_hours is None:
+            return False
+        if self.age_hours < 0:
+            return False
+        if self.max_age_hours is None:
+            return True
+        return self.age_hours <= self.max_age_hours
 
 
 @dataclass(frozen=True)
@@ -478,7 +487,10 @@ def _seconds_between(start: datetime | None, end: datetime | None) -> float | No
     """Return (end - start) in seconds, or None if either bound is missing."""
     if start is None or end is None:
         return None
-    return (end - start).total_seconds()
+    seconds = (end - start).total_seconds()
+    if seconds < 0:
+        return None
+    return seconds
 
 
 def parse_run_timing(workflow_run: dict) -> RunTiming:
@@ -661,10 +673,15 @@ def select_baseline_run(
     excluded = {str(run_id) for run_id in exclude_run_ids}
 
     check_commit = current_commit_sha is not None
-    if check_commit and ordered_commit_shas is None:
-        raise ValueError(
-            "ordered_commit_shas is required when current_commit_sha is set"
-        )
+    if check_commit:
+        if not current_commit_sha.strip():
+            raise ValueError(
+                "current_commit_sha must be non-empty when commit checking is enabled"
+            )
+        if ordered_commit_shas is None:
+            raise ValueError(
+                "ordered_commit_shas is required when current_commit_sha is set"
+            )
     check_recency = max_age_hours is not None
 
     candidates = (
@@ -695,6 +712,13 @@ def select_baseline_run(
                 now=now,
             )
             if not run_recency.is_valid:
+                logger.info(
+                    "Skipping run %s: too old or undatable "
+                    "(age_hours=%s, max_age_hours=%s)",
+                    run_id,
+                    run_recency.age_hours,
+                    run_recency.max_age_hours,
+                )
                 continue
 
         commit_compatibility: CommitCompatibility | None = None
@@ -702,6 +726,7 @@ def select_baseline_run(
             candidate_head_sha = (workflow_run.get("head_sha", "") or "").strip()
             if not candidate_head_sha:
                 # A run without a head_sha cannot be confirmed compatible.
+                logger.info("Skipping run %s: no head_sha to compare", run_id)
                 continue
             commit_compatibility = validate_commit_compatibility(
                 candidate_head_sha=candidate_head_sha,
@@ -709,6 +734,13 @@ def select_baseline_run(
                 ordered_commit_shas=ordered_commit_shas or (),
             )
             if not commit_compatibility.is_valid:
+                logger.info(
+                    "Skipping run %s: commit %s is %s relative to current %s",
+                    run_id,
+                    candidate_head_sha,
+                    commit_compatibility.relationship,
+                    commit_compatibility.current_commit_sha,
+                )
                 continue
 
         job_health = validate_required_jobs_successful(
@@ -716,6 +748,13 @@ def select_baseline_run(
             required_name_substrings=required_jobs,
         )
         if not job_health.is_valid:
+            logger.info(
+                "Skipping run %s: required build jobs not healthy "
+                "(failed=%s, missing=%s)",
+                run_id,
+                job_health.failed_job_names,
+                job_health.missing_name_substrings,
+            )
             continue
 
         backend = backend_factory(workflow_run, github_repository, platform)
@@ -724,6 +763,11 @@ def select_baseline_run(
             required_artifacts=requirements,
         )
         if not availability.is_valid:
+            logger.info(
+                "Skipping run %s: missing artifacts %s",
+                run_id,
+                availability.missing_artifacts,
+            )
             continue
 
         return BaselineRun(
