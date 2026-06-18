@@ -99,9 +99,11 @@ class CommitCompatibility:
 @dataclass(frozen=True)
 class RunRecency:
     """Result of checking how old a candidate run is."""
+
     created_at: str
     age_hours: float | None
     max_age_hours: float | None
+
     @property
     def is_valid(self) -> bool:
         if self.age_hours is None:
