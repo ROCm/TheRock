@@ -3,6 +3,7 @@
 
 # Multi-arch release entry point for Linux JAX wheels.
 #
+# Currently this workflow is uses only rocm-jaxlib-v0.9.1
 # This workflow owns the release matrix and delegates each matrix cell to the
 # reusable single-build workflow.
 
@@ -68,7 +69,7 @@ run-name: Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_
 
 permissions:
   contents: read
-
+#TODO: Add rocm-jaxlib-v0.10.0 once it is released and tested.
 jobs:
   build_jax_wheels:
     name: Build | py ${{ matrix.python_version }} | jax ${{ matrix.jax_ref }}
