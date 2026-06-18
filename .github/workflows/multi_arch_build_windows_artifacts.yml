@@ -201,11 +201,18 @@ jobs:
 
       - name: Configure
         run: |
+          COMPILER_LAUNCHER_ARGS=""
+          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+            COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
+            # /FS forces synchronous PDB writes, required when sccache runs parallel cl.exe invocations
+            COMPILER_LAUNCHER_ARGS="${COMPILER_LAUNCHER_ARGS} -DCMAKE_C_FLAGS=/FS -DCMAKE_CXX_FLAGS=/FS"
+          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+            COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          fi
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=${{ inputs.cache_type == 'sccache' && 'sccache' || inputs.cache_type == 'ccache' && 'ccache' || 'echo' }} \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=${{ inputs.cache_type == 'sccache' && 'sccache' || inputs.cache_type == 'ccache' && 'ccache' || 'echo' }} \
+            ${COMPILER_LAUNCHER_ARGS} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
