@@ -42,9 +42,9 @@ RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
 ######## Ninja ########
 WORKDIR /install-ninja
-ENV CMAKE_VERSION="1.12.1"
+ENV NINJA_VERSION="1.12.1"
 COPY install_ninja.sh ./
-RUN ./install_ninja.sh "${CMAKE_VERSION}" && rm -rf /install-ninja
+RUN ./install_ninja.sh "${NINJA_VERSION}" && rm -rf /install-ninja
 
 ######## AWS CLI ######
 WORKDIR /install-awscli
@@ -56,6 +56,14 @@ WORKDIR /install-googletest
 ENV GOOGLE_TEST_VERSION="1.16.0"
 COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
+
+######## Rust (rustup) ########
+ENV RUSTUP_HOME="/usr/local/rustup"
+ENV CARGO_HOME="/usr/local/cargo"
+WORKDIR /install-rust
+ENV RUST_VERSION="1.95.0"
+COPY install_rust.sh ./
+RUN ./install_rust.sh "${RUST_VERSION}" && rm -rf /install-rust
 
 ######## Yum Packages #######
 # We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest

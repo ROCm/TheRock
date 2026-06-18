@@ -46,13 +46,12 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 
 # Build runner configuration for Linux builds
-# Uses weighted distribution: 80% Azure, 20% AWS
+# Uses weighted distribution: 100% AWS
 # Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 0.8},
-            {"label": "aws-linux-scale-rocm-prod", "weight": 0.2},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -108,7 +107,6 @@ all_build_variants = {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
-            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -154,12 +152,16 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.138,
-                },  # cirrascale (4/29)
+                    "weight": 0.117,
+                },  # cirrascale (4/34)
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.862,
-                },  # core42 (25/29)
+                    "weight": 0.736,
+                },  # core42 (25/34)
+                {
+                    "label": "linux-gfx942-1gpu-ossci-rocm",
+                    "weight": 0.147,
+                },  # vultr (5/34)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
@@ -242,6 +244,7 @@ amdgpu_family_info_matrix_presubmit = {
         },
     },
 }
+
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
 amdgpu_family_info_matrix_postsubmit = {
@@ -394,6 +397,18 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            # PyTorch builds are included — workflow_dispatch can be used
+            # to trigger manually; nightly schedule runs both ROCm stack
+            # and PyTorch builds.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
