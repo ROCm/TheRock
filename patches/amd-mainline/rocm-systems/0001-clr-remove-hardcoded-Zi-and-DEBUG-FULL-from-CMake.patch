@@ -10,15 +10,14 @@ them.
 
 Upstream fix: https://github.com/ROCm/rocm-systems/pull/6239
 ---
- projects/clr/hipamd/CMakeLists.txt  | 5 -----
- projects/clr/opencl/CMakeLists.txt  | 6 ------
+ projects/clr/hipamd/CMakeLists.txt | 5 -----
+ projects/clr/opencl/CMakeLists.txt | 6 ------
  2 files changed, 0 insertions(+), 11 deletions(-)
 
 diff --git a/projects/clr/hipamd/CMakeLists.txt b/projects/clr/hipamd/CMakeLists.txt
-index ca7abded903..4fcb36d211b 100755
 --- a/projects/clr/hipamd/CMakeLists.txt
 +++ b/projects/clr/hipamd/CMakeLists.txt
-@@ -33,11 +33,6 @@ option(THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS
+@@ -32,11 +32,6 @@ option(THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS
    "Stamp git revisions into generated library version metadata"
    ON)
 
@@ -31,10 +30,9 @@ index ca7abded903..4fcb36d211b 100755
  set(HIPCC_BIN_DIR "${ROCM_PATH}/bin" CACHE STRING "HIPCC and HIPCONFIG binary directories")
 
 diff --git a/projects/clr/opencl/CMakeLists.txt b/projects/clr/opencl/CMakeLists.txt
-index 5b750f9bd99..6d849b4f33b 100644
 --- a/projects/clr/opencl/CMakeLists.txt
 +++ b/projects/clr/opencl/CMakeLists.txt
-@@ -16,12 +16,6 @@ option(BUILD_ICD "Enable building OpenCL ICD Loader" OFF)
+@@ -17,12 +17,6 @@ option(BUILD_ICD "Enable building OpenCL ICD Loader" OFF)
  option(EMU_ENV "Enable building for emulation environment" OFF)
  option(ENABLE_ADDRESS_SANITIZER "Option to enable ASAN build" OFF)
 
@@ -46,4 +44,4 @@ index 5b750f9bd99..6d849b4f33b 100644
 -
  # Address sanitizer options
  if(ENABLE_ADDRESS_SANITIZER)
-   message(STATUS "Building ocltst tests with Address Sanitizer options"
+   message(STATUS "Building ocltst tests with Address Sanitizer options")
