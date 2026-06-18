@@ -426,7 +426,6 @@ class BuildConfig:
     build_variant_label: str
     build_variant_suffix: str
     build_variant_cmake_preset: str
-    expect_failure: bool
     build_native_linux: bool
     build_pytorch: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -953,8 +952,6 @@ def _expand_build_config_for_platform(
         return None
 
     family_names = [f["amdgpu_family"] for f in per_family_info]
-    expect_failure = variant_config.get("expect_failure", False)
-    expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
@@ -975,13 +972,10 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        expect_failure=expect_failure,
-        build_native_linux=(not expect_failure and suffix != "asan"),
-        build_pytorch=(
-            not expect_failure and not expect_pytorch_failure and suffix != "asan"
-        ),
-        test_python_packages_matrix=test_python_packages_matrix,
+        build_native_linux=(suffix != "asan"),
+        build_pytorch=(suffix != "asan"),
         build_runs_on=build_runs_on,
+        test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
     )
