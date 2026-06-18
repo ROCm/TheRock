@@ -15,6 +15,7 @@ import io
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -401,6 +402,65 @@ class TestDownloadBlob(unittest.TestCase):
             with self.assertRaisesRegex(fda.FetchError, "size mismatch"):
                 fda._download_blob(s3, remote, md5, dest, expected_size=len(data) + 100)
             self.assertFalse(dest.exists())
+
+
+class TestDownloadBlobConcurrency(unittest.TestCase):
+    """Regression test for #5943.
+
+    `_materialize_dir` caches `.dir` manifests at a content-addressed path
+    derived only from their md5, so two `.dvc` pointers whose manifests hash
+    the same can both call `_download_blob` with an identical `dest` from
+    separate ThreadPoolExecutor workers. The old fixed `<dest>.tmp` name let
+    one worker's unlink()/os.replace() collide with another's open handle,
+    surfacing as `[WinError 5] Access is denied` on Windows.
+    """
+
+    def _remote(self) -> fda._Remote:
+        return fda._Remote(bucket="bkt", prefix="p", anonymous=True)
+
+    def test_concurrent_calls_with_same_dest_do_not_collide(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            data = b"shared manifest content"
+            md5 = _md5_hex(data)
+            remote = self._remote()
+            key = fda._s3_key(remote, md5)
+
+            barrier = threading.Barrier(2)
+
+            class _SlowFakeS3(_FakeS3):
+                def download_fileobj(self, Bucket, Key, Fileobj):
+                    # Force both threads to be mid-download at the same time
+                    # so they are guaranteed to race on the temp filename.
+                    barrier.wait(timeout=5)
+                    super().download_fileobj(Bucket, Key, Fileobj)
+
+            s3 = _SlowFakeS3({(remote.bucket, key): data})
+            # Identical dest for both workers, mirroring two .dir manifests
+            # that hash to the same content-addressed cache path.
+            dest = tmp / "cache" / "ab" / "cdef"
+
+            errors = []
+
+            def worker():
+                try:
+                    fda._download_blob(
+                        s3, remote, md5, dest, expected_size=len(data)
+                    )
+                except Exception as e:  # noqa: BLE001
+                    errors.append(e)
+
+            threads = [threading.Thread(target=worker) for _ in range(2)]
+            for th in threads:
+                th.start()
+            for th in threads:
+                th.join(timeout=5)
+
+            self.assertEqual(errors, [], f"concurrent _download_blob raised: {errors}")
+            self.assertTrue(dest.exists())
+            self.assertEqual(dest.read_bytes(), data)
+            leftover = list(dest.parent.glob("*.tmp"))
+            self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
 
 
 class TestMaterializeFile(unittest.TestCase):
