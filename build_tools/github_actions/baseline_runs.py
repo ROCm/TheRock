@@ -89,7 +89,7 @@ class CommitCompatibility:
     """Result of checking a candidate run's commit against the current commit.
 
     A baseline run is only safe to reuse when it was built from source that the
-    current commit is based on. Reusing artifacts from a divergent or newer-than-current 
+    current commit is based on. Reusing artifacts from a divergent or newer-than-current
     commit risks mixing incompatible binaries, so those are rejected.
     """
 
