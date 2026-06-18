@@ -134,6 +134,12 @@ jobs:
         with:
           version: '3.62.0'
 
+      - name: Install sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: |
+          choco install --no-progress -y sccache
+          echo "sccache version: $(sccache --version)"
+
       # After other installs, so MSVC gets priority in the PATH.
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
