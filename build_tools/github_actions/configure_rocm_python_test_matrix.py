@@ -6,6 +6,8 @@
 
 from dataclasses import dataclass
 
+from amdgpu_family_matrix import select_weighted_label
+
 UBUNTU_24_04_CONTAINER = (
     "ghcr.io/rocm/no_rocm_image_ubuntu24_04@"
     "sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26"
@@ -53,6 +55,20 @@ def _test_environments_for_platform(platform: str) -> list[PythonTestEnvironment
     raise ValueError(f"Unknown platform: {platform}")
 
 
+def _select_test_runs_on(family_info: dict) -> str:
+    test_runs_on = str(family_info["test-runs-on"])
+    if not test_runs_on:
+        return ""
+
+    labels_config = family_info.get("test-runs-on-labels")
+    if labels_config:
+        return select_weighted_label(
+            labels_config=labels_config,
+            context_name=f"python-test-runner ({family_info['amdgpu_family']})",
+        )
+    return test_runs_on
+
+
 def build_rocm_python_test_matrix(
     *,
     per_family_info: list[dict],
@@ -63,22 +79,38 @@ def build_rocm_python_test_matrix(
     matrix: list[dict[str, str]] = []
     for family_info in per_family_info:
         amdgpu_family = str(family_info["amdgpu_family"])
-        test_runs_on = str(family_info["test-runs-on"])
-        if not test_runs_on:
+        if not family_info["test-runs-on"]:
             continue
 
-        # Example Linux output:
-        #   gfx94X-dcgpu x py3.10 x ubuntu24.04 container
-        #   gfx94X-dcgpu x py3.10 x ubi10 container
-        #   gfx94X-dcgpu x py3.11 x ubuntu24.04 container
+        # Example Linux output, note the Python versions, containers, and test
+        # runners):
+        #
+        # [
+        #   {
+        #     "amdgpu_family": "gfx94X-dcgpu",
+        #     "test_runs_on": "linux-gfx942-1gpu-core42-ossci-rocm",
+        #     "python_version": "3.10",
+        #     "container_image_name": "ubuntu24.04",
+        #     "container_image_url": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:..."
+        #   },
+        #   {
+        #     "amdgpu_family": "gfx94X-dcgpu",
+        #     "test_runs_on": "linux-gfx942-1gpu-ccs-ossci-rocm",
+        #     "python_version": "3.10",
+        #     "container_image_name": "ubi10",
+        #     "container_image_url": "ghcr.io/rocm/no_rocm_image_ubi10@sha256:..."
+        #   },
         #   ...
-        #   gfx94X-dcgpu x py3.12 x ubi10 container
-        #   gfx1151      x py3.10 x ubuntu24.04 container
-        #   ...
-        # Example Windows output:
-        #   gfx110X-all x py3.12 x native (no container)
-        #   gfx1151     x py3.12 x native (no container)
+        #   {
+        #     "amdgpu_family": "gfx94X-dcgpu",
+        #     "test_runs_on": "linux-gfx942-1gpu-core42-ossci-rocm",
+        #     "python_version": "3.12",
+        #     "container_image_name": "ubi10",
+        #     "container_image_url": "ghcr.io/rocm/no_rocm_image_ubi10@sha256:..."
+        #   }
+        # ]
         for environment in test_environments:
+            test_runs_on = _select_test_runs_on(family_info)
             matrix.append(
                 {
                     "amdgpu_family": amdgpu_family,

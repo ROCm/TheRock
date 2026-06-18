@@ -937,16 +937,17 @@ def _expand_build_config_for_platform(
                 f"disabling test runner for non-scheduled runs"
             )
 
-        per_family_info.append(
-            {
-                "amdgpu_family": platform_info["family"],
-                "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
-                "test-runs-on": test_runs_on,
-                "sanity_check_only_for_family": platform_info.get(
-                    "sanity_check_only_for_family", False
-                ),
-            }
-        )
+        family_info = {
+            "amdgpu_family": platform_info["family"],
+            "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
+            "test-runs-on": test_runs_on,
+            "sanity_check_only_for_family": platform_info.get(
+                "sanity_check_only_for_family", False
+            ),
+        }
+        if test_runs_on and "test-runs-on-labels" in platform_info:
+            family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        per_family_info.append(family_info)
 
     if not per_family_info:
         return None

@@ -832,16 +832,15 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "sanity_check_only_for_family",
         }
+        optional_keys = {"test-runs-on-labels"}
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info
             self.assertGreater(len(per_family), 0)
             for entry in per_family:
-                self.assertEqual(
-                    set(entry.keys()),
-                    required_keys,
-                    f"unexpected keys in per-family info: {entry}",
-                )
+                entry_keys = set(entry.keys())
+                self.assertLessEqual(required_keys, entry_keys)
+                self.assertLessEqual(entry_keys, required_keys | optional_keys)
 
     def test_build_config_structure(self):
         """BuildConfig has correct structure: families, metadata, consistency.

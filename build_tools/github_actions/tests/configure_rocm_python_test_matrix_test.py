@@ -5,6 +5,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -56,17 +57,44 @@ class ConfigureRocmPythonTestMatrixTest(unittest.TestCase):
         )
 
     def test_families_without_runners_are_skipped(self):
+        # test-runs-on is required, test-runs-on-labels is not used on its own
         matrix = m.build_rocm_python_test_matrix(
             per_family_info=[
                 {
                     "amdgpu_family": "gfxMOCKTARGET",
                     "test-runs-on": "",
+                    "test-runs-on-labels": [
+                        {"label": "mock-weighted-runner", "weight": 1.0}
+                    ],
                 }
             ],
             platform="linux",
         )
 
         self.assertEqual(matrix, [])
+
+    def test_weighted_runner_labels_override_fallback_runner(self):
+        with mock.patch.object(
+            m, "select_weighted_label", return_value="mock-weighted-runner"
+        ) as select_weighted_label:
+            matrix = m.build_rocm_python_test_matrix(
+                per_family_info=[
+                    {
+                        "amdgpu_family": "gfxMOCKWEIGHTED",
+                        "test-runs-on": "mock-fallback-runner",
+                        "test-runs-on-labels": [
+                            {"label": "mock-weighted-runner", "weight": 1.0}
+                        ],
+                    }
+                ],
+                platform="linux",
+            )
+
+        self.assertEqual(len(matrix), 6)
+        self.assertEqual(select_weighted_label.call_count, len(matrix))
+        self.assertEqual(
+            {row["test_runs_on"] for row in matrix}, {"mock-weighted-runner"}
+        )
 
     def test_unknown_platform_errors(self):
         with self.assertRaisesRegex(ValueError, "not-a-platform"):
