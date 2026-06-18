@@ -397,19 +397,20 @@ class S3Index:
         out.append(f'<!--TIMESTAMP {int(time.time())}-->')
         return '\n'.join(out)
 
-    def upload_pep503_htmls(self) -> None:
+    def upload_pep503_htmls(self, update_root_index: bool = True) -> None:
         for subdir in self.subdirs:
-            index_html = self.to_simple_packages_html(subdir=subdir)
-            for bucket in INDEX_BUCKETS:
-                print(f"INFO Uploading {subdir}/index.html to {bucket.name}")
-                bucket.Object(
-                    key=f"{subdir}/index.html"
-                ).put(
-                    # ACL='public-read',
-                    CacheControl='no-cache,no-store,must-revalidate',
-                    ContentType='text/html',
-                    Body=index_html
-                )
+            if update_root_index:
+                index_html = self.to_simple_packages_html(subdir=subdir)
+                for bucket in INDEX_BUCKETS:
+                    print(f"INFO Uploading {subdir}/index.html to {bucket.name}")
+                    bucket.Object(
+                        key=f"{subdir}/index.html"
+                    ).put(
+                        # ACL='public-read',
+                        CacheControl='no-cache,no-store,must-revalidate',
+                        ContentType='text/html',
+                        Body=index_html
+                    )
             for pkg_name in self.get_package_names(subdir=subdir):
                 compat_pkg_name = pkg_name.lower().replace("_", "-")
                 index_html = self.to_simple_package_html(subdir=subdir, package_name=pkg_name)
@@ -424,12 +425,13 @@ class S3Index:
                         Body=index_html
                     )
 
-    def save_pep503_htmls(self) -> None:
+    def save_pep503_htmls(self, update_root_index: bool = True) -> None:
         for subdir in self.subdirs:
-            print(f"INFO Saving {subdir}/index.html")
-            makedirs(subdir, exist_ok=True)
-            with open(path.join(subdir, "index.html"), mode="w", encoding="utf-8") as f:
-                f.write(self.to_simple_packages_html(subdir=subdir))
+            if update_root_index:
+                print(f"INFO Saving {subdir}/index.html")
+                makedirs(subdir, exist_ok=True)
+                with open(path.join(subdir, "index.html"), mode="w", encoding="utf-8") as f:
+                    f.write(self.to_simple_packages_html(subdir=subdir))
             for pkg_name in self.get_package_names(subdir=subdir):
                 makedirs(path.join(subdir, pkg_name), exist_ok=True)
                 with open(path.join(subdir, pkg_name, "index.html"), mode="w", encoding="utf-8") as f:
@@ -535,7 +537,7 @@ class S3Index:
             rc.fetch_pep658()
         return rc
 
-def update_pep503_index(prefix: str, package_name: Optional[str] = None, compute_sha256: bool = False, upload: bool = True):
+def update_pep503_index(prefix: str, package_name: Optional[str] = None, update_root_index: bool = True, compute_sha256: bool = False, upload: bool = True):
     """
     Regenerates the PEP 503 simple index for a given S3 prefix.
     Fetches valid artifacts, applies allow-list filtering, optionally updates
@@ -550,6 +552,11 @@ def update_pep503_index(prefix: str, package_name: Optional[str] = None, compute
             this package only (e.g. "torch"). The S3 listing is narrowed to
             "{prefix}/{package_name}-*" for efficiency. When None, all packages
             under the prefix are processed (full sweep).
+        update_root_index: If True (default), regenerate the root index page
+            at "{prefix}/index.html". Must be False when package_name is set:
+            the root index must be built from a full listing, not a
+            package-scoped one — passing both would clobber the root index
+            with only that package's entries.
 
     IMPORTANT:
         `initialize_bucket()` must be called prior to invoking this function.
@@ -564,6 +571,13 @@ def update_pep503_index(prefix: str, package_name: Optional[str] = None, compute
     Returns:
         int: The number of S3 objects included in the index after filtering.
     """
+    if package_name and update_root_index:
+        raise ValueError(
+            "package_name and update_root_index=True cannot be used together: "
+            "the root index must be built from a full prefix listing, not a "
+            "package-scoped one. Use a separate full-sweep call to update the root index."
+        )
+
     print(f"Processing prefix: {prefix}" + (f", package: {package_name}" if package_name else ""))
 
     # Record start time to measure S3 fetch duration
@@ -580,9 +594,9 @@ def update_pep503_index(prefix: str, package_name: Optional[str] = None, compute
     if compute_sha256:
         idx.compute_sha256()
     elif not upload:
-        idx.save_pep503_htmls()
+        idx.save_pep503_htmls(update_root_index=update_root_index)
     else:
-        idx.upload_pep503_htmls()
+        idx.upload_pep503_htmls(update_root_index=update_root_index)
 
     return len(idx.objects)
 

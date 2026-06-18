@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from manage import S3Index, S3Object, _make_list_prefix
+from manage import S3Index, S3Object, _make_list_prefix, update_pep503_index
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +31,11 @@ from manage import S3Index, S3Object, _make_list_prefix
 )
 def test_make_list_prefix(prefix: str, package_name: str | None, expected: str) -> None:
     assert _make_list_prefix(prefix, package_name) == expected
+
+
+def test_update_pep503_index_rejects_package_name_with_update_root_index() -> None:
+    with pytest.raises(ValueError, match="package_name and update_root_index=True cannot be used together"):
+        update_pep503_index(prefix="v4/whl", package_name="torch", update_root_index=True)
 
 
 def test_make_list_prefix_torch_does_not_match_torchaudio() -> None:
