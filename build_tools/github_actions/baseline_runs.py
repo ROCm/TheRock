@@ -73,6 +73,7 @@ class WorkflowJobHealth:
     def is_valid(self) -> bool:
         return not self.failed_job_names and not self.missing_name_substrings
 
+
 @dataclass(frozen=True)
 class WorkflowRunSummary:
     """Compact source/ref summary for a workflow run."""
@@ -99,6 +100,7 @@ class WorkflowRunSummary:
             "timestamp": self.timestamp,
             "html_url": self.html_url,
         }
+
 
 @dataclass(frozen=True)
 class BaselineRun:
@@ -136,6 +138,7 @@ class BaselineRun:
             "job_health": self.job_health,
             "artifact_availability": self.artifact_availability,
         }
+
 
 ArtifactBackendFactory = Callable[[dict, str, str], ArtifactBackend]
 WorkflowJobsFetcher = Callable[[dict, str], Sequence[dict]]
@@ -310,6 +313,7 @@ def query_jobs_for_workflow_run(
         run_attempt=run_attempt,
     )
 
+
 def create_workflow_run_summary(
     workflow_run: dict,
     *,
@@ -328,6 +332,7 @@ def create_workflow_run_summary(
         timestamp=workflow_run.get("created_at"),
         html_url=workflow_run.get("html_url", ""),
     )
+
 
 def create_artifact_backend_for_workflow_run(
     workflow_run: dict,
