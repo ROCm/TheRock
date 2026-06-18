@@ -3,34 +3,33 @@
 
 # This workflow is the entry point for weekly ASAN releases.
 #
-# It builds ASAN-instrumented ROCm packages on a weekly schedule and
-# publishes them to release buckets. This is modeled on multi_arch_release.yml
-# but uses the ASAN build variant.
-#
-# For manual dev releases, trigger via workflow_dispatch on TheRock.
+# Modeled on multi_arch_release.yml but uses the ASAN build variant and
+# runs on a weekly schedule (Saturdays at noon UTC).
 
 name: Multi-Arch Release ASAN
 
 on:
   schedule:
-    # Runs every Saturday at 02:00 AM UTC
-    - cron: "0 2 * * 6"
-  workflow_dispatch:
+    # Runs every Saturday at 12:00 PM UTC
+    - cron: "0 12 * * 6"
+  workflow_call:
     inputs:
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev".'
-        type: choice
-        options:
-          - dev
-          - nightly
-        default: dev
+        description: 'Release type: "dev", "nightly", or "prerelease".'
+        type: string
+        required: true
+      prerelease_version:
+        description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
+        type: string
+        default: ""
+      # For workflow_call, default to empty and trust the calling workflow to be explicit or pass "all".
       linux_amdgpu_families:
-        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" or empty = skip.'
         type: string
-        default: "gfx94x"
-      linux_test_labels:
+        default: ""
+      windows_amdgpu_families:
+        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" or empty = skip.'
         type: string
-        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'. ex: test:rocprim, test:hipcub"
         default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
@@ -40,13 +39,61 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        type: boolean
+        default: false
+      build_pytorch:
+        description: "Build PyTorch wheels"
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type; developer-triggered jobs should use "dev".'
+        type: choice
+        options:
+          - dev
+          - nightly
+        default: dev
+      prerelease_version:
+        description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
+        type: string
+        default: ""
+      # For workflow_dispatch, default to a single GPU family to limit CI load for most workflow runs.
+      # Note: empty string will be converted to the default by github, so we need an explicit "none".
+      linux_amdgpu_families:
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+        type: string
+        default: "gfx94x"
+      windows_amdgpu_families:
+        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" = skip platform.'
+        type: string
+        default: "none"
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        type: boolean
+        default: false
+      build_pytorch:
+        description: "Build PyTorch wheels"
+        type: boolean
+        default: false
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 run-name: >-
   Multi-Arch Release ASAN (${{ inputs.release_type || 'nightly' }})
-  | Linux: ${{ inputs.linux_amdgpu_families || 'gfx94x,gfx110x,gfx120x' }}
+  | Linux: ${{ inputs.linux_amdgpu_families || 'all' }}
+  | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
 
 jobs:
   setup:
@@ -54,137 +101,51 @@ jobs:
     with:
       build_variant: "asan"
       release_type: ${{ inputs.release_type || 'nightly' }}
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'gfx94x,gfx110x,gfx120x' }}
-      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      prerelease_version: ${{ inputs.prerelease_version }}
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
+      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
 
-  linux_build_and_test:
+  linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
     if: ${{ needs.setup.outputs.linux_build_config != '' }}
-    uses: ./.github/workflows/multi_arch_ci_linux.yml
+    uses: ./.github/workflows/multi_arch_release_linux.yml
     secrets: inherit
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
-    permissions:
-      contents: read
-      id-token: write
-
-  build_tarballs:
-    needs: [setup, linux_build_and_test]
-    name: Build Tarballs
-    uses: ./.github/workflows/multi_arch_build_tarballs.yml
-    with:
-      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
-      platform: linux
-      package_version: ${{ needs.setup.outputs.rocm_package_version }}
       release_type: ${{ inputs.release_type || 'nightly' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}
+      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+      build_pytorch: ${{ inputs.build_pytorch }}
+      python_version: ${{ inputs.python_version }}
     permissions:
       contents: read
+      actions: write
       id-token: write
 
-  record_build_metrics:
-    name: Record Build Metrics
-    needs: [setup, linux_build_and_test, build_tarballs]
-    if: always() && needs.linux_build_and_test.result == 'success'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
-
-      - name: Calculate build duration
-        id: duration
-        run: |
-          # Get workflow start time from GitHub API
-          START_TIME=$(gh api \
-            repos/${{ github.repository }}/actions/runs/${{ github.run_id }} \
-            --jq '.run_started_at')
-
-          END_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-          START_EPOCH=$(date -d "$START_TIME" +%s)
-          END_EPOCH=$(date -d "$END_TIME" +%s)
-          DURATION_SECONDS=$((END_EPOCH - START_EPOCH))
-          DURATION_MINUTES=$((DURATION_SECONDS / 60))
-
-          echo "start_time=$START_TIME" >> "$GITHUB_OUTPUT"
-          echo "end_time=$END_TIME" >> "$GITHUB_OUTPUT"
-          echo "duration_seconds=$DURATION_SECONDS" >> "$GITHUB_OUTPUT"
-          echo "duration_minutes=$DURATION_MINUTES" >> "$GITHUB_OUTPUT"
-
-          echo "### ASAN Build Metrics" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Metric | Value |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Start Time | $START_TIME |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| End Time | $END_TIME |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Duration | ${DURATION_MINUTES} minutes (${DURATION_SECONDS} seconds) |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Run ID | ${{ github.run_id }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Release Type | ${{ inputs.release_type || 'nightly' }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| GPU Families | ${{ inputs.linux_amdgpu_families || 'gfx94x,gfx110x,gfx120x' }} |" >> "$GITHUB_STEP_SUMMARY"
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-  publish_to_release_buckets:
-    needs: [setup, linux_build_and_test, build_tarballs]
-    name: Publish to Release Buckets
-    runs-on: ubuntu-24.04
+  windows_release:
+    name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
+    needs: setup
+    if: ${{ needs.setup.outputs.windows_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_release_windows.yml
+    secrets: inherit
+    with:
+      build_config: ${{ needs.setup.outputs.windows_build_config }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      release_type: ${{ inputs.release_type || 'nightly' }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ needs.setup.outputs.ref }}
+      build_pytorch: ${{ inputs.build_pytorch }}
+      python_version: ${{ inputs.python_version }}
     permissions:
+      contents: read
+      actions: write
       id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
-
-      - name: Setting up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
-
-      - name: Install Python requirements
-        run: pip install -r requirements.txt
-
-      - name: Configure AWS Credentials
-        uses: ./.github/actions/configure_aws_artifacts_credentials
-        with:
-          release_type: ${{ inputs.release_type || 'nightly' }}
-
-      - name: Copy to release buckets
-        run: |
-          python build_tools/github_actions/publish_rocm_to_release_buckets.py \
-            --run-id="${{ github.run_id }}" \
-            --platform=linux \
-            --release-type="${{ inputs.release_type || 'nightly' }}" \
-            --skip-native-packages
-
-  ci_summary:
-    name: CI Summary
-    if: always()
-    needs:
-      - setup
-      - linux_build_and_test
-      - build_tarballs
-      - publish_to_release_buckets
-      - record_build_metrics
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - name: Evaluate workflow results
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json '${{ toJSON(needs) }}'
