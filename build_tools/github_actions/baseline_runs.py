@@ -485,6 +485,7 @@ def _seconds_between(start: datetime | None, end: datetime | None) -> float | No
             end.isoformat(),
             seconds,
         )
+        return None
     return seconds
 
 
