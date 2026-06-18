@@ -785,6 +785,20 @@ class RunTimingTest(unittest.TestCase):
             },
         )
 
+    def test_out_of_order_timestamps_emit_debug_log(self):
+        with self.assertLogs(baseline_runs.logger, level="DEBUG") as captured:
+            baseline_runs.parse_run_timing(
+                {
+                    "id": "42",
+                    "created_at": "2026-06-17T20:05:00Z",
+                    "run_started_at": "2026-06-17T20:00:00Z",
+                    "updated_at": "2026-06-17T21:00:00Z",
+                }
+            )
+        self.assertTrue(
+            any("negative duration" in message for message in captured.output)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

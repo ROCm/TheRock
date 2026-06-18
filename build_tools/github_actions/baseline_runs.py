@@ -479,7 +479,12 @@ def _seconds_between(start: datetime | None, end: datetime | None) -> float | No
         return None
     seconds = (end - start).total_seconds()
     if seconds < 0:
-        return None
+        logger.debug(
+            "Ignoring negative duration: start=%s end=%s (%.1fs)",
+            start.isoformat(),
+            end.isoformat(),
+            seconds,
+        )
     return seconds
 
 
@@ -703,7 +708,7 @@ def select_baseline_run(
             )
             if not run_recency.is_valid:
                 logger.info(
-                    "Skipping run %s: too old or undatable "
+                    "Skipping run %s: too old or not date-parseable "
                     "(age_hours=%s, max_age_hours=%s)",
                     run_id,
                     run_recency.age_hours,
