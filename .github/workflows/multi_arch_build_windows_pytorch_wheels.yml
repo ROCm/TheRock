@@ -205,8 +205,6 @@ jobs:
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
           git config --global core.longpaths true
-          TRITON_WINDOWS_REF="$(python -c "from pathlib import Path; print(Path('external-builds/pytorch/ci_commit_pins/triton-windows.txt').read_text(encoding='utf-8').splitlines()[0].strip())")"
-          echo "Triton-windows ref (from ci_commit_pins/triton-windows.txt): ${TRITON_WINDOWS_REF}"
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
             --repo-hashtag nightly \
@@ -221,7 +219,6 @@ jobs:
           python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
             --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag "${TRITON_WINDOWS_REF}" \
             --no-commit-hipify
 
       - name: Checkout PyTorch source repos (stable)
@@ -286,6 +283,8 @@ jobs:
           set "CACHE_FLAG="
           if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+          set "TRITON_ARGS="
+          if "${{ inputs.pytorch_git_ref }}"=="nightly" set "TRITON_ARGS=--triton-dir ${{ env.CHECKOUT_ROOT }}/triton --build-triton"
 
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_families }} (cache: ${{ inputs.cache_type }})"
           python ./external-builds/pytorch/build_prod_wheels.py ^
@@ -294,7 +293,8 @@ jobs:
             --find-links "${{ inputs.rocm_package_find_links_url }}" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
-            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ${{ inputs.pytorch_git_ref == 'nightly' && format('--triton-dir {0}/triton --build-triton', env.CHECKOUT_ROOT) || '' }} ^
+            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            %TRITON_ARGS% ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
