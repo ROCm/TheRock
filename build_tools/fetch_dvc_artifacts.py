@@ -282,12 +282,18 @@ def _download_blob(
     write. boto3's multipart download writes chunks out of order via seek+write,
     which breaks any sequential-hash wrapper. Re-reading costs one extra pass
     (~150 MB/s on SSD); negligible vs network time for our workload.
+
+    Uses a per-call unique temp filename rather than a fixed `<dest>.tmp`:
+    `_materialize_dir` caches `.dir` manifests at a content-addressed path
+    derived only from their md5, so two pointer files whose manifests hash
+    the same can call this function with an identical `dest` from separate
+    ThreadPoolExecutor workers. A shared temp name lets one worker's
+    unlink()/os.replace() collide with another's open handle, which surfaces
+    as `[WinError 5] Access is denied` on Windows (see #5943).
     """
     key = _s3_key(remote, md5)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".tmp")
-    if tmp.exists():
-        tmp.unlink()
+    tmp = dest.with_suffix(f"{dest.suffix}.{uuid.uuid4().hex}.tmp")
     try:
         with tmp.open("wb") as f:
             s3.download_fileobj(remote.bucket, key, f)
