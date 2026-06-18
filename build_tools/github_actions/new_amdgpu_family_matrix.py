@@ -14,7 +14,6 @@ amdgpu_family_info_matrix_all {
      <target>: {                                # string: cmake target for single gpu architecture
         "linux": {
             "build": {
-              "expect_failure":                 #         boolean:
               "build_variants": []              #         list: build variant names (e.g., ["release", "asan"])
             },                                  # platform <optional>
            "test": {                            #     test options
@@ -32,7 +31,6 @@ amdgpu_family_info_matrix_all {
         }
         "windows": {
             "build": {
-              "expect_failure":                 #         boolean:
               "build_variants": []              #         list: build variant names
             },                                  # platform <optional>
             "test": {                           #     test options
@@ -90,7 +88,6 @@ all_build_variants = {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
-            "expect_failure": True,
         },
     },
     "windows": {
@@ -257,7 +254,6 @@ amdgpu_family_info_matrix_all = {
         "gfx1152": {
             "linux": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -272,7 +268,6 @@ amdgpu_family_info_matrix_all = {
             },
             "windows": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -289,7 +284,6 @@ amdgpu_family_info_matrix_all = {
         "gfx1153": {
             "linux": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -308,7 +302,6 @@ amdgpu_family_info_matrix_all = {
             },
             "windows": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
