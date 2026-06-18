@@ -534,6 +534,12 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("amd-llvm_dev")
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
+            if args.prim:
+                # The hipthreads example apps link roc::rocthrust and call
+                # find_package(rocthrust/rocprim CONFIG); those headers and
+                # CMake package configs live in prim's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("prim_dev")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test
