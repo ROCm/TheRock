@@ -61,13 +61,7 @@ class ArtifactAvailability:
 
     @property
     def is_valid(self) -> bool:
-        if self.age_hours is None:
-            return False
-        if self.age_hours < 0:
-            return False
-        if self.max_age_hours is None:
-            return True
-        return self.age_hours <= self.max_age_hours
+        return not self.missing_artifacts
 
 
 @dataclass(frozen=True)
@@ -104,21 +98,15 @@ class CommitCompatibility:
 
 @dataclass(frozen=True)
 class RunRecency:
-    """Result of checking how old a candidate run is.
-
-    Even a successful run with all artifacts can be too old to safely reuse, so
-    callers may bound the acceptable age. ``age_hours`` is ``None`` when the run
-    has no parseable ``created_at`` timestamp, which is treated as invalid so a
-    missing timestamp can never silently pass an age gate.
-    """
-
+    """Result of checking how old a candidate run is."""
     created_at: str
     age_hours: float | None
     max_age_hours: float | None
-
     @property
     def is_valid(self) -> bool:
         if self.age_hours is None:
+            return False
+        if self.age_hours < 0:
             return False
         if self.max_age_hours is None:
             return True
