@@ -1,0 +1,32 @@
+From ae457969e3a409d0a68109e37eb5e4e12d22b7a8 Mon Sep 17 00:00:00 2001
+From: Ethan Stewart <ethan.stewart@amd.com>
+Date: Wed, 17 Jun 2026 15:09:35 -0500
+Subject: [PATCH 4/4] [rocprofiler-systems] - Format line break in
+ environment.hpp
+
+---
+ .../rocprofiler-systems/source/lib/common/environment.hpp   | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/projects/rocprofiler-systems/source/lib/common/environment.hpp b/projects/rocprofiler-systems/source/lib/common/environment.hpp
+index b599bf98d9..4c7ba913ed 100644
+--- a/projects/rocprofiler-systems/source/lib/common/environment.hpp
++++ b/projects/rocprofiler-systems/source/lib/common/environment.hpp
+@@ -439,10 +439,12 @@ discover_llvm_libdir_for_ompt()
+     }
+     push_unique(rocm_dir + "/llvm/lib");
+     push_unique(rocm_dir + "/lib/llvm/lib");
+-    push_unique(rocm_dir + "/lib/llvm/lib/" + std::string{ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE});
++    push_unique(rocm_dir + "/lib/llvm/lib/" +
++                std::string{ ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE });
+     push_unique("/opt/rocm/llvm/lib");
+     push_unique("/opt/rocm/lib/llvm/lib");
+-    push_unique("/opt/rocm/lib/llvm/lib/" + std::string{ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE});
++    push_unique("/opt/rocm/lib/llvm/lib/" +
++                std::string{ ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE });
+ 
+     auto has_libomptarget = [](const std::string& dir) {
+         const std::string so = dir + "/libomptarget.so";
+-- 
+2.34.1
+

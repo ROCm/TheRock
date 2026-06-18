@@ -1,34 +1,43 @@
-From ec4a7f329e4d4771d4e5246e0a6b206d34cc8452 Mon Sep 17 00:00:00 2001
+From ced14255a50763cdd5b2939a98d437930ea94d5f Mon Sep 17 00:00:00 2001
 From: Ethan Stewart <ethan.stewart@amd.com>
-Date: Tue, 9 Jun 2026 00:31:20 -0500
-Subject: [PATCH] [rocprofiler-systems] - add suffix to libomptarget
+Date: Tue, 16 Jun 2026 13:21:37 -0500
+Subject: [PATCH 1/4] [rocprofiler-systems] - add suffix to libomptarget
  find_library
 
-Temporary fix to get unblocked.
+This is in prepartion for compiler using LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
+by default. This option will install libomptarget.so in a target specific
+directory one level down in lib. Then the path would be:
+INSTALL_PREFIX/lib/llvm/lib/x86_64-unknown-linux-gnu.
+
+This is required for https://github.com/ROCm/TheRock/pull/5758
 ---
- .../examples/openmp/target/CMakeLists.txt             | 11 ++++++++++-
- 1 file changed, 10 insertions(+), 1 deletion(-)
+ .../examples/openmp/target/CMakeLists.txt         | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
 
 diff --git a/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt b/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
-index c415ecf0c5..22fbc9a64f 100644
+index 4c9479e240..8cd5087b51 100644
 --- a/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
 +++ b/projects/rocprofiler-systems/examples/openmp/target/CMakeLists.txt
-@@ -66,8 +66,17 @@ set(_LLVM_LIB_HINTS
+@@ -70,8 +70,21 @@ set(_LLVM_LIB_HINTS
      "/opt/rocm/lib/llvm/lib"
  )
  
 +# Determine LLVM host triple as libomptarget might be installed there.
 +execute_process(
-+  COMMAND "${CMAKE_COMMAND}" -E
-+  "${OMP_TARGET_COMPILER}" --print-target-triple
-+  OUTPUT_VARIABLE LLVM_HOST_TRIPLE
-+  OUTPUT_STRIP_TRAILING_WHITESPACE
-+  COMMAND_ERROR_IS_FATAL ANY
++    COMMAND "${OMP_TARGET_COMPILER}" --print-target-triple
++    OUTPUT_VARIABLE LLVM_HOST_TRIPLE
++    OUTPUT_STRIP_TRAILING_WHITESPACE
++    COMMAND_ERROR_IS_FATAL ANY
 +)
 +
  # Find libomptarget
 -find_library(LIBOMPTARGET_SO NAMES omptarget HINTS ${_LLVM_LIB_HINTS})
-+find_library(LIBOMPTARGET_SO NAMES omptarget HINTS ${_LLVM_LIB_HINTS} PATH_SUFFIXES ${LLVM_HOST_TRIPLE})
++find_library(
++    LIBOMPTARGET_SO
++    NAMES omptarget
++    HINTS ${_LLVM_LIB_HINTS}
++    PATH_SUFFIXES ${LLVM_HOST_TRIPLE}
++)
  
  if(NOT LIBOMPTARGET_SO)
      message(FATAL_ERROR "Could not find libomptarget in any of:\n  ${_LLVM_LIB_HINTS}")

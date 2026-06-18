@@ -1,0 +1,64 @@
+From 008010c7c86ba7888e4285a5783fc651ddbac02d Mon Sep 17 00:00:00 2001
+From: Ethan Stewart <ethan.stewart@amd.com>
+Date: Wed, 17 Jun 2026 10:57:38 -0500
+Subject: [PATCH 3/4] [rocprofiler-systems] - Add
+ ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE usage to common headers
+
+---
+ .../source/lib/common/CMakeLists.txt                   | 10 ++++++++++
+ .../rocprofiler-systems/source/lib/common/defines.h.in |  2 ++
+ .../source/lib/common/environment.hpp                  |  2 ++
+ 3 files changed, 14 insertions(+)
+
+diff --git a/projects/rocprofiler-systems/source/lib/common/CMakeLists.txt b/projects/rocprofiler-systems/source/lib/common/CMakeLists.txt
+index 14687e6d12..c1a5d97b99 100644
+--- a/projects/rocprofiler-systems/source/lib/common/CMakeLists.txt
++++ b/projects/rocprofiler-systems/source/lib/common/CMakeLists.txt
+@@ -14,6 +14,16 @@ add_library(
+     ALIAS rocprofiler-systems-common-library
+ )
+ 
++# Query clang for host target triple for defines.h
++# This is useful when LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON and
++# the openmp libraries are installed one level deeper in lib/<host-target-triple>.
++execute_process(
++    COMMAND "${ROCM_PATH}/lib/llvm/bin/amdclang" --print-target-triple
++    OUTPUT_VARIABLE LLVM_HOST_TRIPLE
++    OUTPUT_STRIP_TRAILING_WHITESPACE
++    COMMAND_ERROR_IS_FATAL ANY
++)
++
+ configure_file(
+     ${CMAKE_CURRENT_SOURCE_DIR}/defines.h.in
+     ${CMAKE_CURRENT_BINARY_DIR}/defines.h
+diff --git a/projects/rocprofiler-systems/source/lib/common/defines.h.in b/projects/rocprofiler-systems/source/lib/common/defines.h.in
+index 0c563dbf79..7080a611db 100644
+--- a/projects/rocprofiler-systems/source/lib/common/defines.h.in
++++ b/projects/rocprofiler-systems/source/lib/common/defines.h.in
+@@ -47,6 +47,8 @@
+ #define ROCPROFSYS_ROCM_VERSION_MINOR @ROCPROFSYS_ROCM_VERSION_MINOR@
+ #define ROCPROFSYS_ROCM_VERSION_PATCH @ROCPROFSYS_ROCM_VERSION_PATCH@
+ 
++#define ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE "@LLVM_HOST_TRIPLE@"
++
+ // these can be set via defining the variable in CMake, e.g.:
+ //      cmake -D ROCPROFSYS_CACHELINE_SIZE=N /path/to/source
+ // if not defined when configuring cmake, these values fall back to
+diff --git a/projects/rocprofiler-systems/source/lib/common/environment.hpp b/projects/rocprofiler-systems/source/lib/common/environment.hpp
+index 3f21fc44d5..b599bf98d9 100644
+--- a/projects/rocprofiler-systems/source/lib/common/environment.hpp
++++ b/projects/rocprofiler-systems/source/lib/common/environment.hpp
+@@ -439,8 +439,10 @@ discover_llvm_libdir_for_ompt()
+     }
+     push_unique(rocm_dir + "/llvm/lib");
+     push_unique(rocm_dir + "/lib/llvm/lib");
++    push_unique(rocm_dir + "/lib/llvm/lib/" + std::string{ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE});
+     push_unique("/opt/rocm/llvm/lib");
+     push_unique("/opt/rocm/lib/llvm/lib");
++    push_unique("/opt/rocm/lib/llvm/lib/" + std::string{ROCPROFSYS_ROCM_LLVM_HOST_TRIPLE});
+ 
+     auto has_libomptarget = [](const std::string& dir) {
+         const std::string so = dir + "/libomptarget.so";
+-- 
+2.34.1
+
