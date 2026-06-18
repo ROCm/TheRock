@@ -25,6 +25,8 @@ from manage import S3Index, S3Object, _make_list_prefix
         ("v4/whl", "torchaudio", "v4/whl/torchaudio-"),
         ("v4/whl", None, "v4/whl"),
         ("v2/gfx94X-dcgpu", None, "v2/gfx94X-dcgpu"),
+        # Empty string must not narrow the prefix; treated as full sweep.
+        ("v4/whl", "", "v4/whl"),
     ],
 )
 def test_make_list_prefix(prefix: str, package_name: str | None, expected: str) -> None:

@@ -73,7 +73,7 @@ def _make_list_prefix(prefix: str, package_name: Optional[str]) -> str:
     When package_name is provided, narrows the prefix to only that package's
     objects (e.g. "v4/whl/torch-"). The hyphen delimiter in wheel filenames
     makes this unambiguous: "torch-" cannot match "torchaudio-" wheels.
-    When package_name is None, returns the bare prefix for a full sweep.
+    When package_name is None or empty, returns the bare prefix for a full sweep.
     """
     if package_name:
         return f"{prefix}/{package_name}-"
