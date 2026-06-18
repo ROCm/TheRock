@@ -9,10 +9,6 @@
 name: Multi-Arch Release ASAN
 
 on:
-  # TODO: Remove push trigger before merging
-  push:
-    branches:
-      - users/geomin12/asan-packaging
   schedule:
     # Runs every Saturday at 12:00 PM UTC
     - cron: "0 12 * * 6"
