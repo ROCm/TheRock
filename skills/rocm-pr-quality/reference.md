@@ -42,18 +42,18 @@ ______________________________________________________________________
 A PR may carry more than one class. When ambiguous, pick the stricter one. Overlays may add
 component-specific classes (and bind them to paths).
 
-| Class                         | Typical test/flag bar                                                            |
-| ----------------------------- | -------------------------------------------------------------------------------- |
-| `new-public-api`              | Functional/API tests; compatibility check; likely flag if behavior-changing      |
-| `new-op/dtype/path`           | Tests exercising the new path across applicable devices                          |
-| `heuristic/default-selection` | Tests + safe-default flag for the new default                                    |
-| `kernel/tuning`               | Device/arch coverage appropriate to the kernel; perf evidence if perf-sensitive  |
-| `build/ci`                    | Build/CI green on supported lanes; no behavior change expected                   |
-| `docs`                        | Doc/link validation only                                                         |
-| `revert`                      | Links the PR it reverts (self-evident "why"); regression test if reverting a fix |
+| Class                         | Typical test/flag bar                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `new-public-api`              | Functional/API tests; compatibility check; likely flag if behavior-changing                                                                                                                                               |
+| `new-op/dtype/path`           | Tests exercising the new path across applicable devices                                                                                                                                                                   |
+| `heuristic/default-selection` | Tests + safe-default flag for the new default                                                                                                                                                                             |
+| `kernel/tuning`               | Device/arch coverage appropriate to the kernel; perf evidence if perf-sensitive                                                                                                                                           |
+| `build/ci`                    | Build/CI green on supported lanes; no behavior change expected                                                                                                                                                            |
+| `docs`                        | Doc/link validation only                                                                                                                                                                                                  |
+| `revert`                      | Links the PR it reverts (self-evident "why"); regression test if reverting a fix                                                                                                                                          |
 | `defect-fix`                  | M1: regression test or tracked two-PR plan, **plus reproduction evidence** — the new test is shown to **fail on the unpatched build (reproducing the cited defect) and pass with the fix**, with the run linked in the PR |
-| `regression-test-only`        | The test is the deliverable; must fail before / pass after the fix               |
-| `other`                       | Judgment call; default to stricter                                               |
+| `regression-test-only`        | The test is the deliverable; must fail before / pass after the fix                                                                                                                                                        |
+| `other`                       | Judgment call; default to stricter                                                                                                                                                                                        |
 
 ______________________________________________________________________
 
