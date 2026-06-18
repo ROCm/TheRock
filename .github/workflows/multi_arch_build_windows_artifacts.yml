@@ -204,9 +204,6 @@ jobs:
           COMPILER_LAUNCHER_ARGS=""
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
             COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
-            # //FS forces synchronous PDB writes, required when sccache runs parallel cl.exe invocations.
-            # Double slash suppresses MSYS2/Git Bash path conversion (single /FS becomes C:/Program Files/Git/FS).
-            COMPILER_LAUNCHER_ARGS="${COMPILER_LAUNCHER_ARGS} -DCMAKE_C_FLAGS=//FS -DCMAKE_CXX_FLAGS=//FS"
           elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
             COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           fi
