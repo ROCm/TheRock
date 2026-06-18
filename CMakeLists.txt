@@ -125,6 +125,12 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
+# Builds the comgr hotswap transpiler entry point and, on Linux, the
+# HSA_TOOLS_LIB hotswap tool (libamd_comgr_hotswap_tool.so). The tool needs the
+# rocr-runtime HSA headers, which are provided automatically from the in-tree
+# rocm-systems checkout (see compiler/CMakeLists.txt).
+option(THEROCK_BUILD_COMGR_HOTSWAP "Enables building the comgr hotswap transpiler and tool" ON)
+
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
 # Options to control the concurrency for building LLVM.
