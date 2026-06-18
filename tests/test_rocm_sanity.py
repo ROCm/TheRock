@@ -66,6 +66,10 @@ def run_command(command: list[str], cwd=None, env=None):
         for line in process.stderr.splitlines():
             logger.error(line)
         raise Exception(f"Command failed: `{shlex.join(command)}`, see output above")
+    elif is_asan() and process.stderr:
+        logger.info("ASAN stderr output:")
+        for line in process.stderr.splitlines():
+            logger.info(line)
     return process
 
 
