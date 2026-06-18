@@ -160,7 +160,16 @@ class ValidTestCategoriesTest(unittest.TestCase):
     def test_all_expected_categories_present(self):
         self.assertEqual(
             test_runner.VALID_TEST_CATEGORIES,
-            {"quick", "standard", "comprehensive", "full"},
+            {
+                "quick",
+                "standard",
+                "comprehensive",
+                "full",
+                "ffm-quick",
+                "ffm-standard",
+                "ffm-comprehensive",
+                "ffm-full",
+            },
         )
 
     def test_valid_category_accepted(self):

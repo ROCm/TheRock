@@ -187,6 +187,17 @@ jobs:
           choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ninja --version 1.13.1
 
+      # Build a fixed version of libuv from source, no matter the pytorch ref.
+      # gloo requires >= 1.26; v1.47.0 matches upstream's source build.
+      # https://github.com/pytorch/pytorch/blob/main/.ci/pytorch/windows/arm64/bootstrap_libuv.bat
+      - name: Build libuv from source for GLOO
+        run: |
+          git clone https://github.com/libuv/libuv.git -b v1.47.0 --depth 1
+          cmake -S libuv -B libuv/build -DBUILD_TESTING=OFF
+          cmake --build libuv/build --config Release
+          cmake --install libuv/build --prefix "${{ github.workspace }}/libuv-install"
+          echo "libuv_ROOT=${{ github.workspace }}/libuv-install" >> $GITHUB_ENV
+
       - name: Install sccache
         if: ${{ inputs.cache_type == 'sccache' }}
         run: |
@@ -421,7 +432,7 @@ jobs:
       matrix: ${{ steps.configure.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}

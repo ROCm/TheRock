@@ -119,6 +119,10 @@ submodules = []
 description = "Communication library submodules"
 submodules = []
 
+[source_sets.storage-libs]
+description = "Storage library submodules"
+submodules = []
+
 [source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
@@ -166,6 +170,11 @@ type = "per-arch"
 [build_stages.comm-libs]
 description = "Communication libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["comm-libs"]
+type = "generic"
+
+[build_stages.storage-libs]
+description = "Storage libraries (generic, single job parallel to math-libs)"
+artifact_groups = ["storage-libs"]
 type = "generic"
 
 [build_stages.debug-tools]
@@ -280,6 +289,12 @@ type = "generic"
 artifact_group_deps = ["hip-runtime"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["comm-libs", "rocm-systems"]
+
+[artifact_groups.storage-libs]
+description = "Storage libraries"
+type = "generic"
+artifact_group_deps = ["hip-runtime"]
+source_sets = ["storage-libs", "rocm-systems"]
 
 [artifact_groups.profiler-core]
 description = "Core profiling libraries and annotation support"
@@ -686,6 +701,14 @@ disable_platforms = ["windows"]
 artifact_group = "comm-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
+disable_platforms = ["windows"]
+
+# --- Storage Libraries ---
+
+[artifacts.hipfile]
+artifact_group = "storage-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "sysdeps", "sysdeps-util-linux"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
