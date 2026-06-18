@@ -34,6 +34,7 @@ cmd = [
     sys.executable,
     "-m",
     "pytest",
+    "-s",
     "tests/",
     "--log-cli-level=info",
     "--timeout=300",
