@@ -56,7 +56,7 @@ elif test_type == "regression":
     timeout = str(_PER_TEST_TIMEOUT_QUICK_SEC)
 
 # Make per-device adjustments
-ctest_parallelism = "2"
+ctest_parallelism = "1"
 if AMDGPU_FAMILIES == "gfx1153":
     ctest_parallelism = "1"
 

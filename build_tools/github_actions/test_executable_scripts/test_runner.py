@@ -99,7 +99,7 @@ SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 
 # CTest parallel jobs (use fewer in less capable platforms)
-ctest_parallel_count = 8
+ctest_parallel_count = 1
 if AMDGPU_FAMILIES and "gfx1152" in AMDGPU_FAMILIES:
     ctest_parallel_count = 4
 elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
