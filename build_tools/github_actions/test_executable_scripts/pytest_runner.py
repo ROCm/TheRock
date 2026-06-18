@@ -132,7 +132,9 @@ def collect_pytest_tests(test_paths, marker_expr, cwd, env):
     if marker_expr:
         cmd.extend(["-m", marker_expr])
 
-    logging.info(f"Collecting tests from {existing} with markers: {marker_expr or 'none'}")
+    logging.info(
+        f"Collecting tests from {existing} with markers: {marker_expr or 'none'}"
+    )
     result = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True)
     if result.returncode not in (0, 5):  # 5 == no tests collected
         logging.error("Failed to collect tests")
