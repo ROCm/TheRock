@@ -137,7 +137,9 @@ class RunTiming:
             "run_seconds": self.run_seconds,
             "total_seconds": self.total_seconds,
         }
-      
+
+
+@dataclass(frozen=True)
 class WorkflowRunSummary:
     """Compact source/ref summary for a workflow run."""
 
