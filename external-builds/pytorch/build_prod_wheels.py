@@ -981,15 +981,30 @@ def do_build_pytorch(
     AOTRITON_SUPPORTED_ARCH_PREFIXES = ("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
-    aotriton_unsupported_archs_for_version = []
+    # gfx1250: not yet supported by aotriton.
+    #   See: https://github.com/ROCm/TheRock/issues/5833
+    aotriton_unsupported_archs_for_version = ["gfx1250"]
     if not is_pytorch_2_11_or_later:
-        aotriton_unsupported_archs_for_version = ["gfx1152", "gfx1153"]
+        aotriton_unsupported_archs_for_version += ["gfx1152", "gfx1153"]
     rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
     has_aotriton_supported_arch = any(
         arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES)
         and arch not in aotriton_unsupported_archs_for_version
         for arch in rocm_arch_list
     )
+
+    # CK-based SDPA and GEMM kernels must be disabled when gfx1250 is present
+    # in the build (single-arch or multi-arch). Even though release/2.11_gfx1250
+    # generates CK tiles for gfx1250, the engineer recommendation is to keep
+    # USE_ROCM_CK_SDPA and USE_ROCM_CK_GEMM OFF until fully validated.
+    # See: https://github.com/ROCm/TheRock/issues/5833
+    CK_SDPA_GEMM_UNSUPPORTED_ARCHS = ("gfx1250",)
+    has_ck_sdpa_gemm_unsupported_arch = any(
+        arch and arch.startswith(CK_SDPA_GEMM_UNSUPPORTED_ARCHS)
+        for arch in rocm_arch_list
+    )
+    # CK is enabled only when NO unsupported arch is present in the build
+    has_ck_sdpa_gemm_supported_arch = not has_ck_sdpa_gemm_unsupported_arch
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
@@ -1055,6 +1070,18 @@ def do_build_pytorch(
         )
         print(
             f"Flash Attention and Memory efficiency enabled: {env['USE_FLASH_ATTENTION'] == 'ON'}"
+        )
+
+        use_ck_sdpa_gemm = "ON" if has_ck_sdpa_gemm_supported_arch else "OFF"
+        env.update(
+            {
+                "USE_ROCM_CK_SDPA": use_ck_sdpa_gemm,
+                "USE_ROCM_CK_GEMM": use_ck_sdpa_gemm,
+            }
+        )
+        print(
+            f"CK SDPA and GEMM enabled: {env['USE_ROCM_CK_SDPA'] == 'ON'}"
+            f" (archs: {rocm_arch_list})"
         )
 
     env["USE_ROCM"] = "ON"

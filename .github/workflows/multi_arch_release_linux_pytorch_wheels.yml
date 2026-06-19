@@ -141,7 +141,11 @@ jobs:
       actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
     with:
-      amdgpu_families: ${{ matrix.amdgpu_families }}
+      # For branches in GFX1250_PYTORCH_REFS (e.g. release/2.11_gfx1250),
+      # extra_amdgpu_families="gfx1250" is appended to the caller's amdgpu_families.
+      # All other branches use inputs.amdgpu_families unchanged.
+      # See: build_tools/github_actions/configure_pytorch_release_matrix.py
+      amdgpu_families: ${{ matrix.extra_amdgpu_families != '' && format('{0};{1}', inputs.amdgpu_families, matrix.extra_amdgpu_families) || inputs.amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
