@@ -425,16 +425,14 @@ sudo dnf install amdrocm-core-sdk
 
 ### Using ROCm from WSL
 
-When using ROCm from WSL, enable DXG detection before running ROCm
-applications:
+ROCm supports WSL via the DXG kernel interface. DXG detection is enabled by
+default as of rocm-systems@901f9a5 — no environment variable setup is required.
+
+To explicitly disable DXG detection, set:
 
 ```bash
-export HSA_ENABLE_DXG_DETECTION=1
+export HSA_ENABLE_DXG_DETECTION=0
 ```
-
-Native Linux packages installed inside WSL set this for future shells via
-`/etc/profile.d/rocm-wsl-rocdxg.sh`. For Python packages and tarballs, set it
-manually in your shell or startup files.
 
 ## Per-family releases
 
