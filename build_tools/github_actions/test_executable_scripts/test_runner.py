@@ -133,13 +133,13 @@ if test_component_job_name in ("rocsparse", "hipsparse") and (
     environ_vars["ROCSPARSE_TEST_VRAM_LOG"] = "1"
     environ_vars["HIPSPARSE_TEST_TRIM_POOL"] = "1"
     environ_vars["HIPSPARSE_TEST_VRAM_LOG"] = "1"
-    # Experiment (diagnostic): reset the whole device context after each test to
-    # check whether a full teardown (vs. per-test pool trim) changes the residual
-    # failures. hipDeviceReset() per test is very expensive (it reloads code
-    # objects on the next test), so scope the run to the bsrxmv cases (the
-    # operation that OOM'd on this family) to stay within the test step timeout.
-    environ_vars["ROCSPARSE_TEST_DEVICE_RESET"] = "1"
-    environ_vars["HIPSPARSE_TEST_DEVICE_RESET"] = "1"
+    # NOTE: the per-test hipDeviceReset() experiment was removed. It tore down
+    # the device context (and the loaded code objects) after the first test, so
+    # every subsequent rocsparse_create_handle() failed with hipErrorInvalidValue
+    # ("empty kernel scheduling failed") -- a reset artifact, not the real OOM.
+    # Run reset-free with pool trim + VRAM logging, scoped to the bsrxmv cases
+    # (the operation that first OOM'd on this family per ROCm/rocm-libraries#8592)
+    # to capture a clean per-test VRAM growth trace within the step timeout.
     environ_vars["GTEST_FILTER"] = "*bsrxmv*"
 
 # Component-specific ENV VARs/PATHs applied on top of defaults.
