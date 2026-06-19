@@ -22,6 +22,7 @@ GFX_META = "gfx_meta"
 # Splits comma-, semicolon-, or whitespace-separated arch tokens in one string.
 _GFX_ARCH_SPLIT_RE = re.compile(r"[,;\s]+")
 
+
 def set_artifacts_dir(path):
     """Set the artifacts directory for package building."""
     global _artifacts_dir
@@ -31,7 +32,6 @@ def set_artifacts_dir(path):
 def get_artifacts_dir():
     """Get the artifacts directory for package building."""
     return globals().get("_artifacts_dir")
-
 
 
 def normalize_target_list(
@@ -216,6 +216,7 @@ def is_packaging_disabled(pkg_info):
 
     return is_key_defined(pkg_info, "Disablepackaging")
 
+
 def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
     """Check if arch-specific artifact directories exist for a package.
 
@@ -241,6 +242,7 @@ def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
                     return True
     return False
 
+
 def is_gfxarch_package(pkg_info, enable_kpack=False):
     """Check whether the package is associated with a graphics architecture
 
@@ -260,18 +262,13 @@ def is_gfxarch_package(pkg_info, enable_kpack=False):
         if pkgname.endswith("-devel") and not is_meta_package(pkg_info):
             return False
 
-    is_gfxarch = is_key_defined(pkg_info, "Gfxarch")
-
     # In kpack mode, verify arch-specific artifacts exist; fallback to False if not
-    #if is_gfxarch and enable_kpack:
     if enable_kpack:
         artifacts_dir = get_artifacts_dir()
-        if artifacts_dir and not _has_arch_specific_artifacts(pkg_info, artifacts_dir):
-            return False
-        if artifacts_dir and _has_arch_specific_artifacts(pkg_info, artifacts_dir):
-            return True
+        if artifacts_dir:
+            return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
 
-    return is_gfxarch
+    return is_key_defined(pkg_info, "Gfxarch")
 
 
 def get_package_info(pkgname, raise_if_missing=True):
