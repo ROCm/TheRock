@@ -101,14 +101,14 @@ An empty or one-line description makes it hard for reviewers to understand the c
 
 **Required tracking reference** — include **one** of the following lines:
 
-| Field      | Example                                                        |
-| ---------- | -------------------------------------------------------------- |
-| `JIRA ID`  | `JIRA ID : AITESTAUTO-6039`                                    |
-| `JIRA ID`  | `JIRA ID - #330`                                               |
-| `JIRA ID`  | `JIRA ID #330`                                                 |
-| `ISSUE ID` | `ISSUE ID : AITESTUTO-3334`                                    |
-| `ISSUE ID` | `ISSUE ID - AITESTAUTO-3433`                                   |
-| `ISSUE ID` | `ISSUE ID : https://github.com/ROCm/TheRock-Infra/issues/1234` |
+| Field      | Example                                                  |
+| ---------- |----------------------------------------------------------|
+| `JIRA ID`  | `JIRA ID : TESTAUTO-6039`                                |
+| `JIRA ID`  | `JIRA ID - #330`                                         |
+| `JIRA ID`  | `JIRA ID #330`                                           |
+| `ISSUE ID` | `ISSUE ID : TESTUTO-3334`                                |
+| `ISSUE ID` | `ISSUE ID - TESTAUTO-3433`                               |
+| `ISSUE ID` | `ISSUE ID : https://github.com/abc/abc_repo/issues/1234` |
 
 > **Note:** The separator is **optional** and may be `:` or `-` (`JIRA ID #330`, `JIRA ID : #330`, and `JIRA ID - #330` all work). Each field accepts a JIRA key (`PREFIX-<number>` — any project), a number (with or without `#`), or a link.
 
