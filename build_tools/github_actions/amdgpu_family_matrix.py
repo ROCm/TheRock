@@ -46,13 +46,12 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 
 # Build runner configuration for Linux builds
-# Uses weighted distribution: 50% Azure, 50% AWS
+# Uses weighted distribution: 100% AWS
 # Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 0.5},
-            {"label": "aws-linux-scale-rocm-prod", "weight": 0.5},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -108,7 +107,6 @@ all_build_variants = {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
-            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -246,6 +244,7 @@ amdgpu_family_info_matrix_presubmit = {
         },
     },
 }
+
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
 amdgpu_family_info_matrix_postsubmit = {
@@ -398,6 +397,18 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            # PyTorch builds are included — workflow_dispatch can be used
+            # to trigger manually; nightly schedule runs both ROCm stack
+            # and PyTorch builds.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },

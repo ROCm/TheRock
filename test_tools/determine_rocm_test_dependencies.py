@@ -33,7 +33,7 @@ def parse_cmake_test_subprojects(therock_dir):
         content = cmake_file.read_text()
 
         # Find all therock_cmake_subproject_declare blocks
-        pattern = r"therock_cmake_subproject_declare\s*\(\s*(\w+)(.*?)\)"
+        pattern = r"therock_cmake_subproject_declare\s*\(\s*([\w-]+)(.*?)\)"
 
         for match in re.finditer(pattern, content, re.DOTALL):
             subproject_name = match.group(1).lower()
@@ -43,7 +43,7 @@ def parse_cmake_test_subprojects(therock_dir):
             # Match TEST_SUBPROJECTS with optional list of dependencies
             # Empty TEST_SUBPROJECTS is valid (only tests itself)
             test_subprojects_match = re.search(
-                r"TEST_SUBPROJECTS(?:\s+((?:\w+\s*)+))?", block_content
+                r"TEST_SUBPROJECTS(?:\s+((?:[\w-]+\s*)+))?", block_content
             )
 
             if test_subprojects_match:
