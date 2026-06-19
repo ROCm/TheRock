@@ -207,21 +207,24 @@ def is_packaging_disabled(pkg_info):
 
 
 def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
-    """Check if arch-specific artifact directories exist for a package.
+    """
+    Check if arch-specific artifact directories exist for a package.
 
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-    artifacts_dir (Path): Directory where artifacts are saved.
+    Args:
+        pkg_info (dict): A dictionary containing package details.
+        artifacts_dir (Path): Directory where artifacts are saved.
 
     Returns:
-    bool: True if any arch-specific artifact directory exists, False otherwise.
+        bool: True if any arch-specific artifact directory exists, False otherwise.
     """
     artifactory = pkg_info.get("Artifactory")
     if not artifactory:
         return False
 
     for artifact in artifactory:
-        artifact_prefix = artifact["Artifact"]
+        artifact_prefix = artifact.get("Artifact")
+        if not artifact_prefix:
+            continue
         for subdir in artifact.get("Artifact_Subdir", []):
             for component in subdir.get("Components", []):
                 # Check for any gfx-specific directory (not generic)
