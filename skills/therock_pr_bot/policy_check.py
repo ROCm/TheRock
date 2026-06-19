@@ -911,7 +911,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument(
         "--policy",
-        default=".github/therock_pr_bot/policy.yml",
+        default="skills/therock_pr_bot/policy.yml",
         help="Path to policy.yml",
     )
     parser.add_argument(
