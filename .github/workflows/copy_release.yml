@@ -22,8 +22,23 @@ on:
         description: Copy 'torch' packages in addition to 'rocm' packages?
         type: boolean
         default: false
+      include_jax:
+        description: Copy 'jax' packages in addition to 'rocm' packages?
+        type: boolean
+        default: false
 permissions:
   contents: read
+
+run-name: >-
+  Copy nightly -> dev |
+  rocm ${{ inputs.rocm_version }} |
+  py ${{ inputs.python_version }} |
+  extras: ${{
+    inputs.include_torch && inputs.include_jax && 'PyTorch + JAX' ||
+    inputs.include_torch && 'PyTorch' ||
+    inputs.include_jax && 'JAX' ||
+    'none'
+  }}
 
 jobs:
   copy_python_packages:
@@ -56,13 +71,25 @@ jobs:
           aws s3 cp \
             s3://therock-nightly-python/v4/whl/ \
             s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*"  --include "rocm*${{ inputs.rocm_version }}*"
+            --recursive --exclude "*" \
+            --include "rocm*${{ inputs.rocm_version }}*"
 
-      # TODO: also copy apex, triton, etc.?
       - name: Copy torch wheels between S3 buckets
         if: ${{ inputs.include_torch }}
         run: |
           aws s3 cp \
             s3://therock-nightly-python/v4/whl/ \
             s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*"  --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+            --recursive --exclude "*" \
+            --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
+            --include "apex*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
+            --include "triton*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+
+      - name: Copy JAX wheels between S3 buckets
+        if: ${{ inputs.include_jax }}
+        run: |
+          aws s3 cp \
+            s3://therock-nightly-python/v4/whl/ \
+            s3://therock-dev-python/v4/whl/ \
+            --recursive --exclude "*" \
+            --include "jax*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
