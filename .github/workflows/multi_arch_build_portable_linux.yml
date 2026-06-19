@@ -94,7 +94,14 @@ jobs:
   # ==========================================================================
   runtime-tests:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'runtime-tests'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -118,7 +125,14 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'wsl-rocdxg') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'wsl-rocdxg'))
+      }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
@@ -141,7 +155,14 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'math-libs') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'math-libs'))
+      }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -178,7 +199,14 @@ jobs:
   # ==========================================================================
   comm-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'comm-libs') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'comm-libs'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -204,7 +232,14 @@ jobs:
   # ==========================================================================
   storage-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'storage-libs') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'storage-libs'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -229,7 +264,14 @@ jobs:
   # ==========================================================================
   debug-tools:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'debug-tools'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -253,7 +295,14 @@ jobs:
   # ==========================================================================
   dctools-core:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'dctools-core') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'dctools-core'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -277,7 +326,14 @@ jobs:
   # ==========================================================================
   profiler-apps:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'profiler-apps') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'profiler-apps'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -301,7 +357,14 @@ jobs:
   # ==========================================================================
   media-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'media-libs') &&
+        (inputs.external_repo_config == '' ||
+         fromJSON(inputs.external_repo_config).build_stages == '' ||
+         contains(fromJSON(inputs.external_repo_config).build_stages, 'media-libs'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:

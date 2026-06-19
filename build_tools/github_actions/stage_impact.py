@@ -274,6 +274,36 @@ class StageImpactAnalyzer:
 
         return expanded
 
+    def required_stages_for_component(self, submodule_name: str) -> list[str]:
+        """Return all build stages required to build the given submodule.
+
+        Unlike downstream impact analysis (which expands from a changed stage to
+        everything that consumes it), this walks *upstream*: from the stage that
+        owns the submodule back to every stage whose artifacts it depends on.
+
+        Example: "rocgdb" owns "debug-tools", which depends on artifacts from
+        "compiler-runtime". Returns ["compiler-runtime", "debug-tools"].
+
+        Returns [] if the submodule is unknown — callers should treat [] as
+        "no restriction; run all stages".
+        """
+        source_set = self.topology.get_source_set_for_submodule(submodule_name)
+        if source_set is None:
+            return []
+        owning_stages = list(
+            self.topology.get_source_set_to_stages().get(source_set.name, [])
+        )
+        if not owning_stages:
+            return []
+
+        artifact_to_stages = self.topology.get_artifact_to_producer_stages()
+        required: set[str] = set(owning_stages)
+        for stage_name in owning_stages:
+            for artifact_name in self.topology.get_inbound_artifacts(stage_name):
+                for producer_stage in artifact_to_stages.get(artifact_name, []):
+                    required.add(producer_stage)
+        return sorted(required)
+
 
 def analyze_stage_impact(
     changed_inputs: Sequence[str],
