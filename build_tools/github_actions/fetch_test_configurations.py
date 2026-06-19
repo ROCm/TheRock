@@ -328,15 +328,14 @@ test_matrix = {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
         # Temporary mitigation for ROCm/rocm-libraries#8592: the gfx110X
         # Windows V710 MxGPU partition OOMs on the pre_checkin sparse configs
-        # that the test_runner.py (standard) path now runs. Keep Windows on
-        # the pre-#4490 legacy script (last green) until the OOM is fixed;
-        # Linux stays on test_runner.py for full coverage.
-        "test_script_by_platform": {
-            "windows": f"python {_get_script_path('test_hipsparse.py')}",
-        },
+        # that the test_runner.py (standard) path runs, cascading into mass
+        # hipErrorOutOfMemory failures. Route sparse back to the pre-#4490
+        # legacy script (the last green basis, which already carries the
+        # gfx110X ignore list) until the underlying OOM is fixed. Restore
+        # test_runner.py afterwards.
+        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -347,13 +346,11 @@ test_matrix = {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
         # Temporary mitigation for ROCm/rocm-libraries#8592 (see hipsparse
-        # above). Keep Windows on the pre-#4490 legacy script; Linux stays on
-        # test_runner.py.
-        "test_script_by_platform": {
-            "windows": f"python {_get_script_path('test_rocsparse.py')}",
-        },
+        # above): route sparse back to the pre-#4490 legacy script until the
+        # underlying gfx110X Windows OOM is fixed. Restore test_runner.py
+        # afterwards.
+        "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -830,15 +827,6 @@ def run():
                 continue
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
-            # Optional per-platform test_script override. Temporary mitigation
-            # for ROCm/rocm-libraries#8592: Windows sparse runs the pre-#4490
-            # legacy script while Linux stays on test_runner.py. Pop the helper
-            # key so it does not leak into the GHA matrix JSON.
-            test_script_by_platform = job_config_data.pop(
-                "test_script_by_platform", None
-            )
-            if test_script_by_platform and platform in test_script_by_platform:
-                job_config_data["test_script"] = test_script_by_platform[platform]
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
