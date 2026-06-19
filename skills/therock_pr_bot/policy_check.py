@@ -149,9 +149,7 @@ def load_policy(policy_path: Path) -> Policy:
     unit_test_patterns = [
         str(p) for p in (unit_cfg.get("test_file_patterns", []) or [])
     ]
-    unit_test_exempt_paths = [
-        str(p) for p in (unit_cfg.get("exempt_paths", []) or [])
-    ]
+    unit_test_exempt_paths = [str(p) for p in (unit_cfg.get("exempt_paths", []) or [])]
 
     required_checks = [str(x) for x in (checks.get("required_check_runs", []) or [])]
 
@@ -407,10 +405,7 @@ def ensure_unit_tests(
             continue
 
         # Files under exempt paths never require an accompanying unit test.
-        if any(
-            _matches_forbidden(filename, pat)
-            for pat in policy.unit_test_exempt_paths
-        ):
+        if any(_matches_forbidden(filename, pat) for pat in policy.unit_test_exempt_paths):
             continue
 
         base = Path(filename).name
