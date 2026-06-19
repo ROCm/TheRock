@@ -9,4 +9,7 @@ exclude = [
 include = [
   "bin/miopen_plugin*_test*",
   "bin/miopen_plugin/CTestTestfile.cmake",
+  # Test config TOMLs (e.g. MIOPEN_ENGINE.toml) consumed by the cross-provider
+  # integration suite (hipdnn_integration_tests --test-config).
+  "bin/miopen_plugin/*.toml",
 ]

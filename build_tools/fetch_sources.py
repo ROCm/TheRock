@@ -20,18 +20,24 @@ import hashlib
 from pathlib import Path
 import platform
 import shlex
-import shutil
 import subprocess
 import sys
 from typing import List
 import os
 
+import fetch_dvc_artifacts
 from _therock_utils.git_mirrors import MIRROR_DIR_ENV, url_to_mirror_relpath
+from _therock_utils.branch_config import (
+    get_source_sets_for_artifact_groups,
+    load_branch_config,
+)
+from _therock_utils.build_topology import BuildTopology, ExternalGitSource
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
+BRANCH_CONFIG_PATH = THEROCK_DIR / "BRANCH_CONFIG.json"
 ALWAYS_SUBMODULE_PATHS: list[str] = []
 
 
@@ -258,8 +264,6 @@ def _update_submodules_with_reference(
 
 def get_projects_from_topology(stage: str) -> List[str]:
     """Get submodule names for a build stage from BUILD_TOPOLOGY.toml."""
-    from _therock_utils.build_topology import BuildTopology
-
     if not TOPOLOGY_PATH.exists():
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
 
@@ -271,8 +275,6 @@ def get_projects_from_topology(stage: str) -> List[str]:
 
 def get_available_stages() -> List[str]:
     """Get list of available build stages from BUILD_TOPOLOGY.toml."""
-    from _therock_utils.build_topology import BuildTopology
-
     if not TOPOLOGY_PATH.exists():
         return []
 
@@ -280,24 +282,106 @@ def get_available_stages() -> List[str]:
     return [s.name for s in topology.get_build_stages()]
 
 
-def parse_nested_submodules(input):
-    """Parse nested submodules string like 'iree:flatcc,something' into ("iree", ["flatcc", "something"])."""
-    project, nested = input.split(":", 1)
-    nested_list = [n.strip() for n in nested.split(",")] if nested else []
-    return (project, nested_list)
+def get_topology() -> BuildTopology:
+    """Load BUILD_TOPOLOGY.toml."""
+    if not TOPOLOGY_PATH.exists():
+        raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+    return BuildTopology(str(TOPOLOGY_PATH))
 
 
-def get_enabled_projects(args) -> List[str]:
-    """Get list of submodule names to fetch.
+def parse_source_set_args(source_sets: list[str] | None) -> list[str]:
+    """Parse source set CLI args, accepting spaces and commas."""
+    if not source_sets:
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in source_sets:
+        for name in value.split(","):
+            name = name.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            result.append(name)
+    return result
+
+
+def _append_source_set_contents(
+    topology: BuildTopology,
+    source_set_names: list[str],
+    projects_by_name: dict[str, str],
+    external_sources_by_path: dict[str, ExternalGitSource],
+    *,
+    current_platform: str | None = None,
+) -> None:
+    """Append the submodules and external sources from source sets."""
+    for source_set_name in source_set_names:
+        if source_set_name not in topology.source_sets:
+            raise ValueError(f"Source set '{source_set_name}' not found")
+        source_set = topology.source_sets[source_set_name]
+        if current_platform and current_platform in source_set.disable_platforms:
+            continue
+        for submodule in source_set.submodules:
+            if submodule.name not in projects_by_name:
+                projects_by_name[submodule.name] = submodule.name
+        for external_source in source_set.external_git_sources:
+            if external_source.path not in external_sources_by_path:
+                external_sources_by_path[external_source.path] = external_source
+
+
+def get_enabled_sources(args) -> tuple[List[str], list[ExternalGitSource]]:
+    """Get submodule and external git sources to fetch.
 
     If --stage is provided, uses BUILD_TOPOLOGY.toml to determine submodules.
     Otherwise, uses the legacy --include-* flags.
     """
+    topology = get_topology()
+    branch_config = load_branch_config(BRANCH_CONFIG_PATH, topology)
+    current_platform = platform.system().lower()
+    explicit_source_sets = parse_source_set_args(args.source_sets)
+    projects_by_name: dict[str, str] = {}
+    external_sources_by_path: dict[str, ExternalGitSource] = {}
+
     # Stage-aware mode: use topology
     if args.stage:
-        projects = get_projects_from_topology(args.stage)
+        stage_source_sets = [
+            source_set.name
+            for source_set in topology.get_source_sets_for_stage(
+                args.stage, platform=current_platform
+            )
+        ]
+        stage = topology.build_stages[args.stage]
+        branch_source_sets = get_source_sets_for_artifact_groups(
+            branch_config, stage.artifact_groups
+        )
+        _append_source_set_contents(
+            topology,
+            stage_source_sets + branch_source_sets + explicit_source_sets,
+            projects_by_name,
+            external_sources_by_path,
+            current_platform=current_platform,
+        )
+        # Apply --skip-submodules filter
+        skip_set = set(args.skip_submodules or [])
+        if skip_set:
+            original_count = len(projects_by_name)
+            projects_by_name = {
+                k: v for k, v in projects_by_name.items() if k not in skip_set
+            }
+            skipped_count = original_count - len(projects_by_name)
+            if skipped_count > 0:
+                log(
+                    f"Skipped {skipped_count} submodule(s) via --skip-submodules: "
+                    f"{sorted(skip_set)}"
+                )
+        projects = list(projects_by_name)
         log(f"Stage '{args.stage}' requires submodules: {projects}")
-        return projects
+        external_sources = list(external_sources_by_path.values())
+        if external_sources:
+            log(
+                f"Stage '{args.stage}' requires external git sources: "
+                f"{[source.name for source in external_sources]}"
+            )
+        return projects, external_sources
 
     # Legacy flag-based mode
     projects = []
@@ -315,50 +399,106 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.ml_framework_projects)
     if args.include_media_libs:
         projects.extend(args.media_libs_projects)
-    if args.include_iree_libs:
-        projects.extend(args.iree_libs_projects)
     if args.include_math_libraries:
         projects.extend(args.math_library_projects)
-    return projects
+
+    for project in projects:
+        if project not in projects_by_name:
+            projects_by_name[project] = project
+
+    _append_source_set_contents(
+        topology,
+        branch_config.source_sets + explicit_source_sets,
+        projects_by_name,
+        external_sources_by_path,
+        current_platform=current_platform,
+    )
+    # Apply --skip-submodules filter
+    skip_set = set(args.skip_submodules or [])
+    if skip_set:
+        original_count = len(projects_by_name)
+        projects_by_name = {
+            k: v for k, v in projects_by_name.items() if k not in skip_set
+        }
+        skipped_count = original_count - len(projects_by_name)
+        if skipped_count > 0:
+            log(
+                f"Skipped {skipped_count} submodule(s) via --skip-submodules: "
+                f"{sorted(skip_set)}"
+            )
+    return list(projects_by_name), list(external_sources_by_path.values())
 
 
-def fetch_nested_submodules(args, projects):
-    """Fetch nested submodules for projects specified in --nested-submodules."""
-    update_args = []
-    if args.depth:
-        update_args += ["--depth", str(args.depth)]
-    if args.progress:
-        update_args += ["--progress"]
-    if args.jobs:
-        update_args += ["--jobs", str(args.jobs)]
-    if args.remote:
-        update_args += ["--remote"]
+def fetch_external_git_sources(
+    args: argparse.Namespace, external_sources: list[ExternalGitSource]
+) -> None:
+    """Fetch external git sources and check them out at their pinned commits."""
+    if not external_sources:
+        return
 
-    for parent, nested_submodules in dict(args.nested_submodules).items():
-        if len(nested_submodules) == 0:
-            continue
+    reference_dir = resolve_reference_dir(args)
+    for source in external_sources:
+        _fetch_one_external_git_source(args, source, reference_dir)
 
-        # Skip if parent project wasn't fetched
-        if parent not in projects:
-            continue
 
-        # Fetch the nested submodules
-        parent_dir = THEROCK_DIR / get_submodule_path(parent)
-        nested_submodule_paths = [
-            get_submodule_path(nested_submodule, cwd=parent_dir)
-            for nested_submodule in nested_submodules
-        ]
+def _fetch_one_external_git_source(
+    args: argparse.Namespace,
+    source: ExternalGitSource,
+    reference_dir: Path | None,
+) -> None:
+    source_dir = THEROCK_DIR / source.path
+    git_dir = source_dir / ".git"
+    mirror = (
+        _resolve_mirror_path(reference_dir, source.origin) if reference_dir else None
+    )
+
+    if git_dir.exists():
+        log(f"Updating external git source {source.name} in {source.path}")
         run_command(
-            ["git", "submodule", "update", "--init"]
-            + update_args
-            + ["--"]
-            + nested_submodule_paths,
-            cwd=parent_dir,
+            ["git", "remote", "set-url", "origin", source.origin], cwd=source_dir
         )
+        fetch_cmd: list[str | Path] = ["git", "fetch"]
+        if args.depth:
+            fetch_cmd += ["--depth", str(args.depth)]
+        if args.progress:
+            fetch_cmd += ["--progress"]
+        fetch_cmd += ["origin"]
+        run_command(fetch_cmd, cwd=source_dir)
+    else:
+        if source_dir.exists() and any(source_dir.iterdir()):
+            raise RuntimeError(
+                f"External source path {source_dir} exists but is not a git checkout"
+            )
+        source_dir.parent.mkdir(parents=True, exist_ok=True)
+        clone_cmd: list[str | Path] = ["git", "clone", "--no-checkout"]
+        if args.depth:
+            clone_cmd += ["--depth", str(args.depth)]
+        if args.progress:
+            clone_cmd += ["--progress"]
+        if mirror:
+            clone_cmd += ["--reference", mirror]
+            log(f"  {source.name}: using reference {mirror}")
+        clone_cmd += [source.origin, source_dir]
+        try:
+            run_command(clone_cmd, cwd=THEROCK_DIR)
+        except subprocess.CalledProcessError:
+            if not mirror:
+                raise
+            log(
+                f"  WARNING: --reference clone failed for {source.name}, "
+                f"retrying without reference..."
+            )
+            clone_cmd = [
+                arg for arg in clone_cmd if arg != "--reference" and arg != mirror
+            ]
+            run_command(clone_cmd, cwd=THEROCK_DIR)
+
+    run_command(["git", "checkout", "--detach", source.commit], cwd=source_dir)
+    run_command(["git", "reset", "--hard", source.commit], cwd=source_dir)
 
 
 def run(args):
-    projects = get_enabled_projects(args)
+    projects, external_sources = get_enabled_sources(args)
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
         get_submodule_path(project) for project in projects
     ]
@@ -373,39 +513,38 @@ def run(args):
     if args.remote:
         update_args += ["--remote"]
     if args.update_submodules:
-        reference_dir = resolve_reference_dir(args)
-        if reference_dir:
-            log(f"Using reference directory: {reference_dir}")
-            _update_submodules_with_reference(
-                submodule_paths,
-                update_args,
-                reference_dir,
-                jobs=args.jobs if args.jobs is not None else 4,
-            )
-        else:
-            run_command(
-                ["git", "submodule", "update", "--init"]
-                + update_args
-                + ["--"]
-                + submodule_paths,
-                cwd=THEROCK_DIR,
-            )
+        if submodule_paths:
+            reference_dir = resolve_reference_dir(args)
+            if reference_dir:
+                log(f"Using reference directory: {reference_dir}")
+                _update_submodules_with_reference(
+                    submodule_paths,
+                    update_args,
+                    reference_dir,
+                    jobs=args.jobs if args.jobs is not None else 4,
+                )
+            else:
+                run_command(
+                    ["git", "submodule", "update", "--init"]
+                    + update_args
+                    + ["--"]
+                    + submodule_paths,
+                    cwd=THEROCK_DIR,
+                )
+        fetch_external_git_sources(args, external_sources)
     if args.dvc_projects:
-        pull_large_files(args.dvc_projects, projects)
-
-    # Fetch nested submodules
-    if args.update_submodules:
-        fetch_nested_submodules(args, projects)
+        pull_large_files(args.dvc_projects, projects, jobs=args.jobs)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
     # then meaningless. Here on each fetch, we reset the flag so that if
     # patches are aged out, the tree is restored to normal.
     submodule_paths = [get_submodule_path(name) for name in projects]
-    run_command(
-        ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
-        cwd=THEROCK_DIR,
-    )
+    if submodule_paths:
+        run_command(
+            ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
+            cwd=THEROCK_DIR,
+        )
 
     # Remove any stale .smrev files.
     remove_smrev_files(args, projects)
@@ -414,30 +553,26 @@ def run(args):
         apply_patches(args, projects)
 
 
-def pull_large_files(dvc_projects, projects):
+def pull_large_files(dvc_projects, projects, jobs=None):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
         return
-    dvc_missing = shutil.which("dvc") is None
-    if dvc_missing:
-        if is_windows():
-            print("Could not find `dvc` on PATH so large files could not be fetched")
-            print("Visit https://dvc.org/doc/install for installation instructions.")
-            sys.exit(1)
-        else:
-            print("`dvc` not found, skipping large file pull on Linux.")
-            return
+    pull_jobs = jobs if jobs is not None else fetch_dvc_artifacts.DEFAULT_JOBS
     for project in dvc_projects:
         if not project in projects:
             continue
         submodule_path = get_submodule_path(project)
         project_dir = THEROCK_DIR / submodule_path
         dvc_config_file = project_dir / ".dvc" / "config"
-        if dvc_config_file.exists():
-            print(f"dvc detected in {project_dir}, running dvc pull")
-            run_command(["dvc", "pull"], cwd=project_dir)
-        else:
+        if not dvc_config_file.exists():
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
+            continue
+        print(f"dvc config detected in {project_dir}, fetching large files")
+        result = fetch_dvc_artifacts.pull(project_dir, jobs=pull_jobs)
+        print(
+            f"  done: fetched={result.fetched} "
+            f"cached={result.cached} skipped={result.skipped}"
+        )
 
 
 def remove_smrev_files(args, projects):
@@ -453,9 +588,11 @@ def remove_smrev_files(args, projects):
 def apply_patches(args, projects):
     if not args.patch_tag:
         log("Not patching (no --patch-tag specified)")
+        return
     patch_version_dir: Path = PATCHES_DIR / args.patch_tag
     if not patch_version_dir.exists():
-        log(f"ERROR: Patch directory {patch_version_dir} does not exist")
+        log(f"No patch directory {patch_version_dir} exists. Skipping patches.")
+        return
     for patch_project_dir in patch_version_dir.iterdir():
         log(f"* Processing project patch directory {patch_project_dir}:")
         # Check that project patch directory was included
@@ -485,6 +622,7 @@ def apply_patches(args, projects):
                 "user.email=therockbot@amd.com",
                 "am",
                 "--whitespace=nowarn",
+                "--no-gpg-sign",
             ]
             + patch_files,
             cwd=project_dir,
@@ -595,6 +733,20 @@ def main(argv):
         action="store_true",
         help="List available build stages and their submodules, then exit",
     )
+    parser.add_argument(
+        "--source-sets",
+        nargs="+",
+        default=[],
+        help=(
+            "Additional source sets to fetch. Accepts space-separated names or "
+            "comma-separated lists."
+        ),
+    )
+    parser.add_argument(
+        "--list-source-sets",
+        action="store_true",
+        help="List available source sets and their sources, then exit",
+    )
 
     # Reference repos for faster submodule clones
     parser.add_argument(
@@ -650,24 +802,6 @@ def main(argv):
         default=None,
     )
     parser.add_argument(
-        "--nested-submodules",
-        nargs="+",
-        type=parse_nested_submodules,
-        default=[
-            (
-                "iree",
-                [
-                    "third_party/flatcc",
-                    "third_party/benchmark",
-                    "third_party/llvm-project",
-                    "third_party/torch-mlir",
-                    "third_party/printf",
-                ],
-            )
-        ],
-        help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
-    )
-    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -710,16 +844,20 @@ def main(argv):
         help="Include media projects that are part of ROCM",
     )
     parser.add_argument(
-        "--include-iree-libs",
-        default=False,
-        action=argparse.BooleanOptionalAction,
-        help="Include IREE and related libraries",
-    )
-    parser.add_argument(
         "--include-math-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
+        "--skip-submodules",
+        nargs="+",
+        default=[],
+        help=(
+            "Submodule names to skip (e.g., 'rocm-libraries rocm-systems'). "
+            "These will not be fetched regardless of stage or source set configuration. "
+            "Useful for external repo builds where the submodule is checked out separately."
+        ),
     )
     parser.add_argument(
         "--system-projects",
@@ -760,15 +898,6 @@ def main(argv):
         ),
     )
     parser.add_argument(
-        "--iree-libs-projects",
-        nargs="+",
-        type=str,
-        default=[
-            "iree",
-            "fusilli",
-        ],
-    )
-    parser.add_argument(
         # projects that use DVC to manage large files
         "--dvc-projects",
         nargs="+",
@@ -801,21 +930,14 @@ def main(argv):
         "--math-library-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "libhipcxx",
-            ]
-        ),
+        default=[
+            "libhipcxx",
+        ],
     )
     args = parser.parse_args(argv)
 
     # Handle --list-stages
     if args.list_stages:
-        from _therock_utils.build_topology import BuildTopology
-
         if not TOPOLOGY_PATH.exists():
             print(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
             sys.exit(1)
@@ -830,6 +952,36 @@ def main(argv):
             print(
                 f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
             )
+            print()
+        sys.exit(0)
+
+    # Handle --list-source-sets
+    if args.list_source_sets:
+        if not TOPOLOGY_PATH.exists():
+            print(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+            sys.exit(1)
+
+        topology = BuildTopology(str(TOPOLOGY_PATH))
+        print("Available source sets:\n")
+        for source_set in topology.get_source_sets():
+            submodule_names = [s.name for s in source_set.submodules]
+            external_sources = [
+                f"{s.name} ({s.origin} @ {s.commit} -> {s.path})"
+                for s in source_set.external_git_sources
+            ]
+            print(f"  {source_set.name}:")
+            print(f"    {source_set.description}")
+            print(
+                f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
+            )
+            print(
+                "    External git sources: "
+                f"{', '.join(external_sources) if external_sources else '(none)'}"
+            )
+            if source_set.disable_platforms:
+                print(
+                    f"    Disabled platforms: {', '.join(source_set.disable_platforms)}"
+                )
             print()
         sys.exit(0)
 

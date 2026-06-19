@@ -3,6 +3,10 @@
 TheRock aims to support as many subprojects as possible on "native" Windows
 (as opposed to WSL 1 or WSL 2) using standard build tools like MSVC.
 
+> [!NOTE]
+> For the WSL-specific ROCDXG CI stage, see
+> [WSL ROCDXG CI Stage](wsl_rocdxg.md).
+
 > [!WARNING]
 > While Windows source builds of TheRock (including PyTorch!) are working for
 > some expert developers, this support is relatively new and is not yet mature.
@@ -50,7 +54,7 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo (hip-tests)](https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests)                              | rocm-systems   | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/rocm-systems/tree/develop/projects/clr)                                                    | rocm-systems   | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |                |           |                                               |
-| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ❌        | Unsupported                                   |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ✅        |                                               |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                   |
 | debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
@@ -83,7 +87,7 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (BLAS)    | [hipSOLVER](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsolver)                                      | rocm-libraries | ✅        |                                               |
 | math-libs (BLAS)    | [hipBLAS](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas)                                          | rocm-libraries | ✅        |                                               |
 | math-libs           | [rocWMMA](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma)                                          | rocm-libraries | ✅        |                                               |
-| math-libs           | [libhipcxx](https://github.com/ROCm/libhipcxx)                                                                           | standalone     | ❌        | Unsupported                                   |
+| math-libs           | [libhipcxx](https://github.com/ROCm/libhipcxx)                                                                           | standalone     | ✅        |                                               |
 |                     |                                                                                                                          |                |           |                                               |
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen](https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen)                                            | rocm-libraries | ✅        |                                               |
@@ -179,7 +183,7 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
-> winget install cmake -v 3.31.0
+> winget install cmake
 > winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
@@ -190,7 +194,10 @@ If you prefer to install tools manually, you will need:
   (Using either "Visual Studio" or "Build Tools for Visual Studio"),
   including these components:
 
-  - MSVC
+  - MSVC **version 19.43+** (Visual Studio 2022 **17.13+**). Older versions
+    will fail at link time because prebuilt libraries reference STL internals
+    introduced in 19.43.
+    See [Issue#5029](https://github.com/ROCm/TheRock/issues/5029).
   - C++ CMake tools for Windows
   - C++ ATL
   - C++ AddressSanitizer (optional)
@@ -199,8 +206,7 @@ If you prefer to install tools manually, you will need:
 
   - With "Use Git and optional Unix tools from the Windows Command Prompt" as certain build scripts use Bash.
 
-- CMake: https://cmake.org/download/, version < 4.0.0
-  (see [Issue#318](https://github.com/ROCm/TheRock/issues/318))
+- CMake: https://cmake.org/download/
 
 - Ninja: https://ninja-build.org/
 
@@ -208,6 +214,8 @@ If you prefer to install tools manually, you will need:
   https://github.com/mozilla/sccache
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
+
+- nasm, recommended from Strawberry Perl: https://strawberryperl.com/
 
 - patch, available in Strawberry Perl or Git.
 
@@ -277,22 +285,9 @@ options you may want to set.
 
 ```bash
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
-
-# If iterating and wishing to cache, add these:
-#  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-#  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-#  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
 ```
 
-> [!TIP]
-> ccache [does not support](https://github.com/ccache/ccache/issues/1040)
-> MSVC's `/Zi` flag which may be set by default when a project (e.g. LLVM) opts
-> in to
-> [policy CMP0141](https://cmake.org/cmake/help/latest/policy/CMP0141.html).
-> Setting
-> [`-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded`](https://cmake.org/cmake/help/latest/variable/CMAKE_MSVC_DEBUG_INFORMATION_FORMAT.html)
-> instructs CMake to compile with `/Z7` or equivalent, which is supported by
-> ccache.
+If iterating and wishes to use ccache, see [CCache usage on Windows](../../README.md#ccache-usage-on-windows)
 
 > [!TIP]
 > Ensure that MSVC is used by looking for lines like these in the logs:
@@ -308,8 +303,7 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 ### CMake build usage
 
 ```bash
-cmake --build build --target therock-dist
-cmake --build build --target therock-archives
+cmake --build build --target therock-artifacts therock-dist
 ```
 
 This will start building using MSVC. Once the amd-llvm subproject is built,
@@ -324,7 +318,7 @@ outputs.
 #### Building ROCm Python wheels
 
 To build Python wheels, you will need an "artifacts" directory, either from a
-source build of `therock-archives` (see above) or by running the
+source build of `therock-artifacts` (see above) or by running the
 [`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
 artifacts from a CI run.
 
@@ -367,6 +361,13 @@ files now exist.
 Errors like this indicate that the value of `-DTHEROCK_AMDGPU_FAMILIES=` or
 `-DTHEROCK_AMDGPU_TARGETS=` is currently unsupported by one or more libraries.
 
+#### `lld-link: m.lib does not exist`
+
+Since msvc 14+, m.lib has become an implicit dependency and should not be linked
+(it does not exist). TheRock does not link it, but `cmake` could decide on its own to try
+and link it because it found a libm.a in the path, coming from leftover installs on the
+build machine, like a w64devkit or msys2 install.
+
 #### `lld-link: error: duplicate symbol`
 
 Several developers have reported link errors in rocBLAS and rocSPARSE like
@@ -390,6 +391,22 @@ Several developers have reported link errors in rocBLAS and rocSPARSE like
 ```
 
 These have been worked around by disabling ccache.
+
+### `pyYAML cannot be found by cmake`
+
+It is recommended to build TheRock using the `.venv` python3 virtual environment.
+The build steps explain that you must do a `pip install -r requirements.txt` that
+installs PyYAML in the venv so maybe this step was not done.
+
+The problem can also be that you have another python install available in your path
+and that cmake chose to use it. Make sure to check `which python` points to the python
+in your .venv
+
+### `gfortran cannot be found by cmake`
+
+If you have installed strawberry perl as recommended but gfortran cannot be found by
+cmake, you can create a `FC` environment variable pointing to where `gfortran.exe` is
+located.
 
 ## Other notes
 

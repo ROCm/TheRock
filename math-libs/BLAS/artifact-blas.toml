@@ -19,6 +19,7 @@ exclude = [
 optional = true
 [components.test."math-libs/BLAS/rocRoller/stage"]
 include = [
+  "bin/rocroller/**",
   "bin/rocroller-test*",
 ]
 optional = true
@@ -47,6 +48,8 @@ include = [
   "bin/hipblas_gtest.data",
   "bin/hipblas_v2-test*",
   "bin/hipblas_v2_gtest.data",
+  # Clients tests outputs
+  "bin/hipblas/**",
 ]
 
 # hipBLASLt
@@ -226,6 +229,9 @@ optional = true
 include = [
   "**/*.cmake"
 ]
+exclude = [
+  "bin/hipsparselt/CTest*",
+]
 [components.doc."math-libs/BLAS/hipSPARSELt/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSELt/stage"]
@@ -233,6 +239,7 @@ include = [
   # Clients benchmarks
   "bin/hipsparselt-bench*",
   # Clients tests
+  "bin/hipsparselt/**",
   "bin/hipsparselt-test*",
   "bin/hipsparselt_gtest.data",
   "bin/hipsparselt_gentest.py",

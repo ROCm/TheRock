@@ -12,7 +12,10 @@
 #
 # Arguments:
 #   VERSION          - Full version string (e.g., 7.11.0a20251211, 7.10.0)
-#   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu)
+#   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu).
+#                      Special value: 'multi-arch' downloads AMD's bundled
+#                      tarball that contains kpack files for all GPU families
+#                      (from the tarball-multi-arch/ path).
 #   RELEASE_TYPE     - Release type: nightlies (default), prereleases, devreleases, stable
 #
 # Examples:
@@ -20,6 +23,7 @@
 #   ./install_rocm_tarball.sh 7.11.0a20251211 gfx94X-dcgpu nightlies
 #   ./install_rocm_tarball.sh 7.10.0rc2 gfx110X-all prereleases
 #   ./install_rocm_tarball.sh 7.10.0 gfx94X-dcgpu stable
+#   ./install_rocm_tarball.sh 7.13.0a20260515 multi-arch nightlies   # multi-arch
 
 set -eu
 
@@ -31,13 +35,25 @@ RELEASE_TYPE="${3:-nightlies}"
 # URL-encode '+' as '%2B' in VERSION (required for devreleases)
 VERSION_ENCODED="${VERSION//+/%2B}"
 
-# Build tarball URL based on release type
-# - stable releases use: https://repo.amd.com/rocm/tarball/
-# - other releases use: https://rocm.{RELEASE_TYPE}.amd.com/tarball/
-if [ "$RELEASE_TYPE" = "stable" ]; then
-    TARBALL_URL="https://repo.amd.com/rocm/tarball/therock-dist-linux-${AMDGPU_FAMILY}-${VERSION_ENCODED}.tar.gz"
+# AMDGPU_FAMILY=multi-arch selects AMD's bundled all-GPU tarball at the
+# tarball-multi-arch/ path. AMD's URL path uses "multi-arch" (with hyphen)
+# but the tarball filename slot uses "multiarch" (no hyphen) — handle both
+# conventions explicitly here.
+if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then
+    TARBALL_DIR="tarball-multi-arch"
+    FAMILY_SLOT="multiarch"
 else
-    TARBALL_URL="https://rocm.${RELEASE_TYPE}.amd.com/tarball/therock-dist-linux-${AMDGPU_FAMILY}-${VERSION_ENCODED}.tar.gz"
+    TARBALL_DIR="tarball"
+    FAMILY_SLOT="$AMDGPU_FAMILY"
+fi
+
+# Build tarball URL based on release type
+# - stable releases use: https://repo.amd.com/rocm/${TARBALL_DIR}/
+# - other releases use: https://rocm.{RELEASE_TYPE}.amd.com/${TARBALL_DIR}/
+if [ "$RELEASE_TYPE" = "stable" ]; then
+    TARBALL_URL="https://repo.amd.com/rocm/${TARBALL_DIR}/therock-dist-linux-${FAMILY_SLOT}-${VERSION_ENCODED}.tar.gz"
+else
+    TARBALL_URL="https://rocm.${RELEASE_TYPE}.amd.com/${TARBALL_DIR}/therock-dist-linux-${FAMILY_SLOT}-${VERSION_ENCODED}.tar.gz"
 fi
 
 echo "=============================================="
@@ -54,10 +70,37 @@ TARBALL_FILE="/tmp/rocm-tarball.tar.gz"
 
 echo "Downloading tarball..."
 # Use curl with -fsSL: fail on errors, silent, show errors, follow redirects
-curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" || {
-    echo "Error: Failed to download tarball from $TARBALL_URL"
-    exit 1
-}
+# If direct URL fails, try fuzzy match (supports simplified AMDGPU_FAMILY like gfx110x)
+if ! curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" 2>/dev/null; then
+    echo "Direct URL not found, searching for matching tarball..."
+    if [ "$RELEASE_TYPE" = "stable" ]; then
+        LISTING_URL="https://repo.amd.com/rocm/${TARBALL_DIR}/"
+    else
+        LISTING_URL="https://rocm.${RELEASE_TYPE}.amd.com/${TARBALL_DIR}/"
+    fi
+    # Case-insensitive search for tarball matching FAMILY_SLOT and VERSION.
+    # The HTML listing contains literal '+' (not URL-encoded), so use VERSION
+    # with '+' escaped as '\+' for PCRE rather than VERSION_ENCODED.
+    VERSION_REGEX="${VERSION//+/\\+}"
+    MATCHED_FILE=$(curl -fsSL "$LISTING_URL" 2>/dev/null \
+        | grep -ioP "therock-dist-linux-[^\"]*${FAMILY_SLOT}[^\"]*-${VERSION_REGEX}\.tar\.gz" \
+        | head -1) || true
+    if [ -z "$MATCHED_FILE" ]; then
+        echo "Error: No tarball found matching '${AMDGPU_FAMILY}' and version '${VERSION}'"
+        echo "Tried direct URL: ${TARBALL_URL}"
+        echo "Tried fuzzy search at: ${LISTING_URL}"
+        echo "Hint: specify the full AMDGPU_FAMILY (e.g., gfx110X-all) or check available tarballs"
+        exit 1
+    fi
+    # URL-encode '+' in the matched filename for the download URL
+    TARBALL_URL="${LISTING_URL}${MATCHED_FILE//+/%2B}"
+    echo "Found matching tarball: ${MATCHED_FILE}"
+    echo "Downloading from: ${TARBALL_URL}"
+    curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" || {
+        echo "Error: Failed to download tarball from $TARBALL_URL"
+        exit 1
+    }
+fi
 
 # Verify download
 if [ ! -f "$TARBALL_FILE" ] || [ ! -s "$TARBALL_FILE" ]; then

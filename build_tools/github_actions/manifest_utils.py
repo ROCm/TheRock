@@ -16,18 +16,27 @@ def log(*args, **kwargs) -> None:
     sys.stdout.flush()
 
 
+def warn(*args, **kwargs) -> None:
+    """Consistent warning helper for manifest generation scripts."""
+    print("WARNING:", *args, file=sys.stderr, **kwargs)
+    sys.stderr.flush()
+
+
 @dataclass(frozen=True)
 class GitSourceInfo:
-    """Git commit and origin repo for a source checkout."""
+    """Git source info for a repository checkout."""
 
-    commit: str
     repo: str
+    commit: str
     branch: str | None = None
+    version: str | None = None
 
     def to_dict(self) -> dict[str, str]:
-        d = {"commit": self.commit, "repo": self.repo}
+        d = {"repo": self.repo, "commit": self.commit}
         if self.branch is not None:
             d["branch"] = self.branch
+        if self.version is not None:
+            d["version"] = self.version
         return d
 
 
@@ -65,6 +74,24 @@ def capture_optional(args: list[str | Path], cwd: Path) -> str | None:
     return out or None
 
 
+def git_upstream_commit(dirpath: Path, *, label: str) -> str:
+    """Return the true upstream commit, skipping any local commit.
+
+    The TheRock checkout wrapper (repo_management.py) tags the real upstream
+    commit as THEROCK_UPSTREAM_DIFFBASE before HIPIFY runs. We prefer
+    that tag; if it is absent (plain clone) we fall back to HEAD.
+    """
+    commit = capture_optional(
+        ["git", "rev-parse", "THEROCK_UPSTREAM_DIFFBASE"], cwd=dirpath
+    )
+    if commit:
+        log(f"{label} upstream commit (via THEROCK_UPSTREAM_DIFFBASE): {commit}")
+    else:
+        commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
+        log(f"{label} upstream commit (HEAD fallback): {commit}")
+    return commit
+
+
 def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
     """Return commit + origin repo for a git checkout."""
     dirpath = dirpath.resolve()
@@ -81,7 +108,7 @@ def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
             "Manifest generation requires git commit hash and origin repo."
         )
 
-    commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
+    commit = git_upstream_commit(dirpath, label=label)
     repo = capture(["git", "remote", "get-url", "origin"], cwd=dirpath)
     return GitSourceInfo(commit=commit, repo=repo)
 
@@ -112,6 +139,32 @@ def resolve_branch(*, inferred: str | None, provided: str | None) -> str | None:
     if provided:
         return provided
     return None
+
+
+def detect_therock_source_info(repo_root: Path) -> GitSourceInfo:
+    """Detect TheRock commit, repo, and branch from a local git checkout.
+
+    Falls back to "unknown" for fields that cannot be determined (e.g. when
+    not inside a git worktree).
+    """
+    commit = capture_optional(["git", "rev-parse", "HEAD"], cwd=repo_root)
+    if commit is None:
+        warn(f"Could not detect TheRock commit from {repo_root}; using 'unknown'")
+        commit = "unknown"
+
+    repo_url = capture_optional(["git", "remote", "get-url", "origin"], cwd=repo_root)
+    if repo_url is None:
+        warn(
+            f"Could not detect TheRock origin from {repo_root}; "
+            "using https://github.com/ROCm/TheRock"
+        )
+        repo_url = "https://github.com/ROCm/TheRock"
+    repo_url = repo_url.removesuffix(".git")
+    branch = git_branch_best_effort(repo_root)
+    if branch is None:
+        warn(f"Could not detect TheRock branch from {repo_root}; using 'unknown'")
+        branch = "unknown"
+    return GitSourceInfo(commit=commit, repo=repo_url, branch=branch)
 
 
 def normalize_python_version_for_filename(python_version: str) -> str:

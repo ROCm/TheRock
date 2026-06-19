@@ -14,8 +14,8 @@ to S3, organized by stage name and (optionally) GPU family:
 This is the multi-arch counterpart to post_build_upload.py, which handles
 single-stage (monolithic) CI builds. Key differences:
 
+- Uploads the stage manifest alongside logs when present
 - No artifact upload (artifact_manager.py push handles that)
-- No manifest upload (deferred to workflow-level, see #1236)
 - No index generation (server-side Lambda handles that, see #3331)
 - Logs are scoped to one stage, not the entire build
 
@@ -128,7 +128,7 @@ def upload_stage_logs(
         build_dir: Build directory containing logs/.
         output_root: Workflow output root for path computation.
         backend: Storage backend (S3 or local) to upload through.
-        stage_name: Build stage (e.g., 'foundation', 'math-libs').
+        stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs').
         amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
     """
     log_dir = build_dir / "logs"
@@ -136,9 +136,28 @@ def upload_stage_logs(
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
-    dest = output_root.stage_log_dir(stage_name, amdgpu_family)
+    dest = output_root.log_stage_dir(stage_name, amdgpu_family)
     # Exclude raw ccache logs — they're uploaded compressed as ccache_logs.tar.zst.
     backend.upload_directory(log_dir, dest, exclude=["ccache/**/*"])
+
+
+def upload_manifest(
+    build_dir: Path,
+    output_root: WorkflowOutputRoot,
+    backend: StorageBackend,
+):
+    """Upload therock_manifest.json when present."""
+
+    manifest_path = (
+        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
+    )
+
+    if not manifest_path.is_file():
+        log("[INFO] No therock_manifest.json found. Skipping upload.")
+        return
+
+    log(f"[INFO] Uploading manifest {manifest_path}")
+    backend.upload_file(manifest_path, output_root.manifest_root())
 
 
 def run(args: argparse.Namespace):
@@ -148,7 +167,7 @@ def run(args: argparse.Namespace):
 
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id,
-        platform=platform.system().lower(),
+        platform=args.platform,
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
@@ -159,6 +178,12 @@ def run(args: argparse.Namespace):
         stage_name=args.stage,
         amdgpu_family=args.amdgpu_family,
     )
+    if args.stage == "foundation":
+        upload_manifest(
+            build_dir=args.build_dir,
+            output_root=output_root,
+            backend=backend,
+        )
 
 
 def main(argv: list[str] | None = None):
@@ -170,10 +195,16 @@ def main(argv: list[str] | None = None):
         help="GitHub Actions run ID (default: $GITHUB_RUN_ID)",
     )
     parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform.system().lower(),
+        help=f"Platform for workflow output paths (default: {platform.system().lower()})",
+    )
+    parser.add_argument(
         "--stage",
         type=str,
         required=True,
-        help="Build stage name (e.g., 'foundation', 'math-libs')",
+        help="Build stage name (e.g., 'compiler-runtime', 'math-libs')",
     )
     parser.add_argument(
         "--build-dir",

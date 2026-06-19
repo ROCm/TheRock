@@ -37,80 +37,6 @@ def _make_output_root(
     )
 
 
-class TestUploadArtifacts(unittest.TestCase):
-    """Tests for upload_artifacts()."""
-
-    def test_uploads_tar_xz_files(self):
-        """Verify only .tar.xz and .tar.xz.sha256sum files are uploaded."""
-        output_root = _make_output_root()
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
-            build_dir = Path(tmp)
-            staging_dir = Path(staging)
-            artifacts = build_dir / "artifacts"
-            artifacts.mkdir()
-            (artifacts / "core_lib_gfx94X.tar.xz").write_bytes(b"data")
-            (artifacts / "core_lib_gfx94X.tar.xz.sha256sum").write_text("abc")
-            (artifacts / "some_dir").mkdir()
-            (artifacts / "some_dir" / "file.txt").write_text("ignore")
-
-            backend = LocalStorageBackend(staging_dir)
-            post_build_upload.upload_artifacts(
-                "gfx94X-dcgpu", build_dir, output_root, backend
-            )
-
-            # .tar.xz and .sha256sum should be at the run root
-            self.assertTrue(
-                (staging_dir / "12345-linux" / "core_lib_gfx94X.tar.xz").is_file()
-            )
-            self.assertTrue(
-                (
-                    staging_dir / "12345-linux" / "core_lib_gfx94X.tar.xz.sha256sum"
-                ).is_file()
-            )
-            # index.html is generated server-side — not uploaded from upload_artifacts
-            self.assertFalse(
-                (staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html").exists()
-            )
-            # Non-matching files should NOT be uploaded
-            self.assertFalse(
-                (staging_dir / "12345-linux" / "some_dir" / "file.txt").exists()
-            )
-
-    def test_external_repo_prefix(self):
-        """Verify external_repo propagates into paths."""
-        output_root = _make_output_root(
-            external_repo="Fork-TheRock/",
-            bucket="therock-ci-artifacts-external",
-        )
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
-            build_dir = Path(tmp)
-            staging_dir = Path(staging)
-            artifacts = build_dir / "artifacts"
-            artifacts.mkdir()
-            (artifacts / "lib.tar.xz").write_bytes(b"data")
-
-            backend = LocalStorageBackend(staging_dir)
-            post_build_upload.upload_artifacts(
-                "gfx94X-dcgpu", build_dir, output_root, backend
-            )
-
-            self.assertTrue(
-                (staging_dir / "Fork-TheRock" / "12345-linux" / "lib.tar.xz").is_file()
-            )
-
-    def test_no_artifacts_dir_skips(self):
-        """Verify no error when artifacts/ doesn't exist."""
-        output_root = _make_output_root()
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
-            build_dir = Path(tmp)
-            staging_dir = Path(staging)
-            backend = LocalStorageBackend(staging_dir)
-            # Should not raise
-            post_build_upload.upload_artifacts(
-                "gfx94X-dcgpu", build_dir, output_root, backend
-            )
-
-
 class TestUploadLogs(unittest.TestCase):
     """Tests for upload_logs()."""
 
@@ -298,7 +224,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
             calls[1],
         )
         self.assertIn(
-            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/index-gfx94X-dcgpu.html",
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/index.html",
             calls[2],
         )
         self.assertIn(
@@ -342,6 +268,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
 
         for call in calls:
             self.assertNotIn("index-gfx94X-dcgpu.html", call)
+            self.assertNotIn("12345-linux/index.html", call)
 
     @mock.patch("post_build_upload.gha_append_step_summary")
     def test_summary_with_external_repo(self, mock_summary):
