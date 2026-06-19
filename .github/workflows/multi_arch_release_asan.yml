@@ -1,17 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# This workflow is the entry point for weekly ASAN releases.
+# This workflow is the entry point for ASAN releases.
 #
-# Modeled on multi_arch_release.yml but uses the ASAN build variant and
-# runs on a weekly schedule (Saturdays at noon UTC).
+# Modeled on multi_arch_release.yml but uses the ASAN build variant.
 
 name: Multi-Arch Release ASAN
 
 on:
-  schedule:
-    # Runs every Saturday at 12:00 PM UTC
-    - cron: "0 12 * * 6"
   workflow_call:
     inputs:
       release_type:
@@ -58,7 +54,6 @@ on:
         type: choice
         options:
           - dev
-          - nightly
         default: dev
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
@@ -91,7 +86,7 @@ permissions:
   contents: read
 
 run-name: >-
-  Multi-Arch Release ASAN (${{ inputs.release_type || 'nightly' }})
+  Multi-Arch Release ASAN (${{ inputs.release_type || 'dev' }})
   | Linux: ${{ inputs.linux_amdgpu_families || 'all' }}
   | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
 
@@ -100,7 +95,7 @@ jobs:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan"
-      release_type: ${{ inputs.release_type || 'nightly' }}
+      release_type: ${{ inputs.release_type || 'dev' }}
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
@@ -119,7 +114,7 @@ jobs:
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
-      release_type: ${{ inputs.release_type || 'nightly' }}
+      release_type: ${{ inputs.release_type || 'dev' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}
       run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
@@ -140,7 +135,7 @@ jobs:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
-      release_type: ${{ inputs.release_type || 'nightly' }}
+      release_type: ${{ inputs.release_type || 'dev' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}
       build_pytorch: ${{ inputs.build_pytorch }}
