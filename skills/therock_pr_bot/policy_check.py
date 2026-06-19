@@ -151,6 +151,18 @@ def load_policy(policy_path: Path) -> Policy:
     ]
     unit_test_exempt_paths = [str(p) for p in (unit_cfg.get("exempt_paths", []) or [])]
 
+    # Always exempt the bot's own directory (the folder where this policy.yml
+    # lives) so changes to the bot's source don't require a separate test file.
+    # This refers to the policy.yml path itself instead of hard-coding a name,
+    # while keeping the Unit Test rule enforced for the rest of the repo.
+    try:
+        self_dir = policy_path.resolve().parent
+        rel_self = self_dir.relative_to(find_repo_root(self_dir)).as_posix()
+        if rel_self and rel_self != ".":
+            unit_test_exempt_paths.append(f"{rel_self}/**")
+    except Exception:
+        pass
+
     required_checks = [str(x) for x in (checks.get("required_check_runs", []) or [])]
 
     fc = ((checks.get("failure_comments", {}) or {}).get("pre-commit")) or None
