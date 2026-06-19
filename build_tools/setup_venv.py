@@ -294,6 +294,7 @@ def install_packages_into_venv(
     index_url: str | None = None,
     index_name: str | None = None,
     index_subdir: str | None = None,
+    extra_index_urls: list[str] | None = None,
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
@@ -309,6 +310,8 @@ def install_packages_into_venv(
         index_url: URL for '--index-url' command argument
         index_name: Shorthand for a base index_url (e.g. 'nightly')
         index_subdir: Subdirectory for 'index_url' or 'index_name'
+        extra_index_urls: Additional index URLs for '--extra-index-url'. If
+            index_subdir is set it is appended to each (matching index_url).
         find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
@@ -357,6 +360,24 @@ def install_packages_into_venv(
                 pip_install_cmd.append(f"--find-links={pkg_find_links}")
         else:
             pip_install_cmd.append(f"--index-url={index_url}")
+
+    for extra_index_url in extra_index_urls or []:
+        if not extra_index_url:
+            continue
+        # Join extra index with subdir (matching primary index_url behavior).
+        if index_subdir:
+            extra_index_url = (
+                f"{extra_index_url.rstrip('/')}/{index_subdir.strip('/')}"
+            )
+        extra_index_url, extra_using_s3_fallback = apply_url_fallback(extra_index_url)
+        if extra_using_s3_fallback:
+            # S3 doesn't auto-serve index.html for directory URLs, so scrape the
+            # available packages and add them as --find-links.
+            for pkg_name in scrape_package_names_from_index(extra_index_url):
+                pkg_find_links = f"{extra_index_url.rstrip('/')}/{pkg_name}/index.html"
+                pip_install_cmd.append(f"--find-links={pkg_find_links}")
+        else:
+            pip_install_cmd.append(f"--extra-index-url={extra_index_url}")
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
@@ -413,6 +434,7 @@ def run(args: argparse.Namespace):
             index_url=args.index_url,
             index_subdir=args.index_subdir,
             index_name=args.index_name,
+            extra_index_urls=args.extra_index_url,
             find_links=args.find_links,
             pre=args.pre,
             disable_cache=args.disable_cache,
@@ -527,6 +549,16 @@ def main(argv: list[str]):
         type=str,
         choices=["stable", "prerelease", "nightly", "dev"],
         help="Shorthand for a named index (requires --index-subdir)",
+    )
+    install_options.add_argument(
+        "--extra-index-url",
+        type=str,
+        action="append",
+        default=[],
+        help="Additional package index URL for pip --extra-index-url. May be "
+        "passed multiple times. --index-subdir is appended to each (like "
+        "--index-url). Useful when a package's dependency (e.g. the matching "
+        "rocm SDK) lives in a different index than the package itself.",
     )
     install_options.add_argument(
         "--find-links",

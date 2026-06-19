@@ -337,6 +337,11 @@ jobs:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
       package_index_url: ${{ inputs.cloudfront_staging_url }}
+      # The torch wheel is in the staging index, but its matching rocm SDK
+      # dependency is only published to the release (cloudfront_url) index until
+      # the wheel is promoted. Provide it as an extra index so the dependency
+      # resolves during the pre-promotion test.
+      extra_index_url: ${{ inputs.cloudfront_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}

@@ -61,6 +61,14 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
+      extra_index_url:
+        description: >-
+          Optional additional package index URL (pip --extra-index-url). The
+          GPU family is appended as a subdir (like package_index_url). Use when
+          a dependency (e.g. the matching rocm SDK) lives in a different index
+          than the torch wheel under test (e.g. wheel in v2-staging, rocm in v2).
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
@@ -100,6 +108,12 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
+      extra_index_url:
+        description: >-
+          Optional additional package index URL (pip --extra-index-url). The
+          GPU family is appended as a subdir (like package_index_url).
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -197,17 +211,25 @@ jobs:
 
       - name: Set up virtual environment
         timeout-minutes: 15
+        env:
+          EXTRA_INDEX_URL: ${{ inputs.extra_index_url }}
         run: |
+          extra_index_arg=()
+          if [ -n "${EXTRA_INDEX_URL}" ]; then
+            extra_index_arg=(--extra-index-url="${EXTRA_INDEX_URL}")
+          fi
           if [ "${{ inputs.multi_arch }}" = "true" ]; then
             python build_tools/setup_venv.py ${VENV_DIR} \
               --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
               --index-url=${{ inputs.package_index_url }} \
+              "${extra_index_arg[@]}" \
               --activate-in-future-github-actions-steps
           else
             python build_tools/setup_venv.py ${VENV_DIR} \
               --packages torch==${{ inputs.torch_version }} \
               --index-url=${{ inputs.package_index_url }} \
               --index-subdir=${{ inputs.amdgpu_family }} \
+              "${extra_index_arg[@]}" \
               --activate-in-future-github-actions-steps
           fi
 
