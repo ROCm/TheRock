@@ -34,8 +34,6 @@ on:
         type: string
       build_variant_suffix:
         type: string
-      expect_failure:
-        type: boolean
       rocm_package_version:
         type: string
       prebuilt_stages:

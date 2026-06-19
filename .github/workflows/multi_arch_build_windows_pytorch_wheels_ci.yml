@@ -187,7 +187,7 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --repo-hashtag nightly \
             --no-commit-hipify
 
@@ -196,7 +196,7 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
@@ -260,7 +260,7 @@ jobs:
             build ^
             --install-rocm ^
             --find-links "${{ inputs.rocm_package_find_links_url }}" ^
-            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
+            --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
