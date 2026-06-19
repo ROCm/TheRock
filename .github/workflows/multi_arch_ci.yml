@@ -34,6 +34,13 @@ on:
         type: string
         description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:' ex: test:rocprim, test:hipcub"
         default: ""
+      aws_windows_cpu_build_label:
+        type: choice
+        options:
+          - aws-windows-scale-rocm-customer-dev
+          - aws-windows-scale-rocm-customer-dev-large
+          - aws-windows-scale-rocm-customer-dev-xlarge
+          - azure-windows-scale-rocm
       prebuilt_stages:
         type: string
         default: ""
@@ -47,6 +54,9 @@ on:
       - labeled
       - opened
       - synchronize
+
+run-name: >-
+  Multi-Arch CI${{ inputs.aws_windows_cpu_build_label && format(' [{0}]', inputs.aws_windows_cpu_build_label) || '' }}
 
 permissions:
   contents: read
@@ -111,6 +121,7 @@ jobs:
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      aws_windows_cpu_build_label: ${{ inputs.aws_windows_cpu_build_label || '' }}
     permissions:
       contents: read
       id-token: write
