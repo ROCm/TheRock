@@ -6,7 +6,7 @@ on:
 
 jobs:
   validate-gfx1030:
-    runs-on: prolense-shark39-gfx1030-scaleset
+    runs-on: prolense-shark39-gfx1030-scaleset-shark39
     steps:
       - name: Check GPU env vars + arch
         run: |
@@ -16,7 +16,7 @@ jobs:
           rocminfo | grep "Name:" | grep gfx
 
   validate-gfx1100:
-    runs-on: prolense-shark39-gfx1100-scaleset
+    runs-on: prolense-shark39-gfx1100-scaleset-shark39
     steps:
       - name: Check GPU env vars + arch
         run: |
