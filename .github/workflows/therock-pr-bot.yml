@@ -2,10 +2,7 @@ name: TheRock PR Bot
 
 on:
   workflow_dispatch:
-  # Use pull_request_target so secrets + a write token are available even for
-  # PRs opened from FORKS. SAFE here only because we never check out or run PR
-  # head code — we read PR data via the GitHub API.
-  pull_request_target:
+  pull_request:
     branches: [ main, pr-bot-test ]
     types:
       [
@@ -31,8 +28,6 @@ jobs:
       # Checkout the BASE repo's default branch (NOT the PR head). This ensures
       # we run OUR policy_check.py / policy.yml, never the fork's version.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
 
       - uses: actions/setup-python@v5
         with:
