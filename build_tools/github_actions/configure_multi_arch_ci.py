@@ -426,6 +426,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_python_packages: bool
     build_pytorch: bool
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
@@ -952,6 +953,19 @@ def _expand_build_config_for_platform(
     family_names = [f["amdgpu_family"] for f in per_family_info]
     suffix = variant_config.get("build_variant_suffix", "")
 
+    # Read skip_packaging from the caller's external_repo JSON if present.
+    # External repos (e.g. rocgdb) opt in by setting "skip_packaging": true
+    # in their external_repo JSON; by default packaging runs normally.
+    skip_packaging = False
+    external_repo_json_str = os.environ.get("EXTERNAL_REPO_JSON", "")
+    if external_repo_json_str:
+        try:
+            skip_packaging = bool(
+                json.loads(external_repo_json_str).get("skip_packaging", False)
+            )
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
 
@@ -962,8 +976,9 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
-        build_pytorch=(suffix != "asan"),
+        build_native_linux=(suffix != "asan") and not skip_packaging,
+        build_python_packages=not skip_packaging,
+        build_pytorch=(suffix != "asan") and not skip_packaging,
         build_runs_on=build_runs_on,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,

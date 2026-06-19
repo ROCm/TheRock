@@ -138,6 +138,9 @@ jobs:
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
+          # Pass the caller's external_repo JSON so configure_multi_arch_ci.py can
+          # read fields like skip_packaging without depending on the detect step.
+          EXTERNAL_REPO_JSON: ${{ inputs.external_repo }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
