@@ -13,7 +13,9 @@ jobs:
           echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
           echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
           echo "GPU_DEVICE_ORDINAL=$GPU_DEVICE_ORDINAL"
-          rocminfo | grep "Name:" | grep gfx
+          which rocminfo || echo "rocminfo not in PATH"
+          rocminfo 2>&1 | grep -E "Name:|gfx" || echo "no gfx found"
+          rocminfo 2>&1 | head -40
 
   validate-gfx1100:
     runs-on: linux-shark39-gfx1100-gpu-rocm
@@ -23,4 +25,6 @@ jobs:
           echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
           echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
           echo "GPU_DEVICE_ORDINAL=$GPU_DEVICE_ORDINAL"
-          rocminfo | grep "Name:" | grep gfx
+          which rocminfo || echo "rocminfo not in PATH"
+          rocminfo 2>&1 | grep -E "Name:|gfx" || echo "no gfx found"
+          rocminfo 2>&1 | head -40
