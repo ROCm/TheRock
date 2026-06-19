@@ -405,7 +405,9 @@ def ensure_unit_tests(
             continue
 
         # Files under exempt paths never require an accompanying unit test.
-        if any(_matches_forbidden(filename, pat) for pat in policy.unit_test_exempt_paths):
+        if any(
+            _matches_forbidden(filename, pat) for pat in policy.unit_test_exempt_paths
+        ):
             continue
 
         base = Path(filename).name
