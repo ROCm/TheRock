@@ -64,6 +64,13 @@ jobs:
   `configure_aws_artifacts_credentials` composite action mentioned above
   handles this automatically)
 
+**External repos and forks:**
+
+- **External repos** (e.g., `rocm-libraries`) use OIDC with the
+  `therock-ci-external` role to upload to `therock-ci-artifacts-external`.
+- **Fork PRs** cannot use OIDC (no trust relationship). They fall back to
+  runner base credentials.
+
 ## Bucket inventory
 
 ### CI buckets
