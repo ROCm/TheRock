@@ -529,7 +529,6 @@ if(_ck_enabled)
       dev
       doc
       lib
-      run
     SUBPROJECT_DEPS
       composable_kernel
   )
