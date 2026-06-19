@@ -133,10 +133,7 @@ def build_package_variants(pkg_name, config: PackageConfig) -> list:
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
 
     if config.enable_kpack:
-        _probe = kpack_gfx_probe_kwargs(
-            config.enable_kpack, config.artifacts_dir, config.gfxarch_list
-        )
-        if is_gfxarch_package(pkg_info, config.enable_kpack, **_probe):
+        if is_gfxarch_package(pkg_info, config.enable_kpack):
             # GfxArch=True: host + devices + meta + non-versioned
             return build_gfxarch_package_variants(pkg_name, config)
         else:
@@ -550,6 +547,7 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
 
     # Auto-detect kpack from manifest if not explicitly requested via --enable-kpack
     artifacts_dir = Path(args.artifacts_dir).resolve()
+    set_artifacts_dir(artifacts_dir)
     if not args.enable_kpack:
         args.enable_kpack = load_kpack_from_manifest(artifacts_dir)
         if args.enable_kpack:
