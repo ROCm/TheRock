@@ -330,6 +330,101 @@ class TestCacheMaterialize(unittest.TestCase):
             self.assertEqual(cache_file.read_bytes(), b"existing")
 
 
+class TestStoreInCacheConcurrency(unittest.TestCase):
+    """Regression test for #5943.
+
+    `_materialize_file` calls `_store_in_cache(dest, _cache_path(cache_dir, md5))`
+    for every fetched file, so multiple `.dvc` pointers that share one content
+    hash (e.g. the duplicate fixture tensors under rocm-libraries) drive separate
+    ThreadPoolExecutor workers to `os.replace` into the *same* content-addressed
+    cache path. On Windows the loser's replace hits `[WinError 5] Access is
+    denied` while the winner still holds the file open. The cache is
+    content-addressed, so that collision is benign and must be swallowed.
+    """
+
+    def test_concurrent_stores_same_hash_do_not_collide(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            data = b"shared content-addressed bytes"
+            cache_file = tmp / "cache" / "ab" / "cdef"
+
+            srcs = []
+            for i in range(2):
+                s = tmp / f"src{i}.bin"
+                s.write_bytes(data)
+                srcs.append(s)
+
+            barrier = threading.Barrier(len(srcs))
+            errors = []
+
+            def worker(src):
+                try:
+                    barrier.wait(timeout=5)
+                    fda._store_in_cache(src, cache_file)
+                except Exception as e:  # noqa: BLE001
+                    errors.append(e)
+
+            threads = [threading.Thread(target=worker, args=(s,)) for s in srcs]
+            for th in threads:
+                th.start()
+            for th in threads:
+                th.join(timeout=5)
+
+            self.assertEqual(errors, [], f"concurrent _store_in_cache raised: {errors}")
+            self.assertTrue(cache_file.exists())
+            self.assertEqual(cache_file.read_bytes(), data)
+            leftover = list(cache_file.parent.glob("*.tmp"))
+            self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
+
+    def test_replace_permission_error_is_benign_when_content_matches(self):
+        # Simulate the Windows race deterministically: os.replace raises
+        # PermissionError, but a concurrent winner has already populated
+        # cache_file with identical content. _store_in_cache must treat this as
+        # success rather than propagating [WinError 5].
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            data = b"identical content"
+            src = tmp / "src.bin"
+            src.write_bytes(data)
+            cache_file = tmp / "cache" / "ab" / "cdef"
+
+            real_replace = os.replace
+
+            def fake_replace(a, b):
+                # A concurrent winner finished first: the cache entry now exists
+                # with matching content, and our own replace is denied.
+                dst = Path(b)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(data)
+                raise PermissionError("simulated [WinError 5] Access is denied")
+
+            with mock.patch("os.replace", side_effect=fake_replace):
+                fda._store_in_cache(src, cache_file)  # must not raise
+
+            self.assertEqual(cache_file.read_bytes(), data)
+            leftover = list(cache_file.parent.glob("*.tmp"))
+            self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
+
+    def test_replace_permission_error_reraises_on_content_mismatch(self):
+        # If os.replace is denied AND the existing entry does not match `src`,
+        # the error is real and must propagate.
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            src = tmp / "src.bin"
+            src.write_bytes(b"my content")
+            cache_file = tmp / "cache" / "ab" / "cdef"
+
+            def fake_replace(a, b):
+                dst = Path(b)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(b"a different blob entirely")
+                raise PermissionError("simulated [WinError 5] Access is denied")
+
+            with mock.patch("os.replace", side_effect=fake_replace):
+                with self.assertRaises(PermissionError):
+                    fda._store_in_cache(src, cache_file)
+
+
 # --------------------------------------------------------------------------
 # Orchestration glue with mocked boto3.
 # --------------------------------------------------------------------------
@@ -402,65 +497,6 @@ class TestDownloadBlob(unittest.TestCase):
             with self.assertRaisesRegex(fda.FetchError, "size mismatch"):
                 fda._download_blob(s3, remote, md5, dest, expected_size=len(data) + 100)
             self.assertFalse(dest.exists())
-
-
-class TestDownloadBlobConcurrency(unittest.TestCase):
-    """Regression test for #5943.
-
-    `_materialize_dir` caches `.dir` manifests at a content-addressed path
-    derived only from their md5, so two `.dvc` pointers whose manifests hash
-    the same can both call `_download_blob` with an identical `dest` from
-    separate ThreadPoolExecutor workers. The old fixed `<dest>.tmp` name let
-    one worker's unlink()/os.replace() collide with another's open handle,
-    surfacing as `[WinError 5] Access is denied` on Windows.
-    """
-
-    def _remote(self) -> fda._Remote:
-        return fda._Remote(bucket="bkt", prefix="p", anonymous=True)
-
-    def test_concurrent_calls_with_same_dest_do_not_collide(self):
-        with tempfile.TemporaryDirectory() as t:
-            tmp = Path(t)
-            data = b"shared manifest content"
-            md5 = _md5_hex(data)
-            remote = self._remote()
-            key = fda._s3_key(remote, md5)
-
-            barrier = threading.Barrier(2)
-
-            class _SlowFakeS3(_FakeS3):
-                def download_fileobj(self, Bucket, Key, Fileobj):
-                    # Force both threads to be mid-download at the same time
-                    # so they are guaranteed to race on the temp filename.
-                    barrier.wait(timeout=5)
-                    super().download_fileobj(Bucket, Key, Fileobj)
-
-            s3 = _SlowFakeS3({(remote.bucket, key): data})
-            # Identical dest for both workers, mirroring two .dir manifests
-            # that hash to the same content-addressed cache path.
-            dest = tmp / "cache" / "ab" / "cdef"
-
-            errors = []
-
-            def worker():
-                try:
-                    fda._download_blob(
-                        s3, remote, md5, dest, expected_size=len(data)
-                    )
-                except Exception as e:  # noqa: BLE001
-                    errors.append(e)
-
-            threads = [threading.Thread(target=worker) for _ in range(2)]
-            for th in threads:
-                th.start()
-            for th in threads:
-                th.join(timeout=5)
-
-            self.assertEqual(errors, [], f"concurrent _download_blob raised: {errors}")
-            self.assertTrue(dest.exists())
-            self.assertEqual(dest.read_bytes(), data)
-            leftover = list(dest.parent.glob("*.tmp"))
-            self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
 
 
 class TestMaterializeFile(unittest.TestCase):
