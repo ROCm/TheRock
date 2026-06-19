@@ -245,13 +245,16 @@ def create_therock_bump(submodule, token):
             data={"title": title, "head": branch_name, "base": "main", "body": body},
         )
 
-        # Add ci:run-all-archs label to the PR
-        gh_api(
-            token,
-            f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
-            method="POST",
-            data={"labels": ["ci:run-all-archs"]},
-        )
+        try:
+            # Add ci:run-all-archs label to the PR
+            gh_api(
+                token,
+                f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
+                method="POST",
+                data={"labels": ["ci:run-all-archs"]},
+            )
+        except RuntimeError as e:
+            print(f"[WARN] Failed to apply ci:run-all-archs to PR #{pr['number']}: {e}")
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
 
