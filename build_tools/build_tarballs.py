@@ -160,6 +160,13 @@ def main(argv=None):
         required=True,
         help="Output directory for tarballs",
     )
+    parser.add_argument(
+        "--build-variant",
+        default="release",
+        choices=["release", "asan"],
+        help="Build variant. Non-release variants add a suffix to tarball names "
+        "(e.g. therock-dist-linux-gfx94X-dcgpu-7.10.0-asan.tar.gz)",
+    )
     args = parser.parse_args(argv)
     # Normalize empty string to None (workflow inputs default to "")
     args.run_github_repo = args.run_github_repo or None
@@ -172,9 +179,13 @@ def main(argv=None):
     download_cache_dir = work_dir / "download-cache"
     download_cache_dir.mkdir(parents=True, exist_ok=True)
 
+    # Build variant suffix for tarball naming (e.g. "-asan" for ASAN builds)
+    variant_suffix = "" if args.build_variant == "release" else f"-{args.build_variant}"
+
     log(f"Building tarballs for {len(families)} families: {', '.join(families)}")
     log(f"  Platform: {args.platform}")
     log(f"  Version: {args.package_version}")
+    log(f"  Build variant: {args.build_variant}")
     log(f"  Output: {args.output_dir}")
 
     # Phase 1: Fetch and flatten sequentially.
@@ -193,9 +204,7 @@ def main(argv=None):
             run_github_repo=args.run_github_repo,
         )
         family_dirs.append(flatten_dir)
-        tarball_name = (
-            f"therock-dist-{args.platform}-{family}-{args.package_version}.tar.gz"
-        )
+        tarball_name = f"therock-dist-{args.platform}-{family}-{args.package_version}{variant_suffix}.tar.gz"
         compress_tasks.append((flatten_dir, args.output_dir / tarball_name))
 
     # Phase 1.5: If KPACK_SPLIT_ARTIFACTS is enabled, fetch all families
@@ -214,9 +223,7 @@ def main(argv=None):
             download_cache_dir=download_cache_dir,
             run_github_repo=args.run_github_repo,
         )
-        tarball_name = (
-            f"therock-dist-{args.platform}-multiarch-{args.package_version}.tar.gz"
-        )
+        tarball_name = f"therock-dist-{args.platform}-multiarch-{args.package_version}{variant_suffix}.tar.gz"
         compress_tasks.append((multiarch_dir, args.output_dir / tarball_name))
 
     # Phase 2: Compress all tarballs in parallel.
