@@ -1,5 +1,5 @@
 ---
-author: Freddy Paul, Saad Rahim (saadrahim)
+author: Freddy Paul
 created: 2026-04-14
 modified: 2026-04-14
 status: draft
@@ -56,38 +56,8 @@ release cadence.
 - ROCm Core SDK packaging (covered by RFC0009)
 - GPU driver packaging
 - Internal CI/CD pipeline specifics of individual extras projects
-- **ROCm Expansion SDKs** (e.g., the HPC SDK proposed in
-  [PR #5613](https://github.com/ROCm/TheRock/pull/5613)). Expansions are a
-  distinct category and require a parallel RFC. The key difference is the
-  version model: an **expansion pins to and installs a single ROCm version**,
-  whereas the **extras** described here are explicitly designed to support
-  **multiple ROCm major versions side by side** within a single
-  `/opt/rocm/extras/` tree (e.g. the `rvs7` and `rvs8` binaries coexist).
-  The requirements in this RFC do not govern expansions.
-
-### Related RFCs
-
-This RFC defines the **build, release, versioning, and install layout** for
-extras. It is single-responsibility by design and relies on the following
-companion RFCs:
-
-- [**RFC0012 — ROCm Repository Structure** (PR #4414)](https://github.com/ROCm/TheRock/pull/4414):
-  defines the *distribution* layout on `repo.amd.com`, including the single
-  `extras/` folder with per-project subfolders that this RFC's packages are
-  published into.
-- [**RFC00XX — ROCm Repository Setup Packages**](RFC00XX-Repository-Package.md):
-  defines the native `amdrocm-repo-*` rpm/deb tier packages that configure the
-  AMD repositories from which these extras are installed.
-- [**RFC0009 — OS Packaging Requirements**](/docs/rfcs/RFC0009-OS-Packaging-Requirements.md):
-  the native packaging conventions (FHS layout, `-gfxarch` naming) that extras
-  packages inherit.
-- [**RFC0008 — Multi-Arch Packaging**](/docs/rfcs/RFC0008-Multi-Arch-Packaging.md):
-  the host/device package split that extras dependency declarations must be
-  compatible with.
-- [**PR #5613 — ROCm Expansion SDK / HPC SDK**](https://github.com/ROCm/TheRock/pull/5613):
-  the separate expansions track (single ROCm version per install), which is
-  explicitly out of scope here (see Out of Scope above).
-
+- ROCm Expansion SDK requirements need a parallel RFC to the requirements in this PR. 
+- These requirements is for software that releases individually and islimited to one version installed per major ROCm version.
 ## 2. Release Cadence
 
 Extras projects follow an **independent release cadence** that is not tied
@@ -117,18 +87,17 @@ The project version is entirely independent of the ROCm version it was
 built against. The relationship to the ROCm platform is encoded in two
 ways:
 
-1. **Versioned binary within a single extras tree.** All end-user
-   projects install into one shared prefix — `/opt/rocm/extras/` — with
-   no per-major directory. The public executable is suffixed with the
-   ROCm major (`rvs7`, `rvs8`) and an unsuffixed symlink points at the
-   latest installed major (`rvs` → `rvs7`), so builds for different ROCm
-   majors coexist in the same tree. Shared libraries use **ordinary,
-   project-version-based SONAMEs** (`librvs.so` → `librvs.so.1` →
-   `librvs.so.1.2.0`) — the ROCm major is **not** encoded in the `.so`
-   version. Because an extra bumps its own major version when it retargets
-   a new ROCm major (RVS 1.x for ROCm 7.x, RVS 2.x for ROCm 8.x), the
-   library SONAMEs naturally differ across ROCm majors and coexist via
-   standard linker versioning.
+1. **Extras tree version (installation path).** All end-user projects
+   compiled against a given ROCm major version are installed into a
+   single shared prefix whose name carries the ROCm major version:
+
+   ```
+   /opt/rocm/extras-<rocm-major>/
+   ```
+
+   For example, `extras-7` contains every end-user project built for the
+   ROCm 7.x family. This makes compatibility immediately visible from
+   the filesystem path — no additional metadata lookup is required.
 
 2. **Package name.** Each package embeds the target ROCm major version
    in its name using the `amdrocm<major>-<project>` convention, so the
@@ -141,26 +110,22 @@ ways:
    amdrocm8-rvs-2.0.0       # RVS 2.0.0 for ROCm 8.x
    ```
 
-The combination of both signals — the versioned artifact names and the
-package name — ensures that whether a user is looking at an installed
-binary, a package filename, or a repository index, the compatible ROCm
-version family is always unambiguous.
+The combination of both signals — the install path and the package
+name — ensures that whether a user is looking at an installed directory,
+a package filename, or a repository index, the compatible ROCm version
+family is always unambiguous.
 
 ### ROCm Compatibility Matrix
 
 The following table illustrates how project versions map to ROCm
 compatibility:
 
-| Project version | ROCm target | Package name    | Installed binary               |
-| :-------------- | :---------- | :-------------- | :----------------------------- |
-| rvs-1.0.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras/bin/rvs7`    |
-| rvs-1.1.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras/bin/rvs7`    |
-| rvs-1.2.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras/bin/rvs7`    |
-| rvs-2.0.0       | ROCm 8.x    | `amdrocm8-rvs`  | `/opt/rocm/extras/bin/rvs8`    |
-
-All four install into the same `/opt/rocm/extras/` tree; the ROCm major
-is carried by the binary suffix (`rvs7` / `rvs8`), not a per-major
-directory.
+| Project version | ROCm target | Package name    | Install path          |
+| :-------------- | :---------- | :-------------- | :-------------------- |
+| rvs-1.0.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras-7/` |
+| rvs-1.1.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras-7/` |
+| rvs-1.2.0       | ROCm 7.x    | `amdrocm7-rvs`  | `/opt/rocm/extras-7/` |
+| rvs-2.0.0       | ROCm 8.x    | `amdrocm8-rvs`  | `/opt/rocm/extras-8/` |
 
 ### Release Principles
 
@@ -177,19 +142,18 @@ directory.
 ROCm 7.0  ─────── ROCm 7.1 ─────── ROCm 7.2 ──────── ROCm 8.0
   │                  │                  │                  │
   ├─ rvs-1.0.0       │                  │                  │
-  │  (bin/rvs7)      ├─ rvs-1.1.0       │                  │
-  │                  │  (bin/rvs7)      │                  │
+  │  (extras-7)      ├─ rvs-1.1.0       │                  │
+  │                  │  (extras-7)      │                  │
   │                  │    ├─ rvs-1.1.1  │                  │
-  │                  │    (bin/rvs7)    ├─ rvs-1.2.0       │
-  │                  │                  │  (bin/rvs7)      │
+  │                  │    (extras-7)    ├─ rvs-1.2.0       │
+  │                  │                  │  (extras-7)      │
   │                  │                  │                  ├─ rvs-2.0.0
-  │                  │                  │                  │  (bin/rvs8)
+  │                  │                  │                  │  (extras-8)
 ```
 
-In this timeline, all RVS 1.x releases install as `rvs7` and work with
+In this timeline, all RVS 1.x releases land in `extras-7` and work with
 any ROCm 7.x release. When ROCm 8.0 introduces breaking ABI changes, RVS
-publishes a new major version (2.0.0) that installs as `rvs8` alongside
-`rvs7` in the same `/opt/rocm/extras/` tree.
+publishes a new major version (2.0.0) that installs into `extras-8`.
 
 ## 3. Compatibility with ROCm Releases
 
@@ -248,52 +212,37 @@ different ROCm major families must not be mixed.
 
 ## 4. Installed Package Directory Structure
 
-Extras packages install under a single `/opt/rocm/extras/` prefix following
+Extras packages install under `/opt/rocm/extras-<rocm-major>/` following
 the
 [ROCm Linux Filesystem Hierarchy Standard](https://rocm.docs.amd.com/en/latest/conceptual/file-reorg.html)
 and the conventions established in
-[RFC0009](/docs/rfcs/RFC0009-OS-Packaging-Requirements.md). There is **no
-per-major directory** — every extra, regardless of which ROCm major it
-targets, installs into this one tree. Side-by-side support across ROCm
-majors is provided by a **versioned binary name**: the public executable
-is suffixed with the ROCm major (`rvs7`, `rvs8`), and an unsuffixed
-symlink (`rvs` → `rvs7`) resolves to the latest installed major. Shared
-libraries use **ordinary project-version SONAMEs** (`librvs.so` →
-`librvs.so.1` → `librvs.so.1.2.0`); the ROCm major is **not** encoded in
-the `.so` version. The layout is otherwise **flat** — public binaries and
-libraries from every extras project share the common `bin/` and `lib/`,
-with project-specific subfolders under `include/`, `share/`, and the
-private `lib/`/`libexec/` component directories for namespace isolation.
-
-> **Distribution vs. install layout.** This section describes the *installed*
-> on-disk layout. The *distribution* layout on the AMD repository
-> (`repo.amd.com`) is a separate concern, defined in
-> [RFC0012 — Repository Structure (PR #4414)](https://github.com/ROCm/TheRock/pull/4414):
-> extras are distributed from a single `extras/` folder with per-project
-> subfolders, and the ROCm major version is carried in the *package name*
-> (`amdrocm<major>-<project>`) rather than the repository path. On the
-> installed side, the ROCm major is carried by the binary suffix
-> (`/opt/rocm/extras/bin/rvs7`) rather than a per-major install prefix;
-> libraries use ordinary project-version SONAMEs.
+[RFC0009](/docs/rfcs/RFC0009-OS-Packaging-Requirements.md). The extras
+tree version matches the ROCm major version it targets, so `extras-7`
+contains all extras built for ROCm 7.x. The layout is **flat** — all
+binaries, libraries, and headers from every extras project are merged into
+this single prefix, with project-specific subfolders under `include/` and
+`share/` for namespace isolation.
 
 ### Layout
 
 ```
-/opt/rocm/extras/
+/opt/rocm/extras-<rocm-major>/
     | -- bin
-    |      | -- <component><rocm-major>          # versioned public binary (e.g. rvs7)
-    |      | -- <component> -> <component><rocm-major>   # symlink to the latest major
+    |      | -- all public binaries across extras projects
     | -- lib
-    |      | -- lib<soname>.so -> lib<soname>.so.<proj-major> -> lib<soname>.so.<proj-ver>   # ordinary project-version SONAME (no ROCm major)
-    |      | -- <component><rocm-major>          # private arch-dependent libs/modules, major-scoped so runtimes coexist
+    |      | -- lib<soname>.so -> lib<soname>.so.major -> lib<soname>.so.major.minor.patch
+    |      |      (public libraries to link with applications)
+    |      | -- <component>
+    |      |      | -- architecture dependent libraries and binaries used internally
     |      | -- cmake
     |             | -- <component>
-    |                    | -- <component>-config.cmake   # dev files (resolve to the latest major)
+    |                    | -- <component>-config.cmake
     | -- libexec
-    |      | -- <component><rocm-major>          # private executables used internally, major-scoped
+    |      | -- <component>
+    |             | -- non-ISA/architecture independent executables used internally
     | -- include
     |      | -- <component>
-    |             | -- public header files       # dev files (latest major)
+    |             | -- public header files
     | -- share
            | -- html
            |      | -- <component>
@@ -312,44 +261,30 @@ private `lib/`/`libexec/` component directories for namespace isolation.
                   | -- architecture independent misc files (configs, test assets)
 ```
 
-Where `<rocm-major>` is the ROCm major version the extra targets (e.g.,
-`7` for ROCm 7.x), `<component>` is the individual project name (e.g.,
-`rvs`), `<proj-major>` is the project's own SONAME major, and `<proj-ver>`
-is the project's full semantic version (e.g., `1.2.0`). Only the `bin/`
-executable and the private `lib/`/`libexec/` component directories carry
-the ROCm major (so multiple majors coexist); the public `lib*.so` uses an
-ordinary project-version SONAME with **no** ROCm major, and
-development-only files (`include/`, `lib/cmake/`) stay per-project and
-resolve to the latest installed major.
+Where `<rocm-major>` is the ROCm major version the extras target (e.g.,
+`7` for ROCm 7.x), and `<component>` is the individual project name
+(e.g., `rvs`).
 
 ### Symlinks
 
-Unversioned symlinks provide stable paths that resolve to the latest
-installed ROCm major:
+A soft link provides a stable unversioned path that resolves to the latest
+installed extras tree:
 
 ```
-/opt/rocm/extras/bin/rvs        -> rvs7
-```
-
-Shared libraries keep their conventional development symlink resolving to
-the project SONAME (not the ROCm major):
-
-```
-/opt/rocm/extras/lib/librvs.so  -> librvs.so.1 -> librvs.so.1.2.0
+/opt/rocm/extras/         -> /opt/rocm/extras-7
 ```
 
 ### RVS Example
 
-A concrete installation containing RVS 1.2.0 built for ROCm 7.x:
+A concrete installation of the `extras-7` tree containing RVS 1.2.0:
 
 ```
-/opt/rocm/extras/
+/opt/rocm/extras-7/
     | -- bin
-    |      | -- rvs7                           # Main RVS executable (ROCm 7.x)
-    |      | -- rvs -> rvs7                     # symlink to the latest major
+    |      | -- rvs                            # Main RVS executable
     | -- lib
-    |      | -- librvs.so -> librvs.so.1 -> librvs.so.1.2.0   # ordinary project SONAME (no ROCm major)
-    |      | -- rvs7                            # private RVS modules for ROCm 7.x
+    |      | -- librvs.so -> librvs.so.1 -> librvs.so.1.2.0
+    |      | -- rvs
     |      |      | -- libgst.so               # GPU Stress Test module
     |      |      | -- libiet.so               # Input EDPp Test module
     |      |      | -- libpeqt.so              # PCI-Express Qualification Test module
@@ -361,8 +296,8 @@ A concrete installation containing RVS 1.2.0 built for ROCm 7.x:
     |                    | -- rvs-config.cmake
     |                    | -- rvs-targets.cmake
     | -- libexec
-    |      | -- rvs7
-    |             | -- rvs_worker               # Internal worker process (ROCm 7.x)
+    |      | -- rvs
+    |             | -- rvs_worker               # Internal worker process
     | -- include
     |      | -- rvs
     |             | -- rvs.h
@@ -386,30 +321,30 @@ A concrete installation containing RVS 1.2.0 built for ROCm 7.x:
 ```
 
 When RVS releases a new version (e.g., rvs-1.3.0) while still targeting
-ROCm 7, the updated files replace the `rvs7` binary in-place — the
-ROCm-major suffix does not change — and the library advances its ordinary
-project SONAME (`librvs.so.1.3.0`). The `rvs` symlink continues to point
-at `rvs7` until a newer ROCm major is installed.
+ROCm 7, the updated files are installed in-place into the same `extras-7`
+tree. The extras tree version does not change — only the individual project
+binaries and libraries within it are upgraded.
+
+Symlink:
+
+```
+/opt/rocm/extras/         -> /opt/rocm/extras-7
+```
 
 ### Multiple Extras Projects
 
 When more than one extras project is installed, all projects merge into the
-same flat prefix. Each public binary keeps its ROCm-major suffix, and the
-project-specific subfolders under `include/` and `share/` prevent namespace
-collisions:
+same flat prefix. The project-specific subfolders under `include/` and
+`share/` prevent namespace collisions:
 
 ```
-/opt/rocm/extras/
+/opt/rocm/extras-7/
     | -- bin
-    |      | -- rvs7
-    |      | -- rvs -> rvs7
-    |      | -- rocm-bench7
-    |      | -- rocm-bench -> rocm-bench7
+    |      | -- rvs
+    |      | -- rocm-bench
     | -- lib
-    |      | -- librvs.so -> librvs.so.1 -> librvs.so.1.2.0
-    |      | -- librocmbench.so -> librocmbench.so.3 -> librocmbench.so.3.0.0
-    |      | -- rvs7
-    |      | -- rocm-bench7
+    |      | -- librvs.so
+    |      | -- librocmbench.so
     |      | -- cmake
     |             | -- rvs
     |             |      | -- rvs-config.cmake
@@ -435,35 +370,19 @@ collisions:
 
 ### Side-by-Side Installation
 
-When multiple ROCm major versions are installed on the same system, both
-sets of artifacts coexist within the **same** `/opt/rocm/extras/` tree —
-there is no per-major directory. The ROCm-major suffix on each binary
-(and on the private module directory) keeps the executables from
-colliding. The public libraries do **not** carry the ROCm major; they
-coexist through ordinary SONAME versioning because an extra bumps its own
-major when it retargets a new ROCm major (RVS 1.x → ROCm 7, RVS 2.x →
-ROCm 8):
+When multiple ROCm major versions are installed on the same system, a
+separate extras tree exists for each. This allows side-by-side operation
+without conflicts:
 
 ```
-/opt/rocm/extras/
-    | -- bin
-    |      | -- rvs7
-    |      | -- rvs8
-    |      | -- rvs -> rvs8                      # latest ROCm major wins
-    | -- lib
-           | -- librvs.so.1 -> librvs.so.1.2.0   # RVS 1.x (built for ROCm 7)
-           | -- librvs.so.2 -> librvs.so.2.0.0   # RVS 2.x (built for ROCm 8)
-           | -- librvs.so -> librvs.so.2         # newest project SONAME
-           | -- rvs7                             # ROCm 7 private modules
-           | -- rvs8                             # ROCm 8 private modules
+/opt/rocm/extras-7/
+/opt/rocm/extras-8/
+/opt/rocm/extras/         -> /opt/rocm/extras-8
 ```
 
-Within a single ROCm major (e.g. `rvs7`), project upgrades are installed
-in-place — there is no side-by-side at the individual project level. The
-ROCm major version is the only axis of side-by-side support. Development
-files (`include/`, `lib/cmake/`) are not major-suffixed and reflect the
-most recently installed major; consumers needing headers for a specific
-older major should install that major last or use a dedicated environment.
+Within a single extras tree (e.g., `extras-7`), project upgrades are
+installed in-place — there is no side-by-side at the individual project
+level. The ROCm major version is the only axis of side-by-side support.
 
 ### Environment Integration
 
@@ -475,11 +394,11 @@ snippet:
 ```
 
 This adds `/opt/rocm/extras/bin` to `$PATH` and `/opt/rocm/extras/lib` to
-`$LD_LIBRARY_PATH` (or the equivalent `ld.so.conf.d` drop-in). Because all
-majors share the one tree, a single profile snippet covers every extras
-project and every ROCm major. Invoking `rvs` runs the latest installed
-major (via the `rvs` → `rvs7` symlink); to target a specific major, call
-the suffixed binary directly (`rvs7`, `rvs8`).
+`$LD_LIBRARY_PATH` (or the equivalent `ld.so.conf.d` drop-in). Because the
+layout is flat, a single profile snippet covers all extras projects. Users
+can target a specific ROCm major version by pointing directly at
+`/opt/rocm/extras-7/bin` instead of the symlink, or by using environment
+modules.
 
 ## 5. Packaging Formats
 
@@ -744,7 +663,7 @@ into the flat FHS layout described in Section 4:
 
 ```bash
 tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
-    -C /opt/rocm/extras/
+    -C /opt/rocm/extras-7/
 ```
 
 Tarball naming follows the pattern:
@@ -772,7 +691,7 @@ amd-smi version
 
 # Extract the end-user project into the extras tree
 tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
-    -C /opt/rocm/extras/
+    -C /opt/rocm/extras-7/
 ```
 
 **Option 2: ROCm installed from tarball**
@@ -787,7 +706,7 @@ tar -xf amdrocm-core-7.1.0-linux-x86_64.tar.xz \
 
 # Extract the end-user project
 tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
-    -C /opt/rocm/extras/
+    -C /opt/rocm/extras-7/
 ```
 
 **Option 3: ROCm installed via Python packages**
@@ -800,7 +719,7 @@ libraries reside inside the Python site-packages directory. Use
 ROCM_ROOT=$(rocm-sdk path --root)
 
 tar -xf amdrocm7-rvs-1.2.0-linux-x86_64.tar.xz \
-    -C /opt/rocm/extras/
+    -C /opt/rocm/extras-7/
 ```
 
 #### Connecting Project Binaries with ROCm Libraries
@@ -826,7 +745,7 @@ or when `$ORIGIN` RPATH does not cover the layout:
 ```bash
 export ROCM_PATH=/opt/rocm/core-7
 export LD_LIBRARY_PATH=${ROCM_PATH}/lib:${LD_LIBRARY_PATH}
-export PATH=/opt/rocm/extras/bin:${ROCM_PATH}/bin:${PATH}
+export PATH=/opt/rocm/extras-7/bin:${ROCM_PATH}/bin:${PATH}
 ```
 
 **Option 3: `ld.so.conf.d` drop-in (system-wide, requires root)**
@@ -847,7 +766,7 @@ paths per user or per job:
 ```tcl
 # /opt/modulefiles/rocm-extras/7
 set     rocm_root    /opt/rocm/core-7
-set     extras_root  /opt/rocm/extras
+set     extras_root  /opt/rocm/extras-7
 
 prepend-path  PATH             $extras_root/bin
 prepend-path  PATH             $rocm_root/bin
@@ -871,7 +790,7 @@ end-user project binaries can find all required ROCm libraries:
 
 ```bash
 # Check that all shared library dependencies resolve
-ldd /opt/rocm/extras/bin/rvs7
+ldd /opt/rocm/extras-7/bin/rvs
 
 # Run the project's built-in sanity check (if available)
 rvs -d 1 -g
@@ -887,57 +806,21 @@ API, CLI tool, or test harness written in Python. Native-only extras
 projects like RVS do not produce wheels.
 
 When applicable, extras wheels follow the conventions described in the
-[Python packaging documentation](/docs/packaging/python_packaging.md).
+[Python packaging documentation](/docs/packaging/python_packaging.md):
 
-> **Wheel naming differs from native packages.** Unlike DEB/RPM packages,
-> a Python wheel **does not embed the ROCm major version in its distribution
-> name**. The wheel is named `rocm-<project>` (e.g., `rocm-rvs`), and the
-> ROCm major version is carried by metadata instead. This follows Python
-> packaging norms — PyPI treats `rocm7-rvs` and `rocm8-rvs` as unrelated
-> projects, which breaks `pip`'s upgrade and conflict resolution — and avoids
-> squatting a new PyPI name for every ROCm major.
-
-The target ROCm major version is encoded by **doing both** of the following,
-so the binding is visible to humans *and* enforced by the resolver:
-
-1. **PEP 440 local-version segment.** Each wheel carries a `+rocm<major>`
-   local-version tag, so the compatibility target is visible in the version
-   string and in `pip list`:
-
-   ```
-   rocm_rvs-1.2.0+rocm7-py3-none-linux_x86_64.whl   # RVS 1.2.0 for ROCm 7.x
-   rocm_rvs-2.0.0+rocm8-py3-none-linux_x86_64.whl   # RVS 2.0.0 for ROCm 8.x
-   ```
-
-2. **Non-overlapping `Requires-Dist` range.** The wheel declares a dependency
-   on the ROCm SDK Python packages pinned to a single major version. The
-   ranges across majors never overlap, so `pip` can only resolve a wheel
-   against a matching ROCm install:
-
-   ```
-   Requires-Dist: rocm[core] >=7.0, <8.0
-   ```
-
+- **Selector package**: A source distribution (`rocm<major>-<project>`)
+  that evaluates install-time constraints and pulls the correct runtime
+  wheels.
 - **Runtime wheels**: Contain the minimal set of files needed to run,
   with no symlinks. SONAME libraries are included directly.
 - **Devel wheels**: Catch-all for headers, CMake files, and symlinks
   stored in a `_devel.tar` inside the wheel.
 
-**PyPI name reservation.** To prevent dependency-confusion attacks, the
-`rocm-<project>` name should be reserved (registered) on public PyPI even if
-the wheels are primarily distributed through AMD's own index. This blocks a
-malicious actor from publishing a same-named package that `pip` might prefer.
-
-**Pinning across a fleet.** `pip` has no `apt-mark hold` equivalent, so
-fleet-wide version control is done with a constraints file:
+Wheels declare a dependency on the ROCm SDK Python packages for the
+matching major version:
 
 ```
-# rocm-constraints.txt
-rocm-rvs==1.2.0+rocm7
-```
-
-```bash
-pip install -c rocm-constraints.txt rocm-rvs
+Requires-Dist: rocm[core] >=7.0, <8.0
 ```
 
 Example build:
@@ -948,18 +831,10 @@ build_tools/build_python_packages.py \
     --dest-dir ./OUTPUT_PKG
 ```
 
-Example install (resolver selects the major via `Requires-Dist` against the
-installed ROCm):
+Example install:
 
 ```bash
-pip install rocm-rvs --pre \
-    --find-links=./OUTPUT_PKG/dist
-```
-
-Example install (explicitly pinned to a ROCm major):
-
-```bash
-pip install "rocm-rvs==1.2.0+rocm7" --pre \
+pip install rocm7-mytool --pre \
     --find-links=./OUTPUT_PKG/dist
 ```
 
