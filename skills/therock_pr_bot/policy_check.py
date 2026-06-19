@@ -85,6 +85,7 @@ class Policy:
     forbidden_paths: List[str]
     unit_test_code_extensions: List[str]
     unit_test_patterns: List[str]
+    unit_test_exempt_paths: List[str]
     required_checks: List[str]
     precommit_failure_comment: Optional[FailureComment]
 
@@ -148,6 +149,9 @@ def load_policy(policy_path: Path) -> Policy:
     unit_test_patterns = [
         str(p) for p in (unit_cfg.get("test_file_patterns", []) or [])
     ]
+    unit_test_exempt_paths = [
+        str(p) for p in (unit_cfg.get("exempt_paths", []) or [])
+    ]
 
     required_checks = [str(x) for x in (checks.get("required_check_runs", []) or [])]
 
@@ -174,6 +178,7 @@ def load_policy(policy_path: Path) -> Policy:
         forbidden_paths=forbidden_paths,
         unit_test_code_extensions=unit_test_code_extensions,
         unit_test_patterns=unit_test_patterns,
+        unit_test_exempt_paths=unit_test_exempt_paths,
         required_checks=required_checks,
         precommit_failure_comment=precommit_failure_comment,
     )
@@ -400,6 +405,14 @@ def ensure_unit_tests(
         filename = Path(str(f.get("filename") or "")).as_posix()
         if not filename:
             continue
+
+        # Files under exempt paths never require an accompanying unit test.
+        if any(
+            _matches_forbidden(filename, pat)
+            for pat in policy.unit_test_exempt_paths
+        ):
+            continue
+
         base = Path(filename).name
         ext = Path(filename).suffix.lower()
 

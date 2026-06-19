@@ -80,6 +80,7 @@ pr:
       - '.github/**'
       - 'tools/**'
       - 'scripts/**'
+      - 'skills/**'
 
 diff:
   # Block risky / unwanted files
