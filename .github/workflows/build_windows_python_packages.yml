@@ -68,6 +68,9 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      build_runs_on:
+        type: string
+        default: ""
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -84,7 +87,7 @@ run-name: Build Windows Python Packages (${{ inputs.artifact_group }}, ${{ input
 jobs:
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    runs-on: ${{ inputs.build_runs_on || 'aws-windows-scale-rocm-customer-dev' }}
     permissions:
       id-token: write
     outputs:

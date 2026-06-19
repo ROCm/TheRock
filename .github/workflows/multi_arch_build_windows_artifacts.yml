@@ -62,11 +62,15 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
+      build_runs_on:
+        type: string
+        default: ""
+        description: "Build runner label override for Windows builds"
 
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: azure-windows-scale-rocm
+    runs-on: ${{ inputs.build_runs_on || 'aws-windows-scale-rocm-customer-dev' }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
