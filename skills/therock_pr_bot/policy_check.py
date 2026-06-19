@@ -705,7 +705,7 @@ def build_policy_table_comment(
     else:
         footer = "\n\n> 🎉 All policy checks passed!"
 
-    faq_url = "https://github.com/ROCm/TheRock/tree/main/.github/therock_pr_bot/FAQ.md"
+    faq_url = "https://github.com/ROCm/TheRock/tree/main/skills/therock_pr_bot/FAQ.md"
 
     faq_link = (
         "\n\n📖 **Need help?** See the "
