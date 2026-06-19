@@ -1,6 +1,4 @@
 # composable-kernel
-[components.run."math-libs/composable_kernel/stage"]
-optional = true
 [components.lib."math-libs/composable_kernel/stage"]
 [components.dbg."math-libs/composable_kernel/stage"]
 [components.dev."math-libs/composable_kernel/stage"]
