@@ -15,9 +15,9 @@ jobs:
           echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
           echo "GPU_DEVICE_ORDINAL=$GPU_DEVICE_ORDINAL"
           echo "=== DRI DEVICES ==="
-          ls -la /dev/dri/ || echo "no /dev/dri"
-          echo "=== KFD ==="
-          ls -la /dev/kfd || echo "no /dev/kfd"
+          ls -la /dev/dri/
+          echo "=== GPU ARCH ==="
+          HSA_OVERRIDE_GFX_VERSION="" /opt/host-rocm/bin/rocminfo 2>&1 | grep -E "Name:.*gfx|Marketing" || true
 
   validate-gfx1100:
     runs-on: linux-shark39-gfx1100-gpu-rocm
@@ -29,6 +29,6 @@ jobs:
           echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
           echo "GPU_DEVICE_ORDINAL=$GPU_DEVICE_ORDINAL"
           echo "=== DRI DEVICES ==="
-          ls -la /dev/dri/ || echo "no /dev/dri"
-          echo "=== KFD ==="
-          ls -la /dev/kfd || echo "no /dev/kfd"
+          ls -la /dev/dri/
+          echo "=== GPU ARCH ==="
+          HSA_OVERRIDE_GFX_VERSION="" /opt/host-rocm/bin/rocminfo 2>&1 | grep -E "Name:.*gfx|Marketing" || true
