@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 from _therock_utils.build_topology import BuildTopology
-from github_actions.stage_impact import analyze_stage_impact
+from github_actions.stage_impact import StageImpactAnalyzer, analyze_stage_impact
 
 
 class StageImpactTest(unittest.TestCase):
@@ -504,6 +504,107 @@ class StageImpactTest(unittest.TestCase):
         self.assertEqual(payload["unmatched_inputs"], ())
         self.assertEqual(payload["matched_source_sets"], ("rocm-libraries",))
         self.assertFalse(payload["full_rebuild_required"])
+
+
+class RequiredStagesForComponentTest(unittest.TestCase):
+    """Tests for StageImpactAnalyzer.required_stages_for_component()."""
+
+    def setUp(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as temp_file:
+            self.topology_path = temp_file.name
+
+    def tearDown(self):
+        if os.path.exists(self.topology_path):
+            os.unlink(self.topology_path)
+
+    def write_topology(self, content: str) -> None:
+        with open(self.topology_path, "w", encoding="utf-8") as f:
+            f.write(textwrap.dedent(content))
+
+    def test_required_stages_include_upstream_deps(self):
+        """required_stages_for_component includes owning stage + artifact-producer stages."""
+        self.write_topology(
+            """
+            [source_sets.debug-tools]
+            description = "Debug tools"
+            submodules = ["rocgdb"]
+
+            [source_sets.math]
+            description = "Math libraries"
+            submodules = ["rocm-libraries"]
+
+            [build_stages.compiler-runtime]
+            description = "Compiler and runtime"
+            artifact_groups = ["compiler"]
+
+            [build_stages.debug-tools]
+            description = "Debug tools stage"
+            artifact_groups = ["debug-tools"]
+
+            [build_stages.math-libs]
+            description = "Math libs stage"
+            artifact_groups = ["math-libs"]
+
+            [artifact_groups.compiler]
+            description = "Compiler"
+            type = "generic"
+            source_sets = []
+
+            [artifact_groups.debug-tools]
+            description = "Debug tools"
+            type = "generic"
+            artifact_group_deps = ["compiler"]
+            source_sets = ["debug-tools"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "generic"
+            artifact_group_deps = ["compiler"]
+            source_sets = ["math"]
+
+            [artifacts.amd-llvm]
+            artifact_group = "compiler"
+            type = "target-neutral"
+
+            [artifacts.rocgdb]
+            artifact_group = "debug-tools"
+            type = "target-neutral"
+        """
+        )
+        topology = BuildTopology(self.topology_path)
+        analyzer = StageImpactAnalyzer(topology=topology)
+
+        # rocgdb: owns debug-tools, which depends on compiler → needs compiler-runtime too
+        self.assertEqual(
+            analyzer.required_stages_for_component("rocgdb"),
+            ["compiler-runtime", "debug-tools"],
+        )
+        # rocm-libraries: owns math-libs, which depends on compiler → needs compiler-runtime too
+        self.assertEqual(
+            analyzer.required_stages_for_component("rocm-libraries"),
+            ["compiler-runtime", "math-libs"],
+        )
+        # Unknown submodule → [] (no restriction)
+        self.assertEqual(analyzer.required_stages_for_component("unknown"), [])
+
+    def test_required_stages_real_topology(self):
+        """required_stages_for_component against the real BUILD_TOPOLOGY.toml."""
+        from _therock_utils.build_topology import get_topology
+
+        analyzer = StageImpactAnalyzer(topology=get_topology())
+        self.assertEqual(
+            analyzer.required_stages_for_component("rocgdb"),
+            ["compiler-runtime", "debug-tools"],
+        )
+        self.assertEqual(
+            analyzer.required_stages_for_component("rocm-libraries"),
+            ["compiler-runtime", "math-libs"],
+        )
+        self.assertEqual(
+            analyzer.required_stages_for_component("unknown-submodule"), []
+        )
 
 
 if __name__ == "__main__":
