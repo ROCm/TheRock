@@ -102,7 +102,7 @@ An empty or one-line description makes it hard for reviewers to understand the c
 **Required tracking reference** — include **one** of the following lines:
 
 | Field      | Example                                                  |
-| ---------- |----------------------------------------------------------|
+| ---------- | -------------------------------------------------------- |
 | `JIRA ID`  | `JIRA ID : TESTAUTO-6039`                                |
 | `JIRA ID`  | `JIRA ID - #330`                                         |
 | `JIRA ID`  | `JIRA ID #330`                                           |
