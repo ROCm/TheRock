@@ -2,7 +2,7 @@ name: TheRock PR Bot
 
 on:
   workflow_dispatch:
-  pull_request_target:
+  pull_request:
     branches: [main, pr-bot-test]
     types: [opened, synchronize, reopened, ready_for_review, edited]
 
@@ -20,9 +20,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Run only trusted base-branch code, never fork/PR-head code.
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.repository.default_branch }}
 
       - uses: actions/setup-python@v5
         with:
