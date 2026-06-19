@@ -97,12 +97,11 @@ def setup_env():
     environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
     environ_vars["HIP_PLATFORM"] = "amd"
 
-    ld_lib_paths = 
-        [
-            f"{THEROCK_LIB_PATH}", 
-            f"{THEROCK_SYSDEPS_LIB_PATH}",
-            f"${THE_ROCK_LLVM_LIB_HOST_TRIPLE_PATH}"
-        ]
+    ld_lib_paths = [
+        f"{THEROCK_LIB_PATH}",
+        f"{THEROCK_SYSDEPS_LIB_PATH}",
+        f"{THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}",
+    ]
 
     if is_asan():
         # Installed test binaries are built with -shared-libsan, so the clang
