@@ -1307,5 +1307,143 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx1101", result)
 
 
+class TestFindAvailableArtifactsExclude(unittest.TestCase):
+    """Unit tests for find_available_artifacts exclude_components parameter."""
+
+    def setUp(self):
+        import artifact_manager as am
+
+        self.am = am
+
+    def test_exclude_test_removes_test_archives(self):
+        """find_available_artifacts with exclude_components={'test'} skips test archives."""
+        available = {
+            "blas_lib_generic.tar.zst",
+            "blas_test_generic.tar.zst",
+            "blas_dev_generic.tar.zst",
+        }
+        result = self.am.find_available_artifacts(
+            {"blas"}, ["generic"], available, exclude_components={"test"}
+        )
+        self.assertIn("blas_lib_generic.tar.zst", result)
+        self.assertIn("blas_dev_generic.tar.zst", result)
+        self.assertNotIn("blas_test_generic.tar.zst", result)
+
+    def test_exclude_multiple_components(self):
+        """find_available_artifacts can exclude multiple components at once."""
+        available = {
+            "blas_lib_generic.tar.zst",
+            "blas_test_generic.tar.zst",
+            "blas_dbg_generic.tar.zst",
+            "blas_doc_generic.tar.zst",
+        }
+        result = self.am.find_available_artifacts(
+            {"blas"},
+            ["generic"],
+            available,
+            exclude_components={"test", "dbg", "doc"},
+        )
+        self.assertIn("blas_lib_generic.tar.zst", result)
+        self.assertNotIn("blas_test_generic.tar.zst", result)
+        self.assertNotIn("blas_dbg_generic.tar.zst", result)
+        self.assertNotIn("blas_doc_generic.tar.zst", result)
+
+    def test_no_exclusion_returns_all(self):
+        """find_available_artifacts with no exclude_components returns everything."""
+        available = {
+            "blas_lib_generic.tar.zst",
+            "blas_test_generic.tar.zst",
+        }
+        result = self.am.find_available_artifacts({"blas"}, ["generic"], available)
+        self.assertIn("blas_lib_generic.tar.zst", result)
+        self.assertIn("blas_test_generic.tar.zst", result)
+
+
+class TestFetchExcludeComponents(ArtifactManagerTestBase):
+    """Integration tests: fetch --exclude-components skips specified archives."""
+
+    def test_fetch_excludes_test_component(self):
+        """fetch --exclude-components=test does not download test archives."""
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "test", "generic")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            import artifact_manager
+
+            artifact_manager.main(
+                [
+                    "fetch",
+                    "--stage",
+                    "all",
+                    "--output-dir",
+                    str(self.output_dir),
+                    "--topology",
+                    str(self.topology_path),
+                    "--local-staging-dir",
+                    str(self.staging_dir),
+                    "--platform",
+                    TEST_PLATFORM,
+                    "--run-id",
+                    "local",
+                    "--exclude-components",
+                    "test",
+                ]
+            )
+
+        fetched = [c.archive_path.name for c in extract_calls]
+        self.assertTrue(
+            any("_lib_" in f for f in fetched),
+            f"lib component should be fetched, got: {fetched}",
+        )
+        self.assertFalse(
+            any("_test_" in f for f in fetched),
+            f"test component should be excluded, got: {fetched}",
+        )
+
+    def test_fetch_without_exclude_includes_test(self):
+        """fetch without --exclude-components includes test archives (backward compat)."""
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "test", "generic")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            import artifact_manager
+
+            artifact_manager.main(
+                [
+                    "fetch",
+                    "--stage",
+                    "all",
+                    "--output-dir",
+                    str(self.output_dir),
+                    "--topology",
+                    str(self.topology_path),
+                    "--local-staging-dir",
+                    str(self.staging_dir),
+                    "--platform",
+                    TEST_PLATFORM,
+                    "--run-id",
+                    "local",
+                ]
+            )
+
+        fetched = [c.archive_path.name for c in extract_calls]
+        self.assertTrue(
+            any("_test_" in f for f in fetched),
+            f"test component should be present without exclusion, got: {fetched}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

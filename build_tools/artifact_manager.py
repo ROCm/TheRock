@@ -139,17 +139,26 @@ def find_available_artifacts(
     artifact_names: Set[str],
     target_families: List[str],
     available: Set[str],
+    exclude_components: Optional[Set[str]] = None,
 ) -> List[str]:
     """Find which artifacts exist in the available set.
 
     Iterates artifact_names × target_families × components × extensions,
     returning filenames that are present in `available`. Prefers .tar.zst
     over .tar.xz when both exist.
+
+    Args:
+        exclude_components: Optional set of component names to skip
+            (e.g. {"test", "dbg"}). Components not in ARTIFACT_COMPONENTS
+            are silently ignored.
     """
+    skip = exclude_components or set()
     matched = []
     for artifact_name in sorted(artifact_names):
         for tf in target_families:
             for comp in ARTIFACT_COMPONENTS:
+                if comp in skip:
+                    continue
                 for ext in ARTIFACT_EXTENSIONS:
                     filename = f"{artifact_name}_{comp}_{tf}{ext}"
                     if filename in available:
@@ -355,7 +364,19 @@ def do_fetch(args: argparse.Namespace):
     )
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    matched_filenames = find_available_artifacts(inbound, target_families, available)
+    exclude = (
+        {c.strip() for c in args.exclude_components.split(",") if c.strip()}
+        if args.exclude_components
+        else set()
+    )
+    active = [c for c in ARTIFACT_COMPONENTS if c not in exclude]
+    log(
+        f"Fetching components: {', '.join(active)}"
+        + (f" (excluded: {', '.join(sorted(exclude))})" if exclude else "")
+    )
+    matched_filenames = find_available_artifacts(
+        inbound, target_families, available, exclude
+    )
 
     download_requests = [
         DownloadRequest(
@@ -1082,6 +1103,12 @@ def main(argv: Optional[List[str]] = None):
         type=int,
         default=None,
         help="Number of concurrent extractions (default: auto)",
+    )
+    fetch_parser.add_argument(
+        "--exclude-components",
+        default="",
+        help="Comma-separated artifact components to exclude (e.g. 'test' or 'test,dbg'). "
+        "Valid components: " + ", ".join(ARTIFACT_COMPONENTS),
     )
     fetch_parser.set_defaults(func=do_fetch)
 
