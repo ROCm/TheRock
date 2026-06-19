@@ -124,7 +124,6 @@ on:
         default: "linux-gfx942-1gpu-core42-ossci-rocm"
 permissions:
   contents: read
-  packages: read
   id-token: write
 
 jobs:

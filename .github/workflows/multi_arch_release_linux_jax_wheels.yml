@@ -86,7 +86,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      packages: read
     uses: ./.github/workflows/multi_arch_build_linux_jax_wheels.yml
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
