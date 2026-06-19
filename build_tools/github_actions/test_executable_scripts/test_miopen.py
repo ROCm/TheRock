@@ -16,8 +16,7 @@ The test category can be selected with ``--test-type`` (alias ``--category``)
 or the ``TEST_TYPE`` environment variable. Precedence is: CLI option, then
 ``TEST_TYPE``, then the default of "standard". All other configuration
 (THEROCK_BIN_DIR, AMDGPU_FAMILIES, SHARD_INDEX, TOTAL_SHARDS, ...) is read by
-test_runner.py from the environment. Any unrecognized arguments are forwarded
-to test_runner.py.
+test_runner.py from the environment.
 """
 
 import argparse
@@ -56,7 +55,7 @@ def main() -> int:
             f"variable. Defaults to TEST_TYPE or '{DEFAULT_TEST_TYPE}'."
         ),
     )
-    args, extra_args = parser.parse_known_args()
+    args = parser.parse_args()
 
     # Precedence: CLI option > TEST_TYPE env var > default.
     category = args.test_type or os.getenv("TEST_TYPE") or DEFAULT_TEST_TYPE
@@ -68,8 +67,7 @@ def main() -> int:
 
     logging.info(f"MIOpen test category (TEST_TYPE): {category}")
 
-    # Forward any unrecognized arguments through to test_runner.py.
-    cmd = [sys.executable, str(TEST_RUNNER), *extra_args]
+    cmd = [sys.executable, str(TEST_RUNNER)]
     logging.info(f"++ Exec $ {shlex.join(cmd)}")
     return subprocess.run(cmd, env=env, check=False).returncode
 
