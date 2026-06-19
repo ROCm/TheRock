@@ -35,6 +35,7 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/miopen_plugin",
     "--output-on-failure",
+    "--verbose",
     "--parallel",
     "8",
 ]
