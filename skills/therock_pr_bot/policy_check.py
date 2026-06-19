@@ -151,7 +151,6 @@ def load_policy(policy_path: Path) -> Policy:
     ]
     unit_test_exempt_paths = [str(p) for p in (unit_cfg.get("exempt_paths", []) or [])]
 
-
     required_checks = [str(x) for x in (checks.get("required_check_runs", []) or [])]
 
     fc = ((checks.get("failure_comments", {}) or {}).get("pre-commit")) or None
