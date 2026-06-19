@@ -217,15 +217,15 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --repo-hashtag nightly \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
             --repo-hashtag nightly \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
             --repo-hashtag nightly \
             --no-commit-hipify
 
@@ -234,18 +234,18 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --require-related-commit \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch  \
             --require-related-commit \
             --no-commit-hipify
 
@@ -296,9 +296,7 @@ jobs:
             build ^
             --install-rocm ^
             --find-links "${{ inputs.rocm_package_find_links_url }}" ^
-            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
-            --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
-            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
