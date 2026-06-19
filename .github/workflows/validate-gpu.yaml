@@ -1,0 +1,24 @@
+name: GPU Index Validation
+on: workflow_dispatch
+
+jobs:
+  validate-gfx1030:
+    runs-on: [self-hosted, linux-shark39-gfx1030-gpu-rocm]
+    # No container: block — runs directly in the prolense runner
+    steps:
+      - name: Check GPU env vars + arch
+        run: |
+          echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
+          echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
+          echo "GPU_DEVICE_ORDINAL=$GPU_DEVICE_ORDINAL"
+          rocminfo | grep "Name:" | grep gfx
+
+  validate-gfx1100:
+    runs-on: [self-hosted, linux-shark39-gfx1100-gpu-rocm]
+    steps:
+      - name: Check GPU env vars + arch
+        run: |
+          echo "HIP_VISIBLE_DEVICES=$HIP_VISIBLE_DEVICES"
+          echo "ROCR_VISIBLE_DEVICES=$ROCR_VISIBLE_DEVICES"
+          echo "GPU_DEVICE_ORDINAL=$GPU_DEVICE_ORDINAL"
+          rocminfo | grep "Name:" | grep gfx
