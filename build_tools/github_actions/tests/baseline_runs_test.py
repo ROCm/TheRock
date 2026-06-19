@@ -211,7 +211,7 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertEqual(summary.run_id, "123")
         self.assertEqual(summary.status, "completed")
         self.assertEqual(summary.conclusion, "success")
-        self.assertEqual(summary.timestamp, None)
+        self.assertEqual(summary.timestamp, "2026-06-17T20:00:00Z")
 
     def test_workflow_run_summary_to_dict(self):
         run = _workflow_run("123")
