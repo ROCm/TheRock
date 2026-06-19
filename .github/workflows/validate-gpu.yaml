@@ -1,10 +1,12 @@
 name: GPU Index Validation
-on: workflow_dispatch
+on:
+  push:
+    branches:
+      - validate-gpu-index
 
 jobs:
   validate-gfx1030:
     runs-on: [self-hosted, linux-shark39-gfx1030-gpu-rocm]
-    # No container: block — runs directly in the prolense runner
     steps:
       - name: Check GPU env vars + arch
         run: |
