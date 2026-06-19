@@ -431,12 +431,14 @@ def main(argv=None):
             .replace("_SOURCE_DIR", "")
         )
 
-        # Extract projects from external_repo JSON if provided
+        # Extract caller-supplied fields from external_repo JSON if provided
         projects = ""
+        extra_cmake_options = ""
         if args.external_repo_json:
             try:
                 external_repo = json.loads(args.external_repo_json)
                 projects = external_repo.get("projects", "")
+                extra_cmake_options = external_repo.get("extra_cmake_options", "")
             except json.JSONDecodeError as e:
                 print(
                     f"Warning: failed to parse external_repo_json: {e}",
@@ -449,6 +451,7 @@ def main(argv=None):
             "checkout_path": checkout_path,
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "extra_cmake_options": extra_cmake_options,
             "projects": projects,
         }
         config["config_json"] = json.dumps(config_json)
