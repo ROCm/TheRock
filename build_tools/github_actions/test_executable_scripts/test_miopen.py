@@ -9,9 +9,8 @@ compiled into an installed ``bin/MIOpen/CTestTestfile.cmake`` and consumed by
 the generic ``test_runner.py`` via ctest category labels (quick / standard /
 comprehensive / full) plus GPU-specific ``ex_gpu_<arch>`` exclusions.
 
-This script used to maintain its own hand-copied gtest filters, which drifted
-from the YAML and only understood "quick" vs. "standard". It now simply
-delegates to ``test_runner.py`` so the YAML is the single source of truth.
+This convenience script simply delegates to ``test_runner.py`` so the YAML is
+the single source of truth.
 
 The test category can be selected with ``--test-type`` (alias ``--category``)
 or the ``TEST_TYPE`` environment variable. Precedence is: CLI option, then
