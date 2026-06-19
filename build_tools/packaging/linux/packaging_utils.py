@@ -881,7 +881,9 @@ def filter_components_fromartifactory(
             dir_suffix = "generic"
     else:
         dir_suffix = (
-            gfx_arch if is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir) else "generic"
+            gfx_arch
+            if is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir)
+            else "generic"
         )
 
     artifactory = pkg_info.get("Artifactory")
@@ -1159,7 +1161,9 @@ def filter_dependencies_by_artifacts(
             continue
 
         # Non-gfxarch packages are always available
-        if not is_gfxarch_package(dep_info, enable_kpack=True, artifacts_dir=artifacts_dir):
+        if not is_gfxarch_package(
+            dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
+        ):
             filtered.append(dep)
             continue
 
