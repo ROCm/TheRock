@@ -834,7 +834,9 @@ def run():
             # for ROCm/rocm-libraries#8592: Windows sparse runs the pre-#4490
             # legacy script while Linux stays on test_runner.py. Pop the helper
             # key so it does not leak into the GHA matrix JSON.
-            test_script_by_platform = job_config_data.pop("test_script_by_platform", None)
+            test_script_by_platform = job_config_data.pop(
+                "test_script_by_platform", None
+            )
             if test_script_by_platform and platform in test_script_by_platform:
                 job_config_data["test_script"] = test_script_by_platform[platform]
             job_config_data["test_type"] = test_type
