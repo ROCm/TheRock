@@ -43,6 +43,18 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
       -> s3://therock-prerelease-packages/v4/packages/rpm/
 
+ASAN build variant:
+
+    For ASAN builds (--build-variant asan), python packages are skipped and
+    native packages are published to separate paths:
+
+    s3://therock-dev-artifacts/12345-linux/packages/deb/
+      -> s3://therock-dev-packages/v4/packages-asan/deb/20250101-12345/
+    s3://therock-dev-artifacts/12345-linux/packages/rpm/
+      -> s3://therock-dev-packages/v4/packages-asan/rpm/20250101-12345/
+
+    Tarballs already include -asan suffix in filenames from the build system.
+
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
         --run-id 12345 --platform linux --release-type dev --dry-run
@@ -139,6 +151,7 @@ def publish_native_linux_packages(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
     backend: StorageBackend,
+    build_variant: str = "release",
 ) -> None:
     """Copy native Linux packages from the artifacts bucket to the release packages bucket.
 
@@ -158,6 +171,12 @@ def publish_native_linux_packages(
         s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
           -> s3://therock-prerelease-packages/v4/packages/rpm/
 
+    asan example:
+        s3://therock-dev-artifacts/12345-linux/packages/deb/
+          -> s3://therock-dev-packages/v4/packages-asan/deb/20250101-12345/
+        s3://therock-dev-artifacts/12345-linux/packages/rpm/
+          -> s3://therock-dev-packages/v4/packages-asan/rpm/20250101-12345/
+
     Note (prerelease): This is a plain copy — the repodata already present in the
     packages bucket is overwritten with the repodata from this run. If multiple
     prerelease runs upload packages to the same fixed prefix, earlier packages
@@ -167,12 +186,15 @@ def publish_native_linux_packages(
     """
     dest_bucket = get_release_bucket_config(release_type, "packages")
     today = datetime.date.today().strftime("%Y%m%d")
+    is_asan = build_variant == "asan"
 
     for pkg_type in ["deb", "rpm"]:
         source = artifacts_root.native_linux_packages(pkg_type)
 
         if release_type == "prerelease":
             dest_prefix = f"v4/packages/{pkg_type}"
+        elif is_asan:
+            dest_prefix = f"v4/packages-asan/{pkg_type}/{today}-{artifacts_root.run_id}"
         else:
             dest_prefix = f"v4/{pkg_type}/{today}-{artifacts_root.run_id}"
 
@@ -217,6 +239,13 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"
     )
+    parser.add_argument(
+        "--build-variant",
+        default="release",
+        choices=["release", "asan"],
+        help="Build variant (default: release). ASAN builds skip python packages "
+        "and publish native packages to separate paths.",
+    )
     args = parser.parse_args(argv)
 
     artifacts_root = WorkflowOutputRoot.from_workflow_run(
@@ -224,11 +253,17 @@ def main(argv: list[str]) -> None:
     )
     backend = create_storage_backend(dry_run=args.dry_run)
     kpack_split = args.kpack_split.lower() == "true"
+    is_asan = args.build_variant == "asan"
 
     publish_tarballs(artifacts_root, args.release_type, backend)
-    publish_python_packages(artifacts_root, args.release_type, backend, kpack_split)
+    if not is_asan:
+        publish_python_packages(artifacts_root, args.release_type, backend, kpack_split)
+    else:
+        logger.info("Skipping python packages for ASAN build variant")
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
-        publish_native_linux_packages(artifacts_root, args.release_type, backend)
+        publish_native_linux_packages(
+            artifacts_root, args.release_type, backend, args.build_variant
+        )
 
 
 if __name__ == "__main__":
