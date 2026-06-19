@@ -69,6 +69,12 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
+      run_full_pytorch_tests:
+        description: >-
+          Dispatch the full PyTorch test suite after a successful build.
+          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -123,6 +129,12 @@ on:
           - sccache
           - ccache
         default: sccache
+      run_full_pytorch_tests:
+        description: >-
+          Dispatch the full PyTorch test suite after a successful build.
+          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+        type: boolean
+        default: false
 
 run-name: Build Multi-Arch Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -415,3 +427,56 @@ jobs:
       multi_arch: true
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+
+  # Dispatch the full PyTorch test suite for this exact build. Because this
+  # workflow builds a single (python_version, pytorch_git_ref), the build job's
+  # torch_version output is unambiguous and only this build's success gates the
+  # dispatch -- a failure for one ref no longer skips testing the others (#5777).
+  # Scoped to nightly gfx94X-dcgpu Python 3.12 builds for now.
+  dispatch_pytorch_wheels_full_test:
+    name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
+    if: >-
+      ${{
+        inputs.run_full_pytorch_tests &&
+        inputs.release_type == 'nightly' &&
+        inputs.python_version == '3.12' &&
+        contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
+      }}
+    needs: [build_pytorch_wheels]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: read
+    env:
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+    steps:
+      - name: Check full test cadence
+        id: cadence
+        # Release branches test daily; the nightly branch tests weekly (Sunday).
+        run: |
+          if [ "${PYTORCH_GIT_REF}" != "nightly" ] || [ "$(date -u +%u)" = "7" ]; then
+            echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch full PyTorch test workflow
+        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        with:
+          workflow: test_pytorch_wheels_full.yml
+          inputs: |
+            { "amdgpu_family": "gfx94X-dcgpu",
+              "test_runs_on": "linux-gfx942-1gpu-ossci-rocm",
+              "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
+              "package_index_url": "${{ needs.build_pytorch_wheels.outputs.package_index_url }}",
+              "python_version": "${{ inputs.python_version }}",
+              "torch_version": "${{ needs.build_pytorch_wheels.outputs.torch_version }}",
+              "pytorch_git_ref": "${{ inputs.pytorch_git_ref }}",
+              "pytorch_git_repo": "${{ inputs.pytorch_git_ref == 'nightly' && 'pytorch/pytorch' || 'ROCm/pytorch' }}",
+              "test_configs": "default distributed inductor",
+              "tests_to_include": "",
+              "multi_arch": true,
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref }}"
+            }

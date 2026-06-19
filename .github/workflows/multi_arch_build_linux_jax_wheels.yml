@@ -1,67 +1,125 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Placeholder reusable build workflow.
-# Artifact upload and release/test plumbing will be added in a follow-up PR.
-
-# Reusable multi-arch build variant of the Linux JAX wheel flow.
+# Reusable single-build workflow for the Linux JAX wheel flow.
+#
+# This workflow is called once per release matrix cell from
+# test_linux_jax_wheels_partial.yml
 #
 # Built shape:
 #   - One build/ci_build invocation for one python_version and jax_ref
 #     matrix cell.
-#   - Builds directly against the shared TheRock multiarch tarball
-#     passed in via inputs.tar_url.
-#
-# Legacy rocm-jax release branches
-# (rocm-jaxlib-v0.8.2, rocm-jaxlib-v0.9.0, rocm-jaxlib-v0.9.1, and
-# rocm-jaxlib-v0.9.2) produce architecture-agnostic wheels.
+#   - Uploads the resulting wheels to the multi-arch release bucket.
+#   - Runs the JAX test subset against the published multi-arch index.
 
 name: Multi-Arch Build Linux JAX Wheels
 
 on:
   workflow_call:
     inputs:
+      test_amdgpu_family:
+        description: "GPU family to use for JAX tests; empty means skip tests."
+        type: string
+        default: ""
       python_version:
-        description: Python version to build wheels for.
+        description: "Python version to build wheels for."
         type: string
         required: true
       jax_ref:
-        description: JAX / rocm-jax release ref.
+        description: "JAX / rocm-jax release ref."
         type: string
         required: true
       build_jaxlib:
-        description: Whether this matrix cell should build jaxlib from JAX source.
+        description: "Whether this matrix cell should build jaxlib from JAX source."
         type: boolean
         required: true
       rocm_version:
-        description: ROCm package version to install and build against.
+        description: "ROCm package version to install and build against."
         type: string
         required: true
       tar_url:
-        description: URL to the TheRock tarball used for the build.
+        description: "URL to the TheRock tarball used for the build."
         type: string
         required: true
       release_type:
-        description: Release type.
+        description: "Release type."
         type: string
         required: true
       repository:
-        description: Repository to checkout. Defaults to github.repository.
+        description: "Repository to checkout. Defaults to github.repository."
         type: string
         default: ""
       ref:
-        description: Branch, tag, or SHA to checkout. Defaults to the triggering ref.
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+    outputs:
+      package_index_url:
+        description: "Package index URL for the multi-arch release bucket."
+        value: ${{ jobs.build_jax_wheels.outputs.package_index_url }}
+      jax_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jax_version }}
+      jaxlib_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jaxlib_version }}
+      jax_plugin_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jax_plugin_version }}
+      jax_pjrt_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jax_pjrt_version }}
+  workflow_dispatch:
+    inputs:
+      test_amdgpu_family:
+        description: "Representative GPU family to use for JAX tests."
+        type: string
+        default: "gfx94X-dcgpu"
+      python_version:
+        description: "Python version to build wheels for."
+        type: string
+        required: true
+      jax_ref:
+        description: "JAX / rocm-jax release ref."
+        type: string
+        required: true
+      build_jaxlib:
+        description: "Whether this matrix cell should build jaxlib from JAX source."
+        type: boolean
+        required: true
+      rocm_version:
+        description: "ROCm package version to install and build against."
+        type: string
+        required: true
+      tar_url:
+        description: "URL to the TheRock tarball used for the build."
+        type: string
+        required: true
+      release_type:
+        description: "Release type."
+        type: string
+        required: true
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
 
+run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
+
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build_jax_wheels:
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
-
+    outputs:
+      package_index_url: ${{ steps.publish_jax_wheels.outputs.package_index_url }}
+      jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
+      jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
 
@@ -97,6 +155,10 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      - name: Install boto3
+        run: |
+          python -m pip install boto3
+
       - name: Determine build arguments
         env:
           BUILD_JAXLIB: ${{ inputs.build_jaxlib }}
@@ -107,16 +169,81 @@ jobs:
             echo "SOURCE_ARG=" >> "$GITHUB_ENV"
           fi
 
-      - name: Build JAX wheels
+      - name: Build JAX Wheels
         working-directory: rocm-jax
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
+          TAR_URL: ${{ inputs.tar_url }}
         run: |
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${PYTHON_VERSION}" \
             --rocm-version="${ROCM_VERSION}" \
-            --therock-path="${{ inputs.tar_url }}" \
+            --therock-path="${TAR_URL}" \
             ${SOURCE_ARG} \
             dist_wheels
+
+      - name: Extract JAX versions from built wheels
+        id: write_jax_versions
+        run: |
+          python3 ./build_tools/github_actions/write_jax_versions.py \
+            --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
+
+      - name: Configure AWS Credentials
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Upload JAX wheels to release bucket
+        id: publish_jax_wheels
+        run: |
+          python build_tools/github_actions/publish_jax_to_release_bucket.py \
+            --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
+            --release-type="${{ inputs.release_type }}"
+
+
+
+  generate_target_to_run:
+    name: Generate target_to_run
+    if: ${{ inputs.test_amdgpu_family != '' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref_name }}
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.test_amdgpu_family }}
+          PLATFORM: linux
+        run: python ./build_tools/github_actions/configure_target_run.py
+
+  test_jax_wheels:
+    if: ${{ inputs.test_amdgpu_family != '' }}
+    needs: [build_jax_wheels, generate_target_to_run]
+    name: Test JAX wheels | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/test_linux_jax_wheels_partial.yml
+    with:
+      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
+      rocm_version: ${{ inputs.rocm_version }}
+      tar_url: ${{ inputs.tar_url }}
+      release_type: ${{ inputs.release_type }}
+      python_version: ${{ inputs.python_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+      jax_ref: ${{ inputs.jax_ref }}
+      jax_version: ${{ needs.build_jax_wheels.outputs.jax_version }}
+      jaxlib_version: ${{ needs.build_jax_wheels.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}

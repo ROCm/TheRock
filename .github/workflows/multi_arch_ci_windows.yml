@@ -12,8 +12,9 @@ on:
           JSON object with build configuration for this platform. Fields:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
-          build_variant_suffix, expect_failure, build_pytorch,
-          build_native_linux, prebuilt_stages, baseline_run_id.
+          build_variant_suffix, build_pytorch,
+          build_native_linux, test_python_packages_matrix,
+          prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
       rocm_package_version:
@@ -101,7 +102,6 @@ jobs:
       build_variant_label: ${{ fromJSON(inputs.build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
-      expect_failure: ${{ fromJSON(inputs.build_config).expect_failure }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
@@ -116,8 +116,7 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    # If we are expecting a build failure, do not run tests to save machine capacity.
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -129,8 +128,7 @@ jobs:
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
-    # If we are expecting a build failure, do not run tests to save machine capacity.
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
@@ -153,7 +151,7 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/build_windows_python_packages.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
@@ -172,15 +170,15 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+        include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
     uses: ./.github/workflows/test_rocm_wheels.yml
     with:
-      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
-      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      amdgpu_family: ${{ matrix.amdgpu_family }}
+      test_runs_on: ${{ matrix.test_runs_on }}
       # TODO: Simplify to just `needs.build_python_packages.outputs.package_find_links_url`
       # once kpack split is always enabled.
       package_find_links_url: >-
@@ -189,14 +187,13 @@ jobs:
           && needs.build_python_packages.outputs.package_find_links_url
           || format('{0}/{1}/index.html',
               needs.build_python_packages.outputs.package_find_links_url,
-              matrix.family_info.amdgpu_family)
+              matrix.amdgpu_family)
         }}
-      python_version: "3.12"
+      python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
-      # Windows runs natively without a container image.
-      container_image_name: native
-      container_image_url: ""
+      container_image_name: ${{ matrix.container_image_name }}
+      container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
