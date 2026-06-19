@@ -34,6 +34,7 @@ import logging
 import platform as platform_module
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
@@ -91,9 +92,10 @@ def run(
 
     for f in tarball_files:
         name = f.name
+        encoded_name = quote(name, safe="")
 
         if name.startswith(f"therock-dist-{platform}-multiarch-"):
-            shared_tarball_url = output_root.tarball(name).https_url
+            shared_tarball_url = output_root.tarball(encoded_name).https_url
             break
 
         prefix = f"therock-dist-{platform}-"
@@ -103,7 +105,7 @@ def run(
             stem = name[len(prefix) : -len(suffix)]
 
             if "-" not in stem:
-                shared_tarball_url = output_root.tarball(name).https_url
+                shared_tarball_url = output_root.tarball(encoded_name).https_url
                 break
 
     if not shared_tarball_url:
