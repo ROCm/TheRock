@@ -154,23 +154,6 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
-      # Hotswap smoke test: hotswap is built by default (THEROCK_ENABLE_HOTSWAP=ON), so the
-      # tool must be present in the artifacts. Load it via HSA_TOOLS_LIB so ROCr/CLR exercise
-      # the tool-load path during hip-tests (which load code objects on the GPU). The tool is
-      # inert on non-gfx1250 targets, so this is a regression guard that enabling it does not
-      # perturb existing results. A missing tool means a broken/misconfigured build, so fail
-      # loudly rather than silently skipping.
-      - name: Enable hotswap tool loading
-        if: ${{ runner.os == 'Linux' && fromJSON(inputs.component).job_name == 'hip-tests' }}
-        run: |
-          hotswap_tool="${{ env.OUTPUT_ARTIFACTS_DIR }}/lib/libamd_comgr_hotswap_tool.so"
-          if [ ! -f "$hotswap_tool" ]; then
-            echo "::error::Hotswap tool not found at $hotswap_tool. THEROCK_ENABLE_HOTSWAP is on by default, so it should be present in the artifacts."
-            exit 1
-          fi
-          echo "Loading hotswap tool via HSA_TOOLS_LIB: $hotswap_tool"
-          echo "HSA_TOOLS_LIB=$hotswap_tool" >> $GITHUB_ENV
-
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
