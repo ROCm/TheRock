@@ -249,7 +249,7 @@ if(THEROCK_ENABLE_FFT)
     #   "The code execution cannot proceed because hiprtc0605.dll was not found."
     set(_fft_kernel_cache_enable "OFF")
   else()
-    set(_fft_kernel_cache_enable "ON")
+    set(_fft_kernel_cache_enable "OFF")
   endif()
 
   ##############################################################################
