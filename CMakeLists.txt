@@ -124,6 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
+option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
