@@ -162,11 +162,6 @@ if(THEROCK_ENABLE_COMPILER)
   set(_comgr_hotswap_cmake_args)
   if(THEROCK_ENABLE_HOTSWAP)
     list(APPEND _comgr_hotswap_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=ON)
-    if(NOT WIN32)
-      list(APPEND _comgr_hotswap_cmake_args
-        -DHOTSWAP_BUILD_TOOL=ON
-        "-DHOTSWAP_TOOL_HSA_INCLUDE_ROOT=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime")
-    endif()
   endif()
 
   therock_cmake_subproject_declare(amd-comgr

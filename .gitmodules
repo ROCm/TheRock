@@ -8,7 +8,7 @@
 	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
-	url = https://github.com/ROCm/llvm-project.git
+	url = https://github.com/harsh-amd/llvm-project.git
 	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
@@ -20,7 +20,7 @@
 	branch = develop
 [submodule "rocm-systems"]
 	path = rocm-systems
-	url = https://github.com/ROCm/rocm-systems.git
+	url = https://github.com/harsh-amd/rocm-systems.git
 	branch = develop
 [submodule "spirv-llvm-translator"]
 	path = compiler/spirv-llvm-translator
