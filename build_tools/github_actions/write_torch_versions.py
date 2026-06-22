@@ -94,6 +94,30 @@ def get_all_wheel_versions(
     else:
         raise FileNotFoundError("Did not find apex wheel")
 
+    torch_scatter_version = get_wheel_version(package_dist_dir, "torch_scatter")
+    if torch_scatter_version:
+        all_versions = all_versions | {
+            "torch_scatter_version": torch_scatter_version
+        }
+    elif os.lower() == "windows":
+        _log(
+            "Did not find torch_scatter (that's okay, is not currently built on Windows)"
+        )
+    else:
+        _log("Did not find torch_scatter wheel (optional)")
+
+    torch_sparse_version = get_wheel_version(package_dist_dir, "torch_sparse")
+    if torch_sparse_version:
+        all_versions = all_versions | {
+            "torch_sparse_version": torch_sparse_version
+        }
+    elif os.lower() == "windows":
+        _log(
+            "Did not find torch_sparse (that's okay, is not currently built on Windows)"
+        )
+    else:
+        _log("Did not find torch_sparse wheel (optional)")
+
     return all_versions
 
 

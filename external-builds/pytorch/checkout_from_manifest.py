@@ -42,6 +42,8 @@ CHECKOUT_SCRIPTS: dict[str, str] = {
     "pytorch_vision": "pytorch_vision_repo.py",
     "triton": "pytorch_triton_repo.py",
     "apex": "pytorch_apex_repo.py",
+    "torch_scatter": "pytorch_torch_scatter_repo.py",
+    "torch_sparse": "pytorch_torch_sparse_repo.py",
 }
 
 

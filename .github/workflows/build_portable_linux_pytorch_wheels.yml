@@ -156,6 +156,8 @@ jobs:
       apex_version: ${{ steps.build-pytorch-wheels.outputs.apex_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
       triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
+      torch_scatter_version: ${{ steps.build-pytorch-wheels.outputs.torch_scatter_version }}
+      torch_sparse_version: ${{ steps.build-pytorch-wheels.outputs.torch_sparse_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -195,6 +197,8 @@ jobs:
           ./external-builds/pytorch/pytorch_apex_repo.py checkout --repo-hashtag master --no-commit-hipify
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly --no-commit-hipify
           ./external-builds/pytorch/pytorch_triton_repo.py checkout --no-commit-hipify
+          ./external-builds/pytorch/pytorch_torch_scatter_repo.py checkout --repo-hashtag master --no-commit-hipify
+          ./external-builds/pytorch/pytorch_torch_sparse_repo.py checkout --repo-hashtag master --no-commit-hipify
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
@@ -205,6 +209,8 @@ jobs:
           ./external-builds/pytorch/pytorch_apex_repo.py checkout --require-related-commit --no-commit-hipify
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit --no-commit-hipify
           ./external-builds/pytorch/pytorch_triton_repo.py checkout --no-commit-hipify
+          ./external-builds/pytorch/pytorch_torch_scatter_repo.py checkout --repo-hashtag master --no-commit-hipify
+          ./external-builds/pytorch/pytorch_torch_sparse_repo.py checkout --repo-hashtag master --no-commit-hipify
 
       # Note: determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
@@ -279,7 +285,9 @@ jobs:
             --pytorch-audio-dir "external-builds/pytorch/pytorch_audio" \
             --pytorch-vision-dir "external-builds/pytorch/pytorch_vision" \
             --triton-dir "external-builds/pytorch/triton" \
-            --apex-dir "external-builds/pytorch/apex"
+            --apex-dir "external-builds/pytorch/apex" \
+            --torch-scatter-dir "external-builds/pytorch/torch_scatter" \
+            --torch-sparse-dir "external-builds/pytorch/torch_sparse"
 
       - name: Configure AWS Credentials
         if: always()
@@ -359,6 +367,8 @@ jobs:
       TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
       TRITON_VERSION: "${{ needs.build_pytorch_wheels.outputs.triton_version }}"
+      TORCH_SCATTER_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_scatter_version }}"
+      TORCH_SPARSE_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_sparse_version }}"
 
     steps:
       - name: Checkout
@@ -395,7 +405,9 @@ jobs:
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "apex-${APEX_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "apex-${APEX_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "torch_scatter-${TORCH_SCATTER_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "torch_sparse-${TORCH_SPARSE_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
 
       - name: Install python deps for CI

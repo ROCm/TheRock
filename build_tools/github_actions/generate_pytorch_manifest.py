@@ -46,11 +46,15 @@ def build_sources(
     pytorch_vision_dir: Path,
     triton_dir: Path | None,
     apex_dir: Path | None,
+    torch_scatter_dir: Path | None,
+    torch_sparse_dir: Path | None,
     pytorch_git_ref: str,
     pytorch_audio_git_ref: str | None,
     pytorch_vision_git_ref: str | None,
     triton_git_ref: str | None,
     apex_git_ref: str | None,
+    torch_scatter_git_ref: str | None,
+    torch_sparse_git_ref: str | None,
 ) -> dict[str, dict[str, str]]:
     pt = git_head(pytorch_dir, label="pytorch")
     aud = git_head(pytorch_audio_dir, label="pytorch_audio")
@@ -101,6 +105,26 @@ def build_sources(
             commit=ax.commit, repo=ax.repo, branch=ax_branch
         ).to_dict()
 
+    if torch_scatter_dir is not None:
+        ts = git_head(torch_scatter_dir, label="torch_scatter")
+        ts_branch = resolve_branch(
+            inferred=git_branch_best_effort(torch_scatter_dir),
+            provided=torch_scatter_git_ref,
+        )
+        sources["torch_scatter"] = GitSourceInfo(
+            commit=ts.commit, repo=ts.repo, branch=ts_branch
+        ).to_dict()
+
+    if torch_sparse_dir is not None:
+        tsp = git_head(torch_sparse_dir, label="torch_sparse")
+        tsp_branch = resolve_branch(
+            inferred=git_branch_best_effort(torch_sparse_dir),
+            provided=torch_sparse_git_ref,
+        )
+        sources["torch_sparse"] = GitSourceInfo(
+            commit=tsp.commit, repo=tsp.repo, branch=tsp_branch
+        ).to_dict()
+
     return sources
 
 
@@ -129,11 +153,15 @@ def generate_manifest_dict(
     pytorch_vision_dir: Path,
     triton_dir: Path | None,
     apex_dir: Path | None,
+    torch_scatter_dir: Path | None,
+    torch_sparse_dir: Path | None,
     pytorch_git_ref: str,
     pytorch_audio_git_ref: str | None,
     pytorch_vision_git_ref: str | None,
     triton_git_ref: str | None,
     apex_git_ref: str | None,
+    torch_scatter_git_ref: str | None,
+    torch_sparse_git_ref: str | None,
 ) -> dict[str, object]:
     """Generate the manifest dictionary"""
     sources = build_sources(
@@ -142,11 +170,15 @@ def generate_manifest_dict(
         pytorch_vision_dir=pytorch_vision_dir,
         triton_dir=triton_dir,
         apex_dir=apex_dir,
+        torch_scatter_dir=torch_scatter_dir,
+        torch_sparse_dir=torch_sparse_dir,
         pytorch_git_ref=pytorch_git_ref,
         pytorch_audio_git_ref=pytorch_audio_git_ref,
         pytorch_vision_git_ref=pytorch_vision_git_ref,
         triton_git_ref=triton_git_ref,
         apex_git_ref=apex_git_ref,
+        torch_scatter_git_ref=torch_scatter_git_ref,
+        torch_sparse_git_ref=torch_sparse_git_ref,
     )
 
     server_url = os.environ.get("GITHUB_SERVER_URL")
@@ -210,6 +242,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--apex-git-ref",
         help="Optional ref for apex branch field (used if detached).",
     )
+    ap.add_argument(
+        "--torch-scatter-git-ref",
+        help="Optional ref for torch_scatter branch field (used if detached).",
+    )
+    ap.add_argument(
+        "--torch-sparse-git-ref",
+        help="Optional ref for torch_sparse branch field (used if detached).",
+    )
     ap.add_argument("--pytorch-dir", type=Path, required=True)
     ap.add_argument("--pytorch-audio-dir", type=Path, required=True)
     ap.add_argument("--pytorch-vision-dir", type=Path, required=True)
@@ -222,6 +262,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--apex-dir",
         type=Path,
         help="Optional apex checkout (Linux only).",
+    )
+    ap.add_argument(
+        "--torch-scatter-dir",
+        type=Path,
+        help="Optional torch_scatter checkout (Linux only).",
+    )
+    ap.add_argument(
+        "--torch-sparse-dir",
+        type=Path,
+        help="Optional torch_sparse checkout (Linux only).",
     )
     return ap.parse_args(argv)
 
@@ -244,11 +294,15 @@ def main(argv: list[str]) -> None:
         pytorch_vision_dir=args.pytorch_vision_dir,
         triton_dir=args.triton_dir,
         apex_dir=args.apex_dir,
+        torch_scatter_dir=args.torch_scatter_dir,
+        torch_sparse_dir=args.torch_sparse_dir,
         pytorch_git_ref=args.pytorch_git_ref,
         pytorch_audio_git_ref=args.pytorch_audio_git_ref,
         pytorch_vision_git_ref=args.pytorch_vision_git_ref,
         triton_git_ref=args.triton_git_ref,
         apex_git_ref=args.apex_git_ref,
+        torch_scatter_git_ref=args.torch_scatter_git_ref,
+        torch_sparse_git_ref=args.torch_sparse_git_ref,
     )
 
     out_path.write_text(

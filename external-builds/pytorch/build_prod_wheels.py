@@ -582,8 +582,10 @@ def _do_build_wheels_core(
     pytorch_audio_dir: Path | None,
     pytorch_vision_dir: Path | None,
     apex_dir: Path | None,
+    torch_scatter_dir: Path | None,
+    torch_sparse_dir: Path | None,
 ) -> None:
-    """Execute all wheel builds (triton, pytorch, audio, vision, apex)."""
+    """Execute all wheel builds (triton, pytorch, audio, vision, apex, torch-scatter, torch-sparse)."""
     # Build triton.
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):
@@ -629,6 +631,28 @@ def _do_build_wheels_core(
     else:
         print("--- Not build apex (no --apex-dir)")
 
+    # Build torch-scatter (must come before torch-sparse).
+    if args.build_torch_scatter or (
+        args.build_torch_scatter is None and torch_scatter_dir
+    ):
+        assert (
+            torch_scatter_dir
+        ), "Must specify --torch-scatter-dir if --build-torch-scatter"
+        do_build_torch_scatter(args, torch_scatter_dir, dict(env))
+    else:
+        print("--- Not building torch-scatter (no --torch-scatter-dir)")
+
+    # Build torch-sparse (depends on torch-scatter).
+    if args.build_torch_sparse or (
+        args.build_torch_sparse is None and torch_sparse_dir
+    ):
+        assert (
+            torch_sparse_dir
+        ), "Must specify --torch-sparse-dir if --build-torch-sparse"
+        do_build_torch_sparse(args, torch_sparse_dir, dict(env))
+    else:
+        print("--- Not building torch-sparse (no --torch-sparse-dir)")
+
     print("--- Builds all completed")
 
 
@@ -644,6 +668,8 @@ def do_build(args: argparse.Namespace):
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
     pytorch_vision_dir: Path | None = args.pytorch_vision_dir
     apex_dir: Path | None = args.apex_dir
+    torch_scatter_dir: Path | None = args.torch_scatter_dir
+    torch_sparse_dir: Path | None = args.torch_sparse_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
     cmake_prefix = get_rocm_path("cmake")
@@ -745,6 +771,8 @@ def do_build(args: argparse.Namespace):
             pytorch_audio_dir,
             pytorch_vision_dir,
             apex_dir,
+            torch_scatter_dir,
+            torch_sparse_dir,
         )
     finally:
         if args.use_sccache:
@@ -1298,6 +1326,57 @@ def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str])
     copy_to_output(args, built_wheel)
 
 
+def do_build_torch_scatter(
+    args: argparse.Namespace, torch_scatter_dir: Path, env: dict[str, str]
+):
+    env.update(
+        {
+            "FORCE_CUDA": "1",
+        }
+    )
+
+    remove_dir_if_exists(torch_scatter_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(torch_scatter_dir / "build")
+
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"],
+        cwd=torch_scatter_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(torch_scatter_dir / "dist", "torch_scatter")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+    print("+++ Installing built torch-scatter:")
+    run_command(
+        [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
+    )
+
+
+def do_build_torch_sparse(
+    args: argparse.Namespace, torch_sparse_dir: Path, env: dict[str, str]
+):
+    env.update(
+        {
+            "FORCE_CUDA": "1",
+        }
+    )
+
+    remove_dir_if_exists(torch_sparse_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(torch_sparse_dir / "build")
+
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"],
+        cwd=torch_sparse_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(torch_sparse_dir / "dist", "torch_sparse")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
 
@@ -1452,6 +1531,30 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of apex (requires --apex-dir)",
+    )
+    build_p.add_argument(
+        "--torch-scatter-dir",
+        default=directory_if_exists(script_dir / "torch_scatter"),
+        type=Path,
+        help="torch_scatter source directory",
+    )
+    build_p.add_argument(
+        "--torch-sparse-dir",
+        default=directory_if_exists(script_dir / "torch_sparse"),
+        type=Path,
+        help="torch_sparse source directory",
+    )
+    build_p.add_argument(
+        "--build-torch-scatter",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch-scatter (requires --torch-scatter-dir)",
+    )
+    build_p.add_argument(
+        "--build-torch-sparse",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch-sparse (requires --torch-sparse-dir)",
     )
     build_p.add_argument(
         "--enable-pytorch-flash-attention-windows",
