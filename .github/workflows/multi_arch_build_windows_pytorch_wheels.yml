@@ -434,8 +434,18 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Checkout CI config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
       - name: Configure PyTorch test matrix
         id: configure
+        env:
+          CI_CONFIG_PATH: ci-config
         run: |
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
