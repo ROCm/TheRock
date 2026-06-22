@@ -87,6 +87,8 @@ include = [
   "libexec/hipblaslt-samples/**",
   # TensileLite Python test artifacts
   "share/hipblaslt/tensilelite/**",
+  # TensileLite client binary (common/benchmark tests)
+  "libexec/hipblaslt/tensilelite/**",
 ]
 
 # rocBLAS
@@ -130,6 +132,8 @@ optional = true
 [components.test."math-libs/BLAS/rocSOLVER/stage"]
 include = [
   "bin/rocsolver-bench*",
+  # Clients tests (test_runner runs ctest from bin/rocsolver/; needs CTestTestfile.cmake)
+  "bin/rocsolver/**",
   "bin/rocsolver-test*",
   "share/rocsolver/test/**",
 ]
@@ -150,6 +154,8 @@ optional = true
 [components.test."math-libs/BLAS/hipSOLVER/stage"]
 include = [
   "bin/hipsolver-bench*",
+  # Clients tests (test_runner runs ctest from bin/hipsolver/; needs CTestTestfile.cmake)
+  "bin/hipsolver/**",
   "bin/hipsolver-test*",
   "lib/libhipsolver_fortran.so*",
   "share/hipsolver/test/**",

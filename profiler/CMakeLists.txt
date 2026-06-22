@@ -103,6 +103,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_BUILD_SAMPLES=OFF
       -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -118,6 +119,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       rocprof-trace-decoder
       rocprofiler-register
+      therock-yaml-cpp
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}

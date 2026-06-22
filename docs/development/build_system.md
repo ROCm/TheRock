@@ -79,6 +79,8 @@ Sub-project directories:
   higher level HIP runtimes.
 - [`comm-libs/`](/comm-libs/) : Communication library sub-projects, including
   [rccl](https://github.com/ROCm/rccl)
+- [`storage-libs/`](/storage-libs/) : Storage library sub-projects, including
+  [hipFile](https://github.com/ROCm/rocm-systems/tree/develop/projects/hipfile)
 - [`math-libs/`](/math-libs/) : Math library sub-projects, including `math-libs/BLAS` for
   [Basic Linear Algebra Subprogram](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms)
   projects like [hipBLASLt](https://github.com/ROCm/hipBLASLt).

@@ -119,6 +119,10 @@ submodules = []
 description = "Communication library submodules"
 submodules = []
 
+[source_sets.storage-libs]
+description = "Storage library submodules"
+submodules = []
+
 [source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
@@ -166,6 +170,11 @@ type = "per-arch"
 [build_stages.comm-libs]
 description = "Communication libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["comm-libs"]
+type = "generic"
+
+[build_stages.storage-libs]
+description = "Storage libraries (generic, single job parallel to math-libs)"
+artifact_groups = ["storage-libs"]
 type = "generic"
 
 [build_stages.debug-tools]
@@ -281,6 +290,12 @@ artifact_group_deps = ["hip-runtime"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["comm-libs", "rocm-systems"]
 
+[artifact_groups.storage-libs]
+description = "Storage libraries"
+type = "generic"
+artifact_group_deps = ["hip-runtime"]
+source_sets = ["storage-libs", "rocm-systems"]
+
 [artifact_groups.profiler-core]
 description = "Core profiling libraries and annotation support"
 type = "generic"
@@ -372,6 +387,13 @@ feature_group = "CORE"
 disable_platforms = ["windows"]
 
 [artifacts.sysdeps-libmnl]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-util-linux]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
 artifact_deps = []
@@ -595,6 +617,11 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
 
+[artifacts.composable-kernel]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip"]
+
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
@@ -606,11 +633,6 @@ type = "target-neutral"
 artifact_deps = []
 
 # --- ML Libraries (per-arch) ---
-
-[artifacts.composable-kernel]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
@@ -679,6 +701,14 @@ disable_platforms = ["windows"]
 artifact_group = "comm-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
+disable_platforms = ["windows"]
+
+# --- Storage Libraries ---
+
+[artifacts.hipfile]
+artifact_group = "storage-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "sysdeps", "sysdeps-util-linux"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---

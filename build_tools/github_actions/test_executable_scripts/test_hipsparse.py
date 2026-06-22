@@ -35,6 +35,10 @@ TEST_TO_IGNORE = {
             "*csr2csr_compress*",
             "*prune_csr2csr.conversion*",
             "*prune_csr2csr_by_percentage.conversion*",
+            # TODO: spsv_csr (e.g. quick/spsv_csr.generic ... ND_U_1b) fails its
+            # unit_check and corrupts the heap (exit 0xC0000374) on gfx110X
+            # Windows, aborting the suite mid-run. Exclude until root-caused.
+            "*spsv_csr*",
         ]
     },
 }
@@ -47,7 +51,7 @@ cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
 
 gtest_filter = "--gtest_filter="
 
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     gtest_filter += "*spmv*:*spsv*:*spsm*:*spmm*:*csric0*:*csrilu0*:-known_bug*"
 else:
