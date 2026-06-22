@@ -17,7 +17,41 @@ For presubmit, postsubmit and nightly family selection:
 TODO(#2200): clarify AMD GPU family selection
 """
 
+import os
 import random
+import sys
+from pathlib import Path
+
+
+def _log(*args, **kwargs):
+    print(*args, **kwargs)
+    sys.stdout.flush()
+
+
+def load_external_config() -> dict | None:
+    """Load external CI config from CI_CONFIG_PATH if set.
+
+    The CI config API lives in therock-ci-config repo, which is checked out
+    to CI_CONFIG_PATH. Returns None if CI_CONFIG_PATH is not set or config
+    doesn't exist (fallback to local definitions).
+    """
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if not ci_config_path:
+        _log("CI_CONFIG_PATH not set, using local amdgpu_family_matrix.py")
+        return None
+    config_path = Path(ci_config_path)
+    sys.path.insert(0, str(config_path))
+    try:
+        from ci_config_api import config_exists, load_runner_config
+    except ImportError:
+        _log(f"CI config API not found at {ci_config_path}, using local fallback")
+        return None
+    if not config_exists(config_path):
+        _log(f"CI config not found at {ci_config_path}, using local fallback")
+        return None
+    config = load_runner_config(config_path)
+    _log(f"Using external CI config from {ci_config_path}")
+    return config
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
@@ -413,8 +447,16 @@ amdgpu_family_info_matrix_nightly = {
 
 
 def get_all_families_for_trigger_types(trigger_types, external_config=None):
-    """Returns combined family matrix for the specified trigger types."""
-    # Use external config if provided
+    """Returns combined family matrix for the specified trigger types.
+
+    Auto-loads external config if not provided. Falls back to local definitions
+    if external config is unavailable.
+    """
+    # Auto-load external config if not explicitly provided
+    if external_config is None:
+        external_config = load_external_config()
+
+    # Use external config if available
     if external_config is not None:
         gpu_families = external_config.get("gpu_families", {})
         result = {}
@@ -441,7 +483,15 @@ def get_all_families_for_trigger_types(trigger_types, external_config=None):
 
 
 def get_build_runner_labels(external_config=None):
-    """Returns build runner label configuration."""
+    """Returns build runner label configuration.
+
+    Auto-loads external config if not provided. Falls back to local definitions
+    if external config is unavailable.
+    """
+    # Auto-load external config if not explicitly provided
+    if external_config is None:
+        external_config = load_external_config()
+
     if external_config is not None:
         return external_config.get("build_runners", {})
 
