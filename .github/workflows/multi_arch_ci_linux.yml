@@ -86,6 +86,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            ${{ fromJSON(inputs.build_config).baseline_github_repo != '' && format('--run-github-repo={0}', fromJSON(inputs.build_config).baseline_github_repo) || '' }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
