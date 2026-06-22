@@ -28,7 +28,7 @@ benefit from further discussion.
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 - [RFC0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem](./RFC0011-Quartz-CICD-Datahub.md)
 - [RFC0012: Repo Structure](./RFC0012-Repo-Structure.md)
-- [RFC0013: Debug Symbol Generation & Packaging](./RFC0013-Debug-Symbol-Generation-Packaging.md)
+- [RFC00XX: Debug Symbol Generation & Packaging](./RFC00XX-Debug-Symbol-Generation-Packaging.md)
 
 ## Adding an RFC
 
