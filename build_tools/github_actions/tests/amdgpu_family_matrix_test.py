@@ -100,8 +100,8 @@ class TestExternalConfig(unittest.TestCase):
         result = load_external_config()
         self.assertIsNone(result)
 
-    def test_get_all_families_uses_external_config_when_provided(self):
-        """get_all_families_for_trigger_types uses external config when passed."""
+    def test_get_all_families_uses_external_config_when_available(self):
+        """get_all_families_for_trigger_types uses external config when available."""
         fake_config = {
             "gpu_families": {
                 "presubmit": {
@@ -114,9 +114,10 @@ class TestExternalConfig(unittest.TestCase):
                 }
             }
         }
-        result = get_all_families_for_trigger_types(
-            ["presubmit"], external_config=fake_config
-        )
+        with mock.patch.object(
+            amdgpu_family_matrix, "load_external_config", return_value=fake_config
+        ):
+            result = get_all_families_for_trigger_types(["presubmit"])
         self.assertIn("test_family", result)
         self.assertEqual(result["test_family"]["linux"]["family"], "test-family")
 
@@ -128,14 +129,17 @@ class TestExternalConfig(unittest.TestCase):
         # Should contain entries from local presubmit matrix
         self.assertIn("gfx94x", result)
 
-    def test_get_build_runner_labels_uses_external_config_when_provided(self):
-        """get_build_runner_labels uses external config when passed."""
+    def test_get_build_runner_labels_uses_external_config_when_available(self):
+        """get_build_runner_labels uses external config when available."""
         fake_config = {
             "build_runners": {
                 "linux": {"default": [{"label": "custom-runner", "weight": 1.0}]}
             }
         }
-        result = get_build_runner_labels(external_config=fake_config)
+        with mock.patch.object(
+            amdgpu_family_matrix, "load_external_config", return_value=fake_config
+        ):
+            result = get_build_runner_labels()
         self.assertEqual(result["linux"]["default"][0]["label"], "custom-runner")
 
     def test_get_build_runner_labels_falls_back_to_local_when_no_external_config(self):

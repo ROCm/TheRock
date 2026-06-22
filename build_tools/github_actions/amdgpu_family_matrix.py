@@ -17,6 +17,10 @@ For presubmit, postsubmit and nightly family selection:
 TODO(#2200): clarify AMD GPU family selection
 """
 
+#############################################################################################
+# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
+#############################################################################################
+
 import os
 import random
 import sys
@@ -97,12 +101,13 @@ BUILD_RUNNER_LABELS = {
 
 def select_build_runner(platform: str, build_variant: str) -> str:
     """Select a build runner label based on platform and build variant."""
-    if platform not in BUILD_RUNNER_LABELS:
+    build_runner_labels = get_build_runner_labels()
+    if platform not in build_runner_labels:
         # Platform not configured for weighted selection, return default
         print(f"  No build runner config for platform {platform}, using default")
         return ""
 
-    platform_config = BUILD_RUNNER_LABELS[platform]
+    platform_config = build_runner_labels[platform]
 
     # Use sanitizer runners for asan/tsan builds
     if "san" in build_variant:
@@ -446,15 +451,13 @@ amdgpu_family_info_matrix_nightly = {
 }
 
 
-def get_all_families_for_trigger_types(trigger_types, external_config=None):
+def get_all_families_for_trigger_types(trigger_types):
     """Returns combined family matrix for the specified trigger types.
 
-    Auto-loads external config if not provided. Falls back to local definitions
-    if external config is unavailable.
+    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
+    definitions if external config is unavailable.
     """
-    # Auto-load external config if not explicitly provided
-    if external_config is None:
-        external_config = load_external_config()
+    external_config = load_external_config()
 
     # Use external config if available
     if external_config is not None:
@@ -482,15 +485,13 @@ def get_all_families_for_trigger_types(trigger_types, external_config=None):
     return result
 
 
-def get_build_runner_labels(external_config=None):
+def get_build_runner_labels():
     """Returns build runner label configuration.
 
-    Auto-loads external config if not provided. Falls back to local definitions
-    if external config is unavailable.
+    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
+    definitions if external config is unavailable.
     """
-    # Auto-load external config if not explicitly provided
-    if external_config is None:
-        external_config = load_external_config()
+    external_config = load_external_config()
 
     if external_config is not None:
         return external_config.get("build_runners", {})
