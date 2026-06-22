@@ -158,6 +158,7 @@ if(THEROCK_ENABLE_PRIM)
         ${_rocprim_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
+      TEST_SUBPROJECTS
     )
     therock_cmake_subproject_glob_c_sources(rocPRIM_tests
       SUBDIRS
@@ -185,6 +186,8 @@ if(THEROCK_ENABLE_PRIM)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+    TEST_SUBPROJECTS
+      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(hipCUB
     SUBDIRS
@@ -213,6 +216,8 @@ if(THEROCK_ENABLE_PRIM)
     RUNTIME_DEPS
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
+    TEST_SUBPROJECTS
+      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
     SUBDIRS
@@ -438,6 +443,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       amd-llvm
       hip-clr
       hipcc
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
     SUBDIRS
