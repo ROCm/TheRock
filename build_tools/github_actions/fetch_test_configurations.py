@@ -338,12 +338,17 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        # Investigation (#5960): the full suite (~76k tests) runs ~137 min on the
+        # Windows gfx110X card, overrunning the old 30 min step timeout. Shard
+        # Windows into 2 (~68 min/shard) and raise the timeout modestly to 80 min
+        # (68 + margin) so the reset-free pool-trim config can finish and confirm
+        # it passes without OOM.
+        "timeout_minutes": 80,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 1,
+            "windows": 2,
         },
     },
     "hipsparselt": {
