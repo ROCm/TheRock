@@ -328,7 +328,14 @@ test_matrix = {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        # Temporary mitigation for ROCm/rocm-libraries#8592: the gfx110X
+        # Windows V710 MxGPU partition OOMs on the pre_checkin sparse configs
+        # that the test_runner.py (standard) path runs, cascading into mass
+        # hipErrorOutOfMemory failures. Route sparse back to the pre-#4490
+        # legacy script (the last green basis, which already carries the
+        # gfx110X ignore list) until the underlying OOM is fixed. Restore
+        # test_runner.py afterwards.
+        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -338,17 +345,21 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        # Investigation (#5960): the full suite (~76k tests) runs ~137 min on the
-        # Windows gfx110X card, overrunning the old 30 min step timeout. Shard
-        # Windows into 2 (~68 min/shard) and raise the timeout modestly to 80 min
-        # (68 + margin) so the reset-free pool-trim config can finish and confirm
-        # it passes without OOM.
-        "timeout_minutes": 80,
+        # Investigation (#5960): intentionally keep the test_runner.py diagnostic
+        # path (VRAM logging + per-test pool-trim, reset-free) here rather than the
+        # main-branch legacy-script mitigation, so we can measure the full suite.
+        # rocsparse registers a single monolithic ctest entry
+        # (rocsparse-test_gpus_full_suite), so the test_runner.py stride sharding
+        # cannot split it; run a single shard and instead raise the step timeout
+        # to 180 min (full suite ~137 min on the Windows gfx110X card + margin,
+        # under the 210 min job cap) so it can finish and confirm it passes
+        # without OOM.
+        "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 2,
+            "windows": 1,
         },
     },
     "hipsparselt": {

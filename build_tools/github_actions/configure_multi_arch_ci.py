@@ -65,6 +65,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
+from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
@@ -425,9 +426,9 @@ class BuildConfig:
     build_variant_label: str
     build_variant_suffix: str
     build_variant_cmake_preset: str
-    expect_failure: bool
     build_native_linux: bool
     build_pytorch: bool
+    test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -936,27 +937,34 @@ def _expand_build_config_for_platform(
                 f"disabling test runner for non-scheduled runs"
             )
 
-        per_family_info.append(
-            {
-                "amdgpu_family": platform_info["family"],
-                "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
-                "test-runs-on": test_runs_on,
-                "sanity_check_only_for_family": platform_info.get(
-                    "sanity_check_only_for_family", False
-                ),
-            }
-        )
+        family_info = {
+            "amdgpu_family": platform_info["family"],
+            "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
+            "test-runs-on": test_runs_on,
+            "sanity_check_only_for_family": platform_info.get(
+                "sanity_check_only_for_family", False
+            ),
+        }
+        if test_runs_on and "test-runs-on-labels" in platform_info:
+            family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        per_family_info.append(family_info)
 
     if not per_family_info:
         return None
 
     family_names = [f["amdgpu_family"] for f in per_family_info]
-    expect_failure = variant_config.get("expect_failure", False)
-    expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
+
+    test_python_packages_matrix = build_rocm_python_test_matrix(
+        per_family_info=per_family_info,
+        platform=platform,
+    )
+    # TODO: Thread jobs.build_rocm_python into expand_build_configs() so this
+    # matrix is empty when the ROCm Python package build is disabled. Then
+    # multi_arch_ci_* can also condition build_python_packages on that decision.
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -965,12 +973,10 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        expect_failure=expect_failure,
-        build_native_linux=(not expect_failure and suffix != "asan"),
-        build_pytorch=(
-            not expect_failure and not expect_pytorch_failure and suffix != "asan"
-        ),
+        build_native_linux=(suffix != "asan"),
+        build_pytorch=(suffix != "asan"),
         build_runs_on=build_runs_on,
+        test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=prebuilt_stages or [],
         baseline_run_id=baseline_run_id,
     )
