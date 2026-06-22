@@ -129,9 +129,14 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 if test_component_job_name in ("rocsparse", "hipsparse") and (
     AMDGPU_FAMILIES and "gfx110X" in AMDGPU_FAMILIES
 ):
-    environ_vars["ROCSPARSE_TEST_TRIM_POOL"] = "1"
+    # CONTROL RUN (#5960): trim DISABLED to isolate the fix. With TRIM_POOL=0 and
+    # VRAM logging still on, pool_reserved should grow monotonically and the suite
+    # should OOM partway through, reproducing ROCm/rocm-libraries#8592. This is the
+    # A/B counterpart to the trim=1 run that passed the full suite flat at pool 0.
+    # Flip back to "1" to restore the fix once the repro is captured.
+    environ_vars["ROCSPARSE_TEST_TRIM_POOL"] = "0"
     environ_vars["ROCSPARSE_TEST_VRAM_LOG"] = "1"
-    environ_vars["HIPSPARSE_TEST_TRIM_POOL"] = "1"
+    environ_vars["HIPSPARSE_TEST_TRIM_POOL"] = "0"
     environ_vars["HIPSPARSE_TEST_VRAM_LOG"] = "1"
     # NOTE: the per-test hipDeviceReset() experiment was removed. It tore down
     # the device context (and the loaded code objects) after the first test, so
