@@ -47,6 +47,7 @@ if(THEROCK_ENABLE_HIPFILE)
       dev
       doc
       lib
+      run
       test
     SUBPROJECT_DEPS
       ${_hipfile_subproject_names}

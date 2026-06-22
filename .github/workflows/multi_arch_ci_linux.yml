@@ -13,7 +13,8 @@ on:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, build_pytorch,
-          build_native_linux, prebuilt_stages, baseline_run_id.
+          build_native_linux, test_python_packages_matrix,
+          prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
       rocm_package_version:
@@ -251,22 +252,15 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
-        python_version: ["3.10", "3.11", "3.12"]
-        # Fan out wheel tests across multiple base images to catch distro-specific regressions.
-        image:
-          - name: ubuntu24.04
-            url: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
-          - name: ubi10
-            url: ghcr.io/rocm/no_rocm_image_ubi10@sha256:a10f34d6006a20d02cf688982de9dea147710927ed405a3b0d5c73b58a6030c0
+        include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
     uses: ./.github/workflows/test_rocm_wheels.yml
     with:
-      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
-      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      amdgpu_family: ${{ matrix.amdgpu_family }}
+      test_runs_on: ${{ matrix.test_runs_on }}
       # TODO: Simplify to just `needs.build_python_packages.outputs.package_find_links_url`
       # once kpack split is always enabled.
       package_find_links_url: >-
@@ -275,13 +269,13 @@ jobs:
           && needs.build_python_packages.outputs.package_find_links_url
           || format('{0}/{1}/index.html',
               needs.build_python_packages.outputs.package_find_links_url,
-              matrix.family_info.amdgpu_family)
+              matrix.amdgpu_family)
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
-      container_image_name: ${{ matrix.image.name }}
-      container_image_url: ${{ matrix.image.url }}
+      container_image_name: ${{ matrix.container_image_name }}
+      container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 

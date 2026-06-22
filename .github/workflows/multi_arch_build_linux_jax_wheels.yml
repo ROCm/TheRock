@@ -109,7 +109,6 @@ run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inp
 permissions:
   contents: read
   id-token: write
-  packages: read
 
 jobs:
   build_jax_wheels:
@@ -214,6 +213,9 @@ jobs:
     steps:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref_name }}
 
       - name: Generating target to run
         id: configure
@@ -228,7 +230,6 @@ jobs:
     name: Test JAX wheels | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
     permissions:
       contents: read
-      packages: read
       id-token: write
     uses: ./.github/workflows/test_linux_jax_wheels_partial.yml
     with:
