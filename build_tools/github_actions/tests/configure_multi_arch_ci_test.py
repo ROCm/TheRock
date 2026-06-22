@@ -934,6 +934,64 @@ class TestExpandBuildConfigs(unittest.TestCase):
             ],
         )
 
+    def test_build_config_includes_pytorch_build_matrix(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
+        )
+
+        self.assertEqual(
+            result.linux.pytorch_build_matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.10",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.11",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.12",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+            ],
+        )
+        self.assertEqual(
+            result.windows.pytorch_build_matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.10",
+                    "amdgpu_families": "gfx110X-all",
+                }
+            ],
+        )
+
+    def test_build_config_disables_pytorch_when_all_families_are_filtered(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx125x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
+        )
+
+        self.assertFalse(result.linux.build_pytorch)
+        self.assertEqual(result.linux.pytorch_build_matrix, [])
+
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
         # gfx94x supports asan, gfx110x is release-only, windows has no asan variant.

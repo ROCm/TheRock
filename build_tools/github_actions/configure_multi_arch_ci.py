@@ -65,6 +65,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
+from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
     gha_append_step_summary,
@@ -429,6 +430,7 @@ class BuildConfig:
     build_native_linux: bool
     build_pytorch: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
+    pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -823,6 +825,7 @@ def _expand_build_config_for_platform(
     pr_labels: list[str],
     is_schedule: bool,
     is_workflow_dispatch: bool,
+    release_type: str,
     git_context: GitContext,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
@@ -953,10 +956,23 @@ def _expand_build_config_for_platform(
         return None
 
     family_names = [f["amdgpu_family"] for f in per_family_info]
+    dist_amdgpu_families = ";".join(family_names)
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
+
+    build_pytorch = suffix != "asan"
+    pytorch_build_matrix: list[dict[str, str]] = []
+    if build_pytorch:
+        pytorch_build_matrix = generate_pytorch_matrix_for_release_type(
+            release_type=release_type,
+            python_versions=None,
+            pytorch_git_refs=None,
+            amdgpu_families=dist_amdgpu_families,
+            platform=platform,
+        )
+        build_pytorch = bool(pytorch_build_matrix)
 
     test_python_packages_matrix = build_rocm_python_test_matrix(
         per_family_info=per_family_info,
@@ -968,13 +984,14 @@ def _expand_build_config_for_platform(
 
     return BuildConfig(
         per_family_info=per_family_info,
-        dist_amdgpu_families=";".join(family_names),
+        dist_amdgpu_families=dist_amdgpu_families,
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         build_native_linux=(suffix != "asan"),
-        build_pytorch=(suffix != "asan"),
+        build_pytorch=build_pytorch,
+        pytorch_build_matrix=pytorch_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=prebuilt_stages or [],
@@ -1027,6 +1044,7 @@ def expand_build_configs(
             pr_labels=ci_inputs.pr_labels,
             is_schedule=ci_inputs.is_schedule,
             is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
+            release_type=ci_inputs.release_type,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
             git_context=git_context,
