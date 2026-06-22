@@ -540,6 +540,11 @@ def retrieve_artifacts_by_run_id(args):
                 # CMake package configs live in prim's _dev component (the
                 # extra_artifacts expansion below only pulls _lib/_test).
                 argv.append("prim_dev")
+            if args.rand:
+                # The InOneWeekend example includes <hiprand/hiprand.hpp>; the
+                # hipRAND/rocRAND headers live in rand's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("rand_dev")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test

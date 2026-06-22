@@ -673,8 +673,9 @@ test_matrix = {
     # hipthreads example apps (build + run consumer samples against the artifact)
     "hipthreads_examples": {
         "job_name": "hipthreads_examples",
-        # --prim pulls rocThrust/rocPrim, which the examples link (roc::rocthrust).
-        "fetch_artifact_args": "--hipthreads --prim --tests",
+        # --prim pulls rocThrust/rocPrim (roc::rocthrust); --rand pulls hipRAND
+        # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
+        "fetch_artifact_args": "--hipthreads --prim --rand --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
         "platform": ["linux"],
