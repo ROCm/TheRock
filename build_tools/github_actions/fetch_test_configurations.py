@@ -329,15 +329,16 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         # Investigation (#5960): keep the test_runner.py diagnostic path (VRAM
         # logging + per-test pool-trim, reset-free) rather than the main-branch
-        # legacy-script mitigation, matching rocsparse below. The full hipsparse
-        # suite (~83k tests) completes reset-free in ~14 min on the Windows
-        # gfx110X card, so the default 30 min step timeout is ample.
+        # legacy-script mitigation, matching rocsparse below. The single
+        # hipsparse-test_standard_suite ctest entry is split across shards by
+        # GTEST_TOTAL_SHARDS (gtest-level sharding), so 3 shards each run ~1/3 of
+        # the cases.
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "rocsparse": {
@@ -347,17 +348,16 @@ test_matrix = {
         # path (VRAM logging + per-test pool-trim, reset-free) here rather than the
         # main-branch legacy-script mitigation, so we can measure the full suite.
         # rocsparse registers a single monolithic ctest entry
-        # (rocsparse-test_gpus_full_suite), so the test_runner.py stride sharding
-        # cannot split it; run a single shard and instead raise the step timeout
-        # to 180 min (full suite ~137 min on the Windows gfx110X card + margin,
-        # under the 210 min job cap) so it can finish and confirm it passes
-        # without OOM.
+        # (rocsparse-test_standard_suite), but that entry is still split across
+        # shards by GTEST_TOTAL_SHARDS (gtest-level sharding, same as rocsolver),
+        # so 3 shards each run ~1/3 of the cases. Keep a generous step timeout
+        # while we validate the sharded path.
         "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "hipsparselt": {
