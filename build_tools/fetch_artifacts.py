@@ -59,6 +59,31 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
+def _get_base_arch(target: str) -> str:
+    """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'."""
+    return target.split(":")[0]
+
+
+def _matches_target(artifact_target: str, requested_targets: set[str]) -> bool:
+    """Check if artifact target matches requested targets (base arch matches variants)."""
+    # Direct match
+    if artifact_target in requested_targets:
+        return True
+
+    # Check if the artifact's base arch matches any requested target
+    artifact_base = _get_base_arch(artifact_target)
+    if artifact_base in requested_targets:
+        return True
+
+    # Check if any requested target's base arch matches the artifact's base arch
+    # (handles case where user requests "gfx942:xnack+" explicitly)
+    for requested in requested_targets:
+        if _get_base_arch(requested) == artifact_base:
+            return True
+
+    return False
+
+
 def list_artifacts_for_group(
     backend: ArtifactBackend,
     artifact_group: str | None,
@@ -69,6 +94,9 @@ def list_artifacts_for_group(
     Inclusive matching: accepts both family-named archives (mono-arch pipeline)
     and individual-target archives (split/kpack pipeline). Whichever naming
     convention is present in the bucket will be matched.
+
+    Base architecture matching: requesting a base arch (e.g., "gfx942") will
+    also match variants with suffixes (e.g., "gfx942:xnack+", "gfx942:xnack-").
 
     Args:
         backend: ArtifactBackend instance configured for the target run
@@ -103,7 +131,7 @@ def list_artifacts_for_group(
     data = set()
     for filename in all_artifacts:
         an = ArtifactName.from_filename(filename)
-        if an and an.target_family in targets_to_match:
+        if an and _matches_target(an.target_family, targets_to_match):
             data.add(filename)
 
     if not data:

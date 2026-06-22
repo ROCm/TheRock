@@ -139,6 +139,50 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         self.assertIn("blas_lib_generic.tar.zst", result)
         self.assertIn("blas_lib_gfx942.tar.zst", result)
 
+    def testListArtifactsForGroup_MatchesXnackVariants(self):
+        """Test that requesting base arch also matches xnack-suffixed variants."""
+        backend = MagicMock(spec=ArtifactBackend)
+        backend.base_uri = "s3://therock-ci-artifacts/123-linux"
+        backend.list_artifacts.return_value = [
+            "blas_lib_generic.tar.zst",
+            "blas_lib_gfx942.tar.zst",
+            "blas_test_gfx942.tar.zst",
+            "rccl_test_gfx942:xnack+.tar.zst",  # xnack+ variant
+            "rccl_lib_gfx942:xnack-.tar.zst",  # xnack- variant
+            "blas_lib_gfx1100.tar.zst",  # different arch, should not match
+        ]
+
+        # Request base arch gfx942 - should also pull xnack variants
+        result = list_artifacts_for_group(
+            backend, artifact_group=None, amdgpu_targets=["gfx942"]
+        )
+
+        self.assertIn("blas_lib_generic.tar.zst", result)
+        self.assertIn("blas_lib_gfx942.tar.zst", result)
+        self.assertIn("blas_test_gfx942.tar.zst", result)
+        self.assertIn("rccl_test_gfx942:xnack+.tar.zst", result)
+        self.assertIn("rccl_lib_gfx942:xnack-.tar.zst", result)
+        self.assertNotIn("blas_lib_gfx1100.tar.zst", result)
+
+    def testListArtifactsForGroup_ExplicitXnackTargetMatchesBase(self):
+        """Test that requesting xnack variant explicitly also matches base arch."""
+        backend = MagicMock(spec=ArtifactBackend)
+        backend.base_uri = "s3://therock-ci-artifacts/123-linux"
+        backend.list_artifacts.return_value = [
+            "blas_lib_generic.tar.zst",
+            "blas_lib_gfx942.tar.zst",
+            "rccl_test_gfx942:xnack+.tar.zst",
+        ]
+
+        # Request xnack+ variant explicitly - should also pull base arch
+        result = list_artifacts_for_group(
+            backend, artifact_group=None, amdgpu_targets=["gfx942:xnack+"]
+        )
+
+        self.assertIn("blas_lib_generic.tar.zst", result)
+        self.assertIn("blas_lib_gfx942.tar.zst", result)
+        self.assertIn("rccl_test_gfx942:xnack+.tar.zst", result)
+
     def testFilterArtifacts_NoIncludesOrExcludes(self):
         artifacts = {"foo_test", "foo_run", "bar_test", "bar_run"}
 
