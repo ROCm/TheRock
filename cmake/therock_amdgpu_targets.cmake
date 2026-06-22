@@ -51,6 +51,7 @@ therock_add_amdgpu_target(gfx900 "Vega 10 / MI25" FAMILY dgpu-all gfx900-dgpu
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
@@ -61,6 +62,7 @@ therock_add_amdgpu_target(gfx90c "AMD Renoir/Lucienne/Cezanne iGPU" FAMILY igpu-
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
@@ -208,6 +210,7 @@ therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all 
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     composable_kernel # https://github.com/ROCm/TheRock/issues/4836
+    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
