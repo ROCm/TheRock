@@ -2112,8 +2112,13 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [],
-    "RPMRequires": [],
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime"
+    ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "hipTensor library for high-performance tensor operations on AMD GPUs",
     "Description_Long": "hipTensor is AMD's C++ library for accelerating tensor primitives based on the Composable Kernel library.",
