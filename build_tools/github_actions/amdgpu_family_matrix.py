@@ -107,7 +107,6 @@ all_build_variants = {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
-            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",

@@ -3,6 +3,10 @@
 include = [
   "share/hipfile/**",
 ]
+[components.run."storage-libs/hipfile/stage"]
+include = [
+  "bin/**",
+]
 [components.dbg."storage-libs/hipfile/stage"]
 [components.dev."storage-libs/hipfile/stage"]
 [components.doc."storage-libs/hipfile/stage"]
