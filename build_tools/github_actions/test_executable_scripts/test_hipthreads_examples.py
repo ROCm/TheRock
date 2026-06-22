@@ -96,7 +96,9 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
         raise FileNotFoundError(f"Example source dir not found: {source_dir}")
 
     build_dir = source_dir / "build"
-    hip_compiler = OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin" / "clang++"
+    llvm_bin = OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin"
+    clang = llvm_bin / "clang"
+    clangxx = llvm_bin / "clang++"
 
     configure_cmd = [
         "cmake",
@@ -106,7 +108,15 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
         str(source_dir),
         "-GNinja",
         f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-        f"-DCMAKE_HIP_COMPILER={hip_compiler.as_posix()}",
+        # The examples are project(... LANGUAGES CXX HIP). Pin BOTH the CXX and
+        # HIP compilers to the ROCm clang from the artifact. Otherwise CMake
+        # picks the system C++ compiler for CXX (e.g. clang-18 at /usr/bin/c++)
+        # while HIP uses ROCm clang, and the final link fails looking for the
+        # system toolchain's compiler-rt (libclang_rt.builtins) which isn't
+        # installed in the CI container.
+        f"-DCMAKE_C_COMPILER={clang.as_posix()}",
+        f"-DCMAKE_CXX_COMPILER={clangxx.as_posix()}",
+        f"-DCMAKE_HIP_COMPILER={clangxx.as_posix()}",
         f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
     ]
     logging.info(f"++ Configure [{example['name']}]$ {shlex.join(configure_cmd)}")
