@@ -106,11 +106,11 @@ on:
 permissions:
   contents: read
 
-run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version }}, ${{ inputs.test_runs_on }})
+run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, py${{ inputs.python_version }}, ${{ inputs.rocm_version }}, ${{ inputs.test_runs_on }})
 
 jobs:
   test_wheels:
-    name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | ${{ inputs.container_image_name }}
+    name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | py${{ inputs.python_version }} | ${{ inputs.container_image_name }}
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30

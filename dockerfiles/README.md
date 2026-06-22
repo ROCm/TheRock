@@ -7,10 +7,9 @@ well as supporting scripts.
 
 ### `build_manylinux_*.Dockerfile`
 
-| Source .Dockerfile                                                                 | Published package                                                                  |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile)          | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64      |
-| [`build_manylinux_rccl_x86_64.Dockerfile`](build_manylinux_rccl_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_rccl_x86_64 |
+| Source .Dockerfile                                                        | Published package                                                             |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64 |
 
 These Dockerfiles are used to build ROCm, PyTorch, and other packages for
 release across a wide variety of Linux distributions. They are derived from
@@ -208,11 +207,10 @@ The common
 [`.github/workflows/publish_dockerfile.yml`](/.github/workflows/publish_dockerfile.yml)
 workflow is used by other `publish_*.yml` workflows:
 
-| Workflow file                                                                                                             | Workflow run history                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)           | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)           |
-| [`.github/workflows/publish_build_manylinux_rccl_x86_64.yml`](/.github/workflows/publish_build_manylinux_rccl_x86_64.yml) | [actions/workflows/publish_build_manylinux_rccl_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_rccl_x86_64.yml) |
-| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml)     | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml)     |
+| Workflow file                                                                                                         | Workflow run history                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)       | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)       |
+| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml) | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml) |
 
 Tags for built docker images are set based on the branch name pattern:
 
