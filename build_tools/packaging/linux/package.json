@@ -1840,6 +1840,17 @@
         ]
       },
       {
+        "Artifact": "sysdeps-util-linux",
+        "Artifact_Subdir": [
+          {
+            "Name": "util-linux",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "sysdeps-amd-mesa",
         "Artifact_Subdir": [
           {
