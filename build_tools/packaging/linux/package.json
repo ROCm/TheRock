@@ -215,6 +215,18 @@
         ]
       },
       {
+        "Artifact": "wsl-rocdxg",
+        "Artifact_Subdir": [
+          {
+            "Name": "wsl-rocdxg",
+            "Components": [
+              "lib",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "core-hip",
         "Artifact_Subdir": [
           {
@@ -287,6 +299,17 @@
             "Components": [
               "dev",
               "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "wsl-rocdxg",
+        "Artifact_Subdir": [
+          {
+            "Name": "wsl-rocdxg",
+            "Components": [
+              "dev"
             ]
           }
         ]
