@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000002 Mon Sep 17 00:00:00 2001
+From: TheRock <therock@amd.com>
+Date: Wed, 18 Jun 2026 00:00:00 +0000
+Subject: [PATCH] rocprof-sys-launch-compiler: add sccache to known wrappers
+
+rocprof-sys-launch-compiler only recognized "ccache" as a compiler
+wrapper. When sccache is set as CMAKE_CXX_COMPILER_LAUNCHER the script
+treated "sccache" as an unknown command, fell into the eval $@ branch,
+and invoked clang++ directly without going through hipcc. This caused
+hip/hip_runtime.h to not be found.
+
+Add "sccache" to KNOWN_WRAPPERS with the same prefix-preservation logic
+as ccache so that the rocprofiler-systems compiler is invoked correctly
+when sccache is the launcher.
+---
+ projects/rocprofiler-systems/scripts/rocprof-sys-launch-compiler | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/projects/rocprofiler-systems/scripts/rocprof-sys-launch-compiler b/projects/rocprofiler-systems/scripts/rocprof-sys-launch-compiler
+--- a/projects/rocprofiler-systems/scripts/rocprof-sys-launch-compiler
++++ b/projects/rocprofiler-systems/scripts/rocprof-sys-launch-compiler
+@@ -105,10 +105,11 @@
+ # Known wrappers that may appear before the actual compiler
+ KNOWN_WRAPPERS=(
+     "resource_info.py"  # TheRock build profiling
+-    "ccache"            # Compiler cache
++    "ccache"            # Compiler cache (ccache)
++    "sccache"           # Compiler cache (sccache)
+ )
+
+-CCACHE_PREFIX=""
++CACHE_PREFIX=""
+ ACTUAL_COMPILER="${1}"
+ CURRENT_BASENAME="$(basename "${1}")"
+
+@@ -119,9 +120,9 @@
+             echo "but no underlying command was specified as the next argument." >&2
+             exit 1
+         fi
+-        # Preserve ccache so we can re-apply it to the rocprofiler-systems compiler
+-        if [[ "${wrapper}" == "ccache" ]]; then
+-            CCACHE_PREFIX="${1}"
++        # Preserve cache wrapper so we can re-apply it to the rocprofiler-systems compiler
++        if [[ "${wrapper}" == "ccache" || "${wrapper}" == "sccache" ]]; then
++            CACHE_PREFIX="${1}"
+         fi
+         shift
+         ACTUAL_COMPILER="${1}"
+@@ -150,10 +151,10 @@
+         export LIBRARY_PATH=${LLVM_LIB_DIR}:${LIBRARY_PATH}
+     fi
+
+-    # Use ccache with the rocprofiler-systems compiler if ccache was originally requested
+-    if [ -n "${CCACHE_PREFIX}" ]; then
+-        debug-message ${CCACHE_PREFIX} ${ROCPROFSYS_COMPILER} $@
+-        ${CCACHE_PREFIX} ${ROCPROFSYS_COMPILER} $@
++    # Use cache wrapper with the rocprofiler-systems compiler if one was originally requested
++    if [ -n "${CACHE_PREFIX}" ]; then
++        debug-message ${CACHE_PREFIX} ${ROCPROFSYS_COMPILER} $@
++        ${CACHE_PREFIX} ${ROCPROFSYS_COMPILER} $@
+     else
+         debug-message ${ROCPROFSYS_COMPILER} $@
+         ${ROCPROFSYS_COMPILER} $@
