@@ -156,6 +156,19 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
+    # and do not require a GPU runner.
+    "hipfile": {
+        "job_name": "hipfile",
+        "fetch_artifact_args": "--hipfile --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipfile.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
