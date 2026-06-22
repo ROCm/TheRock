@@ -70,7 +70,6 @@ from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
-    load_external_config,
 )
 
 # ---------------------------------------------------------------------------
@@ -707,12 +706,11 @@ def _filter_families_by_platform(
     ]
 
 
-def select_targets(
-    ci_inputs: CIInputs, external_config: dict | None = None
-) -> TargetSelection:
+def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
     Trigger types run progressively larger sets of builds and tests:
+
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
       families (gfx* labels) or the full set (ci:run-all-archs).
@@ -730,7 +728,7 @@ def select_targets(
     that have a platform entry in amdgpu_family_matrix.py.
     """
     all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"], external_config=external_config
+        ["presubmit", "postsubmit", "nightly"]
     )
 
     # Select family names per platform based on trigger type.
@@ -754,11 +752,7 @@ def select_targets(
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs
         # for everything).
-        defaults = list(
-            get_all_families_for_trigger_types(
-                ["presubmit"], external_config=external_config
-            ).keys()
-        )
+        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_push:
@@ -766,9 +760,7 @@ def select_targets(
         # we validate on more targets (e.g. gfx950) without paying full
         # nightly cost.
         defaults = list(
-            get_all_families_for_trigger_types(
-                ["presubmit", "postsubmit"], external_config=external_config
-            ).keys()
+            get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
         )
         linux_names = list(defaults)
         windows_names = list(defaults)
@@ -997,11 +989,14 @@ def expand_build_configs(
     git_context: GitContext,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
-    external_config: dict | None = None,
 ) -> BuildConfigs:
-    """Build a BuildConfig for each platform that supports the variant."""
+    """Build a BuildConfig for each platform that supports the variant.
+
+    Returns BuildConfigs with a BuildConfig per platform, or None for
+    platforms where the variant isn't available or no families match.
+    """
     all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"], external_config=external_config
+        ["presubmit", "postsubmit", "nightly"]
     )
     build_variant = ci_inputs.build_variant
     # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
@@ -1109,12 +1104,13 @@ def write_outputs(
 # ---------------------------------------------------------------------------
 
 
-def configure(
-    ci_inputs: CIInputs,
-    git_context: GitContext,
-    external_config: dict | None = None,
-) -> CIOutputs:
-    """Main pipeline. Each step feeds the next."""
+def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
+    """Main pipeline. Each step feeds the next.
+
+    This function is the primary entry point for testing — construct
+    CIInputs and GitContext directly and assert on the returned CIOutputs.
+    No git operations or environment access needed.
+    """
     print("=== Inputs ===")
     ci_inputs.log()
     git_context.log()
@@ -1129,7 +1125,7 @@ def configure(
     jobs.log()
 
     print("\n=== Selecting GPU target families ===")
-    targets = select_targets(ci_inputs, external_config=external_config)
+    targets = select_targets(ci_inputs)
     targets.log()
 
     print("\n=== Building per-platform configs ===")
@@ -1140,7 +1136,6 @@ def configure(
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         git_context=git_context,
-        external_config=external_config,
     )
     builds.log()
 
@@ -1159,8 +1154,6 @@ def configure(
 
 
 def main():
-    external_config = load_external_config()
-
     ci_inputs = CIInputs.from_environ()
 
     # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
@@ -1181,7 +1174,7 @@ def main():
         # a "prior commit" to compare against.
         git_context = GitContext.empty()
 
-    outputs = configure(ci_inputs, git_context, external_config=external_config)
+    outputs = configure(ci_inputs, git_context)
     write_outputs(ci_inputs=ci_inputs, outputs=outputs)
 
 

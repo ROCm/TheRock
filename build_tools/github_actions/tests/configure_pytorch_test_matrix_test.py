@@ -38,9 +38,7 @@ FAKE_FAMILY_MATRIX: FamilyMatrix = {
 }
 
 
-def _fake_family_matrix(
-    _trigger_types: list[str], external_config=None
-) -> FamilyMatrix:
+def _fake_family_matrix(_trigger_types: list[str]) -> FamilyMatrix:
     return FAKE_FAMILY_MATRIX
 
 
@@ -96,11 +94,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
     def test_main_writes_outputs(self) -> None:
         with mock.patch.object(
             m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
-        ), mock.patch.object(
-            m, "load_external_config", return_value=None
-        ), mock.patch.object(
-            m, "gha_set_output"
-        ) as gha_set_output:
+        ), mock.patch.object(m, "gha_set_output") as gha_set_output:
             m.main(
                 [
                     "--build-amdgpu-families",
@@ -120,11 +114,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
     def test_main_auto_uses_built_families(self) -> None:
         with mock.patch.object(
             m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
-        ), mock.patch.object(
-            m, "load_external_config", return_value=None
-        ), mock.patch.object(
-            m, "gha_set_output"
-        ) as gha_set_output:
+        ), mock.patch.object(m, "gha_set_output") as gha_set_output:
             m.main(
                 [
                     "--build-amdgpu-families",

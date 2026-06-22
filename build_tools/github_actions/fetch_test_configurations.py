@@ -328,7 +328,14 @@ test_matrix = {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        # Temporary mitigation for ROCm/rocm-libraries#8592: the gfx110X
+        # Windows V710 MxGPU partition OOMs on the pre_checkin sparse configs
+        # that the test_runner.py (standard) path runs, cascading into mass
+        # hipErrorOutOfMemory failures. Route sparse back to the pre-#4490
+        # legacy script (the last green basis, which already carries the
+        # gfx110X ignore list) until the underlying OOM is fixed. Restore
+        # test_runner.py afterwards.
+        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -339,7 +346,11 @@ test_matrix = {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        # Temporary mitigation for ROCm/rocm-libraries#8592 (see hipsparse
+        # above): route sparse back to the pre-#4490 legacy script until the
+        # underlying gfx110X Windows OOM is fixed. Restore test_runner.py
+        # afterwards.
+        "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -677,7 +688,7 @@ test_matrix = {
 }
 
 
-def run(external_config=None):
+def run():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--platform",
@@ -835,10 +846,6 @@ def run(external_config=None):
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
-                amdgpu_families_matrix = get_all_families_for_trigger_types(
-                    ["presubmit", "postsubmit", "nightly"],
-                    external_config=external_config,
-                )
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
@@ -898,5 +905,4 @@ def run(external_config=None):
 
 
 if __name__ == "__main__":
-    external_config = load_external_config()
-    run(external_config=external_config)
+    run()

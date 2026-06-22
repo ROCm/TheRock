@@ -239,7 +239,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # -----------------------
 
     def test_multi_gpu_job_included_when_supported(self):
-        def fake_get_all_families(_, external_config=None):
+        def fake_get_all_families(_):
             return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
@@ -255,7 +255,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_multi_gpu_job_uses_weighted_labels_when_available(self):
         """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
 
-        def fake_get_all_families(_, external_config=None):
+        def fake_get_all_families(_):
             return {
                 "gfx94x": {
                     "linux": {
@@ -308,7 +308,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_multi_gpu_job_excluded_when_not_supported(self):
         os.environ["AMDGPU_FAMILIES"] = "gfx90a"
 
-        def fake_get_all_families(_, external_config=None):
+        def fake_get_all_families(_):
             return {}
 
         fetch_test_configurations.get_all_families_for_trigger_types = (

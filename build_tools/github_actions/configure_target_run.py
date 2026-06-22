@@ -15,10 +15,10 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from github_actions_api import *
 
 
-def get_runner_label(target: str, platform: str, external_config=None) -> str:
+def get_runner_label(target: str, platform: str) -> str:
     print(f"Searching for a runner for target '{target}' on platform '{platform}'")
     amdgpu_family_info_matrix = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit"], external_config=external_config
+        ["presubmit", "postsubmit"]
     )
     for key, info_for_key in amdgpu_family_info_matrix.items():
         print(f"Cheecking key '{key}' with info:\n  {info_for_key}")
@@ -49,10 +49,10 @@ def get_runner_label(target: str, platform: str, external_config=None) -> str:
     return ""
 
 
-def get_upload_label(target: str, platform: str, external_config=None) -> str:
+def get_upload_label(target: str, platform: str) -> str:
     print(f"Searching for a runner for target '{target}' on platform '{platform}'")
     amdgpu_family_info_matrix = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit"], external_config=external_config
+        ["presubmit", "postsubmit"]
     )
     for key, info_for_key in amdgpu_family_info_matrix.items():
         print(f"Cheecking key '{key}' with info:\n  {info_for_key}")
@@ -83,11 +83,11 @@ def get_upload_label(target: str, platform: str, external_config=None) -> str:
     return ""
 
 
-def main(target: str, platform: str, external_config=None):
-    runner_label = get_runner_label(target, platform, external_config=external_config)
+def main(target: str, platform: str):
+    runner_label = get_runner_label(target, platform)
     if runner_label:
         gha_set_output({"test-runs-on": runner_label})
-    upload_label = get_upload_label(target, platform, external_config=external_config)
+    upload_label = get_upload_label(target, platform)
     if upload_label:
         gha_set_output({"bypass_tests_for_releases": upload_label})
 
@@ -95,5 +95,4 @@ def main(target: str, platform: str, external_config=None):
 if __name__ == "__main__":
     target = os.getenv("TARGET", "")
     platform = os.getenv("PLATFORM", "")
-    external_config = load_external_config()
-    main(target=target, platform=platform, external_config=external_config)
+    main(target=target, platform=platform)
