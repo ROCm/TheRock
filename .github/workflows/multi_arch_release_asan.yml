@@ -55,10 +55,6 @@ on:
         options:
           - dev
         default: dev
-      prerelease_version:
-        description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
-        type: string
-        default: ""
       # For workflow_dispatch, default to a single GPU family to limit CI load for most workflow runs.
       # Note: empty string will be converted to the default by github, so we need an explicit "none".
       linux_amdgpu_families:
