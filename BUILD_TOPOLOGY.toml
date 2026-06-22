@@ -642,8 +642,6 @@ artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
-# Windows support is not yet landed on hipThreads develop; disable until then.
-disable_platforms = ["windows"]
 
 [artifacts.support]
 artifact_group = "math-libs"
