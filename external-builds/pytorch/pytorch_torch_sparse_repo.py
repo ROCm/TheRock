@@ -34,7 +34,9 @@ import repo_management
 THIS_MAIN_REPO_NAME = "torch_sparse"
 THIS_DIR = Path(__file__).resolve().parent
 
-DEFAULT_ORIGIN = "https://github.com/rusty1s/pytorch_sparse.git"
+# TODO: Revert to https://github.com/rusty1s/pytorch_sparse.git once
+# https://github.com/rusty1s/pytorch_sparse/pull/405 is merged.
+DEFAULT_ORIGIN = "https://github.com/Looong01/pytorch_sparse-rocm.git"
 DEFAULT_HASHTAG = "master"
 
 
