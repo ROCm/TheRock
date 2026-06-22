@@ -93,6 +93,8 @@ def run(
     for f in tarball_files:
         name = f.name
         encoded_name = quote(name, safe="")
+        if "-lite-" in name:
+            continue
 
         if name.startswith(f"therock-dist-{platform}-multiarch-"):
             shared_tarball_url = output_root.tarball(encoded_name).https_url
