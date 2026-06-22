@@ -193,6 +193,74 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertIn("page=1", first_url)
         self.assertIn("page=2", second_url)
 
+    def test_create_workflow_run_summary(self):
+        run = _workflow_run("123")
+        summary = baseline_runs.create_workflow_run_summary(
+            run,
+            github_repository="ROCm/TheRock",
+            workflow_name="multi_arch_ci.yml",
+        )
+
+        self.assertEqual(summary.repository, "ROCm/TheRock")
+        self.assertEqual(summary.branch, "main")
+        self.assertEqual(summary.commit, "sha-123")
+        self.assertEqual(summary.workflow, "multi_arch_ci.yml")
+        self.assertEqual(summary.run_id, "123")
+        self.assertEqual(summary.status, "completed")
+        self.assertEqual(summary.conclusion, "success")
+        self.assertEqual(summary.timestamp, None)
+
+    def test_workflow_run_summary_to_dict(self):
+        run = _workflow_run("123")
+        summary = baseline_runs.create_workflow_run_summary(
+            run,
+            github_repository="ROCm/TheRock",
+            workflow_name="multi_arch_ci.yml",
+        )
+
+        payload = summary.to_dict()
+        self.assertEqual(
+            set(payload.keys()),
+            {
+                "repository",
+                "branch",
+                "commit",
+                "workflow",
+                "run_id",
+                "status",
+                "conclusion",
+                "timestamp",
+                "html_url",
+            },
+        )
+        self.assertEqual(payload["run_id"], "123")
+        self.assertEqual(payload["workflow"], "multi_arch_ci.yml")
+
+    def test_baseline_run_to_dict(self):
+        source_ref = baseline_runs.WorkflowRunSummary(
+            repository="ROCm/TheRock",
+            branch="main",
+            commit="sha-123",
+            workflow="multi_arch_ci.yml",
+            run_id="123",
+            status="completed",
+            conclusion="success",
+            timestamp=None,
+        )
+
+        baseline = baseline_runs.BaselineRun(
+            source_ref=source_ref,
+            platform="linux",
+            job_health=mock.Mock(),
+            artifact_availability=mock.Mock(),
+        )
+
+        payload = baseline.to_dict()
+
+        self.assertIn("source_ref", payload)
+        self.assertEqual(payload["platform"], "linux")
+        self.assertEqual(payload["source_ref"]["run_id"], "123")
+
     def test_validate_required_artifacts_available(self):
         backend = FakeBackend(
             [
@@ -375,6 +443,8 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertEqual(baseline.run_id, "failed")
         self.assertEqual(baseline.head_sha, "sha-failed")
         self.assertEqual(baseline.platform, "linux")
+        self.assertEqual(baseline.source_ref.workflow, "multi_arch_ci.yml")
+        self.assertEqual(baseline.source_ref.repository, "ROCm/TheRock")
         self.assertEqual(baseline.job_health.failed_job_names, ())
         self.assertEqual(baseline.artifact_availability.missing_artifacts, ())
 

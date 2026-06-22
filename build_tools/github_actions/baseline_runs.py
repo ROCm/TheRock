@@ -75,17 +75,69 @@ class WorkflowJobHealth:
 
 
 @dataclass(frozen=True)
+class WorkflowRunSummary:
+    """Compact source/ref summary for a workflow run."""
+
+    repository: str
+    branch: str
+    commit: str
+    workflow: str
+    run_id: str
+    status: str
+    conclusion: str | None
+    timestamp: str | None
+    html_url: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "repository": self.repository,
+            "branch": self.branch,
+            "commit": self.commit,
+            "workflow": self.workflow,
+            "run_id": self.run_id,
+            "status": self.status,
+            "conclusion": self.conclusion,
+            "timestamp": self.timestamp,
+            "html_url": self.html_url,
+        }
+
+
+@dataclass(frozen=True)
 class BaselineRun:
     """Workflow run with build jobs and artifacts suitable for reuse."""
 
-    run_id: str
-    html_url: str
-    head_sha: str
-    branch: str
-    workflow_name: str
+    source_ref: WorkflowRunSummary
     platform: str
     job_health: WorkflowJobHealth
     artifact_availability: ArtifactAvailability
+
+    @property
+    def run_id(self) -> str:
+        return self.source_ref.run_id
+
+    @property
+    def html_url(self) -> str:
+        return self.source_ref.html_url
+
+    @property
+    def head_sha(self) -> str:
+        return self.source_ref.commit
+
+    @property
+    def branch(self) -> str:
+        return self.source_ref.branch
+
+    @property
+    def workflow_name(self) -> str:
+        return self.source_ref.workflow
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "source_ref": self.source_ref.to_dict(),
+            "platform": self.platform,
+            "job_health": self.job_health,
+            "artifact_availability": self.artifact_availability,
+        }
 
 
 ArtifactBackendFactory = Callable[[dict, str, str], ArtifactBackend]
@@ -259,6 +311,26 @@ def query_jobs_for_workflow_run(
         github_repository=github_repository,
         run_id=str(workflow_run["id"]),
         run_attempt=run_attempt,
+    )
+
+
+def create_workflow_run_summary(
+    workflow_run: dict,
+    *,
+    github_repository: str,
+    workflow_name: str,
+) -> WorkflowRunSummary:
+    """Create a compact source/ref summary for a workflow run."""
+    return WorkflowRunSummary(
+        repository=github_repository,
+        branch=workflow_run.get("head_branch", ""),
+        commit=workflow_run.get("head_sha", ""),
+        workflow=workflow_name,
+        run_id=str(workflow_run["id"]),
+        status=workflow_run.get("status", ""),
+        conclusion=workflow_run.get("conclusion"),
+        timestamp=workflow_run.get("created_at"),
+        html_url=workflow_run.get("html_url", ""),
     )
 
 
@@ -471,12 +543,14 @@ def select_baseline_run(
         if not availability.is_valid:
             continue
 
-        return BaselineRun(
-            run_id=run_id,
-            html_url=workflow_run.get("html_url", ""),
-            head_sha=workflow_run.get("head_sha", ""),
-            branch=workflow_run.get("head_branch", branch),
+        source_ref = create_workflow_run_summary(
+            workflow_run,
+            github_repository=github_repository,
             workflow_name=workflow_name,
+        )
+
+        return BaselineRun(
+            source_ref=source_ref,
             platform=platform,
             job_health=job_health,
             artifact_availability=availability,
