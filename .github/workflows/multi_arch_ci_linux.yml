@@ -284,12 +284,13 @@ jobs:
   # KPACK_SPLIT_ARTIFACTS is always ON in multi-arch CI (FLAGS.cmake
   # default; build_configure.py's opt-out only fires in single-arch CI),
   # so the split path is unconditional here. The split itself runs inline
-  # in build_portable_linux_pytorch_wheels_ci.yml based on inputs.kpack_split.
+  # in multi_arch_build_portable_linux_pytorch_wheels_ci.yml based on
+  # inputs.kpack_split.
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
-    uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
+    uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: "3.12"
