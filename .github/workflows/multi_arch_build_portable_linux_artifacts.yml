@@ -175,7 +175,6 @@ jobs:
 
       - name: Run build tests
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
-        continue-on-error: true
         env:
           TEATIME_FORCE_INTERACTIVE: 1
         run: |
