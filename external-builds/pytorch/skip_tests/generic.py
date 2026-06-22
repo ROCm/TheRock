@@ -235,6 +235,21 @@ skip_tests = {
             "test_idiv_and_ifloordiv_vs_python_cuda",
         ],
         "cuda": [
+            # Device-side assert() does not propagate to the host on Windows ROCm:
+            # the KMD has no trap handler, so the faulted queue never reports an
+            # error and torch.cuda.synchronize() hangs until the CI job timeout.
+            # These tests deliberately trigger a device-side assert and await it
+            # with no subprocess timeout, so they hang rather than fail.
+            # Re-enable once the Windows ROCm driver propagates device-side
+            # faults to the runtime.
+            "test_fixed_cuda_assert_async",
+            "test_index_out_of_bounds_exception_cuda",
+            # Same device-side-assert-propagation issue as the two tests above:
+            # spawns a subprocess that feeds invalid probabilities (negative,
+            # inf, nan) to torch.multinomial, calls torch.cuda.synchronize(), and
+            # asserts the device-side assert surfaces in stderr. On Windows ROCm
+            # the fault never propagates, so it hangs/fails instead.
+            "test_multinomial_invalid_probs_cuda",
             # RuntimeError: miopenStatusUnknownError
             "test_autocast_rnn",
             # On some test runners
