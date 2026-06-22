@@ -206,55 +206,16 @@ def is_packaging_disabled(pkg_info):
     return is_key_defined(pkg_info, "Disablepackaging")
 
 
-def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
-    """
-    Check if arch-specific artifact directories exist for a package.
-
-    Args:
-        pkg_info (dict): A dictionary containing package details.
-        artifacts_dir (Path): Directory where artifacts are saved.
-
-    Returns:
-        bool: True if any arch-specific artifact directory exists, False otherwise.
-    """
-    artifactory = pkg_info.get("Artifactory")
-    if not artifactory:
-        return False
-
-    for artifact in artifactory:
-        artifact_prefix = artifact.get("Artifact")
-        if not artifact_prefix:
-            continue
-        for subdir in artifact.get("Artifact_Subdir", []):
-            for component in subdir.get("Components", []):
-                # Check for any gfx-specific directory (not generic)
-                pattern = f"{artifact_prefix}_{component}_gfx*"
-                matches = list(Path(artifacts_dir).glob(pattern))
-                if matches:
-                    return True
-    return False
-
-
-def is_gfxarch_package(
-    pkg_info,
-    enable_kpack=False,
-    artifacts_dir: Path | None = None,
-):
+def is_gfxarch_package(pkg_info, enable_kpack=False):
     """Check whether the package is associated with a graphics architecture
 
     Parameters:
     pkg_info (dict): A dictionary containing package details.
     enable_kpack (bool): Enable multi-architecture support.
-    artifacts_dir (Path | None): Artifact tree root; required for kpack gfx-arch
-        detection (passed explicitly by callers; when enable_kpack is True and this
-        is None, the package is not treated as gfx-arch-specific).
 
     Returns:
     bool : True if Gfxarch is set, else False.
            False if devel package when enable_kpack is True
-           False if Gfxarch is set but no arch-specific artifacts exist (kpack mode)
-           When enable_kpack is True, False if artifacts_dir is None: kpack logic
-           cannot classify the package as gfx-arch-specific without an artifact path.
     """
     if enable_kpack:
         pkgname = pkg_info.get("Package", "")
@@ -263,13 +224,11 @@ def is_gfxarch_package(
         if pkgname.endswith("-devel") and not is_meta_package(pkg_info):
             return False
 
-    # In kpack mode, verify arch-specific artifacts exist
-    if enable_kpack:
-        if artifacts_dir:
-            return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
-        # Do not fall through to Gfxarch metadata: without artifacts we cannot treat
-        # the package as gfx-arch-specific for kpack splits (explicit bool).
-        return False
+        # Override RCCL Gfxarch behavior in kpack mode
+        # When --enable-kpack is used, RCCL should look for architecture-specific artifacts
+        # instead of generic artifacts to ensure GPU-specific kernel support (e.g., gfx1201)
+        if pkgname in ["amdrocm-rccl", "amdrocm-rccl-test"]:
+            return True
 
     return is_key_defined(pkg_info, "Gfxarch")
 
@@ -426,14 +385,14 @@ def update_package_name(pkg_name, config: PackageConfig):
     # Result: amdrocm-fft-host8.2 (not amdrocm-fft8.2-host)
     if (
         config.enable_kpack
-        and is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir)
+        and is_gfxarch_package(pkg_info, config.enable_kpack)
         and config.gfx_arch == GFX_HOST
     ):
         updated_pkgname += "-host"
 
     updated_pkgname += pkg_suffix
 
-    if is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
+    if is_gfxarch_package(pkg_info, config.enable_kpack):
         if config.enable_kpack:
             if config.gfx_arch == GFX_HOST:
                 # Host package: "-host" already added before version
@@ -624,16 +583,14 @@ def process_main_dependencies_kpack(
             dep
             for dep in dep_list
             if not is_gfxarch_package(
-                get_package_info(dep, raise_if_missing=False) or {},
-                config.enable_kpack,
-                config.artifacts_dir,
+                get_package_info(dep, raise_if_missing=False) or {}, config.enable_kpack
             )
         ]
         # Filter deps without artifacts
         dep_list = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
-    elif not is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
+    elif not is_gfxarch_package(pkg_info, config.enable_kpack):
         # Non-gfxarch versioned package: use all dependencies directly
         # These packages don't have host/device split, so include everything
         dep_list = pkg_info.get(field_key, [])
@@ -648,9 +605,7 @@ def process_main_dependencies_kpack(
             dep
             for dep in dep_list
             if is_gfxarch_package(
-                get_package_info(dep, raise_if_missing=False) or {},
-                config.enable_kpack,
-                config.artifacts_dir,
+                get_package_info(dep, raise_if_missing=False) or {}, config.enable_kpack
             )
         ]
         # Filter deps without artifacts
@@ -878,15 +833,13 @@ def filter_components_fromartifactory(
         # GFX_HOST uses "generic" artifacts
         if gfx_arch == GFX_HOST:
             dir_suffix = "generic"
-        elif is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir):
+        elif is_gfxarch_package(pkg_info, enable_kpack):
             dir_suffix = gfx_arch
         else:
             dir_suffix = "generic"
     else:
         dir_suffix = (
-            gfx_arch
-            if is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir)
-            else "generic"
+            gfx_arch if is_gfxarch_package(pkg_info, enable_kpack) else "generic"
         )
 
     artifactory = pkg_info.get("Artifactory")
@@ -984,9 +937,7 @@ def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
         for dep in dep_list:
             dep_info = get_package_info(dep)
             # Only gfxarch dependencies get arch suffix, others stay generic
-            preserve = dep_info and is_gfxarch_package(
-                dep_info, config.enable_kpack, config.artifacts_dir
-            )
+            preserve = dep_info and is_gfxarch_package(dep_info, config.enable_kpack)
             versioned = convert_to_versiondependency(
                 [dep], config, preserve_arch=preserve
             )
@@ -1037,7 +988,7 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
         return False
 
     # Non-gfxarch packages do not need arch-specific artifacts
-    if not is_gfxarch_package(pkg_info, enable_kpack=True, artifacts_dir=artifacts_dir):
+    if not is_gfxarch_package(pkg_info, enable_kpack=True):
         return True
 
     # Meta packages do not have their own artifacts
@@ -1119,7 +1070,7 @@ def filter_archs_with_artifacts(
         return list(gfxarch_list)
 
     # Non-gfxarch packages do not have arch-specific variants
-    if not is_gfxarch_package(pkg_info, enable_kpack=True, artifacts_dir=artifacts_dir):
+    if not is_gfxarch_package(pkg_info, enable_kpack=True):
         return list(gfxarch_list)
 
     # Meta packages inherit from their dependencies, return all archs
@@ -1164,9 +1115,7 @@ def filter_dependencies_by_artifacts(
             continue
 
         # Non-gfxarch packages are always available
-        if not is_gfxarch_package(
-            dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
-        ):
+        if not is_gfxarch_package(dep_info, enable_kpack=True):
             filtered.append(dep)
             continue
 
