@@ -160,13 +160,6 @@ def main(argv=None):
         required=True,
         help="Output directory for tarballs",
     )
-    parser.add_argument(
-        "--build-variant",
-        default="release",
-        choices=["release", "asan"],
-        help="Build variant. ASAN tarballs are published to a separate folder "
-        "(v4/tarball-asan/) rather than encoding the variant in filenames.",
-    )
     args = parser.parse_args(argv)
     # Normalize empty string to None (workflow inputs default to "")
     args.run_github_repo = args.run_github_repo or None
@@ -182,7 +175,6 @@ def main(argv=None):
     log(f"Building tarballs for {len(families)} families: {', '.join(families)}")
     log(f"  Platform: {args.platform}")
     log(f"  Version: {args.package_version}")
-    log(f"  Build variant: {args.build_variant}")
     log(f"  Output: {args.output_dir}")
 
     # Phase 1: Fetch and flatten sequentially.
