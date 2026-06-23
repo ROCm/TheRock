@@ -76,6 +76,7 @@ class SourceSet:
     submodules: List[Submodule] = field(default_factory=list)
     external_git_sources: List[ExternalGitSource] = field(default_factory=list)
     disable_platforms: List[str] = field(default_factory=list)
+    path_prefixes: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -176,6 +177,7 @@ class BuildTopology:
                 submodules=submodules,
                 external_git_sources=external_git_sources,
                 disable_platforms=set_data.get("disable_platforms", []),
+                path_prefixes=set_data.get("path_prefixes", []),
             )
 
         # Parse build stages
@@ -489,6 +491,24 @@ class BuildTopology:
                             f"External git source '{source.name}' path '{source.path}' "
                             "must be under optional-sources/"
                         )
+            for prefix in source_set.path_prefixes:
+                if not prefix:
+                    errors.append(
+                        f"Source set '{source_set_name}' has an empty path_prefix"
+                    )
+                    continue
+
+                prefix_path = Path(prefix)
+                if prefix_path.is_absolute():
+                    errors.append(
+                        f"Source set '{source_set_name}' path_prefix '{prefix}' "
+                        "must be relative"
+                    )
+                if ".." in prefix_path.parts:
+                    errors.append(
+                        f"Source set '{source_set_name}' path_prefix '{prefix}' "
+                        "must not contain '..'"
+                    )
 
         return errors
 
@@ -608,6 +628,34 @@ class BuildTopology:
                     )
                 else:
                     external_sources_by_path[source.path] = source_set.name
+
+        # Check for conflicting submodule ownership.
+        submodule_owner: Dict[str, str] = {}
+        for source_set in self.source_sets.values():
+            for submodule in source_set.submodules:
+                previous_source_set = submodule_owner.get(submodule.name)
+                if previous_source_set and previous_source_set != source_set.name:
+                    errors.append(
+                        f"Submodule '{submodule.name}' is used by both "
+                        f"source sets '{previous_source_set}' and '{source_set.name}'"
+                    )
+                else:
+                    submodule_owner[submodule.name] = source_set.name
+
+        # Check for conflicting path prefix ownership.
+        path_prefix_owner: Dict[str, str] = {}
+        for source_set in self.source_sets.values():
+            for prefix in source_set.path_prefixes:
+                normalized_prefix = prefix.rstrip("/")
+                previous_source_set = path_prefix_owner.get(normalized_prefix)
+
+                if previous_source_set and previous_source_set != source_set.name:
+                    errors.append(
+                        f"Path prefix '{normalized_prefix}' is used by both "
+                        f"source sets '{previous_source_set}' and '{source_set.name}'"
+                    )
+                else:
+                    path_prefix_owner[normalized_prefix] = source_set.name
 
         return errors
 
@@ -800,9 +848,80 @@ class BuildTopology:
                 stages_by_source_set.setdefault(source_set_name, []).append(stage_name)
         return stages_by_source_set
 
+    def get_submodule_to_source_set(self) -> Dict[str, str]:
+        """
+        Get a reverse index from submodule names to source set names.
+        """
+        mapping: Dict[str, str] = {}
+        for source_set in self.source_sets.values():
+            for submodule in source_set.submodules:
+                mapping[submodule.name] = source_set.name
+        return mapping
+
     def get_source_sets(self) -> List[SourceSet]:
         """Get all source sets."""
         return list(self.source_sets.values())
+
+    def get_source_set_for_submodule(
+        self, submodule_name: str, platform: Optional[str] = None
+    ) -> Optional[SourceSet]:
+        """
+        Return the first source set whose submodules include `submodule_name`.
+
+        Args:
+            submodule_name: Name of the git submodule.
+            platform: Optional platform filter.
+
+        Returns:
+            Matching SourceSet, or None if no match is found.
+        """
+        for source_set in self.source_sets.values():
+            if platform and platform in source_set.disable_platforms:
+                continue
+
+            for submodule in source_set.submodules:
+                if submodule.name == submodule_name:
+                    return source_set
+
+        return None
+
+    def get_source_set_for_path(
+        self, path: str, platform: Optional[str] = None
+    ) -> Optional[SourceSet]:
+        """
+        Return the first source set whose path_prefixes match the given path.
+        """
+        normalized_path = path.strip().lstrip("./")
+
+        for source_set in self.source_sets.values():
+            if platform and platform in source_set.disable_platforms:
+                continue
+
+            for prefix in source_set.path_prefixes:
+                prefix = prefix.rstrip("/")
+                if normalized_path == prefix or normalized_path.startswith(
+                    prefix + "/"
+                ):
+                    return source_set
+
+        return None
+
+    def get_source_sets_for_submodules(
+        self, submodule_names: List[str], platform: Optional[str] = None
+    ) -> List[SourceSet]:
+        """
+        Return deduplicated source sets for a list of submodule names.
+        """
+        source_sets_by_name: Dict[str, SourceSet] = {}
+
+        for submodule_name in submodule_names:
+            source_set = self.get_source_set_for_submodule(
+                submodule_name, platform=platform
+            )
+            if source_set and source_set.name not in source_sets_by_name:
+                source_sets_by_name[source_set.name] = source_set
+
+        return list(source_sets_by_name.values())
 
     def get_submodules_for_source_set(self, source_set_name: str) -> List[Submodule]:
         """

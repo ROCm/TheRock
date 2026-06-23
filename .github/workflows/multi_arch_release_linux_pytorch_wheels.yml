@@ -29,7 +29,7 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        description: 'Release type; selects the S3 bucket'
         type: string
         required: true
       repository:
@@ -48,6 +48,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -66,9 +70,11 @@ on:
         type: string
         required: true
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
-        type: string
-        required: true
+        description: 'Release type; developer-triggered jobs should use "dev"'
+        type: choice
+        options:
+          - dev
+        default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -89,6 +95,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        type: boolean
+        default: false
 
 run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -102,7 +112,7 @@ jobs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -112,7 +122,8 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${{ inputs.python_version }}" \
-            --platform=linux
+            --platform=linux \
+            --amdgpu-families="${{ inputs.amdgpu_families }}"
 
   build_pytorch_wheels:
     needs: setup_matrix
@@ -124,9 +135,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      # Granted so the reusable build workflow's dispatch_pytorch_wheels_full_test
+      # job can trigger the full test workflow (a reusable workflow's job cannot
+      # request more permissions than its caller grants).
+      actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
     with:
-      amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_families: ${{ matrix.amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -135,3 +150,7 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
+      # The reusable build workflow dispatches the full PyTorch test suite for
+      # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
+      # build's own torch_version output (#5777).
+      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}

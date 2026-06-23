@@ -11,62 +11,58 @@ Table of contents:
 > [!IMPORTANT]
 > All developer-triggered workflows should use the default "dev" release type.
 >
+> Nightly release workflows have been moved to the dedicated release
+> https://github.com/ROCm/rockrel repository.
+>
 > Do **NOT** trigger "nightly" or "prereleases" manually unless you are
 > absolutely sure that is justified and you have confirmed this with an
 > infrastructure maintainer. The "nightly" release type pushes directly to
 > user-visible channels documented in [`RELEASES.md`](/RELEASES.md) and should
 > be treated as "prod"/"production". Do not test in prod!
->
-> We are still moving nightly release workflows over to the dedicated
-> https://github.com/ROCm/rockrel repository. Until then please be careful!
 
 ### Testing PyTorch release workflows
 
 Let's say we want to test
-[`.github/workflows/build_portable_linux_pytorch_wheels.yml`](/.github/workflows/build_portable_linux_pytorch_wheels.yml),
+[`.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml),
 which
 
 1. Installs ROCm packages that have already been built
 1. Builds `torch`, `torchvision`, `torchaudio`, and `triton` packages
-1. Uploads the built packages to a staging directory in a release index
+1. Uploads the built packages to a release index
 1. Runs tests on the packages
-1. Copies the built packages from staging to the final directory in that
-   release index
 
 This should be performed using a "dev" release using the `therock-dev-python` S3
-bucket and the package index https://rocm.devreleases.amd.com/
+bucket and the package index https://rocm.devreleases.amd.com/.
 
 Follow these steps:
 
-1. Identify the ROCm package version that you want to build against, like
-   `7.11.0a20251124`. You can find recent versions in a nightly release index
-   like at https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/rocm/.
+1. Find a workflow run that produced packages you want to build against, like
+   https://github.com/ROCm/rockrel/actions/runs/27516899413 from
+   https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml.
 
-1. Copy that version from the "nightly" release bucket to the "dev" release
-   bucket by triggering
+1. Find the package version that produced, e.g. `7.14.0a20260615`:
+
+   ![multi_arch_find_package_version](assets/multi_arch_find_package_version.jpg)
+
+1. Find the `--find-links` URL where those packages were uploaded, e.g.
+   https://therock-nightly-artifacts.s3.amazonaws.com/27516899413-linux/python/index.html :
+
+   ![multi_arch_find_links_url](assets/multi_arch_find_links_url.jpg)
+
+1. Copy the rocm packages for that version from the "nightly" release bucket to
+   the "dev" release bucket by triggering
    https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml.
-
-   Trigger the workflow twice, once to copy to the `v2` "destsubdir" and again
-   to copy to the `v2-staging` "destsubdir".
 
    ![copy_release_workflow_dispatch](assets/copy_release_workflow_dispatch.jpg)
 
 1. Trigger
-   https://github.com/ROCm/TheRock/actions/workflows/build_portable_linux_pytorch_wheels.yml
-   from the branch you want. Keep the default of "dev" release type, enter the
-   selected rocm version, and choose a PyTorch ref as needed:
+   https://github.com/ROCm/TheRock/actions/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
+   from the branch you want and enter those inputs along with a list of GPU
+   families to build and test for, e.g. `gfx94X-dcgpu;gfx1151`:
 
-   ![build_portable_linux_pytorch_wheels_workflow_dispatch](assets/build_portable_linux_pytorch_wheels_workflow_dispatch.jpg)
+   ![multi_arch_build_torch_trigger](assets/multi_arch_build_torch_trigger.jpg)
 
-   The "Patch directory name" is only needed if there are patches in the
-   [`external-builds/pytorch/patches/`](/external-builds/pytorch/patches/)
-   folder for that pytorch ref you want to build.
-
-The workflow should then run as expected. If it fails to download packages,
-check that you chose a valid ROCm package version and copied the necessary files
-to the dev bucket. You might also need to upload dependent packages or
-[re]generate release index pages, for which you can see the documentation at
-[`build_tools/third_party/s3_management/README.md`](/build_tools/third_party/s3_management/README.md).
+   That should start a workflow run like https://github.com/ROCm/TheRock/actions/runs/27648661730.
 
 ## Connecting to Kubernetes runners for interactive debugging
 

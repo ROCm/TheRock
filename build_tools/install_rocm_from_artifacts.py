@@ -121,6 +121,7 @@ from botocore import UNSIGNED
 from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
+from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from pathlib import Path
 import platform
 import re
@@ -314,6 +315,21 @@ def retrieve_artifacts_by_run_id(args):
     ]
     if args.amdgpu_targets:
         argv.extend(["--amdgpu-targets", args.amdgpu_targets])
+    else:
+        # Auto-derive gfx targets from the family so a family-only install also
+        # fetches per-target (kpack-split) shards. In split runs the per-target
+        # shard carries data the family/'generic' shards lack (e.g. MIOpen
+        # tuning DBs under share/miopen/db); without these targets the fetch
+        # matches only the family literal and 'generic', silently dropping them.
+        derived_targets = expand_families(
+            [args.artifact_group], amdgpu_family_map(), strict=False
+        )
+        if derived_targets:
+            log(
+                f"Auto-deriving --amdgpu-targets from family "
+                f"'{args.artifact_group}': {','.join(derived_targets)}"
+            )
+            argv.extend(["--amdgpu-targets", ",".join(derived_targets)])
     if args.dry_run:
         argv.append("--dry-run")
     if args.run_github_repo:

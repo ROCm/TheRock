@@ -457,3 +457,79 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       libhipcxx
   )
 endif(THEROCK_ENABLE_LIBHIPCXX)
+
+# Most libraries need to depend on the profiler, but is conditionally only used
+# on Posix.
+set(optional_profiler_deps)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
+  list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+endif()
+
+# composable_kernel only supports a subset of gfx targets (per its own
+# rocm_check_target_ids allowlist). The per-arch EXCLUDE_TARGET_PROJECTS
+# mechanism in cmake/therock_amdgpu_targets.cmake removes unsupported arches
+# from the CK subproject's GPU_TARGETS at activate time. If no targets remain
+# after that filter (e.g. a single-arch shard for a CK-unsupported arch),
+# declaring CK with an empty GPU_TARGETS list breaks CK's own HIP try-compile
+# with "HIP_ARCHITECTURES is empty", so flip the global gate off here and let
+# MIOpen build with MIOPEN_USE_COMPOSABLEKERNEL=OFF.
+# See https://github.com/ROCm/TheRock/issues/4836
+set(_ck_enabled ${THEROCK_ENABLE_COMPOSABLE_KERNEL})
+if(_ck_enabled)
+  therock_filter_amdgpu_targets(_ck_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _ck_targets)
+    message(STATUS
+      "composable_kernel: no supported gfx targets remain after filtering "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+    set(_ck_enabled OFF)
+  endif()
+endif()
+# composable_kernel now lives in math-libs but MIOpen (in ml-libs) gates its CK
+# usage on _ck_enabled. math-libs is configured before ml-libs, so push the
+# resolved value to the parent scope where ml-libs will inherit it.
+set(_ck_enabled ${_ck_enabled} PARENT_SCOPE)
+
+if(_ck_enabled)
+  ##############################################################################
+  # Composable_kernel
+  ##############################################################################
+
+  therock_cmake_subproject_declare(composable_kernel
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+      -DMIOPEN_REQ_LIBS_ONLY=ON
+      "-DHIPTENSOR_REQ_LIBS_ONLY=$<NOT:$<BOOL:${THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY}>>"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      hip-clr
+      rocm-half
+      rocRAND
+      ${THEROCK_BUNDLED_BZIP2}
+      ${optional_profiler_deps}
+  )
+  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
+
+  therock_cmake_subproject_activate(composable_kernel)
+
+  therock_provide_artifact(composable-kernel
+    DESCRIPTOR artifact-composable-kernel.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      composable_kernel
+  )
+endif()

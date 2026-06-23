@@ -26,6 +26,7 @@ if(NOT WIN32)
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cl" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cpp" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdllvm" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdllvm"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
   )
   # llvm and amdgcn are symlinks to directories; install(FILES) rejects
@@ -46,6 +47,7 @@ if(NOT WIN32)
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdllvm"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
     DESTINATION bin
   )
