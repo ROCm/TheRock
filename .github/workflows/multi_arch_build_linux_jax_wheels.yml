@@ -178,37 +178,6 @@ jobs:
             echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/rocm-jax/jax_rocm_plugin/wheelhouse" >> "$GITHUB_ENV"
           fi
 
-      - name: Patch native builder Dockerfile to expose /opt/rocm
-        if: ${{ inputs.build_mode == 'native' }}
-        working-directory: rocm-jax
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          dockerfile = Path("docker/manylinux/Dockerfile.jax-manylinux_2_28-rocm")
-          text = dockerfile.read_text()
-
-          old = """RUN --mount=type=cache,target=/var/cache/dnf \\
-          --mount=type=bind,source=./tools/get_rocm.py,target=get_rocm.py \\
-          python3 get_rocm.py --rocm-version=$ROCM_VERSION --job-name=$ROCM_BUILD_JOB --build-num=$ROCM_BUILD_NUM
-      ENV PATH="$PATH:/opt/rocm/bin:/opt/rocm/llvm/bin"
-      """
-
-          new = """RUN --mount=type=cache,target=/var/cache/dnf \\
-          --mount=type=bind,source=./tools/get_rocm.py,target=get_rocm.py \\
-          python3 get_rocm.py --rocm-version=$ROCM_VERSION --job-name=$ROCM_BUILD_JOB --build-num=$ROCM_BUILD_NUM
-      RUN set -eux; \\
-          ROCM_ROOT="$(rocm-sdk path --root)"; \\
-          rm -rf /opt/rocm; \\
-          ln -sfn "${ROCM_ROOT}" /opt/rocm
-      ENV PATH="$PATH:/opt/rocm/bin:/opt/rocm/llvm/bin"
-      """
-
-          if old not in text:
-              raise SystemExit("Expected Dockerfile block not found")
-
-          dockerfile.write_text(text.replace(old, new, 1))
-          PY
 
       - name: Build JAX Wheels (native, v0.9.1)
         if: ${{ inputs.build_mode == 'native' }}
@@ -221,19 +190,7 @@ jobs:
             --compiler=clang \
             --python-versions="${PYTHON_VERSION}" \
             --rocm-version="${ROCM_VERSION}" \
-            dist_wheels
-
-      - name: Build JAX Wheels (native, v0.9.1)
-        if: ${{ inputs.build_mode == 'native' }}
-        working-directory: rocm-jax
-        env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
-          PYTHON_VERSION: ${{ inputs.python_version }}
-        run: |
-          python3 build/ci_build \
-            --compiler=clang \
-            --python-versions="${PYTHON_VERSION}" \
-            --rocm-version="${ROCM_VERSION}" \
+            --therock-path="${TAR_URL}" \
             dist_wheels
 
       - name: Build manylinux image
