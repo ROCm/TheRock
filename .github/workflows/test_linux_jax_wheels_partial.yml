@@ -249,6 +249,7 @@ jobs:
           JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
           JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: /opt/rocm/lib/llvm/bin
         run: |
+          python -c "import jax; print(jax.local_devices())"
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
           pytest jax/tests/core_test.py -q --log-cli-level=INFO
           pytest jax/tests/util_test.py -q --log-cli-level=INFO

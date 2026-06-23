@@ -29,10 +29,6 @@ on:
         description: "JAX / rocm-jax release ref."
         type: string
         required: true
-      build_jaxlib:
-        description: "Whether this matrix cell should build jaxlib from JAX source."
-        type: boolean
-        required: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -52,6 +48,19 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+        default: ""
+      jax_repository:
+        description: "Repository containing the JAX release branch."
+        type: string
+        required: true
+      build_mode:
+        description: "Build mode: native or manylinux."
+        type: string
+        required: true
+      gfx_arch:
+        description: "GFX architecture used for the manylinux image build."
+        type: string
+        required: false
         default: ""
     outputs:
       package_index_url:
@@ -79,10 +88,6 @@ on:
         description: "JAX / rocm-jax release ref."
         type: string
         required: true
-      build_jaxlib:
-        description: "Whether this matrix cell should build jaxlib from JAX source."
-        type: boolean
-        required: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -103,6 +108,19 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      jax_repository:
+        description: "Repository containing the JAX release branch."
+        type: string
+        required: true
+      build_mode:
+        description: "Build mode: native or manylinux."
+        type: string
+        required: true
+      gfx_arch:
+        description: "GFX architecture used for the manylinux image build."
+        type: string
+        required: false
+        default: ""
 
 run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
 
@@ -121,7 +139,7 @@ jobs:
       jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
     env:
-      PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
+      MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
 
     steps:
       - name: Checkout TheRock
@@ -131,6 +149,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref_name }}
 
       - name: Checkout rocm-jax
+        if: ${{ inputs.build_mode == 'native' }}
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           path: rocm-jax
@@ -138,11 +157,11 @@ jobs:
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX
-        if: ${{ inputs.build_jaxlib }}
+        if: ${{ inputs.build_mode == 'manylinux' }}
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          path: jax
-          repository: ROCm/jax
+          path: jax-source
+          repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_ref }}
 
       - name: Configure Git Identity
@@ -159,17 +178,16 @@ jobs:
         run: |
           python -m pip install boto3
 
-      - name: Determine build arguments
-        env:
-          BUILD_JAXLIB: ${{ inputs.build_jaxlib }}
+      - name: Set package dist dir
         run: |
-          if [ "$BUILD_JAXLIB" = "true" ]; then
-            echo "SOURCE_ARG=--jax-source-dir=$GITHUB_WORKSPACE/jax" >> "$GITHUB_ENV"
+          if [ "${{ inputs.build_mode }}" = "manylinux" ]; then
+            echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/jax-source/dist" >> "$GITHUB_ENV"
           else
-            echo "SOURCE_ARG=" >> "$GITHUB_ENV"
+            echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/rocm-jax/jax_rocm_plugin/wheelhouse" >> "$GITHUB_ENV"
           fi
 
-      - name: Build JAX Wheels
+      - name: Build JAX Wheels (native, v0.9.1)
+        if: ${{ inputs.build_mode == 'native' }}
         working-directory: rocm-jax
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
@@ -181,8 +199,76 @@ jobs:
             --python-versions="${PYTHON_VERSION}" \
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${TAR_URL}" \
-            ${SOURCE_ARG} \
             dist_wheels
+
+      - name: Build manylinux image
+        if: ${{ inputs.build_mode == 'manylinux' }}
+        working-directory: jax-source
+        env:
+          BRANCH: ${{ inputs.jax_ref }}
+          THEROCK_INDEX_URL: https://rocm.nightlies.amd.com/whl-multi-arch/
+          THEROCK_VERSION: ""
+          GFX_ARCH: ${{ inputs.gfx_arch }}
+        run: |
+          curl -fsSL \
+            -o Dockerfile.jax-manylinux_2_28-therock \
+            "https://raw.githubusercontent.com/ROCm/rocm-jax/${BRANCH}/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock"
+
+          docker build \
+            -t "${MANYLINUX_IMAGE_TAG}" \
+            --file=Dockerfile.jax-manylinux_2_28-therock \
+            --build-arg=THEROCK_INDEX_URL="${THEROCK_INDEX_URL}" \
+            --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
+            --build-arg=GFX_ARCH="${GFX_ARCH}" \
+            .
+
+      - name: Compute wheel version suffix
+        if: ${{ inputs.build_mode == 'manylinux' }}
+        run: |
+          ROCM_VERSION_BASE="${ROCM_VERSION%%+*}"
+          ROCM_VERSION_BUILD="${ROCM_VERSION#*+}"
+
+          if [ "${RELEASE_TYPE}" = "nightly" ]; then
+            echo "ML_WHEEL_VERSION_SUFFIX=+rocm${ROCM_VERSION_BASE}a$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
+          else
+            echo "ML_WHEEL_VERSION_SUFFIX=+rocm${ROCM_VERSION_BASE}.${ROCM_VERSION_BUILD}" >> "$GITHUB_ENV"
+          fi
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+
+      - name: Build JAX Wheels in manylinux container
+        if: ${{ inputs.build_mode == 'manylinux' }}
+        working-directory: jax-source
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
+          TAR_URL: ${{ inputs.tar_url }}
+        run: |
+          docker run --rm \
+            --user root \
+            --env ROCM_VERSION="${ROCM_VERSION}" \
+            --env PYTHON_VERSION="${PYTHON_VERSION}" \
+            --env TAR_URL="${TAR_URL}" \
+            --env ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
+            --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --workdir /workspace/jax-source \
+            "${MANYLINUX_IMAGE_TAG}" \
+            bash -lc '
+              python build/build.py build \
+                --wheels=jax-rocm-plugin,jax-rocm-pjrt \
+                --python_version="${PYTHON_VERSION}" \
+                --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
+                --bazel_options=--config=rocm_release_wheel \
+                --bazel_options=--repo_env=ROCM_PATH=$(rocm-sdk path --root) \
+                --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
+                --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
+                --bazel_options=--//jaxlib/tools:jaxlib_git_hash=$(git rev-parse HEAD) \
+                --verbose \
+                --detailed_timestamped_log \
+                --output_path=$(pwd)/dist
+            '
 
       - name: Extract JAX versions from built wheels
         id: write_jax_versions
@@ -201,7 +287,6 @@ jobs:
           python build_tools/github_actions/publish_jax_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
-
 
 
   generate_target_to_run:
