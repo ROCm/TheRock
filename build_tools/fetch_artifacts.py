@@ -61,27 +61,18 @@ def log(*args, **kwargs):
 
 def _get_base_arch(target: str) -> str:
     """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'."""
-    return target.split(":")[0]
+    if not target:
+        return ""
+    base = target.split(":")[0]
+    return base if base else target
 
 
 def _matches_target(artifact_target: str, requested_targets: set[str]) -> bool:
-    """Check if artifact target matches requested targets (base arch matches variants)."""
-    # Direct match
-    if artifact_target in requested_targets:
-        return True
-
-    # Check if the artifact's base arch matches any requested target
-    artifact_base = _get_base_arch(artifact_target)
-    if artifact_base in requested_targets:
-        return True
-
-    # Check if any requested target's base arch matches the artifact's base arch
-    # (handles case where user requests "gfx942:xnack+" explicitly)
-    for requested in requested_targets:
-        if _get_base_arch(requested) == artifact_base:
-            return True
-
-    return False
+    """Match if the artifact's base arch equals any requested target's base arch."""
+    if not artifact_target:
+        return False
+    requested_bases = {_get_base_arch(t) for t in requested_targets}
+    return _get_base_arch(artifact_target) in requested_bases
 
 
 def list_artifacts_for_group(

@@ -13,6 +13,8 @@ from _therock_utils.artifact_backend import ArtifactBackend
 from fetch_artifacts import (
     list_artifacts_for_group,
     filter_artifacts,
+    _get_base_arch,
+    _matches_target,
 )
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -182,6 +184,22 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         self.assertIn("blas_lib_generic.tar.zst", result)
         self.assertIn("blas_lib_gfx942.tar.zst", result)
         self.assertIn("rccl_test_gfx942:xnack+.tar.zst", result)
+
+    def testGetBaseArch_HandlesEdgeCases(self):
+        """Test _get_base_arch with empty and garbage inputs."""
+        self.assertEqual(_get_base_arch(""), "")
+        self.assertEqual(_get_base_arch(":xnack+"), ":xnack+")
+        self.assertEqual(_get_base_arch("gfx942"), "gfx942")
+        self.assertEqual(_get_base_arch("gfx942:xnack+"), "gfx942")
+        self.assertEqual(_get_base_arch("garbage-*&%^$"), "garbage-*&%^$")
+
+    def testMatchesTarget_HandlesEdgeCases(self):
+        """Test _matches_target with empty and garbage inputs."""
+        requested = {"generic", "gfx942"}
+        self.assertFalse(_matches_target("", requested))
+        self.assertFalse(_matches_target("garbage-*&%^$", requested))
+        self.assertTrue(_matches_target("gfx942", requested))
+        self.assertTrue(_matches_target("gfx942:xnack+", requested))
 
     def testFilterArtifacts_NoIncludesOrExcludes(self):
         artifacts = {"foo_test", "foo_run", "bar_test", "bar_run"}
