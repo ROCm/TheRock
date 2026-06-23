@@ -360,7 +360,9 @@ def handle_push(before, after, systems_token, libraries_token):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
-    parser.add_argument("--submodule", default="all", choices=["all", "rocm-systems", "rocm-libraries"])
+    parser.add_argument(
+        "--submodule", default="all", choices=["all", "rocm-systems", "rocm-libraries"]
+    )
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
