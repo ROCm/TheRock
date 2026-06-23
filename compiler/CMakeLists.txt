@@ -159,14 +159,12 @@ if(THEROCK_ENABLE_COMPILER)
   # version script, avoiding symbol interposition issues.
   ##############################################################################
 
+  # A0 hotswap needs only the in-place rewrite (amd_comgr_hotswap_rewrite), which
+  # is compiled unconditionally. The cross-gen transpiler is NOT needed for A0 and
+  # is disabled (it also pulls dynamic libLLVM into comgr, defeating static link).
   set(_comgr_hotswap_cmake_args)
   if(THEROCK_ENABLE_HOTSWAP)
-    list(APPEND _comgr_hotswap_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=ON)
-    if(NOT WIN32)
-      list(APPEND _comgr_hotswap_cmake_args
-        -DHOTSWAP_BUILD_TOOL=ON
-        "-DHOTSWAP_TOOL_HSA_INCLUDE_ROOT=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime")
-    endif()
+    list(APPEND _comgr_hotswap_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=OFF)
   endif()
 
   therock_cmake_subproject_declare(amd-comgr
