@@ -22,12 +22,14 @@ from github_actions_api import (
     gha_job_summary_mirror_path,
     gha_load_github_event,
     gha_query_last_workflow_run,
+    gha_query_prs_for_commit,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
     gha_resolve_git_ref,
     gha_set_job_summary_output,
     gha_set_output,
+    gha_update_pr_comment,
     is_authenticated_github_api_available,
 )
 
@@ -196,6 +198,39 @@ class GitHubAPITest(unittest.TestCase):
         api = GitHubAPI()
         auth_method = api.get_auth_method()
         self.assertIsInstance(auth_method, GitHubAPI.AuthMethod)
+
+    def test_explicit_github_token_skips_auto_detection(self):
+        """An explicit github_token should be used without env/gh-CLI detection."""
+        # No GITHUB_TOKEN env var and gh CLI unavailable: auto-detection alone
+        # would land on UNAUTHENTICATED, but the explicit token should win.
+        with mock.patch("github_actions_api.shutil.which", return_value=None):
+            api = GitHubAPI(github_token="explicit-token")
+            self.assertEqual(api.get_auth_method(), GitHubAPI.AuthMethod.GITHUB_TOKEN)
+            self.assertEqual(api._github_token, "explicit-token")
+
+    def test_explicit_github_token_used_in_request_headers(self):
+        """An explicit github_token should be sent as the Authorization header."""
+        api = GitHubAPI(github_token="explicit-token")
+        headers = api._get_request_headers()
+        self.assertEqual(headers["Authorization"], "Bearer explicit-token")
+
+    def test_explicit_github_token_independent_of_env_token(self):
+        """Two instances with different explicit tokens should not interfere."""
+        os.environ["GITHUB_TOKEN"] = "env-token"
+        default_api = GitHubAPI()
+        app_api = GitHubAPI(github_token="app-token")
+
+        self.assertEqual(
+            default_api._get_request_headers()["Authorization"], "Bearer env-token"
+        )
+        self.assertEqual(
+            app_api._get_request_headers()["Authorization"], "Bearer app-token"
+        )
+
+    def test_no_github_token_falls_back_to_auto_detection(self):
+        """Without an explicit github_token, auto-detection still runs as before."""
+        api = GitHubAPI(github_token=None)
+        self.assertIsNone(api._auth_method)
 
     # -------------------------------------------------------------------------
     # Successful request tests
@@ -472,6 +507,297 @@ class GitHubAPITest(unittest.TestCase):
 
             self.assertIn("Invalid JSON", str(ctx.exception))
             self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
+
+    def test_rest_api_post_sends_json_body(self):
+        """REST API POST should send JSON body with Content-Type header."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b'{"id": 99}'
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch(
+            "github_actions_api.urlopen", return_value=mock_response
+        ) as urlopen:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {"id": 99})
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(request.data, b'{"body": "hello"}')
+        self.assertEqual(request.headers["Content-type"], "application/json")
+
+    def test_rest_api_patch_sends_json_body(self):
+        """REST API PATCH should send JSON body."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b'{"id": 42, "body": "updated"}'
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch(
+            "github_actions_api.urlopen", return_value=mock_response
+        ) as urlopen:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/comments/42",
+                method="PATCH",
+                body={"body": "updated"},
+            )
+
+        self.assertEqual(result["id"], 42)
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.method, "PATCH")
+
+    def test_gh_cli_post_uses_method_and_stdin_body(self):
+        """gh CLI POST should pass --method and JSON on stdin."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = '{"id": 7}'
+
+        with mock.patch(
+            "github_actions_api.subprocess.run", return_value=mock_result
+        ) as subprocess_run:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {"id": 7})
+        cmd = subprocess_run.call_args[0][0]
+        self.assertEqual(cmd[0:4], ["/usr/bin/gh", "api", "--method", "POST"])
+        self.assertEqual(cmd[4], "/repos/test/test/issues/1/comments")
+        self.assertIn("--input", cmd)
+        self.assertEqual(subprocess_run.call_args[1]["input"], '{"body": "hello"}')
+
+    def test_rest_api_get_empty_body_raises_github_api_error(self):
+        """REST API GET with empty body should raise GitHubAPIError (unchanged behavior)."""
+        import json
+
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b""
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("Invalid JSON", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
+
+    def test_rest_api_post_empty_body_returns_empty_dict(self):
+        """REST API POST with empty body may return {} without parsing JSON."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b""
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {})
+
+
+class GhaUpdatePrCommentTest(unittest.TestCase):
+    """Tests for gha_update_pr_comment."""
+
+    def test_posts_new_comment_when_marker_not_found(self):
+        marker = "<!-- therock-report-manifest-diff -->"
+        body = f"{marker}\n### Report\n\n[View report](https://example.com)\n"
+        comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                [{"id": 1, "body": "unrelated comment"}],
+                {"id": 99, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=42,
+                marker=marker,
+                body=body,
+            )
+
+        self.assertEqual(result["id"], 99)
+        self.assertEqual(send_request.call_count, 2)
+        send_request.assert_any_call(
+            f"{comments_url}?per_page=100&page=1",
+        )
+        send_request.assert_any_call(
+            comments_url,
+            method="POST",
+            body={"body": body},
+        )
+
+    def test_patches_existing_comment_when_marker_found(self):
+        marker = "<!-- therock-report-manifest-diff -->"
+        body = f"{marker}\n### Report\n\n[View report](https://example.com/v2)\n"
+        comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                [{"id": 10, "body": f"{marker}\nold content"}],
+                {"id": 10, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=42,
+                marker=marker,
+                body=body,
+            )
+
+        self.assertEqual(result["id"], 10)
+        self.assertEqual(send_request.call_count, 2)
+        send_request.assert_any_call(
+            "https://api.github.com/repos/ROCm/TheRock/issues/comments/10",
+            method="PATCH",
+            body={"body": body},
+        )
+        send_request.assert_any_call(f"{comments_url}?per_page=100&page=1")
+
+    def test_paginates_until_marker_found(self):
+        marker = "<!-- therock-breadcrumb-unmapped-6057 -->"
+        body = f"{marker}\n### Unmapped\n"
+        comments_url = (
+            "https://api.github.com/repos/ROCm/rocm-libraries/issues/7/comments"
+        )
+
+        page_1 = [{"id": i, "body": f"comment {i}"} for i in range(100)]
+        page_2 = [{"id": 200, "body": f"{marker}\nstale"}]
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                page_1,
+                page_2,
+                {"id": 200, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=7,
+                marker=marker,
+                body=body,
+                github_repository="ROCm/rocm-libraries",
+            )
+
+        self.assertEqual(result["id"], 200)
+        self.assertEqual(send_request.call_count, 3)
+        send_request.assert_any_call(f"{comments_url}?per_page=100&page=1")
+        send_request.assert_any_call(f"{comments_url}?per_page=100&page=2")
+
+    def test_raises_when_comment_response_is_not_dict(self):
+        marker = "<!-- therock-report-manifest-diff -->"
+        body = f"{marker}\nbody"
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[[], "not-a-dict"],
+        ):
+            with self.assertRaisesRegex(GitHubAPIError, "Expected comment object"):
+                gha_update_pr_comment(pr_number=1, marker=marker, body=body)
+
+    def test_uses_provided_github_api_instance_instead_of_singleton(self):
+        """A github_api override should be used instead of the singleton."""
+        marker = "<!-- therock-bump-breadcrumb -->"
+        body = f"{marker}\nThis PR is now part of TheRock."
+
+        custom_api = mock.create_autospec(GitHubAPI, instance=True)
+        custom_api.send_request.side_effect = [
+            [],
+            {"id": 55, "body": body},
+        ]
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request"
+        ) as singleton_send_request:
+            result = gha_update_pr_comment(
+                pr_number=9,
+                marker=marker,
+                body=body,
+                github_repository="ROCm/rocm-systems",
+                github_api=custom_api,
+            )
+
+        self.assertEqual(result["id"], 55)
+        self.assertEqual(custom_api.send_request.call_count, 2)
+        singleton_send_request.assert_not_called()
+
+
+class GhaQueryPrsForCommitTest(unittest.TestCase):
+    """Tests for gha_query_prs_for_commit."""
+
+    def test_returns_prs_for_commit(self):
+        sha = "a" * 40
+        prs = [{"number": 42, "title": "Some PR"}]
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            return_value=prs,
+        ) as send_request:
+            result = gha_query_prs_for_commit("ROCm/TheRock", sha)
+
+        self.assertEqual(result, prs)
+        send_request.assert_called_once_with(
+            f"https://api.github.com/repos/ROCm/TheRock/commits/{sha}/pulls"
+        )
+
+    def test_returns_empty_list_when_no_prs_found(self):
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            return_value=[],
+        ):
+            result = gha_query_prs_for_commit("ROCm/TheRock", "b" * 40)
+
+        self.assertEqual(result, [])
+
+    def test_raises_when_response_is_not_list(self):
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            return_value={"message": "not found"},
+        ):
+            with self.assertRaisesRegex(GitHubAPIError, "Expected a list"):
+                gha_query_prs_for_commit("ROCm/TheRock", "c" * 40)
+
+    def test_uses_provided_github_api_instance_instead_of_singleton(self):
+        """A github_api override should be used instead of the singleton."""
+        sha = "d" * 40
+        prs = [{"number": 7}]
+        custom_api = mock.create_autospec(GitHubAPI, instance=True)
+        custom_api.send_request.return_value = prs
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request"
+        ) as singleton_send_request:
+            result = gha_query_prs_for_commit(
+                "ROCm/rocm-libraries", sha, github_api=custom_api
+            )
+
+        self.assertEqual(result, prs)
+        custom_api.send_request.assert_called_once_with(
+            f"https://api.github.com/repos/ROCm/rocm-libraries/commits/{sha}/pulls"
+        )
+        singleton_send_request.assert_not_called()
 
 
 class GitHubActionsUtilsTest(unittest.TestCase):
