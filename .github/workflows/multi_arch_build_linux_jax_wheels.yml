@@ -113,7 +113,7 @@ permissions:
 jobs:
   build_jax_wheels:
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     outputs:
       package_index_url: ${{ steps.publish_jax_wheels.outputs.package_index_url }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
