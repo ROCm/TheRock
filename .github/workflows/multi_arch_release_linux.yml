@@ -41,6 +41,10 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (release, asan). Affects publish paths."
+        type: string
+        default: "release"
 
 permissions:
   contents: read
@@ -162,7 +166,8 @@ jobs:
             --run-id="${{ github.run_id }}" \
             --platform=linux \
             --release-type="${{ inputs.release_type }}" \
-            --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
+            --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}" \
+            --build-variant="${{ inputs.build_variant }}"
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]

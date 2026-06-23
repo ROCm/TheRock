@@ -110,12 +110,9 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse"}
 use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
 
-# CTest parallel jobs (use fewer in less capable platforms)
-ctest_parallel_count = 8
-if AMDGPU_FAMILIES and "gfx1152" in AMDGPU_FAMILIES:
-    ctest_parallel_count = 4
-elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
-    ctest_parallel_count = 4
+# CTest runs serially by default; per-GPU overrides can be added below.
+# Example: if AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES: ctest_parallel_count = 4
+ctest_parallel_count = 1
 
 # CTest per-test timeout (default 2 hours, in seconds)
 # There should be a timeout set from component level, but this can be used as an override
