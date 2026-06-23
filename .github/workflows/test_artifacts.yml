@@ -159,7 +159,9 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      test_runs_on: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
+      # For workflow_dispatch, honor the explicit test_runs_on input if provided.
+      # Otherwise, use the runner selected by fetch_test_configurations.py.
+      test_runs_on: ${{ (github.event_name == 'workflow_dispatch' && inputs.test_runs_on) || fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
       release_type: ${{ inputs.release_type }}
@@ -193,12 +195,16 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
+      #   0. For workflow_dispatch, honor the explicit test_runs_on input if provided
       #   1. Benchmark components use the dedicated benchmark runner
       #   2. Multi-GPU components use the multi-GPU runner
       #   3. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
       #   4. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
+          (github.event_name == 'workflow_dispatch' &&
+            inputs.test_runs_on != '' &&
+            inputs.test_runs_on) ||
           (matrix.components.is_benchmark == true &&
             inputs.benchmark_runs_on != '' &&
             inputs.benchmark_runs_on) ||
