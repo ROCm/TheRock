@@ -288,10 +288,12 @@ def create_therock_bump(submodule, token):
         os.chdir(original_cwd)
 
 
-def handle_schedule(systems_token, libraries_token):
-    """Create bump PRs for both submodules"""
-    create_therock_bump("rocm-systems", systems_token)
-    create_therock_bump("rocm-libraries", libraries_token)
+def handle_schedule(systems_token, libraries_token, submodule="all"):
+    """Create bump PRs for the specified submodule(s)"""
+    if submodule in ("all", "rocm-systems"):
+        create_therock_bump("rocm-systems", systems_token)
+    if submodule in ("all", "rocm-libraries"):
+        create_therock_bump("rocm-libraries", libraries_token)
 
 
 def handle_push(before, after, systems_token, libraries_token):
@@ -358,6 +360,7 @@ def handle_push(before, after, systems_token, libraries_token):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
+    parser.add_argument("--submodule", default="all", choices=["all", "rocm-systems", "rocm-libraries"])
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
@@ -368,7 +371,7 @@ def main():
     run(["git", "config", "--global", "user.email", "therockbot@amd.com"])
 
     if args.event_type == "schedule":
-        handle_schedule(args.systems_token, args.libraries_token)
+        handle_schedule(args.systems_token, args.libraries_token, args.submodule)
     elif args.event_type == "push":
         handle_push(
             args.before,
