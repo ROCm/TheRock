@@ -126,36 +126,6 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
-# Memory-constrained Windows runners (gfx110X-all = 4 GB) OOM on the large
-# single-process sparse suites. rocSPARSE/hipSPARSE allocate temporaries via
-# hipMallocAsync/hipFreeAsync on the device default pool; on Windows the freed
-# blocks are cached rather than returned to the device (Linux reclaims them
-# because its pool release threshold defaults to 0), so reserved VRAM grows
-# monotonically across the suite and eventually exhausts the card. Enable the
-# opt-in per-test pool trim (and VRAM logging) implemented in the
-# rocSPARSE/hipSPARSE gtest listeners for the sparse components on this family.
-# Trimming is a near-noop where the pool already reclaims, so it is safe.
-if test_component_job_name in ("rocsparse", "hipsparse") and (
-    AMDGPU_FAMILIES and "gfx110X" in AMDGPU_FAMILIES
-):
-    # CONTROL RUN (#5960): trim DISABLED to isolate the fix. With TRIM_POOL=0 and
-    # VRAM logging still on, pool_reserved should grow monotonically and the suite
-    # should OOM partway through, reproducing ROCm/rocm-libraries#8592. This is the
-    # A/B counterpart to the trim=1 run that passed the full suite flat at pool 0.
-    # Flip back to "1" to restore the fix once the repro is captured.
-    environ_vars["ROCSPARSE_TEST_TRIM_POOL"] = "0"
-    environ_vars["ROCSPARSE_TEST_VRAM_LOG"] = "1"
-    environ_vars["HIPSPARSE_TEST_TRIM_POOL"] = "0"
-    environ_vars["HIPSPARSE_TEST_VRAM_LOG"] = "1"
-    # NOTE: the per-test hipDeviceReset() experiment was removed. It tore down
-    # the device context (and the loaded code objects) after the first test, so
-    # every subsequent rocsparse_create_handle() failed with hipErrorInvalidValue
-    # ("empty kernel scheduling failed") -- a reset artifact, not the real OOM.
-    # Run reset-free with pool trim + VRAM logging, scoped to the bsrxmv cases
-    # (the operation that first OOM'd on this family per ROCm/rocm-libraries#8592)
-    # to capture a clean per-test VRAM growth trace within the step timeout.
-    environ_vars["GTEST_FILTER"] = "*bsrxmv*"
-
 # Component-specific ENV VARs/PATHs applied on top of defaults.
 #
 # - test_dir: The default TEST_DIR for ctest is THEROCK_BIN_DIR/TEST_COMPONENT.
