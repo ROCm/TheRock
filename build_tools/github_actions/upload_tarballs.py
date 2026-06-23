@@ -46,6 +46,44 @@ from github_actions_api import gha_set_output
 logger = logging.getLogger(__name__)
 
 
+def _tarball_url(output_root: WorkflowOutputRoot, name: str) -> str:
+    return output_root.tarball(quote(name, safe="")).https_url
+
+
+def _is_lite_tarball(name: str) -> bool:
+    return "-lite-" in name
+
+
+def _select_shared_tarball_url(
+    *,
+    tarball_files: list[Path],
+    output_root: WorkflowOutputRoot,
+    platform: str,
+) -> str | None:
+    full_tarball_files = [f for f in tarball_files if not _is_lite_tarball(f.name)]
+
+    for f in full_tarball_files:
+        name = f.name
+        if name.startswith(f"therock-dist-{platform}-multiarch-"):
+            return _tarball_url(output_root, name)
+
+    if len(full_tarball_files) == 1:
+        return _tarball_url(output_root, full_tarball_files[0].name)
+
+    prefix = f"therock-dist-{platform}-"
+    suffix = ".tar.gz"
+
+    for f in full_tarball_files:
+        name = f.name
+        if name.startswith(prefix) and name.endswith(suffix):
+            stem = name[len(prefix) : -len(suffix)]
+
+            if "-" not in stem:
+                return _tarball_url(output_root, name)
+
+    return None
+
+
 def run(
     input_tarballs_dir: Path,
     run_id: str,
@@ -88,27 +126,11 @@ def run(
 
     logger.info("Uploaded %d files", count)
 
-    shared_tarball_url: str | None = None
-
-    for f in tarball_files:
-        name = f.name
-        encoded_name = quote(name, safe="")
-        if "-lite-" in name:
-            continue
-
-        if name.startswith(f"therock-dist-{platform}-multiarch-"):
-            shared_tarball_url = output_root.tarball(encoded_name).https_url
-            break
-
-        prefix = f"therock-dist-{platform}-"
-        suffix = ".tar.gz"
-
-        if name.startswith(prefix) and name.endswith(suffix):
-            stem = name[len(prefix) : -len(suffix)]
-
-            if "-" not in stem:
-                shared_tarball_url = output_root.tarball(encoded_name).https_url
-                break
+    shared_tarball_url = _select_shared_tarball_url(
+        tarball_files=tarball_files,
+        output_root=output_root,
+        platform=platform,
+    )
 
     if not shared_tarball_url:
         raise ValueError(
