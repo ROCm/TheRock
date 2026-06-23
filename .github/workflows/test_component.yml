@@ -153,8 +153,6 @@ jobs:
           echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
-          ASAN_LIB=$(${{ env.OUTPUT_ARTIFACTS_DIR }}/lib/llvm/bin/clang++ --print-file-name=libclang_rt.asan-x86_64.so)
-          echo "LD_PRELOAD=${ASAN_LIB}" >> $GITHUB_ENV
 
       - name: Test
         id: test

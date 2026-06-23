@@ -29,10 +29,37 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None):
+def get_asan_preload_env():
+    """Returns env with LD_PRELOAD for ASAN builds, None otherwise."""
+    if not is_asan():
+        return None
+    machine = platform.machine()
+    if machine in ("x86_64", "AMD64"):
+        arch = "x86_64"
+    elif machine == "aarch64":
+        arch = "aarch64"
+    else:
+        return None
+    clangxx = THEROCK_BIN_DIR / ".." / "lib" / "llvm" / "bin" / "clang++"
+    if not clangxx.exists():
+        return None
+    result = subprocess.run(
+        [str(clangxx), f"--print-file-name=libclang_rt.asan-{arch}.so"],
+        capture_output=True,
+        text=True,
+    )
+    asan_lib = result.stdout.strip()
+    if not asan_lib or not Path(asan_lib).exists():
+        return None
+    env = os.environ.copy()
+    env["LD_PRELOAD"] = asan_lib
+    return env
+
+
+def run_command(command: list[str], cwd=None, env=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True, env=env
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -147,7 +174,11 @@ class TestROCmSanity:
         # Running and checking the executable
         platform_executable_prefix = "./" if not is_windows() else ""
         hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
-        process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
+        process = run_command(
+            [hipcc_check_executable],
+            cwd=str(THEROCK_BIN_DIR),
+            env=get_asan_preload_env(),
+        )
         check.equal(process.returncode, 0)
         check.greater(
             os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable_file)), 0
