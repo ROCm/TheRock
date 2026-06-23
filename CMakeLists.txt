@@ -246,6 +246,9 @@ option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK
 option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
+# hip-kernel-provider is not packaged by default yet.
+option(THEROCK_ENABLE_HIPKERNELPROVIDER "Enables hipDNN hip kernel provider plugin" OFF)
+
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
 ################################################################################
@@ -255,6 +258,15 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
+
+# The generated HIPKERNELPROVIDER feature belongs to ML_LIBS, which resets to ON
+# because THEROCK_ENABLE_ML_LIBS defaults to ON. Keep this packaging exception
+# immediately after generated feature declarations so THEROCK_RESET_FEATURES
+# restores the explicit OFF default above.
+if(THEROCK_RESET_FEATURES)
+  set(THEROCK_ENABLE_HIPKERNELPROVIDER OFF CACHE BOOL "Enables hipDNN hip kernel provider plugin" FORCE)
+  set(THEROCK_ENABLE_HIPKERNELPROVIDER OFF)
+endif()
 
 ################################################################################
 # Manual features that don't map to artifacts
