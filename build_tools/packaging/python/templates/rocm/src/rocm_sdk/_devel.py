@@ -432,8 +432,26 @@ def _lock_and_expand(
                             parent_path.mkdir(parents=True, exist_ok=True)
                             symlink_target = ti.linkname
                             hardlink_target = dest_path.parent / symlink_target
+                            # On Linux, preserve symlinks in top-level bin/ directory
+                            # top-level bin/ so $ORIGIN in RPATH resolves correctly.
+                            PRESERVE_SYMLINKS = [
+                                "amdclang",
+                                "amdclang++",
+                                "amdclang-cl",
+                                "amdclang-cpp",
+                                "amdflang",
+                                "amdlld",
+                                "amdllvm",
+                            ]
+                            if (
+                                not _is_windows()
+                                and dest_path.name in PRESERVE_SYMLINKS
+                                and dest_path.parent.name == "bin"
+                                and dest_path.parent.parent.name.startswith("_rocm_sdk_devel")
+                            ):
+                                dest_path.symlink_to(symlink_target)
                             # Only create hardlinks for files, not directories
-                            if hardlink_target.is_file():
+                            elif hardlink_target.is_file():
                                 dest_path.hardlink_to(hardlink_target)
                             else:
                                 # For directory symlinks, extract as normal
