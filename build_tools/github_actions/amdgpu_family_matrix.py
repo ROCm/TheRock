@@ -94,7 +94,7 @@ BUILD_RUNNER_LABELS = {
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
-            {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
+            {"label": "azure-linux-scale-rocm-heavy-halfcpu-ramdisk", "weight": 1.0},
         ],
     },
     "windows": {
