@@ -1,0 +1,11 @@
+name: Test AWS Runner (no container spec)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  hello-world:
+    runs-on: aws-linux-scale-rocm-prod
+    steps:
+      - name: Echo hello world
+        run: echo "hello world"
