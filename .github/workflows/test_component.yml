@@ -163,6 +163,9 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
+          # Limit thread count to prevent CPU over-subscription during tests
+          OPENBLAS_NUM_THREADS: "4"
+          OMP_NUM_THREADS: "4"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
