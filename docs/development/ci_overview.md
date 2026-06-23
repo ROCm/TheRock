@@ -168,6 +168,7 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 - [github_actions_debugging.md](github_actions_debugging.md) - Debugging GitHub Actions
 - [ci_behavior_manipulation.md](ci_behavior_manipulation.md) - Controlling CI behavior with labels and inputs
 - [manifest_diff.md](manifest_diff.md) - Manifest diff report (submodule SHA changes between two commits)
+- [external_repo_integration.md](external_repo_integration.md) - Running TheRock CI from an external component repo
 
 ## Getting Help
 
