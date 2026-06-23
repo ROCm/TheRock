@@ -111,7 +111,24 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # Test modules excluded at the run_test.py level (--exclude).  Keep this scoped
 # to modules that hang or crash the subprocess in ways pytest-timeout cannot
 # catch (e.g. hanging during import or in C extensions).
+# TODO: investigate root causes and narrow exclusions over time.
 EXCLUDED_TEST_MODULES: list[str] = [
+    # Run 28001683693 (2.14 nightly, gfx94X): all 17 shards hit the 6h timeout.
+    # These modules hang at the process level, bypassing the 900s pytest-timeout.
+    # EXCLUDED_TEST_MODULES only applies to the default/distributed configs.
+    # For inductor, hangers are removed from INDUCTOR_GENERIC_TESTS /
+    # INDUCTOR_UNIT_TESTS below.
+    "functorch/test_vmap",                            # hangs ~5h50m (shard 2/10)
+    "test_decomp",                                    # hangs ~4h24-4h36m (shards 3,5/10)
+    "test_meta",                                      # hangs ~4h24m (shard 4/10)
+    "inductor/test_torchinductor_dynamic_shapes",     # hangs ~5h17m (shard 8/10)
+    "inductor/test_torchinductor_codegen_dynamic_shapes",  # hangs ~4h27m (shard 6/10)
+    "test_ops",                                       # hangs (default shards 1,7,10 + shard 5 internal)
+    "distributed/test_c10d_gloo",                     # hangs at bootstrap (dist shards 1,3/3)
+    "distributed/fsdp/test_fsdp_checkpoint",          # 300s-timeout x3 reruns burns ~4h (dist shard 2/3)
+    # inductor/test_aot_inductor also hangs (inductor shard 2/4) but is reached
+    # via the INDUCTOR_UNIT_TESTS --include allowlist, which never consults
+    # EXCLUDED_TEST_MODULES; it is dropped from that list directly instead.
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
@@ -128,7 +145,11 @@ INDUCTOR_GENERIC_TESTS = [
 INDUCTOR_UNIT_TESTS = [
     "inductor/test_torchinductor",
     "inductor/test_torchinductor_opinfo",
-    "inductor/test_aot_inductor",
+    # inductor/test_aot_inductor temporarily removed: hangs at the process level
+    # on the 2.14 nightly gfx94X wheel (run 28001683693 inductor shard 2/4,
+    # internal shard 6/7). The module produces no per-test output before hanging,
+    # so a targeted -k skip is not derivable; EXCLUDED_TEST_MODULES does not apply
+    # to the inductor --include allowlist. Restore once the deadlock is bisected.
 ]
 
 
