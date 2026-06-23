@@ -46,14 +46,14 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
 ASAN build variant:
 
     For ASAN builds (--build-variant asan), python packages are skipped and
-    native packages are published to separate paths:
+    tarballs/native packages are published to separate paths:
 
+    s3://therock-dev-artifacts/12345-linux/tarballs/
+      -> s3://therock-dev-tarball/v4/tarball-asan/
     s3://therock-dev-artifacts/12345-linux/packages/deb/
       -> s3://therock-dev-packages/v4/packages-asan/deb/20250101-12345/
     s3://therock-dev-artifacts/12345-linux/packages/rpm/
       -> s3://therock-dev-packages/v4/packages-asan/rpm/20250101-12345/
-
-    Tarballs already include -asan suffix in filenames from the build system.
 
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
@@ -82,6 +82,7 @@ def publish_tarballs(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
     backend: StorageBackend,
+    build_variant: str = "release",
 ) -> int:
     """Copy tarballs from the artifacts bucket to the release tarball bucket.
 
@@ -89,12 +90,17 @@ def publish_tarballs(
         s3://therock-dev-artifacts/12345-linux/tarballs/
           -> s3://therock-dev-tarball/v4/tarball/
 
+    ASAN example:
+        s3://therock-dev-artifacts/12345-linux/tarballs/
+          -> s3://therock-dev-tarball/v4/tarball-asan/
+
     Returns:
         Number of tarballs copied.
     """
     source = artifacts_root.tarballs()
     dest_bucket = get_release_bucket_config(release_type, "tarball")
-    dest = StorageLocation(dest_bucket.name, "v4/tarball")
+    dest_path = "v4/tarball-asan" if build_variant == "asan" else "v4/tarball"
+    dest = StorageLocation(dest_bucket.name, dest_path)
 
     logger.info("Tarballs: %s -> %s", source.s3_uri, dest.s3_uri)
     count = backend.copy_directory(source, dest, include=["*.tar.gz"])
@@ -261,7 +267,7 @@ def main(argv: list[str]) -> None:
     kpack_split = args.kpack_split.lower() == "true"
     is_asan = args.build_variant == "asan"
 
-    publish_tarballs(artifacts_root, args.release_type, backend)
+    publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
     if not is_asan:
         publish_python_packages(artifacts_root, args.release_type, backend, kpack_split)
     else:

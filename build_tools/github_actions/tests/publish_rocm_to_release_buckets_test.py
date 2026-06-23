@@ -181,7 +181,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(mock_copy.call_count, 1)
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
-        self.assertEqual(tarball_dest.relative_path, "v4/tarball")
+        # ASAN tarballs go to separate folder
+        self.assertEqual(tarball_dest.relative_path, "v4/tarball-asan")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_asan_native_packages_use_separate_path(self, mock_copy):
