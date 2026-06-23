@@ -191,12 +191,18 @@ def publish_native_linux_packages(
     for pkg_type in ["deb", "rpm"]:
         source = artifacts_root.native_linux_packages(pkg_type)
 
-        if release_type == "prerelease":
-            dest_prefix = f"v4/packages/{pkg_type}"
-        elif is_asan:
-            dest_prefix = f"v4/packages-asan/{pkg_type}/{today}-{artifacts_root.run_id}"
+        # Determine base path (asan vs non-asan, prerelease vs dated)
+        # prerelease: v4/packages/{pkg_type} or v4/packages-asan/{pkg_type}
+        # non-prerelease: v4/{pkg_type}/{dated} or v4/packages-asan/{pkg_type}/{dated}
+        if is_asan:
+            base_path = "v4/packages-asan"
         else:
-            dest_prefix = f"v4/{pkg_type}/{today}-{artifacts_root.run_id}"
+            base_path = "v4/packages" if release_type == "prerelease" else "v4"
+
+        if release_type == "prerelease":
+            dest_prefix = f"{base_path}/{pkg_type}"
+        else:
+            dest_prefix = f"{base_path}/{pkg_type}/{today}-{artifacts_root.run_id}"
 
         dest = StorageLocation(dest_bucket.name, dest_prefix)
         logger.info(
