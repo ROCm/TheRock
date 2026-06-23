@@ -87,7 +87,7 @@ jobs:
           - jax_ref: "rocm-jaxlib-v0.10.0"
             jax_repository: "ROCm/jax"
             build_mode: "manylinux"
-            gfx_arch: "device-all"
+            gfx_arch: "all"
 
     permissions:
       id-token: write
