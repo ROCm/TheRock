@@ -1840,6 +1840,17 @@
         ]
       },
       {
+        "Artifact": "sysdeps-util-linux",
+        "Artifact_Subdir": [
+          {
+            "Name": "util-linux",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "sysdeps-amd-mesa",
         "Artifact_Subdir": [
           {
@@ -3019,6 +3030,122 @@
   },
 
   {
+    "Package": "amdrocm-hipfile",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "hipFile Maintainer <hipfile-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm hipFile library",
+    "Description_Long": "hipFile is a library for high-performance file I/O between storage and GPU memory",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "hipfile",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipfile",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-hipfile-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-hipfile"
+    ],
+    "RPMRequires": [
+      "amdrocm-hipfile"
+    ],
+    "Maintainer": "hipFile Maintainer <hipfile-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm hipFile library development files",
+    "Description_Long": "Provides development files for the hipFile library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "hipfile",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipfile",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-hipfile-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-hipfile-devel",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-hipfile-devel",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "hipFile Maintainer <hipfile-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm hipFile library test files",
+    "Description_Long": "Provides test files for the hipFile library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "hipfile",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipfile",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
     "Version": "",
@@ -3042,6 +3169,7 @@
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
+      "amdrocm-hipfile",
       "amdrocm-decode",
       "amdrocm-jpeg"
     ],
@@ -3063,6 +3191,7 @@
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
+      "amdrocm-hipfile",
       "amdrocm-decode",
       "amdrocm-jpeg"
     ],
@@ -3122,6 +3251,7 @@
       "amdrocm-rccl-devel",
       "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
+      "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
     ],
@@ -3140,6 +3270,7 @@
       "amdrocm-rccl-devel",
       "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
+      "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
     ],
