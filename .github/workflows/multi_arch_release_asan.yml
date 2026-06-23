@@ -23,10 +23,6 @@ on:
         description: 'Comma-separated list of Linux GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
-      windows_amdgpu_families:
-        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" or empty = skip.'
-        type: string
-        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -61,10 +57,6 @@ on:
         description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
         type: string
         default: "gfx94x"
-      windows_amdgpu_families:
-        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" = skip platform.'
-        type: string
-        default: "none"
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
         type: boolean
@@ -84,7 +76,6 @@ permissions:
 run-name: >-
   Multi-Arch Release ASAN (${{ inputs.release_type || 'dev' }})
   | Linux: ${{ inputs.linux_amdgpu_families || 'all' }}
-  | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
 
 jobs:
   setup:
@@ -94,7 +85,7 @@ jobs:
       release_type: ${{ inputs.release_type || 'dev' }}
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
-      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
+      windows_amdgpu_families: "none"
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
 
@@ -117,26 +108,6 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
       build_variant: "asan"
-    permissions:
-      contents: read
-      actions: write
-      id-token: write
-
-  windows_release:
-    name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: ${{ needs.setup.outputs.windows_build_config != '' }}
-    uses: ./.github/workflows/multi_arch_release_windows.yml
-    secrets: inherit
-    with:
-      build_config: ${{ needs.setup.outputs.windows_build_config }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-      release_type: ${{ inputs.release_type || 'dev' }}
-      repository: ${{ inputs.repository || github.repository }}
-      ref: ${{ needs.setup.outputs.ref }}
-      build_pytorch: ${{ inputs.build_pytorch }}
-      python_version: ${{ inputs.python_version }}
     permissions:
       contents: read
       actions: write
