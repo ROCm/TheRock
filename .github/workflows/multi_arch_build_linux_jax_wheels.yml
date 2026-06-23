@@ -33,6 +33,10 @@ on:
         description: "ROCm package version to install and build against."
         type: string
         required: true
+      tar_url:
+        description: "URL to the TheRock tarball used for the build."
+        type: string
+        required: true
       release_type:
         description: "Release type."
         type: string
@@ -86,6 +90,10 @@ on:
         required: true
       rocm_version:
         description: "ROCm package version to install and build against."
+        type: string
+        required: true
+      tar_url:
+        description: "URL to the TheRock tarball used for the build."
         type: string
         required: true
       release_type:
@@ -178,13 +186,13 @@ jobs:
             echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/rocm-jax/jax_rocm_plugin/wheelhouse" >> "$GITHUB_ENV"
           fi
 
-
       - name: Build JAX Wheels (native, v0.9.1)
         if: ${{ inputs.build_mode == 'native' }}
         working-directory: rocm-jax
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
+          TAR_URL: ${{ inputs.tar_url }}
         run: |
           python3 build/ci_build \
             --compiler=clang \
