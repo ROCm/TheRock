@@ -2,6 +2,9 @@ name: Test AWS Runner (no container spec)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - test/aws-runner-no-container-spec
 
 jobs:
   hello-world:
