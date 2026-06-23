@@ -17,52 +17,55 @@ from github_actions.github_actions_api import gha_set_output
 
 RELEASE_TYPES = ["ci", "dev", "nightly", "prerelease"]
 
+# TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
+#       only included in release runs
+
 RELEASE_PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
     "windows": ["3.12"],
 }
 
-GFX125X_FAMILY = "gfx125X-dcgpu"
-GFX125X_UNSUPPORTED = {GFX125X_FAMILY}
-
-# Known PyTorch refs per platform. Each ref may carry canonical AMDGPU
-# families that should be omitted while support is not available.
-PYTORCH_REFS_LINUX: list[dict[str, object]] = [
-    {
-        "pytorch_git_ref": "release/2.9",
-        "exclude_amdgpu_families": GFX125X_UNSUPPORTED,
-    },
-    {
-        "pytorch_git_ref": "release/2.10",
-        "exclude_amdgpu_families": GFX125X_UNSUPPORTED,
-    },
-    {
-        "pytorch_git_ref": "release/2.11",
-        "exclude_amdgpu_families": GFX125X_UNSUPPORTED,
-    },
-    {
-        "pytorch_git_ref": "release/2.12",
-        "exclude_amdgpu_families": GFX125X_UNSUPPORTED,
-    },
-    {
-        "pytorch_git_ref": "nightly",
-        "exclude_amdgpu_families": GFX125X_UNSUPPORTED,
-    },
-]
-
-# gfx125X-dcgpu is Linux-only, so Windows currently needs no exclusions.
-PYTORCH_REFS_WINDOWS: list[dict[str, object]] = [
-    {"pytorch_git_ref": "release/2.9"},
-    {"pytorch_git_ref": "release/2.10"},
-    {"pytorch_git_ref": "release/2.11"},
-    {"pytorch_git_ref": "release/2.12"},
-    {"pytorch_git_ref": "nightly"},
-]
+# TODO: separate out "nightly" pytorch refs from "prerelease" pytorch refs?
+# That would let us:
+#   1. choose to not build the "nightly" pytorch branch for prerelease builds,
+#      saving some CI resources and possibly simplifying package promotion
+#      scripts.
+#   2. filter out some AMDGPU families from prereleases if we only want them
+#      built for nightly but not published to stable.
+RELEASE_PYTORCH_REFS = {
+    "linux": [
+        "release/2.9",
+        "release/2.10",
+        "release/2.11",
+        "release/2.12",
+        "nightly",
+    ],
+    "windows": [
+        "release/2.9",
+        "release/2.10",
+        "release/2.11",
+        "release/2.12",
+        "nightly",
+    ],
+}
 
 CI_PYTORCH_REFS = {
     "linux": ["release/2.10", "release/2.11", "release/2.12"],
     "windows": ["release/2.10"],
+}
+
+# Unknown explicit refs are left unfiltered so bring-up branches can opt into
+# new GPU families before the default PyTorch refs support them.
+UNSUPPORTED_AMDGPU_FAMILIES = {
+    "linux": {
+        "release/2.9": {"gfx125X-dcgpu"},
+        "release/2.10": {"gfx125X-dcgpu"},
+        "release/2.11": {"gfx125X-dcgpu"},
+        "release/2.12": {"gfx125X-dcgpu"},
+        "nightly": {"gfx125X-dcgpu"},
+    },
+    "windows": {},
 }
 
 
@@ -85,30 +88,10 @@ def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
     return list(RELEASE_PYTHON_VERSIONS)
 
 
-def _ref_configs_for_platform(platform: str) -> list[dict[str, object]]:
-    if platform == "windows":
-        return PYTORCH_REFS_WINDOWS
-    return PYTORCH_REFS_LINUX
-
-
-def _default_ref_configs(
-    *, release_type: str, platform: str
-) -> list[dict[str, object]]:
-    known_configs = _ref_configs_for_platform(platform)
-    if release_type != "ci":
-        return list(known_configs)
-
-    ci_refs = set(CI_PYTORCH_REFS[platform])
-    return [
-        config for config in known_configs if str(config["pytorch_git_ref"]) in ci_refs
-    ]
-
-
-def _ref_config_for_ref(*, platform: str, pytorch_git_ref: str) -> dict[str, object]:
-    for config in _ref_configs_for_platform(platform):
-        if config["pytorch_git_ref"] == pytorch_git_ref:
-            return config
-    return {"pytorch_git_ref": pytorch_git_ref}
+def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
+    if release_type == "ci":
+        return list(CI_PYTORCH_REFS[platform])
+    return list(RELEASE_PYTORCH_REFS[platform])
 
 
 def _filter_families(families_str: str, exclude: set[str]) -> str:
@@ -124,29 +107,13 @@ def _filter_families(families_str: str, exclude: set[str]) -> str:
     )
 
 
-def generate_pytorch_matrix(
-    *,
-    python_versions: list[str] | None,
-    pytorch_git_refs: list[str] | None,
-    amdgpu_families: str,
-    platform: str = "linux",
-) -> list[dict[str, str]]:
-    return generate_pytorch_matrix_for_release_type(
-        release_type="dev",
-        python_versions=python_versions,
-        pytorch_git_refs=pytorch_git_refs,
-        amdgpu_families=amdgpu_families,
-        platform=platform,
-    )
-
-
 def generate_pytorch_matrix_for_release_type(
     *,
     release_type: str,
-    python_versions: list[str] | None,
-    pytorch_git_refs: list[str] | None,
     amdgpu_families: str,
     platform: str,
+    python_versions: list[str] | None = None,
+    pytorch_git_refs: list[str] | None = None,
 ) -> list[dict[str, str]]:
     if release_type not in RELEASE_TYPES:
         raise ValueError(f"Unknown release_type: {release_type!r}")
@@ -156,24 +123,38 @@ def generate_pytorch_matrix_for_release_type(
     versions = python_versions or _default_python_versions(
         release_type=release_type, platform=platform
     )
-    ref_configs = (
-        [
-            _ref_config_for_ref(platform=platform, pytorch_git_ref=ref)
-            for ref in pytorch_git_refs
-        ]
-        if pytorch_git_refs
-        else _default_ref_configs(release_type=release_type, platform=platform)
+    refs = pytorch_git_refs or _default_pytorch_git_refs(
+        release_type=release_type, platform=platform
     )
 
+    # Build one matrix row per requested Python version and PyTorch ref. Each
+    # row carries the AMDGPU families that the child build workflow should use
+    # for that ref after filtering out families that are not supported yet.
+    #
+    # Example Linux output for release_type="dev" and
+    # amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu":
+    #
+    # [
+    #   {
+    #     "python_version": "3.10",
+    #     "pytorch_git_ref": "release/2.9",
+    #     "amdgpu_families": "gfx94X-dcgpu"
+    #   },
+    #   ...
+    #   {
+    #     "python_version": "3.14",
+    #     "pytorch_git_ref": "nightly",
+    #     "amdgpu_families": "gfx94X-dcgpu"
+    #   }
+    # ]
     matrix: list[dict[str, str]] = []
     for py in versions:
-        for ref_cfg in ref_configs:
-            ref = str(ref_cfg["pytorch_git_ref"])
-            exclude = set(ref_cfg.get("exclude_amdgpu_families", set()))
+        for ref in refs:
+            exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
             families = _filter_families(amdgpu_families, exclude)
             if not families:
                 continue
-            row: dict = {
+            row: dict[str, str] = {
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,

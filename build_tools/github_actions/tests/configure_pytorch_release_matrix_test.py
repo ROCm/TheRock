@@ -15,8 +15,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
     def test_ci_linux_uses_reduced_matrix(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="ci",
-            python_versions=None,
-            pytorch_git_refs=None,
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
         )
@@ -45,8 +43,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
     def test_ci_windows_uses_reduced_matrix(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="ci",
-            python_versions=None,
-            pytorch_git_refs=None,
             amdgpu_families="gfx110X-all",
             platform="windows",
         )
