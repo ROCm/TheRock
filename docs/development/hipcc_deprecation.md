@@ -146,11 +146,3 @@ amdclang++ \
 When using a TheRock build, the `--hip-path` and `--hip-device-lib-path` values
 are available from the toolchain's `_toolchain.cmake` or from the `hip-config.cmake`
 installed in `<dist>/lib/cmake/hip/`.
-
-## Known pre-existing issues (not caused by this deprecation)
-
-- **roctracer** uses the legacy `FindHIP.cmake` module, which calls `hipcc` and
-  `hipconfig` directly via `run_hipcc.cmake`. This requires a separate migration
-  to CMake-native HIP language support and is tracked separately.
-- **rocThrust** has a pre-existing build failure in its bundled `googlebenchmark`
-  due to `-Wc2y-extensions` with clang 23. This is unrelated to hipcc deprecation.
