@@ -21,7 +21,14 @@ TODO(#2200): clarify AMD GPU family selection
 # NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
 #############################################################################################
 
+import os
 import random
+
+
+def is_asan():
+    """Determines if this is an ASAN build using BUILD_VARIANT env var."""
+    BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
+    return BUILD_VARIANT == "asan"
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:

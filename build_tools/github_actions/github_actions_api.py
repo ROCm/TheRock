@@ -770,9 +770,3 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
             logging.info(f"Detected GPU architecture: {gpu_arch}")
             return gpu_arch
     raise RuntimeError("No GPU architecture found in rocminfo output")
-
-
-def is_asan():
-    """Determines if this is an ASAN build using BUILD_VARIANT env var."""
-    BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
-    return BUILD_VARIANT == "asan"
