@@ -178,6 +178,31 @@ jobs:
             echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/rocm-jax/jax_rocm_plugin/wheelhouse" >> "$GITHUB_ENV"
           fi
 
+      - name: Patch builder image for /opt/rocm
+        if: ${{ inputs.build_mode == 'native' }}
+        working-directory: rocm-jax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          dockerfile = Path("docker/manylinux/Dockerfile.jax-manylinux_2_28-rocm")
+          text = dockerfile.read_text()
+
+          needle = 'ENV PATH="$PATH:/opt/rocm/bin:/opt/rocm/llvm/bin"\n'
+          insert = (
+              'RUN set -eux; \\\n'
+              '    ROCM_ROOT="$(rocm-sdk path --root)"; \\\n'
+              '    rm -rf /opt/rocm; \\\n'
+              '    ln -sfn "${ROCM_ROOT}" /opt/rocm\n'
+          )
+
+          if needle not in text:
+              raise SystemExit("Expected ENV PATH line not found")
+
+          text = text.replace(needle, needle + insert, 1)
+          dockerfile.write_text(text)
+          PY
+
       - name: Build JAX Wheels (native, v0.9.1)
         if: ${{ inputs.build_mode == 'native' }}
         working-directory: rocm-jax
