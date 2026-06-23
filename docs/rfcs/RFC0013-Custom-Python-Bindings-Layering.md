@@ -17,9 +17,9 @@ ROCm should separate native library ownership, generated C API bindings, custom 
 The proposed target state is:
 
 1. **Native component repositories remain native-first.** `rocm-libraries/projects/<component>` owns native libraries, headers, CMake package exports, plugins, and native tests.
-2. **TheRock / `rocm_sdk` publishes normal ROCm SDK native artifacts.** TheRock does not own custom Python binding version policy, nanobind extension matrices, or final binding wheel release metadata.
-3. **Custom binding projects live in `rocm-bindings`.** For hipDNN, `rocm-bindings/hipdnn/hipdnn-nanobind` owns the native Python extension build, and `rocm-bindings/hipdnn/hipdnn-frontend` owns the final wheel.
-4. **`hip-python` is proposed to be relocated into the same bindings repository.** It remains the generated low-level C API binding area for HIP and ROCm library C APIs. `hipdnn_backend.h` is one example generator input, not a custom hipDNN frontend subproject.
+1. **TheRock / `rocm_sdk` publishes normal ROCm SDK native artifacts.** TheRock does not own custom Python binding version policy, nanobind extension matrices, or final binding wheel release metadata.
+1. **Custom binding projects live in `rocm-bindings`.** For hipDNN, `rocm-bindings/hipdnn/hipdnn-nanobind` owns the native Python extension build, and `rocm-bindings/hipdnn/hipdnn-frontend` owns the final wheel.
+1. **`hip-python` is proposed to be relocated into the same bindings repository.** It remains the generated low-level C API binding area for HIP and ROCm library C APIs. `hipdnn_backend.h` is one example generator input, not a custom hipDNN frontend subproject.
 
 This document describes the proposed target state. Current hipDNN sources still keep nanobind sources, package metadata, and tests under `projects/hipdnn/python`.
 
@@ -67,13 +67,13 @@ The target model puts the binding-specific release decisions in the bindings rep
 
 ## Proposed layering
 
-| Layer | Owns | Does not own |
-| --- | --- | --- |
-| `rocm-libraries/projects/<component>` | Native library sources, headers, CMake package exports, plugins, native tests | Custom Python extension sources, final Python wheel metadata, Python binding release policy |
-| TheRock / `rocm_sdk` | Native ROCm build orchestration, native artifact split, ROCm SDK runtime/devel/device packages | Custom Python binding version matrix, nanobind extension artifacts, final binding wheel metadata |
-| `rocm-bindings/<component>/<component>-nanobind` | C++/nanobind extension sources, extension build, ABI-specific extension artifacts, artifact manifest, producer-side tests | Final user-facing wheel metadata and installed-wheel tests |
-| `rocm-bindings/<component>/<component>-frontend` | Final Python wheel, import package, runtime ROCm initialization, package metadata, wheel tags, installed-wheel tests, docs, release/upload policy | Native library implementation, generated C API bindings, TheRock artifact split |
-| relocated `hip-python` | Auto-generated Python bindings over ROCm C APIs across projects | Custom Pythonic frontend APIs such as hipDNN `Graph` and `TensorAttributes` |
+| Layer                                            | Owns                                                                                                                                              | Does not own                                                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `rocm-libraries/projects/<component>`            | Native library sources, headers, CMake package exports, plugins, native tests                                                                     | Custom Python extension sources, final Python wheel metadata, Python binding release policy      |
+| TheRock / `rocm_sdk`                             | Native ROCm build orchestration, native artifact split, ROCm SDK runtime/devel/device packages                                                    | Custom Python binding version matrix, nanobind extension artifacts, final binding wheel metadata |
+| `rocm-bindings/<component>/<component>-nanobind` | C++/nanobind extension sources, extension build, ABI-specific extension artifacts, artifact manifest, producer-side tests                         | Final user-facing wheel metadata and installed-wheel tests                                       |
+| `rocm-bindings/<component>/<component>-frontend` | Final Python wheel, import package, runtime ROCm initialization, package metadata, wheel tags, installed-wheel tests, docs, release/upload policy | Native library implementation, generated C API bindings, TheRock artifact split                  |
+| relocated `hip-python`                           | Auto-generated Python bindings over ROCm C APIs across projects                                                                                   | Custom Pythonic frontend APIs such as hipDNN `Graph` and `TensorAttributes`                      |
 
 For hipDNN, the target project split is:
 
@@ -218,7 +218,6 @@ The wheel build must ensure:
 
 The follow-up packaging guide should define the exact backend hook/tooling that enforces `Root-Is-Purelib`, `WHEEL` tags, `RECORD` contents, and audit checks.
 
-
 ## Python ABI and artifact strategy
 
 Python extension modules are not generic shared libraries. They must be treated as Python ABI artifacts.
@@ -356,13 +355,13 @@ This keeps release artifacts isolated to the owning binding repository and lets 
 ## Migration plan
 
 1. **Agree on this RFC.** Decide the ownership boundaries, repository layout, and artifact contracts.
-2. **Create or update the `rocm-bindings` repository layout.** Relocate `hip-python` there and reserve `rocm-bindings/hipdnn/` for custom hipDNN bindings.
-3. **Move hipDNN nanobind sources.** Move `projects/hipdnn/python/src/*.cpp` and the extension CMake build into `rocm-bindings/hipdnn/hipdnn-nanobind`.
-4. **Create the frontend wheel project.** Move final wheel metadata, import package, loader setup, tests, and samples into `rocm-bindings/hipdnn/hipdnn-frontend`.
-5. **Define and validate the manifest schema.** Make wheel builds fail on mismatched ABI, Python tag, platform tag, native input versions, or extension module names.
-6. **Wire CI.** Build nanobind artifacts, build frontend wheels, install them, and run CPU/GPU tests.
-7. **Retire transitional TheRock packers.** Once `rocm-bindings` owns the build/release pipeline, remove TheRock-specific hipDNN frontend wheel repacking.
-8. **Publish developer documentation.** After the RFC is accepted and implementation details settle, add a durable developer guide under TheRock docs, likely in `docs/packaging/`, and link it back to this RFC.
+1. **Create or update the `rocm-bindings` repository layout.** Relocate `hip-python` there and reserve `rocm-bindings/hipdnn/` for custom hipDNN bindings.
+1. **Move hipDNN nanobind sources.** Move `projects/hipdnn/python/src/*.cpp` and the extension CMake build into `rocm-bindings/hipdnn/hipdnn-nanobind`.
+1. **Create the frontend wheel project.** Move final wheel metadata, import package, loader setup, tests, and samples into `rocm-bindings/hipdnn/hipdnn-frontend`.
+1. **Define and validate the manifest schema.** Make wheel builds fail on mismatched ABI, Python tag, platform tag, native input versions, or extension module names.
+1. **Wire CI.** Build nanobind artifacts, build frontend wheels, install them, and run CPU/GPU tests.
+1. **Retire transitional TheRock packers.** Once `rocm-bindings` owns the build/release pipeline, remove TheRock-specific hipDNN frontend wheel repacking.
+1. **Publish developer documentation.** After the RFC is accepted and implementation details settle, add a durable developer guide under TheRock docs, likely in `docs/packaging/`, and link it back to this RFC.
 
 ## Risks and mitigations
 
