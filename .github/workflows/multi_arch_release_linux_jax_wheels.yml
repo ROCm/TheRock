@@ -23,6 +23,10 @@ on:
         description: "ROCm package version to build against."
         type: string
         required: true
+      rocm_package_find_links_url:
+        description: "ROCm package index / find-links URL for the JAX manylinux build."
+        type: string
+        required: true
       tar_url:
         description: "URL to the TheRock tarball used for the build."
         type: string
@@ -49,6 +53,10 @@ on:
         default: dev
       rocm_version:
         description: "ROCm package version to build against."
+        type: string
+        required: true
+      rocm_package_find_links_url:
+        description: "ROCm package index / find-links URL for the JAX manylinux build."
         type: string
         required: true
       tar_url:
@@ -101,6 +109,7 @@ jobs:
       build_mode: ${{ matrix.build_mode }}
       gfx_arch: ${{ matrix.gfx_arch }}
       rocm_version: ${{ inputs.rocm_version }}
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       tar_url: ${{ inputs.tar_url }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
