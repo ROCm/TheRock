@@ -240,6 +240,7 @@ PackageEntry(
 LibraryEntry("amdhip64", "core", "libamdhip64.so*", "amdhip64*.dll")
 # The DLL glob here uses '0' from the version to avoid matching 'hiprtc-builtins'.
 # If DLLs with no version suffix are later added we will need a different pattern.
+LibraryEntry("hipfile", "core", "libhipfile.so*", "")
 LibraryEntry("hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
 LibraryEntry("rocprofiler-sdk", "core", "librocprofiler-sdk.so*", "")
