@@ -1037,6 +1037,85 @@
   },
 
   {
+    "Package": "amdrocm-rocalution",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-blas",
+      "amdrocm-sparse",
+      "amdrocm-rand",
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-blas",
+      "amdrocm-sparse",
+      "amdrocm-rand",
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocALUTION sparse iterative solver library for AMD GPUs",
+    "Description_Long": "rocALUTION is AMD's library of iterative sparse solvers and preconditioners, built on top of rocSPARSE and rocBLAS.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rocalution",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocALUTION",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-rocalution-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-rocalution"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocalution"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocALUTION sparse iterative solver library for AMD GPUs",
+    "Description_Long": "Provides development files for the rocALUTION library.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rocalution",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocALUTION",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+
+  {
     "Package": "amdrocm-rand",
     "Version": "",
     "Architecture": "amd64",
@@ -3070,6 +3149,30 @@
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm metapackage",
     "Description_Long": "ROCm core runtime and libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
+    "Comments": "Opt-in HPC SDK metapackage. Built with Core but NOT pulled in by the default amdrocm metapackage. See docs/rfcs HPC SDK Release Model.",
+    "Package": "amdrocm-hpc",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocalution"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocalution"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm HPC SDK metapackage",
+    "Description_Long": "Opt-in metapackage that installs the AMD HPC SDK libraries on top of a matching ROCm Core SDK install.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
