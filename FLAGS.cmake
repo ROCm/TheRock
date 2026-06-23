@@ -32,6 +32,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME THEROCK_ENABLE_HIPKERNELPROVIDER
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable the Hip Kernel Provider engine"
+  CMAKE_VARS
+    THEROCK_ENABLE_HIPKERNELPROVIDER=OFF
+  SUB_PROJECTS
+    hipDNN
+)
+
+therock_declare_flag(
   NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
   DESCRIPTION "Stamp library git revisions into generated version metadata"
