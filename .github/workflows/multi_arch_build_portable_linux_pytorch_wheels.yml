@@ -286,23 +286,14 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
-          # Choose the ROCm package source: a PEP 503 index (e.g. repo.amd.com
-          # released wheels) via --index-url, or a flat find-links page (e.g. a
-          # TheRock CI artifacts index.html) via --find-links.
-          rocm_source_flag=()
-          if [ -n "${{ inputs.rocm_package_index_url }}" ]; then
-            rocm_source_flag=(--index-url "${{ inputs.rocm_package_index_url }}")
-          elif [ -n "${{ inputs.rocm_package_find_links_url }}" ]; then
-            rocm_source_flag=(--find-links "${{ inputs.rocm_package_find_links_url }}")
-          else
-            echo "ERROR: set rocm_package_index_url or rocm_package_find_links_url" >&2
-            exit 1
-          fi
-
+          # build_prod_wheels.py forwards each of these to pip and ignores an
+          # empty value, so pass both and supply whichever source applies:
+          # --index-url for a PEP 503 index, --find-links for a flat page.
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            "${rocm_source_flag[@]}" \
+            --index-url="${{ inputs.rocm_package_index_url }}" \
+            --find-links="${{ inputs.rocm_package_find_links_url }}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
