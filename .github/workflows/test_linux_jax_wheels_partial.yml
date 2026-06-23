@@ -18,10 +18,6 @@ on:
         description: ROCm version
         required: true
         type: string
-      tar_url:
-        description: URL to TheRock tarball
-        required: true
-        type: string
       release_type:
         description: "Release type"
         type: string
@@ -76,10 +72,6 @@ on:
         description: ROCm version
         type: string
         default: "7.14.0.dev0"
-      tar_url:
-        description: URL to TheRock tarball
-        type: string
-        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -149,7 +141,6 @@ jobs:
 
     env:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
-      TAR_URL: ${{ inputs.tar_url }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
 
@@ -191,19 +182,6 @@ jobs:
       - name: Install base JAX test requirements
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
-
-      - name: Configure ROCm from TheRock tarball
-        run: |
-          DEST="/opt/rocm-${{ inputs.rocm_version }}"
-          TARBALL="${RUNNER_TEMP}/therock.tar.gz"
-
-          rm -rf "${DEST}"
-          mkdir -p "${DEST}"
-
-          wget -O "${TARBALL}" "${TAR_URL}"
-          tar -xzf "${TARBALL}" -C "${DEST}"
-
-          ln -sfn "${DEST}" /opt/rocm
 
       - name: Determine JAX package versions
         run: |

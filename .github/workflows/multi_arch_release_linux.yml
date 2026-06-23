@@ -260,7 +260,6 @@ jobs:
               "test_amdgpu_family": "${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}",
               "release_type": "${{ inputs.release_type }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
-              "tar_url": "${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}",
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref || '' }}"
             }

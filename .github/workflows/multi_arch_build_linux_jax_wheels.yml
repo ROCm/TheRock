@@ -33,10 +33,6 @@ on:
         description: "ROCm package version to install and build against."
         type: string
         required: true
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
-        type: string
-        required: true
       release_type:
         description: "Release type."
         type: string
@@ -90,10 +86,6 @@ on:
         required: true
       rocm_version:
         description: "ROCm package version to install and build against."
-        type: string
-        required: true
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
         type: string
         required: true
       release_type:
@@ -192,13 +184,11 @@ jobs:
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
-          TAR_URL: ${{ inputs.tar_url }}
         run: |
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${PYTHON_VERSION}" \
             --rocm-version="${ROCM_VERSION}" \
-            --therock-path="${TAR_URL}" \
             dist_wheels
 
       - name: Build manylinux image
@@ -243,13 +233,11 @@ jobs:
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
-          TAR_URL: ${{ inputs.tar_url }}
         run: |
           docker run --rm \
             --user root \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
-            --env TAR_URL="${TAR_URL}" \
             --env ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
@@ -321,7 +309,6 @@ jobs:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
       rocm_version: ${{ inputs.rocm_version }}
-      tar_url: ${{ inputs.tar_url }}
       release_type: ${{ inputs.release_type }}
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
