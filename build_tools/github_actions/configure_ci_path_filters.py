@@ -174,27 +174,25 @@ _SKIPPABLE_PATH_PATTERNS = [
 # ``uses: ./.github/workflows/...`` references instead of maintaining it
 # by hand.
 _GITHUB_WORKFLOWS_CI_FILENAMES = {
-    # multi_arch_ci.yml only
-    "multi_arch_ci.yml",
+    "build_portable_linux_python_packages.yml",
+    "build_windows_python_packages.yml",
+    "manifest-diff.yml",
+    "multi_arch_build_native_linux_packages.yml",
+    "multi_arch_build_portable_linux_artifacts.yml",
+    "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
+    "multi_arch_build_portable_linux.yml",
+    "multi_arch_build_windows_artifacts.yml",
+    "multi_arch_build_windows_pytorch_wheels_ci.yml",
+    "multi_arch_build_windows.yml",
+    "multi_arch_build_wsl_rocdxg_artifacts.yml",
     "multi_arch_ci_linux.yml",
     "multi_arch_ci_windows.yml",
-    "multi_arch_build_native_linux_packages.yml",
-    "multi_arch_build_portable_linux.yml",
-    "multi_arch_build_portable_linux_artifacts.yml",
-    "multi_arch_build_windows.yml",
-    "multi_arch_build_windows_artifacts.yml",
-    "multi_arch_build_wsl_rocdxg_artifacts.yml",
+    "multi_arch_ci.yml",
     "setup_multi_arch.yml",
-    "manifest-diff.yml",
     "test_artifacts_structure.yml",
-    "test_native_linux_packages_install.yml",
-    # both
-    "build_portable_linux_python_packages.yml",
-    "build_portable_linux_pytorch_wheels_ci.yml",
-    "build_windows_python_packages.yml",
-    "build_windows_pytorch_wheels_ci.yml",
     "test_artifacts.yml",
     "test_component.yml",
+    "test_native_linux_packages_install.yml",
     "test_rocm_wheels.yml",
 }
 

@@ -7,63 +7,42 @@ on:
   workflow_dispatch:
     inputs:
       rocm_version:
-        description: ROCm version to copy, e.g. 7.0.0rc20250912
+        description: ROCm version to copy from nightly releases to dev releases, e.g. 7.14.0a20260617 (see https://rocm.nightlies.amd.com/whl-multi-arch/)
         type: string
-      amdgpu_family:
-        type: choice
-        options:
-          - gfx101X-dgpu
-          - gfx103X-all
-          - gfx110X-all
-          - gfx1150
-          - gfx1151
-          - gfx1152
-          - gfx1153
-          - gfx120X-all
-          - gfx900
-          - gfx906
-          - gfx908
-          - gfx90a
-          - gfx94X-dcgpu
-          - gfx950-dcgpu
-          - gfx125X-dcgpu
-        default: gfx94X-dcgpu
       python_version:
         type: choice
         options:
-          - 3.11
-          - 3.12
-          - 3.13
-        default: 3.12
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+        default: "3.12"
       include_torch:
+        description: Copy 'torch' packages in addition to 'rocm' packages?
         type: boolean
         default: false
-      sourcesubdir:
-        type: choice
-        options:
-          - v2
-          - v2-staging
-      destsubdir:
-        type: string
-        default: v2
-      sourcebucket:
-        type: choice
-        options:
-          - nightly
-          - dev
-        default: nightly
-      destbucket:
-        type: choice
-        options:
-          - dev
-          - nightly
-        default: dev
+      include_jax:
+        description: Copy 'jax' packages in addition to 'rocm' packages?
+        type: boolean
+        default: false
 permissions:
   contents: read
 
+run-name: >-
+  Copy nightly -> dev |
+  rocm ${{ inputs.rocm_version }} |
+  py ${{ inputs.python_version }} |
+  extras: ${{
+    inputs.include_torch && inputs.include_jax && 'PyTorch + JAX' ||
+    inputs.include_torch && 'PyTorch' ||
+    inputs.include_jax && 'JAX' ||
+    'none'
+  }}
+
 jobs:
   copy_python_packages:
-    name: Copy ${{ inputs.sourcebucket }} ${{ inputs.sourcesubdir }} -> ${{ inputs.destbucket }} ${{ inputs.destsubdir }} | ${{ inputs.amdgpu_family }} | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
+    name: Copy nightly -> dev | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
@@ -72,6 +51,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
+      # TODO: migrate to boto3 Python package instead of this native tool?
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
 
@@ -79,7 +59,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.destbucket }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-dev
 
       - name: Select Python version
         run: |
@@ -89,14 +69,27 @@ jobs:
       - name: Copy ROCm packages between S3 buckets
         run: |
           aws s3 cp \
-            s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*"  --include "rocm*${{ inputs.rocm_version }}*"
+            s3://therock-nightly-python/v4/whl/ \
+            s3://therock-dev-python/v4/whl/ \
+            --recursive --exclude "*" \
+            --include "rocm*${{ inputs.rocm_version }}*"
 
       - name: Copy torch wheels between S3 buckets
         if: ${{ inputs.include_torch }}
         run: |
           aws s3 cp \
-            s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*"  --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+            s3://therock-nightly-python/v4/whl/ \
+            s3://therock-dev-python/v4/whl/ \
+            --recursive --exclude "*" \
+            --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
+            --include "apex*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
+            --include "triton*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+
+      - name: Copy JAX wheels between S3 buckets
+        if: ${{ inputs.include_jax }}
+        run: |
+          aws s3 cp \
+            s3://therock-nightly-python/v4/whl/ \
+            s3://therock-dev-python/v4/whl/ \
+            --recursive --exclude "*" \
+            --include "jax*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
