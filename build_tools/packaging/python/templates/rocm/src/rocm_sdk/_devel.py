@@ -447,7 +447,9 @@ def _lock_and_expand(
                                 not _is_windows()
                                 and dest_path.name in PRESERVE_SYMLINKS
                                 and dest_path.parent.name == "bin"
-                                and dest_path.parent.parent.name.startswith("_rocm_sdk_devel")
+                                and dest_path.parent.parent.name.startswith(
+                                    "_rocm_sdk_devel"
+                                )
                             ):
                                 dest_path.symlink_to(symlink_target)
                             # Only create hardlinks for files, not directories
