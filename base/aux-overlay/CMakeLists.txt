@@ -26,6 +26,7 @@ if(NOT WIN32)
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cl" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cpp" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdllvm" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdllvm"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
   )
   # llvm and amdgcn are symlinks to directories; install(FILES) rejects
@@ -46,9 +47,32 @@ if(NOT WIN32)
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdllvm"
     "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
     DESTINATION bin
   )
+
+  # Begin creation of compiler configs. We will need LLVM_VERSION_MAJOR.
+  include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
+  set(rocm_config_name "rocm.cfg")
+  set(rocm_config_dir "${CMAKE_CURRENT_BINARY_DIR}/lib/llvm/bin")
+  set(rocm_config_content "-Wl,--enable-new-dtags\n--rocm-path='<CFGDIR>/../../..'\n-frtlib-add-rpath")
+
+  # Generate rocm.cfg
+  file(MAKE_DIRECTORY "${rocm_config_dir}")
+  message(STATUS "Generating ${rocm_config_dir}/${rocm_config_name}")
+  file(WRITE "${rocm_config_dir}/${rocm_config_name}" ${rocm_config_content})
+  install(FILES "${rocm_config_dir}/${rocm_config_name}"
+    DESTINATION "lib/llvm/bin")
+
+  # Generate additional config aliases
+  set(config_names "clang-${LLVM_VERSION_MAJOR}.cfg;clang++.cfg;clang.cfg;clang-cl.cfg;clang-cpp.cfg;flang.cfg")
+  foreach(name ${config_names})
+    message(STATUS "Generating ${rocm_config_dir}/${name}")
+    file(WRITE "${rocm_config_dir}/${name}" "@rocm.cfg")
+    install(FILES "${rocm_config_dir}/${name}"
+      DESTINATION "lib/llvm/bin")
+  endforeach()
 endif()
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/overlay/" DESTINATION ".")

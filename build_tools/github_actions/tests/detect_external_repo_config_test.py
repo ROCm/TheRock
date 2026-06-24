@@ -26,6 +26,49 @@ from detect_external_repo_config import (
 )
 
 
+class TestExternalRepoJsonCasing(unittest.TestCase):
+    """Tests that repo name extraction from external_repo JSON is case-insensitive."""
+
+    def setUp(self):
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
+            self.temp_file = f.name
+        os.environ["GITHUB_OUTPUT"] = self.temp_file
+
+    def tearDown(self):
+        if "GITHUB_OUTPUT" in os.environ:
+            del os.environ["GITHUB_OUTPUT"]
+        if hasattr(self, "temp_file") and os.path.exists(self.temp_file):
+            os.unlink(self.temp_file)
+
+    def _run_with_json(self, repository: str) -> int:
+        return detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                f'{{"repository": "{repository}", "ref": "abc123"}}',
+            ]
+        )
+
+    def test_mixed_case_repo_name(self):
+        """ROCm/Rocm-Libraries (mixed case) should resolve to rocm-libraries config."""
+        rc = self._run_with_json("ROCm/Rocm-Libraries")
+        self.assertEqual(rc, 0)
+
+    def test_uppercase_repo_name(self):
+        """ROCm/ROCM-LIBRARIES (all caps) should still resolve to rocm-libraries config."""
+        rc = self._run_with_json("ROCm/ROCM-LIBRARIES")
+        self.assertEqual(rc, 0)
+
+    def test_lowercase_repo_name(self):
+        """ROCm/rocm-libraries (already lowercase) should resolve to rocm-libraries config."""
+        rc = self._run_with_json("ROCm/rocm-libraries")
+        self.assertEqual(rc, 0)
+
+    def test_unknown_repo_returns_nonzero(self):
+        """An unregistered repo should return a non-zero exit code."""
+        rc = self._run_with_json("ROCm/SomeUnknownRepo")
+        self.assertNotEqual(rc, 0)
+
+
 class TestGetRepoConfig(unittest.TestCase):
     """Tests for get_repo_config function"""
 
