@@ -135,10 +135,17 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
 
 
 def run_pytests(python: Path, tests_dir: Path, env: dict) -> None:
-    """Run the upstream hipDNN Python test suite."""
+    """Run the upstream hipDNN Python test suite.
+
+    `--import-mode=importlib` stops pytest's default prepend mode from inserting
+    the tests' parent (lib/python) onto sys.path[0]. That parent also holds the
+    source-only hipdnn_frontend package (no compiled extension), which would
+    otherwise shadow the wheel-installed package and break
+    `import hipdnn_frontend`.
+    """
     # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
     subprocess.run(
-        [str(python), "-m", "pytest", "-v", str(tests_dir)],
+        [str(python), "-m", "pytest", "-v", "--import-mode=importlib", str(tests_dir)],
         env=env,
         cwd=str(tests_dir),
         check=True,
