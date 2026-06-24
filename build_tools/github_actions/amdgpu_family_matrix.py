@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 """
-This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
-Also provides the select_weighted_label utility for weighted runner selection.
+AMD GPU Family Matrix and runner selection utilities for GitHub workflows.
 
-* Each entry determines which families and test runners are available to use
-* Each group determines which entries run by default on workflow triggers
+NOTE: The primary source of truth for GPU families and runner labels is
+ROCm/therock-ci-config (runner-config.json). The definitions in this file
+serve as a fallback when external config is not available.
 
 For presubmit, postsubmit and nightly family selection:
 
@@ -21,7 +21,41 @@ TODO(#2200): clarify AMD GPU family selection
 # NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
 #############################################################################################
 
+import os
 import random
+import sys
+from pathlib import Path
+
+
+def _log(*args, **kwargs):
+    print(*args, **kwargs)
+    sys.stdout.flush()
+
+
+def load_external_config() -> dict | None:
+    """Load external CI config from CI_CONFIG_PATH if set.
+
+    The CI config API lives in therock-ci-config repo, which is checked out
+    to CI_CONFIG_PATH. Returns None if CI_CONFIG_PATH is not set or config
+    doesn't exist (fallback to local definitions).
+    """
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if not ci_config_path:
+        _log("CI_CONFIG_PATH not set, using local amdgpu_family_matrix.py")
+        return None
+    config_path = Path(ci_config_path)
+    sys.path.insert(0, str(config_path))
+    try:
+        from ci_config_api import config_exists, load_runner_config
+    except ImportError:
+        _log(f"CI config API not found at {ci_config_path}, using local fallback")
+        return None
+    if not config_exists(config_path):
+        _log(f"CI config not found at {ci_config_path}, using local fallback")
+        return None
+    config = load_runner_config(config_path)
+    _log(f"Using external CI config from {ci_config_path}")
+    return config
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
@@ -67,12 +101,13 @@ BUILD_RUNNER_LABELS = {
 
 def select_build_runner(platform: str, build_variant: str) -> str:
     """Select a build runner label based on platform and build variant."""
-    if platform not in BUILD_RUNNER_LABELS:
+    build_runner_labels = get_build_runner_labels()
+    if platform not in build_runner_labels:
         # Platform not configured for weighted selection, return default
         print(f"  No build runner config for platform {platform}, using default")
         return ""
 
-    platform_config = BUILD_RUNNER_LABELS[platform]
+    platform_config = build_runner_labels[platform]
 
     # Use sanitizer runners for asan/tsan builds
     if "san" in build_variant:
@@ -417,10 +452,24 @@ amdgpu_family_info_matrix_nightly = {
 
 
 def get_all_families_for_trigger_types(trigger_types):
+    """Returns combined family matrix for the specified trigger types.
+
+    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
+    definitions if external config is unavailable.
     """
-    Returns a combined family matrix for the specified trigger types.
-    trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
-    """
+    external_config = load_external_config()
+
+    # Use external config if available
+    if external_config is not None:
+        gpu_families = external_config.get("gpu_families", {})
+        result = {}
+        for trigger_type in trigger_types:
+            if trigger_type in gpu_families:
+                for name, cfg in gpu_families[trigger_type].items():
+                    result[name] = cfg
+        return result
+
+    # Fall back to local definitions
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,
@@ -434,3 +483,17 @@ def get_all_families_for_trigger_types(trigger_types):
                 result[family_name] = family_config
 
     return result
+
+
+def get_build_runner_labels():
+    """Returns build runner label configuration.
+
+    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
+    definitions if external config is unavailable.
+    """
+    external_config = load_external_config()
+
+    if external_config is not None:
+        return external_config.get("build_runners", {})
+
+    return BUILD_RUNNER_LABELS
