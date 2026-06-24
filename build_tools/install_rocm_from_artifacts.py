@@ -42,7 +42,9 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
+    [--rocalution | --no-rocalution]
     [--rocwmma | --no-rocwmma]
+    [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
@@ -370,6 +372,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipfile,
             args.miopen,
             args.miopenprovider,
+            args.hiptensor,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
@@ -384,6 +387,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.rocalution,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -437,6 +441,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
             extra_artifacts.append("hipkernelprovider")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -492,6 +498,9 @@ def retrieve_artifacts_by_run_id(args):
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
             extra_artifacts.append("sysdeps-hwloc")
             extra_artifacts.append("sysdeps-libpciaccess")
+        if args.rocalution:
+            extra_artifacts.append("rocalution")
+            argv.append("rocalution_dev")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -768,6 +777,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocdecode",
         default=False,
         help="Include 'rocdecode' artifacts",
@@ -855,6 +871,13 @@ def main(argv):
         "--rocrtst",
         default=False,
         help="Include 'rocrtst' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocalution",
+        default=False,
+        help="Include 'rocalution' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

@@ -341,29 +341,22 @@ test_matrix = {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        # Temporary mitigation for ROCm/rocm-libraries#8592: the gfx110X
-        # Windows V710 MxGPU partition OOMs on the pre_checkin sparse configs
-        # that the test_runner.py (standard) path runs, cascading into mass
-        # hipErrorOutOfMemory failures. Route sparse back to the pre-#4490
-        # legacy script (the last green basis, which already carries the
-        # gfx110X ignore list) until the underlying OOM is fixed. Restore
-        # test_runner.py afterwards.
-        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
-        # Temporary mitigation for ROCm/rocm-libraries#8592 (see hipsparse
-        # above): route sparse back to the pre-#4490 legacy script until the
-        # underlying gfx110X Windows OOM is fixed. Restore test_runner.py
-        # afterwards.
-        "test_script": f"python {_get_script_path('test_rocsparse.py')}",
+        # rocsparse runs as a single shard for now, so the full suite executes in
+        # one process and needs a generous timeout. This will be reduced soon once
+        # rocsparse moves to multi-shard gtest sharding (pending the tolerance fix
+        # in ROCm/rocm-libraries#8713).
+        "timeout_minutes": 240,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -600,6 +593,18 @@ test_matrix = {
             "windows": 2,
         },
     },
+    # rocALUTION tests
+    "rocalution": {
+        "job_name": "rocalution",
+        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # profiler tests
     "rocprofiler-compute": {
         "job_name": "rocprofiler-compute",
@@ -696,6 +701,17 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+    },
+    # hipTensor tests
+    "hiptensor": {
+        "job_name": "hiptensor",
+        "fetch_artifact_args": "--hiptensor --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
 }
