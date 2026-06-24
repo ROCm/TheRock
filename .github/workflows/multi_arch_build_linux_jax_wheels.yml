@@ -121,8 +121,11 @@ on:
         type: string
         required: true
       build_mode:
-        description: "Build mode: native or manylinux."
-        type: string
+        description: "Build mode."
+        type: choice
+        options:
+          - native
+          - manylinux
         required: true
       gfx_arch:
         description: "GFX architecture used for the manylinux image build."
