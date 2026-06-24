@@ -117,9 +117,9 @@ on:
         type: string
         default: ""
       jax_repository:
-        description: "Repository containing the JAX release branch."
+        description: "GitHub repository in owner/repo format (e.g. ROCm/jax or ROCm/rocm-jax)."
         type: string
-        required: true
+        default: "ROCm/jax"
       build_mode:
         description: "Build mode."
         type: choice
