@@ -1452,15 +1452,102 @@ class RunFullVerificationTest(unittest.TestCase):
         "test_rdhc",
         return_value=True,
     )
-    def test_returns_test_rdhc_result(self, mock_rdhc):
-        # Test that run_full_verification returns whatever test_rdhc returns.
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "test_package_dependencies",
+        return_value=True,
+    )
+    def test_runs_pkg_dep_check_then_rdhc(self, mock_pkg_dep, mock_rdhc):
+        # Full verification runs package.json dependency check before rdhc.
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             install_prefix="/opt/rocm/core",
         )
         self.assertTrue(t.run_full_verification())
+        mock_pkg_dep.assert_called_once()
         mock_rdhc.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "test_rdhc",
+        return_value=True,
+    )
+    def test_skips_pkg_dep_check_when_requested(self, mock_rdhc):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix="/opt/rocm/core",
+            skip_pkg_dep_check=True,
+        )
+        with patch.object(
+            native_linux_package_install_test.NativeLinuxPackageInstallTest,
+            "test_package_dependencies",
+        ) as mock_pkg_dep:
+            self.assertTrue(t.run_full_verification())
+            mock_pkg_dep.assert_not_called()
+        mock_rdhc.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "test_rdhc",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "test_package_dependencies",
+        return_value=False,
+    )
+    def test_fails_without_running_rdhc_when_pkg_dep_fails(self, _mock_pkg_dep, mock_rdhc):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix="/opt/rocm/core",
+        )
+        self.assertFalse(t.run_full_verification())
+        mock_rdhc.assert_not_called()
+
+
+class TestPackageDependenciesTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.test_package_dependencies()."""
+
+    @patch("pkg_dependency_checker.main", return_value=0)
+    @patch(
+        "native_linux_package_install_test.NativeLinuxPackageInstallTest."
+        "_resolve_pkg_dep_version_config",
+        return_value=("7.14.0~20260620", ""),
+    )
+    def test_invokes_pkg_dependency_checker(self, _mock_version, mock_checker_main):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://rocm.nightlies.amd.com/packages-multi-arch/deb/run/",
+            os_profile="ubuntu2404",
+            install_prefix="/opt/rocm/core",
+            gfx_arch=["gfx1100"],
+            rocm_version="7.14.0",
+        )
+        self.assertTrue(t.test_package_dependencies())
+        mock_checker_main.assert_called_once()
+        argv = mock_checker_main.call_args[0][0]
+        self.assertIn("--mode", argv)
+        self.assertIn("installed", argv)
+        self.assertIn("--enable-kpack", argv)
+        self.assertIn("amdrocm-core-sdk", argv)
+        self.assertIn("--report", argv)
+
+    @patch("pkg_dependency_checker.main")
+    @patch(
+        "native_linux_package_install_test.NativeLinuxPackageInstallTest."
+        "_resolve_pkg_dep_version_config",
+        return_value=None,
+    )
+    def test_skips_when_version_unknown(self, _mock_version, mock_checker_main):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix="/opt/rocm/core",
+        )
+        self.assertTrue(t.test_package_dependencies())
+        mock_checker_main.assert_not_called()
 
 
 class TestRdhcTest(unittest.TestCase):

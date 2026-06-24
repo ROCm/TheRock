@@ -19,7 +19,8 @@ Test modes (--test-type):
      With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
-  3. Full verification: rdhc.py / RDHC test. (Run only for full.)
+  3. Full verification: package.json dependency check (``pkg_dependency_checker``)
+     plus rdhc.py / RDHC test. (Run only for full.)
 - comprehensive: CI alias for full.
 - install: Repo-based install only (step 1). No rocminfo or component checks.
   Used by release workflows that dispatch install tests off the critical path.
@@ -176,6 +177,11 @@ RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
 # Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
+# Optional artifact tree for ``pkg_dependency_checker`` (kpack gfx-arch detection).
+ENV_PKG_DEP_ARTIFACTS_DIR = "PKG_DEP_ARTIFACTS_DIR"
+ENV_PKG_DEP_REPORT_FILE = "PKG_DEP_REPORT_FILE"
+# Default package.json names verified in ``--test-type full``.
+DEFAULT_PKG_DEP_CHECK_NAMES = ("amdrocm-core-sdk",)
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -362,6 +368,11 @@ class NativeLinuxPackageInstallTest:
         gfx_arch: str | list[str] | None = None,
         rocm_version: str | None = None,
         gpg_key_url: str | None = None,
+        pkg_dep_names: list[str] | None = None,
+        pkg_dep_artifacts_dir: str | Path | None = None,
+        pkg_dep_report_file: str | Path | None = None,
+        skip_pkg_dep_check: bool = False,
+        pkg_dep_report: bool = True,
     ):
         """Initialize the native Linux package install test runner.
 
@@ -379,12 +390,18 @@ class NativeLinuxPackageInstallTest:
         If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
         does not add arch suffixes).
         gpg_key_url: GPG key URL
+        pkg_dep_names: ``package.json`` base names for full-test dependency verification.
+        pkg_dep_artifacts_dir: Artifact tree for kpack gfx-arch rules (optional).
+        pkg_dep_report_file: Write pkg_dependency_checker report to this path.
+        skip_pkg_dep_check: Skip ``pkg_dependency_checker`` even in ``--test-type full``.
+        pkg_dep_report: Pass ``--report`` to pkg_dependency_checker (dependency inventory).
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
         self.repo_url = repo_url.rstrip("/")
         self.release_type = release_type.lower()
         self.install_prefix = install_prefix
+        self.rocm_version_raw = (rocm_version or "").strip() or None
         self.gfx_arch_list = normalize_target_list(
             gfx_arch, lowercase=True, dedupe=True
         )
@@ -396,6 +413,21 @@ class NativeLinuxPackageInstallTest:
             self.gfx_arch_list[0] if self.gfx_arch_list else None
         )
         self.gpg_key_url = gpg_key_url
+        self.pkg_dep_names = list(pkg_dep_names or DEFAULT_PKG_DEP_CHECK_NAMES)
+        self.pkg_dep_artifacts_dir = (
+            Path(pkg_dep_artifacts_dir).expanduser()
+            if pkg_dep_artifacts_dir
+            else None
+        )
+        self.skip_pkg_dep_check = skip_pkg_dep_check
+        self.pkg_dep_report = pkg_dep_report
+        env_report_file = (os.environ.get(ENV_PKG_DEP_REPORT_FILE) or "").strip()
+        if pkg_dep_report_file:
+            self.pkg_dep_report_file = Path(pkg_dep_report_file).expanduser()
+        elif env_report_file:
+            self.pkg_dep_report_file = Path(env_report_file).expanduser()
+        else:
+            self.pkg_dep_report_file = None
 
         # Metapackage install targets (four combinations of optional inputs):
         #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
@@ -970,10 +1002,147 @@ gpgcheck=0
         print("\n[FAIL] Basic verification FAILED (insufficient components)")
         return False
 
-    def run_full_verification(self) -> bool:
-        """Step 3: Full test — runs test_rdhc (rdhc.py) only. Used when --test-type is full."""
+    def _find_installed_install_target(self) -> str | None:
+        """Return the first install target package name that is on the system."""
+        import pkg_dependency_checker as checker
+
+        for name in self.package_names:
+            if checker.is_installed(name, self.package_type):
+                return name
+        return None
+
+    def _resolve_pkg_dep_version_config(self) -> tuple[str, str] | None:
+        """Resolve ``(rocm_version, version_suffix)`` for ``pkg_dependency_checker``.
+
+        Prefers the version string from an installed metapackage; falls back to
+        ``--rocm-version`` when set.
+        """
+        import pkg_dependency_checker as checker
+
+        installed = self._find_installed_install_target()
+        if installed:
+            if self.package_type == "deb":
+                result = subprocess.run(
+                    ["dpkg-query", "-W", "-f=${Version}", installed],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    version = result.stdout.strip()
+                    if version:
+                        return version, ""
+            else:
+                result = subprocess.run(
+                    ["rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", installed],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    version = result.stdout.strip()
+                    if version:
+                        return version, ""
+
+        if self.rocm_version_raw:
+            return self.rocm_version_raw, ""
+
+        return None
+
+    def _infer_enable_kpack_for_pkg_dep_check(self) -> bool:
+        """Heuristic: multi-arch repos and gfx installs use kpack dependency rules."""
+        if "multi-arch" in self.repo_url.lower():
+            return True
+        return bool(self.gfx_arch_list and self.rocm_version_major_minor)
+
+    def _pkg_dep_artifacts_dir_path(self) -> Path:
+        """Artifact directory for dependency rules (env, CLI, or empty temp dir)."""
+        if self.pkg_dep_artifacts_dir is not None:
+            path = self.pkg_dep_artifacts_dir.resolve()
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        env_dir = (os.environ.get(ENV_PKG_DEP_ARTIFACTS_DIR) or "").strip()
+        if env_dir:
+            path = Path(env_dir).expanduser().resolve()
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        import tempfile
+
+        return Path(tempfile.mkdtemp(prefix="rocm-pkg-dep-artifacts-"))
+
+    def test_package_dependencies(self) -> bool:
+        """Verify installed packages match ``package.json`` dependency expectations.
+
+        Uses ``pkg_dependency_checker`` in installed mode. Guards against regressions
+        where metapackages (e.g. ``amdrocm-core-sdk``) lose per-GPU dependencies (#6093).
+        """
+        import pkg_dependency_checker as checker
+
         print("\n" + "=" * 80)
-        print("STEP 3: FULL VERIFICATION (RDHC)")
+        print("STEP 3a: PACKAGE.JSON DEPENDENCY VERIFICATION")
+        print("=" * 80)
+
+        version_info = self._resolve_pkg_dep_version_config()
+        if version_info is None:
+            print(
+                "\n[WARN] Skipping package dependency check: "
+                "could not determine ROCm version from installed packages or --rocm-version"
+            )
+            return True
+
+        rocm_version, version_suffix = version_info
+        artifacts_dir = self._pkg_dep_artifacts_dir_path()
+        enable_kpack = self._infer_enable_kpack_for_pkg_dep_check()
+
+        argv = [
+            "--mode",
+            "installed",
+            "--pkg-type",
+            self.package_type,
+            "--rocm-version",
+            rocm_version,
+            "--artifacts-dir",
+            str(artifacts_dir),
+            "--install-prefix",
+            self.install_prefix or "/opt/rocm/core",
+            "--pkg-names",
+            *self.pkg_dep_names,
+            "--verify-installed",
+            "--quiet",
+        ]
+        if self.pkg_dep_report:
+            argv.append("--report")
+        if self.pkg_dep_report_file is not None:
+            argv.extend(["--report-file", str(self.pkg_dep_report_file)])
+        if version_suffix:
+            argv.extend(["--version-suffix", version_suffix])
+        if enable_kpack and self.gfx_arch_list:
+            argv.append("--enable-kpack")
+            argv.extend(["--target", *self.gfx_arch_list])
+
+        print(f"\nPackage(s): {self.pkg_dep_names}")
+        print(f"ROCm version (checker): {rocm_version}")
+        print(f"Kpack mode: {enable_kpack}")
+        if enable_kpack and self.gfx_arch_list:
+            print(f"GPU target(s): {self.gfx_arch_list}")
+        print(f"Artifacts dir: {artifacts_dir}")
+        print(f"Command: {sys.executable} pkg_dependency_checker.py {' '.join(argv)}")
+
+        checker._suppress_packaging_noise(True)
+        rc = checker.main(argv)
+        if rc == 0:
+            print("\n[PASS] Package dependency verification")
+            return True
+        print("\n[FAIL] Package dependency verification")
+        return False
+
+    def run_full_verification(self) -> bool:
+        """Step 3: Full test — package.json deps, then rdhc (``--test-type full``)."""
+        if not self.skip_pkg_dep_check:
+            if not self.test_package_dependencies():
+                return False
+        print("\n" + "=" * 80)
+        print("STEP 3b: FULL VERIFICATION (RDHC)")
         print("=" * 80)
         return self.test_rdhc()
 
@@ -1173,7 +1342,41 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         "--test-type",
         type=str,
         default="sanity",
-        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
+        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + package.json dependency check + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
+    )
+    parser.add_argument(
+        "--pkg-dep-names",
+        nargs="+",
+        default=None,
+        metavar="PKG",
+        help="package.json base names for full-test dependency verification "
+        f"(default: {' '.join(DEFAULT_PKG_DEP_CHECK_NAMES)}).",
+    )
+    parser.add_argument(
+        "--pkg-dep-artifacts-dir",
+        type=str,
+        default=None,
+        metavar="DIR",
+        help="Artifact tree for pkg_dependency_checker kpack rules "
+        f"(default: ${ENV_PKG_DEP_ARTIFACTS_DIR} or a temp directory).",
+    )
+    parser.add_argument(
+        "--skip-pkg-dep-check",
+        action="store_true",
+        help="Skip pkg_dependency_checker even when --test-type is full.",
+    )
+    parser.add_argument(
+        "--no-pkg-dep-report",
+        action="store_true",
+        help="Do not pass --report to pkg_dependency_checker in full test.",
+    )
+    parser.add_argument(
+        "--pkg-dep-report-file",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Write pkg_dependency_checker report to PATH "
+        f"(default: ${ENV_PKG_DEP_REPORT_FILE} if set).",
     )
     parser.add_argument(
         "--packages-dir",
@@ -1324,6 +1527,11 @@ def run_tests(args: Namespace) -> int:
         gfx_arch=args.gfx_arch,
         rocm_version=args.rocm_version,
         gpg_key_url=args.gpg_key_url,
+        pkg_dep_names=args.pkg_dep_names,
+        pkg_dep_artifacts_dir=args.pkg_dep_artifacts_dir,
+        pkg_dep_report_file=args.pkg_dep_report_file,
+        skip_pkg_dep_check=args.skip_pkg_dep_check,
+        pkg_dep_report=not args.no_pkg_dep_report,
     )
 
     print("\n" + "=" * 80)
@@ -1349,7 +1557,7 @@ def run_tests(args: Namespace) -> int:
             return 1
         if args.test_type == "full":
             if not test_runner.run_full_verification():
-                print("\n[FAIL] Step 3 (full verification) failed.")
+                print("\n[FAIL] Step 3 (full verification: package deps and/or rdhc) failed.")
                 return 1
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
