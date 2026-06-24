@@ -229,20 +229,11 @@ jobs:
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
             .
 
-      - name: Compute wheel version suffix
+      - name: Determine wheel version suffix
         if: ${{ inputs.build_mode == 'manylinux' }}
         run: |
-          ROCM_VERSION_BASE="${ROCM_VERSION%%+*}"
-          ROCM_VERSION_BUILD="${ROCM_VERSION#*+}"
-
-          if [ "${RELEASE_TYPE}" = "nightly" ]; then
-            echo "ML_WHEEL_VERSION_SUFFIX=+rocm${ROCM_VERSION_BASE}a$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
-          else
-            echo "ML_WHEEL_VERSION_SUFFIX=+rocm${ROCM_VERSION_BASE}.${ROCM_VERSION_BUILD}" >> "$GITHUB_ENV"
-          fi
-        env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
-          RELEASE_TYPE: ${{ inputs.release_type }}
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version "${{ inputs.rocm_version }}"
 
       - name: Build JAX Wheels in manylinux container
         if: ${{ inputs.build_mode == 'manylinux' }}
@@ -255,7 +246,7 @@ jobs:
             --user root \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
-            --env ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
+            --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace/jax-source \
