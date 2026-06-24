@@ -216,7 +216,18 @@ def _run_kpack_split(
         )
     )
 
-    # Build core + libraries wheels. The rocm, rocm-sdk-devel, and
+    # Opt-in HPC SDK wheel (arch-neutral host libraries). Only produced when
+    # hpc artifacts are present in the artifact catalog (e.g. hipTensor).
+    hpc_artifacts = params.filter_artifacts(
+        filter=functools.partial(hpc_artifact_filter, "generic"),
+    )
+    if hpc_artifacts.artifact_names:
+        hpc = PopulatedDistPackage(params, logical_name="hpc", target_family=None)
+        hpc.rpath_dep(core, "lib")
+        hpc.rpath_dep(core, "lib/rocm_sysdeps/lib")
+        hpc.populate_runtime_files(hpc_artifacts)
+
+    # Build core + libraries + hpc wheels. The rocm, rocm-sdk-devel, and
     # rocm-sdk-device staging dirs do not exist yet, so the default scan
     # in build_packages will not accidentally include them.
     if args.build_packages:
@@ -263,6 +274,7 @@ def _run_kpack_split(
             "nlohmann-json",
             "rocshmem",
             "rocjitsu",
+            "hiptensor",
         ],
         exclude_components=["test"],
         tarball_compression=args.devel_tarball_compression,
@@ -293,6 +305,19 @@ def _run_legacy(
                 filter=functools.partial(libraries_artifact_filter, target_family),
             )
         )
+
+        # Opt-in HPC SDK wheel per target family. Only produced when hpc
+        # artifacts are present in the artifact catalog (e.g. hipTensor).
+        hpc_artifacts = params.filter_artifacts(
+            filter=functools.partial(hpc_artifact_filter, target_family),
+        )
+        if hpc_artifacts.artifact_names:
+            hpc = PopulatedDistPackage(
+                params, logical_name="hpc", target_family=target_family
+            )
+            hpc.rpath_dep(core, "lib")
+            hpc.rpath_dep(core, "lib/rocm_sysdeps/lib")
+            hpc.populate_runtime_files(hpc_artifacts)
 
     # Compute these before the first build call so they can be shared with the
     # meta and devel loops below.
@@ -352,6 +377,8 @@ def _run_legacy(
                 "nlohmann-json",
                 # rocjitsu emulation suite.
                 "rocjitsu",
+                # HPC SDK: headers + cmake config for find_package(hiptensor).
+                "hiptensor",
             ],
             tarball_compression=args.devel_tarball_compression,
         )
@@ -433,6 +460,14 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
+
+
+def hpc_artifact_filter(target_family: str, an: ArtifactName) -> bool:
+    return (
+        an.name in ["hiptensor"]
+        and an.component in ["lib"]
+        and (an.target_family == target_family or an.target_family == "generic")
+    )
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
