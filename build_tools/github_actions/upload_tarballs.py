@@ -60,16 +60,30 @@ def _select_shared_tarball_url(
     output_root: WorkflowOutputRoot,
     platform: str,
 ) -> str | None:
+    """Select the shared tarball URL for the tarball_urls output.
+
+    Priority:
+    1. Multiarch tarball (if exists)
+    2. Single shared tarball (if only one non-test tarball exists)
+    3. Family name without hyphen (legacy single-family builds)
+
+    Returns None if multiple families exist without a multiarch tarball,
+    which is an error condition.
+    """
     shared_tarball_files = [f for f in tarball_files if not _is_test_tarball(f.name)]
 
+    # Priority 1: Look for multiarch tarball
     for f in shared_tarball_files:
         name = f.name
         if name.startswith(f"therock-dist-{platform}-multiarch-"):
             return _tarball_url(output_root, name)
 
+    # Priority 2: If only one shared tarball, use it (handles single-family
+    # builds like ASAN with gfx94X-dcgpu)
     if len(shared_tarball_files) == 1:
         return _tarball_url(output_root, shared_tarball_files[0].name)
 
+    # Priority 3: Legacy - family name without hyphen (e.g., gfx900)
     prefix = f"therock-dist-{platform}-"
     suffix = ".tar.gz"
 
@@ -81,6 +95,7 @@ def _select_shared_tarball_url(
             if "-" not in stem:
                 return _tarball_url(output_root, name)
 
+    # Multiple families without multiarch - caller should handle this error
     return None
 
 
