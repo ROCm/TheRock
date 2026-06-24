@@ -145,6 +145,8 @@ def setup_env(env):
         if is_asan():
             env["LD_PRELOAD"] = get_asan_lib_path()
             env["HSA_XNACK"] = "1"
+            # Increase stack size of clr threads
+            env["CQ_THREAD_STACK_SIZE"] = "8388608"
             # TODO: enable this when we have symbolizer patch in
             # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
     else:
