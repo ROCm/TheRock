@@ -45,14 +45,6 @@ on:
         description: "Release type."
         type: string
         required: true
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
-        type: string
-        default: ""
-      ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
-        type: string
-        default: ""
       jax_repository:
         description: "Repository containing the JAX release branch."
         type: string
@@ -65,6 +57,14 @@ on:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
         required: false
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
         default: ""
     outputs:
       package_index_url:
@@ -108,14 +108,6 @@ on:
         description: "Release type."
         type: string
         required: true
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
-        type: string
-        default: ""
-      ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
-        type: string
-        default: ""
       jax_repository:
         description: "GitHub repository in owner/repo format (e.g. ROCm/jax or ROCm/rocm-jax)."
         type: string
@@ -132,7 +124,14 @@ on:
         type: string
         required: false
         default: ""
-
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
 run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
 
 permissions:
