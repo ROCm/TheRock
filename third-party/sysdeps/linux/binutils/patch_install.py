@@ -56,11 +56,14 @@ def main():
         so_link = os.path.join(lib_dir, "libiberty.so")
         subprocess.run(
             [
-                "cc", "-shared",
+                "cc",
+                "-shared",
                 "-Wl,-soname,libiberty.so.0",
-                "-Wl,--whole-archive", libiberty_a,
+                "-Wl,--whole-archive",
+                libiberty_a,
                 "-Wl,--no-whole-archive",
-                "-o", so_versioned,
+                "-o",
+                so_versioned,
             ],
             check=True,
         )
