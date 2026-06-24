@@ -46,7 +46,6 @@ Choose one of these options to specify where to install from:
 | `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
 | `--rocalution`  | Flag | Include rocALUTION artifacts                       |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
-| `--rocalution`  | Flag | Include rocALUTION artifacts                       |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
 > [!NOTE]
