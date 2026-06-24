@@ -18,6 +18,10 @@ on:
         description: ROCm version
         required: true
         type: string
+      rocm_package_find_links_url:
+        description: "ROCm package index / find-links URL for installing ROCm packages."
+        required: true
+        type: string
       release_type:
         description: "Release type"
         type: string
@@ -72,6 +76,10 @@ on:
         description: ROCm version
         type: string
         default: "7.14.0.dev0"
+      rocm_package_find_links_url:
+        description: "ROCm package index / find-links URL for installing ROCm packages."
+        required: true
+        type: string
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -143,6 +151,7 @@ jobs:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
       - name: Checkout

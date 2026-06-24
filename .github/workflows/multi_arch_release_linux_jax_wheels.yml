@@ -26,7 +26,7 @@ on:
       rocm_package_find_links_url:
         description: "ROCm package index / find-links URL for the JAX manylinux build."
         type: string
-        required: true
+        default: "https://rocm.devreleases.amd.com/whl-multi-arch/"
       tar_url:
         description: "URL to the TheRock tarball used for the build."
         type: string
@@ -58,7 +58,7 @@ on:
       rocm_package_find_links_url:
         description: "ROCm package index / find-links URL for the JAX manylinux build."
         type: string
-        required: true
+        default: "https://rocm.devreleases.amd.com/whl-multi-arch/"
       tar_url:
         description: "URL to the TheRock tarball used for the build."
         type: string
