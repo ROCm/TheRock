@@ -25,6 +25,19 @@ on:
         description: "Python version to build wheels for."
         type: string
         required: true
+      jax_repository:
+        description: "Repository containing the JAX release branch."
+        type: string
+        required: true
+      build_mode:
+        description: "Build mode: native or manylinux."
+        type: string
+        required: true
+      gfx_arch:
+        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        type: string
+        required: false
+        default: ""
       jax_ref:
         description: "JAX / rocm-jax release ref."
         type: string
@@ -45,19 +58,6 @@ on:
         description: "Release type."
         type: string
         required: true
-      jax_repository:
-        description: "Repository containing the JAX release branch."
-        type: string
-        required: true
-      build_mode:
-        description: "Build mode: native or manylinux."
-        type: string
-        required: true
-      gfx_arch:
-        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
-        type: string
-        required: false
-        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -88,6 +88,22 @@ on:
         description: "Python version to build wheels for."
         type: string
         required: true
+      jax_repository:
+        description: "GitHub repository in owner/repo format (e.g. ROCm/jax or ROCm/rocm-jax)."
+        type: string
+        default: "ROCm/jax"
+      build_mode:
+        description: "Build mode."
+        type: choice
+        options:
+          - native
+          - manylinux
+        required: true
+      gfx_arch:
+        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        type: string
+        required: false
+        default: ""
       jax_ref:
         description: "JAX / rocm-jax release ref."
         type: string
@@ -108,22 +124,6 @@ on:
         description: "Release type."
         type: string
         required: true
-      jax_repository:
-        description: "GitHub repository in owner/repo format (e.g. ROCm/jax or ROCm/rocm-jax)."
-        type: string
-        default: "ROCm/jax"
-      build_mode:
-        description: "Build mode."
-        type: choice
-        options:
-          - native
-          - manylinux
-        required: true
-      gfx_arch:
-        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
-        type: string
-        required: false
-        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
