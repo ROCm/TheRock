@@ -184,7 +184,6 @@ jobs:
           python-version: ${{ inputs.python_version }}
 
       - name: Install python deps for CI
-        if: ${{ inputs.build_mode == 'manylinux' }}
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
 
