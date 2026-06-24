@@ -3328,6 +3328,31 @@
     "Gfxarch": "True"
   },
   {
+    "Package": "amdrocm-hpc-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-hpc",
+      "amdrocm-hiptensor-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-hpc",
+      "amdrocm-hiptensor-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm HPC SDK development metapackage",
+    "Description_Long": "Opt-in metapackage that installs the AMD HPC SDK development files on top of a matching ROCm Core SDK install.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-core-devel",
     "Version": "",
     "Architecture": "amd64",
