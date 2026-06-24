@@ -50,7 +50,10 @@ Archives are intended for power users, CI pipelines, and offline deployments whe
 Archives are offered along two axes:
 
 - **Target scope** — either a single GPU target denoted by `gfx<target>` (e.g., `gfx1100`, `gfx1201`), or all GPU targets with no denotation (the default).
-- **Content variant** — either a *full* package containing all build artifacts, or a *lite* package with intermediary build files and test files (including unit tests) removed, denoted by `lite` in the package name.
+- **Content variant** — either a default package containing all build artifacts without the test files, or a *-test* package with basic unit tests, denoted by `-test` in the package name.
+
+- <name> headers, cmake and static libraries, debug, build tools
+- <name-test> test binaries and test dependencies
 
 ### Naming Convention
 
