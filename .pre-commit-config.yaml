@@ -52,6 +52,11 @@ repos:
 
 - repo: local
   hooks:
+  - id: forbidden-paths
+    name: Forbid secrets, certificates, keys, and executables
+    entry: "File matched a forbidden file path pattern. Do not commit secrets, key material, certificates, or Windows executables."
+    language: fail
+    files: '(^|/)([^/]*\.(pem|key|exe|crt|cer|p12|pfx|der|csr|gpg|asc)|\.env|id_(rsa|dsa|ecdsa|ed25519))$'
   - id: test-file-naming
     name: Enforce *_test.py naming for build_tools tests
     entry: "Test files must use the *_test.py naming convention, not test_*.py"
