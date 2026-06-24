@@ -504,6 +504,7 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocwmma_dev")
         if args.rocalution:
             extra_artifacts.append("rocalution")
+            argv.append("rocalution_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
