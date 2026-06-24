@@ -74,6 +74,7 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
     "rocsparse": "rocsparse",
+    "rocalution": "rocalution",
     "hipsparse": "hipsparse",
     "hipsparselt": "hipsparselt",
     "rocroller": "rocroller",
@@ -99,12 +100,21 @@ TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 
-# CTest parallel jobs (use fewer in less capable platforms)
-ctest_parallel_count = 8
-if AMDGPU_FAMILIES and "gfx1152" in AMDGPU_FAMILIES:
-    ctest_parallel_count = 4
-elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
-    ctest_parallel_count = 4
+# Components whose category label matches MULTIPLE ctest entries (e.g. rocsparse
+# registers both *_full_suite and *_ffm-full_suite under the same label). For
+# these we must NOT combine the ctest `--tests-information` stride with the
+# gtest GTEST_TOTAL_SHARDS sharding: the two axes compound and silently drop
+# ~(1 - 1/N) of the suite (only one (entry x gtest-sub-shard) pair runs per
+# shard). Instead, shard purely at the gtest case level -- every shard runs all
+# ctest entries and gtest splits the cases -- which yields complete, disjoint
+# coverage for any number of (gtest-binary) entries. Single-entry components are
+# unaffected either way, so this is safe to keep narrowly scoped.
+GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse"}
+use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
+
+# CTest runs serially by default; per-GPU overrides can be added below.
+# Example: if AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES: ctest_parallel_count = 4
+ctest_parallel_count = 1
 
 # CTest per-test timeout (default 2 hours, in seconds)
 # There should be a timeout set from component level, but this can be used as an override
@@ -449,10 +459,15 @@ def build_ctest_command(
             "--test-dir",
             TEST_DIR,
             "-V",
-            "--tests-information",
-            f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         ]
     )
+
+    # Shard via the ctest entry stride only when we are NOT relying on gtest
+    # case-level sharding. Applying both compounds and drops tests on multi-entry
+    # suites (see GTEST_ONLY_SHARDING_COMPONENTS). For gtest-only sharding, ctest
+    # runs every entry and GTEST_TOTAL_SHARDS splits the cases within each.
+    if not use_gtest_only_sharding:
+        cmd.extend(["--tests-information", f"{SHARD_INDEX},,{TOTAL_SHARDS}"])
 
     # Constrain GPU tests to the available GPU slots when the component
     # provides a resource spec. Without this, RESOURCE_GROUPS properties are

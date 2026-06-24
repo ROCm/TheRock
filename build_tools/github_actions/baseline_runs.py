@@ -21,9 +21,13 @@ Example:
 
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import logging
 from pathlib import Path
 import sys
 from urllib.parse import urlencode, quote
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for artifact and _therock_utils imports.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -75,6 +79,67 @@ class WorkflowJobHealth:
 
 
 @dataclass(frozen=True)
+class CommitCompatibility:
+    """Result of checking a candidate run's commit against the current commit.
+
+    A baseline run is only safe to reuse when it was built from source that the
+    current commit is based on. Reusing artifacts from a divergent or newer-than-current
+    commit risks mixing incompatible binaries, so those are rejected.
+    """
+
+    current_commit_sha: str
+    candidate_head_sha: str
+    relationship: str
+
+    @property
+    def is_valid(self) -> bool:
+        return self.relationship in ("same", "ancestor")
+
+
+@dataclass(frozen=True)
+class RunRecency:
+    """Result of checking how old a candidate run is."""
+
+    created_at: str
+    age_hours: float | None
+    max_age_hours: float | None
+
+    @property
+    def is_valid(self) -> bool:
+        if self.age_hours is None:
+            return False
+        if self.age_hours < 0:
+            return False
+        if self.max_age_hours is None:
+            return True
+        return self.age_hours <= self.max_age_hours
+
+
+@dataclass(frozen=True)
+class RunTiming:
+    """Timing measurements for a workflow run."""
+
+    run_id: str
+    created_at: str
+    run_started_at: str
+    updated_at: str
+    queue_seconds: float | None
+    run_seconds: float | None
+    total_seconds: float | None
+
+    def to_dict(self) -> dict:
+        return {
+            "run_id": self.run_id,
+            "created_at": self.created_at,
+            "run_started_at": self.run_started_at,
+            "updated_at": self.updated_at,
+            "queue_seconds": self.queue_seconds,
+            "run_seconds": self.run_seconds,
+            "total_seconds": self.total_seconds,
+        }
+
+
+@dataclass(frozen=True)
 class WorkflowRunSummary:
     """Compact source/ref summary for a workflow run."""
 
@@ -110,6 +175,8 @@ class BaselineRun:
     platform: str
     job_health: WorkflowJobHealth
     artifact_availability: ArtifactAvailability
+    commit_compatibility: CommitCompatibility | None = None
+    run_recency: RunRecency | None = None
 
     @property
     def run_id(self) -> str:
@@ -459,6 +526,154 @@ def validate_required_jobs_successful(
     )
 
 
+def _normalize_sha(value: str) -> str:
+    return value.strip().lower()
+
+
+def _parse_iso_timestamp(value: str) -> datetime | None:
+    """Parse a GitHub ISO-8601 timestamp into an aware UTC datetime."""
+
+    normalized = (value or "").strip()
+    if not normalized:
+        return None
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _seconds_between(start: datetime | None, end: datetime | None) -> float | None:
+    """Return (end - start) in seconds, or None if either bound is missing."""
+    if start is None or end is None:
+        return None
+    seconds = (end - start).total_seconds()
+    if seconds < 0:
+        logger.debug(
+            "Ignoring negative duration: start=%s end=%s (%.1fs)",
+            start.isoformat(),
+            end.isoformat(),
+            seconds,
+        )
+        return None
+    return seconds
+
+
+def parse_run_timing(workflow_run: dict) -> RunTiming:
+    """Parse queue/run timing from a workflow-run dict."""
+
+    created_at = workflow_run.get("created_at", "") or ""
+    run_started_at = workflow_run.get("run_started_at", "") or ""
+    updated_at = workflow_run.get("updated_at", "") or ""
+
+    created = _parse_iso_timestamp(created_at)
+    started = _parse_iso_timestamp(run_started_at)
+    updated = _parse_iso_timestamp(updated_at)
+
+    return RunTiming(
+        run_id=str(workflow_run.get("id", "")),
+        created_at=created_at,
+        run_started_at=run_started_at,
+        updated_at=updated_at,
+        queue_seconds=_seconds_between(created, started),
+        run_seconds=_seconds_between(started, updated),
+        total_seconds=_seconds_between(created, updated),
+    )
+
+
+def validate_commit_compatibility(
+    *,
+    candidate_head_sha: str,
+    current_commit_sha: str,
+    ordered_commit_shas: Sequence[str],
+) -> CommitCompatibility:
+    """Validate that a candidate run was built from a compatible commit.
+
+    ``ordered_commit_shas`` is the branch history newest-first (as returned by
+    ``gha_query_recent_branch_commits``). The current commit is expected to be
+    at or near the front of that list. A candidate is:
+
+    * ``same`` when its head_sha equals the current commit;
+    * ``ancestor`` when its head_sha appears *after* the current commit in the
+      newest-first history (i.e. the current commit is built on top of it);
+    * ``descendant_or_divergent`` when it appears *before* the current commit
+      (newer than current, so unsafe to reuse);
+    * ``unknown`` when it does not appear in the provided history window.
+
+    Only ``same`` and ``ancestor`` are considered valid. ``unknown`` is treated
+    as unsafe rather than assumed-good: a candidate outside the history window
+    cannot be confirmed as an ancestor, so widen the window if legitimate
+    ancestors are being rejected.
+    """
+    current = _normalize_sha(current_commit_sha)
+    candidate = _normalize_sha(candidate_head_sha)
+    if not current:
+        raise ValueError("current_commit_sha must be non-empty")
+    if not candidate:
+        raise ValueError("candidate_head_sha must be non-empty")
+
+    if candidate == current:
+        relationship = "same"
+    else:
+        history = [_normalize_sha(sha) for sha in ordered_commit_shas]
+        try:
+            current_index = history.index(current)
+        except ValueError:
+            current_index = None
+        try:
+            candidate_index = history.index(candidate)
+        except ValueError:
+            candidate_index = None
+
+        if candidate_index is None:
+            relationship = "unknown"
+        elif current_index is None:
+            # Current commit is outside the window but the candidate is in it;
+            # we cannot establish ordering, so treat as unknown.
+            relationship = "unknown"
+        elif candidate_index > current_index:
+            # Newest-first: a larger index is older than the current commit.
+            relationship = "ancestor"
+        else:
+            relationship = "descendant_or_divergent"
+
+    return CommitCompatibility(
+        current_commit_sha=current,
+        candidate_head_sha=candidate,
+        relationship=relationship,
+    )
+
+
+def validate_run_recency(
+    *,
+    workflow_run: dict,
+    max_age_hours: float | None,
+    now: datetime | None = None,
+) -> RunRecency:
+    """Validate that a candidate run is recent enough to reuse."""
+
+    if max_age_hours is not None and max_age_hours < 0:
+        raise ValueError("max_age_hours must be non-negative")
+
+    created_at_raw = workflow_run.get("created_at", "") or ""
+    reference = now or datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+
+    age_hours: float | None = None
+    parsed = _parse_iso_timestamp(created_at_raw)
+    if parsed is not None:
+        age_hours = (reference - parsed).total_seconds() / 3600.0
+
+    return RunRecency(
+        created_at=created_at_raw,
+        age_hours=age_hours,
+        max_age_hours=max_age_hours,
+    )
+
+
 def select_baseline_run(
     *,
     required_artifacts: Iterable[RequiredArtifact],
@@ -469,6 +684,10 @@ def select_baseline_run(
     max_runs: int = 20,
     exclude_run_ids: Iterable[str] = (),
     required_successful_job_name_substrings: Iterable[str] = ("Build",),
+    current_commit_sha: str | None = None,
+    ordered_commit_shas: Sequence[str] | None = None,
+    max_age_hours: float | None = None,
+    now: datetime | None = None,
     workflow_runs: Sequence[dict] | None = None,
     backend_factory: ArtifactBackendFactory = create_artifact_backend_for_workflow_run,
     workflow_jobs_fetcher: WorkflowJobsFetcher = query_jobs_for_workflow_run,
@@ -489,6 +708,17 @@ def select_baseline_run(
             match at least one completed successful job in the candidate run.
             Defaults to ``("Build",)`` so unrelated test failures do not
             automatically disqualify otherwise reusable build artifacts.
+        current_commit_sha: When provided, enables the commit-compatibility
+            rule: a candidate run is only accepted when its head_sha equals or
+            is an ancestor of this commit. Requires ``ordered_commit_shas``.
+        ordered_commit_shas: Branch history newest-first (e.g. from
+            ``gha_query_recent_branch_commits``) used to establish ancestry for
+            the commit-compatibility rule. Ignored unless ``current_commit_sha``
+            is set.
+        max_age_hours: When provided, enables the recency rule: candidate runs
+            older than this many hours (by ``created_at``) are rejected.
+        now: Reference time for the recency rule; defaults to the current UTC
+            time. Primarily for testing.
         workflow_runs: Optional pre-fetched candidate runs for testing or for
             callers that already queried GitHub.
         backend_factory: Factory used to create an artifact backend for each
@@ -510,6 +740,18 @@ def select_baseline_run(
     )
     excluded = {str(run_id) for run_id in exclude_run_ids}
 
+    check_commit = current_commit_sha is not None
+    if check_commit:
+        if not current_commit_sha.strip():
+            raise ValueError(
+                "current_commit_sha must be non-empty when commit checking is enabled"
+            )
+        if ordered_commit_shas is None:
+            raise ValueError(
+                "ordered_commit_shas is required when current_commit_sha is set"
+            )
+    check_recency = max_age_hours is not None
+
     candidates = (
         list(workflow_runs)
         if workflow_runs is not None
@@ -528,11 +770,59 @@ def select_baseline_run(
         if not is_completed_workflow_run(workflow_run):
             continue
 
+        # Cheap, local checks (recency, commit ancestry) run before the
+        # job-health and artifact checks, which require extra API/backend calls.
+        run_recency: RunRecency | None = None
+        if check_recency:
+            run_recency = validate_run_recency(
+                workflow_run=workflow_run,
+                max_age_hours=max_age_hours,
+                now=now,
+            )
+            if not run_recency.is_valid:
+                logger.info(
+                    "Skipping run %s: too old or not date-parseable "
+                    "(age_hours=%s, max_age_hours=%s)",
+                    run_id,
+                    run_recency.age_hours,
+                    run_recency.max_age_hours,
+                )
+                continue
+
+        commit_compatibility: CommitCompatibility | None = None
+        if check_commit:
+            candidate_head_sha = (workflow_run.get("head_sha", "") or "").strip()
+            if not candidate_head_sha:
+                # A run without a head_sha cannot be confirmed compatible.
+                logger.info("Skipping run %s: no head_sha to compare", run_id)
+                continue
+            commit_compatibility = validate_commit_compatibility(
+                candidate_head_sha=candidate_head_sha,
+                current_commit_sha=current_commit_sha,
+                ordered_commit_shas=ordered_commit_shas or (),
+            )
+            if not commit_compatibility.is_valid:
+                logger.info(
+                    "Skipping run %s: commit %s is %s relative to current %s",
+                    run_id,
+                    candidate_head_sha,
+                    commit_compatibility.relationship,
+                    commit_compatibility.current_commit_sha,
+                )
+                continue
+
         job_health = validate_required_jobs_successful(
             workflow_jobs=workflow_jobs_fetcher(workflow_run, github_repository),
             required_name_substrings=required_jobs,
         )
         if not job_health.is_valid:
+            logger.info(
+                "Skipping run %s: required build jobs not healthy "
+                "(failed=%s, missing=%s)",
+                run_id,
+                job_health.failed_job_names,
+                job_health.missing_name_substrings,
+            )
             continue
 
         backend = backend_factory(workflow_run, github_repository, platform)
@@ -541,6 +831,11 @@ def select_baseline_run(
             required_artifacts=requirements,
         )
         if not availability.is_valid:
+            logger.info(
+                "Skipping run %s: missing artifacts %s",
+                run_id,
+                availability.missing_artifacts,
+            )
             continue
 
         source_ref = create_workflow_run_summary(
@@ -554,6 +849,8 @@ def select_baseline_run(
             platform=platform,
             job_health=job_health,
             artifact_availability=availability,
+            commit_compatibility=commit_compatibility,
+            run_recency=run_recency,
         )
 
     return None

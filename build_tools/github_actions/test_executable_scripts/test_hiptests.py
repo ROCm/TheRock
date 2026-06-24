@@ -24,9 +24,9 @@ TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
-# Importing is_asan from github_actions_api.py
+# Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_api import is_asan
+from amdgpu_family_matrix import is_asan
 
 env = os.environ.copy()
 
