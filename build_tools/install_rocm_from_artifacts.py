@@ -26,6 +26,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn | --no-hipdnn]
     [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
+    [--hipfile | --no-hipfile]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
@@ -41,6 +42,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
+    [--rocalution | --no-rocalution]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
@@ -120,6 +122,7 @@ from botocore import UNSIGNED
 from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
+from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from pathlib import Path
 import platform
 import re
@@ -313,6 +316,21 @@ def retrieve_artifacts_by_run_id(args):
     ]
     if args.amdgpu_targets:
         argv.extend(["--amdgpu-targets", args.amdgpu_targets])
+    else:
+        # Auto-derive gfx targets from the family so a family-only install also
+        # fetches per-target (kpack-split) shards. In split runs the per-target
+        # shard carries data the family/'generic' shards lack (e.g. MIOpen
+        # tuning DBs under share/miopen/db); without these targets the fetch
+        # matches only the family literal and 'generic', silently dropping them.
+        derived_targets = expand_families(
+            [args.artifact_group], amdgpu_family_map(), strict=False
+        )
+        if derived_targets:
+            log(
+                f"Auto-deriving --amdgpu-targets from family "
+                f"'{args.artifact_group}': {','.join(derived_targets)}"
+            )
+            argv.extend(["--amdgpu-targets", ",".join(derived_targets)])
     if args.dry_run:
         argv.append("--dry-run")
     if args.run_github_repo:
@@ -350,6 +368,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn,
             args.hipdnn_integration_tests,
             args.hipdnn_samples,
+            args.hipfile,
             args.miopen,
             args.miopenprovider,
             args.hipblasltprovider,
@@ -366,6 +385,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.rocalution,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -406,6 +426,9 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("hipdnn-integration-tests_run")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
+        if args.hipfile:
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
@@ -471,6 +494,9 @@ def retrieve_artifacts_by_run_id(args):
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
             extra_artifacts.append("sysdeps-hwloc")
             extra_artifacts.append("sysdeps-libpciaccess")
+        if args.rocalution:
+            extra_artifacts.append("rocalution")
+            argv.append("rocalution_dev")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -719,6 +745,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hipfile",
+        default=False,
+        help="Include 'hipfile' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--miopen",
         default=False,
         help="Include 'miopen' artifacts",
@@ -827,6 +860,13 @@ def main(argv):
         "--rocrtst",
         default=False,
         help="Include 'rocrtst' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocalution",
+        default=False,
+        help="Include 'rocalution' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
