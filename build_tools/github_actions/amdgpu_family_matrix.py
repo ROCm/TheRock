@@ -58,6 +58,12 @@ def load_external_config() -> dict | None:
     return config
 
 
+def is_asan():
+    """Determines if this is an ASAN build using BUILD_VARIANT env var."""
+    BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
+    return BUILD_VARIANT == "asan"
+
+
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     """Select a runner label based on weighted random selection."""
     rand_val = random.random()

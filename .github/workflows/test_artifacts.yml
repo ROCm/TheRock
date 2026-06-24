@@ -51,6 +51,13 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan)."
+        type: choice
+        options:
+          - release
+          - asan
+        default: release
   workflow_call:
     inputs:
       artifact_group:
@@ -94,6 +101,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan)."
+        type: string
+        default: "release"
   push:
     branches:
       - ADHOCBUILD
@@ -176,6 +187,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      build_variant: ${{ inputs.build_variant }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -228,3 +240,4 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      build_variant: ${{ inputs.build_variant }}

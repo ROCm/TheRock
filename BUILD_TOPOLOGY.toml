@@ -612,6 +612,11 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
 
+[artifacts.rocalution]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
+
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
