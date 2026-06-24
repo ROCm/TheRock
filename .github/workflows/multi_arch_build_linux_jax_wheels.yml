@@ -62,7 +62,7 @@ on:
         type: string
         required: true
       gfx_arch:
-        description: "GFX architecture used for the manylinux image build."
+        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
         required: false
         default: ""
@@ -128,7 +128,7 @@ on:
           - manylinux
         required: true
       gfx_arch:
-        description: "GFX architecture used for the manylinux image build."
+        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
         required: false
         default: ""
