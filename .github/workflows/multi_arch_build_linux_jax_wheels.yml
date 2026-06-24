@@ -216,6 +216,7 @@ jobs:
         env:
           THEROCK_VERSION: ""
           GFX_ARCH: ${{ inputs.gfx_arch }}
+          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
         run: |
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
