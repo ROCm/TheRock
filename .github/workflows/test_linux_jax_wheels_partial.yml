@@ -6,7 +6,7 @@ name: Test Multi-Arch Linux JAX Wheels
 on:
   workflow_call:
     inputs:
-      amdgpu_family:
+      test_amdgpu_family:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         required: true
         type: string
@@ -22,6 +22,10 @@ on:
         description: URL to TheRock tarball
         required: true
         type: string
+      release_type:
+        description: "Release type"
+        type: string
+        required: true
       python_version:
         description: Python version to test
         required: true
@@ -60,7 +64,7 @@ on:
         type: string
   workflow_dispatch:
     inputs:
-      amdgpu_family:
+      test_amdgpu_family:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         type: string
         default: "gfx94X-dcgpu"
@@ -76,6 +80,12 @@ on:
         description: URL to TheRock tarball
         type: string
         default: ""
+      release_type:
+        description: 'Release type; developer-triggered jobs should use "dev".'
+        type: choice
+        options:
+          - dev
+        default: dev
       python_version:
         description: Python version to test
         type: string
@@ -109,12 +119,12 @@ on:
         type: string
         default: ""
       test_runs_on:
-        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
         default: "linux-gfx942-1gpu-core42-ossci-rocm"
 permissions:
   contents: read
-  packages: read
+  id-token: write
 
 jobs:
   test_jax_wheels:
@@ -139,7 +149,7 @@ jobs:
 
     env:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
-      THEROCK_TAR_URL: ${{ inputs.tar_url }}
+      TAR_URL: ${{ inputs.tar_url }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
 
@@ -181,3 +191,65 @@ jobs:
       - name: Install base JAX test requirements
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
+
+      - name: Configure ROCm from TheRock tarball
+        run: |
+          DEST="/opt/rocm-${{ inputs.rocm_version }}"
+          TARBALL="${RUNNER_TEMP}/therock.tar.gz"
+
+          rm -rf "${DEST}"
+          mkdir -p "${DEST}"
+
+          wget -O "${TARBALL}" "${TAR_URL}"
+          tar -xzf "${TARBALL}" -C "${DEST}"
+
+          ln -sfn "${DEST}" /opt/rocm
+
+      - name: Determine JAX package versions
+        run: |
+          if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
+            echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
+            echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PLUGIN_VERSION=${{ inputs.jax_plugin_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PJRT_VERSION=${{ inputs.jax_pjrt_version }}" >> "$GITHUB_ENV"
+          else
+            pip install packaging
+
+            python build_tools/github_actions/compute_jax_package_version.py \
+              --rocm-version "${{ inputs.rocm_version }}" \
+              --jax-requirements rocm-jax/build/requirements.txt
+          fi
+
+      - name: Install JAX wheels from package index
+        run: |
+          echo "Installing from:"
+          echo "  ${WHEEL_INDEX_URL}"
+
+          pip install \
+            --index-url "${WHEEL_INDEX_URL}" \
+            "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
+            "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
+
+          if [ -n "${JAXLIB_VERSION}" ]; then
+            pip install \
+              --index-url "${WHEEL_INDEX_URL}" \
+              "jaxlib==${JAXLIB_VERSION}"
+
+            pip install "jax==${JAX_VERSION}"
+          else
+            pip install \
+              "jax==${JAX_VERSION}" \
+              "jaxlib==${JAX_VERSION}"
+          fi
+
+      - name: Run JAX tests
+        env:
+          JAX_PLATFORMS: rocm
+          HIP_DEVICE_LIB_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: /opt/rocm/lib/llvm/bin
+        run: |
+          pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
+          pytest jax/tests/core_test.py -q --log-cli-level=INFO
+          pytest jax/tests/util_test.py -q --log-cli-level=INFO
+          pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO

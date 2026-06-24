@@ -26,6 +26,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn | --no-hipdnn]
     [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
+    [--hipfile | --no-hipfile]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
@@ -367,6 +368,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn,
             args.hipdnn_integration_tests,
             args.hipdnn_samples,
+            args.hipfile,
             args.miopen,
             args.miopenprovider,
             args.hipblasltprovider,
@@ -424,6 +426,9 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("hipdnn-integration-tests_run")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
+        if args.hipfile:
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
@@ -491,6 +496,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("sysdeps-libpciaccess")
         if args.rocalution:
             extra_artifacts.append("rocalution")
+            argv.append("rocalution_dev")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -735,6 +741,13 @@ def main(argv):
         "--hipdnn-samples",
         default=False,
         help="Include 'hipdnn-samples' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipfile",
+        default=False,
+        help="Include 'hipfile' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

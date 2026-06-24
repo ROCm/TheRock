@@ -51,6 +51,28 @@ if(NOT WIN32)
     "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
     DESTINATION bin
   )
+
+  # Begin creation of compiler configs. We will need LLVM_VERSION_MAJOR.
+  include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
+  set(rocm_config_name "rocm.cfg")
+  set(rocm_config_dir "${CMAKE_CURRENT_BINARY_DIR}/lib/llvm/bin")
+  set(rocm_config_content "-Wl,--enable-new-dtags\n--rocm-path='<CFGDIR>/../../..'\n-frtlib-add-rpath")
+
+  # Generate rocm.cfg
+  file(MAKE_DIRECTORY "${rocm_config_dir}")
+  message(STATUS "Generating ${rocm_config_dir}/${rocm_config_name}")
+  file(WRITE "${rocm_config_dir}/${rocm_config_name}" ${rocm_config_content})
+  install(FILES "${rocm_config_dir}/${rocm_config_name}"
+    DESTINATION "lib/llvm/bin")
+
+  # Generate additional config aliases
+  set(config_names "clang-${LLVM_VERSION_MAJOR}.cfg;clang++.cfg;clang.cfg;clang-cl.cfg;clang-cpp.cfg;flang.cfg")
+  foreach(name ${config_names})
+    message(STATUS "Generating ${rocm_config_dir}/${name}")
+    file(WRITE "${rocm_config_dir}/${name}" "@rocm.cfg")
+    install(FILES "${rocm_config_dir}/${name}"
+      DESTINATION "lib/llvm/bin")
+  endforeach()
 endif()
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/overlay/" DESTINATION ".")

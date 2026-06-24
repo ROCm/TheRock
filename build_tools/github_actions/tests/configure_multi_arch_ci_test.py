@@ -832,16 +832,15 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "sanity_check_only_for_family",
         }
+        optional_keys = {"test-runs-on-labels"}
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info
             self.assertGreater(len(per_family), 0)
             for entry in per_family:
-                self.assertEqual(
-                    set(entry.keys()),
-                    required_keys,
-                    f"unexpected keys in per-family info: {entry}",
-                )
+                entry_keys = set(entry.keys())
+                self.assertLessEqual(required_keys, entry_keys)
+                self.assertLessEqual(entry_keys, required_keys | optional_keys)
 
     def test_build_config_structure(self):
         """BuildConfig has correct structure: families, metadata, consistency.
@@ -896,6 +895,44 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertTrue(len(config.build_variant_label) > 0)
         self.assertIn("release", config.artifact_group)
         self.assertIsInstance(config.build_pytorch, bool)
+
+    def test_build_config_includes_python_package_test_matrix(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            git_context=cm.GitContext(),
+        )
+
+        self.assertEqual(len(result.linux.test_python_packages_matrix), 6)
+        self.assertEqual(
+            {row["python_version"] for row in result.linux.test_python_packages_matrix},
+            {"3.10", "3.11", "3.12"},
+        )
+        self.assertEqual(
+            {
+                row["container_image_name"]
+                for row in result.linux.test_python_packages_matrix
+            },
+            {"ubuntu24.04", "ubi10"},
+        )
+
+        self.assertEqual(
+            result.windows.test_python_packages_matrix,
+            [
+                {
+                    "amdgpu_family": "gfx110X-all",
+                    "test_runs_on": "windows-gfx110X-gpu-rocm",
+                    "python_version": "3.12",
+                    "container_image_name": "native",
+                    "container_image_url": "",
+                }
+            ],
+        )
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -1260,7 +1297,21 @@ class TestFamilyTestFilters(unittest.TestCase):
 
 
 class TestMultiLabelRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of multi-label runner configurations."""
+    """Test weighted random selection of multi-label runner configurations.
+
+    These tests validate local amdgpu_family_matrix.py definitions.
+    CI_CONFIG_PATH is cleared to ensure external config is not loaded.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        # Ensure tests use local fallback, not external config
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
 
     def test_gfx94x_has_multi_label_config(self):
         """Verify gfx94x has the multi-label configuration."""
@@ -1363,7 +1414,21 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 class TestBuildRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of build runners (Azure vs AWS)."""
+    """Test weighted random selection of build runners (Azure vs AWS).
+
+    These tests validate local amdgpu_family_matrix.py definitions.
+    CI_CONFIG_PATH is cleared to ensure external config is not loaded.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        # Ensure tests use local fallback, not external config
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
 
     def test_select_build_runner_weighted_selection(self):
         """Test weighted selection: 100% AWS for default Linux builds."""
