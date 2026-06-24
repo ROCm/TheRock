@@ -433,7 +433,6 @@ def _lock_and_expand(
                             symlink_target = ti.linkname
                             hardlink_target = dest_path.parent / symlink_target
                             # On Linux, preserve symlinks in top-level bin/ directory
-                            # top-level bin/ so $ORIGIN in RPATH resolves correctly.
                             PRESERVE_SYMLINKS = [
                                 "amdclang",
                                 "amdclang++",
