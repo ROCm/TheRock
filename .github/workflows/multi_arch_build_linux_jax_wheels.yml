@@ -172,7 +172,6 @@ jobs:
           ref: ${{ inputs.jax_ref }}
 
 
-
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
@@ -230,7 +229,6 @@ jobs:
             .
 
       - name: Determine wheel version suffix
-        if: ${{ inputs.build_mode == 'manylinux' }}
         run: |
           python build_tools/github_actions/determine_version.py \
             --rocm-version "${{ inputs.rocm_version }}"
