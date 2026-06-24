@@ -15,7 +15,7 @@ if(THEROCK_ENABLE_RAND)
     set(_primlibs_benchmark_deps amdsmi)
     set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
   endif()
-  
+
   ##############################################################################
   # rocRAND
   ##############################################################################
@@ -56,7 +56,7 @@ if(THEROCK_ENABLE_RAND)
   # hipRAND
   ##############################################################################
   # Note: hipRAND has no benchmarks
-  
+
   therock_cmake_subproject_declare(hipRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipRAND"
@@ -145,7 +145,7 @@ if(THEROCK_ENABLE_PRIM)
     set(_primlibs_benchmark_deps amdsmi)
     set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
   endif()
-  
+
   if(THEROCK_BUILD_TESTING)
     ##############################################################################
     # rocPRIM tests
@@ -233,7 +233,7 @@ if(THEROCK_ENABLE_PRIM)
       rocPRIM
       rocRAND
       therock-googletest
-      ${_primbench_benchmark_deps}
+      ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
