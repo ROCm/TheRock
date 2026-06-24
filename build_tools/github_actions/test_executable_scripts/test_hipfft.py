@@ -29,10 +29,13 @@ if test_type == "quick":
 else:
     # Standard/comprehensive: "--test_prob" is the probability that a given test will run.
     # Due to the large number of tests for hipFFT, we only run a subset.
+    # The option --precompile=precompiled.db reduces test time by more
+    # efficiently parallelizing runtime compilation.
     test_filter = [
         "--gtest_filter=-*multi_gpu*",
         "--test_prob",
         "0.01",
+        "--precompile=precompiled.db",
     ]
 
 cmd = [f"{THEROCK_BIN_DIR}/hipfft-test"] + test_filter
