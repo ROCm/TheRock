@@ -36,6 +36,10 @@ on:
         description: "Branch, tag, or SHA to checkout."
         type: string
         default: ""
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       test_amdgpu_family:
@@ -64,6 +68,10 @@ on:
         description: "Branch, tag, or SHA to checkout."
         type: string
         default: ""
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
+        type: string
+        default: ""
 
 run-name: Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
 
@@ -71,17 +79,30 @@ permissions:
   contents: read
 #TODO: Add rocm-jaxlib-v0.10.0 once it is released and tested.
 jobs:
+  setup_matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      jax_matrix: ${{ steps.matrix.outputs.jax_matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Generate JAX matrix
+        id: matrix
+        run: |
+          python ./build_tools/github_actions/configure_jax_release_matrix.py \
+            --python-versions="${{ inputs.python_version }}"
+
   build_jax_wheels:
+    needs: setup_matrix
     name: Build | py ${{ matrix.python_version }} | jax ${{ matrix.jax_ref }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13", "3.14"]
-        jax_ref:
-          - "rocm-jaxlib-v0.9.1"
-        include:
-          - jax_ref: "rocm-jaxlib-v0.9.1"
-            build_jaxlib: false
+        include: ${{ fromJSON(needs.setup_matrix.outputs.jax_matrix) }}
 
     permissions:
       id-token: write

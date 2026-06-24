@@ -51,6 +51,10 @@ on:
         description: "Build PyTorch wheels"
         type: boolean
         default: true
+      build_jax:
+        description: "Build JAX wheels"
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
@@ -83,6 +87,10 @@ on:
         default: false
       build_pytorch:
         description: "Build PyTorch wheels"
+        type: boolean
+        default: false
+      build_jax:
+        description: "Build JAX wheels"
         type: boolean
         default: false
       python_version:
@@ -127,6 +135,7 @@ jobs:
       ref: ${{ needs.setup.outputs.ref }}
       run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
       build_pytorch: ${{ inputs.build_pytorch }}
+      build_jax: ${{ inputs.build_jax }}
       python_version: ${{ inputs.python_version }}
     permissions:
       contents: read

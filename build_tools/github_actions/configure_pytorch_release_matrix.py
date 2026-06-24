@@ -69,6 +69,15 @@ PYTORCH_REFS_WINDOWS: list[dict] = [
 ]
 
 
+def _split_values(raw: str) -> list[str]:
+    """Split comma, semicolon, or whitespace-separated workflow input values."""
+    return [
+        value.strip()
+        for value in raw.replace(",", " ").replace(";", " ").split()
+        if value.strip()
+    ]
+
+
 def _filter_families(families_str: str, exclude: set[str]) -> str:
     """Remove excluded family names from a semicolon-separated families string.
 
@@ -141,12 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    python_versions = None
-    if args.python_versions:
-        sep = ";" if ";" in args.python_versions else ","
-        python_versions = [
-            v.strip() for v in args.python_versions.split(sep) if v.strip()
-        ]
+    python_versions = _split_values(args.python_versions) or None
 
     matrix = generate_pytorch_matrix(
         python_versions, args.amdgpu_families, args.platform
