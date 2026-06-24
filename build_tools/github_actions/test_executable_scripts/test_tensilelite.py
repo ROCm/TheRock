@@ -133,8 +133,6 @@ if not skip_unit:
             "-m",
             "pytest",
             "-v",
-            "-n",
-            NUM_PYTEST_WORKERS,
             str(tensilelite_root / "Tensile" / "Tests" / "unit"),
         ],
         cwd=str(THEROCK_DIR),
