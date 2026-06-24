@@ -79,9 +79,21 @@ def _get_module_path(expand_devel: bool) -> Path:
          These tools should pass `expand_devel=False`.
       B) Other tools that benefit from the extra files in the 'devel' package
          will expand expand it by passing `expand_devel=True`.
+
+    NOTE: the "already expanded" check is one-shot. Once the devel tree exists
+    it is returned directly, WITHOUT re-running the device-link reconcile in
+    `rocm_sdk._devel._reconcile_device_links` (only `_expand_devel_module()` /
+    `rocm-sdk init` does that). So a `rocm-sdk-device-*` wheel installed or
+    removed after the first expansion is NOT picked up by these trampolines
+    (e.g. hipcc); refresh it with an explicit
+    `rocm-sdk init` / `rocm-sdk path` / `rocm-sdk test`.
+    This is intentional: reconciling on every compiler invocation would add a
+    subprocess + metadata scan to a build hot path.
     """
     if _has_devel_module():
         if _is_devel_module_expanded():
+            # One-shot: returns the existing tree without re-reconciling device
+            # links (see NOTE above).
             return _get_devel_module_path()
         elif expand_devel:
             _expand_devel_module()

@@ -192,32 +192,6 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int64",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int8",
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
-            "test_reference_numerics_large__refs_nn_functional_mish_cuda_float16",
-            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_large__refs_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_large_nn_functional_mish_cuda_float16",
-            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_large_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_normal_special_airy_ai_cuda_uint16",
-            "test_reference_numerics_normal_special_airy_ai_cuda_uint32",
-            "test_reference_numerics_normal_special_airy_ai_cuda_uint64",
-            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_normal_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_small__refs_special_spherical_bessel_j0_cuda_uint64",
-            "test_reference_numerics_small_special_airy_ai_cuda_uint16",
-            "test_reference_numerics_small_special_airy_ai_cuda_uint32",
-            "test_reference_numerics_small_special_airy_ai_cuda_uint64",
-            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint16",
-            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint32",
-            "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint64",
         ],
     },
     # Special notes for Windows:
@@ -281,8 +255,28 @@ skip_tests = {
             #   AssertionError: Scalars are not equal!
             #   Expected 0 but got 2173342911312.
             "test_streams",
+            # Device-side assert() does not propagate to the host on Windows ROCm:
+            # the KMD has no trap handler, so the faulted queue never reports an
+            # error and torch.cuda.synchronize() hangs until the CI job timeout.
+            # These tests deliberately trigger a device-side assert and await it
+            # with no subprocess timeout, so they hang rather than fail.
+            # Re-enable once the Windows ROCm driver propagates device-side
+            # faults to the runtime.
+            # See https://github.com/ROCm/TheRock/issues/5565
+            "test_fixed_cuda_assert_async",
+            "test_index_out_of_bounds_exception_cuda",
+            # Same device-side-assert-propagation issue as the two tests above:
+            # spawns a subprocess that feeds invalid probabilities (negative,
+            # inf, nan) to torch.multinomial, calls torch.cuda.synchronize(), and
+            # asserts the device-side assert surfaces in stderr. On Windows ROCm
+            # the fault never propagates, so it hangs/fails instead.
+            # See https://github.com/ROCm/TheRock/issues/5565
+            "test_multinomial_invalid_probs_cuda",
         ],
         "nn": [
+            # Hangs on some Windows ROCm runners until the job hits the 6h limit.
+            # https://github.com/ROCm/TheRock/issues/5565
+            "test_cross_entropy_loss_2d_out_of_bounds_class_index",
             # RuntimeError: miopenStatusUnknownError
             "test_cudnn_weight_format",
             "test_rnn_retain_variables_cuda_float16",
