@@ -95,6 +95,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # TIGHT-GATE: cascaded for test-simulator.yml poll step (see
+      # multi_arch_build_portable_linux.yml simulator-test job).
+      actions: read
 
   windows_build_and_test:
     name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}

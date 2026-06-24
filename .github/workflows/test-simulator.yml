@@ -1,0 +1,494 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Run a real ROCm application (rocRAND today) end-to-end against the rocjitsu
+# CPU-only simulator instead of physical AMD GPU hardware.
+#
+# This workflow has TWO execution modes:
+#
+#   1) Consume-artifacts mode (default, fast: ~10-15min):
+#      Downloads `--rocjitsu` + `--rand --tests` artifacts already produced by
+#      the `compiler-runtime` and `math-libs` stages of a prior TheRock build
+#      and runs the simulator against them. No LLVM rebuild.
+#
+#   2) Build-from-source mode (slow: ~4-5h):
+#      Falls back to the original behavior - fetch sources, configure, build
+#      `therock-artifacts therock-dist` from scratch. Use this when a PR
+#      changes rocjitsu C++ source or compiler/amd-llvm code that needs to be
+#      tested as-is (the prebuilt artifacts in mode 1 would be stale).
+#
+# Trigger -> mode selection:
+#   - workflow_call (invoked as a sibling job inside the Linux Release
+#     pipeline once `compiler-runtime` and `math-libs` complete): mode 1,
+#     consumes the calling workflow's own run via `inputs.artifact_run_id`.
+#     This is the production path - see `simulator-test` in
+#     `multi_arch_build_portable_linux.yml`.
+#   - workflow_dispatch with `source_run_id`: mode 1 pinned to that prior
+#     TheRock CI run. This is the fast-iteration escape hatch: dispatch
+#     against any previously-built run id without re-running the full DAG.
+#   - workflow_dispatch with `build_from_source=true`: mode 2.
+#
+# The legacy `workflow_run` (auto-trigger on every Multi-Arch Build
+# completion), `pull_request`, and `source_release` / `--latest-release`
+# triggers have been removed: the `--release` / `--latest-release` paths in
+# `install_rocm_from_artifacts.py` do not carry rocjitsu artifacts, so they
+# would always fail. Only `--run-id` mode fetches a run-scoped tree that
+# includes the rocjitsu component.
+#
+# Runner: `azure-linux-scale-rocm` runners do not have AMD GPUs (the simulator
+# runs entirely on CPU). Mode 1 still uses the manylinux build container only
+# so the python toolchain in install_rocm_from_artifacts.py has a consistent
+# environment.
+
+name: Test Simulator
+
+on:
+  # Mode 1 (automatic): called as a sibling job from
+  # multi_arch_build_portable_linux.yml once compiler-runtime + math-libs
+  # finish. The caller passes its own github.run_id as `artifact_run_id`.
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        description: "Caller workflow run ID whose --rocjitsu/--rand/--tests artifacts to consume."
+        type: string
+        required: true
+      amdgpu_families:
+        description: "GPU family for rocrand test artifacts (rocjitsu currently supports gfx94X-dcgpu)."
+        type: string
+        required: true
+      filter_preset:
+        description: "simulator_runner preset (basic | quick | full)."
+        type: string
+        required: false
+        default: basic
+
+  # Mode 1 (manual fast loop) / Mode 2 (build from source).
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: "GPU family for rocrand test artifacts (rocjitsu currently supports gfx94X-dcgpu)"
+        type: string
+        default: gfx94X-dcgpu
+      filter_preset:
+        description: "simulator_runner preset (basic | quick | full)"
+        type: string
+        default: basic
+      source_run_id:
+        description: "Mode 1: TheRock CI run ID whose artifacts to consume. Required unless build_from_source=true."
+        type: string
+        default: ""
+      build_from_source:
+        description: "Mode 2: build from source instead of fetching artifacts (slow, ~4-5h)."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================================
+  # MODE 1: Consume pre-built artifacts and run the simulator (fast).
+  # ============================================================================
+  consume_and_test:
+    name: rocrand-sim (consume artifacts, ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    if: ${{ !inputs.build_from_source }}
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 90
+    permissions:
+      id-token: write
+      actions: read   # TIGHT-GATE: needed so the poll step below can read run jobs
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+      TEATIME_FORCE_INTERACTIVE: 0
+      # Convention used by all per-component test drivers (test_runner.py,
+      # test_rocdecode.py, ...): THEROCK_BIN_DIR points at the `bin/` subdir
+      # of the populated ROCm install. Drivers derive the ROCm root via
+      # `Path(THEROCK_BIN_DIR).parent`, and simulator_runner.py follows the
+      # same rule to locate librocjitsu_kmd.so and rocjitsu config/schema.
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm/bin"
+      THEROCK_ROCM_ROOT: "${{ github.workspace }}/build/dist/rocm"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+          # simulator_runner.py reads simulator_runner_filters.yaml.
+          pip install pyyaml
+
+      # ===== TIGHT-GATE BEGIN =====
+      # Replaces the implicit GitHub-Actions matrix wait that we dropped
+      # from `needs:` in multi_arch_build_portable_linux.yml. Polls the GH
+      # jobs API for the `Stage - Math Libs (gfx94X-dcgpu)` leaf inside the
+      # calling run and blocks until it completes. No-op for manual
+      # dispatch against an already-completed `source_run_id` (the leaf is
+      # found completed on the first iteration).
+      # To revert: delete this entire BEGIN/END block AND restore
+      # `needs: [compiler-runtime, math-libs]` in
+      # multi_arch_build_portable_linux.yml.
+      - name: Wait for math-libs (gfx94X-dcgpu) shard
+        env:
+          RUN_ID: ${{ inputs.artifact_run_id || inputs.source_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_NAME: "Stage - Math Libs (gfx94X-dcgpu)"
+        # Implemented with python3 + urllib (stdlib only) rather than `gh api`
+        # because the manylinux build container used by simulator-test does not
+        # ship the `gh` CLI. python3 is guaranteed present (the preceding
+        # "Install python deps" step ran pip).
+        run: |
+          set -eu
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::No RUN_ID to poll (neither artifact_run_id nor source_run_id set)" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, sys, time, urllib.error, urllib.request
+          run_id = os.environ["RUN_ID"]
+          repo   = os.environ["GITHUB_REPOSITORY"]
+          token  = os.environ["GH_TOKEN"]
+          target = os.environ["TARGET_NAME"]
+          api = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs"
+
+          def find_target():
+              page = 1
+              while True:
+                  req = urllib.request.Request(
+                      f"{api}?per_page=100&page={page}",
+                      headers={
+                          "Accept": "application/vnd.github+json",
+                          "Authorization": f"Bearer {token}",
+                          "X-GitHub-Api-Version": "2022-11-28",
+                      },
+                  )
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      body = json.load(r)
+                  jobs = body.get("jobs", []) or []
+                  for j in jobs:
+                      if target in (j.get("name") or ""):
+                          return j
+                  if len(jobs) < 100:
+                      return None
+                  page += 1
+
+          max_iter = 120  # 120 * 30s = 60 min
+          for i in range(1, max_iter + 1):
+              try:
+                  row = find_target()
+              except (urllib.error.URLError, TimeoutError) as e:
+                  print(f"(poll {i}/{max_iter}) fetch error: {e}, sleeping 30s...", flush=True)
+                  time.sleep(30); continue
+              status     = (row or {}).get("status") or "missing"
+              conclusion = (row or {}).get("conclusion") or ""
+              if status == "completed":
+                  if conclusion in ("success", "skipped"):
+                      print(f"math-libs (gfx94X-dcgpu) leaf: {conclusion} after {i} polls")
+                      sys.exit(0)
+                  print(f"::error::math-libs (gfx94X-dcgpu) leaf finished with conclusion={conclusion}", file=sys.stderr)
+                  sys.exit(1)
+              print(f"(poll {i}/{max_iter}) status={status} conclusion={conclusion}, sleeping 30s...", flush=True)
+              time.sleep(30)
+          print(f"::error::Timeout (60min) waiting for {target} in run {run_id}", file=sys.stderr)
+          sys.exit(1)
+          PY
+      # ===== TIGHT-GATE END =====
+
+      - name: Resolve source run id
+        id: resolve_source
+        # Exactly one of inputs.artifact_run_id (workflow_call) /
+        # inputs.source_run_id (workflow_dispatch) is set per invocation.
+        # Fail loudly if neither is present rather than silently falling
+        # back to a stale release.
+        env:
+          CALL_RUN_ID: ${{ inputs.artifact_run_id }}
+          DISPATCH_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -eu
+          if [ -n "$CALL_RUN_ID" ]; then
+            run_id="$CALL_RUN_ID"
+            echo "Mode 1 source: workflow_call artifact_run_id ($run_id)"
+          elif [ -n "$DISPATCH_RUN_ID" ]; then
+            run_id="$DISPATCH_RUN_ID"
+            echo "Mode 1 source: workflow_dispatch source_run_id ($run_id)"
+          else
+            echo "::error::No run id provided. Set workflow_call.inputs.artifact_run_id or workflow_dispatch.inputs.source_run_id." >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Install ROCm from artifacts
+        # Lays out everything the simulator needs under $THEROCK_ROCM_ROOT:
+        #   - lib/librocjitsu_kmd.so + share/rocjitsu/**       (from --rocjitsu)
+        #   - bin/rocRAND/CTestTestfile.cmake + test_*         (from --rand --tests)
+        #   - lib/libamdhip64.so*, libhsa-runtime64.so*, libamd_comgr.so*,
+        #     llvm/amdgcn/bitcode/*.bc                         (from the base layer)
+        # Only --run-id mode fetches per-component artifacts including
+        # rocjitsu; the --release / --latest-release code paths in
+        # install_rocm_from_artifacts.py do NOT carry rocjitsu and are
+        # intentionally not wired up here.
+        # See [build_tools/install_rocm_from_artifacts.py](build_tools/install_rocm_from_artifacts.py).
+        env:
+          RUN_ID: ${{ steps.resolve_source.outputs.run_id }}
+        run: |
+          set -ex
+          python build_tools/install_rocm_from_artifacts.py \
+            --run-id "$RUN_ID" \
+            --amdgpu-family "${AMDGPU_FAMILIES}" \
+            --output-dir "${THEROCK_ROCM_ROOT}" \
+            --rocjitsu --rand --tests
+
+      - name: Skew guard - compare source SHAs
+        # Best-effort warning: if the rocjitsu/simulator_runner sources on the
+        # current checkout differ from the SHAs baked into the consumed
+        # artifacts, the test result may not reflect HEAD. Doesn't fail the run.
+        continue-on-error: true
+        run: |
+          set +e
+          # actions/checkout sets safe.directory only inside its own temp HOME,
+          # which is reaped before subsequent steps run. Re-add it here so
+          # `git rev-parse` / `git ls-tree` don't fail with "dubious ownership"
+          # when the checkout uid differs from the container's runtime uid.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
+          echo "## Source vs artifact skew check"
+          echo "Current HEAD: $(git rev-parse HEAD)"
+          echo "Current rocm-systems submodule: $(git ls-tree HEAD rocm-systems | awk '{print $3}')"
+          manifest_dirs=$(find "${THEROCK_ROCM_ROOT}" -maxdepth 3 -name 'artifact_manifest.txt' 2>/dev/null | head -5)
+          if [ -n "$manifest_dirs" ]; then
+            echo ""
+            echo "Consumed artifact manifests:"
+            for m in $manifest_dirs; do
+              echo "--- $m ---"
+              head -20 "$m" 2>/dev/null || true
+            done
+          else
+            echo "(no artifact_manifest.txt found under ${THEROCK_ROCM_ROOT})"
+          fi
+
+      - name: Verify rocjitsu interposer + ctest layout are present
+        run: |
+          set -ex
+          ls -lh "$THEROCK_ROCM_ROOT/lib/librocjitsu_kmd.so"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/schemas/simulation_config.fbs"
+          ls -lh "$THEROCK_BIN_DIR/rocRAND/CTestTestfile.cmake"
+
+      - name: Run rocrand under rocjitsu simulator
+        id: rocrand_sim
+        continue-on-error: true
+        timeout-minutes: 60
+        env:
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          TEST_COMPONENT: rocrand
+          TEST_TYPE: full
+        run: |
+          python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
+            --component rocrand \
+            --filter-preset "${{ inputs.filter_preset || 'basic' }}"
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## Simulator test result: ${{ steps.rocrand_sim.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Mode: consume artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Source run id: ${{ steps.resolve_source.outputs.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
+          if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocjitsu install" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_ROCM_ROOT/share/rocjitsu" -maxdepth 3 -type f >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -d "$THEROCK_BIN_DIR/rocRAND" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocRAND test layout (first 30 entries)" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_BIN_DIR/rocRAND" -maxdepth 2 | head -30 >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Collect ctest + rocjitsu logs
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          mkdir -p test-logs
+          if [ -d "$THEROCK_BIN_DIR/rocRAND/Testing" ]; then
+            cp -r "$THEROCK_BIN_DIR/rocRAND/Testing" test-logs/ctest-Testing
+          fi
+          find . -maxdepth 4 -name 'rocjitsu_*.log' -exec cp {} test-logs/ \; 2>/dev/null
+          find "$THEROCK_ROCM_ROOT" -maxdepth 6 -name 'rocjitsu_*.log' \
+            -exec cp {} test-logs/ \; 2>/dev/null
+          ls -lh test-logs/ 2>&1 | head -40 || true
+
+      - name: Upload logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-simulator-logs-consume-${{ github.run_attempt }}
+          path: test-logs/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ============================================================================
+  # MODE 2: Build TheRock from source (escape hatch for PRs that change
+  # rocjitsu C++ source or compiler internals). Triggered only via
+  # workflow_dispatch with build_from_source=true.
+  # ============================================================================
+  build_and_test:
+    name: rocrand-sim (build from source, ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_from_source }}
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 720
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEATIME_FORCE_INTERACTIVE: 0
+      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm/bin"
+      THEROCK_ROCM_ROOT: "${{ github.workspace }}/build/dist/rocm"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+          pip install pyyaml
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-dev" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12
+
+      - name: Configure Projects
+        env:
+          amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ADHOCBUILD
+          extra_cmake_options: >-
+            -DTHEROCK_ENABLE_EMULATION=ON
+            -DTHEROCK_ENABLE_ROCJITSU=ON
+            -DTHEROCK_BUILD_TESTING=ON
+          BUILD_DIR: build
+        run: |
+          python3 build_tools/github_actions/build_configure.py --manylinux
+
+      - name: Build therock-artifacts and therock-dist
+        # Upstream removed `therock-archives` (#4771); the per-component
+        # directories under build/artifacts/ are produced by `therock-artifacts`
+        # and flattened into build/dist/rocm/ by `therock-dist`. The legacy
+        # tarball outputs are no longer the contract.
+        run: |
+          cmake --build build --target therock-artifacts therock-dist -- -k 0
+
+      - name: Ensure rocRAND test artifact is materialized in dist
+        # Safety net: therock-dist *should* flatten _test for rand into
+        # build/dist/rocm/bin/rocRAND, but if the flatten pass missed it (or
+        # if the local cmake settings differ from CI's), merge the per-comp
+        # artifact directory into the dist with a tar|tar pipe. rsync is not
+        # available in the manylinux container.
+        run: |
+          set -ex
+          shopt -s nullglob
+          merged=0
+          for d in build/artifacts/rand_test build/artifacts/rand_test_*; do
+            if [ -d "$d" ] && [ "$(basename "$d")" != "rand_test.fprint" ]; then
+              echo "Merge $d/ -> $THEROCK_ROCM_ROOT/"
+              ( cd "$d" && tar --exclude=artifact_manifest.txt -cf - . ) \
+                | tar -C "$THEROCK_ROCM_ROOT" -xf -
+              merged=$((merged + 1))
+            fi
+          done
+          if [ "$merged" -eq 0 ]; then
+            echo "::warning::No rand_test artifact directory found under build/artifacts/"
+            ls -lh build/artifacts/ 2>&1 | head -60 || true
+          fi
+
+      - name: Verify rocjitsu interposer + ctest layout are present
+        run: |
+          set -ex
+          ls -lh "$THEROCK_ROCM_ROOT/lib/librocjitsu_kmd.so"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/schemas/simulation_config.fbs"
+          ls -lh "$THEROCK_BIN_DIR/rocRAND/CTestTestfile.cmake"
+
+      - name: Run rocrand under rocjitsu simulator
+        id: rocrand_sim
+        continue-on-error: true
+        timeout-minutes: 60
+        env:
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          TEST_COMPONENT: rocrand
+          TEST_TYPE: full
+        run: |
+          python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
+            --component rocrand \
+            --filter-preset "${{ inputs.filter_preset || 'basic' }}"
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## Simulator test result: ${{ steps.rocrand_sim.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Mode: build from source" >> $GITHUB_STEP_SUMMARY
+          echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
+          if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocjitsu install" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_ROCM_ROOT/share/rocjitsu" -maxdepth 3 -type f >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -d "$THEROCK_BIN_DIR/rocRAND" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocRAND test layout (first 30 entries)" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_BIN_DIR/rocRAND" -maxdepth 2 | head -30 >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Collect ctest + rocjitsu logs
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          mkdir -p test-logs
+          if [ -d "$THEROCK_BIN_DIR/rocRAND/Testing" ]; then
+            cp -r "$THEROCK_BIN_DIR/rocRAND/Testing" test-logs/ctest-Testing
+          fi
+          find . -maxdepth 4 -name 'rocjitsu_*.log' -exec cp {} test-logs/ \; 2>/dev/null
+          find "$THEROCK_ROCM_ROOT" -maxdepth 6 -name 'rocjitsu_*.log' \
+            -exec cp {} test-logs/ \; 2>/dev/null
+          ls -lh test-logs/ 2>&1 | head -40 || true
+
+      - name: Upload logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-simulator-logs-build-${{ github.run_attempt }}
+          path: test-logs/
+          if-no-files-found: warn
+          retention-days: 7

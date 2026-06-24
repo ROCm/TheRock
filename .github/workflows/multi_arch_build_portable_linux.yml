@@ -61,6 +61,12 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
+      run_simulator:
+        description: "Run the rocjitsu CPU-only simulator as a sibling job once compiler-runtime + math-libs finish. Only the Release pipeline sets this to true today."
+        type: boolean
+        # EXPERIMENTAL: defaulted true so PR CI also exercises simulator-test.
+        # Revert to `false` to restore the original Release-only behaviour.
+        default: true
 
 permissions:
   contents: read
@@ -86,6 +92,13 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      # EMULATION-FLAG: only the compiler-runtime stage builds rocjitsu
+      # (per BUILD_TOPOLOGY.toml). Forward run_simulator so the per-stage
+      # workflow appends `-DTHEROCK_ENABLE_EMULATION=ON` to its cmake
+      # configure, unblocking `therock_provide_artifact(rocjitsu ...)`.
+      # Without this, rocjitsu silently fails its gate and no
+      # `rocjitsu_*.tar.zst` is produced for simulator-test to consume.
+      enable_emulation: ${{ inputs.run_simulator }}
     permissions:
       contents: read
       id-token: write
@@ -170,6 +183,39 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  # ==========================================================================
+  # STAGE: simulator-test (generic, single job)
+  # Runs the rocjitsu CPU-only simulator against the just-built rocrand test
+  # binaries. Starts as soon as compiler-runtime + math-libs are uploaded
+  # (no waiting for the rest of the DAG). Gated by `run_simulator` so only
+  # the Release pipeline enables it today; PR CI keeps it off by default.
+  # ==========================================================================
+  simulator-test:
+    # ===== TIGHT-GATE BEGIN =====
+    # `needs:` deliberately omits `math-libs` so this job starts as soon as
+    # compiler-runtime is done, instead of waiting for the slowest entry of
+    # the math-libs matrix. A polling step inside test-simulator.yml waits
+    # specifically for the `Stage - Math Libs (gfx94X-dcgpu)` leaf job
+    # before installing artifacts. To revert: restore `[compiler-runtime,
+    # math-libs]` here AND remove the matching TIGHT-GATE block in
+    # test-simulator.yml.
+    needs: compiler-runtime
+    # ===== TIGHT-GATE END =====
+    if: ${{ !cancelled() && !failure() && inputs.run_simulator && contains(inputs.dist_amdgpu_families, 'gfx94X-dcgpu') }}
+    uses: ./.github/workflows/test-simulator.yml
+    secrets: inherit
+    with:
+      artifact_run_id: ${{ github.run_id }}
+      amdgpu_families: gfx94X-dcgpu
+      filter_preset: basic
+    permissions:
+      contents: read
+      id-token: write
+      # TIGHT-GATE: cascaded so test-simulator.yml's consume_and_test poll
+      # step can read run jobs via `gh api`. Reusable-workflow perms must be
+      # >= each called workflow's job perms.
+      actions: read
 
   # ==========================================================================
   # STAGE: comm-libs (generic, single job parallel to math-libs)
