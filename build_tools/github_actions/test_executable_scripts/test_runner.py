@@ -79,6 +79,7 @@ COMPONENT_DIR_MAPPING = {
     "hipsparselt": "hipsparselt",
     "rocroller": "rocroller",
     "hipblas": "hipblas",
+    "hiptensor": "hiptensor",
     # Add more mappings as needed
 }
 
