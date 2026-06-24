@@ -57,6 +57,7 @@ static char* get_main_dir(void* main_addr) {
     }
 #endif
 
+#if defined(__linux__) || defined(__CYGWIN__)
     // Fallback: use dladdr to get the path. This requires the executable to be
     // linked as PIE (-fPIE) and may return just a filename in some cases.
     if (!main_path) {
@@ -71,6 +72,7 @@ static char* get_main_dir(void* main_addr) {
             }
         }
     }
+#endif
 
     if (!main_path) {
         fprintf(stderr, "could not determine path of main program\n");
