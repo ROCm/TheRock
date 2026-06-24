@@ -16,6 +16,7 @@ if(NOT TARGET LibIberty::LibIberty)
   set_target_properties(LibIberty::LibIberty PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;${_IMPORT_PREFIX}/include/libiberty"
     IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libiberty.so"
+    IMPORTED_SONAME "libiberty.so.0"
   )
 endif()
 

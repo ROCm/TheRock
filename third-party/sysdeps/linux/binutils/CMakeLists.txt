@@ -58,11 +58,14 @@ endif()
 
 # -fPIC must be in CFLAGS/CXXFLAGS (compiler flags), so that libiberty object
 # files are compiled as position-independent code and can be linked into shared
-# libraries by downstream consumers (e.g. dyninst).
+# libraries by downstream consumers (e.g. dyninst). Append to any existing
+# flags from the environment so we do not discard flags set by the caller.
 set(EXTRA_CFLAGS "-fPIC")
 set(EXTRA_CXXFLAGS "-fPIC")
 message(STATUS "EXTRA_CFLAGS=${EXTRA_CFLAGS}")
 message(STATUS "EXTRA_CXXFLAGS=${EXTRA_CXXFLAGS}")
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 add_custom_target(
   build ALL
@@ -73,8 +76,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "CFLAGS=${EXTRA_CFLAGS}"
-      "CXXFLAGS=${EXTRA_CXXFLAGS}"
+      "CFLAGS=$ENV{CFLAGS} ${EXTRA_CFLAGS}"
+      "CXXFLAGS=$ENV{CXXFLAGS} ${EXTRA_CXXFLAGS}"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
@@ -85,18 +88,22 @@ add_custom_target(
       --disable-nls
       --disable-werror
       --disable-gprofng
+      --disable-gas
+      --disable-ld
+      --disable-gold
+      --disable-binutils
   COMMAND
-    make -j "${PAR_JOBS}" V=1
+    make -j "${PAR_JOBS}" V=1 -C libiberty
   COMMAND
-    make install
+    make -C libiberty install
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
       --
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 
   DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py"
 )
 
 # This matches the conventions of the FindLibIberty.cmake module.
