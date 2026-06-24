@@ -394,7 +394,6 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "sysdeps-mpfr",
         "sysdeps-ncurses",
         "sysdeps-util-linux",
-        "wsl-rocdxg",
     ] and an.component in [
         "lib",
         "run",
