@@ -157,7 +157,6 @@ jobs:
           ref: ${{ inputs.ref || github.ref_name }}
 
       - name: Checkout rocm-jax
-        if: ${{ inputs.build_mode == 'native' }}
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           path: rocm-jax
@@ -171,6 +170,8 @@ jobs:
           path: jax-source
           repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_ref }}
+
+
 
       - name: Configure Git Identity
         run: |
@@ -213,14 +214,11 @@ jobs:
         if: ${{ inputs.build_mode == 'manylinux' }}
         working-directory: jax-source
         env:
-          BRANCH: ${{ inputs.jax_ref }}
-          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
           THEROCK_VERSION: ""
           GFX_ARCH: ${{ inputs.gfx_arch }}
         run: |
-          curl -fsSL \
-            -o Dockerfile.jax-manylinux_2_28-therock \
-            "https://raw.githubusercontent.com/ROCm/rocm-jax/${BRANCH}/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock"
+          cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
+            Dockerfile.jax-manylinux_2_28-therock
 
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
