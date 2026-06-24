@@ -4,8 +4,9 @@
 # CI variant of multi_arch_build_windows_pytorch_wheels.yml.
 #
 # Key differences from the release workflow:
-#   - Installs ROCm packages via --find-links (CI artifacts) instead of
-#     --index-url (release index)
+#   - Installs ROCm packages from either a flat find-links page (CI artifacts,
+#     via rocm_package_find_links_url) or a PEP 503 index (via
+#     rocm_package_index_url); provide whichever one applies.
 #   - Builds torch only (no torchvision, torchaudio)
 #   - No S3 upload, staging, testing, or promotion — just build + sanity check
 #
@@ -30,9 +31,13 @@ on:
         type: string
         default: "release/2.10"
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
@@ -77,9 +82,13 @@ on:
         type: string
         default: "release/2.10"
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
@@ -259,7 +268,8 @@ jobs:
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --find-links "${{ inputs.rocm_package_find_links_url }}" ^
+            --index-url="${{ inputs.rocm_package_index_url }}" ^
+            --find-links="${{ inputs.rocm_package_find_links_url }}" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^

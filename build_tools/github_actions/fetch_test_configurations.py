@@ -593,6 +593,18 @@ test_matrix = {
             "windows": 2,
         },
     },
+    # rocALUTION tests
+    "rocalution": {
+        "job_name": "rocalution",
+        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # profiler tests
     "rocprofiler-compute": {
         "job_name": "rocprofiler-compute",
@@ -689,6 +701,17 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+    },
+    # hipTensor tests
+    "hiptensor": {
+        "job_name": "hiptensor",
+        "fetch_artifact_args": "--hiptensor --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
 }
