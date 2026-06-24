@@ -118,7 +118,7 @@ class TestMain(unittest.TestCase):
                         main(argv)
         return MainMocks(fetch_mock, compress_mock, kpack_mock)
 
-    def test_default_builds_full_tarballs_only(self) -> None:
+    def test_default_builds_tarballs_without_tests_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
             fetch_mock, compress_mock, _ = self._run_main_with_mocks(
@@ -132,7 +132,8 @@ class TestMain(unittest.TestCase):
             )
 
         self.assertEqual(fetch_mock.call_count, 1)
-        self.assertNotIn("exclude_components", fetch_mock.call_args.kwargs)
+        self.assertEqual(fetch_mock.call_args.kwargs["exclude_components"], ["test"])
+        self.assertEqual(fetch_mock.call_args.kwargs["exclude_artifacts"], ["fftw3"])
 
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
@@ -142,7 +143,7 @@ class TestMain(unittest.TestCase):
             ["therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz"],
         )
 
-    def test_include_lite_tarballs_builds_both_sets(self) -> None:
+    def test_include_test_tarballs_builds_both_sets(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
             fetch_mock, compress_mock, _ = self._run_main_with_mocks(
@@ -152,19 +153,19 @@ class TestMain(unittest.TestCase):
                     "--platform=linux",
                     "--package-version=7.13.0",
                     f"--output-dir={output_dir}",
-                    "--include-lite-tarballs",
+                    "--include-test-tarballs",
                 ]
             )
 
         self.assertEqual(fetch_mock.call_count, 2)
-        self.assertNotIn("exclude_components", fetch_mock.call_args_list[0].kwargs)
-        self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[0].kwargs)
         self.assertEqual(
-            fetch_mock.call_args_list[1].kwargs["exclude_components"], ["test"]
+            fetch_mock.call_args_list[0].kwargs["exclude_components"], ["test"]
         )
         self.assertEqual(
-            fetch_mock.call_args_list[1].kwargs["exclude_artifacts"], ["fftw3"]
+            fetch_mock.call_args_list[0].kwargs["exclude_artifacts"], ["fftw3"]
         )
+        self.assertNotIn("exclude_components", fetch_mock.call_args_list[1].kwargs)
+        self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[1].kwargs)
 
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
@@ -173,11 +174,11 @@ class TestMain(unittest.TestCase):
             compressed_names,
             [
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
-                "therock-dist-linux-gfx94X-dcgpu-lite-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
             ],
         )
 
-    def test_include_lite_tarballs_builds_kpack_multiarch_variant(self) -> None:
+    def test_include_test_tarballs_builds_kpack_multiarch_variant(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
             fetch_mock, compress_mock, _ = self._run_main_with_mocks(
@@ -187,18 +188,20 @@ class TestMain(unittest.TestCase):
                     "--platform=linux",
                     "--package-version=7.13.0",
                     f"--output-dir={output_dir}",
-                    "--include-lite-tarballs",
+                    "--include-test-tarballs",
                 ],
                 kpack_split=True,
             )
 
         self.assertEqual(fetch_mock.call_count, 6)
         self.assertEqual(
-            fetch_mock.call_args_list[-1].kwargs["exclude_components"], ["test"]
+            fetch_mock.call_args_list[-2].kwargs["exclude_components"], ["test"]
         )
         self.assertEqual(
-            fetch_mock.call_args_list[-1].kwargs["exclude_artifacts"], ["fftw3"]
+            fetch_mock.call_args_list[-2].kwargs["exclude_artifacts"], ["fftw3"]
         )
+        self.assertNotIn("exclude_components", fetch_mock.call_args_list[-1].kwargs)
+        self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[-1].kwargs)
 
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
@@ -207,11 +210,11 @@ class TestMain(unittest.TestCase):
             compressed_names,
             [
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
-                "therock-dist-linux-gfx94X-dcgpu-lite-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx110X-all-7.13.0.tar.gz",
-                "therock-dist-linux-gfx110X-all-lite-7.13.0.tar.gz",
+                "therock-dist-linux-gfx110X-all-tests-7.13.0.tar.gz",
                 "therock-dist-linux-multiarch-7.13.0.tar.gz",
-                "therock-dist-linux-multiarch-lite-7.13.0.tar.gz",
+                "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
             ],
         )
 

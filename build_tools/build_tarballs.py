@@ -17,6 +17,10 @@ containing all targets in a single install prefix.
 A shared download cache avoids re-downloading generic (host) artifacts
 when processing multiple families.
 
+By default, generated tarballs exclude test artifacts and fftw3. Pass
+``--include-test-tarballs`` to also generate full tarballs, named with a
+``-tests`` suffix, that include test artifacts.
+
 Tarball naming follows the existing release convention:
     therock-dist-{platform}-{family}-{version}.tar.gz
     therock-dist-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
@@ -55,8 +59,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-LITE_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
-LITE_EXCLUDED_COMPONENTS: list[str] = ["test"]
+DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
+DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
 
 
 def log(msg: str) -> None:
@@ -174,9 +178,9 @@ def main(argv: list[str] | None = None) -> None:
         help="Output directory for tarballs",
     )
     parser.add_argument(
-        "--include-lite-tarballs",
+        "--include-test-tarballs",
         action="store_true",
-        help="Also produce lite tarballs that exclude test artifacts",
+        help="Also produce -tests tarballs that include test artifacts",
     )
     args = parser.parse_args(argv)
     # Normalize empty string to None (workflow inputs default to "")
@@ -194,7 +198,7 @@ def main(argv: list[str] | None = None) -> None:
     log(f"  Platform: {args.platform}")
     log(f"  Version: {args.package_version}")
     log(f"  Output: {args.output_dir}")
-    log(f"  Include lite tarballs: {args.include_lite_tarballs}")
+    log(f"  Include test tarballs: {args.include_test_tarballs}")
 
     # Phase 1: Fetch and flatten sequentially.
     # Sequential so the shared download cache avoids re-downloading generic
@@ -210,26 +214,29 @@ def main(argv: list[str] | None = None) -> None:
             output_dir=flatten_dir,
             download_cache_dir=download_cache_dir,
             run_github_repo=args.run_github_repo,
+            exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
+            exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
         )
         family_dirs.append(flatten_dir)
         tarball_name = (
             f"therock-dist-{args.platform}-{family}-{args.package_version}.tar.gz"
         )
         compress_tasks.append((flatten_dir, args.output_dir / tarball_name))
-        if args.include_lite_tarballs:
-            lite_dir = work_dir / "lite" / family
+        if args.include_test_tarballs:
+            tests_dir = work_dir / "tests" / family
             fetch_and_flatten(
                 run_id=args.run_id,
                 amdgpu_families=[family],
                 platform=args.platform,
-                output_dir=lite_dir,
+                output_dir=tests_dir,
                 download_cache_dir=download_cache_dir,
                 run_github_repo=args.run_github_repo,
-                exclude_components=LITE_EXCLUDED_COMPONENTS,
-                exclude_artifacts=LITE_EXCLUDED_ARTIFACTS,
             )
-            lite_tarball_name = f"therock-dist-{args.platform}-{family}-lite-{args.package_version}.tar.gz"
-            compress_tasks.append((lite_dir, args.output_dir / lite_tarball_name))
+            tests_tarball_name = (
+                f"therock-dist-{args.platform}-{family}-tests-"
+                f"{args.package_version}.tar.gz"
+            )
+            compress_tasks.append((tests_dir, args.output_dir / tests_tarball_name))
 
     # Phase 1.5: If KPACK_SPLIT_ARTIFACTS is enabled, fetch all families
     # into a single combined directory. With KPACK split, device-specific
@@ -246,29 +253,29 @@ def main(argv: list[str] | None = None) -> None:
             output_dir=multiarch_dir,
             download_cache_dir=download_cache_dir,
             run_github_repo=args.run_github_repo,
+            exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
+            exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
         )
         tarball_name = (
             f"therock-dist-{args.platform}-multiarch-{args.package_version}.tar.gz"
         )
         compress_tasks.append((multiarch_dir, args.output_dir / tarball_name))
-        if args.include_lite_tarballs:
-            lite_multiarch_dir = work_dir / "lite" / "multiarch"
+        if args.include_test_tarballs:
+            tests_multiarch_dir = work_dir / "tests" / "multiarch"
             fetch_and_flatten(
                 run_id=args.run_id,
                 amdgpu_families=families,
                 platform=args.platform,
-                output_dir=lite_multiarch_dir,
+                output_dir=tests_multiarch_dir,
                 download_cache_dir=download_cache_dir,
                 run_github_repo=args.run_github_repo,
-                exclude_components=LITE_EXCLUDED_COMPONENTS,
-                exclude_artifacts=LITE_EXCLUDED_ARTIFACTS,
             )
-            lite_tarball_name = (
-                f"therock-dist-{args.platform}-multiarch-lite-"
+            tests_tarball_name = (
+                f"therock-dist-{args.platform}-multiarch-tests-"
                 f"{args.package_version}.tar.gz"
             )
             compress_tasks.append(
-                (lite_multiarch_dir, args.output_dir / lite_tarball_name)
+                (tests_multiarch_dir, args.output_dir / tests_tarball_name)
             )
 
     # Phase 2: Compress all tarballs in parallel.

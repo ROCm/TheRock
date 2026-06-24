@@ -50,8 +50,8 @@ def _tarball_url(output_root: WorkflowOutputRoot, name: str) -> str:
     return output_root.tarball(quote(name, safe="")).https_url
 
 
-def _is_lite_tarball(name: str) -> bool:
-    return "-lite-" in name
+def _is_test_tarball(name: str) -> bool:
+    return "-tests-" in name
 
 
 def _select_shared_tarball_url(
@@ -60,20 +60,20 @@ def _select_shared_tarball_url(
     output_root: WorkflowOutputRoot,
     platform: str,
 ) -> str | None:
-    full_tarball_files = [f for f in tarball_files if not _is_lite_tarball(f.name)]
+    shared_tarball_files = [f for f in tarball_files if not _is_test_tarball(f.name)]
 
-    for f in full_tarball_files:
+    for f in shared_tarball_files:
         name = f.name
         if name.startswith(f"therock-dist-{platform}-multiarch-"):
             return _tarball_url(output_root, name)
 
-    if len(full_tarball_files) == 1:
-        return _tarball_url(output_root, full_tarball_files[0].name)
+    if len(shared_tarball_files) == 1:
+        return _tarball_url(output_root, shared_tarball_files[0].name)
 
     prefix = f"therock-dist-{platform}-"
     suffix = ".tar.gz"
 
-    for f in full_tarball_files:
+    for f in shared_tarball_files:
         name = f.name
         if name.startswith(prefix) and name.endswith(suffix):
             stem = name[len(prefix) : -len(suffix)]

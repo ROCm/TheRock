@@ -167,7 +167,7 @@ def extract_version_from_asset_name(
     suffix = ".tar.gz"
     if asset_name.startswith(prefix) and asset_name.endswith(suffix):
         version = asset_name[len(prefix) : -len(suffix)]
-        if version.startswith("lite-"):
+        if version.startswith("tests-"):
             return None
         return version
     return None
@@ -185,7 +185,7 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
 
     for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
         for obj in page.get("Contents", []):
-            if "-lite-" in obj["Key"]:
+            if "-tests-" in obj["Key"]:
                 continue
             # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
             match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
@@ -216,7 +216,7 @@ def _fetch_and_sort_nightly_releases(
             key = obj["Key"]
             if not key.endswith(".tar.gz"):
                 continue
-            if "-lite-" in key:
+            if "-tests-" in key:
                 continue
             version = extract_version_from_asset_name(key, artifact_group, platform_str)
             if version:

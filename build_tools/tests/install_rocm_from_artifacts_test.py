@@ -17,23 +17,23 @@ import install_rocm_from_artifacts as mod
 
 
 class TestReleaseDiscovery(unittest.TestCase):
-    def test_extract_version_ignores_lite_tarball(self) -> None:
+    def test_extract_version_ignores_test_tarball(self) -> None:
         self.assertIsNone(
             mod.extract_version_from_asset_name(
-                "therock-dist-linux-gfx94X-dcgpu-lite-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
                 "gfx94X-dcgpu",
                 "linux",
             )
         )
 
-    def test_fetch_and_sort_nightly_releases_ignores_lite_tarballs(self) -> None:
+    def test_fetch_and_sort_nightly_releases_ignores_test_tarballs(self) -> None:
         paginator = mock.Mock()
         paginator.paginate.return_value = [
             {
                 "Contents": [
                     {
                         "Key": (
-                            "therock-dist-linux-gfx94X-dcgpu-lite-"
+                            "therock-dist-linux-gfx94X-dcgpu-tests-"
                             "7.13.0a20260102.tar.gz"
                         ),
                         "LastModified": datetime(2026, 1, 2),
@@ -58,13 +58,13 @@ class TestReleaseDiscovery(unittest.TestCase):
             ["therock-dist-linux-gfx94X-dcgpu-7.13.0a20260101.tar.gz"],
         )
 
-    def test_list_available_nightly_gpu_families_ignores_lite_tarballs(self) -> None:
+    def test_list_available_nightly_gpu_families_ignores_test_tarballs(self) -> None:
         paginator = mock.Mock()
         paginator.paginate.return_value = [
             {
                 "Contents": [
                     {"Key": "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz"},
-                    {"Key": ("therock-dist-linux-gfx94X-dcgpu-lite-" "7.13.0.tar.gz")},
+                    {"Key": ("therock-dist-linux-gfx94X-dcgpu-tests-" "7.13.0.tar.gz")},
                 ]
             }
         ]

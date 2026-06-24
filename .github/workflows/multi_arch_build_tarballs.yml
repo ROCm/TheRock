@@ -34,8 +34,8 @@ on:
           - ci
           - dev
         default: ci
-      include_lite_tarballs:
-        description: "Also build lite tarballs that exclude test artifacts"
+      include_test_tarballs:
+        description: "Also build -tests tarballs that include test artifacts"
         type: boolean
         default: true
   workflow_call:
@@ -58,7 +58,7 @@ on:
       release_type:
         type: string
         default: ci
-      include_lite_tarballs:
+      include_test_tarballs:
         type: boolean
         default: true
       repository:
@@ -109,8 +109,8 @@ jobs:
       - name: Build tarballs
         run: |
           EXTRA_ARGS=()
-          if [[ "${{ inputs.include_lite_tarballs }}" == "true" ]]; then
-            EXTRA_ARGS+=(--include-lite-tarballs)
+          if [[ "${{ inputs.include_test_tarballs }}" == "true" ]]; then
+            EXTRA_ARGS+=(--include-test-tarballs)
           fi
 
           python build_tools/build_tarballs.py \
