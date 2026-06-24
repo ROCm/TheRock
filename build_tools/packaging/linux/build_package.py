@@ -95,7 +95,9 @@ def get_all_target_families(artifact_dir):
 
     # Use ArtifactCatalog from _therock_utils to get all target families
     catalog = ArtifactCatalog(artifact_dir)
-    return sorted(catalog.all_target_families)
+    # Strip xnack suffixes (e.g., gfx942:xnack+ -> gfx942)
+    targets = {t.split(":", 1)[0] for t in catalog.all_target_families}
+    return sorted(targets)
 
 
 ################### Package Variant Builders #######################
