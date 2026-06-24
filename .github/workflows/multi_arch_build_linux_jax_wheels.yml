@@ -183,9 +183,10 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Install boto3
+      - name: Install python deps for CI
+        if: ${{ inputs.build_mode == 'manylinux' }}
         run: |
-          python -m pip install boto3
+          pip install -r external-builds/jax/requirements-jax.txt
 
       - name: Set package dist dir
         run: |
