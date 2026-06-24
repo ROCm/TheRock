@@ -69,6 +69,8 @@ jobs:
   test_artifact_structure:
     name: "Validate artifact structure"
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    container:
+      image: python:3.12-slim
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       PLATFORM: ${{ inputs.platform }}
@@ -80,11 +82,6 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
-
-      - name: Setting up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
 
       - name: Install test requirements
         run: |

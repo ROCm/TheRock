@@ -148,6 +148,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
 
   build_native_deb_packages:
     needs: [build_multi_arch_stages]
@@ -288,13 +289,17 @@ jobs:
   # inputs.kpack_split.
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
-    name: Build PyTorch (fat + split)
+    name: Build PyTorch (fat + split) | ${{ matrix.pytorch_git_ref }}
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pytorch_git_ref: ["release/2.10", "release/2.11", "release/2.12"]
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: "3.12"
-      pytorch_git_ref: "release/2.10"
+      pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}

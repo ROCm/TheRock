@@ -113,7 +113,7 @@ permissions:
 jobs:
   build_jax_wheels:
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
       package_index_url: ${{ steps.publish_jax_wheels.outputs.package_index_url }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
@@ -217,11 +217,20 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
 
+      - name: Checkout CI config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
       - name: Generating target to run
         id: configure
         env:
           TARGET: ${{ inputs.test_amdgpu_family }}
           PLATFORM: linux
+          CI_CONFIG_PATH: ci-config
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_jax_wheels:
