@@ -46,10 +46,10 @@ on:
         description: "ROCm package version to install and build against."
         type: string
         required: true
-      rocm_package_find_links_url:
-        description: "ROCm package index / find-links URL for the manylinux build."
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
         type: string
-        required: true
+        default: ""
       tar_url:
         description: "URL to the TheRock tarball used for the build."
         type: string
@@ -112,10 +112,10 @@ on:
         description: "ROCm package version to install and build against."
         type: string
         required: true
-      rocm_package_find_links_url:
-        description: "ROCm package index / find-links URL for the manylinux build."
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
         type: string
-        required: true
+        default: ""
       tar_url:
         description: "URL to the TheRock tarball used for the build."
         type: string
@@ -217,7 +217,7 @@ jobs:
         env:
           THEROCK_VERSION: ""
           GFX_ARCH: ${{ inputs.gfx_arch }}
-          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+          ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
         run: |
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
@@ -225,7 +225,7 @@ jobs:
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_INDEX_URL}" \
             --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
             .
@@ -317,7 +317,7 @@ jobs:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
       rocm_version: ${{ inputs.rocm_version }}
-      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
+      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
       release_type: ${{ inputs.release_type }}
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}

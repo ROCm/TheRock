@@ -18,10 +18,10 @@ on:
         description: ROCm version
         required: true
         type: string
-      rocm_package_find_links_url:
-        description: "ROCm package index / find-links URL for installing ROCm packages."
-        required: true
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
         type: string
+        default: ""
       release_type:
         description: "Release type"
         type: string
@@ -76,10 +76,10 @@ on:
         description: ROCm version
         type: string
         default: "7.14.0.dev0"
-      rocm_package_find_links_url:
-        description: "ROCm package index / find-links URL for installing ROCm packages."
-        required: true
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
         type: string
+        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -151,7 +151,7 @@ jobs:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
-      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
 
     steps:
       - name: Checkout
@@ -206,18 +206,27 @@ jobs:
               --rocm-version "${{ inputs.rocm_version }}" \
               --jax-requirements rocm-jax/build/requirements.txt
           fi
+      - name: Compute ROCm device extras
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.test_amdgpu_family }}" \
+            --output-mode=device-extras
 
       - name: Install ROCm packages
         run: |
           python -m pip install --upgrade pip
+
+          pkg="rocm[libraries]"
+          if [ -n "${{ steps.expand.outputs.device_extras }}" ]; then
+            pkg="${pkg%]},${{ steps.expand.outputs.device_extras }}]"
+          fi
+
           python -m pip install --pre \
-            --index-url "${ROCM_PACKAGE_FIND_LINKS_URL}" \
-            rocm \
-            rocm-sdk-devel \
-            rocm-sdk-device-gfx942
-          rocm-sdk init
+            --index-url "${ROCM_PACKAGE_INDEX_URL}" \
+            "${pkg}==${{ inputs.rocm_version }}"
+
           echo "ROCM_ROOT=$(rocm-sdk path --root)" >> "$GITHUB_ENV"
-          ln -sfn "$(rocm-sdk path --root)" /opt/rocm
 
       - name: Install JAX wheels from package index
         run: |
@@ -244,9 +253,9 @@ jobs:
       - name: Run JAX tests
         env:
           JAX_PLATFORMS: rocm
-          HIP_DEVICE_LIB_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
-          JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
-          JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: /opt/rocm/lib/llvm/bin
+          HIP_DEVICE_LIB_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/bin
         run: |
           python -c "import jax; print(jax.local_devices())"
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
