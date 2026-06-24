@@ -694,6 +694,11 @@ if(THEROCK_ENABLE_HIPTHREADS)
     EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/hipthreads"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipthreads"
     BACKGROUND_BUILD
+    # libhipthreads.a is a static archive of device bitcode that is identical
+    # regardless of which per-arch shard builds it. Build all test targets once
+    # and publish a single target-neutral (_generic) artifact (see TARGET_NEUTRAL
+    # on therock_provide_artifact below) so per-arch CI upload races are harmless.
+    USE_TEST_AMDGPU_TARGETS
     DEFAULT_GPU_TARGETS
       gfx1201  # Fixes issue with empty target list for unsupported architectures.
     CMAKE_ARGS
@@ -738,6 +743,7 @@ if(THEROCK_ENABLE_HIPTHREADS)
   therock_cmake_subproject_activate(hipthreads)
 
   therock_provide_artifact(hipthreads
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-hipthreads.toml
     COMPONENTS
       dbg
