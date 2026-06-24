@@ -49,6 +49,10 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      # Opt the Release pipeline into the rocjitsu CPU-only simulator
+      # sibling job inside multi_arch_build_portable_linux.yml. Default in
+      # that workflow stays `false`, so PR CI / other callers are unaffected.
+      run_simulator: true
     permissions:
       contents: read
       id-token: write

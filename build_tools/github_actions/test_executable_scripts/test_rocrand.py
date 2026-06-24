@@ -82,22 +82,44 @@ QUICK_TESTS = [
     "-*basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/10*",
 ]
 
+# Resolve the ctest test-dir. simulator_runner.py overrides this via env so
+# the simulator can run the same component out of a non-standard layout; on
+# the real-GPU lane the env vars are unset and we fall back to the historical
+# `<THEROCK_BIN_DIR>/rocRAND` path.
+ctest_dir = os.getenv("SIMULATOR_CTEST_DIR") or f"{THEROCK_BIN_DIR}/rocRAND"
+
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/rocRAND",
+    ctest_dir,
     "--output-on-failure",
     "--parallel",
     "8",
-    "--repeat",
-    "until-pass:3",
 ]
 
-# If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
+# Simulator override: narrow ctest to the binaries that actually carry tests
+# matching the preset's GTEST_FILTER. Without this the 51 rocRAND binaries
+# that don't host any `basic` gtest still run, exit 0 with zero tests, and
+# silently inflate ctest's pass count (see Rocjitsu_005 LastTest.log). Empty
+# / unset / ".*" preserves today's behavior.
+include_regex = os.getenv("SIMULATOR_CTEST_INCLUDE_REGEX", "").strip()
+if include_regex and include_regex != ".*":
+    cmd.extend(["-R", include_regex])
+
+# Simulator override: drop --repeat until-pass:3. Flake-retry was useful on
+# real GPUs but under the deterministic simulator it can only hide bugs by
+# masking the symptom. Unset / "0" / "false" => preserve historical retries.
+no_retry = os.getenv("SIMULATOR_NO_RETRY", "").strip().lower()
+if no_retry not in ("1", "true", "yes", "on"):
+    cmd.extend(["--repeat", "until-pass:3"])
+
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "quick":
+# Only apply QUICK_TESTS if the caller hasn't already pinned GTEST_FILTER.
+# This lets simulator_runner.py keep its own preset+skip list intact when it
+# invokes us, while preserving today's on-device behavior (where GTEST_FILTER
+# is never set in the inherited environment).
+if test_type == "quick" and not environ_vars.get("GTEST_FILTER"):
     environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

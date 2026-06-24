@@ -61,6 +61,12 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package, fetch_sources_args)"
         type: string
         default: ""
+      run_simulator:
+        description: "Run the rocjitsu CPU-only simulator as a sibling job once compiler-runtime + math-libs finish. Only the Release pipeline sets this to true today."
+        type: boolean
+        # EXPERIMENTAL: defaulted true so PR CI also exercises simulator-test.
+        # Revert to `false` to restore the original Release-only behaviour.
+        default: true
 
 permissions:
   contents: read
@@ -86,6 +92,13 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      # EMULATION-FLAG: only the compiler-runtime stage builds rocjitsu
+      # (per BUILD_TOPOLOGY.toml). Forward run_simulator so the per-stage
+      # workflow appends `-DTHEROCK_ENABLE_EMULATION=ON` to its cmake
+      # configure, unblocking `therock_provide_artifact(rocjitsu ...)`.
+      # Without this, rocjitsu silently fails its gate and no
+      # `rocjitsu_*.tar.zst` is produced for simulator-test to consume.
+      enable_emulation: ${{ inputs.run_simulator }}
     permissions:
       contents: read
       id-token: write
@@ -167,6 +180,44 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: simulator-test (generic, single job)
+  # Runs the rocjitsu CPU-only simulator against the just-built rocrand test
+  # binaries. Starts as soon as compiler-runtime + math-libs are uploaded
+  # (no waiting for the rest of the DAG). Gated by `run_simulator` so only
+  # the Release pipeline enables it today; PR CI keeps it off by default.
+  # ==========================================================================
+  simulator-test:
+    # Make the run-graph label per matrix entry show the family cleanly
+    # (e.g. "simulator-test (gfx94X-dcgpu)"). Without this, GitHub auto-
+    # derives the label from `matrix.family_info` (an object) and produces
+    # an ugly stringified form for both running and skipped entries.
+    name: simulator-test (${{ matrix.family_info.amdgpu_family }})
+    needs: [compiler-runtime, math-libs]
+    # Fan out across the same families math-libs builds for. Per-family
+    # rocjitsu-support whitelisting (cdna3 + cdna4 KMD configs today;
+    # see FAMILY_TO_KMD_CONFIG in
+    # build_tools/github_actions/test_executable_scripts/simulator_runner.py)
+    # lives in the leaf workflow's job-level `if:` because job-level `if:`
+    # in this caller cannot reference the `matrix` context (actionlint /
+    # GitHub context-availability restriction). For non-supported families
+    # the leaf's `consume_and_test` skips itself and the matrix entry
+    # shows as a skipped check in the UI.
+    if: ${{ !cancelled() && !failure() && inputs.run_simulator }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+    uses: ./.github/workflows/test-simulator.yml
+    secrets: inherit
+    with:
+      artifact_run_id: ${{ github.run_id }}
+      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
+      filter_preset: quick
     permissions:
       contents: read
       id-token: write
