@@ -36,6 +36,13 @@ skip_tests = {
             # TestNNDeviceTypeCUDA::test_linear_cross_entropy_loss_default_bias_False_cuda_float32
             # input-grad ULP worst case 952 > 854 on ROCm June 12 wheel.
             "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
+            # Run 28126068513 default shard 6/10, job 83294069418:
+            # Test passes an out-of-bounds class index to cross-entropy loss and asserts
+            # a device assertion error appears in stderr. On ROCm, device assertions
+            # manifest as a GPU memory access fault instead of a catchable assertion
+            # message, so the expected error string is never found.
+            "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float16)",
+            "(TestNNDeviceTypeCUDA and test_cross_entropy_loss_2d_out_of_bounds_class_index_cuda_float32)",
         ],
         "export": [
             # Run 27246343570 default shard 10/10, job 80461205617:
@@ -119,6 +126,19 @@ skip_tests = {
             "(TestTEFuserDynamic and test_unary_ops)",
             "(TestTEFuserDynamic and test_where_ops)",
         ],
+        "dynamo": [
+            # Run 28109021458 job 83231166331:
+            # LoggingTests::test_logs_out captures all subprocess log output and does
+            # an exact string comparison against an expected log. ROCm's HSA runtime
+            # emits an extra warning line into stderr:
+            #   W agent.cpp:158] Attempt to enable hip visiblity for agent-2
+            #   which is not visible to HSA (ROCR)
+            # This warning leaks into the captured output and breaks the exact match.
+            # Same agent.cpp warning family as test_hip_device_count (Bucket 3a in
+            # skip_root_causes_and_fixes.md). Fix: suppress ROCm agent warnings in
+            # the test subprocess env or fix the visibility mismatch causing the warning.
+            "(LoggingTests and test_logs_out)",
+        ],
         "serialization": [
             # Mirrored from pytorch_2.12.py — TestSerialization/TestOldSerialization
             # expect debug env flags set in CI; TheRock wheel CI does not enable them.
@@ -168,6 +188,31 @@ skip_tests = {
             "(TestFullyShard1DTrainingCore and test_post_optim_event)",
             # /dev/shm exhausted by 8-rank 3D mesh tensor allocs; NCCL shared memory OOM
             "(TestFullyShardHSDP3DTraining and test_3d_mlp_with_nd_mesh)",
+            # Run 28109021458 distributed shard 2/3, job 83231166359:
+            # CPFlexAttentionTest context-parallel flex attention numerical mismatch.
+            # 24/1048576 elements wrong; greatest abs diff 1.60e-05 (tol 2e-06).
+            # causal_mask was already a Jun1-stack monitoring candidate in FLAKY_TESTS.md
+            # (failed run 26922264789, passed 26907811456); now fails again on Jun12 stack.
+            # document_mask is a new consistent failure in the same run.
+            "(CPFlexAttentionTest and test_cp_flex_attention_causal_mask)",
+            "(CPFlexAttentionTest and test_cp_flex_attention_document_mask)",
+            # Promoted flaky entries from FLAKY_TESTS.md — failed in multiple full-suite
+            # runs on the June 12 stack and promoted per the ledger's promotion policy.
+            # Passed in validation run 27657923936 but that is only one passing run;
+            # the ledger requires 3+ consecutive passes before removal.
+            # Run 27480021236 distributed shard 1/3, job 81226065498 (+ earlier runs):
+            # ComposabilityTest::test_replicate_pp_ScheduleClass3_bfloat16 hits NCCL
+            # /dev/shm exhaustion under 8-rank pipeline-parallel reduce-grad.
+            "(ComposabilityTest and test_replicate_pp_ScheduleClass3_bfloat16)",
+            # Run 27480021236 distributed shard 1/3, job 81226065498:
+            # TestStateDict::test_shared_weight fails with optimizer state_dict
+            # tensor mismatch (1/3000000 elements, tiny drift).
+            "(TestStateDict and test_shared_weight)",
+            # Run 27480021236 distributed shard 1/3 + run 26922264789:
+            # TestDistBackendWithSpawn::test_ddp_apply_optim_in_backward fails with
+            # parameter tensor mismatch after optimizer-in-backward on separate stream.
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward)",
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward_grad_as_bucket_view_false)",
         ],
     },
 }
