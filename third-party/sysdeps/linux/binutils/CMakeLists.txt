@@ -47,7 +47,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(BINUTILS_BUILD)
+project(BINUTILS_BUILD VERSION 2.46.0)
 
 include(ProcessorCount)
 ProcessorCount(PAR_JOBS)
@@ -92,6 +92,7 @@ add_custom_target(
       --disable-ld
       --disable-gold
       --disable-binutils
+      --disable-maintainer-mode
   COMMAND
     make -j "${PAR_JOBS}" V=1 -C libiberty
   COMMAND
