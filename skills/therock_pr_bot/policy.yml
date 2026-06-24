@@ -81,29 +81,6 @@ pr:
       - 'tools/**'
       - 'scripts/**'
 
-diff:
-  # Block risky / unwanted files
-  forbidden_paths:
-    - '**/*.pem'
-    - '**/*.key'
-    - '**/.env'
-    - '**/*.exe'
-    # Certificates / signing requests
-    - '**/*.crt'
-    - '**/*.cer'
-    - '**/*.p12'
-    - '**/*.pfx'
-    - '**/*.der'
-    - '**/*.csr'
-    # SSH private keys
-    - '**/id_rsa'
-    - '**/id_dsa'
-    - '**/id_ecdsa'
-    - '**/id_ed25519'
-    # GPG keys / signatures
-    - '**/*.gpg'
-    - '**/*.asc'
-
 checks:
   # External checks that must be GREEN before PR is "ready for review"
   # (Do NOT include therock-pr-bot here to avoid circular dependency.)

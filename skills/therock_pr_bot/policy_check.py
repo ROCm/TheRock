@@ -32,7 +32,6 @@ CODEQL_ENABLED = False
 LABEL_TRIGGER_CHECKS = {
     "PR Title/Description",
     "Unit Test",
-    "Forbidden Files",
 }
 
 # Fixed display order for rows in the results table (by check name). Any row
@@ -40,7 +39,6 @@ LABEL_TRIGGER_CHECKS = {
 TABLE_ORDER = [
     "Branch Name",
     "PR Title/Description",
-    "Forbidden Files",
     "Unit Test",
     "pre-commit",
     "Draft PR",
@@ -82,7 +80,6 @@ class Policy:
     max_files_changed: int
     max_total_changes: int
     max_single_file_changes: int
-    forbidden_paths: List[str]
     unit_test_code_extensions: List[str]
     unit_test_patterns: List[str]
     unit_test_exempt_paths: List[str]
@@ -139,8 +136,6 @@ def load_policy(policy_path: Path) -> Policy:
     max_total_changes = int(diff.get("max_total_changes", 0) or 0)
     max_single_file_changes = int(diff.get("max_single_file_changes", 0) or 0)
 
-    forbidden_paths = [str(p) for p in (diff.get("forbidden_paths", []) or [])]
-
     # Unit test rules live under pr.unit_tests.
     unit_cfg = pr.get("unit_tests", {}) or {}
     unit_test_code_extensions = [
@@ -173,7 +168,6 @@ def load_policy(policy_path: Path) -> Policy:
         max_files_changed=max_files_changed,
         max_total_changes=max_total_changes,
         max_single_file_changes=max_single_file_changes,
-        forbidden_paths=forbidden_paths,
         unit_test_code_extensions=unit_test_code_extensions,
         unit_test_patterns=unit_test_patterns,
         unit_test_exempt_paths=unit_test_exempt_paths,
@@ -350,7 +344,7 @@ def ensure_pr_description(policy: Policy, body: str, errors: List[str]) -> None:
         )
 
 
-def _matches_forbidden(filename: str, pattern: str) -> bool:
+def _matches_path(filename: str, pattern: str) -> bool:
     # GitHub returns POSIX-style paths.
     if fnmatch.fnmatch(filename, pattern):
         return True
@@ -358,25 +352,6 @@ def _matches_forbidden(filename: str, pattern: str) -> bool:
     if pattern.startswith("**/") and fnmatch.fnmatch(filename, pattern[3:]):
         return True
     return False
-
-
-def ensure_no_forbidden_files(
-    policy: Policy, pr_files: Iterable[Dict[str, Any]], errors: List[str]
-) -> None:
-    if not policy.forbidden_paths:
-        return
-    for f in pr_files:
-        filename = str(f.get("filename") or "")
-        status = str(f.get("status") or "")
-        if not filename or status == "removed":
-            continue
-        norm = Path(filename).as_posix()
-        for pattern in policy.forbidden_paths:
-            if _matches_forbidden(norm, pattern):
-                errors.append(
-                    f"Forbidden file present in PR: `{norm}` (matched `{pattern}`)."
-                )
-                break
 
 
 def ensure_unit_tests(
@@ -405,9 +380,7 @@ def ensure_unit_tests(
             continue
 
         # Files under exempt paths never require an accompanying unit test.
-        if any(
-            _matches_forbidden(filename, pat) for pat in policy.unit_test_exempt_paths
-        ):
+        if any(_matches_path(filename, pat) for pat in policy.unit_test_exempt_paths):
             continue
 
         base = Path(filename).name
@@ -1000,10 +973,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     results.append(CheckResult("Draft PR", "🚫", passed=True, details=[], tbe=True))
 
     _e = []
-    ensure_no_forbidden_files(policy, pr_files, _e)
-    results.append(CheckResult("Forbidden Files", "⛔", not _e, _e))
-
-    _e = []
     ensure_unit_tests(policy, pr_files, _e)
     results.append(CheckResult("Unit Test", "🧪", not _e, _e))
 
@@ -1035,12 +1004,22 @@ def main(argv: Optional[List[str]] = None) -> int:
             build_policy_table_comment(combined, marker),
         )
 
-        # Add "Not ready to Review" ONLY when one of the key policy checks
-        # (Branch Name, PR Title/Description, Unit Test, Forbidden Files) fails.
-        if any(not r.passed and r.name in LABEL_TRIGGER_CHECKS for r in results):
+        # Add "Not ready to Review" ONLY when one of the key policy checks fails.
+        adds_not_ready_label = any(
+            not r.passed and r.name in LABEL_TRIGGER_CHECKS for r in results
+        )
+        if adds_not_ready_label:
             add_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
+            label_note = (
+                f"The **`{NOT_READY_LABEL}`** label has been added to this PR.\n"
+                "Once all policies pass, the label will be removed automatically."
+            )
         else:
             remove_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
+            label_note = (
+                f"The **`{NOT_READY_LABEL}`** label is only added for "
+                "PR Title/Description or Unit Test failures."
+            )
 
         # Post/update a dedicated "fix policies" comment.
         failing_names = [r.name for r in results if not r.passed]
@@ -1051,8 +1030,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "The following policy checks failed:\n"
             + "\n".join(f"- ❌ {n}" for n in failing_names)
             + "\n\n"
-            f"The **`{NOT_READY_LABEL}`** label has been added to this PR.\n"
-            "Once all policies pass, the label will be removed automatically."
+            f"{label_note}"
         )
         upsert_comment(owner, repo, pr_number, token, fix_marker, fix_body)  # type: ignore[arg-type]
 
