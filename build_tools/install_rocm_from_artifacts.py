@@ -43,6 +43,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
+    [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
@@ -370,6 +371,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipfile,
             args.miopen,
             args.miopenprovider,
+            args.hiptensor,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
@@ -437,6 +439,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
             extra_artifacts.append("hipkernelprovider")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -764,6 +768,13 @@ def main(argv):
         "--hipkernelprovider",
         default=False,
         help="Include 'hipkernelprovider' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

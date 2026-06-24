@@ -1,0 +1,64 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Main rocm-sdk-hpc (OS specific)."""
+
+import importlib.util
+import os
+from setuptools import setup, find_packages
+import sys
+import sysconfig
+from pathlib import Path
+
+THIS_DIR = Path(__file__).resolve().parent
+
+
+def import_dist_info():
+    dist_info_path = THIS_DIR / "src" / "rocm_sdk_hpc" / "_dist_info.py"
+    if not dist_info_path.exists():
+        raise RuntimeError(f"No _dist_info.py file found: {dist_info_path}")
+    module_name = "rocm_sdk_dist_info"
+    spec = importlib.util.spec_from_file_location(module_name, dist_info_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+dist_info = import_dist_info()
+my_package = dist_info.ALL_PACKAGES["hpc"]
+print(f"Loaded dist_info package: {my_package}")
+if dist_info.THIS_TARGET_FAMILY is None:
+    pure_py_package = my_package.pure_py_package_name
+else:
+    pure_py_package = (
+        f"{my_package.pure_py_package_name}_{dist_info.THIS_TARGET_FAMILY}"
+    )
+packages = [pure_py_package]
+platform_py_package = my_package.get_py_package_name(
+    target_family=dist_info.THIS_TARGET_FAMILY
+)
+packages.append(platform_py_package)
+print("Found packages:", packages)
+
+setup(
+    name=my_package.get_dist_package_name(target_family=dist_info.THIS_TARGET_FAMILY),
+    version=dist_info.__version__,
+    packages=packages,
+    package_dir={
+        f"{pure_py_package}": f"src/rocm_sdk_hpc",
+        f"{platform_py_package}": f"platform/{platform_py_package}",
+    },
+    zip_safe=False,
+    include_package_data=True,
+    options={
+        "bdist_wheel": {
+            "plat_name": os.getenv(
+                "ROCM_SDK_WHEEL_PLATFORM_TAG", sysconfig.get_platform()
+            ),
+        },
+    },
+    entry_points={
+        "console_scripts": [],
+    },
+)

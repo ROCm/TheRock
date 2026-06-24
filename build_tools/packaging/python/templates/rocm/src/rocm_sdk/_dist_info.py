@@ -233,6 +233,13 @@ PackageEntry(
     template_directory="rocm-profiler",
     required=False,
 )
+PackageEntry(
+    "hpc",
+    "rocm-sdk-hpc-{target_family}",
+    pure_py_package_name="rocm_sdk_hpc",
+    template_directory="rocm-sdk-hpc",
+    required=False,
+)
 
 # TODO(#703,#1057): Use patterns for version suffixes and platform differences too?
 
@@ -275,6 +282,7 @@ LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
 LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
+LibraryEntry("hiptensor", "hpc", "libhiptensor.so*", "hiptensor*.dll")
 
 # Others we may want:
 # hiprtc-builtins

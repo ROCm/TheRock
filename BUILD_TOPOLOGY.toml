@@ -622,6 +622,11 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.hiptensor]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
+
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
