@@ -215,18 +215,6 @@
         ]
       },
       {
-        "Artifact": "wsl-rocdxg",
-        "Artifact_Subdir": [
-          {
-            "Name": "wsl-rocdxg",
-            "Components": [
-              "lib",
-              "doc"
-            ]
-          }
-        ]
-      },
-      {
         "Artifact": "core-hip",
         "Artifact_Subdir": [
           {
@@ -258,6 +246,42 @@
             "Components": [
               "lib",
               "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-wsl",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD ROCm WSL support library",
+    "Description_Long": "AMD ROCm DXG support library for Windows Subsystem for Linux (WSL)",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "wsl-rocdxg",
+        "Artifact_Subdir": [
+          {
+            "Name": "wsl-rocdxg",
+            "Components": [
+              "lib",
               "doc"
             ]
           }
