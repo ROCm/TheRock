@@ -44,7 +44,9 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
+    [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
+    [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
@@ -169,7 +171,10 @@ def extract_version_from_asset_name(
     prefix = f"therock-dist-{platform_str}-{artifact_group}-"
     suffix = ".tar.gz"
     if asset_name.startswith(prefix) and asset_name.endswith(suffix):
-        return asset_name[len(prefix) : -len(suffix)]
+        version = asset_name[len(prefix) : -len(suffix)]
+        if version.startswith("tests-"):
+            return None
+        return version
     return None
 
 
@@ -185,6 +190,8 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
 
     for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
         for obj in page.get("Contents", []):
+            if "-tests-" in obj["Key"]:
+                continue
             # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
             match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
             if match:
@@ -213,6 +220,8 @@ def _fetch_and_sort_nightly_releases(
         for obj in page.get("Contents", []):
             key = obj["Key"]
             if not key.endswith(".tar.gz"):
+                continue
+            if "-tests-" in key:
                 continue
             version = extract_version_from_asset_name(key, artifact_group, platform_str)
             if version:
@@ -372,6 +381,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipfile,
             args.miopen,
             args.miopenprovider,
+            args.hiptensor,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
@@ -388,6 +398,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems_examples,
             args.rocrtst,
             args.rocalution,
+            args.kfdtest,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -441,6 +452,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
             extra_artifacts.append("hipkernelprovider")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -502,6 +515,11 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.kfdtest:
+            extra_artifacts.append("kfdtest")
+            # kfdtest depends on llvm-dev
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -778,6 +796,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocdecode",
         default=False,
         help="Include 'rocdecode' artifacts",
@@ -879,6 +904,13 @@ def main(argv):
         "--rocalution",
         default=False,
         help="Include 'rocalution' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--kfdtest",
+        default=False,
+        help="Include 'kfdtest' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

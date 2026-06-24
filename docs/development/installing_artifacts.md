@@ -36,6 +36,7 @@ Choose one of these options to specify where to install from:
 | `--debug-tools` | Flag | Include ROCm debugging tools artifacts             |
 | `--fft`         | Flag | Include FFT artifacts                              |
 | `--hipdnn`      | Flag | Include hipDNN artifacts                           |
+| `--hiptensor`   | Flag | Include hipTensor artifacts                        |
 | `--libhipcxx`   | Flag | Include libhipcxx artifacts                        |
 | `--miopen`      | Flag | Include MIOpen artifacts                           |
 | `--prim`        | Flag | Include primitives artifacts                       |
