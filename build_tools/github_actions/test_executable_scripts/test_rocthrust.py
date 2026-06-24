@@ -84,12 +84,9 @@ QUICK_TESTS = [
     "ZipIterator*",
 ]
 
-# Some platforms are less capable than others.
-ctest_parallel_count = 8
-if AMDGPU_FAMILIES == "gfx1152":
-    ctest_parallel_count = 4
-elif AMDGPU_FAMILIES == "gfx1153":
-    ctest_parallel_count = 4
+# CTest runs serially by default; per-GPU overrides can be added below.
+# Example: if AMDGPU_FAMILIES == "gfx1153": ctest_parallel_count = 4
+ctest_parallel_count = 1
 
 # Generate the resource spec file for ctest
 rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
