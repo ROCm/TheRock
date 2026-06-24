@@ -379,6 +379,12 @@ if(THEROCK_ENABLE_ROCWMMA)
   set(_rocwmma_build_tests ${THEROCK_BUILD_TESTING})
   set(_rocwmma_enable_benchmarks ${THEROCK_ROCWMMA_ENABLE_BENCHMARKS})
   set(_rocwmma_artifact_components dbg dev lib test)
+
+  # rocWMMA intentionally supports only targets with MFMA/WMMA instructions.
+  # Use the same target filtering metadata as CK to recognize all-filtered
+  # shards, but keep the host/API subproject declared for downstream users.
+  # For those shards, omit only target-dependent samples/tests/benchmarks so
+  # they do not publish an untransformed rocwmma_test_generic artifact.
   if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
     therock_filter_amdgpu_targets(
       _rocwmma_gpu_targets rocWMMA ${THEROCK_AMDGPU_TARGETS})
@@ -386,7 +392,8 @@ if(THEROCK_ENABLE_ROCWMMA)
       string(JOIN " " _rocwmma_requested_targets ${THEROCK_AMDGPU_TARGETS})
       message(STATUS
         "rocWMMA: no supported GPU targets remain after filtering "
-        "(${_rocwmma_requested_targets}); disabling samples and tests.")
+        "(${_rocwmma_requested_targets}); disabling samples, tests, "
+        "and benchmarks.")
       set(_rocwmma_build_samples OFF)
       set(_rocwmma_build_tests OFF)
       set(_rocwmma_enable_benchmarks OFF)
