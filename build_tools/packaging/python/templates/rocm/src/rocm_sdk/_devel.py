@@ -29,12 +29,15 @@ it, as the alternative is to increase the package size by 2-5x and break
 symlink relationships.
 """
 
+import importlib
 import importlib.metadata as md
 import io
+import json
 import os
 from pathlib import Path
 import platform
 import shutil
+import sys
 import tarfile
 
 from . import _dist_info as di
@@ -67,6 +70,11 @@ def get_devel_root() -> Path:
     # we haven't expanded yet or expansion failed and we need to retry
     tarfile_path, _ = _find_tarfile(rocm_sdk_devel_path)
     if (devel_py_pkg_path / "__init__.py").exists() and not tarfile_path:
+        # The generic devel content is expanded one-shot, but per-ISA device
+        # files are owned by independently-installed rocm-sdk-device-* wheels.
+        # Reconcile their links on every call so a device wheel installed after
+        # the first expansion is picked up on the next `rocm-sdk init`.
+        _reconcile_device_links(site_lib_path, devel_py_pkg_path, di.__version__)
         return devel_py_pkg_path
 
     _expand_devel_contents(rocm_sdk_devel_path, site_lib_path)
@@ -74,6 +82,7 @@ def get_devel_root() -> Path:
         raise ImportError(
             f"Expanding {devel_py_pkg_name} did not produce a valid Python package"
         )
+    _reconcile_device_links(site_lib_path, devel_py_pkg_path, di.__version__)
     return devel_py_pkg_path
 
 
@@ -177,6 +186,204 @@ def _find_tarfile(rocm_sdk_devel_path: Path):
     return tarfile_path, tarfile_mode
 
 
+def _devel_link_ok(dest_path: Path, target: str) -> bool:
+    """True if dest_path already exists as a hardlink to its manifest target.
+
+    A symlink that happens to resolve to the right inode is rejected: the
+    reconciler must guarantee hardlinks, so the slow path replaces it.
+    """
+    if dest_path.is_symlink() or not dest_path.is_file():
+        return False
+    try:
+        return dest_path.samefile(dest_path.parent / target)
+    except OSError:
+        return False
+
+
+def _record_has_entries(record_path: Path, names: list[str]) -> bool:
+    """True if RECORD exists, has no duplicate rows, and lists every name.
+
+    Returning False on a duplicate row makes the fast path fall through so
+    `_ensure_record_entries` can rewrite RECORD and drop the duplicates.
+    """
+    if not record_path.exists():
+        return False
+    existing = set()
+    for line in record_path.read_text().splitlines():
+        if not line.strip():
+            continue
+        name = line.split(",", 1)[0]
+        if name in existing:
+            return False
+        existing.add(name)
+    return all(n in existing for n in names)
+
+
+def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
+    """Find installed rocm-sdk-device-* wheels and their devel-link manifests.
+
+    Returns a list of (record_path, links) where links is the list of
+    {"relpath", "target"} entries from that wheel's `_devel_links` manifest and
+    record_path is that wheel's RECORD (so newly materialized devel links can be
+    recorded against the wheel that owns the underlying device files).
+    """
+    # importlib.metadata caches path scans by directory mtime. On filesystems with
+    # coarse mtime resolution, a device wheel installed immediately after a prior
+    # scan may otherwise be missed.
+    importlib.invalidate_caches()
+
+    plans = []
+    for dist in md.distributions(path=[str(site_lib_path)]):
+        name = dist.metadata["Name"]
+        if not name:
+            continue
+        if name != "rocm-sdk-device" and not name.startswith("rocm-sdk-device-"):
+            continue
+        # The device wheel and the SDK are version-locked. A mismatched wheel's
+        # link targets may not line up with this devel tree, so skip it loudly.
+        if dist.version != expected_version:
+            print(
+                f"WARNING: skipping {name} {dist.version}: does not match "
+                f"rocm-sdk {expected_version}",
+                file=sys.stderr,
+            )
+            continue
+        files = dist.files
+        if not files:
+            continue
+        manifest_file = None
+        record_file = None
+        for f in files:
+            if f.name == "RECORD" and f.parent.name.endswith(".dist-info"):
+                record_file = f
+            elif f.suffix == ".json" and f.parent.name == ".devel_links":
+                manifest_file = f
+        if manifest_file is None or record_file is None:
+            continue
+        manifest_path = Path(manifest_file.locate())
+        if not manifest_path.is_file():
+            continue
+        links = json.loads(manifest_path.read_text()).get("links", [])
+        if not links:
+            continue
+        plans.append((Path(record_file.locate()), links))
+    return plans
+
+
+def _ensure_record_entries(record_path: Path, names: list[str]):
+    """Append RECORD entries for materialized devel links, de-duplicated.
+
+    Reads the existing RECORD, drops any duplicate paths, appends the new
+    site-packages-relative paths (with empty hash/size, per the PyPA spec), and
+    rewrites the file. Writes only when there is something to add or a duplicate
+    row to remove.
+    """
+    lines = []
+    seen = set()
+    changed = False
+    if record_path.exists():
+        for line in record_path.read_text().splitlines():
+            if not line.strip():
+                continue
+            path0 = line.split(",", 1)[0]
+            if path0 in seen:
+                # Drop a duplicate row; rewriting the file removes it.
+                changed = True
+                continue
+            seen.add(path0)
+            lines.append(line)
+    additions = [n for n in names if n not in seen]
+    if not additions and not changed:
+        return
+    for n in additions:
+        lines.append(f"{n},,")
+    record_path.write_text("\n".join(lines) + "\n", newline="\n")
+
+
+def _record_name(site_lib_path: Path, devel_py_pkg_path: Path, relpath: str) -> str:
+    """Site-packages-relative RECORD path for a materialized devel link."""
+    return (devel_py_pkg_path / relpath).relative_to(site_lib_path).as_posix()
+
+
+def _reconcile_device_links(
+    site_lib_path: Path, devel_py_pkg_path: Path, expected_version: str
+) -> int:
+    """Mirror per-ISA device files into the expanded devel tree.
+
+    Each installed `rocm-sdk-device-*` wheel ships a `.devel_links/<arch>.json`
+    manifest listing (relpath, target) pairs. For each entry we hardlink the
+    device file from the rocm-sdk-libraries overlay into the devel platform dir
+    and record the new path in that device wheel's RECORD so that
+    `pip uninstall rocm-sdk-device-<arch>` removes it.
+
+    Idempotent and safe to call on every `get_devel_root()`: links already in
+    place are left untouched and add nothing to RECORD. Returns the number of
+    links created during this call.
+
+    Note: the core CLI trampolines (hipcc etc., see rocm_sdk_core._cli) only
+    reach `get_devel_root()` on the FIRST devel expansion, so a device wheel
+    installed after that is linked by an explicit `rocm-sdk init` / `rocm-sdk
+    path`, not by subsequent compiler invocations.
+    """
+    plans = _discover_device_link_plans(site_lib_path, expected_version)
+    if not plans:
+        return 0
+
+    # Fast path: skip the lock and any RECORD rewrite only when every device file
+    # is already a correct hardlink AND its wheel's RECORD cleanly owns every
+    # link (present, no duplicates). The RECORD check matters because a prior run
+    # can be interrupted after creating the hardlink but before writing RECORD;
+    # that must still be repaired (otherwise `pip uninstall` would not prune the
+    # orphaned link).
+    if all(
+        _devel_link_ok(devel_py_pkg_path / link["relpath"], link["target"])
+        for _record_path, links in plans
+        for link in links
+    ) and all(
+        _record_has_entries(
+            record_path,
+            [
+                _record_name(site_lib_path, devel_py_pkg_path, link["relpath"])
+                for link in links
+            ],
+        )
+        for record_path, links in plans
+    ):
+        return 0
+
+    lock_path = devel_py_pkg_path / ".devel_reconcile.lock"
+    with open(lock_path, "a") as lock_file:
+        file_lock = FileLock(lock_file)
+        try:
+            created = 0
+            for record_path, links in plans:
+                recorded_names = []
+                for link in links:
+                    relpath = link["relpath"]
+                    dest_path = devel_py_pkg_path / relpath
+                    recorded_names.append(
+                        _record_name(site_lib_path, devel_py_pkg_path, relpath)
+                    )
+                    if _devel_link_ok(dest_path, link["target"]):
+                        continue
+                    # Create the parent first so the relative ".." target can be
+                    # resolved through it (the OS cannot traverse a missing dir).
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    hardlink_target = dest_path.parent / link["target"]
+                    if not hardlink_target.is_file():
+                        # The target ships in the same wheel as this manifest, so
+                        # it should exist; skip defensively if it somehow does not.
+                        continue
+                    if dest_path.exists() or dest_path.is_symlink():
+                        dest_path.unlink()
+                    dest_path.hardlink_to(hardlink_target)
+                    created += 1
+                _ensure_record_entries(record_path, recorded_names)
+            return created
+        finally:
+            file_lock.unlock()
+
+
 def _lock_and_expand(
     site_lib_path: Path,
     tarfile_path: Path,
@@ -249,7 +456,12 @@ class FileLock:
 
     def __init__(self, file: io.TextIOWrapper):
         self.file = file
-        self.original_file_size = os.path.getsize(file.name)
+        # Lock at least one byte. On Windows, msvcrt.locking treats a zero-length
+        # range as a no-op (a lock on an empty file does not block), so a lock
+        # file that starts empty - like the reconcile sentinel - would not
+        # actually serialize callers. Locking one byte at offset 0 is valid even
+        # when the file is empty.
+        self.lock_size = max(os.path.getsize(file.name), 1)
 
         if _is_windows():
             # The Windows APIs for file locking apply to only a given range
@@ -261,7 +473,7 @@ class FileLock:
 
             original_position = self.file.tell()
             self.file.seek(0)
-            msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, self.original_file_size)
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, self.lock_size)
             self.file.seek(original_position)
         else:
             # The Unix APIs for file locking apply to the entire file descriptor.
@@ -275,7 +487,7 @@ class FileLock:
 
             original_position = self.file.tell()
             self.file.seek(0)
-            msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, self.original_file_size)
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, self.lock_size)
             self.file.seek(original_position)
         else:
             import fcntl

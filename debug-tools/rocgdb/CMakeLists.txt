@@ -705,6 +705,26 @@ if(BUILD_TESTING)
       COMPONENT tests
       USE_SOURCE_PERMISSIONS)
   endforeach()
+
+  # Also install the CI wrapper script to invoke rocgdb tests.
+  # This is used in the context of TheRock CI.
+  install(
+    PROGRAMS ${ROCGDB_SOURCE_DIR}/.github/scripts/test_rocgdb.py
+    DESTINATION tests/rocgdb
+    COMPONENT tests
+  )
+
+  # Install the optional xfails ignore list, if present in the sources.
+  if(EXISTS "${ROCGDB_SOURCE_DIR}/.github/scripts/rocgdb_ignore_list.json")
+    install(
+      FILES ${ROCGDB_SOURCE_DIR}/.github/scripts/rocgdb_ignore_list.json
+      DESTINATION tests/rocgdb
+      COMPONENT tests
+    )
+  else()
+    message(WARNING "rocgdb tests: xfails ignore list not found at "
+      "${ROCGDB_SOURCE_DIR}/.github/scripts/rocgdb_ignore_list.json; skipping installation.")
+  endif()
 else()
   message(STATUS "rocgdb tests: BUILD_TESTING not set. Skipping installation integrity tests.")
 endif()
