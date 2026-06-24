@@ -110,6 +110,15 @@ logging.info(f"PATH: {environ_vars['PATH']}")
 if not staged_lib.exists():
     logging.error(f"Pre-built library not found at: {staged_lib}")
     raise FileNotFoundError(staged_lib)
+
+# Report the size of the (now target-neutral) static archive so each CI run
+# records how large the all-architecture libhipthreads.a is.
+_lib_size_bytes = staged_lib.stat().st_size
+logging.info(
+    f"libhipthreads.a size: {_lib_size_bytes} bytes "
+    f"({_lib_size_bytes / (1024 * 1024):.2f} MiB) at {staged_lib}"
+)
+
 if not GPULIB_SOURCE_DIR.exists():
     logging.error(f"Test sources not found at: {GPULIB_SOURCE_DIR}")
     raise FileNotFoundError(GPULIB_SOURCE_DIR)
