@@ -253,20 +253,17 @@ jobs:
 
       - name: Run JAX tests
         env:
-          JAX_PLATFORMS: rocm
-
-          # Keep JAX on the assigned/free GPU only.
-          ROCR_VISIBLE_DEVICES: "0"
-          HIP_VISIBLE_DEVICES: "0"
-          GPU_DEVICE_ORDINAL: "0"
-
           # Avoid large upfront GPU memory reservation.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+
+          # Set XLA allocator.
+          XLA_PYTHON_CLIENT_ALLOCATOR: platform
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
             --xla_gpu_force_compilation_parallelism=1
-            --xla_gpu_autotune_level=0
+            --xla_gpu_enable_nccl_comm_splitting=false
+            --xla_gpu_enable_command_buffer=
 
         run: |
           set -euxo pipefail
