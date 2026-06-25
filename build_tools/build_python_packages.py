@@ -376,6 +376,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-hip",
         "core-kpack",
         "core-ocl",
+        "core-ocl-icd",
         "core-hipinfo",
         "core-runtime",
         "hipfile",
