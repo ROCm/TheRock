@@ -1,0 +1,10 @@
+# kfdtest
+[components.run."core/kfdtest/stage"]
+exclude = [
+  "bin/**",
+  "share/kfdtest/**",
+]
+[components.dbg."core/kfdtest/stage"]
+[components.dev."core/kfdtest/stage"]
+[components.doc."core/kfdtest/stage"]
+[components.test."core/kfdtest/stage"]

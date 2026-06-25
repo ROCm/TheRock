@@ -32,6 +32,7 @@ class LibraryEntry:
         so_pattern: str,
         dll_pattern: str,
         posix_relpath="lib",
+        optional: bool = False,
     ):
         self.shortname = shortname
         self.package = ALL_PACKAGES[package_name]
@@ -39,6 +40,11 @@ class LibraryEntry:
         self.windows_relpath = "bin"
         self.so_pattern = so_pattern
         self.dll_pattern = dll_pattern
+        # Optional libraries may be absent from a built distribution (e.g.
+        # rocdxg only builds on a WSL host and is skipped on fork PRs and
+        # local single-command Linux builds). find_libraries skips these
+        # rather than raising when no file matches.
+        self.optional = optional
         assert shortname not in ALL_LIBRARIES
         ALL_LIBRARIES[shortname] = self
 
@@ -264,7 +270,7 @@ LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
 LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
-LibraryEntry("rocdxg", "core", "librocdxg*.so*", "")
+LibraryEntry("rocdxg", "core", "librocdxg*.so*", "", optional=True)
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
