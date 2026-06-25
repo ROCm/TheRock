@@ -245,7 +245,7 @@ test_matrix = {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 180,
-        "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
