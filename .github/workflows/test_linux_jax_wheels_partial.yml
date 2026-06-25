@@ -267,57 +267,11 @@ jobs:
       - name: Run JAX tests
         env:
           JAX_PLATFORMS: rocm
-
-          # JAX allocator controls.
-          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
-
-          # Keep the compiler/autotune throttles.
-          XLA_FLAGS: >-
-            --xla_gpu_force_compilation_parallelism=1
-            --xla_gpu_autotune_level=0
-
-          JAX_DEBUG_NANS: "0"
+          HIP_DEVICE_LIB_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
+          JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: /opt/rocm/lib/llvm/bin
         run: |
-          set -euxo pipefail
-
-          test -n "${ROCM_ROOT}"
-
-          export HIP_DEVICE_LIB_PATH="${ROCM_ROOT}/lib/llvm/amdgcn/bitcode"
-          export JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH="${ROCM_ROOT}/lib/llvm/amdgcn/bitcode"
-          export JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH="${ROCM_ROOT}/lib/llvm/bin"
-
-          test -d "${HIP_DEVICE_LIB_PATH}"
-          test -d "${JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH}"
-          test -d "${JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH}"
-
-          echo "ROCM_ROOT=${ROCM_ROOT}"
-          echo "HIP_DEVICE_LIB_PATH=${HIP_DEVICE_LIB_PATH}"
-          echo "JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH=${JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH}"
-          echo "JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH=${JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH}"
-
-          echo "=== /dev/shm ==="
-          df -h /dev/shm || true
-
-          echo "=== Relevant GPU/JAX environment ==="
-          env | grep -E 'ROCR_VISIBLE|HIP_VISIBLE|CUDA_VISIBLE|GPU_DEVICE_ORDINAL|ROCM_ROOT|HIP_DEVICE_LIB_PATH|JAX_ROCM|XLA|JAX' | sort || true
-
-          echo "=== GPU Memory Before JAX Import ==="
-          if command -v rocm-smi >/dev/null 2>&1; then
-            rocm-smi --showmemuse --showpids || true
-          else
-            echo "rocm-smi not found"
-          fi
-
           python -c "import jax; print(jax.local_devices())"
-
-          echo "=== GPU Memory After JAX Import ==="
-          if command -v rocm-smi >/dev/null 2>&1; then
-            rocm-smi --showmemuse --showpids || true
-          else
-            echo "rocm-smi not found"
-          fi
-
-          echo "=== Starting full test suite ==="
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
           pytest jax/tests/core_test.py -q --log-cli-level=INFO
           pytest jax/tests/util_test.py -q --log-cli-level=INFO
