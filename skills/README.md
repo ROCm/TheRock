@@ -1,7 +1,7 @@
 # Skills
 
 This directory holds reusable "skills" — structured guidance and tooling that an AI coding
-assistant (Cursor, Claude Code, etc.) can load on demand, and that humans can read directly. The
+assistant can load on demand, and that humans can read directly. The
 skills here focus on **pull-request quality**: making the high-quality path the easy path so PRs land
 traceable, tested, and safe to merge.
 

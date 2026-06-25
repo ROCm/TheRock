@@ -67,7 +67,7 @@ When you create a pull request, you should target the *main* branch.
   - If you don't know who to add to a PR as a maintainer, please review the git history to see recently approved PRs in the same file or folder.
 
 > [!TIP]
-> If you use an AI coding assistant (Cursor, Claude Code, etc.), this repo ships PR-quality "skills"
+> If you use an AI coding assistant, this repo ships PR-quality "skills"
 > that help you author, review, and pre-merge gate a PR so it lands traceable, tested, and safe to
 > merge. They are advisory and never post to GitHub or Jira without your approval. See
 > [`skills/`](/skills/) for the full index:
