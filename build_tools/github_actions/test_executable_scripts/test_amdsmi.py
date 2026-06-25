@@ -91,7 +91,14 @@ else:
         },
         "gfx110X-all": {
             "linux": [
+                # gfx110X runs on a non-privileged runner (no --privileged
+                # container), so exclude write/set tests that require elevated
+                # device access. Leaves the read-only + dynamic-metric subset.
                 "amdsmitstReadWrite.FanReadWrite",
+                "amdsmitstReadWrite.TestOverdriveReadWrite",
+                "amdsmitstReadWrite.TestPciReadWrite",
+                "amdsmitstReadWrite.TestPerfCntrReadWrite",
+                "amdsmitstReadWrite.TestEvtNotifReadWrite",
             ]
         },
         "gfx103X-all": {
