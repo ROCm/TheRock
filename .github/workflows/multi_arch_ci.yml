@@ -42,6 +42,10 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+      changed_projects:
+        type: string
+        default: ""
+        description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
   pull_request:
     types:
       - labeled
@@ -92,6 +96,7 @@ jobs:
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      changed_projects: ${{ inputs.changed_projects || '' }}
     permissions:
       contents: read
       id-token: write
@@ -111,6 +116,17 @@ jobs:
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      changed_projects: ${{ inputs.changed_projects || '' }}
+    permissions:
+      contents: read
+      id-token: write
+
+  manifest_diff:
+    name: Manifest Diff
+    # Refs are auto-derived from push / pull_request events only.
+    # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
       id-token: write
@@ -122,9 +138,10 @@ jobs:
       - setup
       - linux_build_and_test
       - windows_build_and_test
+      - manifest_diff
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}

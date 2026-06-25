@@ -25,11 +25,15 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
+        description: 'Release type; selects the S3 bucket'
         type: string
         required: true
       repository:
@@ -43,7 +47,15 @@ on:
       cache_type:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
-        default: "none"
+        default: "sccache"
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
+        type: string
+        default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -58,13 +70,19 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". Selects the S3 bucket.'
-        type: string
-        required: true
+        description: 'Release type; developer-triggered jobs should use "dev"'
+        type: choice
+        options:
+          - dev
+        default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -80,7 +98,15 @@ on:
           - none
           - sccache
           - ccache
-        default: none
+        default: sccache
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
+        type: string
+        default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        type: boolean
+        default: false
 
 run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -88,24 +114,52 @@ permissions:
   contents: read
 
 jobs:
+  setup_matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Generate PyTorch matrix
+        id: matrix
+        run: |
+          python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
+            --python-versions="${{ inputs.python_version }}" \
+            --platform=linux \
+            --amdgpu-families="${{ inputs.amdgpu_families }}"
+
   build_pytorch_wheels:
-    name: Release | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    needs: setup_matrix
+    name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        pytorch_git_ref: ["release/2.9", "release/2.10", "release/2.11", "release/2.12", "nightly"]
+        include: ${{ fromJSON(needs.setup_matrix.outputs.pytorch_matrix) }}
     permissions:
       id-token: write
       contents: read
+      # Granted so the reusable build workflow's dispatch_pytorch_wheels_full_test
+      # job can trigger the full test workflow (a reusable workflow's job cannot
+      # request more permissions than its caller grants).
+      actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
     with:
-      amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_families: ${{ matrix.amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
+      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
+      # The reusable build workflow dispatches the full PyTorch test suite for
+      # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
+      # build's own torch_version output (#5777).
+      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}

@@ -28,6 +28,7 @@ Table of contents:
   - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
   - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
+  - [Using ROCm from WSL](#using-rocm-from-wsl)
 - [Per-family releases](#per-family-releases)
   - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
     - [Python packages release status](#python-packages-release-status)
@@ -81,22 +82,25 @@ Key differences from [per-family releases](#per-family-releases):
 > - https://therock-hud-dev.amd.com/ for current test status
 > - https://github.com/ROCm/TheRock/issues for known issues
 
-| Job description                         | Status                                                                                                                                                                                                                                                     |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build ROCm artifacts/tarballs/packages  | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
-| Test ROCm artifacts                     | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
-| Build and test Linux PyTorch packages   | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
-| Build and test Windows PyTorch packages | [![Multi-Arch Release Windows PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
+| Job description                        | Status                                                                                                                                                                                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build ROCm artifacts/tarballs/packages | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
+| Test ROCm artifacts                    | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
+| Test ROCm native Linux packages        | [![Test Native Linux Packages Install](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml)                      |
+| PyTorch packages - Linux build/test    | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
+| PyTorch packages - Windows build/test  | [![Multi-Arch Release Windows PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
+| PyTorch packages - full tests          | [![Test PyTorch Wheels (Full Suite)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml)                                            |
+| JAX packages - Linux build/test        | [![Multi-Arch Release Linux JAX Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml)                   |
 
 **Package availability:**
 
-| Package type            | Linux                                                                                                                                                  | Windows                                                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| ROCm Python packages    | ✅ Available                                                                                                                                           | ✅ Available                                                      |
-| PyTorch Python packages | ✅ Available<ul><li>Torch versions 2.8, 2.10, and 2.11 only -<br>other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)</li></ul> | ✅ Available                                                      |
-| JAX Python packages     | 🟠 Planned                                                                                                                                             | -                                                                 |
-| ROCm tarballs           | ✅ Available                                                                                                                                           | ✅ Available                                                      |
-| Native packages         | ✅ Available                                                                                                                                           | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
+| Package type            | Linux                                                                                                                                               | Windows                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| ROCm Python packages    | ✅ Available                                                                                                                                        | ✅ Available                                                      |
+| PyTorch Python packages | ✅ Available<ul><li>Torch versions 2.10, 2.11, 2.12 only -<br>other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)</li></ul> | ✅ Available                                                      |
+| JAX Python packages     | 🟠 In progress ([#5634](https://github.com/ROCm/TheRock/issues/5634))                                                                               | -                                                                 |
+| ROCm tarballs           | ✅ Available                                                                                                                                        | ✅ Available                                                      |
+| Native packages         | ✅ Available                                                                                                                                        | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
 
 ### Installing multi-arch ROCm Python packages
 
@@ -179,6 +183,22 @@ After installing, verify your installation:
 ```bash
 rocm-sdk test
 ```
+
+The `rocm-sdk-devel` development files (headers, CMake config, and the device
+`.kpack`/kernel files from your `rocm-sdk-device-*` wheels) are expanded on first
+use. To expand them eagerly, run `rocm-sdk init`.
+
+> [!NOTE]
+> The devel tree is expanded - and its device files linked from the installed
+> `rocm-sdk-device-*` wheels - only once: on the first `rocm-sdk init` /
+> `rocm-sdk test`, or the first use of a devel tool such as `hipcc`. If you
+> install or remove a `rocm-sdk-device-*` wheel (for example, adding a second GPU
+> target) **after** that first expansion, re-run `rocm-sdk init` or `rocm-sdk test`
+> to link the new device files. The compiler tools do not re-scan on their own,
+> so a device wheel added later is not picked up until you run one of those again.
+> Uninstalling a `rocm-sdk-device-*` wheel removes its devel files automatically
+> via `pip`. If the devel tree ever ends up in a bad state, recreate the virtual
+> environment.
 
 #### Supported Python `[device-*]` install extras
 
@@ -422,15 +442,38 @@ sudo dnf install amdrocm-core-sdk
 > supported GPU targets and their identifiers, see
 > [Supported Python `[device-*]` install extras](#supported-python-device--install-extras).
 
+### Using ROCm from WSL
+
+ROCm supports WSL via the DXG kernel interface. DXG detection is enabled by
+default as of rocm-systems@901f9a5 — no environment variable setup is required.
+
+To use ROCm on WSL, install the optional `amdrocm-wsl` package which provides
+the DXG support library:
+
+```bash
+# For Debian/Ubuntu:
+sudo apt install amdrocm-wsl
+
+# For RHEL/CentOS/Fedora:
+sudo dnf install amdrocm-wsl
+```
+
+To explicitly disable DXG detection, set:
+
+```bash
+export HSA_ENABLE_DXG_DETECTION=0
+```
+
 ## Per-family releases
 
-Per-family releases use **GPU-family-specific index URLs** — you choose the
+Per-family releases use **GPU-family-specific index URLs** - you choose the
 index URL that matches your GPU family, and all packages for that family are
 served from that URL.
 
-> [!NOTE]
-> Multi-arch releases (above) are the newer approach and will soon replace
-> per-family releases. Both are available during the transition.
+> [!CAUTION]
+> Multi-arch releases (above) are the newer approach and have replaced
+> per-family releases. Historical per-family releases are still available but
+> no new per-family releases will be generated.
 
 ### Installing per-family releases using pip
 
@@ -820,7 +863,6 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 >   | 0.9.2       | 0.9.2 (upstream) |
 >   | 0.9.1       | 0.9.1 (upstream) |
 >   | 0.8.2       | 0.8.2            |
->   | 0.8.0       | 0.8.0            |
 >
 >   See also
 >
@@ -829,16 +871,23 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 > [!WARNING]
 > Unlike PyTorch, the JAX wheels do **not** automatically install `rocm[libraries]`
 > as a dependency. You must have ROCm installed separately via a
-> [tarball installation](#installing-from-tarballs).
+> [tarball installation](#installing-from-tarballs) or use `pip install --index-url https://rocm.nightlies.amd.com/v2/<your_gfx_arch>/ rocm[libraries,devel]`.
 
 > [!IMPORTANT]
 > The `jax` package itself is **not** published to the TheRock index.
-> After installing `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt` from the
-> GPU-family index, install `jax` from [PyPI](https://pypi.org/project/jax/):
 >
-> ```bash
-> pip install jax
-> ```
+> **For JAX 0.8.2 version:** install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`
+> from the GPU-family index, then install JAX from [PyPI](https://pypi.org/project/jax/)
+> with `pip install jax==0.8.2`.
+>
+> **For JAX versions > 0.8.2:** install `jax_rocm7_plugin` and `jax_rocm7_pjrt` from the
+> GPU-family index, then install JAX from [PyPI](https://pypi.org/project/jax/) with
+> `pip install jax==<jax_version>`.
+>
+> Always pin all four packages (`jax`, `jaxlib` if applicable, `jax_rocm7_plugin`,
+> `jax_rocm7_pjrt`) to the **same** `<jax_version>` from the table above (e.g. `0.9.2`,
+> `0.9.1`, `0.8.2`). The `==<version>` pin matches the `+rocm...` local-version
+> wheels published on the GPU-family index.
 
 ##### jax for gfx94X-dcgpu
 
@@ -848,10 +897,22 @@ Supported devices in this family:
 | ------------- | ---------- |
 | MI300A/MI300X | gfx942     |
 
+###### For JAX 0.8.2:
+
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
-# Install jax from PyPI
-pip install jax
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
+# Install matching jax from PyPI
+pip install jax==0.8.2
+```
+
+###### For JAX versions > 0.8.2:
+
+```bash
+# Replace <jax_version> with one of the supported versions above (e.g. 0.9.2, 0.9.1)
+# — keep all three pins in sync.
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ jax_rocm7_plugin==<jax_version> jax_rocm7_pjrt==<jax_version>
+# Install matching jax from PyPI
+pip install jax==<jax_version>
 ```
 
 ##### jax for gfx950-dcgpu
@@ -862,10 +923,22 @@ Supported devices in this family:
 | ------------- | ---------- |
 | MI350X/MI355X | gfx950     |
 
+###### For JAX 0.8.2:
+
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
-# Install jax from PyPI
-pip install jax
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
+# Install matching jax from PyPI
+pip install jax==0.8.2
+```
+
+###### For JAX versions > 0.8.2:
+
+```bash
+# Replace <jax_version> with one of the supported versions above (e.g. 0.9.2, 0.9.1)
+# — keep all three pins in sync.
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ jax_rocm7_plugin==<jax_version> jax_rocm7_pjrt==<jax_version>
+# Install matching jax from PyPI
+pip install jax==<jax_version>
 ```
 
 ##### jax for gfx110X-all
@@ -879,10 +952,22 @@ Supported devices in this family:
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
 | AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
+###### For JAX 0.8.2:
+
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
-# Install jax from PyPI
-pip install jax
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
+# Install matching jax from PyPI
+pip install jax==0.8.2
+```
+
+###### For JAX versions > 0.8.2:
+
+```bash
+# Replace <jax_version> with one of the supported versions above (e.g. 0.9.2, 0.9.1)
+# — keep all three pins in sync.
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ jax_rocm7_plugin==<jax_version> jax_rocm7_pjrt==<jax_version>
+# Install matching jax from PyPI
+pip install jax==<jax_version>
 ```
 
 ##### jax for gfx1151
@@ -893,10 +978,22 @@ Supported devices in this family:
 | ------------------- | ---------- |
 | AMD Strix Halo iGPU | gfx1151    |
 
+###### For JAX 0.8.2:
+
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
-# Install jax from PyPI
-pip install jax
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
+# Install matching jax from PyPI
+pip install jax==0.8.2
+```
+
+###### For JAX versions > 0.8.2:
+
+```bash
+# Replace <jax_version> with one of the supported versions above (e.g. 0.9.2, 0.9.1)
+# — keep all three pins in sync.
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ jax_rocm7_plugin==<jax_version> jax_rocm7_pjrt==<jax_version>
+# Install matching jax from PyPI
+pip install jax==<jax_version>
 ```
 
 ##### jax for gfx120X-all
@@ -908,10 +1005,22 @@ Supported devices in this family:
 | AMD RX 9060 / XT | gfx1200    |
 | AMD RX 9070 / XT | gfx1201    |
 
+###### For JAX 0.8.2:
+
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ jaxlib jax_rocm7_plugin jax_rocm7_pjrt
-# Install jax from PyPI
-pip install jax
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
+# Install matching jax from PyPI
+pip install jax==0.8.2
+```
+
+###### For JAX versions > 0.8.2:
+
+```bash
+# Replace <jax_version> with one of the supported versions above (e.g. 0.9.2, 0.9.1)
+# — keep all three pins in sync.
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ jax_rocm7_plugin==<jax_version> jax_rocm7_pjrt==<jax_version>
+# Install matching jax from PyPI
+pip install jax==<jax_version>
 ```
 
 #### Using JAX Python packages
