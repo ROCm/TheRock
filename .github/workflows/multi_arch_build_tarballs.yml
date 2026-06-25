@@ -104,6 +104,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Build tarballs
+        shell: bash
         run: |
           EXTRA_ARGS=()
           if [[ "${{ inputs.include_test_tarballs }}" == "true" ]]; then
