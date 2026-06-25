@@ -207,7 +207,9 @@ release branch you are using.
 1. Install requirements:
 
    ```bash
-   pip install -r external-builds/jax/requirements-jax.txt
+   cd jax
+   pip install -r build/test-requirements.txt
+   pip install pytest-html pytest-csv uv pytest-json-report
    ```
 
 1. Install ROCm Python packages:
