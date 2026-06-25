@@ -28,16 +28,21 @@ on:
         description: "ROCm package version string (e.g. '7.13.0.dev0+abc123')"
         type: string
       release_type:
-        description: 'Release type: "ci" or "dev"'
+        description: 'Release type: "ci", "dev", or "nightly"'
         type: choice
         options:
           - ci
           - dev
+          - nightly
         default: ci
       include_test_tarballs:
         description: "Also build -tests tarballs that include test artifacts"
         type: boolean
         default: true
+      upload_run_id:
+        description: "Run ID prefix to upload tarballs under (defaults to current run)"
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_run_id:
@@ -61,6 +66,9 @@ on:
       include_test_tarballs:
         type: boolean
         default: true
+      upload_run_id:
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -130,6 +138,6 @@ jobs:
         run: |
           python build_tools/github_actions/upload_tarballs.py \
             --input-tarballs-dir="${{ github.workspace }}/tarballs" \
-            --run-id="${{ github.run_id }}" \
+            --run-id="${{ inputs.upload_run_id || github.run_id }}" \
             --platform="${{ inputs.platform }}" \
             --release-type="${{ inputs.release_type }}"
