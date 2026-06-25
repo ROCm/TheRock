@@ -288,7 +288,8 @@ def run(args: argparse.Namespace):
                 "kpack_split": kpack_split,
             }
         )
-
+        
+        log(f"Set package_index_url = {index_url}")
         log("Write github actions build summary")
         log("----------------------------------")
         # families: None=single-arch, []=kpack-split flat, [...]=legacy per-family
