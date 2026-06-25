@@ -17,6 +17,7 @@ from _therock_utils.exe_stub_gen import (
 
 
 IS_WINDOWS = platform.system() == "Windows"
+IS_LINUX = platform.system() == "Linux"
 
 
 def _require_cc():
@@ -43,7 +44,7 @@ def _compile_stub_source(output_file: Path, relative_link_to: str, source: str):
 
 @unittest.skipIf(IS_WINDOWS, "exe stubs are not implemented on Windows")
 class ExeStubGenTest(unittest.TestCase):
-    def test_invokes_target_by_absolute_path_and_path_lookup(self):
+    def test_invokes_target_by_absolute_path(self):
         _require_cc()
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -54,15 +55,40 @@ class ExeStubGenTest(unittest.TestCase):
 
             generate_exe_link_stub(stub, "../bin/target")
 
-            result = subprocess.check_output([str(stub), "absolute"], text=True)
-            self.assertEqual(result, "target ran:absolute\n")
+            result = subprocess.run(
+                [str(stub), "absolute"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "target ran:absolute\n")
+            self.assertEqual(result.stderr, "")
+
+    @unittest.skipUnless(IS_LINUX, "PATH lookup regression is Linux-specific")
+    def test_invokes_system_target_by_path_lookup(self):
+        _require_cc()
+        echo = Path("/bin/echo")
+        if not echo.exists():
+            raise unittest.SkipTest("/bin/echo not found")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            stub = tmp / "tool"
+
+            generate_exe_link_stub(stub, os.path.relpath(echo, stub.parent))
 
             env = os.environ.copy()
-            env["PATH"] = f"{stub.parent}{os.pathsep}{env.get('PATH', '')}"
-            result = subprocess.check_output(
-                ["tool", "path"], env=env, cwd=tmp, text=True
+            env["PATH"] = str(stub.parent)
+            result = subprocess.run(
+                ["tool", "path"],
+                env=env,
+                cwd=tmp,
+                capture_output=True,
+                text=True,
             )
-            self.assertEqual(result, "target ran:path\n")
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "path\n")
+            self.assertEqual(result.stderr, "")
 
     def test_invocation_through_symlink_uses_real_stub_location(self):
         _require_cc()
