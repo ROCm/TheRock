@@ -127,13 +127,13 @@ TheRock currently supports two build paths depending on the JAX release branch:
 
    ```bash
    pushd rocm-jax
-   python3 build/ci_build \
-     --compiler=clang \
-     --python-versions="3.12" \
-     --rocm-version="<rocm_version>" \
-     --therock-path="<path_to_tarball_or_rocm_dir>" \
-     --jax-source-dir="<path_to_jax_directory>" \
-     dist_wheels
+      PYTHON_VERSION=<python versions, comma separated>
+      ROCM_VERSION=<rocm_version>
+
+      python3 build/ci_build --therock-path "<path_to_tarball_or_rocm_dir>"
+      --python-versions="$PYTHON_VERSION"
+      --rocm-version="$ROCM_VERSION"
+      dist_wheels
    popd
    ```
 
