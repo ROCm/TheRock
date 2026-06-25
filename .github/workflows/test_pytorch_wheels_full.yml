@@ -321,6 +321,31 @@ jobs:
           echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
           echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
+          # Temporary workaround for ROCm/TheRock#6113: rocm.cfg in rocm-sdk-core
+          # injects -Wl,--enable-new-dtags into every clang++ invocation, breaking
+          # PyTorch Inductor PCH compilation. Strip the linker flag from the config.
+          for cfg in $(find "${ROCM_HOME}" -name rocm.cfg 2>/dev/null); do
+            sed -i '/-Wl,--enable-new-dtags/d' "${cfg}"
+          done
+
+      - name: Install C++ build tools and register test library paths
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential cmake pkg-config
+          ROCM_CORE="${ROCM_HOME%/*}/_rocm_sdk_core"
+          PY_BIN="$(readlink -f "$(command -v python)")"
+          PY_LIBDIR="$(ldd "${PY_BIN}" 2>/dev/null | awk '/libpython/ {print $3}' | head -n1 | xargs -r dirname)"
+          # Register lib dirs in the loader cache, not just LD_LIBRARY_PATH: test_export_opinfo
+          # spawns a subprocess with a wiped env that still imports torch (needs ROCm libs + libpython).
+          {
+            echo "${ROCM_HOME}/lib"
+            echo "${ROCM_CORE}/lib"
+            echo "${ROCM_HOME}/lib/host-math/lib"
+            echo "${ROCM_HOME}/lib/rocm_sysdeps/lib"
+            [ -n "${PY_LIBDIR}" ] && echo "${PY_LIBDIR}"
+          } > /etc/ld.so.conf.d/rocm-pytorch-tests.conf
+          ldconfig
+
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
       # tools.stats.*) that expect the repo root on sys.path.
