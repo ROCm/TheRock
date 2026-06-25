@@ -85,7 +85,7 @@ TheRock currently supports two build paths depending on the JAX release branch:
 
 1. Checkout the source repository for your JAX version.
 
-   **JAX 0.9.0**
+   **JAX 0.9.1**
 
    ```bash
    git clone https://github.com/ROCm/rocm-jax.git
