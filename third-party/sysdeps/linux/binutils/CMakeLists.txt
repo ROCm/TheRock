@@ -88,13 +88,9 @@ add_custom_target(
       --disable-nls
       --disable-werror
       --disable-gprofng
-      --disable-gas
-      --disable-ld
-      --disable-gold
-      --disable-binutils
       --disable-maintainer-mode
   COMMAND
-    make -j "${PAR_JOBS}" V=1 -C libiberty
+    make -j "${PAR_JOBS}" V=1 all-libiberty
   COMMAND
     make -C libiberty install
   COMMAND
