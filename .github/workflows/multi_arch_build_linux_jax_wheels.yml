@@ -188,12 +188,6 @@ jobs:
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
 
-      - name: Debug Index URL Propagation
-        run: |
-          echo "=== DEBUG: rocm_package_index_url Propagation ==="
-          echo "inputs.rocm_package_index_url = '${{ inputs.rocm_package_index_url }}'"
-          echo "=================================================="
-
       - name: Set package dist dir
         run: |
           if [ "${{ inputs.build_mode }}" = "manylinux" ]; then
