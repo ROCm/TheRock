@@ -39,6 +39,7 @@ FFM_QUICK_EXCLUDE = [
     "sk_sgemm_quick.yaml",
 ]
 
+# Parallel pytest-xdist workers for common tests. Tuned on internal 224-core runners.
 NUM_PYTEST_WORKERS = os.getenv("TENSILE_NUM_PYTEST_WORKERS", "16")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -176,5 +177,6 @@ if common_tests.is_dir() and "gfx1250" in amdgpu_family:
         common_cmd += ["--global-parameters=LibraryFormat='msgpack'"]
     if cxx.is_file():
         common_cmd += [f"--tensile-options=--cxx-compiler,{cxx},--gpu-targets,gfx1250"]
+    # Threads inside the emulator per process, not the number of parallel test processes.
     env["HSA_MODEL_NUM_THREADS"] = os.getenv("HSA_MODEL_NUM_THREADS", "8")
     subprocess.check_call(common_cmd, cwd=str(THEROCK_DIR), env=env)
