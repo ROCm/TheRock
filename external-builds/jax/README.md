@@ -155,11 +155,21 @@ TheRock currently supports two build paths depending on the JAX release branch:
 
 1. Locate built wheels:
 
-   After a successful build, wheels will be available in:
+**JAX 0.9.1**
 
-   ```text
-   rocm-jax/jax_rocm_plugin/wheelhouse/
-   ```
+After a successful build, wheels will be available in:
+
+```text
+rocm-jax/jax_rocm_plugin/wheelhouse/
+```
+
+**JAX 0.10.0**
+
+The generated wheels are written to the default JAX build output directory:
+
+```text
+jax/dist/
+```
 
 For more detailed build options, see the build instructions for the JAX
 release branch you are using.
