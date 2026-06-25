@@ -72,6 +72,8 @@ from github_actions_api import (
     gha_set_output,
 )
 
+_NULL_GIT_SHA = "0" * 40
+
 # ---------------------------------------------------------------------------
 # Input parsing helpers
 # ---------------------------------------------------------------------------
@@ -194,7 +196,20 @@ class CIInputs:
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
         elif event_name == "push":
-            base_ref = event.get("before", "HEAD^1")
+            before_ref = event.get("before")
+            # GitHub uses the null SHA when a push creates a new ref. That
+            # is not a real object, and this workflow only fetches HEAD and
+            # its parent for path filtering.
+            if before_ref and before_ref != _NULL_GIT_SHA:
+                base_ref = before_ref
+                print(f"Push event before SHA {before_ref}; using it as diff base")
+            elif before_ref == _NULL_GIT_SHA:
+                print(
+                    "Push event before SHA is GitHub's null SHA for a new ref; "
+                    "using HEAD^1 as diff base"
+                )
+            else:
+                print("Push event before SHA is missing; using HEAD^1 as diff base")
 
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
@@ -247,6 +262,7 @@ class GitContext:
     @staticmethod
     def from_repo(base_ref: str) -> "GitContext":
         """Compute from the actual repo. Only called from main()."""
+        print(f"Computing GitContext using diff base {base_ref!r}")
         changed_files = get_git_modified_paths(base_ref)
         submodule_paths = list(get_git_submodule_paths() or [])
         return GitContext(

@@ -17,9 +17,13 @@ Public API:
 
 import fnmatch
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Iterable, Optional
+
+
+_FULL_GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 # ============================================================================
@@ -39,7 +43,50 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     Returns:
         List of relative file paths that were modified, or None if the operation times out
     """
+    print(f"Computing modified paths with: git diff --name-only {base_ref}")
     try:
+        base_ref_is_sha = _FULL_GIT_SHA_RE.fullmatch(base_ref) is not None
+        # Push events can advance a branch by multiple commits. The setup
+        # checkout is intentionally shallow, so event.before may be older than
+        # the fetched history even though it is a valid reachable commit.
+        if base_ref_is_sha:
+            is_commit_available_locally = (
+                subprocess.run(
+                    ["git", "cat-file", "-e", f"{base_ref}^{{commit}}"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    timeout=60,
+                ).returncode
+                == 0
+            )
+        else:
+            is_commit_available_locally = True
+
+        if not is_commit_available_locally:
+            print(
+                f"Base ref {base_ref} is not available locally. "
+                "Fetching it for path filtering..."
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "fetch",
+                    "--no-tags",
+                    "--no-recurse-submodules",
+                    "--depth=1",
+                    "origin",
+                    base_ref,
+                ],
+                stdout=subprocess.PIPE,
+                check=True,
+                text=True,
+                timeout=60,
+            )
+        elif base_ref_is_sha:
+            print(f"Base ref {base_ref} is available locally")
+
+        # We have the commit, now run the diff.
         return subprocess.run(
             ["git", "diff", "--name-only", base_ref],
             stdout=subprocess.PIPE,
@@ -47,7 +94,7 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
             text=True,
             timeout=60,
         ).stdout.splitlines()
-    except TimeoutError:
+    except subprocess.TimeoutExpired:
         print(
             "Computing modified files timed out. Not using PR diff to determine"
             " jobs to run.",
