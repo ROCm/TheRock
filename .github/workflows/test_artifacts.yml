@@ -136,7 +136,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: users/geomin12/new-ccs
           path: ci-config
         continue-on-error: true
 
