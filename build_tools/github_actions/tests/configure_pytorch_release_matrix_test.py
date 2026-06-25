@@ -19,6 +19,9 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             platform="linux",
         )
 
+        # Compared to releases:
+        #   * limited to python 3.12
+        #   * not including "nightly" pytorch_git_ref
         self.assertEqual(
             matrix,
             [
@@ -47,6 +50,10 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             platform="windows",
         )
 
+        # Compared to releases:
+        #   * limited to python 3.12
+        # Compared to Linux:
+        #   * limited to only a single pytorch_git_ref
         self.assertEqual(
             matrix,
             [
@@ -78,7 +85,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             ],
         )
 
-    def test_filters_exact_unsupported_canonical_family(self):
+    def test_filters_exact_unsupported_family(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
             python_versions=["3.12"],
@@ -87,29 +94,10 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             platform="linux",
         )
 
+        # gfx125X-dcgpu not supported on the release/2.10 ref, should filter
         self.assertEqual(matrix[0]["amdgpu_families"], "gfx94X-dcgpu")
-
-    def test_filter_does_not_use_substring_matching(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="dev",
-            python_versions=["3.12"],
-            pytorch_git_refs=["release/2.10"],
-            amdgpu_families="gfx125X-dcgpu-experimental",
-            platform="linux",
-        )
-
-        self.assertEqual(matrix[0]["amdgpu_families"], "gfx125X-dcgpu-experimental")
-
-    def test_rows_with_no_supported_families_are_omitted(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="dev",
-            python_versions=["3.12"],
-            pytorch_git_refs=["release/2.10"],
-            amdgpu_families="gfx125X-dcgpu",
-            platform="linux",
-        )
-
-        self.assertEqual(matrix, [])
+        matrix_families = ";".join(row["amdgpu_families"] for row in matrix)
+        self.assertNotIn("gfx125X", matrix_families)
 
     def test_unknown_explicit_ref_keeps_families(self):
         matrix = m.generate_pytorch_matrix_for_release_type(

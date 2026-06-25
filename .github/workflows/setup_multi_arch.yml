@@ -15,14 +15,6 @@ on:
           artifact bucket selection, IAM role, and package versioning.
         type: string
         default: ci
-      build_pytorch:
-        description: "Build PyTorch wheels."
-        type: boolean
-        default: true
-      python_version:
-        description: "Single Python version for wheel builds; empty uses the default matrix."
-        type: string
-        default: ""
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
@@ -49,6 +41,14 @@ on:
         default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
+        type: string
+        default: ""
+      build_pytorch:
+        description: "Build PyTorch wheels."
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
         default: ""
       repository:
