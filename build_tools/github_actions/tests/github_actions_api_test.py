@@ -617,7 +617,9 @@ class GitHubActionsUtilsTest(unittest.TestCase):
     def test_gha_query_last_workflow_run(self):
         """Test querying for the last workflow run on a branch."""
         # Test successful run found on main branch
-        result = gha_query_last_workflow_run("ROCm/TheRock", "ci_nightly.yml", "main")
+        result = gha_query_last_workflow_run(
+            "ROCm/TheRock", "multi_arch_ci.yml", "main"
+        )
         self.assertIsNotNone(result)
         self.assertEqual(result["head_branch"], "main")
         self.assertEqual(result["conclusion"], "success")
@@ -626,7 +628,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         # Test multi-status set: accept success or failure
         result = gha_query_last_workflow_run(
             "ROCm/TheRock",
-            "ci_nightly.yml",
+            "multi_arch_ci.yml",
             "main",
             accepted_statuses={"success", "failure"},
         )
@@ -635,7 +637,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
 
         # Test no matching branch - should return None
         result = gha_query_last_workflow_run(
-            "ROCm/TheRock", "ci_nightly.yml", "nonexistent-branch-12345"
+            "ROCm/TheRock", "multi_arch_ci.yml", "nonexistent-branch-12345"
         )
         self.assertIsNone(result)
 

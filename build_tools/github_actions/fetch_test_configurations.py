@@ -156,6 +156,19 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
+    # and do not require a GPU runner.
+    "hipfile": {
+        "job_name": "hipfile",
+        "fetch_artifact_args": "--hipfile --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipfile.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
@@ -283,7 +296,7 @@ test_matrix = {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_hipcub.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -316,7 +329,7 @@ test_matrix = {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 45,
-        "test_script": f"python {_get_script_path('test_rocthrust.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -331,14 +344,18 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        # rocsparse runs as a single shard for now, so the full suite executes in
+        # one process and needs a generous timeout. This will be reduced soon once
+        # rocsparse moves to multi-shard gtest sharding (pending the tolerance fix
+        # in ROCm/rocm-libraries#8713).
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -379,7 +396,7 @@ test_matrix = {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocrand.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -390,7 +407,7 @@ test_matrix = {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_hiprand.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -402,7 +419,7 @@ test_matrix = {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards_dict": {
@@ -414,7 +431,7 @@ test_matrix = {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_hipfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 2,
@@ -576,6 +593,18 @@ test_matrix = {
             "windows": 2,
         },
     },
+    # rocALUTION tests
+    "rocalution": {
+        "job_name": "rocalution",
+        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # profiler tests
     "rocprofiler-compute": {
         "job_name": "rocprofiler-compute",
@@ -694,6 +723,28 @@ def run():
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
 
+    # Get runner config for per-component runner selection
+    # This enables better load distribution across runner pools
+    test_runs_on_labels = None
+    test_runs_on_default = None
+    test_runs_on_multi_gpu_labels = None
+    test_runs_on_multi_gpu_default = None
+    if amdgpu_families:
+        shortened_family = amdgpu_families.split("-")[0].lower()
+        all_families = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        if shortened_family in all_families:
+            platform_info = all_families[shortened_family].get(platform, {})
+            test_runs_on_labels = platform_info.get("test-runs-on-labels")
+            test_runs_on_default = platform_info.get("test-runs-on", "")
+            test_runs_on_multi_gpu_labels = platform_info.get(
+                "test-runs-on-multi-gpu-labels"
+            )
+            test_runs_on_multi_gpu_default = platform_info.get(
+                "test-runs-on-multi-gpu", ""
+            )
+
     logging.info(f"Selecting projects: {projects_to_test}")
 
     # Build the selected test matrix:
@@ -759,6 +810,7 @@ def run():
                 total_shards = base.get("total_shards_dict", {}).get(platform, 1)
                 if test_type == "quick":
                     total_shards = 1
+
                 shard_arr = list(range(1, total_shards + 1))
 
                 pal_entry = {
@@ -812,34 +864,16 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
-                amdgpu_families_matrix = get_all_families_for_trigger_types(
-                    ["presubmit", "postsubmit", "nightly"]
-                )
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
                 ):
-                    # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
-                    shortened_amdgpu_families_name = amdgpu_families.split("-")[
-                        0
-                    ].lower()
-                    platform_info = amdgpu_families_matrix[
-                        shortened_amdgpu_families_name
-                    ][platform]
-
-                    # Use weighted random selection if test-runs-on-multi-gpu-labels is available
-                    if "test-runs-on-multi-gpu-labels" in platform_info:
-                        multi_gpu_runner = select_weighted_label(
-                            platform_info["test-runs-on-multi-gpu-labels"],
-                            f"{shortened_amdgpu_families_name}-multi-gpu",
-                        )
-                    else:
-                        multi_gpu_runner = platform_info["test-runs-on-multi-gpu"]
-
+                    # Mark this component as needing a multi-GPU runner.
+                    # The actual runner selection is done in the per-component loop below.
+                    job_config_data["multi_gpu_runner"] = True
                     logging.info(
-                        f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
+                        f"Including job {job_name} for multi GPU testing with family {amdgpu_families}"
                     )
-                    job_config_data["multi_gpu_runner"] = multi_gpu_runner
                 else:
                     # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
                     logging.info(
@@ -848,6 +882,27 @@ def run():
                     continue
 
             all_components.append(job_config_data)
+
+    # Per-component runner selection for better load distribution
+    # Each component gets its own independent random draw based on configured weights
+    for component in all_components:
+        job_name = component.get("job_name", "unknown")
+        if "multi_gpu_runner" in component:
+            # Multi-GPU components use multi-GPU runner labels
+            if test_runs_on_multi_gpu_labels:
+                component["multi_gpu_runner"] = select_weighted_label(
+                    test_runs_on_multi_gpu_labels, f"{job_name}-multi-gpu"
+                )
+            elif test_runs_on_multi_gpu_default:
+                component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
+        else:
+            # Regular components use standard runner labels
+            if test_runs_on_labels:
+                component["test_runner"] = select_weighted_label(
+                    test_runs_on_labels, job_name
+                )
+            elif test_runs_on_default:
+                component["test_runner"] = test_runs_on_default
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [_build_container_options(c, platform) for c in all_components]
