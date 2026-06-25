@@ -272,6 +272,8 @@ jobs:
           unset HIP_DEVICE_LIB_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
+          unset HIP_VISIBLE_DEVICES
+          unset ROCR_VISIBLE_DEVICES
 
           python -c "import jax; print(jax.local_devices())"
 
