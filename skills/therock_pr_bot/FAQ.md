@@ -249,9 +249,9 @@ Common findings include:
 **How to fix**
 
 1. Open **Security → Code scanning alerts** on the repository page.
-2. Read the alert details and the suggested fix.
-3. Apply the fix (validate/sanitise input, use parameterised queries, disable debug mode, etc.).
-4. Push the fix — CodeQL will re-run and the alert will be resolved.
+1. Read the alert details and the suggested fix.
+1. Apply the fix (validate/sanitise input, use parameterised queries, disable debug mode, etc.).
+1. Push the fix — CodeQL will re-run and the alert will be resolved.
 
 > **Tip:** GitHub Advanced Security AI comments directly on the offending line with a suggested code change.
 
