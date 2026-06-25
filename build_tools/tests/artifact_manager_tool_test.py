@@ -389,6 +389,51 @@ class TestPushCompressionFailure(ArtifactManagerTestBase):
         mock_compress.assert_called_once()
 
 
+class TestPushStageAll(ArtifactManagerTestBase):
+    """Tests that push --stage all collects produced artifacts from all stages."""
+
+    def test_push_all_stages_uploads_all_produced_artifacts(self):
+        """Test that --stage all pushes artifacts from every stage."""
+        import artifact_manager
+
+        self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
+        self._create_fake_precompressed_artifact("second-artifact", "lib", "generic")
+        self._create_fake_precompressed_artifact(
+            "downstream-artifact", "lib", "generic"
+        )
+
+        argv = [
+            "push",
+            "--stage",
+            "all",
+            "--build-dir",
+            str(self.build_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+        ]
+
+        artifact_manager.main(argv)
+
+        output_root = WorkflowOutputRoot.for_local(
+            run_id="local", platform=TEST_PLATFORM
+        )
+        backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=output_root,
+        )
+        for name in ["test-artifact", "second-artifact", "downstream-artifact"]:
+            self.assertTrue(
+                backend.artifact_exists(f"{name}_lib_generic.tar.zst"),
+                f"{name} should be pushed with --stage all",
+            )
+
+
 class TestFetchFailureExitCode(ArtifactManagerTestBase):
     """Tests that fetch command exits with non-zero code on download failures."""
 
@@ -455,6 +500,188 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
 
         self.assertEqual(ctx.exception.code, 1)
         mock_extract.assert_called_once()
+
+
+class TestFetchStageAll(ArtifactManagerTestBase):
+    """Tests that fetch --stage all fetches all artifacts in the topology."""
+
+    def test_fetch_all_fetches_every_artifact(self):
+        """Test that --stage all fetches artifacts from every stage."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("second-artifact", "lib", "generic")
+        self._create_staged_artifact("downstream-artifact", "lib", "generic")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_names = {c.archive_path.stem.split("_")[0] for c in extract_calls}
+        for name in ["test-artifact", "second-artifact", "downstream-artifact"]:
+            self.assertIn(
+                name,
+                fetched_names,
+                f"{name} should be fetched with --stage all",
+            )
+
+    def test_fetch_exclude_components_skips_test_artifacts(self) -> None:
+        """Test that --exclude-components filters artifact components."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "test", "generic")
+        self._create_staged_artifact("test-artifact", "test", "gfx942")
+        self._create_staged_artifact("second-artifact", "run", "generic")
+        self._create_staged_artifact("second-artifact", "test", "generic")
+
+        extract_calls: list[artifact_manager.ExtractRequest] = []
+
+        def mock_extract(request: artifact_manager.ExtractRequest) -> Path:
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-targets",
+                "gfx942",
+                "--exclude-components",
+                "test",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertIn("test-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertIn("second-artifact_run_generic.tar.zst", fetched_keys)
+        self.assertFalse(
+            any("_test_" in key for key in fetched_keys),
+            f"Should not fetch test artifacts, got: {fetched_keys}",
+        )
+
+    def test_fetch_exclude_components_rejects_unknown_component(self) -> None:
+        """Test that --exclude-components validates component names."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--exclude-components",
+            "unknown",
+        ]
+
+        with self.assertRaises(ValueError):
+            artifact_manager.main(argv)
+
+    def test_fetch_exclude_artifacts_skips_named_artifacts(self) -> None:
+        """Test that --exclude-artifacts filters whole artifacts."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("second-artifact", "lib", "generic")
+
+        extract_calls: list[artifact_manager.ExtractRequest] = []
+
+        def mock_extract(request: artifact_manager.ExtractRequest) -> Path:
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--exclude-artifacts",
+                "second-artifact",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertIn("test-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertNotIn("second-artifact_lib_generic.tar.zst", fetched_keys)
+
+    def test_fetch_exclude_artifacts_rejects_unknown_artifact(self) -> None:
+        """Test that --exclude-artifacts validates artifact names."""
+        import artifact_manager
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--exclude-artifacts",
+            "unknown-artifact",
+        ]
+
+        with self.assertRaises(ValueError):
+            artifact_manager.main(argv)
 
 
 class TestFetchAmdgpuTargets(ArtifactManagerTestBase):

@@ -57,7 +57,6 @@ NAME_MAPPING = {
     "rocwmma": "rocWMMA",
     "miopenprovider": "miopenprovider",
     "hipblasltprovider": "hipblasltprovider",
-    "fusilliprovider": "fusilliprovider",
 }
 
 # Top-level directories for ROCm components
@@ -70,6 +69,7 @@ ROCM_COMPONENT_DIRS = {
     "profiler",
     "ml-libs",
     "media-libs",
+    "storage-libs",
 }
 
 # Regex to parse artifact filenames: <project>_<variant>[_suffix].tar.xz

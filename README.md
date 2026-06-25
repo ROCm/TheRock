@@ -1,6 +1,6 @@
 # TheRock
 
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain) [![CI Nightly](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml?query=branch%3Amain) [![Multi-arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml?query=branch%3Amain)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![Multi-arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml?query=branch%3Amain) [![Multi-arch CI ASan](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml?query=branch%3Amain)
 
 TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. It is designed for ROCm contributors as well as developers, researchers, and advanced users who need access to the latest ROCm capabilities without the complexity of traditional package-based installations. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info and the [FAQ](docs/faq.md) for frequently asked questions.
 
@@ -30,16 +30,15 @@ See the unified project HUD at https://therock-hud-dev.amd.com/
 
 Multi-arch releases (all GPU architectures):
 
-| Release type                               | Status                                                                                                                                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prebuilt tarballs and ROCm Python packages | [![Multi-arch release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml) |
-
-Per-family releases (one GPU family per package):
-
-| Platform |                                                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages | Native Packages                                                                                                                                                                                                                                  |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain+event%3Aschedule) | [![Release Portable Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) | [![Build Native Linux Packages](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml?query=branch%3Amain) |
-| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain+event%3Aschedule) |                      [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) | —                                                                                                                                                                                                                                                |
+| Job description                        | Status                                                                                                                                                                                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build ROCm artifacts/tarballs/packages | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
+| Test ROCm artifacts                    | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
+| Test ROCm native Linux packages        | [![Test Native Linux Packages Install](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml)                      |
+| PyTorch packages - Linux build/test    | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
+| PyTorch packages - Windows build/test  | [![Multi-Arch Release Windows PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
+| PyTorch packages - full tests          | [![Test PyTorch Wheels (Full Suite)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml)                                            |
+| JAX packages - Linux build/test        | [![Multi-Arch Release Linux JAX Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml)                   |
 
 ## Building from source
 
@@ -193,6 +192,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                         |
 | `-DTHEROCK_ENABLE_RCCL=ON`             | Enables RCCL                                        |
 | `-DTHEROCK_ENABLE_ROCSHMEM=ON`         | Enables rocSHMEM                                    |
+| `-DTHEROCK_ENABLE_HIPFILE=ON`          | Enables hipFile                                     |
 | `-DTHEROCK_ENABLE_ROCR_DEBUG_AGENT=ON` | Enables the ROCR debug agent library                |
 | `-DTHEROCK_ENABLE_PRIM=ON`             | Enables the PRIM library                            |
 | `-DTHEROCK_ENABLE_BLAS=ON`             | Enables the BLAS libraries                          |
@@ -205,8 +205,8 @@ minimal build):
 | `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                      |
 | `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                            |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                     |
+| `-DTHEROCK_ENABLE_ROCALUTION=ON`       | Enables rocALUTION                                  |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
-| `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                              |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
@@ -219,7 +219,6 @@ hipDNN provider plugins:
 | --------------------------------------- | ----------------------------------------- |
 | `-DTHEROCK_ENABLE_MIOPENPROVIDER=ON`    | Enables hipDNN MIOpen-provider plugin     |
 | `-DTHEROCK_ENABLE_HIPBLASLTPROVIDER=ON` | Enables hipDNN hipBLASLt-provider plugin  |
-| `-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON`   | Enables hipDNN Fusilli-provider plugin    |
 | `-DTHEROCK_ENABLE_HIPKERNELPROVIDER=ON` | Enables hipDNN hip kernel provider plugin |
 
 > [!TIP]

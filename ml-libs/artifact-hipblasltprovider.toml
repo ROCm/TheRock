@@ -8,4 +8,7 @@ exclude = [
 include = [
   "bin/hipblaslt_*_test*",
   "bin/hipblaslt_plugin/CTestTestfile.cmake",
+  # Test config TOMLs (e.g. HIPBLASLT_ENGINE.toml) consumed by the cross-provider
+  # integration suite (hipdnn_integration_tests --test-config).
+  "bin/hipblaslt_plugin/*.toml",
 ]

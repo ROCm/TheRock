@@ -74,7 +74,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_dest.bucket, "therock-nightly-python")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_kpack_split_uses_v4_staging_then_release(self, mock_copy):
+    def test_kpack_split_uses_v4_whl_directly(self, mock_copy):
         mock_copy.return_value = 2
         main(
             [
@@ -91,12 +91,10 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # Calls: tarballs, python -> v4/whl-staging, python -> v4/whl
-        self.assertEqual(mock_copy.call_count, 3)
-        _, python_dest_staging = mock_copy.call_args_list[1].args
-        self.assertEqual(python_dest_staging.relative_path, "v4/whl-staging")
-        _, python_dest_release = mock_copy.call_args_list[2].args
-        self.assertEqual(python_dest_release.relative_path, "v4/whl")
+        # Calls: tarballs, python -> v4/whl (no staging for multi-arch)
+        self.assertEqual(mock_copy.call_count, 2)
+        _, python_dest = mock_copy.call_args_list[1].args
+        self.assertEqual(python_dest.relative_path, "v4/whl")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_dev_linux_copies_native_packages(self, mock_copy):
@@ -160,6 +158,59 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                     "--dry-run",
                 ]
             )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_asan_skips_python_packages(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--build-variant",
+                "asan",
+                "--skip-native-packages",
+                "--dry-run",
+            ]
+        )
+
+        # Only tarballs should be copied (python packages skipped for ASAN)
+        self.assertEqual(mock_copy.call_count, 1)
+        tarball_source, tarball_dest = mock_copy.call_args_list[0].args
+        self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
+        # ASAN tarballs go to separate folder
+        self.assertEqual(tarball_dest.relative_path, "v4/tarball-asan")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_asan_native_packages_use_separate_path(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--build-variant",
+                "asan",
+                "--dry-run",
+            ]
+        )
+
+        # Calls: tarballs, deb, rpm (no python for ASAN)
+        self.assertEqual(mock_copy.call_count, 3)
+        # deb packages go to packages-asan path
+        deb_source, deb_dest = mock_copy.call_args_list[1].args
+        self.assertEqual(deb_source.relative_path, "123-linux/packages/deb")
+        self.assertRegex(deb_dest.relative_path, r"^v4/packages-asan/deb/\d{8}-123$")
+        # rpm packages go to packages-asan path
+        rpm_source, rpm_dest = mock_copy.call_args_list[2].args
+        self.assertEqual(rpm_source.relative_path, "123-linux/packages/rpm")
+        self.assertRegex(rpm_dest.relative_path, r"^v4/packages-asan/rpm/\d{8}-123$")
 
 
 if __name__ == "__main__":

@@ -41,6 +41,10 @@ XFAILED_TESTS = {
         "gdb.rocm/corefile.exp",
         "gdb.rocm/device-interrupt.exp",
         "gdb.rocm/load-core-remote-system.exp",
+        # Fails when executed on a machine hosting mixed GPU's with one
+        # of those being the unsupported gfx1036.
+        "gdb.rocm/multi-inferior-fork.exp",
+        "gdb.rocm/multi-inferior-gpu.exp",
     ],
     "GCC": [],
     "LLVM": [

@@ -24,13 +24,17 @@ on:
         type: string
       release_type:
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan). Used to skip tests incompatible with certain builds."
+        type: string
+        default: "release"
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -57,22 +61,10 @@ jobs:
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
         }}
-      # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
-      # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
-      # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
-      # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
-      options: --ipc host
-        --group-add video
-        --device /dev/kfd
-        --device /dev/dri
-        --group-add 993
-        --group-add 992
-        --group-add 110
-        --ulimit memlock=-1:-1
-        --security-opt seccomp=unconfined
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
-        --user 0:0
-        ${{ fromJSON(inputs.component).container_options }}
+      # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
+      # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
+      # and any job-specific options
+      options: ${{ fromJSON(inputs.component).container_options }}
     strategy:
       fail-fast: false
       matrix:
@@ -90,6 +82,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       # Benchmark results database API endpoints for performance metrics collection
       # NOTE: These secrets are only required for benchmark results submission in nightly CI runs.
       # For PR/push workflows, secret retrieval will fail gracefully and benchmarks will skip API submission.
@@ -97,7 +90,7 @@ jobs:
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
       - name: "Fetch 'build_tools' from repository"
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -110,8 +103,13 @@ jobs:
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
+      - name: Pre-job cleanup GPU processes on Linux
+        if: ${{ runner.os == 'Linux' }}
+        timeout-minutes: 5
+        run: bash ./prejob/build_tools/github_actions/cleanup_processes.sh
+
       - name: Checking repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -170,6 +168,9 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
+          # Limit thread count to prevent CPU over-subscription during tests
+          OPENBLAS_NUM_THREADS: "14"
+          OMP_NUM_THREADS: "14"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
@@ -192,6 +193,7 @@ jobs:
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --repository "${{ github.repository }}" \
             --amdgpu-family "${{ inputs.amdgpu_families }}" \
+            --amdgpu-targets "${{ inputs.amdgpu_targets }}" \
             --test-script "${{ fromJSON(inputs.component).test_script }}" \
             --shard-index "${{ matrix.shard }}" \
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
@@ -199,8 +201,11 @@ jobs:
             --print-cmd \
             ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
 
-      # GitHub's 'Complete job' step is unaware of launched executables
-      # and will fail to clean up orphan processes.
+      - name: Post-job cleanup GPU processes on Linux
+        if: ${{ always() && runner.os == 'Linux' }}
+        timeout-minutes: 5
+        run: bash ./build_tools/github_actions/cleanup_processes.sh
+
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
         timeout-minutes: 5

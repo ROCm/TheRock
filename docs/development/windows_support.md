@@ -54,7 +54,7 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo (hip-tests)](https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests)                              | rocm-systems   | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/rocm-systems/tree/develop/projects/clr)                                                    | rocm-systems   | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |                |           |                                               |
-| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ❌        | Unsupported                                   |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ✅        |                                               |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                   |
 | debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
@@ -64,6 +64,8 @@ mainline, in open source, using MSVC, etc.).
 | profiler            | [rocprofiler-systems](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems)                    | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | comm-libs           | [rccl](https://github.com/ROCm/rocm-systems/tree/develop/projects/rccl)                                                  | rocm-systems   | ❌        | Unsupported                                   |
+|                     |                                                                                                                          |                |           |                                               |
+| storage-libs        | [hipFile](https://github.com/ROCm/rocm-systems/tree/develop/projects/hipfile)                                            | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | media-libs          | [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)                                        | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
 | media-libs          | [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg)                                            | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
@@ -86,10 +88,11 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (BLAS)    | [rocSOLVER](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocsolver)                                      | rocm-libraries | ✅        |                                               |
 | math-libs (BLAS)    | [hipSOLVER](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsolver)                                      | rocm-libraries | ✅        |                                               |
 | math-libs (BLAS)    | [hipBLAS](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas)                                          | rocm-libraries | ✅        |                                               |
+| math-libs           | [rocALUTION](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocalution)                                    | rocm-libraries | ✅        |                                               |
 | math-libs           | [rocWMMA](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma)                                          | rocm-libraries | ✅        |                                               |
+| math-libs           | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | math-libs           | [libhipcxx](https://github.com/ROCm/libhipcxx)                                                                           | standalone     | ✅        |                                               |
 |                     |                                                                                                                          |                |           |                                               |
-| ml-libs             | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen](https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen)                                            | rocm-libraries | ✅        |                                               |
 | ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/miopen-provider)                     | rocm-libraries | ✅        |                                               |
@@ -106,8 +109,16 @@ These instructions mostly mirror the instructions in the root
 Before diving into the full setup, you can run the environment validation script
 to check that all prerequisites are met:
 
-```powershell
-.\build_tools\validate_windows_install.ps1
+```bash
+powershell.exe .\build_tools\validate_windows_install.ps1
+```
+
+To get correct results you may need to set all Visual Studio specific paths and pre-configured Python's environment (see below), in such case you need to run few commands before:
+
+```bash
+vcvarsall.bat x64
+.venv\Scripts\Activate.bat
+powershell.exe .\build_tools\validate_windows_install.ps1
 ```
 
 The script checks RAM, disk space, long path support, symlink capability, MSVC,
@@ -184,7 +195,7 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
 > winget install cmake
-> winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
+> winget install ninja-build.ninja ccache python strawberryperl
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 
@@ -303,8 +314,7 @@ If iterating and wishes to use ccache, see [CCache usage on Windows](../../READM
 ### CMake build usage
 
 ```bash
-cmake --build build --target therock-dist
-cmake --build build --target therock-archives
+cmake --build build --target therock-artifacts therock-dist
 ```
 
 This will start building using MSVC. Once the amd-llvm subproject is built,
@@ -319,7 +329,7 @@ outputs.
 #### Building ROCm Python wheels
 
 To build Python wheels, you will need an "artifacts" directory, either from a
-source build of `therock-archives` (see above) or by running the
+source build of `therock-artifacts` (see above) or by running the
 [`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
 artifacts from a CI run.
 

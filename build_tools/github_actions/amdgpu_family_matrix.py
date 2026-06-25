@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 """
-This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
-Also provides the select_weighted_label utility for weighted runner selection.
+AMD GPU Family Matrix and runner selection utilities for GitHub workflows.
 
-* Each entry determines which families and test runners are available to use
-* Each group determines which entries run by default on workflow triggers
+NOTE: The primary source of truth for GPU families and runner labels is
+ROCm/therock-ci-config (runner-config.json). The definitions in this file
+serve as a fallback when external config is not available.
 
 For presubmit, postsubmit and nightly family selection:
 
@@ -21,7 +21,47 @@ TODO(#2200): clarify AMD GPU family selection
 # NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
 #############################################################################################
 
+import os
 import random
+import sys
+from pathlib import Path
+
+
+def _log(*args, **kwargs):
+    print(*args, **kwargs)
+    sys.stdout.flush()
+
+
+def load_external_config() -> dict | None:
+    """Load external CI config from CI_CONFIG_PATH if set.
+
+    The CI config API lives in therock-ci-config repo, which is checked out
+    to CI_CONFIG_PATH. Returns None if CI_CONFIG_PATH is not set or config
+    doesn't exist (fallback to local definitions).
+    """
+    ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
+    if not ci_config_path:
+        _log("CI_CONFIG_PATH not set, using local amdgpu_family_matrix.py")
+        return None
+    config_path = Path(ci_config_path)
+    sys.path.insert(0, str(config_path))
+    try:
+        from ci_config_api import config_exists, load_runner_config
+    except ImportError:
+        _log(f"CI config API not found at {ci_config_path}, using local fallback")
+        return None
+    if not config_exists(config_path):
+        _log(f"CI config not found at {ci_config_path}, using local fallback")
+        return None
+    config = load_runner_config(config_path)
+    _log(f"Using external CI config from {ci_config_path}")
+    return config
+
+
+def is_asan():
+    """Determines if this is an ASAN build using BUILD_VARIANT env var."""
+    BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
+    return BUILD_VARIANT == "asan"
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
@@ -46,13 +86,12 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 
 # Build runner configuration for Linux builds
-# Uses weighted distribution: 90% Azure, 10% AWS
+# Uses weighted distribution: 100% AWS
 # Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "azure-linux-scale-rocm", "weight": 0.9},
-            {"label": "aws-linux-scale-rocm-prod", "weight": 0.1},
+            {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -68,12 +107,13 @@ BUILD_RUNNER_LABELS = {
 
 def select_build_runner(platform: str, build_variant: str) -> str:
     """Select a build runner label based on platform and build variant."""
-    if platform not in BUILD_RUNNER_LABELS:
+    build_runner_labels = get_build_runner_labels()
+    if platform not in build_runner_labels:
         # Platform not configured for weighted selection, return default
         print(f"  No build runner config for platform {platform}, using default")
         return ""
 
-    platform_config = BUILD_RUNNER_LABELS[platform]
+    platform_config = build_runner_labels[platform]
 
     # Use sanitizer runners for asan/tsan builds
     if "san" in build_variant:
@@ -96,10 +136,18 @@ all_build_variants = {
             # "build_variant_cmake_preset": "linux-release-package",
             "build_variant_cmake_preset": "",
         },
+        # full ASAN builds are run on nightly
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+        },
+        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
+        # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
+        "host-asan": {
+            "build_variant_label": "host-asan",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan",
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -129,7 +177,7 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
-- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
+- build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
@@ -141,23 +189,23 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            "test-runs-on": "linux-gfx942-1gpu-ossci-rocm",
+            "test-runs-on": "linux-gfx942-1gpu-core42-ossci-rocm",
             "test-runs-on-labels": [
                 {
-                    "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.369,
-                },  # vultr (17/46)
-                {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.086,
-                },  # cirrascale (4/46)
+                    "weight": 0.117,
+                },  # cirrascale (4/34)
                 {
                     "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.543,
-                },  # core42 (25/46)
+                    "weight": 0.736,
+                },  # core42 (25/34)
+                {
+                    "label": "linux-gfx942-1gpu-ossci-rocm",
+                    "weight": 0.147,
+                },  # vultr (5/34)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "",
+            "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {
@@ -175,7 +223,7 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "host-asan", "tsan"],
         }
     },
     "gfx110x": {
@@ -237,6 +285,7 @@ amdgpu_family_info_matrix_presubmit = {
         },
     },
 }
+
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
 amdgpu_family_info_matrix_postsubmit = {
@@ -393,14 +442,40 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            # PyTorch builds are included — workflow_dispatch can be used
+            # to trigger manually; nightly schedule runs both ROCm stack
+            # and PyTorch builds.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
 }
 
 
 def get_all_families_for_trigger_types(trigger_types):
+    """Returns combined family matrix for the specified trigger types.
+
+    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
+    definitions if external config is unavailable.
     """
-    Returns a combined family matrix for the specified trigger types.
-    trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
-    """
+    external_config = load_external_config()
+
+    # Use external config if available
+    if external_config is not None:
+        gpu_families = external_config.get("gpu_families", {})
+        result = {}
+        for trigger_type in trigger_types:
+            if trigger_type in gpu_families:
+                for name, cfg in gpu_families[trigger_type].items():
+                    result[name] = cfg
+        return result
+
+    # Fall back to local definitions
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,
@@ -414,3 +489,17 @@ def get_all_families_for_trigger_types(trigger_types):
                 result[family_name] = family_config
 
     return result
+
+
+def get_build_runner_labels():
+    """Returns build runner label configuration.
+
+    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
+    definitions if external config is unavailable.
+    """
+    external_config = load_external_config()
+
+    if external_config is not None:
+        return external_config.get("build_runners", {})
+
+    return BUILD_RUNNER_LABELS
