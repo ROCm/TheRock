@@ -150,6 +150,14 @@ class BuildCtestCommandTest(unittest.TestCase):
         le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
         self.assertIn("quick_therock_ci_exclude", le_patterns)
 
+    def test_category_and_therock_ci_exclude_combined(self):
+        exclude_labels = {"quick_exclude", "quick_therock_ci_exclude"}
+        cmd = self._build("quick", "", set(), exclude_labels)
+        le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertIn("quick_exclude", le_patterns)
+        self.assertIn("quick_therock_ci_exclude", le_patterns)
+
     def test_comprehensive_category(self):
         cmd = self._build("comprehensive", "", set())
         idx = cmd.index("-L")
