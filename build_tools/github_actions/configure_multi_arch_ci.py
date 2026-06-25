@@ -131,6 +131,8 @@ class CIInputs:
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
+    build_pytorch: bool = True
+    python_versions: list[str] = field(default_factory=list)
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -182,6 +184,8 @@ class CIInputs:
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
+        build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
+        python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -216,6 +220,8 @@ class CIInputs:
             base_ref=base_ref,
             build_variant=build_variant,
             release_type=release_type,
+            build_pytorch=build_pytorch,
+            python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
@@ -665,6 +671,8 @@ def decide_jobs(
                 test_type_reason="ASAN tests skipped due to non-nightly trigger",
             )
 
+    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
+
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
@@ -672,8 +680,8 @@ def decide_jobs(
         build_rocm=build_rocm,
         test_rocm=test_rocm,
         build_rocm_python=JobGroupDecision(action=JobAction.RUN),
-        build_pytorch=JobGroupDecision(action=JobAction.RUN),
-        test_pytorch=JobGroupDecision(action=JobAction.RUN),
+        build_pytorch=JobGroupDecision(action=build_pytorch_action),
+        test_pytorch=JobGroupDecision(action=build_pytorch_action),
     )
 
 
@@ -826,6 +834,8 @@ def _expand_build_config_for_platform(
     is_schedule: bool,
     is_workflow_dispatch: bool,
     release_type: str,
+    build_pytorch: bool,
+    python_versions: list[str],
     git_context: GitContext,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
@@ -962,13 +972,13 @@ def _expand_build_config_for_platform(
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
 
-    build_pytorch = suffix != "asan"
     pytorch_build_matrix: list[dict[str, str]] = []
     if build_pytorch:
         pytorch_build_matrix = generate_pytorch_matrix_for_release_type(
             release_type=release_type,
             amdgpu_families=dist_amdgpu_families,
             platform=platform,
+            python_versions=python_versions or None,
         )
         build_pytorch = bool(pytorch_build_matrix)
 
@@ -1002,6 +1012,7 @@ def expand_build_configs(
     ci_inputs: CIInputs,
     test_type: str,
     git_context: GitContext,
+    build_pytorch: bool = True,
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
 ) -> BuildConfigs:
@@ -1043,6 +1054,8 @@ def expand_build_configs(
             is_schedule=ci_inputs.is_schedule,
             is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
             release_type=ci_inputs.release_type,
+            build_pytorch=build_pytorch,
+            python_versions=ci_inputs.python_versions,
             prebuilt_stages=prebuilt_stages,
             baseline_run_id=baseline_run_id,
             git_context=git_context,
@@ -1149,6 +1162,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         targets=targets,
         ci_inputs=ci_inputs,
         test_type=jobs.test_rocm.test_type,
+        build_pytorch=jobs.build_pytorch.action == JobAction.RUN,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         git_context=git_context,

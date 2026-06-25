@@ -84,6 +84,8 @@ jobs:
       build_variant: "asan"
       release_type: ${{ inputs.release_type || 'dev' }}
       prerelease_version: ${{ inputs.prerelease_version }}
+      build_pytorch: false
+      python_version: ${{ inputs.python_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: "none"
       repository: ${{ inputs.repository || github.repository }}

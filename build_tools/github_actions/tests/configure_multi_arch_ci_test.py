@@ -129,12 +129,16 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "WINDOWS_TEST_LABELS": "",
                 "PREBUILT_STAGES": "compiler-runtime,runtime-tests",
                 "BASELINE_RUN_ID": "12345",
+                "BUILD_PYTORCH": "false",
+                "PYTHON_VERSION": "3.12",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
         self.assertEqual(inputs.linux_test_labels, ["test:rocprim"])
         self.assertEqual(inputs.prebuilt_stages, "compiler-runtime,runtime-tests")
         self.assertEqual(inputs.baseline_run_id, "12345")
+        self.assertFalse(inputs.build_pytorch)
+        self.assertEqual(inputs.python_versions, ["3.12"])
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -303,6 +307,15 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_rocm_python.action, cm.JobAction.RUN)
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
+
+    def test_build_pytorch_input_skips_pytorch_jobs(self):
+        result = cm.decide_jobs(
+            self._inputs(build_pytorch=False),
+            git_context=cm.GitContext(),
+        )
+
+        self.assertEqual(result.build_pytorch.action, cm.JobAction.SKIP)
+        self.assertEqual(result.test_pytorch.action, cm.JobAction.SKIP)
 
     def test_default_test_type_is_quick(self):
         """Default test_type for PR/push with no special conditions."""
@@ -976,6 +989,42 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 }
             ],
         )
+
+    def test_build_config_uses_requested_pytorch_python_versions(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(
+                release_type="dev",
+                python_versions=["3.13"],
+            ),
+            test_type="quick",
+            git_context=cm.GitContext(),
+        )
+
+        self.assertEqual(
+            {row["python_version"] for row in result.linux.pytorch_build_matrix},
+            {"3.13"},
+        )
+
+    def test_build_config_disables_pytorch_when_job_skipped(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            targets=targets,
+            ci_inputs=self._inputs(),
+            test_type="quick",
+            build_pytorch=False,
+            git_context=cm.GitContext(),
+        )
+
+        self.assertFalse(result.linux.build_pytorch)
+        self.assertEqual(result.linux.pytorch_build_matrix, [])
 
     def test_build_config_disables_pytorch_when_all_families_are_filtered(self):
         targets = cm.TargetSelection(
