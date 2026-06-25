@@ -283,6 +283,11 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
         "disable_dh_strip": disable_dh_strip,
         "install_prefix": config.install_prefix,
         "pkg_name": pkg_name,
+        # Re-pin the relocated PHDR (p_vaddr == p_offset) after dh_strip relocates
+        # it, so binaries exec on old kernels (EL8 4.18). Reuses the kpack
+        # normalization; the workflow fetches the rocm-systems submodule and
+        # `pip install -e shared/kpack` so this module is importable.
+        "phdr_normalize_cmd": "python3 -m rocm_kpack.tools.normalize_phdr_tree",
     }
 
     with rules_file.open("w", encoding="utf-8") as f:

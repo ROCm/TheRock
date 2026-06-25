@@ -27,6 +27,12 @@ override_dh_strip:
 	ln -sf "$(shell command -v llvm-strip-20)"   debian/.llvm-tools/strip
 	ln -sf "$(shell command -v llvm-objcopy-20)" debian/.llvm-tools/objcopy
 	PATH="$(CURDIR)/debian/.llvm-tools:$(PATH)" dh_strip -X.a -X.hsaco
+{% if phdr_normalize_cmd %}
+	# dh_strip relocates the trailing PHDR table's file offset while leaving its
+	# vaddr, re-breaking the p_vaddr == p_offset invariant kpack set at split time
+	# (crashes the EL8 4.18 loader). Re-normalize after strip.
+	{{ phdr_normalize_cmd }} "$(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}"
+{% endif %}
 {% endif %}
 
 override_dh_installchangelogs:

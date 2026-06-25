@@ -84,6 +84,16 @@ jobs:
         run: |
           pip install pyelftools boto3 jinja2 pyzstd
 
+      # rpm/deb packaging strips binaries, which relocates the trailing PHDR
+      # table and re-breaks the p_vaddr == p_offset invariant kpack set at split
+      # time (crashes the EL8 4.18 loader). Fetch the kpack tooling so the
+      # post-strip re-normalization (rocm_kpack.tools.normalize_phdr_tree) is
+      # importable. Mirrors the pytorch wheel step; shallow single-submodule init.
+      - name: Fetch kpack tooling for PHDR normalization
+        run: |
+          git submodule update --init --depth=1 rocm-systems
+          pip install -e rocm-systems/python/rocm-bootstrap -e rocm-systems/shared/kpack
+
       - name: Install System requirements
         run: |
           # Install the needed tools for creating rpm / deb packages

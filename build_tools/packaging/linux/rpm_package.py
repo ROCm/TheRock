@@ -181,6 +181,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "rpmsuggests": rpmsuggests,
         "disable_rpm_strip": is_rpm_stripping_disabled(pkg_info),
         "disable_debug_package": is_debug_package_disabled(pkg_info),
+        # Re-pin the relocated PHDR (p_vaddr == p_offset) after rpmbuild's strip
+        # relocates it, so binaries exec on old kernels (EL8 4.18). Reuses the
+        # kpack normalization; the workflow fetches the rocm-systems submodule and
+        # `pip install -e shared/kpack` so this module is importable.
+        "phdr_normalize_cmd": "python3 -m rocm_kpack.tools.normalize_phdr_tree",
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,

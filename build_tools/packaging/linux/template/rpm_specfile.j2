@@ -5,6 +5,14 @@
 %global __strip   /usr/bin/llvm-strip-20
 {% endif %}
 %global __objcopy /usr/bin/llvm-objcopy-20
+{% if phdr_normalize_cmd and not disable_rpm_strip %}
+# rpmbuild's strip relocates the trailing PHDR table's file offset while leaving
+# its vaddr, re-breaking the p_vaddr == p_offset invariant kpack established at
+# split time and crashing the EL8 4.18 dynamic loader. Append a re-normalization
+# to the default __os_install_post so it runs *after* the strip.
+%global __os_install_post %{__os_install_post} \
+{{ phdr_normalize_cmd }} %{buildroot}{{ install_prefix }}
+{% endif %}
 
 %global _buildshell /bin/bash
 %global _debugsource_template %{nil}
