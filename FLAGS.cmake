@@ -45,6 +45,16 @@ therock_declare_flag(
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
 )
 
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_SDPA
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
+  CMAKE_VARS
+    HIPDNN_ENABLE_SDPA=ON
+  SUB_PROJECTS
+    hipDNN
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
