@@ -1026,17 +1026,24 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertFalse(result.linux.build_pytorch)
         self.assertEqual(result.linux.pytorch_build_matrix, [])
 
-    def test_build_config_disables_pytorch_when_all_families_are_filtered(self):
+    def test_build_config_disables_pytorch_when_matrix_is_empty(self):
         targets = cm.TargetSelection(
-            linux_families=["gfx125x"],
+            linux_families=["gfx94x"],
             windows_families=[],
         )
-        result = cm.expand_build_configs(
-            targets=targets,
-            ci_inputs=self._inputs(),
-            test_type="quick",
-            git_context=cm.GitContext(),
-        )
+        # If the pytorch matrix is empty for some reason (such as only
+        # trying to build one GPU target for a pytorch version where that
+        # GPU target is unsupported), the build_pytorch result should be false.
+        with patch(
+            "configure_multi_arch_ci.generate_pytorch_matrix_for_release_type",
+            return_value=[],
+        ):
+            result = cm.expand_build_configs(
+                targets=targets,
+                ci_inputs=self._inputs(),
+                test_type="quick",
+                git_context=cm.GitContext(),
+            )
 
         self.assertFalse(result.linux.build_pytorch)
         self.assertEqual(result.linux.pytorch_build_matrix, [])
