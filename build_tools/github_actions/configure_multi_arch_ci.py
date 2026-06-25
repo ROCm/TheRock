@@ -821,6 +821,7 @@ def _expand_build_config_for_platform(
     variant_config: dict,
     test_type: str,
     pr_labels: list[str],
+    is_push: bool,
     is_schedule: bool,
     is_workflow_dispatch: bool,
     git_context: GitContext,
@@ -900,8 +901,8 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan" or build_variant == "host-asan":
-            # Only run ASAN tests on scheduled or workflow_dispatch runs
+        if build_variant == "asan":
+            # Only run full ASAN tests on scheduled or workflow_dispatch runs
             if not (is_schedule or is_workflow_dispatch):
                 test_runs_on = ""
                 print(
@@ -915,6 +916,25 @@ def _expand_build_config_for_platform(
                 test_runs_on = ""
                 print(
                     f"  {family_name}: no ASAN sandbox runner available, "
+                    f"disabling tests"
+                )
+        elif build_variant == "host-asan":
+            # Run host-asan tests only on push (postsubmit)
+            if not is_push:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(
+                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                )
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no host-asan sandbox runner available, "
                     f"disabling tests"
                 )
 
@@ -1025,6 +1045,7 @@ def expand_build_configs(
             variant_config=variant_config,
             test_type=test_type,
             pr_labels=ci_inputs.pr_labels,
+            is_push=ci_inputs.is_push,
             is_schedule=ci_inputs.is_schedule,
             is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
             prebuilt_stages=prebuilt_stages,
