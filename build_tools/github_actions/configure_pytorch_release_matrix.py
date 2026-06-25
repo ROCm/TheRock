@@ -92,12 +92,16 @@ def generate_pytorch_matrix(
     python_versions: list[str] | None,
     amdgpu_families: str,
     platform: str = "linux",
+    pytorch_refs: list[str] | None = None,
 ) -> list[dict]:
     versions = python_versions if python_versions else PYTHON_VERSIONS
-    pytorch_refs = PYTORCH_REFS_WINDOWS if platform == "windows" else PYTORCH_REFS_LINUX
+    refs_cfg = PYTORCH_REFS_WINDOWS if platform == "windows" else PYTORCH_REFS_LINUX
+    if pytorch_refs is not None:
+        ref_set = {r.strip() for r in pytorch_refs if r.strip()}
+        refs_cfg = [cfg for cfg in refs_cfg if cfg["pytorch_git_ref"] in ref_set]
     matrix = []
     for py in versions:
-        for ref_cfg in pytorch_refs:
+        for ref_cfg in refs_cfg:
             ref = ref_cfg["pytorch_git_ref"]
             exclude = ref_cfg.get("exclude_amdgpu_families", set())
             families = _filter_families(amdgpu_families, exclude)
@@ -137,6 +141,15 @@ def main(argv: list[str] | None = None) -> int:
             "filtered out of this list for that ref's matrix entry."
         ),
     )
+    parser.add_argument(
+        "--pytorch-refs",
+        type=str,
+        default="",
+        help=(
+            "Comma or semicolon separated list of PyTorch git refs to include "
+            "(default: all configured refs for the platform)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     python_versions = None
@@ -146,8 +159,18 @@ def main(argv: list[str] | None = None) -> int:
             v.strip() for v in args.python_versions.split(sep) if v.strip()
         ]
 
+    pytorch_refs = None
+    if args.pytorch_refs:
+        sep = ";" if ";" in args.pytorch_refs else ","
+        pytorch_refs = [
+            r.strip() for r in args.pytorch_refs.split(sep) if r.strip()
+        ]
+
     matrix = generate_pytorch_matrix(
-        python_versions, args.amdgpu_families, args.platform
+        python_versions,
+        args.amdgpu_families,
+        args.platform,
+        pytorch_refs,
     )
     gha_set_output({"pytorch_matrix": json.dumps(matrix)})
     return 0
