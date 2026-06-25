@@ -24,7 +24,6 @@ import tempfile
 POSIX_EXE_STUB_TEMPLATE = r"""#define _GNU_SOURCE
 #include <dlfcn.h>
 #include <limits.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,8 +32,7 @@ POSIX_EXE_STUB_TEMPLATE = r"""#define _GNU_SOURCE
 static const char EXEC_RELPATH[] = "@EXEC_RELPATH@";
 
 // Get the directory containing the main executable.
-// main_addr should be a pointer to a function in the main executable (used for
-// dladdr fallback).
+// main_addr should be a pointer to a function in the main executable.
 // Returns a heap-allocated string that must be freed, or NULL on failure.
 static char* get_main_dir(void* main_addr) {
     char* main_path = NULL;
@@ -57,9 +55,9 @@ static char* get_main_dir(void* main_addr) {
     }
 #endif
 
-#if defined(__linux__) || defined(__CYGWIN__)
     // Fallback: use dladdr to get the path. This requires the executable to be
     // linked as PIE (-fPIE) and may return just a filename in some cases.
+    // Non-Linux POSIX platforms always use this path.
     if (!main_path) {
         Dl_info info;
         if (dladdr(main_addr, &info) && info.dli_fname) {
@@ -72,7 +70,6 @@ static char* get_main_dir(void* main_addr) {
             }
         }
     }
-#endif
 
     if (!main_path) {
         fprintf(stderr, "could not determine path of main program\n");
@@ -93,7 +90,7 @@ static char* get_main_dir(void* main_addr) {
 }
 
 int main(int argc, char** argv) {
-    char* main_dir = get_main_dir((void*)(intptr_t)main);
+    char* main_dir = get_main_dir((void*)main);
     if (!main_dir) {
         return 1;
     }
