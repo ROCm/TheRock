@@ -68,7 +68,7 @@ When you create a pull request, you should target the *main* branch.
 
 > [!TIP]
 > If you use an AI coding assistant (Cursor, Claude Code, etc.), this repo ships PR-quality "skills"
-> that help you author, review, and pre-merge-gate a PR so it lands traceable, tested, and safe to
+> that help you author, review, and pre-merge gate a PR so it lands traceable, tested, and safe to
 > merge. They are advisory and never post to GitHub or Jira without your approval. See
 > [`skills/`](/skills/) for the full index:
 >
