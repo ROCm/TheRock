@@ -6,10 +6,10 @@ status: draft
 ---
 
 ## Remaining Open Questions
-side by side install?
-only one GA version allowed?
-Signed??
-manylinux standards section??
+side by side install? 
+only one GA version allowed? 
+Signed?? 
+manylinux standards section?? 
 Package Naming for No Duplication
 packages device specific, if so how to treat?
 RVS ABI stability and B/F compat
@@ -18,7 +18,7 @@ CLI compatibility with NVIDIA (out of scope for rn?)
 should I include the list of various tools (tools landscape looks very different rn. Need to do a reaudit)? AGT, ARX, ASST, MEDT, MultEvent, AFHC, ADDC, AGFHC, hKYSYS, AHDS, RVS[MF9.1], RBT, RDC, TransferBench, AMD Interconnect Tool, AMDVBFlash, Scandump, SDV, AMDXIO, AIFM Node Mgmt Agent/Guest mode.
 if we want OS support to mimic rocm need to support rpm and debs
 Fixed GA releases for all tools?
-
+CPU, NIC as well.
 # Data Center Tools Packaging & Build Requirements
 
 ## Overview
@@ -94,44 +94,67 @@ then the standalone form is deprecated.
 
 ### Closed-Source Tools
 
-Closed-source tools **SHOULD** follow the RVS strategy where feasible. Where they
-cannot be hosted in RVS, they **MUST** still honor every contract in this RFC
+All tools **SHOULD** follow the RVS strategy where feasible. Where they
+cannot be hosted in RVS (NDA), they **MUST** still honor every contract in this RFC
 (install location, compatibility, build, signing) and ship via the runfile
-installer path below.
+installer path below. These tools will be hosted in AMD Validation Suite. 
 
 ## Installation Folder Standardization
-
-DC tools **MUST** install to a standardized, predictable location.
-
+ 
+## Overview
+ 
+Data Center (DC) tools **MUST** install to a standardized, predictable location. Each tool gets its own subtree under `/opt/amdtools`. There is **no shared bin directory**. Exactly two versions are supported — **current** and **preview** — at fixed roots; there are **no individually versioned tool directories**.
+ 
+## Directory Structure
+ 
+Each tool installs under its own subtree:
+ 
+```
 /opt/amdtools/
-├── arc/            # ANC/ARC tool subtree
-├── anc/
-├── rvs/            # RVS and hosted open-source modules
-└── <tool>/         # each tool owns its subtree
-
-- Each tool owns its own subtree under `/opt/amdtools/<tool>`; there is **no
-  shared `bin` directory** (Option A). This avoids cross-tool file collisions and
-  makes side-by-side versions and clean uninstall trivial..
-- Each tool subtree **SHOULD** follow a consistent internal layout:
-  `bin/`, `lib/`, `share/`, `etc/`, so a wrapper or environment module can be
-  generated mechanically.
-  The installation structure and directory path follow standard Linux practices. 
-a)	/opt/amd/bin
-  	Binaries are installed in this location
-b)	/opt/amd/lib
-  	Libraries are installed in this location
-c)	/opt/amd/doc
-  	Documentation for the product
-d)	/opt/amd/include
-  	Header files
-e)	And other directories as part of the Linux file system standard such as etc or share as necessary
-Preview versions or early access builds are provided via installers and tarballs only.
-- For users who want tools on `PATH`, the installer **SHOULD** provide an
-  optional environment module / shell-profile snippet rather than dumping
-  symlinks into a global `bin`.
-- Versioned installs **SHOULD** be supported for side-by-side use:
-  `/opt/amdtools/<tool>-X.Y.Z` with a `/opt/amdtools/<tool>` softlink to the
-  active version (mirrors the RFC0009 core-SDK convention).
+└── <tool>/
+    ├── bin/        # tool's executables
+    ├── lib/        # tool-private libraries ($ORIGIN-relative RPATH)
+    ├── share/      # data, docs (share/doc), licenses
+    ├── etc/        # tool configuration
+    ├── doc/        # documentation (optional—can be part of share/)
+    └── [other per-tool folders as needed]
+```
+ 
+*Tools **MUST NOT** place files outside their subtree.*  
+Documentation **SHOULD** be per-tool, as part of `doc` or `share/doc`.
+ 
+## Executable Exposure (PATH Integration)
+ 
+- **Symlinks in `/usr/bin`:**  
+  The installer **MUST** create a symlink for each primary executable in `/usr/bin`:
+  ```
+  /usr/bin/<tool-executable> → /opt/amdtools/<tool>/bin/<tool-executable>
+  ```
+- No shared or global `bin` directory is allowed.
+- Only the **current** version (`/opt/amdtools`) is symlinked into `/usr/bin`. Preview versions (`/opt/amdtools-next`) **MUST NOT** be installed to `/usr/bin` and are **not** placed on the default `PATH`.
+ 
+## Versioning (Two-Slot Model)
+ 
+Exactly two versions are allowed — **current** and **preview** — distinguished by their root, not by per-tool version folders:
+ 
+- **Current (stable):** lives in `/opt/amdtools/<tool>`.
+- **Preview:** lives in `/opt/amdtools-next/<tool>`.
+ 
+```
+/opt/amdtools/         # current / stable
+└── <tool>/
+ 
+/opt/amdtools-next/    # preview
+└── <tool>/
+```
+ 
+- **No individually versioned tool directories** are permitted (e.g., `/opt/amdtools/<tool>-X.Y.Z` or `/opt/amdtools/<tool>/<version>/` are prohibited).
+- Preview and early-access builds are distributed via installers and tarballs only, and land in `/opt/amdtools-next`. Preview versions **MUST NOT** be symlinked into `/usr/bin`; they are invoked directly from their `/opt/amdtools-next/<tool>/bin` path.
+- On promotion, the preview version replaces the current version in `/opt/amdtools`, and `/usr/bin` symlinks are updated accordingly.
+ 
+## Uninstall
+ 
+- Uninstaller **MUST** remove the tool’s subtree (from `/opt/amdtools` and/or `/opt/amdtools-next`), any environment/profile snippets created, and all symlinks from `/usr/bin`.
 
 # RPATH and Relocatability
 All packages must be built and shipped with $ORIGIN-based RPATH
