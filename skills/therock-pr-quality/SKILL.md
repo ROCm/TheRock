@@ -53,6 +53,25 @@ Cite the specific guide section for a style finding.
 
 ______________________________________________________________________
 
+## PR-policy gate (authoritative)
+
+TheRock gates PRs with the `therock_pr_bot`. Do **not** re-encode its rules here — read them live so
+they cannot drift out of sync with this overlay:
+
+- Policy config: `skills/therock_pr_bot/policy.yml` — the source of truth for the branch-name shapes,
+  the Conventional-Commits title rule and length bounds, the required `JIRA ID` / `ISSUE ID`
+  reference, the unit-test-file heuristic and its exempt paths, the forbidden-file list, and the
+  external checks that must be green.
+- What each check means and how to fix a failure: `skills/therock_pr_bot/FAQ.md`.
+
+Conform the PR to that live config before author or pre-merge sign-off. This gate is **authoritative
+and overrides the base skill's assumptions**: it honors none of the base waivers or self-evident
+exemptions, so even a docs-only PR must carry a resolving `ISSUE ID` / `JIRA ID` reference, on its own
+line, exactly in the form the config's pattern accepts. On any conflict between this gate and a base
+default, the gate wins.
+
+______________________________________________________________________
+
 ## Supplements
 
 ### Adds — change classes (bind to TheRock paths)
