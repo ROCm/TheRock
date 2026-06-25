@@ -221,5 +221,31 @@ class TestWriteGhaUploadSummary(unittest.TestCase):
         self.assertNotIn("kpack-split", text)
 
 
+class TestGHASetOutput(unittest.TestCase):
+    """Tests that both package_find_links_url and package_index_url are emitted."""
+
+    @unittest.mock.patch("upload_python_packages.gha_set_output")
+    def test_outputs_both_index_urls(self, mock_gha_set):
+        """Verify that package_index_url is set alongside package_find_links_url."""
+        index_url = "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/python/index.html"
+        kpack_split = "true"
+
+        upload_python_packages.gha_set_output(
+            {
+                "package_find_links_url": index_url,
+                "package_index_url": index_url,
+                "kpack_split": kpack_split,
+            }
+        )
+
+        mock_gha_set.assert_called_once()
+        output_dict = mock_gha_set.call_args[0][0]
+
+        self.assertIn("package_index_url", output_dict)
+        self.assertEqual(output_dict["package_index_url"], index_url)
+        self.assertIn("package_find_links_url", output_dict)
+        self.assertEqual(output_dict["package_find_links_url"], index_url)
+
+
 if __name__ == "__main__":
     unittest.main()
