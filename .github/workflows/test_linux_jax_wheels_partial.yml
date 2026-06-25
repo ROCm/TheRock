@@ -254,9 +254,15 @@ jobs:
       - name: GPU Memory Status
         run: |
           echo "=== GPU Memory Before Tests ==="
-          rocm-smi -d 0 --showmeminfo vram || rocm-smi --showmeminfo vram
+
+          if command -v rocm-smi >/dev/null 2>&1; then
+            rocm-smi -d 0 --showmeminfo vram || rocm-smi --showmeminfo vram || true
+            rocm-smi --showmemuse --showpids || true
+          else
+            echo "rocm-smi not found"
+          fi
+
           echo "================================="
-          nvidia-smi || true
 
       - name: Run JAX tests
         env:
@@ -265,7 +271,7 @@ jobs:
           # JAX allocator controls.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
 
-          # Keep the compiler/autotune throttles if you want them.
+          # Keep the compiler/autotune throttles.
           XLA_FLAGS: >-
             --xla_gpu_force_compilation_parallelism=1
             --xla_gpu_autotune_level=0
@@ -275,23 +281,41 @@ jobs:
           set -euxo pipefail
 
           test -n "${ROCM_ROOT}"
+
           export HIP_DEVICE_LIB_PATH="${ROCM_ROOT}/lib/llvm/amdgcn/bitcode"
           export JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH="${ROCM_ROOT}/lib/llvm/amdgcn/bitcode"
           export JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH="${ROCM_ROOT}/lib/llvm/bin"
+
+          test -d "${HIP_DEVICE_LIB_PATH}"
+          test -d "${JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH}"
+          test -d "${JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH}"
 
           echo "ROCM_ROOT=${ROCM_ROOT}"
           echo "HIP_DEVICE_LIB_PATH=${HIP_DEVICE_LIB_PATH}"
           echo "JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH=${JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH}"
           echo "JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH=${JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH}"
-          df -h /dev/shm
 
+          echo "=== /dev/shm ==="
+          df -h /dev/shm || true
+
+          echo "=== Relevant GPU/JAX environment ==="
           env | grep -E 'ROCR_VISIBLE|HIP_VISIBLE|CUDA_VISIBLE|GPU_DEVICE_ORDINAL|ROCM_ROOT|HIP_DEVICE_LIB_PATH|JAX_ROCM|XLA|JAX' | sort || true
 
+          echo "=== GPU Memory Before JAX Import ==="
           if command -v rocm-smi >/dev/null 2>&1; then
             rocm-smi --showmemuse --showpids || true
+          else
+            echo "rocm-smi not found"
           fi
 
           python -c "import jax; print(jax.local_devices())"
+
+          echo "=== GPU Memory After JAX Import ==="
+          if command -v rocm-smi >/dev/null 2>&1; then
+            rocm-smi --showmemuse --showpids || true
+          else
+            echo "rocm-smi not found"
+          fi
 
           echo "=== Starting full test suite ==="
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
