@@ -980,7 +980,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument(
         "--policy",
-        default="skills/therock_pr_bot/policy.yml",
+        default=str(THIS_SCRIPT_DIR / "policy.yml"),
         help="Path to policy.yml (defaults to the file next to this script)",
     )
     parser.add_argument(
