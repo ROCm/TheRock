@@ -252,11 +252,11 @@ jobs:
           fi
 
       - name: GPU Memory Status
-              run: |
-                echo "=== GPU Memory Before Tests ==="
-                rocm-smi -d 0 --showmeminfo vram || rocm-smi --showmeminfo vram
-                echo "================================="
-                nvidia-smi || true
+        run: |
+          echo "=== GPU Memory Before Tests ==="
+          rocm-smi -d 0 --showmeminfo vram || rocm-smi --showmeminfo vram
+          echo "================================="
+          nvidia-smi || true
 
       - name: Run JAX tests
         env:
