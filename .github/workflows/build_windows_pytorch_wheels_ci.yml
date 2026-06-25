@@ -7,7 +7,7 @@
 #   - Installs ROCm packages via --find-links (CI artifacts) instead of
 #     --index-url (release index)
 #   - Builds torch only (no torchvision, torchaudio)
-#   - No S3 upload, staging, testing, or promotion — just build + sanity check
+#   - No S3 upload, staging, testing, or promotion ΓÇö just build + sanity check
 #
 # TODO(#3291): Build more packages (torchvision, torchaudio, etc.)
 #
@@ -141,8 +141,8 @@ jobs:
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
-          # choco source disable -n=chocolatey
-          # choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ninja --version 1.13.1
 
       - name: Install sccache
@@ -260,7 +260,7 @@ jobs:
 
       # The kpack wheel splitter takes the fat torch wheel and produces a
       # smaller host wheel plus one device wheel per gfx target. Source-install
-      # from the TheRock checkout — kpack has no published wheel today.
+      # from the TheRock checkout ΓÇö kpack has no published wheel today.
       # The outer actions/checkout skips submodules for speed, so pull in
       # rocm-systems only when we actually need it.
       - name: Init rocm-systems submodule
@@ -332,7 +332,7 @@ jobs:
           release_type: ${{ inputs.release_type }}
 
       # Appends to the same therock-ci-artifacts/<run>-windows/python/ prefix
-      # that the ROCm python job already populated — one find-links URL
+      # that the ROCm python job already populated ΓÇö one find-links URL
       # covers the whole SDK + PyTorch stack.
       - name: Upload PyTorch wheels
         run: |
