@@ -53,22 +53,21 @@ Cite the specific guide section for a style finding.
 
 ______________________________________________________________________
 
-## PR-policy gate (authoritative)
+## PR-policy gate
 
-TheRock gates PRs with the `therock_pr_bot`. Do **not** re-encode its rules here — read them live so
-they cannot drift out of sync with this overlay:
+The source of truth for TheRock's contributing policies is the repo's
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md) — follow it first. In practice those policies are enforced
+by an automated gate (`therock_pr_bot`), which is the hoop every PR must actually clear before it can
+be reviewed. Treat that gate as **authoritative**: conform the PR to it before author or pre-merge
+sign-off, it overrides this skill's waivers and self-evident exemptions, and the skill never works
+around it. This overlay only points at the gate; it does not restate the gate's rules, so if the gate
+is later corrected to match `CONTRIBUTING.md`, the overlay needs no change.
 
-- Policy config: `skills/therock_pr_bot/policy.yml` — the source of truth for the branch-name shapes,
-  the Conventional-Commits title rule and length bounds, the required `JIRA ID` / `ISSUE ID`
-  reference, the unit-test-file heuristic and its exempt paths, the forbidden-file list, and the
-  external checks that must be green.
-- What each check means and how to fix a failure: `skills/therock_pr_bot/FAQ.md`.
-
-Conform the PR to that live config before author or pre-merge sign-off. This gate is **authoritative
-and overrides the base skill's assumptions**: it honors none of the base waivers or self-evident
-exemptions, so even a docs-only PR must carry a resolving `ISSUE ID` / `JIRA ID` reference, on its own
-line, exactly in the form the config's pattern accepts. On any conflict between this gate and a base
-default, the gate wins.
+When you advise the author to do something solely to clear the gate that is **not** stated in
+`CONTRIBUTING.md`, say so explicitly — name it as a gate requirement, not a guide requirement — so the
+author knows where it came from (for example: "the bot requires a resolving `ISSUE ID` / `JIRA ID`
+line even though the contributing guide doesn't, so add one"). `skills/therock_pr_bot/FAQ.md` explains
+how to clear a specific failure.
 
 ______________________________________________________________________
 
