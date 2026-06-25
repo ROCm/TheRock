@@ -45,13 +45,7 @@ static char* get_main_dir(void* main_addr) {
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     if (len > 0) {
         exe_path[len] = '\0';
-        // Resolve any symlinks in the path.
-        char* real_path = realpath(exe_path, NULL);
-        if (real_path) {
-            main_path = real_path;
-        } else {
-            main_path = strdup(exe_path);
-        }
+        main_path = strdup(exe_path);
     }
 #endif
 
@@ -61,13 +55,7 @@ static char* get_main_dir(void* main_addr) {
     if (!main_path) {
         Dl_info info;
         if (dladdr(main_addr, &info) && info.dli_fname) {
-            // Try to resolve to an absolute path.
-            char* real_path = realpath(info.dli_fname, NULL);
-            if (real_path) {
-                main_path = real_path;
-            } else {
-                main_path = strdup(info.dli_fname);
-            }
+            main_path = strdup(info.dli_fname);
         }
     }
 
@@ -102,6 +90,12 @@ int main(int argc, char** argv) {
     strcat(target, "/");
     strcat(target, EXEC_RELPATH);
     free(main_dir);
+
+    char* real_target = realpath(target, NULL);
+    if (real_target) {
+        free(target);
+        target = real_target;
+    }
 
     // Exec with altered target executable but preserving argv[0] as pointing
     // to the current program. This emulates how invocation via a symlink
