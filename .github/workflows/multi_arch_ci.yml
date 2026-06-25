@@ -40,6 +40,7 @@ on:
           - aws-windows-scale-rocm-customer-dev
           - aws-windows-scale-rocm-customer-dev-large
           - aws-windows-scale-rocm-customer-dev-xlarge
+          - aws-windows-scale-rocm-customer-dev-xlarge2
           - azure-windows-scale-rocm
       prebuilt_stages:
         type: string
