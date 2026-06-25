@@ -251,34 +251,23 @@ jobs:
               "jaxlib==${JAX_VERSION}"
           fi
 
-      - name: GPU Memory Status
-        run: |
-          echo "=== GPU Memory Before Tests ==="
-
-          if command -v rocm-smi >/dev/null 2>&1; then
-            rocm-smi -d 0 --showmeminfo vram || rocm-smi --showmeminfo vram || true
-            rocm-smi --showmemuse --showpids || true
-          else
-            echo "rocm-smi not found"
-          fi
-
-          echo "================================="
-
       - name: Run JAX tests
         env:
           JAX_PLATFORMS: rocm
 
-          # Force this job to use only physical GPU 0.
-          # This matches your rocm-smi output where GPU 0 is free.
+          # Keep JAX on the assigned/free GPU only.
           ROCR_VISIBLE_DEVICES: "0"
           HIP_VISIBLE_DEVICES: "0"
           GPU_DEVICE_ORDINAL: "0"
 
+          # Avoid large upfront GPU memory reservation.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+
+          # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
             --xla_gpu_force_compilation_parallelism=1
             --xla_gpu_autotune_level=0
-          JAX_DEBUG_NANS: "0"
+
         run: |
           set -euxo pipefail
 
@@ -287,36 +276,7 @@ jobs:
           unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
 
-          echo "=== /dev/shm ==="
-          df -h /dev/shm || true
-
-          echo "=== Relevant GPU/JAX environment ==="
-          env | grep -E 'ROCR_VISIBLE|HIP_VISIBLE|CUDA_VISIBLE|GPU_DEVICE_ORDINAL|ROCM_ROOT|HIP_DEVICE_LIB_PATH|JAX_ROCM|XLA|JAX' | sort || true
-
-          echo "=== GPU Memory Before JAX Import ==="
-          if command -v rocm-smi >/dev/null 2>&1; then
-            rocm-smi -d 0 --showmeminfo vram || true
-            rocm-smi --showmemuse --showpids || true
-          else
-            echo "rocm-smi not found"
-          fi
-
-          python - <<'PY'
-          import os
-          import jax
-
-          print("ROCR_VISIBLE_DEVICES=", os.environ.get("ROCR_VISIBLE_DEVICES"))
-          print("HIP_VISIBLE_DEVICES=", os.environ.get("HIP_VISIBLE_DEVICES"))
-          print("GPU_DEVICE_ORDINAL=", os.environ.get("GPU_DEVICE_ORDINAL"))
-          print("JAX devices=", jax.local_devices())
-          print("JAX device count=", jax.local_device_count())
-          PY
-
-          echo "=== GPU Memory After JAX Import ==="
-          if command -v rocm-smi >/dev/null 2>&1; then
-            rocm-smi -d 0 --showmeminfo vram || true
-            rocm-smi --showmemuse --showpids || true
-          fi
+          python -c "import jax; print(jax.local_devices())"
 
           echo "=== Starting full test suite ==="
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
