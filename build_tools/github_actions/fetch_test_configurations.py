@@ -156,6 +156,19 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
+    # and do not require a GPU runner.
+    "hipfile": {
+        "job_name": "hipfile",
+        "fetch_artifact_args": "--hipfile --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipfile.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
@@ -232,7 +245,7 @@ test_matrix = {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 180,
-        "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
@@ -328,29 +341,22 @@ test_matrix = {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        # Temporary mitigation for ROCm/rocm-libraries#8592: the gfx110X
-        # Windows V710 MxGPU partition OOMs on the pre_checkin sparse configs
-        # that the test_runner.py (standard) path runs, cascading into mass
-        # hipErrorOutOfMemory failures. Route sparse back to the pre-#4490
-        # legacy script (the last green basis, which already carries the
-        # gfx110X ignore list) until the underlying OOM is fixed. Restore
-        # test_runner.py afterwards.
-        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
-        # Temporary mitigation for ROCm/rocm-libraries#8592 (see hipsparse
-        # above): route sparse back to the pre-#4490 legacy script until the
-        # underlying gfx110X Windows OOM is fixed. Restore test_runner.py
-        # afterwards.
-        "test_script": f"python {_get_script_path('test_rocsparse.py')}",
+        # rocsparse runs as a single shard for now, so the full suite executes in
+        # one process and needs a generous timeout. This will be reduced soon once
+        # rocsparse moves to multi-shard gtest sharding (pending the tolerance fix
+        # in ROCm/rocm-libraries#8713).
+        "timeout_minutes": 240,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -413,7 +419,7 @@ test_matrix = {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards_dict": {
@@ -425,7 +431,7 @@ test_matrix = {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_hipfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 2,
@@ -585,6 +591,18 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 5,
             "windows": 2,
+        },
+    },
+    # rocALUTION tests
+    "rocalution": {
+        "job_name": "rocalution",
+        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
         },
     },
     # profiler tests

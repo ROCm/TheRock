@@ -59,10 +59,18 @@ CI_PYTORCH_REFS = {
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
+        # gfx125x not supported for PyTorch 2.9.
         "release/2.9": {"gfx125X-dcgpu"},
+        # gfx125x not supported for PyTorch 2.10.
         "release/2.10": {"gfx125X-dcgpu"},
-        "release/2.11": {"gfx125X-dcgpu"},
+        # gfx125x supported for PyTorch 2.11 via https://github.com/ROCm/pytorch/pull/3346.
+        "release/2.11": {},
+        # gfx125x not yet upstreamed to pytorch/pytorch. Upstream expected
+        # 2026-06-26, but the ROCm 7.14 release is cut before that date.
+        # See https://github.com/ROCm/TheRock/issues/5833.
         "release/2.12": {"gfx125X-dcgpu"},
+        # gfx125x not yet upstreamed to pytorch/pytorch.
+        # See https://github.com/ROCm/TheRock/issues/5833.
         "nightly": {"gfx125X-dcgpu"},
     },
     "windows": {},
