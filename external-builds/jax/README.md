@@ -216,10 +216,6 @@ release branch you are using.
    jax_rocm7_plugin \
    jax_rocm7_pjrt
 
-   pip install \
-   --index-url <package_index_url> \
-   jaxlib
-
    # Install jax from PyPI to match the version
    pip install jax==<JAX_VERSION>
    ```
