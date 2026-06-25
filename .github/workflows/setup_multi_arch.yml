@@ -121,13 +121,14 @@ jobs:
           # We need the parent commit to do a diff
           fetch-depth: 2
 
-      - name: Checkout CI config
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ROCm/therock-ci-config
-          ref: main
-          path: ci-config
-        continue-on-error: true
+      # Disabled external CI config to test local amdgpu_family_matrix.py changes
+      # - name: Checkout CI config
+      #   uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      #   with:
+      #     repository: ROCm/therock-ci-config
+      #     ref: main
+      #     path: ci-config
+      #   continue-on-error: true
 
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
