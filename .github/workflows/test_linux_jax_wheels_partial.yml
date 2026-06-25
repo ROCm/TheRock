@@ -257,8 +257,13 @@ jobs:
           HIP_DEVICE_LIB_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/amdgcn/bitcode
           JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/amdgcn/bitcode
           JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/bin
+          # Memory pressure reduction flags (without skipping tests)
+          XLA_FLAGS: "--xla_gpu_force_compilation_parallelism=1 --xla_gpu_autotune_level=0 --xla_gpu_memory_limit=0.85"
+          TF_FORCE_GPU_ALLOW_GROWTH: "true"
+          JAX_DEBUG_NANS: "0"
         run: |
           python -c "import jax; print(jax.local_devices())"
+          echo "=== Starting full test suite ==="
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
           pytest jax/tests/core_test.py -q --log-cli-level=INFO
           pytest jax/tests/util_test.py -q --log-cli-level=INFO
