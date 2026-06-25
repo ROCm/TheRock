@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_runtime_dev_c" Name="cmake" />
+    <Directory Id="amdrocm_runtime_dev_i" Name="include">
+      <Directory Id="amdrocm_runtime_dev_ih" Name="hip" />
+      <Directory Id="amdrocm_runtime_dev_irk" Name="rocm_kpack" />
+    </Directory>
+    <Directory Id="amdrocm_runtime_dev_l" Name="lib">
+      <Directory Id="amdrocm_runtime_dev_lc" Name="cmake">
+        <Directory Id="amdrocm_runtime_dev_lchl" Name="hip-lang" />
+        <Directory Id="amdrocm_runtime_dev_lch" Name="hip" />
+        <Directory Id="amdrocm_runtime_dev_licmhi" Name="hiprtc" />
+        <Directory Id="amdrocm_runtime_dev_lcl" Name="libhipcxx" />
+        <Directory Id="amdrocm_runtime_dev_lcrc" Name="rocm-core" />
+        <Directory Id="amdrocm_runtime_dev_lcrk" Name="rocm-kpack" />
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_runtime_dev_s" Name="share">
+      <Directory Id="amdrocm_runtime_dev_sd" Name="doc">
+        <Directory Id="amdrocm_runtime_dev_sdrc" Name="rocm-core" />
+      </Directory>
+    </Directory>
+</Include>

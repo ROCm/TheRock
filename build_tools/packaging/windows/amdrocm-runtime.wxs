@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+<!-- Common settings -->
+<?include common.wxi ?>
+
+<!-- Package components -->
+<Fragment>
+  <?include amdrocm-runtime-components.wxi ?>
+</Fragment>
+
+<Package Name="amdrocm-runtime" Version="1.0.0.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="037E1A5A-9216-467B-BCD2-877F573D72CE" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+
+  <!-- Directory structure -->
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="INSTALLFOLDER" Name="AMD\$(var.ProductName)\$(var.ProductVersion)">
+    <?include amdrocm-runtime-structure.wxi ?>
+  </Directory>
+  </StandardDirectory>
+  <!-- Feature description -->
+  <Feature Id="amdrocm_runtime_files" Title="ROCm Runtime" Level="1" Display="expand">
+    <?include amdrocm-runtime-feature.wxi ?>
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+</Package>
+</Wix>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <ComponentGroupRef Id="cg_amdrocm_blas_dev_i" />
+  <ComponentGroupRef Id="cg_amdrocm_blas_dev_ih" />
+  <ComponentGroupRef Id="cg_amdrocm_blas_dev_inhi" />
+  <ComponentGroupRef Id="cg_amdrocm_blas_dev_ir" />
+  <ComponentGroupRef Id="cg_amdrocm_blas_dev_lch" />
+  <ComponentGroupRef Id="cg_amdrocm_blas_dev_licmhi" />
+  <ComponentGroupRef Id="cg_amdrocm_blas_dev_lcr" />
+</Include>
