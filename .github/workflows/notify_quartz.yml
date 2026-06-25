@@ -1,0 +1,109 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Dispatches CI events to the Quartz repository for ingestion into DB
+
+name: Notify Quartz
+
+on:
+  workflow_run:
+    workflows:
+      # - "Build Native Linux Packages"
+      # - "Build Portable Linux Artifacts"
+      # - "Build Portable Linux JAX Wheels"
+      # - "Build Portable Linux PyTorch Wheels"
+      # - "Build Portable Linux PyTorch Wheels (CI)"
+      # - "Build Portable Linux Python Packages"
+      # - "Build Stage Artifacts"
+      # - "Build Windows Artifacts"
+      # - "Build Windows PyTorch Wheels"
+      # - "Build Windows PyTorch Wheels (CI)"
+      # - "Build Windows Python Packages"
+      # - "Bump Submodule automation"
+      # - "CI"
+      # - "CI - Linux"
+      # - "CI - Windows"
+      # - "CI ASAN"
+      # - "CI Nightly"
+      # - "CI TSAN"
+      # - "Copy release to dev bucket"
+      # - "Hip tagging automation"
+      # - "Multi-Arch Build (Linux)"
+      # - "Multi-Arch Build (Windows)"
+      # - "Multi-Arch CI"
+      # - "Multi-Arch CI - Linux"
+      # - "Multi-Arch CI - Windows"
+      # - "Publish build_manylinux_rccl_x86_64 images"
+      # - "Publish build_manylinux_x86_64 images"
+      # - "Publish no_rocm_image_ubuntu24_04 images"
+      # - "Publish no_rocm_image_ubuntu24_04_ocl_rt images"
+      # - "Publish no_rocm_image_ubuntu24_04_rocgdb images"
+      # - "Publish TheRock Docker image"
+      # - "Release native Linux Packages"
+      # - "Release portable Linux JAX Wheels"
+        - "Release portable Linux packages"
+      # - "Release portable Linux PyTorch Wheels"
+        - "Release Windows packages"
+      # - "Release Windows PyTorch Wheels"
+      # - "Setup"
+      # - "Test Artifact Structure"
+      # - "Test Artifacts"
+      # - "Test Benchmarks"
+      # - "Test component"
+      # - "Test JAX Wheels"
+      # - "Test Linux JAX Wheels"
+      # - "Test PyTorch Wheels"
+      # - "Test PyTorch Wheels (Full Suite)"
+      # - "Test ROCm Wheels"
+      # - "TheRock Manifest Diff Report"
+      # - "TheRock Test Harness"
+      # - "Unit Tests"
+      # - "WIP Placeholder CI Weekly"
+      # - "pre-commit"
+    types: [requested, completed]
+  pull_request:
+    types: [opened, closed, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      quartz_repo:
+        description: "Target Quartz repository (owner/repo)"
+        type: string
+        default: "ROCm/Quartz"
+      quartz_workflow_ref:
+        description: "Branch in Quartz repo where the ingest workflow lives"
+        type: string
+        default: "main"
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  QUARTZ_REPO: ${{ inputs.quartz_repo || 'ROCm/Quartz-Tester' }}
+  QUARTZ_WORKFLOW_REF: ${{ inputs.quartz_workflow_ref || 'main' }}
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@2e564a0bb8e7cc2b907b2401a2afe177882d4325 # v3.0.0
+        with:
+          app-id: ${{ secrets.GH_APP_HAULY_ID }}
+          private-key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          owner: "ROCm"
+
+      - name: Dispatch event to Quartz
+        env:
+          QUARTZ_DISPATCH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          python build_tools/github_actions/notify_quartz.py \
+            --quartz-repo "${{ env.QUARTZ_REPO }}" \
+            --quartz-workflow-ref "${{ env.QUARTZ_WORKFLOW_REF }}"
