@@ -134,7 +134,7 @@ jobs:
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
       options: >-
-        --shm-size=64g
+        --shm-size=128g
         --device /dev/kfd
         --device /dev/dri
         --group-add render
@@ -251,18 +251,48 @@ jobs:
               "jaxlib==${JAX_VERSION}"
           fi
 
+      - name: GPU Memory Status
+              run: |
+                echo "=== GPU Memory Before Tests ==="
+                rocm-smi -d 0 --showmeminfo vram || rocm-smi --showmeminfo vram
+                echo "================================="
+                nvidia-smi || true
+
       - name: Run JAX tests
         env:
           JAX_PLATFORMS: rocm
-          HIP_DEVICE_LIB_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/amdgcn/bitcode
-          JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/amdgcn/bitcode
-          JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: ${{ env.ROCM_ROOT }}/lib/llvm/bin
-          # Memory pressure reduction flags (without skipping tests)
-          XLA_FLAGS: "--xla_gpu_force_compilation_parallelism=1 --xla_gpu_autotune_level=0 --xla_gpu_memory_limit=0.85"
-          TF_FORCE_GPU_ALLOW_GROWTH: "true"
+
+          # JAX allocator controls.
+          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+
+          # Keep the compiler/autotune throttles if you want them.
+          XLA_FLAGS: >-
+            --xla_gpu_force_compilation_parallelism=1
+            --xla_gpu_autotune_level=0
+
           JAX_DEBUG_NANS: "0"
         run: |
+          set -euxo pipefail
+
+          test -n "${ROCM_ROOT}"
+          export HIP_DEVICE_LIB_PATH="${ROCM_ROOT}/lib/llvm/amdgcn/bitcode"
+          export JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH="${ROCM_ROOT}/lib/llvm/amdgcn/bitcode"
+          export JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH="${ROCM_ROOT}/lib/llvm/bin"
+
+          echo "ROCM_ROOT=${ROCM_ROOT}"
+          echo "HIP_DEVICE_LIB_PATH=${HIP_DEVICE_LIB_PATH}"
+          echo "JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH=${JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH}"
+          echo "JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH=${JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH}"
+          df -h /dev/shm
+
+          env | grep -E 'ROCR_VISIBLE|HIP_VISIBLE|CUDA_VISIBLE|GPU_DEVICE_ORDINAL|ROCM_ROOT|HIP_DEVICE_LIB_PATH|JAX_ROCM|XLA|JAX' | sort || true
+
+          if command -v rocm-smi >/dev/null 2>&1; then
+            rocm-smi --showmemuse --showpids || true
+          fi
+
           python -c "import jax; print(jax.local_devices())"
+
           echo "=== Starting full test suite ==="
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
           pytest jax/tests/core_test.py -q --log-cli-level=INFO
