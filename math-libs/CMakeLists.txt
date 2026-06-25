@@ -585,3 +585,49 @@ if(_ck_enabled)
       composable_kernel
   )
 endif()
+
+if(THEROCK_ENABLE_HIPTENSOR)
+  ##############################################################################
+  # hipTensor
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipTensor
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipTensor"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIPTENSOR_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
+      -DHIPTENSOR_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      therock-googletest
+      composable_kernel
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipTensor
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_provide_package(hipTensor hiptensor lib/cmake/hiptensor)
+  therock_cmake_subproject_activate(hipTensor)
+
+  therock_provide_artifact(hiptensor
+    DESCRIPTOR artifact-hiptensor.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipTensor
+  )
+endif(THEROCK_ENABLE_HIPTENSOR)
