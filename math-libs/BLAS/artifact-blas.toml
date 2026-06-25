@@ -80,6 +80,7 @@ include = [
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
+  "bin/hipblaslt/**",
   # hipblaslt-perf and python modules
   "bin/hipblaslt-perf",
   "share/hipblaslt/performance/**",

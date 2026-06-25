@@ -90,7 +90,8 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     INTERFACE_PKG_CONFIG_DIRS
       "share/pkgconfig"
     TEST_SUBPROJECTS
-      rocgdb
+      rocgdb-cpu
+      rocgdb-gpu
       rocr-debug-agent-tests
   )
 
@@ -302,6 +303,8 @@ if(THEROCK_ENABLE_ROCGDB)
     INTERFACE_LINK_DIRS
       "lib"
     TEST_SUBPROJECTS
+      rocgdb-cpu
+      rocgdb-gpu
   )
 
   # We may want to adjust this to optimize rebuilds.
