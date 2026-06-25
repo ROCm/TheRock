@@ -1,0 +1,36 @@
+GeneralSettings:
+    PrintKernelInfo: true      # Optional, default is false
+    Rotating: 512              # Optional, default is 0
+    ColdIter: 1000             # Optional, default is 1000
+    Iter: 10                   # Optional, default is 10
+    MaxWorkspaceSize: 33554432 # Optional, default is 33554432
+    UseGraphMode: false        # Optional, default is false
+Layers:
+    - LayerType: GEMM
+      Size: [256, 256, 256, 1]
+      Alpha: 1.0
+      Beta: 0
+      TransposeA: false
+      TransposeB: false
+      DataTypeA: f8_r
+      DataTypeB: f16_r
+      DataTypeC: f16_r
+      DataTypeD: f16_r
+      ComputeType: f32_f16_r
+      Epilogue: HIPBLASLT_EPILOGUE_DEFAULT
+      AlgoIndex: 60
+    - LayerType: GEMM
+      Size: [256, 256, 256, 1]
+      Alpha: 1.0
+      Beta: 0
+      TransposeA: false
+      TransposeB: false
+      DataTypeA: f16_r
+      DataTypeB: f16_r
+      DataTypeC: f16_r
+      DataTypeD: f16_r
+      ComputeType: f32_r
+      Epilogue: HIPBLASLT_EPILOGUE_BIAS
+      BiasType: f16_r
+      AlgoIndex: 35023
+    - LayerType: FLUSH

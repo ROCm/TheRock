@@ -1,0 +1,7 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+add_example_executable(example_broadcast_add_2d_amn_bn broadcast_add_2d_amn_bn.cpp)
+add_example_executable(example_broadcast_add_3d_am_bmnk broadcast_add_3d_am_bmnk.cpp)
+add_example_executable(example_elementwise_add_1d elementwise_add_1d.cpp)
+add_example_executable(example_elementwise_add_4d elementwise_add_4d.cpp)

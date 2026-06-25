@@ -703,6 +703,36 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "tensile": {
+        "job_name": "tensile",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 600,  # 10 hours for full category
+        "test_script": f"python {_get_script_path('pytest_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": {
+                "quick": 1,
+                "standard": 4,
+                "comprehensive": 8,
+                "full": 8,
+            }
+        },
+    },
+    "tensilite": {
+        "job_name": "tensilite",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 480,  # 8 hours for full category
+        "test_script": f"python {_get_script_path('pytest_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": {
+                "quick": 1,
+                "standard": 2,
+                "comprehensive": 4,
+                "full": 4,
+            }
+        },
+    },
 }
 
 
@@ -850,13 +880,27 @@ def run():
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
             # Note: Benchmarks always have total_shards=1 (no sharding)
-            total_shards = job_config_data.get("total_shards_dict", {}).get(platform, 1)
+
+            # Support both simple and test-type-specific sharding configurations:
+            # Simple: total_shards_dict[platform] = integer
+            # Test-type-specific: total_shards_dict[platform][test_type] = integer
+            shards_config = job_config_data.get("total_shards_dict", {}).get(
+                platform, 1
+            )
+            if isinstance(shards_config, dict):
+                # Test-type-specific sharding (e.g., for pytest components)
+                total_shards = shards_config.get(test_type, 1)
+            else:
+                # Simple integer sharding (default for most components)
+                total_shards = shards_config
+
             job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
             job_config_data["total_shards"] = total_shards
 
             # If the test type is quick tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "quick":
+            # Note: Skip this override if component already has test-type-specific sharding
+            if test_type == "quick" and not isinstance(shards_config, dict):
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 

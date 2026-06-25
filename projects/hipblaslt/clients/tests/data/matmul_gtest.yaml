@@ -1,0 +1,2386 @@
+---
+include: hipblaslt_common.yaml
+include: known_bugs.yaml
+include: matmul_common.yaml
+
+Definitions:
+  - &alpha_beta_range
+    - { alpha:  5, beta:  0 }
+    - { alpha:  0, beta:  3 }
+    - { alpha:  1, beta:  3 }
+    - { alpha:  1, beta:  1 }
+
+  - &alpha_beta_range_small
+    - { alpha: 2, alphai: 2, beta: -1.0, betai: 2.0 }
+
+  - &transA_transB_range
+    - { transA: N, transB: N }
+    - { transA: N, transB: T }
+    - { transA: T, transB: N }
+    - { transA: T, transB: T }
+
+  - &deepbench_alpha_beta_range
+    - { alpha: 1, beta: 0 }
+    - { alpha: 1, beta: 1 }
+
+  - &deepbench_transA_transB_range
+    - { transA: N, transB: N }
+    - { transA: N, transB: T }
+    - { transA: T, transB: N }
+
+  - &ldd_transA_transB_range
+    - { transA: N, transB: N }
+    - { transA: N, transB: T }
+    - { transA: T, transB: N }
+    - { transA: T, transB: T }
+
+  - &conjugate_transA_transB_range
+    - { transA: T, transB: C }
+    - { transA: C, transB: T }
+    - { transA: N, transB: C }
+    - { transA: C, transB: N }
+    - { transA: C, transB: C }
+
+  - &swizzleA_strideA_support
+    - {}
+    - { stride_a: 0 }
+
+  - &swizzleB_strideB_support
+    - {}
+    - { stride_b: 0 }
+
+Tests:
+- name: matmul_bad_arg
+  category: pre_checkin
+  function:
+    - matmul_bad_arg: *real_precisions
+  transA: N
+  transB: N
+  fortran: [ false, true ]
+
+# Tests confirm no NaN propagation when alpha = 0, 2 and beta = 0. Value .NaN is converted into zero
+- {name: alpha_beta_zero_NaN, category: pre_checkin, precision: *real_precisions,
+   function: matmul, transA: N, transB: N, M: 256, N: 128, K:  64, alpha: [ .NaN, 2 ], beta: [ .NaN, 2 ] }
+
+- name: matmul_one
+  category: quick
+  function:
+    matmul: *real_precisions
+  matrix_size: *one_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: [ 0.0, 1.0 ]
+  beta: [ 0.0, 2.0 ]
+
+- name: matmul_small
+  category: quick
+  function:
+    - matmul: *real_precisions
+    - matmul: *real_precisions_gemm_only
+  matrix_size: *small_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha_beta: *alpha_beta_range
+  c_equal_d: [false, true]
+
+- name: matmul_conj_small
+  category: quick
+  function:
+    - matmul: *real_precisions
+    - matmul: *real_precisions_gemm_only
+  matrix_size: *small_matrix_size_range
+  transA_transB: *conjugate_transA_transB_range
+  alpha_beta: *alpha_beta_range_small
+  c_equal_d: [false, true]
+
+- name: matmul_medium
+  category: pre_checkin
+  function:
+    - matmul: *real_precisions
+    - matmul: *real_precisions_gemm_only
+  matrix_size: *medium_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha_beta: *alpha_beta_range
+
+- name: matmul_batch_medium
+  category: pre_checkin
+  function:
+    - matmul: *real_precisions
+    - matmul: *real_precisions_gemm_only
+  matrix_size: *medium_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha_beta: *alpha_beta_range
+  batch_count: 10
+
+- name: matmul_medium_HMM
+  category: HMM
+  function:
+    - matmul: *real_precisions
+    - matmul: *real_precisions_gemm_only
+  matrix_size: *medium_matrix_size_range
+  transA: [ N ]
+  transB: [ N ]
+  alpha: 1
+  beta: 1
+  HMM: true
+
+- name: matmul_chunk
+  category: pre_checkin
+  function:
+    - matmul: *real_precisions
+    - matmul: *real_precisions_gemm_only
+  matrix_size: *chunk_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: 2
+  beta: 3
+
+- name: matmul_grid_limit_real
+  category: nightly
+  function:
+    matmul: *real_precisions
+  matrix_size: *grid_limit_matrix_size_real
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: 0
+  gpu_arch: '120[0-1]'
+
+- name: matmul_grid_limit_real_1b
+  category: nightly
+  function:
+    matmul: *real_precisions_1b
+  matrix_size: *grid_limit_matrix_size_real
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: 0
+  gpu_arch: '120[0-1]'
+
+- name: matmul_grid_limit_double
+  category: nightly
+  function:
+    matmul: *double_precision
+  matrix_size: *grid_limit_matrix_size_double
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: 0
+  api_method: [0, 2]
+  gpu_arch: '120[0-1]'
+
+- name: matmul_deepbench
+  category: nightly
+  function:
+    - matmul: *real_precisions
+    - matmul: *real_precisions_gemm_only
+  matrix_size: *deepbench_sizes
+  alpha_beta: *deepbench_alpha_beta_range
+  transA_transB: *deepbench_transA_transB_range
+
+- name: resnet50_fwd
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: N
+  transB: N
+  matrix_size: *resnet50_fwd_sizes
+  alpha: 1
+  beta: 0
+
+- name: resnet50_bwdwrw
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: T
+  transB: N
+  matrix_size: *resnet50_bwdwrw_sizes
+  alpha: 1
+  beta: 1
+
+- name: resnet50_bwddata
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: N
+  transB: T
+  matrix_size: *resnet50_bwddata_sizes
+  alpha: 1
+  beta: 0
+
+- name: inception4_fwd
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: N
+  transB: N
+  matrix_size: *inception4_fwd_sizes
+  alpha: 1
+  beta: 0
+
+- name: inception4_bwdwrw
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: T
+  transB: N
+  matrix_size: *inception4_bwdwrw_sizes
+  alpha: 1
+  beta: 1
+
+- name: inception4_bwddata
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: N
+  transB: T
+  matrix_size: *inception4_bwddata_sizes
+  alpha: 1
+  beta: 0
+
+- name: ctest_bwdwrw
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: T
+  transB: N
+  alpha: 1
+  beta: 1
+  matrix_size: *ctest_bwdwrw_sizes
+
+- name: ctest_fwd
+  category: nightly
+  function:
+    matmul: *real_precisions
+  transA: N
+  transB: N
+  alpha: 1
+  beta: 0
+  matrix_size: *ctest_fwd_sizes
+
+- name: matmul_8
+  category: quick
+  function:
+    matmul: *real_precisions
+  M: 8
+  N: 8
+  K: 8
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_16
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 16
+  K: 16
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_24
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 24
+  N: 24
+  K: 24
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_algo
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 32
+  N: 32
+  K: 32
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+  matmul_algo: [ 0, 1 ]
+
+- name: matmul_32_8_128
+  category: nightly
+  function:
+    matmul: *real_precisions
+  M: [8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128]
+  N: 32
+  K: 32
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_48_8_128
+  category: nightly
+  function:
+    matmul: *real_precisions
+  M: 48
+  N: [8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128]
+  K: 48
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_64_8_128
+  category: nightly
+  function:
+    matmul: *real_precisions
+  M: 64
+  N: 64
+  K: [16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128]
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_64_8
+  category: quick
+  function:
+    matmul: *real_precisions
+  M: 64
+  N: 8
+  K: 8
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_8_64
+  category: quick
+  function:
+    matmul: *real_precisions
+  M: 8
+  N: 8
+  K: 64
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+
+- name: matmul_96
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 96
+  N: 96
+  K: 96
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_128
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 128
+  N: 128
+  K: 128
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_128_streamk
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 128
+  N: 128
+  K: 128
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+  tensile_solution_selection_method: 2
+
+- name: matmul_256
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 256
+  N: 256
+  K: 256
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_256_8_16
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 256
+  N: 8
+  K: 16
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_16_256_8
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 16
+  N: 256
+  K: 8
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_8_16_256
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 8
+  N: 16
+  K: 256
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_512
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 512
+  N: 512
+  K: 512
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_1024
+  category: nightly
+  function:
+    matmul: *real_precisions
+  M: 1024
+  N: 1024
+  K: 1024
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+- name: matmul_bf16
+  category: quick
+  function:
+    matmul: *hpa_bf16_precision
+  transA: T
+  transB: N
+  alpha: 1
+  beta: 0
+  matrix_size:
+    - { M:  512, N:  512, K:  512 }
+    - { M:  960, N: 1024, K: 1024 }
+    - { M: 1024, N: 1024, K: 1024 }
+
+- name: matmul_k0
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: 4
+  N: 4
+  K: 0
+  alpha_beta: *alpha_beta_range
+  transA_transB: *transA_transB_range
+
+#OCP F8
+- name: matmul_f8_bf8_dst_fp32
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_f32
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  #bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '950'
+
+- name: matmul_f8_bf8_dst_bf16
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_bf16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  #bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '950'
+
+- name: matmul_f8_dst_bf16
+  category: pre_checkin
+  function:
+    matmul: *f8_precision_dst_bf16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: [f32_r, bf16_r]
+  unit_check: 1
+  gpu_arch: '950'
+
+- name: matmul_f8_bf8_dst_f16
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_f16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  #bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '950'
+
+- name: matmul_bf16_fp32dst
+  category: quick
+  function:
+    matmul: *hpa_half_bf16_fp32dst_precision
+  transA_transB: *deepbench_transA_transB_range
+  alpha: 1
+  beta: 0
+  matrix_size:
+    - { M:  512, N:  512, K:  512 }
+    - { M:  960, N: 1024, K: 1024 }
+    - { M: 1024, N: 1024, K: 1024 }
+  gpu_arch: '9(0a|42)'
+
+- name: matmul_small2
+  category: pre_checkin
+  transA: N
+  transB: N
+  function:
+    matmul: *real_precisions
+  matrix_size:
+    - { M:  512, N:  512, K:  512 }
+    - { M: 960,  N: 1024, K: 1024 }
+    - { M: 1024, N: 1024, K: 1024 }
+  alpha: [ 0.0, 0.5, 1.0 ]
+  beta:  [ 0.0, 0.5, 1.0 ]
+
+- name: matmul_bias_relu
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: relu
+  bias_vector: [0, 1]
+  unit_check: 1
+
+- name: matmul_bias_sigmoid
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: sigmoid
+  bias_vector: [0, 1]
+  unit_check: 1
+
+- name: matmul_bias_relu_streamk
+  category: pre_checkin
+  function:
+    - matmul: *hpa_half_precision
+    - matmul: *single_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: relu
+  bias_vector: [0, 1]
+  unit_check: 1
+  tensile_solution_selection_method: 2
+
+- name: matmul_bias_gelu
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: gelu
+  bias_vector: [0, 1]
+  unit_check: 0
+  norm_check: 1
+
+- name: matmul_bias_swish
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: swish
+  bias_vector: [0, 1]
+  unit_check: 0
+  norm_check: 1
+
+- name: matmul_bias_clamp
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  activation_type: clamp
+  activation_arg1: -1.5
+  activation_arg2: 1.5
+  bias_vector: [0, 1]
+  unit_check: 0
+  norm_check: 1
+
+- name: matmul_bias_only
+  category: pre_checkin
+  function:
+    matmul: *real_precisions
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: 1
+  unit_check: 1
+
+- name: matmul_bias_type
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_2b
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: 1
+  bias_type: [default, f32_r]
+  unit_check: 1
+
+- name: matmul_fallback_compute_fp16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precisions_compute_fp16
+  M: [4096, 129]
+  N: [4096, 129]
+  K: [4096, 129]
+  transA: N
+  transB: N
+  gpu_arch: '[^1]{2}\d{1,2}'
+
+- name: matmul_fallback_compute_fp16_gfx11
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precisions_compute_fp16
+  M: [4096, 129]
+  N: [4096, 129]
+  K: [4096, 129]
+  transA: N
+  transB: N
+  norm_check: 1
+  unit_check: 0
+  gpu_arch: '110?'
+
+- name: matmul_fallback_equality_NN
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  1104 , N:  1   , K:  4608 }
+    - { M:  1104 , N:  16  , K:  4608 }
+    - { M:  1104 , N:  1335, K:  4608 }
+    - { M:  1104 , N:  1408, K:  4608 }
+    - { M:  4608 , N:  1   , K:  320 }
+    - { M:  4608 , N:  16  , K:  320 }
+    - { M:  4608 , N:  1335, K:  320 }
+    - { M:  4608 , N:  1408, K:  320 }
+    - { M:  16   , N:  1   , K:  4608 }
+    - { M:  16   , N:  16  , K:  4608 }
+    - { M:  16   , N:  1335, K:  4608 }
+    - { M:  16   , N:  1408, K:  4608 }
+    - { M:  768  , N:  1   , K:  4608 }
+    - { M:  768  , N:  16  , K:  4608 }
+    - { M:  768  , N:  1335, K:  4608 }
+    - { M:  768  , N:  1408, K:  4608 }
+    - { M:  4608 , N:  1   , K:  768 }
+    - { M:  4608 , N:  16  , K:  768 }
+    - { M:  4608 , N:  1335, K:  768 }
+    - { M:  4608 , N:  1408, K:  768 }
+    - { M:  320  , N:  8192, K:  320 }
+    - { M:  640  , N:  2048, K:  640 }
+    - { M:  320  , N:  8192, K:  1280 }
+    - { M:  1280 , N:  512 , K:  1280 }
+    - { M:  10240, N:  512 , K:  1280 }
+    - { M:  2560 , N:  8192, K:  320 }
+    - { M:  5120 , N:  2048, K:  640 }
+    - { M:  1280 , N:  512 , K:  5120 }
+    - { M:  640  , N:  2048, K:  2560 }
+    - { M:  320  , N:  154 , K:  768 }
+    - { M:  1280 , N:  154 , K:  768 }
+  transA: N
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+
+- name: matmul_equality_NN_bias_vector_dst_fp16_32
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precisions_fp_16_32_dst
+  matrix_size:
+    - { M:  1104 , N:  1   , K:  4608 }
+    - { M:  1104 , N:  16  , K:  4608 }
+    - { M:  1104 , N:  1335, K:  4608 }
+    - { M:  1104 , N:  1408, K:  4608 }
+    - { M:  4608 , N:  1   , K:  320 }
+    - { M:  4608 , N:  16  , K:  320 }
+    - { M:  4608 , N:  1335, K:  320 }
+    - { M:  4608 , N:  1408, K:  320 }
+    - { M:  16   , N:  1   , K:  4608 }
+    - { M:  16   , N:  16  , K:  4608 }
+    - { M:  16   , N:  1335, K:  4608 }
+    - { M:  16   , N:  1408, K:  4608 }
+    - { M:  768  , N:  1   , K:  4608 }
+    - { M:  768  , N:  16  , K:  4608 }
+    - { M:  768  , N:  1335, K:  4608 }
+    - { M:  768  , N:  1408, K:  4608 }
+    - { M:  4608 , N:  1   , K:  768 }
+    - { M:  4608 , N:  16  , K:  768 }
+    - { M:  4608 , N:  1335, K:  768 }
+    - { M:  4608 , N:  1408, K:  768 }
+  transA: N
+  transB: N
+  alpha: [ 1.0, 2.0 ]
+  beta: [ 0.0, 2.0 ]
+  bias_vector: [0, 1]
+  scaleAlpha_vector: [0, 1]
+
+- name: matmul_bf16_Custom_Equality
+  category: pre_checkin
+  transA: T
+  transB: N
+  function:
+    matmul: *real_precisions
+  matrix_size:
+    - { M: 7168, N: 2, K: 8192 }
+    - { M: 3584, N: 2, K: 8192 }
+    - { M: 1280, N: 2, K: 8192 }
+    - { M: 1280, N: 2, K: 8192 }
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+
+- name: matmul_bias_vector_dst_fp16_32
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precisions_fp_16_32_dst
+  matrix_size:
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: [ 1.0, 2.0 ]
+  beta: [ 0.0, 2.0 ]
+  bias_vector: [0, 1]
+  scaleAlpha_vector: [0, 1]
+
+- name: matmul_f8_bf8_fnuz_dst_fp32
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f32
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_input_fp16_computeIn_bf16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_fp16dst_bf16computeIn_precision
+  matrix_size:
+    - { M: 1, N: 1, K: 1 }
+    - { M: 1, N: 1, K: 512 }
+    - { M: 1, N: 1024, K: 512 }
+    - { M: 1024, N: 1, K: 512 }
+    - { M:  128, N:  128, K:  128 }
+    - { M:  128, N:  128, K:  129 }
+    - { M:  128, N:  129, K:  128 }
+    - { M:  128, N:  129, K:  129 }
+    - { M:  129, N:  128, K:  128 }
+    - { M:  129, N:  128, K:  129 }
+    - { M:  129, N:  129, K:  128 }
+    - { M:  129, N:  129, K:  129 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  bias_vector: [0, 1]
+  scaleAlpha_vector: [0, 1]
+  bias_type: [f16_r, f32_r]
+  unit_check: 1
+  gpu_arch: '90a'
+
+- name: matmul_input_fp16_computeIn_fp8_fnuz
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_intermeddiate_f8_fnuz
+  matrix_size:
+    - { M: 1, N: 1, K: 1 }
+    - { M: 1, N: 1, K: 512 }
+    - { M: 1, N: 1024, K: 512 }
+    - { M: 1024, N: 1, K: 512 }
+    - { M:  128, N:  128, K:  128 }
+    - { M:  128, N:  128, K:  129 }
+    - { M:  128, N:  129, K:  128 }
+    - { M:  128, N:  129, K:  129 }
+    - { M:  129, N:  128, K:  128 }
+    - { M:  129, N:  128, K:  129 }
+    - { M:  129, N:  129, K:  128 }
+    - { M:  129, N:  129, K:  129 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  bias_vector: [0, 1]
+  bias_type: [f16_r, f32_r]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_f8_bf8_fnuz_dst_fp16
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_f8_bf8_fnuz_dst_bf16
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_bf16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_f8_fnuz_dst_bf16_scale_ab_vec
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_bf16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [2]
+  scaleB: [2]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_stride_lt_ld
+  category: pre_checkin
+  function:
+    matmul: *xf32_precision
+  M: 41
+  N: 128
+  K: 6
+  lda: 106266
+  ldb: 2267008
+  ldc: 41
+  ldd: 41
+  stride_a: 6
+  stride_b: 128
+  stride_c: 5248
+  stride_d: 5248
+  batch_count: 17711
+  transA: T
+  transB: T
+  alpha: 1
+  beta: 2.0
+  bias_vector: 1
+  bias_type: f32_r
+  unit_check: 0
+  iters: 1
+  cold_iters: 1
+  gpu_arch: '950'
+
+- name: matmul_swizzleA
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_swizzleA_support
+  arguments: *swizzleA_strideA_support
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  lda: [129, 2440]
+  batch_count: [1, 5]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: [0, 1]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_extapi_swizzleA
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_swizzleA_support
+  arguments: *swizzleA_strideA_support
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  lda: [129, 2440]
+  batch_count: [1, 5]
+  transA: T
+  transB: N
+  use_ext: [1]
+  use_ext_setproblem: [0, 1]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: [0, 1]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_swizzleB
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_swizzleB_support
+  arguments: *swizzleB_strideB_support
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  ldb: [129, 2440]
+  batch_count: [1, 5]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: [0, 1]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_extapi_swizzleB
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_swizzleB_support
+  arguments: *swizzleB_strideB_support
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  ldb: [129, 2440]
+  batch_count: [1, 5]
+  transA: T
+  transB: N
+  use_ext: [1]
+  use_ext_setproblem: [0, 1]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  bias_vector: [0, 1]
+  unit_check: 1
+  gpu_arch: '942'
+
+### GFX12 FP8
+- name: matmul_f8_bf8_dst_fp32_gfx12
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_f32
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_f8_bf8_dst_fp16_gfx12
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_f16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_f8_bf8_dst_bf16_gfx12
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_bf16
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+#scale ab vector//no solution
+#  scaleA: [2]
+#  scaleB: [2]
+
+- name: matmul_real_1b_dst_f8_SCDInt1_gfx12
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_f8
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0] # will use default value '1'
+  scaleD: [0] # will use default value '1'
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_real_1b_dst_f8_SCDNotInt_gfx12
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_dst_f8
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [1] # will use random value from 0.0 to 1.0
+  scaleD: [1] # will use random value from 0.0 to 1.0
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '120[0-1]'
+
+- name: matmul_one_real_precisions_1b_gfx12
+  category: quick
+  function:
+    matmul: *real_precisions_1b
+  matrix_size: *one_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: [ 0.0, 1.0 ]
+  beta: [ 0.0, 2.0 ]
+  gpu_arch: '120[0-1]'
+
+- name: matmul_one_integer_precisions_i8_gfx12
+  category: quick
+  function:
+    matmul: *integer_precisions_i8
+  matrix_size: *one_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: [ 0.0, 1.0 ]
+  beta: [ 0.0, 2.0 ]
+  gpu_arch: '120[0-1]'
+
+### END
+- name: matmul_real_1b_fnuz_dst_f8_fnuz_SCDInt1
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0] # will use default value '1'
+  scaleD: [0] # will use default value '1'
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_1b_fnuz_smallsize
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_1b_fnuz
+  matrix_size:
+    - { M:  1,   N:  1,    K:  1    }
+    - { M:  1,   N:  1,    K:  127  }
+    - { M:  1,   N:  127,  K:  127  }
+    - { M:  2,   N:  127,  K:  127  }
+    - { M:  3,   N:  127,  K:  127  }
+    - { M:  127, N:  1,    K:  127  }
+    - { M:  127, N:  2,    K:  127  }
+    - { M:  127, N:  3,    K:  127  }
+    - { M:  1,   N:  1,    K:  128  }
+    - { M:  1,   N:  128,  K:  128  }
+    - { M:  2,   N:  128,  K:  128  }
+    - { M:  3,   N:  128,  K:  128  }
+    - { M:  128, N:  1,    K:  128  }
+    - { M:  128, N:  2,    K:  128  }
+    - { M:  128, N:  3,    K:  128  }
+    - { M:  1,   N:  1,    K:  129  }
+    - { M:  1,   N:  129,  K:  129  }
+    - { M:  2,   N:  129,  K:  129  }
+    - { M:  3,   N:  129,  K:  129  }
+    - { M:  129, N:  1,    K:  129  }
+    - { M:  129, N:  2,    K:  129  }
+    - { M:  129, N:  3,    K:  129  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0]
+  scaleD: [0]
+  bias_vector: [0, 1]
+  bias_type: f32_r
+  unit_check: 1
+  gpu_arch: '942'
+
+#TODO: extend to all f8 transpose and datatype if necessary
+- name: matmul_real_f8_fnuz_dst_fp32
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_fp32
+  matrix_size:
+    - { M:  1,   N:  1,    K:  1    }
+    - { M:  1,   N:  1,    K:  127  }
+    - { M:  1,   N:  127,  K:  127  }
+    - { M:  2,   N:  127,  K:  127  }
+    - { M:  3,   N:  127,  K:  127  }
+    - { M:  127, N:  1,    K:  127  }
+    - { M:  127, N:  2,    K:  127  }
+    - { M:  127, N:  3,    K:  127  }
+    - { M:  1,   N:  1,    K:  128  }
+    - { M:  1,   N:  128,  K:  128  }
+    - { M:  2,   N:  128,  K:  128  }
+    - { M:  3,   N:  128,  K:  128  }
+    - { M:  128, N:  1,    K:  128  }
+    - { M:  128, N:  2,    K:  128  }
+    - { M:  128, N:  3,    K:  128  }
+    - { M:  1,   N:  1,    K:  129  }
+    - { M:  1,   N:  129,  K:  129  }
+    - { M:  2,   N:  129,  K:  129  }
+    - { M:  3,   N:  129,  K:  129  }
+    - { M:  129, N:  1,    K:  129  }
+    - { M:  129, N:  2,    K:  129  }
+    - { M:  129, N:  3,    K:  129  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0]
+  scaleD: [0]
+  bias_vector: [0, 1]
+  bias_type: f32_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_f8_fnuz_SCDNotInt
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [1] # will use random value from 0.0 to 1.0
+  scaleD: [1] # will use random value from 0.0 to 1.0
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_1b_fnuz_amaxD
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_1b_fnuz
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0]
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  scaleA: [1]
+  scaleB: [1]
+  scaleD: [1]
+  amaxD: [1]
+  activation_type: [none, relu]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_bf8_fnuz_SCDInt1
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_bf8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [0] # will use default value '1'
+  scaleD: [0] # will use default value '1'
+  bias_vector: [0,1]
+  bias_type: f16_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_real_1b_fnuz_dst_bf8_fnuz_SCDNotInt
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_bf8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0, 1]
+  scaleB: [0, 1]
+  scaleC: [1] # will use random value from 0.0 to 1.0
+  scaleD: [1] # will use random value from 0.0 to 1.0
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_fallback_equality_NN_batch16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  40   , N:  4096, K:  4096 }
+    - { M:  80   , N:  1024, K:  1024 }
+    - { M:  40   , N:  4096, K:  77 }
+    - { M:  80   , N:  1024, K:  77 }
+    - { M:  160  , N:  256 , K:  256 }
+  transA: N
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  batch_count: 16
+
+- name: matmul_fallback_equality_TN_batch16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  4096, N:  4096, K:  40 }
+    - { M:  1024, N:  1024, K:  80 }
+    - { M:  77  , N:  1024, K:  80 }
+    - { M:  77  , N:  4096, K:  40 }
+    - { M:  77  , N:  256 , K:  160 }
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  batch_count: 16
+
+- name: matmul_groupedgemm_specific_sizes
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precisions_fp_16_32_dst
+  matrix_size:
+    - { M:  4096, N:  4096, K:  40 }
+    - { M:  1024, N:  1024, K:  80 }
+    - { M:  77  , N:  1024, K:  80 }
+    - { M:  77  , N:  4096, K:  40 }
+    - { M:  77  , N:  256 , K:  160 }
+  transA_transB: *transA_transB_range
+  grouped_gemm: [1, 5]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  algo_method: [2]
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_groupedgemm
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precisions_fp_16_32_dst
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  grouped_gemm: [1, 7]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  algo_method: [0, 2]
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_groupedgemm_f8_fnuz
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_fp16
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB:
+    - { transA: T, transB: N }
+  grouped_gemm: [2]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  algo_method: [2]
+  gpu_arch: '942'
+
+- name: matmul_groupedgemm_bf16
+  category: pre_checkin
+  function:
+    matmul: *hpa_bf16_precision
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  grouped_gemm: [2]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  algo_method: [2]
+  gpu_arch: '942'
+
+- name: matmul_groupedgemm_xf32
+  category: pre_checkin
+  function:
+    matmul: *xf32_precision
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  grouped_gemm: [2]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  algo_method: [2]
+  gpu_arch: '942'
+
+- name: matmul_groupedgemm_zero_n
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [127, 129]
+  N: [127, 0]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  grouped_gemm: [1, 7]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  algo_method: [2]
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_extapi_groupedgemm
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  grouped_gemm: [2]
+  use_ext_setproblem: [0, 1]
+  algo_method: [2]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_extapi_groupedgemm
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  grouped_gemm: [2]
+  use_ext_setproblem: [1]
+  algo_method: [2]
+  use_user_args: 1
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_bias_gelu_aux_fp16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  activation_type: gelu
+  bias_vector: [0, 1]
+  unit_check: 0
+  norm_check: 1
+
+- name: matmul_bias_gelu_aux_fp8_fnuz_TN
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_f8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  activation_type: gelu
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bias_gelu_f16aux_fp8_fnuz_TN
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_f8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  aux_type: f16_r
+  activation_type: gelu
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bias_gelu_aux_fp8_fnuz_scale_ab_TN
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_f8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  activation_type: gelu
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  scaleA: [1]
+  scaleB: [1]
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bias_gelu_f16aux_fp8_fnuz_scale_ab_TN
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_f8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  aux_type: f16_r
+  activation_type: gelu
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  scaleA: [1]
+  scaleB: [1]
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bias_gelu_f16aux_fp8_fnuz_amaxD_TN
+  category: pre_checkin
+  function:
+    matmul: *f8_fnuz_precision_dst_f8_fnuz
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  aux_type: f16_r
+  activation_type: gelu
+  bias_vector: [0, 1]
+  bias_type: f16_r
+  scaleA: [1]
+  scaleB: [1]
+  scaleD: [1]
+  amaxD: [1]
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_dgelu_fp16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  gradient: 1
+  activation_type: gelu
+  unit_check: 1
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_dgelu_bias
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  gradient: 1
+  activation_type: gelu
+  bias_vector: 1
+  bias_type: f32_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_bgradb_f8_bf8_fnuz_dst_fp32
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_1b_fnuz_dst_f32
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  gradient: 1
+  bias_vector: 1
+  bias_type: f32_r
+  bias_source: b
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bgrada_f16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  gradient: 1
+  bias_vector: 1
+  bias_type: f32_r
+  bias_source: a
+  unit_check: 1
+  gpu_arch_exclude: '1[1-2]\d{2}'
+  # norm_check: 1
+
+- name: matmul_bias_gelu_aux_fp32
+  category: pre_checkin
+  function:
+    matmul: *single_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  activation_type: gelu
+  bias_vector: [0, 1]
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_dgelu_fp32
+  category: pre_checkin
+  function:
+    matmul: *single_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  gradient: 1
+  activation_type: gelu
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bgradb_fp32
+  category: pre_checkin
+  function:
+    matmul: *single_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  gradient: 1
+  bias_vector: 1
+  bias_type: f32_r
+  bias_source: b
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bias_gelu_aux_bf16_TN
+  category: pre_checkin
+  function:
+    matmul: *hpa_bf16_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: T
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  activation_type: gelu
+  bias_vector: [0, 1]
+  bias_type: bf16_r
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '9(42|50)'
+
+- name: matmul_dgelu_bf16_NN
+  category: pre_checkin
+  function:
+    matmul: *hpa_bf16_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: N
+  transB: N
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  gradient: 1
+  activation_type: gelu
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bgradb_bf16_NT
+  category: pre_checkin
+  function:
+    matmul: *hpa_bf16_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: N
+  transB: T
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  gradient: 1
+  bias_vector: 1
+  bias_type: bf16_r
+  bias_source: b
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_bgradb_f16
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  gradient: 1
+  bias_vector: 1
+  bias_type: [f16_r, f32_r]
+  bias_source: b
+  unit_check: 1
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_bgradb_16_f32d_NT
+  category: pre_checkin
+  function:
+    matmul:
+    - {a_type: f16_r, b_type: f16_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scale_type: f32_r }
+    - {a_type: bf16_r, b_type: bf16_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scale_type: f32_r }
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA: N
+  transB: T
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  gradient: 1
+  bias_vector: 1
+  bias_type: f32_r
+  bias_source: b
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_extapi_algo_method_gemm
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  algo_method: [1, 2]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+
+- name: matmul_extapi_gemm
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  use_ext: [1]
+  use_ext_setproblem: [0, 1]
+  algo_method: [0, 1, 2]
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+
+- name: matmul_gemm_xf32
+  category: pre_checkin
+  function:
+    matmul: *xf32_precision
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  gpu_arch: '9(42|50)'
+
+- name: matmul_gemm_f32_fast_bf16
+  category: pre_checkin
+  function:
+    matmul: *single_precision_bf16computeIn_precision
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  norm_check: 1
+  unit_check: 0
+  gpu_arch: '950'
+
+- name: matmul_gemm_double
+  category: pre_checkin
+  function:
+    matmul: *double_precision
+  matrix_size:
+    - { M:  128,  N:  128,  K:  1024 }
+    - { M:  4608, N:  1335, K:  640  }
+  transA_transB: *transA_transB_range
+  alpha: [1.0, 2.0]
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  gpu_arch: '9(0a|4[0-2])'
+
+- name: matmul_gemm_i8_dst_i32
+  category: pre_checkin
+  function:
+    matmul: *i8_precision_dst_i32
+  matrix_size:
+    - { M:  1,    N:  131,  K:  131  }
+    - { M:  131,  N:  1,    K:  131  }
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  unit_check: 1
+  gpu_arch: '9(0a|50)'
+
+- name: matmul_gemm_i8_dst_i32_94x
+  category: pre_checkin
+  function:
+    matmul: *i8_precision_dst_i32
+  matrix_size:
+    - { M:  1,    N:  131,  K:  131  }
+    - { M:  131,  N:  1,    K:  131  }
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  scaleAlpha_vector: [0, 1]
+  activation_type: relu
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_i8_dst_i8
+  category: pre_checkin
+  function:
+    matmul: *i8_precision_dst_i8
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  unit_check: 1
+  gpu_arch: '9(0a|50)'
+
+- name: matmul_gemm_i8_dst_i8_94x
+  category: pre_checkin
+  function:
+    matmul: *i8_precision_dst_i8
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  scaleAlpha_vector: [0, 1]
+  activation_type: relu
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_i8_dst_i8_1xxx
+  category: pre_checkin
+  function:
+    matmul: *i8_precision_dst_i8
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  scaleAlpha_vector: [0, 1]
+  activation_type: relu
+  unit_check: 1
+  gpu_arch: '1[1-2]\d{2}'
+
+- name: matmul_gemm_i8_dst_i32_1xxx
+  category: pre_checkin
+  function:
+    matmul: *i8_precision_dst_i32
+  matrix_size:
+    - { M:  128,  N:  128,  K:  128  }
+    - { M:  131,  N:  131,  K:  131  }
+    - { M:  1024, N:  1024, K:  1024 }
+    - { M:  1031, N:  1031, K:  1031 }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  scaleAlpha_vector: [0, 1]
+  activation_type: relu
+  unit_check: 1
+  gpu_arch: '1[1-2]\d{2}'
+
+- name: matmul_gemm_mix_precisions
+  category: pre_checkin
+  function:
+    matmul: *real_mix_precisions_fnuz
+  matrix_size:
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  use_ext: [1]
+  use_ext_setproblem: [0, 1]
+  bias_vector: 1
+  bias_type: [f32_r]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_mix_precisions2
+  category: pre_checkin
+  function:
+    matmul: *real_mix_precisions_fnuz
+  matrix_size:
+    - { M:  1,   N:  1,    K:  1    }
+    - { M:  1,   N:  1,    K:  127  }
+    - { M:  1,   N:  127,  K:  127  }
+    - { M:  2,   N:  127,  K:  127  }
+    - { M:  3,   N:  127,  K:  127  }
+    - { M:  127, N:  1,    K:  127  }
+    - { M:  127, N:  2,    K:  127  }
+    - { M:  127, N:  3,    K:  127  }
+    - { M:  1,   N:  1,    K:  128  }
+    - { M:  1,   N:  128,  K:  128  }
+    - { M:  2,   N:  128,  K:  128  }
+    - { M:  3,   N:  128,  K:  128  }
+    - { M:  128, N:  1,    K:  128  }
+    - { M:  128, N:  2,    K:  128  }
+    - { M:  128, N:  3,    K:  128  }
+    - { M:  1,   N:  1,    K:  129  }
+    - { M:  1,   N:  129,  K:  129  }
+    - { M:  2,   N:  129,  K:  129  }
+    - { M:  3,   N:  129,  K:  129  }
+    - { M:  129, N:  1,    K:  129  }
+    - { M:  129, N:  2,    K:  129  }
+    - { M:  129, N:  3,    K:  129  }
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0, 2 ]
+  use_ext: [1]
+  use_ext_setproblem: [1]
+  bias_vector: 1
+  bias_type: [f32_r]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_mix_precisions_fp8_fnuz
+  category: pre_checkin
+  function:
+    matmul: *real_mix_precisions_fp8_fnuz
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0,1]
+  scaleB: [0,1]
+  scaleC: [0,1]
+  scaleD: [0,1]
+  use_ext: [1]
+  use_ext_setproblem: [1]
+  bias_vector: 1
+  bias_type: [f32_r]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_gemm_amaxAB_mix_precisions_fp8_fnuz
+  category: pre_checkin
+  function:
+    matmul: *real_mix_precisions_fp8_fnuz
+  M: [127, 129]
+  N: [127, 129]
+  K: [127, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  scaleA: [0,1]
+  scaleB: [0,1]
+  amaxScaleA: [0, 1]
+  amaxScaleB: [0, 1]
+  use_ext: [1]
+  use_ext_setproblem: [1]
+  bias_vector: 1
+  bias_type: [f32_r]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_extapi_algo_method_tuning_gsu_gemm_only
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  128,   N:  128,    K:  65536 }
+  transA_transB: *transA_transB_range
+  algo_method: [2]
+  use_ext: [1]
+  use_ext_setproblem: [0]
+  gsu_vector: [[0], [1], [4], [7], [38]]
+  alpha: 1
+  beta: 2.0
+  unit_check: 1
+
+- name: matmul_extapi_algo_method_tuning_wgm
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  4096, N:  4096, K:  40 }
+    - { M:  1024, N:  1024, K:  80 }
+  transA_transB: *transA_transB_range
+  algo_method: [2]
+  use_ext: [1]
+  use_ext_setproblem: [0]
+  grouped_gemm: [0]
+  wgm_vector: [[0], [4], [9], [16]]
+  alpha: 1
+  beta: 2.0
+  unit_check: 1
+
+- name: matmul_extapi_algo_method_grouped_gemm_tuning_wgm
+  category: pre_checkin
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  4096, N:  4096, K:  40 }
+    - { M:  1024, N:  1024, K:  80 }
+  transA_transB: *transA_transB_range
+  algo_method: [2]
+  use_ext: [1]
+  use_ext_setproblem: [0]
+  grouped_gemm: [2]
+  wgm_vector: [[0], [4], [9], [16]]
+  alpha: 1
+  beta: 2.0
+  unit_check: 1
+  gpu_arch_exclude: '1[1-2]\d{2}'
+
+- name: matmul_heuristic_all_solutions_no_workspace
+  category: nightly
+  function:
+    matmul: *real_precisions
+  matrix_size:
+    - { M:  128,   N:  128,    K:  2048 }
+  algo_method: [0,1]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: 1
+  requested_solution_num: -1
+  user_allocated_workspace: [0]
+  unit_check: 1
+
+- name: matmul_heuristic_all_solutions
+  category: nightly
+  function:
+    matmul: *real_precisions
+  matrix_size:
+    - { M:  128,   N:  128,    K:  2048 }
+    - { M:  127,   N:  127,    K:  2047 }
+  algo_method: [0,1]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [0,1]
+  requested_solution_num: -1
+  unit_check: 1
+
+- name: matmul_heuristic_all_solutions_real_1byte_fnuz
+  category: nightly
+  function:
+    matmul: *real_precisions_1b_fnuz
+  matrix_size:
+    - { M:  128,   N:  128,    K:  2048 }
+    - { M:  127,   N:  127,    K:  2047 }
+  algo_method: [0,1]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [0,1]
+  requested_solution_num: -1
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_large_nt_f8_bf8_dst_f8_bf8_f16_bf16_f32_gfx942
+  category: pre_checkin
+  function:
+    matmul:
+    - *f8_fnuz_precision_dst_f8_fnuz
+    - *f8_fnuz_precision_dst_fp16
+    - *f8_fnuz_precision_dst_bf16
+    - *f8_fnuz_precision_dst_fp32
+    - *bf8_fnuz_precision_dst_bf8_fnuz
+    - *bf8_fnuz_precision_dst_fp16
+    - *bf8_fnuz_precision_dst_bf16
+    - *bf8_fnuz_precision_dst_fp32
+  matrix_size:
+    - { M:  4096, N:  4096, K:  2048 }
+  transA: N
+  transB: T
+  alpha: [1.0, 2.0]
+  beta: [ 0.0, 2.0 ]
+  scaleA: [ 0, 1]
+  scaleB: [ 0, 1]
+  bias_vector: [0, 1]
+  bias_type: f32_r
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_large_nt_f64_dst_f64_gfx942
+  category: pre_checkin
+  function:
+    matmul: *double_precision
+  matrix_size:
+    - { M:  4096, N:  4096, K:  2048 }
+  transA: N
+  transB: T
+  alpha: [1.0, 2.0]
+  beta: [ 0.0, 2.0 ]
+  unit_check: 1
+  gpu_arch: '942'
+
+- name: matmul_mx_datatypes
+  category: pre_checkin
+  function:
+    matmul: *real_precisions_mx
+  M: [128, 96, 64]
+  N: [128, 96, 64]
+  K: [128]
+  transA: T
+  transB: N
+  alpha: 1.5
+  beta: 2.0
+  initialization: hpl
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '950'
+
+- name: matmul_mx_large
+  category: pre_checkin
+  function:
+    matmul:
+    - { a_type: f8_r, b_type: f8_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f8_r, b_type: f4_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f4_r, b_type: f4_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f6_r, b_type: f6_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+  M: [4096]
+  N: [4096]
+  K: [16384]
+  transA: T
+  transB: N
+  alpha: 1.0
+  beta: 0.0
+  initialization: trig_float
+  unit_check: 0
+  norm_check: 1
+  gpu_arch: '950'
+
+- name: matmul_mx_all_kernels
+  category: nightly
+  function:
+    matmul:
+    - { a_type: f8_r, b_type: f8_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f8_r, b_type: f4_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f4_r, b_type: f4_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f6_r, b_type: f6_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+  M: [3072]
+  N: [3072]
+  K: [16384]
+  transA: T
+  transB: N
+  alpha: 1.0
+  beta: 0.0
+  initialization: trig_float
+  unit_check: 0
+  norm_check: 1
+  requested_solution_num: 10
+  gpu_arch: '950'
+
+- name: matmul_mx_solution_index
+  category: pre_checkin
+  function:
+    matmul:
+    - { a_type: f8_r, b_type: f8_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f6_r, b_type: f6_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f4_r, b_type: f4_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+  M: [256]
+  N: [256]
+  K: [256]
+  transA: T
+  transB: N
+  alpha: 1.0
+  beta: 0.0
+  initialization: hpl
+  unit_check: 0
+  norm_check: 1
+  algo_method: [2]
+  solution_index: -2147220476  # Workgroup tile size = 128x128x128
+  gpu_arch: '950'
+
+- name: matmul_mx_multiple_kernels
+  category: pre_checkin
+  function:
+    matmul:
+    - { a_type: f8_r, b_type: f8_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f6_r, b_type: f6_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+    - { a_type: f4_r, b_type: f4_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scaleA: 3, scaleB: 3, scale_type: f32_r}
+  M: [256]
+  N: [256]
+  K: [256]
+  transA: T
+  transB: N
+  alpha: 1.0
+  beta: 0.0
+  initialization: hpl
+  unit_check: 0
+  norm_check: 1
+  requested_solution_num: 3
+  gpu_arch: '950'
+
+# MX datatypes with pre-swizzle for swizzle tile {32, 8} (scaleA/B: 1001 = Block_32_UE8M0_32_8_EXT)
+# Tests the preSwizzleScale functionality
+# Uses 16x16x128 MI instruction (subTileK = 128/32 = 4)
+# Requires workgroup tile 128x128x256 for swizzle tile {32, 8} compatibility (WGT.k >= 256)
+- name: matmul_mx_preswizzle_32x8_large
+  category: pre_checkin
+  function:
+    matmul:
+    - { a_type: f8_r, b_type: f4_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 1001, scaleB: 1001, scale_type: f32_r}
+    - { a_type: f4_r, b_type: f4_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 1001, scaleB: 1001, scale_type: f32_r}
+    - { a_type: f6_r, b_type: f6_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scaleA: 1001, scaleB: 1001, scale_type: f32_r}
+  M: [4096]
+  N: [4096]
+  K: [16384]
+  transA: T
+  transB: N
+  alpha: 1.0
+  beta: 0.0
+  initialization: trig_float
+  unit_check: 0
+  norm_check: 1
+  algo_method: [2]
+  solution_index: -2138831864  # Workgroup tile size = 128x128x256
+  gpu_arch: '950'
+
+- name: matmul_relu_clamp_useE
+  category: pre_checkin
+  function:
+    matmul:
+    - {a_type: f32_r, b_type: f32_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scale_type: f32_r }
+    - {a_type: f16_r, b_type: f16_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_r, scale_type: f32_r }
+    - {a_type: f16_r, b_type: f16_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scale_type: f32_r }
+    - {a_type: bf16_r, b_type: bf16_r, c_type: bf16_r, d_type: bf16_r, compute_type: c_f32_r, scale_type: f32_r }
+    - {a_type: bf16_r, b_type: bf16_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scale_type: f32_r }
+  M: [128, 129]
+  N: [128, 129]
+  K: [128, 129]
+  transA_transB: *transA_transB_range
+  alpha: 1
+  beta: [ 0.0, 2.0 ]
+  use_e: 1
+  activation_type: [relu, clamp]
+  activation_arg1: -1.5
+  activation_arg2: 1.5
+  bias_vector: [0, 1]
+  bias_type: f32_r
+  scaleAlpha_vector: 1
+  norm_check: 1
+  unit_check: 0
+  gpu_arch: '942'
+
+# 1x32x512x512x256 [NCDHW], OC = 1
+- name: matmul_conv3d_kernels
+  category: pre_checkin
+  function:
+    matmul:
+    - { a_type: f32_r, b_type: f32_r, c_type: f32_r, d_type: f32_r, compute_type: f32_r, scale_type: f32_r }
+  matrix_size:
+    - { M:  67108864, N:  1, K:  32 }
+  transA: N
+  transB: N
+  alpha: 1.0
+  beta: 0.0
+  gpu_arch: '9(0a|42)'
+
+- name: matmul_one_bf16_fp32dst_precision_gfx90a
+  category: quick
+  function:
+    matmul:
+    - { a_type: bf16_r, b_type: bf16_r, c_type: f32_r, d_type: f32_r, compute_type: c_f32_r, scale_type: f32_r}
+  matrix_size: *one_matrix_size_range
+  transA_transB: *transA_transB_range
+  alpha: [ 0.0, 1.0 ]
+  beta: [ 0.0, 1.0 ]
+  gpu_arch: '90a'
+
+...

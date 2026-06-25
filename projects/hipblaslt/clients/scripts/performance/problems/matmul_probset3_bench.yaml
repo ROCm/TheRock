@@ -1,0 +1,74 @@
+---
+include: ../../../tests/data/hipblaslt_common.yaml
+include: ../../../tests/data/matmul_common.yaml
+
+Definitions:
+Tests:
+- name: hpa_half_precision_rcmt_mphb_nn
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  8192,  N:  320,   K:  320   }
+    - { M:  2048,  N:  640,   K:  640   }
+    - { M:  512,   N:  1280,  K:  1280  }
+    - { M:  8192,  N:  320 ,  K:  320   }
+    - { M:  512,   N:  10240, K:  1280  }
+    - { M:  2048,  N:  5120,  K:  640   }
+    - { M:  8192,  N:  2560,  K:  320   }
+    - { M:  512,   N:  1280,  K:  5120  }
+    - { M:  2048,  N:  640,   K:  2560  }
+    - { M:  154,   N:  320,   K:  768   }
+    - { M:  154,   N:  1280,  K:  768   }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: hpa_half_precision_rcmt_mphb_b_nn
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  4096,  N:  40,    K:  4096  }
+    - { M:  1024,  N:  80,    K:  1024  }
+    - { M:  1024,  N:  88,    K:  77    }
+  initialization: trig_float
+  transA: N
+  transB: N
+  batch_count: 16
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: hpa_half_precision_rcmt_mphb_b_nt
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  4096,  N:  4096,  K:  40    }
+    - { M:  1024,  N:  1024,  K:  80    }
+    - { M:  4096,  N:  77,    K:  40    }
+    - { M:  256,   N:  77,    K:  160   }
+    - { M:  1024,  N:  77,    K:  160   }
+  initialization: trig_float
+  transA: N
+  transB: T
+  batch_count: 16
+  iters: 1000
+  cold_iters: 1000
+  rotating: 512
+
+- name: hpa_half_precision_rcmt_mhb_tn
+  function:
+    matmul: *hpa_half_precision
+  matrix_size:
+    - { M:  10240, N:  16 ,   K:  64640 }
+  initialization: trig_float
+  transA: T
+  transB: N
+  splitk: 1
+  iters: 1000
+  cold_iters: 4000
+  rotating: 512
+  api_method: 2
+...

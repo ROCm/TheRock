@@ -1,0 +1,88 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { M: -1, N: -1, lda: -1 }
+    - { M: 100, N: 100, lda: 200 }
+
+  - &incx_incy_range
+    - { incx:  -2, incy:  1 }
+
+  - &alpha_range
+    - [ -1.0, 2.0 ]
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: ger_general
+    category: quick
+    function:
+      - ger: *single_double_precisions
+      - geru: *single_double_precisions_complex
+      - gerc: *single_double_precisions_complex
+    alpha: *alpha_range
+    matrix_size: *size_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+
+  - name: ger_batched_general
+    category: quick
+    function:
+      - ger_batched: *single_double_precisions
+      - geru_batched: *single_double_precisions_complex
+      - gerc_batched: *single_double_precisions_complex
+    alpha: *alpha_range
+    matrix_size: *size_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: ger_strided_batched_general
+    category: quick
+    function:
+      - ger_strided_batched: *single_double_precisions
+      - geru_strided_batched: *single_double_precisions_complex
+      - gerc_strided_batched: *single_double_precisions_complex
+    alpha: *alpha_range
+    matrix_size: *size_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: ger_bad_arg
+    category: pre_checkin
+    function:
+      - ger_bad_arg: *single_double_precisions
+      - geru_bad_arg: *single_double_precisions_complex
+      - gerc_bad_arg: *single_double_precisions_complex
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: ger_bad_arg
+    category: pre_checkin
+    function:
+      - ger_bad_arg: *single_double_precisions
+      - geru_bad_arg: *single_double_precisions_complex
+      - gerc_bad_arg: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: ger_bad_arg
+    category: pre_checkin
+    function:
+      - ger_batched_bad_arg: *single_double_precisions
+      - ger_strided_batched_bad_arg: *single_double_precisions
+      - geru_batched_bad_arg: *single_double_precisions_complex
+      - geru_strided_batched_bad_arg: *single_double_precisions_complex
+      - gerc_batched_bad_arg: *single_double_precisions_complex
+      - gerc_strided_batched_bad_arg: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

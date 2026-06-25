@@ -1,0 +1,15 @@
+
+<dependencies>
+  <fileversion>0.1</fileversion>
+  <os names="Windows">
+    <vcpkg>
+      <pkg name="google test">gtest:x64-windows</pkg>
+      <pkg name="OpenBLAS">openblas:x64-windows</pkg>
+    </vcpkg>
+  </os>
+  <os names="all">
+    <pip>
+      <req name="Python for Clients">deps/requirements.txt</req>
+    </pip>
+  </os>
+</dependencies>

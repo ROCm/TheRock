@@ -1,0 +1,47 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+- name: triggerDownstreamJobs
+  type: boolean
+  default: true
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - projects/hipfft
+    exclude:
+    - projects/hipfft/.githooks
+    - projects/hipfft/.github
+    - projects/hipfft/.jenkins
+    - projects/hipfft/docs
+    - projects/hipfft/.*.y*ml
+    - projects/hipfft/*.md
+
+pr: none
+
+stages:
+- stage: hipfft
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/hipFFT.yml@pipelines_repo
+    parameters:
+      sparseCheckoutDir: projects/hipfft
+      triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
+- template: templates/report-summary-check-wrapper.yml

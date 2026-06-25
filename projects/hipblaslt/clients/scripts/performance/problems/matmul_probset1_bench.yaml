@@ -1,0 +1,65 @@
+---
+include: ../../../tests/data/hipblaslt_common.yaml
+include: ../../../tests/data/matmul_common.yaml
+
+Definitions:
+  # - &transA_transB_range
+  #   - { transA: N, transB: N }
+  #   - { transA: N, transB: T }
+  #   - { transA: T, transB: N }
+  #   - { transA: T, transB: T }
+
+# change to f8 for gfx950, otherwise we'll get "no solution found"
+# This also works for gfx942 since client automatically converts f8 to f8n on gfx942
+Real mix precisions: &fp8fp16_precision_dst_fp16
+  - { a_type: f8_r, b_type: f16_r, c_type: f16_r, d_type: f16_r, compute_type: c_f32_fast_f16_r, scale_type: f32_r}
+
+Tests:
+- name: matmul_f8f16_f16
+  function:
+    matmul: *fp8fp16_precision_dst_fp16
+  matrix_size:
+    - { M:  16,    N:  16,    K:  1024  }
+    - { M:  16,    N:  16,    K:  8192  }
+    - { M:  16,    N:  16,    K:  65536 }
+    - { M:  16,    N:  2048,  K:  1024  }
+    - { M:  16,    N:  2048,  K:  8192  }
+    - { M:  16,    N:  2048,  K:  65536 }
+    - { M:  16,    N:  8192,  K:  1024  }
+    - { M:  16,    N:  8192,  K:  8192  }
+    - { M:  16,    N:  8192,  K:  65536 }
+    - { M:  2048,  N:  16,    K:  1024  }
+    - { M:  2048,  N:  16,    K:  8192  }
+    - { M:  2048,  N:  16,    K:  65536 }
+    - { M:  2048,  N:  2048,  K:  1024  }
+    - { M:  2048,  N:  2048,  K:  8192  }
+    - { M:  2048,  N:  2048,  K:  65536 }
+    - { M:  2048,  N:  8192,  K:  1024  }
+    - { M:  2048,  N:  8192,  K:  8192  }
+    - { M:  2048,  N:  8192,  K:  65536 }
+    - { M:  8192,  N:  16,    K:  1024  }
+    - { M:  8192,  N:  16,    K:  8192  }
+    - { M:  8192,  N:  16,    K:  65536 }
+    - { M:  8192,  N:  2048,  K:  1024  }
+    - { M:  8192,  N:  2048,  K:  8192  }
+    - { M:  8192,  N:  2048,  K:  65536 }
+    - { M:  8192,  N:  8192,  K:  1024  }
+    - { M:  8192,  N:  8192,  K:  8192  }
+    - { M:  8192,  N:  8192,  K:  65536 }
+    - { M:  2048,  N:  16,    K:  16384 }
+    - { M:  2048,  N:  32,    K:  16384 }
+    - { M:  4096,  N:  16,    K:  16384 }
+    - { M:  4096,  N:  32,    K:  16384 }
+    - { M:  16384, N:  16,    K:  2048  }
+    - { M:  16384, N:  32,    K:  2048  }
+    - { M:  16384, N:  16,    K:  4096  }
+    - { M:  16384, N:  32,    K:  4096  }
+  initialization: trig_float
+  transA: N
+  transB: N
+  iters: 1000
+  cold_iters: 1000
+  algo_method: 0
+  api_method: 2
+  rotating: 512
+...

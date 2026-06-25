@@ -1,0 +1,56 @@
+---
+alwaysApply: true
+---
+
+# MIOpen Provider Plugin Architecture
+
+MIOpen Provider is a hipDNN plugin that wraps AMD's MIOpen library to provide GPU-accelerated deep learning operations.
+
+**hipDNN Context**: hipDNN is a graph-based deep learning library for AMD GPUs with a plugin architecture. Plugins implement the Plugin SDK to provide engine implementations that execute operation graphs.
+
+## Plugin SDK Interfaces
+
+This plugin implements the following hipDNN Plugin SDK interfaces:
+
+| Interface | File | Purpose |
+|-----------|------|---------|
+| **Plugin API** | `PluginApi.h` | Plugin metadata (name, version, type), error reporting, logging callbacks |
+| **Engine Plugin API** | `EnginePluginApi.h` | Engine lifecycle - create handle, set stream, get engines, execute graphs |
+| **IEngine** | `EngineInterface.hpp` | Engine interface - checks applicability, provides details, creates plans |
+| **IPlanBuilder** | `PlanInterface.hpp` | Builds execution plans for specific operation patterns |
+| **IPlan** | `PlanInterface.hpp` | Executable plan that runs operations on GPU |
+
+## Execution Flow
+
+```
+FlatBuffer Graph → Engine Selection → Plan Creation → GPU Execution
+       ↓                  ↓                 ↓              ↓
+   IGraph API    isApplicable()     buildPlan()     execute()
+```
+
+1. **Graph Analysis**: Backend deserializes FlatBuffer graph, queries plugins for applicable engines
+2. **Engine Selection**: Plugin's `isApplicable()` checks if any plan builder can handle the graph
+3. **Plan Building**: Selected plan builder creates concrete `IPlan` instance with MIOpen setup
+4. **Execution**: Plan's `execute()` launches MIOpen kernels on GPU
+
+## Component Linkage (Do Not Modify)
+
+- **Plugin uses**: Plugin SDK (header-only), Data SDK (header-only), MIOpen library
+- **Plugin SDK uses**: Data SDK
+- **Data SDK uses**: FlatBuffers, spdlog
+- **No direct dependencies** on hipDNN Backend or Frontend
+
+## Key Classes
+
+- **HipdnnEnginePluginHandle**: Plugin instance with MIOpen handle, stream, engine manager
+- **EngineManager**: Manages available engines and routes requests to applicable engines
+- **MiopenEngine**: Concrete engine with multiple plan builders for different operations
+- **HipdnnEnginePluginExecutionContext**: Stores the execution plan for a graph
+- **Plan Builders**: `MiopenConvPlanBuilder`, `MiopenBatchnormPlanBuilder`, etc.
+- **Plans**: `MiopenConvFwdPlan`, `MiopenBatchnormFwdPlan`, etc.
+
+## Documentation
+
+- [Plugin SDK Reference](../../../projects/hipdnn/docs/PluginDevelopment.md)
+- [Operation Support](../docs/OperationSupport.md)
+- [Plugin API Headers](../../../projects/hipdnn/plugin_sdk/include/hipdnn_plugin_sdk/)

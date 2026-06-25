@@ -1,0 +1,80 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { M: -1, K: -1, lda: -1 }
+    - { M: 65, K: 59, lda: 68 }
+
+  - &incx_range
+    - [ -2 ]
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: tbmv_general
+    category: quick
+    function: tbmv
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    uplo: [ 'L', 'U' ]
+    diag: [ 'N', 'U' ]
+    matrix_size: *size_range
+    incx: *incx_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+
+  - name: tbmv_batched_general
+    category: quick
+    function: tbmv_batched
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    uplo: [ 'L', 'U' ]
+    diag: [ 'N', 'U' ]
+    matrix_size: *size_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: tbmv_strided_batched_general
+    category: quick
+    function: tbmv_strided_batched
+    precision: *single_double_precisions_complex_real
+    transA: [ 'N', 'T', 'C' ]
+    uplo: [ 'L', 'U' ]
+    diag: [ 'N', 'U' ]
+    matrix_size: *size_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: tbmv_bad_arg
+    category: pre_checkin
+    function:
+      - tbmv_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: tbmv_bad_arg
+    category: pre_checkin
+    function:
+      - tbmv_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: tbmv_bad_arg
+    category: pre_checkin
+    function:
+      - tbmv_batched_bad_arg
+      - tbmv_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

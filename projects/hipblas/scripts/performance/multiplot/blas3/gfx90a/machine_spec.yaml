@@ -1,0 +1,11 @@
+{GBps: 1600, arch: gfx90a, caxpy: 533.3333333333333, cdot: 800.0, cgemv: 1600, chemv: 3200,
+  cher: 800.0, cher2: 1600, chpmv: 3200, chpr: 800.0, chpr2: 1600, cscal: 600.0, ctpmv: 1600,
+  ctpsv: 1600, ctrmv: 1600, ctrsv: 1600, daxpy: 133.33333333333331, ddot: 200.0, dgemv: 400.0,
+  dger: 200.0, dscal: 100.0, dspmv: 800.0, dspr: 200.0, dspr2: 400.0, dsymv: 800.0,
+  dsyr: 200.0, dsyr2: 400.0, dtpmv: 400.0, dtpsv: 400.0, dtrmv: 400.0, dtrsv: 400.0,
+  saxpy: 266.66666666666663, sdot: 400.0, sgemv: 800.0, sger: 400.0, sscal: 200.0,
+  sspmv: 1600, sspr: 400.0, sspr2: 800.0, ssymv: 1600, ssyr: 400.0, ssyr2: 800.0,
+  stpmv: 800.0, stpsv: 800.0, strmv: 800.0, strsv: 800.0, zaxpy: 266.66666666666663,
+  zdot: 400.0, zgemv: 800.0, zhemv: 1600, zher: 400.0, zher2: 800.0, zhpmv: 1600,
+  zhpr: 400.0, zhpr2: 800.0, zscal: 300.0, ztpmv: 800.0, ztpsv: 800.0, ztrmv: 800.0,
+  ztrsv: 800.0}

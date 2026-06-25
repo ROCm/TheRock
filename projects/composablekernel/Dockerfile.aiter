@@ -1,0 +1,22 @@
+ARG BASE_DOCKER="rocm/pytorch:latest"
+FROM $BASE_DOCKER
+ARG AITER_BRANCH="main"
+ARG CK_AITER_BRANCH="develop"
+RUN pip install pandas zmq einops ninja tabulate && \
+    pip install numpy==1.26.2 && \
+    sudo mkdir /home/jenkins && \
+    sudo mkdir /home/jenkins/workspace && \
+    cd /home/jenkins/workspace && \
+    rm -rf aiter && \
+    git clone -b "$AITER_BRANCH" --recursive https://github.com/ROCm/aiter.git && \
+    cd aiter && \
+    rm -rf 3rdparty/composable_kernel/ && \
+    git clone -b "$CK_AITER_BRANCH" https://github.com/ROCm/composable_kernel.git 3rdparty/composable_kernel/ && \
+    python3 setup.py develop && \
+    groupadd -g 1001 jenkins && \
+    useradd -u 1001 -g 1001 -m -s /bin/bash jenkins && \
+    chown -R jenkins:jenkins /home/jenkins && \
+    chmod -R a+rwx /home/jenkins && \
+    chown -R jenkins:jenkins /tmp && \
+    chmod -R a+rwx /tmp && \
+    sudo usermod -aG irc jenkins

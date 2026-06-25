@@ -1,0 +1,31 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { N:  -1, K:  -1, lda:  -1, ldc:  -1 }
+    - { N: 200, K: 32, lda: 200, ldc: 200 }
+
+  - &alpha_beta_range
+    - { alpha: 1.0, beta: 1.0}
+
+Tests:
+
+  - name: herk_ex_bad_arg
+    category: pre_checkin
+    function: 
+    - herk_ex_bad_arg: *herk_ex_precisions
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+
+  - name: herk_ex_general
+    category: pre_checkin
+    function: 
+    - herk_ex: *herk_ex_precisions
+    matrix_size: *size_range
+    uplo: [ 'L', 'U' ]
+    transA: [ 'N', 'C' ]
+    alpha_beta: *alpha_beta_range
+    api: [ FORTRAN, C ]
+    backend_flags: AMD
+...

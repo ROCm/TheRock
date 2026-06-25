@@ -1,0 +1,133 @@
+"project: composablekernel":
+- changed-files:
+  - any-glob-to-any-file: 'projects/composablekernel/**/*'
+
+"project: hipblas":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipblas/**/*'
+
+"project: hipblas-common":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipblas-common/**/*'
+
+"project: hipblaslt":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipblaslt/**/*'
+  - any-glob-to-any-file: 'shared/origami/**/*'
+  - any-glob-to-any-file: 'shared/rocroller/**/*'
+
+"project: hipcub":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipcub/**/*'
+
+"project: hipdnn":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipdnn/**/*'
+
+"project: hipfft":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipfft/**/*'
+
+"project: hiprand":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hiprand/**/*'
+
+"project: hipsolver":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipsolver/**/*'
+
+"project: hipsparse":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipsparse/**/*'
+
+"project: hipsparselt":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hipsparselt/**/*'
+
+"project: miopen":
+- changed-files:
+  - any-glob-to-any-file: 'projects/miopen/**/*'
+
+"project: none":
+- changed-files:
+  - all-globs-to-all-files: ['!projects/**/*', '!shared/**/*']
+
+"project: rocblas":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocblas/**/*'
+  - any-glob-to-any-file: 'shared/tensile/**/*'
+
+"project: rocfft":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocfft/**/*'
+
+"project: rocprim":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocprim/**/*'
+
+"project: rocrand":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocrand/**/*'
+
+"project: rocsolver":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocsolver/**/*'
+
+"project: rocsparse":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocsparse/**/*'
+
+"project: rocthrust":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocthrust/**/*'
+
+"shared: mxdatagenerator":
+- changed-files:
+  - any-glob-to-any-file: 'shared/mxdatagenerator/**/*'
+
+"shared: origami":
+- changed-files:
+  - any-glob-to-any-file: 'shared/origami/**/*'
+
+"shared: rocroller":
+- changed-files:
+  - any-glob-to-any-file: 'shared/rocroller/**/*'
+
+"shared: tensile":
+- changed-files:
+  - any-glob-to-any-file: 'shared/tensile/**/*'
+
+"project: rocwmma":
+- changed-files:
+  - any-glob-to-any-file: 'projects/rocwmma/**/*'
+
+"project: hiptensor":
+- changed-files:
+  - any-glob-to-any-file: 'projects/hiptensor/**/*'
+
+documentation:
+- changed-files:
+  - any-glob-to-any-file:
+    - docs/**/*
+    - '**/docs/**/*'
+    - '**/*.md'
+    - '**/*.rst'
+    - '**/.readthedocs.yaml'
+
+"ci:docs-only":
+- changed-files:
+  - any-glob-to-all-files:
+    - '{**/*.md,**/*.rst,**/docs/**/*,**/.readthedocs.yaml}'
+
+External CI:
+- changed-files:
+  - any-glob-to-any-file:
+    - .azuredevops/**/*
+
+github actions:
+- changed-files:
+  - any-glob-to-any-file:
+    - .github/workflows/**/*
+    - .github/scripts/**/*
+    - .github/*.json
+    - .github/*.yml

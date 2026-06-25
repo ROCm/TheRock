@@ -1,0 +1,54 @@
+name: TheRock Test Packages
+
+on:
+  workflow_call:
+    inputs:
+      project_to_test:
+        type: string
+      amdgpu_families:
+        type: string
+      test_runs_on:
+        type: string
+      platform:
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  configure_test_matrix:
+    name: "Configure test matrix"
+    runs-on: ubuntu-24.04
+    if: ${{ inputs.test_runs_on != '' }}
+    outputs:
+      components: ${{ steps.configure.outputs.components }}
+    steps:
+      - name: "Checking out repository"
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: "ROCm/TheRock"
+          ref: e4d4316c3c20819045722f60fc63928944ebc397 # 2026-01-01 commit
+
+      - name: "Configuring CI options"
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          project_to_test: ${{ inputs.project_to_test }}
+        id: configure
+        run: python ./build_tools/github_actions/fetch_test_configurations.py
+
+  test_components:
+    name: 'Test ${{ matrix.components.job_name }}'
+    needs: [configure_test_matrix]
+    # skip tests if no test matrix to run
+    if: ${{ needs.configure_test_matrix.outputs.components != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
+    uses: './.github/workflows/therock-test-component.yml'
+    with:
+      artifact_run_id: ${{  github.run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}
+      component: ${{ toJSON(matrix.components) }}

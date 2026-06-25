@@ -94,6 +94,30 @@ endif()
 
 
 ##############################################################################
+# Tensile
+##############################################################################
+
+if(THEROCK_BUILD_TESTING)
+  therock_cmake_subproject_declare(Tensile
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/Tensile"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DBUILD_TENSILE_HOST_LIBRARY_TESTS=OFF
+      -DINSTALL_TENSILE_PYTEST_TESTS=ON
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_activate(Tensile)
+  list(APPEND _blas_subproject_names Tensile)
+endif()
+
+
+##############################################################################
 # hipBLASLt
 ##############################################################################
 

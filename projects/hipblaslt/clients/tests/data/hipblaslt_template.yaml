@@ -1,0 +1,8 @@
+# Template used to process YAML from log files
+---
+include: hipblaslt_common.yaml
+
+Functions:
+
+
+Tests:

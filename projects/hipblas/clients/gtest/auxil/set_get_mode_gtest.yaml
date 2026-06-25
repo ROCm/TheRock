@@ -1,0 +1,29 @@
+---
+include: hipblas_common.yaml
+
+Tests:
+  - name: set_get_atomics_mode_general
+    category: quick
+    function: set_get_atomics_mode
+    precision: *single_precision
+    api: [ FORTRAN, C ]
+
+  - name: set_get_pointer_mode_general
+    category: quick
+    function: set_get_pointer_mode
+    precision: *single_precision
+
+  - name: set_get_math_mode_general
+    category: quick
+    function: set_get_math_mode
+    precision: *single_precision
+    bad_arg_all: false
+    gpu_arch: 90?
+
+  - name: set_get_math_mode_general
+    category: quick
+    function: set_get_math_mode
+    precision: *single_precision
+    bad_arg_all: true
+    gpu_arch: 94?
+...

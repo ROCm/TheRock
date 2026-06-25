@@ -1,0 +1,19 @@
+stages:
+- stage: report_successful
+  condition: succeeded()
+  jobs:
+  - template: report-summary-check.yml
+    parameters:
+      checkConclusion: success
+- stage: report_failed
+  condition: failed()
+  jobs:
+  - template: report-summary-check.yml
+    parameters:
+      checkConclusion: failure
+- stage: report_cancelled
+  condition: canceled() # note: only 1 L in canceled()
+  jobs:
+  - template: report-summary-check.yml
+    parameters:
+      checkConclusion: cancelled

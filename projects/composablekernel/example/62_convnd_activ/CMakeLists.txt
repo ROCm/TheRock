@@ -1,0 +1,19 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+add_subdirectory(binary)
+add_subdirectory(convinvscale)
+add_subdirectory(convscale)
+add_subdirectory(convscale_relu)
+add_subdirectory(convscale_add)
+add_subdirectory(convscale_reduce)
+add_subdirectory(multi_AB)
+add_subdirectory(unary)
+add_subdirectory(dynamic_unary)
+
+add_custom_target(example_convnd_activ_xdl)
+# ScaleAdd ScaleAdd Relu
+add_example_executable(example_convnd_fwd_xdl_scaleadd_scaleadd_relu_fp16 convnd_fwd_xdl_scaleadd_scaleadd_relu_fp16.cpp)
+add_example_dependencies(example_convnd_activ_xdl example_convnd_fwd_xdl_scaleadd_scaleadd_relu_fp16)
+add_example_executable(example_convnd_fwd_xdl_scaleadd_scaleadd_relu_bcasted_bias_fp16 convnd_fwd_xdl_scaleadd_scaleadd_relu_bcasted_bias_fp16.cpp)
+add_example_dependencies(example_convnd_activ_xdl example_convnd_fwd_xdl_scaleadd_scaleadd_relu_bcasted_bias_fp16)

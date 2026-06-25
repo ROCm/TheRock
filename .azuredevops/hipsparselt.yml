@@ -1,0 +1,46 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+- name: triggerDownstreamJobs
+  type: boolean
+  default: true
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - projects/hipsparselt
+    exclude:
+    - projects/hipsparselt/.githooks
+    - projects/hipsparselt/.github
+    - projects/hipsparselt/docs
+    - projects/hipsparselt/.*.y*ml
+    - projects/hipsparselt/*.md
+
+pr: none
+
+stages:
+- stage: hipsparselt
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/hipSPARSELt.yml@pipelines_repo
+    parameters:
+      sparseCheckoutDir: projects/hipsparselt
+      triggerDownstreamJobs: ${{ parameters.triggerDownstreamJobs }}
+- template: templates/report-summary-check-wrapper.yml

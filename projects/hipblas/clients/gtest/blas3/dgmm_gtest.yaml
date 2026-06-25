@@ -1,0 +1,66 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { M:  -1, N:  -1, lda:  -1, ldc:  -1 }
+    - { M: 100, N: 100, lda: 200, ldc: 300 }
+
+  - &incx_range
+    - [ -2 ]
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: dgmm_general
+    category: quick
+    function: dgmm
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    matrix_size: *size_range
+    incx: *incx_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: dgmm_batched_general
+    category: quick
+    function: dgmm_batched
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    matrix_size: *size_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dgmm_strided_batched_general
+    category: quick
+    function: dgmm_strided_batched
+    precision: *single_double_precisions_complex_real
+    side: [ 'L', 'R' ]
+    matrix_size: *size_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dgmm_bad_arg
+    category: pre_checkin
+    function:
+      - dgmm_bad_arg
+      - dgmm_batched_bad_arg
+      - dgmm_strided_batched_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: dgmm_bad_arg
+    category: pre_checkin
+    function:
+      - dgmm_bad_arg
+    precision: *single_double_precisions_complex_real
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...

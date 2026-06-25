@@ -1,0 +1,71 @@
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+parameters:
+- name: pipelinesRepoRef
+  type: string
+  default: refs/heads/develop
+
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+    ref: ${{ parameters.pipelinesRepoRef }}
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - CMakeLists.txt
+    - cmake
+    - shared/mxdatagenerator
+    - shared/rocroller
+    - shared/origami
+    - projects/hipblas-common
+    - projects/hipblaslt
+    - projects/rocprim
+    - projects/rocrand
+    exclude:
+    - .githooks
+    - .github
+    - docs
+    - CODEOWNERS
+    - .*.y*ml
+    - ./**/*.md
+
+pr:
+  autoCancel: false
+  branches:
+    include:
+    - develop
+    - release-staging/rocm-rel-7.*
+  paths:
+    include:
+    - CMakeLists.txt
+    - cmake
+    - shared/mxdatagenerator
+    - shared/rocroller
+    - shared/origami
+    - projects/hipblas-common
+    - projects/hipblaslt
+    - projects/rocprim
+    - projects/rocrand
+    exclude:
+    - .githooks
+    - .github
+    - docs
+    - CODEOWNERS
+    - .*.y*ml
+    - ./**/*.md
+
+stages:
+- stage: rocm_libraries
+  jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/rocm-libraries.yml@pipelines_repo

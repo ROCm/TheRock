@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
+
+#include "@INSTANCES@.inc"
+
+namespace ck::tensor_operation::device::instance {
+template void add_@INSTANCES@_shard<@NUM_SHARDS@, @SHARD_ID@>(
+    @INSTANCES@& instances);
+} // namespace ck::tensor_operation::device::instance

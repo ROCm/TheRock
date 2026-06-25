@@ -227,6 +227,13 @@ include = [
 ]
 optional = true
 
+# Tensile
+[components.test."math-libs/BLAS/Tensile/stage"]
+include = [
+  "Tensile/**",
+]
+optional = true
+
 # hipSPARSELt
 [components.lib."math-libs/BLAS/hipSPARSELt/stage"]
 include = [

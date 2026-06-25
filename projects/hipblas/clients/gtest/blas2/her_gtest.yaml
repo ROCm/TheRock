@@ -1,0 +1,79 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &size_range
+    - { N: -1, lda: -1 }
+    - { N: 65, lda: 68 }
+
+  - &incx_range
+    - [ -1, 2 ]
+
+  - &alpha_range
+    - [ 2.0 ]
+
+  - &batch_count_range
+    - [ -1, 5 ]
+
+Tests:
+  - name: her_general
+    category: quick
+    function: her
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    alpha: *alpha_range
+    matrix_size: *size_range
+    incx: *incx_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: her_batched_general
+    category: quick
+    function: her_batched
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    alpha: *alpha_range
+    matrix_size: *size_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: her_strided_batched_general
+    category: quick
+    function: her_strided_batched
+    precision: *single_double_precisions_complex
+    uplo: [ 'L', 'U' ]
+    alpha: *alpha_range
+    matrix_size: *size_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: her_bad_arg
+    category: pre_checkin
+    function:
+      - her_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: her_bad_arg
+    category: pre_checkin
+    function:
+      - her_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: her_bad_arg
+    category: pre_checkin
+    function:
+      - her_batched_bad_arg
+      - her_strided_batched_bad_arg
+    precision: *single_double_precisions_complex
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

@@ -1,0 +1,21 @@
+---
+include: ../../../../clients/include/hipblas_common.yaml
+
+Definitions:
+  - &sizes
+    - {N:  2048, lda:  2048 }
+    - {N:  2048, lda:  2048 }
+    - {N:  3072, lda:  3072 }
+    - {N:  4096, lda:  4096 }
+
+Tests:
+- name: tpsv
+  function: tpsv
+  precision: *single_double_precisions_complex_real
+  samples: 10
+  uplo: L
+  transA: N
+  diag: N
+  incx: 1
+  matrix_size: *sizes
+...

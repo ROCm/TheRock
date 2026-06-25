@@ -1,0 +1,26 @@
+---
+include: ../../../../clients/include/hipblas_common.yaml
+
+Definitions:
+  - &sizes
+    - {M:  2048, N:  2048, lda:  2048 }
+    - {M:  4096, N:  4096, lda:  4096 }
+    - {M:  6144, N:  6144, lda:  6144 }
+    - {M:  8192, N:  8192, lda:  8192 }
+    - {M: 10240, N: 10240, lda: 10240 }
+    - {M: 12288, N: 12288, lda: 12288 }
+    - {M: 14336, N: 14336, lda: 14336 }
+    - {M: 16384, N: 16384, lda: 16384 }
+    - {M: 18432, N: 18432, lda: 18432 }
+    - {M: 20480, N: 20480, lda: 20480 }
+
+Tests:
+- name: ger
+  function: ger
+  precision: *single_double_precisions
+  samples: 10
+  alpha: 1
+  incx: 1
+  incy: 1
+  matrix_size: *sizes
+...

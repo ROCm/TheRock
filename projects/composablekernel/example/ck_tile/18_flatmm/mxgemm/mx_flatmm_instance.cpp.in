@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
+
+#include "mx_flatmm_instance.hpp"
+
+// clang-format off
+#define FLATMM_CONFIG @FLATMM_CONFIG@
+#define A_DATA_TYPE @A_DATA_TYPE@
+#define B_DATA_TYPE @B_DATA_TYPE@
+#define C_DATA_TYPE @C_DATA_TYPE@
+#define A_LAYOUT @A_LAYOUT@
+#define B_LAYOUT @B_LAYOUT@
+#define C_LAYOUT @C_LAYOUT@
+#define PERSISTENT @PERSISTENT@
+#define SPLIT_K @SPLIT_K@
+#define HAS_HOT_LOOP @HAS_HOT_LOOP@
+#define TAIL_NUMBER @TAIL_NUMBER@
+// clang-format on
+
+using FP4  = ck_tile::pk_fp4_t;
+using FP8  = ck_tile::fp8_t;
+using FP16 = ck_tile::fp16_t;
+using BF16 = ck_tile::bf16_t;
+
+using ROW = ck_tile::tensor_layout::gemm::RowMajor;
+using COL = ck_tile::tensor_layout::gemm::ColumnMajor;
+
+using ScaleType = ck_tile::e8m0_t;
+
+inline constexpr auto ODD  = ck_tile::TailNumber::Odd;
+inline constexpr auto EVEN = ck_tile::TailNumber::Even;
+
+inline constexpr int ScaleGranularityM = 1;
+inline constexpr int ScaleGranularityN = 1;
+inline constexpr int ScaleGranularityK = 32;
+using ScaleM = ck_tile::FlatmmScalePointer<ScaleGranularityM, ScaleGranularityK, ScaleType>;
+using ScaleN = ck_tile::FlatmmScalePointer<ScaleGranularityN, ScaleGranularityK, ScaleType>;
+
+template float mx_flatmm_calc<FLATMM_CONFIG,
+                              A_DATA_TYPE,
+                              B_DATA_TYPE,
+                              /*DsDatatype*/ ck_tile::tuple<>,
+                              /*AccDataType*/ float,
+                              C_DATA_TYPE,
+                              A_LAYOUT,
+                              B_LAYOUT,
+                              /*DsLayout*/ ck_tile::tuple<>,
+                              C_LAYOUT,
+                              ScaleM,
+                              ScaleN,
+                              PERSISTENT,
+                              /*CDEElementWise*/ ck_tile::element_wise::PassThrough,
+                              SPLIT_K,
+                              HAS_HOT_LOOP,
+                              TAIL_NUMBER>(const ck_tile::ScaleFlatmmHostArgs<ScaleM, ScaleN>& args,
+                                           const ck_tile::stream_config& s);

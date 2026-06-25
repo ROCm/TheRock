@@ -1,0 +1,81 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 0, 1000 ]
+
+  - &incx_incy_range
+    - { incx:  2, incy:  3 }
+
+  - &alpha_beta_range
+    - { alpha: 2.0, alphai:  2.0, beta:  0.0, betai: 0.0 }
+
+  - &batch_count_range
+    - [ 0, 5 ]
+
+Tests:
+  - name: axpy_ex_general
+    category: quick
+    function:
+      - axpy_ex: *axpy_ex_precision_all
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: axpy_ex_general_amd
+    category: quick
+    function:
+      - axpy_ex: *axpy_ex_precision_amd
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: axpy_batched_ex_general
+    category: quick
+    function:
+      - axpy_batched_ex: *axpy_ex_precision_all
+      - axpy_batched_ex: *axpy_ex_precision_amd
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: axpy_strided_batched_ex_general
+    category: quick
+    function:
+      - axpy_strided_batched_ex: *axpy_ex_precision_all
+      - axpy_strided_batched_ex: *axpy_ex_precision_amd
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: axpy_ex_bad_arg
+    category: pre_checkin
+    function:
+      - axpy_ex_bad_arg: *axpy_ex_precision_all
+      - axpy_batched_ex_bad_arg: *axpy_ex_precision_all
+      - axpy_strided_batched_ex_bad_arg: *axpy_ex_precision_all
+      - axpy_ex_bad_arg: *axpy_ex_precision_amd
+      - axpy_batched_ex_bad_arg: *axpy_ex_precision_amd
+      - axpy_strided_batched_ex_bad_arg: *axpy_ex_precision_amd
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: axpy_ex_bad_arg
+    category: pre_checkin
+    function:
+      - axpy_ex_bad_arg: *axpy_ex_precision_all
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...

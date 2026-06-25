@@ -1,0 +1,104 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 0, 1000 ]
+
+  - &incx_range
+    - [-1, 2 ]
+
+  - &alpha_beta_range
+    - { alpha: 2.0, alphai:  2.0, beta:  0.0, betai: 0.0 }
+
+  - &batch_count_range
+    - [ -1, 0, 5 ]
+
+Tests:
+  - name: scal_general
+    category: quick
+    function:
+      - scal: *single_double_precisions_complex_real
+      - scal: *single_double_complex_real_in_complex_out
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx: *incx_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: scal_batched_general
+    category: quick
+    function:
+      - scal_batched: *single_double_precisions_complex_real
+      - scal_batched: *single_double_complex_real_in_complex_out
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: scal_strided_batched_general
+    category: quick
+    function:
+      - scal_strided_batched: *single_double_precisions_complex_real
+      - scal_strided_batched: *single_double_complex_real_in_complex_out
+    alpha_beta: *alpha_beta_range
+    N: *N_range
+    incx: *incx_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  # ILP-64 tests
+  # - name: scal_64
+  #   category: stress
+  #   function:
+  #     - scal: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1, incy:  1 }
+  #     - { N: 2, incx:  2147483649, incy:  1 }
+  #   api: [ C_64 ]
+  #   os_flags: [ LINUX ]
+  #   gpu_arch: '90a'
+
+  # - name: scal_64
+  #   category: stress
+  #   function:
+  #     - scal_batched: *single_precision
+  #     - scal_strided_batched: *single_precision
+  #   arguments:
+  #     - { N: 2147483649, incx:  1, batch_count: 1 }
+  #     - { N: 2, incx:  2147483649, batch_count: 1 }
+  #     - { N: 2, incx:  1, stride_x: 2, batch_count: 666666 }
+  #   api: [ C_64 ]
+  #   os_flags: [ LINUX ]
+  #   gpu_arch: '90a'
+
+  - name: scal_bad_arg
+    category: pre_checkin
+    function:
+      - scal_bad_arg: *single_double_precisions_complex_real
+      - scal_bad_arg: *single_double_complex_real_in_complex_out
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: scal_bad_arg
+    category: pre_checkin
+    function:
+      - scal_bad_arg: *single_double_precisions_complex_real
+      - scal_bad_arg: *single_double_complex_real_in_complex_out
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+
+  - name: scal_bad_arg
+    category: pre_checkin
+    function:
+      - scal_batched_bad_arg: *single_double_precisions_complex_real
+      - scal_batched_bad_arg: *single_double_complex_real_in_complex_out
+      - scal_strided_batched_bad_arg: *single_double_precisions_complex_real
+      - scal_strided_batched_bad_arg: *single_double_complex_real_in_complex_out
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+...

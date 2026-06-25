@@ -1,0 +1,61 @@
+---
+include: hipblas_common.yaml
+
+Definitions:
+  - &N_range
+    - [ -1, 0, 1000 ]
+
+  - &incx_incy_range
+    - { incx:  2, incy:  3 }
+
+  - &batch_count_range
+    - [ 0, 5 ]
+
+Tests:
+  # rot
+  - name: rot_ex_general
+    category: quick
+    function:
+      - rot_ex: *rot_ex_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+
+  - name: rot_batched_ex_general
+    category: quick
+    function:
+      - rot_batched_ex: *rot_ex_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: rot_strided_batched_ex_general
+    category: quick
+    function:
+      - rot_strided_batched_ex: *rot_ex_precisions
+    N: *N_range
+    incx_incy: *incx_incy_range
+    batch_count: *batch_count_range
+    stride_scale: [ 2.5 ]
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: rot_ex_bad_arg
+    category: pre_checkin
+    function:
+      - rot_ex_bad_arg: *rot_ex_precisions
+      - rot_batched_ex_bad_arg: *rot_ex_precisions
+      - rot_strided_batched_ex_bad_arg: *rot_ex_precisions
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    backend_flags: AMD
+
+  - name: rot_ex_bad_arg
+    category: pre_checkin
+    function:
+      - rot_ex_bad_arg: *rot_ex_precisions
+    api: [ FORTRAN, C, FORTRAN_64, C_64 ]
+    bad_arg_all: false
+    backend_flags: NVIDIA
+...
