@@ -188,6 +188,13 @@ jobs:
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
 
+      - name: Debug Index URL Propagation
+        run: |
+          echo "=== DEBUG: rocm_package_index_url Propagation ==="
+          echo "inputs.rocm_package_index_url = '${{ inputs.rocm_package_index_url }}'"
+          echo "build_python_packages output   = '${{ needs.build_python_packages.outputs.package_index_url }}'"
+          echo "=================================================="
+
       - name: Set package dist dir
         run: |
           if [ "${{ inputs.build_mode }}" = "manylinux" ]; then
@@ -217,7 +224,7 @@ jobs:
         env:
           THEROCK_VERSION: ""
           GFX_ARCH: ${{ inputs.gfx_arch }}
-          ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+          THEROCK_INDEX_URL: ${{ inputs.rocm_package_index_url }}
         run: |
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
@@ -225,9 +232,10 @@ jobs:
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_INDEX_URL}" \
+            --build-arg=THEROCK_INDEX_URL="${THEROCK_INDEX_URL}" \
             --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
+            --progress=plain \
             .
 
       - name: Determine wheel version suffix
