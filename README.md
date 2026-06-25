@@ -205,6 +205,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                      |
 | `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                            |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                     |
+| `-DTHEROCK_ENABLE_ROCALUTION=ON`       | Enables rocALUTION                                  |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |

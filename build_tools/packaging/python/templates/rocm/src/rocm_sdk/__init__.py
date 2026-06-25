@@ -61,6 +61,10 @@ def find_libraries(*shortnames: str) -> list[Path]:
             entry_pattern = lib_entry.so_pattern
         matching_paths = sorted(relpath.glob(entry_pattern))
         if len(matching_paths) == 0:
+            if lib_entry.optional:
+                # Optional libraries (e.g. WSL-only rocdxg) may be absent from
+                # the distribution. Skip rather than failing.
+                continue
             raise FileNotFoundError(
                 f"Could not find rocm library '{shortname}' at path '{relpath},' no match for pattern '{entry_pattern}'"
             )
@@ -97,12 +101,17 @@ def preload_libraries(*shortnames: str, rtld_global: bool = True):
     """
     import ctypes
 
-    paths = find_libraries(*shortnames)
     mode = ctypes.RTLD_GLOBAL if rtld_global is True else ctypes.RTLD_LOCAL
-    for shortname, path in zip(shortnames, paths):
+    for shortname in shortnames:
         if shortname in _ALL_CDLLS:
             continue
-        cdll = ctypes.CDLL(str(path), mode=mode)
+        # Resolve per shortname: find_libraries may skip entries (libraries
+        # absent on the current platform or optional ones not present in the
+        # distribution), so a positional zip against shortnames would mispair.
+        paths = find_libraries(shortname)
+        if not paths:
+            continue
+        cdll = ctypes.CDLL(str(paths[0]), mode=mode)
         _ALL_CDLLS[shortname] = cdll
 
 

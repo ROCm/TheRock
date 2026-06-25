@@ -1,20 +1,19 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Reusable multi-arch build variant of build_windows_pytorch_wheels_ci.yml.
+# Reusable multi-arch PyTorch build workflow for Windows.
 #
 # Built shape:
 #   - One fat build_prod_wheels.py invocation for one python_version and
 #     pytorch_git_ref, covering all gfx targets expanded from the
 #     inputs.amdgpu_families set. Builds torch, torchaudio, and torchvision
-#     in a single invocation. (No triton on Windows,
-#     matching the legacy release_windows_pytorch_wheels.yml shape.)
+#     in a single invocation.
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
-#     torchaudio ships as-is (no split).
+#     other packages ship as-is (nothing to split).
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl/
-#     (server-side indexing handles the index page) via
-#     publish_pytorch_to_release_bucket.py.
+#     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
+#     happens server-side).
 #
 # For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
@@ -52,9 +51,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type; selects the S3 bucket.'
         type: string
@@ -100,9 +103,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -295,7 +302,8 @@ jobs:
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --find-links "${{ inputs.rocm_package_find_links_url }}" ^
+            --index-url="${{ inputs.rocm_package_index_url }}" ^
+            --find-links="${{ inputs.rocm_package_find_links_url }}" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
@@ -435,8 +443,18 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Checkout CI config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
       - name: Configure PyTorch test matrix
         id: configure
+        env:
+          CI_CONFIG_PATH: ci-config
         run: |
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \

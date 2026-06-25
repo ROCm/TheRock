@@ -96,8 +96,8 @@ See also:
 - The upstream PyTorch
   [release documentation](https://github.com/pytorch/pytorch/blob/main/RELEASE.md)
 - Workflow source code:
-  - [`.github/workflows/build_portable_linux_pytorch_wheels.yml`](/.github/workflows/build_portable_linux_pytorch_wheels.yml)
-  - [`.github/workflows/build_windows_pytorch_wheels.yml`](/.github/workflows/build_windows_pytorch_wheels.yml)
+  - [`.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml)
+  - [`.github/workflows/multi_arch_build_windows_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_windows_pytorch_wheels.yml)
 
 ## Build instructions
 

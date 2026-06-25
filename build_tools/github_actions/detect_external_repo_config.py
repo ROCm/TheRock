@@ -377,11 +377,12 @@ def main(argv=None):
             external_repo = json.loads(args.external_repo_json)
             source_repository = external_repo.get("repository", "")
             source_ref = external_repo.get("ref", "")
-            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries")
+            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries").
+            # Lowercase so REPO_CONFIGS lookup is case-insensitive (e.g. "ROCgdb" -> "rocgdb").
             if "/" in source_repository:
-                repo_name = source_repository.split("/")[-1]
+                repo_name = source_repository.split("/")[-1].lower()
             else:
-                repo_name = source_repository
+                repo_name = source_repository.lower()
             args.repository = repo_name
             print(
                 f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
