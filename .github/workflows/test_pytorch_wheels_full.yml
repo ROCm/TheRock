@@ -323,6 +323,13 @@ jobs:
           echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
           echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
+          # Temporary workaround for ROCm/TheRock#6113: rocm.cfg in rocm-sdk-core
+          # injects -Wl,--enable-new-dtags into every clang++ invocation, breaking
+          # PyTorch Inductor PCH compilation. Strip the linker flag from the config.
+          for cfg in $(find "${ROCM_HOME}" -name rocm.cfg 2>/dev/null); do
+            sed -i '/-Wl,--enable-new-dtags/d' "${cfg}"
+          done
+
       - name: Install C++ build tools and register test library paths
         run: |
           apt-get update
