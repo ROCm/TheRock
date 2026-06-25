@@ -162,9 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     pytorch_refs = None
     if args.pytorch_refs:
         sep = ";" if ";" in args.pytorch_refs else ","
-        pytorch_refs = [
-            r.strip() for r in args.pytorch_refs.split(sep) if r.strip()
-        ]
+        pytorch_refs = [r.strip() for r in args.pytorch_refs.split(sep) if r.strip()]
 
     matrix = generate_pytorch_matrix(
         python_versions,

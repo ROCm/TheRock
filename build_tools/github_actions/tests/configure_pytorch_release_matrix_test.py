@@ -32,9 +32,7 @@ class ConfigurePyTorchReleaseMatrixTest(unittest.TestCase):
             pytorch_refs=["release/2.11"],
         )
         self.assertEqual(len(matrix), 1)
-        self.assertEqual(
-            matrix[0]["amdgpu_families"], "gfx94X-dcgpu;gfx125X-dcgpu"
-        )
+        self.assertEqual(matrix[0]["amdgpu_families"], "gfx94X-dcgpu;gfx125X-dcgpu")
 
     def test_pytorch_refs_filter_limits_matrix_rows(self) -> None:
         matrix = m.generate_pytorch_matrix(
