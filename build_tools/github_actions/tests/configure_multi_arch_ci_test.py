@@ -69,6 +69,35 @@ def _run_from_environ(
         os.unlink(event_path)
 
 
+def _jobs(
+    *,
+    test_type: str = "quick",
+    prebuilt_stages: list[str] | None = None,
+    baseline_run_id: str = "",
+    build_pytorch: bool = True,
+) -> cm.JobDecisions:
+    """Construct default job decisions for tests that exercise later stages."""
+    prebuilt_stages = prebuilt_stages or []
+    return cm.JobDecisions(
+        build_rocm=cm.BuildRocmDecision(
+            action=cm.JobAction.RUN,
+            stage_decisions={stage: cm.JobAction.PREBUILT for stage in prebuilt_stages},
+            baseline_run_id=baseline_run_id,
+        ),
+        test_rocm=cm.TestRocmDecision(
+            action=cm.JobAction.RUN,
+            test_type=test_type,
+        ),
+        build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+        build_pytorch=cm.JobGroupDecision(
+            action=cm.JobAction.RUN if build_pytorch else cm.JobAction.SKIP
+        ),
+        test_pytorch=cm.JobGroupDecision(
+            action=cm.JobAction.RUN if build_pytorch else cm.JobAction.SKIP
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # CIInputs — construction and properties
 # ---------------------------------------------------------------------------
@@ -752,7 +781,7 @@ class TestSelectTargets(unittest.TestCase):
 
 
 class TestExpandBuildConfigs(unittest.TestCase):
-    """Test expand_build_configs: TargetSelection × CIInputs → BuildConfigs.
+    """Test expand_build_configs: TargetSelection + CIInputs + JobDecisions -> BuildConfigs.
 
     Tests verify structural properties of the output, not specific data values
     from amdgpu_family_matrix.py. Changing a runner label should not require
@@ -791,10 +820,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
@@ -834,10 +863,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         targets = cm.select_targets(inputs)
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=inputs,
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         required_keys = {
             "amdgpu_family",
@@ -886,10 +915,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
 
         # All target families that support the variant appear in output.
@@ -915,10 +944,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
 
         self.assertEqual(len(result.linux.test_python_packages_matrix), 6)
@@ -953,10 +982,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
 
         self.assertEqual(
@@ -996,13 +1025,13 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=[],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(
                 release_type="dev",
                 python_versions=["3.13"],
             ),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
 
         self.assertEqual(
@@ -1016,11 +1045,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=[],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
-            build_pytorch=False,
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_pytorch=False),
         )
 
         self.assertFalse(result.linux.build_pytorch)
@@ -1039,10 +1067,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             return_value=[],
         ):
             result = cm.expand_build_configs(
-                targets=targets,
                 ci_inputs=self._inputs(),
-                test_type="quick",
                 git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(),
             )
 
         self.assertFalse(result.linux.build_pytorch)
@@ -1056,10 +1084,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(build_variant="asan"),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -1089,10 +1117,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 )
                 ci_inputs = cm.CIInputs(**defaults)
                 result = cm.expand_build_configs(
-                    targets=targets,
                     ci_inputs=ci_inputs,
-                    test_type="quick",
                     git_context=cm.GitContext(),
+                    targets=targets,
+                    jobs=_jobs(),
                 )
                 # Only gfx94x on linux survives.
                 self.assertIsNotNone(result.linux)
@@ -1119,10 +1147,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant="asan",
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=ci_inputs,
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         # Verify it's a host-asan build
@@ -1139,10 +1167,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1153,10 +1181,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # gfx94x has no test-runs-on-kernel entry
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1166,10 +1194,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Without test_runner: label, default runner labels are used."""
         targets = cm.TargetSelection(linux_families=["gfx908"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1184,20 +1212,20 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
         # Schedule: uses sandbox runner
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
 
         # PR: disables tests (empty runner)
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
@@ -1489,7 +1517,10 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
         builds = cm.expand_build_configs(
-            targets, ci_inputs, test_type="quick", git_context=cm.GitContext()
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
 
         self.assertIsNotNone(builds.linux)
@@ -1514,7 +1545,10 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         # Run multiple times to ensure consistency
         for _ in range(10):
             builds = cm.expand_build_configs(
-                targets, ci_inputs, test_type="full", git_context=cm.GitContext()
+                ci_inputs=ci_inputs,
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(test_type="full"),
             )
             if builds.linux and builds.linux.per_family_info:
                 gfx103x_info = builds.linux.per_family_info[0]

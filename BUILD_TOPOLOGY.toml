@@ -627,6 +627,12 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.hiptensor]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
+disable_platforms = ["windows"]
+
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
