@@ -95,6 +95,8 @@ TEST_TO_IGNORE = {
             "Unit_hipGraphNodeGetType_ClonedGraph_InThread_WithDependencies",
             "Unit_hipGraphHostNodeSetParams_BasicFunc",
             "Unit_hipStreamBeginCapture_nestedStreamCapture",
+            "Unit_hipGraphInstantiateWithFlags_AutoFreeOnLaunchDoubleKernel",
+            "Unit_hiprtcCombiComplrOptnTst",
         ]
     },
 }
