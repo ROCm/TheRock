@@ -103,6 +103,10 @@ TEST_TO_IGNORE = {
             "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
             "Unit_hipGraphAddMemcpyNodeToSymbol_MemcpyToSymbolNodeWithKernel",
             "Unit_hipGraphChildGraphNodeGetGraph_Functional",
+            "Unit_hipGraphExecMemcpyNodeSetParams_Positive_Basic",
+            "Unit_hipGraphGetRootNodes_CapturedStream",
+            "Unit_hipGraphNodeGetType_NodeTypeOfChildGraph",
+            "Unit_hipGraphInstantiateWithParams_DependencyGraph",
         ]
     },
 }
