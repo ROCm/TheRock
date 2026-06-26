@@ -297,7 +297,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
   endif()
 
   # When binutils is bundled, use its libiberty; otherwise let rocprofiler-systems build its own.
-  if(THEROCK_BUNDLED_BINUTILS)
+  if(THEROCK_BUNDLED_LIBIBERTY)
     set(_rocprofsys_build_libiberty OFF)
   else()
     set(_rocprofsys_build_libiberty ON)
@@ -341,7 +341,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       hip-clr
       rocprofiler-register
       rocprofiler-sdk
-      ${THEROCK_BUNDLED_BINUTILS}
+      ${THEROCK_BUNDLED_LIBIBERTY}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
