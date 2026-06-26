@@ -159,6 +159,15 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+      - name: Start dmesg monitoring
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          # Capture dmesg continuously to detect GPU hangs/page faults if runner crashes
+          dmesg --clear || true
+          dmesg -w > ${{ github.workspace }}/dmesg.log 2>&1 &
+          echo $! > /tmp/dmesg_pid
+          echo "Started dmesg monitoring (PID: $(cat /tmp/dmesg_pid))"
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -200,6 +209,22 @@ jobs:
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
             --print-cmd \
             ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
+
+      - name: Stop dmesg monitoring
+        if: ${{ always() && runner.os == 'Linux' }}
+        run: |
+          if [ -f /tmp/dmesg_pid ]; then
+            kill $(cat /tmp/dmesg_pid) 2>/dev/null || true
+          fi
+
+      - name: Upload dmesg log
+        if: ${{ always() && runner.os == 'Linux' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dmesg-${{ inputs.amdgpu_families }}-${{ fromJSON(inputs.component).job_name }}-shard${{ matrix.shard }}
+          path: ${{ github.workspace }}/dmesg.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}
