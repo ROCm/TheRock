@@ -176,7 +176,7 @@ def setup_env(env):
 
     # Disable SDMA for gfx125X-dcgpu
     if AMDGPU_FAMILIES == "gfx125X-dcgpu":
-        env["HSA_ENABLE_SDMA"] = "0"
+        env["HSA_ENABLE_SDMA"] = "1"
 
 
 def execute_tests(env):
