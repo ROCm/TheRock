@@ -141,36 +141,6 @@ Split your work into smaller, focused PRs. Each PR should ideally do one thing:
 
 ______________________________________________________________________
 
-## ⛔ Forbidden Files
-
-**What does it check?**
-Certain file types must never be committed to the repository because they can expose secrets or introduce security risks.
-
-| Pattern                                                  | Reason                                                         |
-| -------------------------------------------------------- | -------------------------------------------------------------- |
-| `**/*.pem`                                               | TLS/SSL certificates — must not be stored in source control    |
-| `**/*.key`                                               | Private keys — must not be stored in source control            |
-| `**/.env`                                                | Environment files — often contain secrets/passwords            |
-| `**/*.exe`                                               | Windows executables — binary blobs with no review value        |
-| `**/*.crt`, `**/*.cer`, `**/*.der`                       | Certificates — must not be committed                           |
-| `**/*.p12`, `**/*.pfx`                                   | Keystores / certificate bundles — contain secrets              |
-| `**/*.csr`                                               | Certificate signing requests — should not be in source control |
-| `**/id_rsa`, `**/id_dsa`, `**/id_ecdsa`, `**/id_ed25519` | SSH private keys                                               |
-| `**/*.gpg`, `**/*.asc`                                   | GPG keys / signatures — must not be committed                  |
-
-**How to fix**
-Remove the file from your commit:
-
-```bash
-git rm --cached path/to/secret.pem
-echo "*.pem" >> .gitignore
-git commit --amend
-```
-
-If a secret was already committed, rotate it immediately and follow your organization's incident response process.
-
-______________________________________________________________________
-
 ## 🧪 Unit Test
 
 **What does it check?**
@@ -250,7 +220,7 @@ ______________________________________________________________________
 
 ### What is the "Not ready to Review" label?
 
-When **PR Title/Description**, **Unit Test**, or **Forbidden Files** fails, the bot adds a **`Not ready to Review`** label to the PR so it is clearly gated.
+When **PR Title/Description** or **Unit Test** fails, the bot adds a **`Not ready to Review`** label to the PR so it is clearly gated.
 The label is removed automatically once all policy checks pass.
 Other failures (Branch Name, PR Size, Draft PR, pre-commit, CodeQL) do **not** add the label.
 
