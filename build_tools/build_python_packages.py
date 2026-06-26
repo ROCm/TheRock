@@ -263,6 +263,8 @@ def _run_kpack_split(
             "nlohmann-json",
             "rocshmem",
             "rocjitsu",
+            "composable-kernel",
+            "libhipcxx",
         ],
         exclude_components=["test"],
         tarball_compression=args.devel_tarball_compression,

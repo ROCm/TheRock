@@ -583,7 +583,6 @@ class PopulatedDistPackage:
         devel_artifact_names.difference_update(
             {
                 "rocprofiler-compute",
-                "rocprofiler-systems",
             }
         )
         excluded = set(exclude_components)
