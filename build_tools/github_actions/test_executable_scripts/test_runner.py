@@ -147,6 +147,13 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   (i.e. run ctest serially) for components whose tests can't share GPU/host
 #   resources safely (e.g. rocprofiler-systems, whose pytest-driven CTests
 #   attach to the same profiling backend).
+#
+# - ctest_verbose: Bool (default True). Controls the ctest "-V" flag. Set to
+#   False to drop "-V" for components whose tests emit very large per-test
+#   output (e.g. rocprofiler-systems, whose pytest-driven CTests dump
+#   instrumented-function listings). "--output-on-failure" is always passed, so
+#   failing tests still show their full output; only passing-test noise is
+#   suppressed.
 COMPONENT_OVERRIDES = {
     # For rocprofiler-compute, we need the following additional paths:
     # - PATH=ROCM_PATH/bin:$PATH
@@ -181,6 +188,10 @@ COMPONENT_OVERRIDES = {
         # profiling backend; running them concurrently causes flaky failures.
         # 0 = drop the --parallel flag (ctest runs serially).
         "ctest_parallel_count": 0,
+        # pytest-driven CTests dump very large per-test output (instrumented
+        # function listings, etc). Drop -V to keep CI logs readable;
+        # --output-on-failure still surfaces output for any failing test.
+        "ctest_verbose": False,
     },
     # rocwmma installs three independent CTestTestfile.cmake fragments:
     #   bin/rocwmma/             - per-target plain runs + regression_tests
@@ -487,11 +498,20 @@ def build_ctest_command(
             str(ctest_timeout_seconds),
             "--test-dir",
             TEST_DIR,
-            "-V",
-            "--tests-information",
-            f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         ]
     )
+
+    # -V prints full stdout for every test (pass or fail). Components can opt
+    # out via COMPONENT_OVERRIDES[...]["ctest_verbose"] = False when their
+    # per-test output is too large for readable CI logs; --output-on-failure
+    # (added above) still surfaces output for failing tests.
+    component_verbose = COMPONENT_OVERRIDES.get(test_component_job_name, {}).get(
+        "ctest_verbose", True
+    )
+    if component_verbose:
+        cmd.append("-V")
+
+    cmd.extend(["--tests-information", f"{SHARD_INDEX},,{TOTAL_SHARDS}"])
 
     # Constrain GPU tests to the available GPU slots when the component
     # provides a resource spec. Without this, RESOURCE_GROUPS properties are
