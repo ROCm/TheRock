@@ -356,6 +356,75 @@ skip_tests = {
             "test_unused_forward_module",
             # TestViewOpsWithLocalTensor - list index out of range
             "test_view_ops",
+            # ---------------------------------------------------------------
+            # gloo ProcessGroup heap-corruption hangs (300s join timeout).
+            # Root cause is an upstream PyTorch data race on pgStatus_ in
+            # ProcessGroupGloo::runLoop (torch/csrc/distributed/c10d/
+            # ProcessGroupGloo.cpp): worker threads update shared pgStatus_
+            # before lock.lock(), corrupting the heap allocator
+            # ("malloc(): unsorted double linked list corrupted"). The child
+            # aborts, the parent loses the pipe and hits its 300s join
+            # timeout. Reproduces on plain CPU gloo and is independent of the
+            # ROCm version (identical failures on rocm7.14 and rocm7.15), so
+            # this is NOT a ROCm bug. See TRIAGE_2.12.md.
+            # Upstream: https://github.com/pytorch/pytorch/issues/179848 (open)
+            # CI runs:
+            #   https://github.com/ROCm/TheRock/actions/runs/28242196383 (2.12/rocm7.15)
+            #   https://github.com/ROCm/TheRock/actions/runs/28200428535 (2.12/rocm7.14)
+            #
+            # test_c10d_gloo.py ProcessGroupGloo{,FR,LazyInit}Test collectives
+            "(ProcessGroupGloo and test_allgather_basics_cuda)",
+            "(ProcessGroupGloo and test_allreduce_basics_cuda)",
+            "(ProcessGroupGloo and test_allreduce_coalesced_checks_cuda)",
+            "(ProcessGroupGloo and test_alltoall_basics_cuda)",
+            "(ProcessGroupGloo and test_alltoall_multidim_cuda)",
+            "(ProcessGroupGloo and test_broadcast_basics_cuda)",
+            "(ProcessGroupGloo and test_reduce_basics_cuda)",
+            "(ProcessGroupGloo and test_scatter_basics_cuda)",
+            "(ProcessGroupGloo and test_sparse_allreduce_basics_cuda)",
+            "(ProcessGroupGloo and test_sparse_allreduce_cuda_dispatched)",
+            # test_c10d_gloo.py DistributedDataParallelTest (gloo backend)
+            "(DistributedDataParallelTest and test_ddp_buffer_sync_multi_forward_with_batchnorm)",
+            # Collapsed: covers use_reentrant_True/False variants
+            "(DistributedDataParallelTest and test_ddp_checkpointing_twice)",
+            "(DistributedDataParallelTest and test_ddp_comm_hook_future_passing_gpu_gloo)",
+            "(DistributedDataParallelTest and test_find_unused_parameters_when_unused_parameters_empty)",
+            # Collapsed: covers _with_grad_is_view / _with_static_graph variants
+            "(DistributedDataParallelTest and test_global_local_unused_params_grad)",
+            # Collapsed: covers 1gpu/2gpu/4gpu device_ids variants
+            "(DistributedDataParallelTest and test_gloo_backend)",
+            "(DistributedDataParallelTest and test_ignored_sharded_tensor)",
+            "(CommTest and test_broadcast_coalesced_gloo_cuda)",
+            # test_c10d_nccl.py (constructs a gloo PG in these cases)
+            "(CommTest and test_coalesced_manager_op_integrity)",
+            "(DistributedDataParallelTest and test_nccl_backend_multi_device_ids_not_allowed)",
+            # test_distributed_spawn.py TestDistBackendWithSpawn (BACKEND=gloo)
+            "(TestDistBackendWithSpawn and test_DistributedDataParallel_SyncBatchNorm_Single_Input_Per_Process)",
+            "(TestDistBackendWithSpawn and test_batch_isend_irecv_op_err)",
+            "(TestDistBackendWithSpawn and test_broadcast_cuda)",
+            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward_ignored_params)",
+            "(TestDistBackendWithSpawn and test_ddp_namedtuple)",
+            "(TestDistBackendWithSpawn and test_get_data_parallel_params)",
+            "(TestDistBackendWithSpawn and test_output_unused_in_loss_dict_module)",
+            "(TestDistBackendWithSpawn and test_skip_all_reduce_unused_parameters)",
+            # test_aten_comm_compute_reordering.py
+            "(TestComputeCommReorderingBucketing and test_inductor_default_comms_ordering)",
+            "(TestComputeCommReorderingMultiProc and test_inductor_default_comms_ordering)",
+            "(TestManualOverlapBucketing and test_inductor_default_comms_ordering)",
+            # Collapsed: covers _custom_module_stack_fn variant
+            "(TestManualOverlapBucketing and test_make_graph_view_and_get_subgraph_by_path)",
+            # tensor/test_dtensor.py
+            "(DTensorTest and test_dtensor_save_load_import)",
+            # test_functional_api.py
+            "(TestCollectivesWithDistributedBackendCUDA and test_tracing_with_fakepg_cuda)",
+            # checkpoint/test_state_dict.py
+            "(TestNoComm and test_no_dist)",
+            # _shard/sharded_tensor/test_sharded_tensor.py
+            "(TestShardedTensorChunked and test_load_state_dict_errors)",
+            "(TestShardedTensorEnumerable and test_sharded_tensor_to_test)",
+            "(TestShardedTensorFromLocalShards and test_st_base_init_from_local_shards_and_global_metadata)",
+            # launcher/test_run.py - ChildFailedError (same gloo instability)
+            "(ElasticLaunchTest and test_virtual_local_rank)",
         ],
     },
 }
