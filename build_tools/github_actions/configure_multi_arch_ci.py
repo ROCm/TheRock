@@ -61,6 +61,7 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
@@ -202,14 +203,11 @@ class CIInputs:
             # its parent for path filtering.
             if before_ref and before_ref != _NULL_GIT_SHA:
                 base_ref = before_ref
-                print(f"Push event before SHA {before_ref}; using it as diff base")
             elif before_ref == _NULL_GIT_SHA:
-                print(
-                    "Push event before SHA is GitHub's null SHA for a new ref; "
-                    "using HEAD^1 as diff base"
-                )
-            else:
-                print("Push event before SHA is missing; using HEAD^1 as diff base")
+                # Note: we could also use no base ref here. If we would choose
+                # to run only a subset of CI jobs due to changed files, for
+                # branch creation we could just always run all jobs.
+                base_ref = "HEAD^1"
 
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
@@ -253,6 +251,11 @@ class GitContext:
     construct GitContext directly without touching git.
     """
 
+    # Resolved commit range used for changed_files.
+    diff_head_commit: str | None = None
+    diff_base_ref: str | None = None
+    diff_base_commit: str | None = None
+
     # List of relative file paths modified relative to a base ref
     changed_files: list[str] | None = None
 
@@ -262,12 +265,18 @@ class GitContext:
     @staticmethod
     def from_repo(base_ref: str) -> "GitContext":
         """Compute from the actual repo. Only called from main()."""
-        print(f"Computing GitContext using diff base {base_ref!r}")
+        print(f"Computing GitContext using base ref {base_ref!r}")
+        diff_head_commit = get_git_commit_hash("HEAD")
+        diff_base_commit = get_git_commit_hash(base_ref)
+        print(f"Diff commit range: {diff_base_commit} -> {diff_head_commit}")
         changed_files = get_git_modified_paths(base_ref)
         submodule_paths = list(get_git_submodule_paths() or [])
         return GitContext(
             changed_files=changed_files,
             submodule_paths=submodule_paths,
+            diff_base_ref=base_ref,
+            diff_base_commit=diff_base_commit,
+            diff_head_commit=diff_head_commit,
         )
 
     @staticmethod
@@ -1175,7 +1184,9 @@ def main():
     elif ci_inputs.is_pull_request or ci_inputs.is_push:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
+        print("=== Git Diff ===")
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
+        print()
     else:
         # 'workflow_dispatch' and 'schedule' events don't have as natural
         # a "prior commit" to compare against.

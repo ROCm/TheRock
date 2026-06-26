@@ -10,6 +10,7 @@ This module provides utilities to:
 - Decide whether CI should run based on the modified paths
 
 Public API:
+    get_git_commit_hash() - Resolve a git ref to a commit hash
     get_git_modified_paths() - Get modified files from git diff compared to worktree
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     is_ci_run_required() - Check if CI run is required based on modified paths
@@ -31,6 +32,17 @@ _FULL_GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 # ============================================================================
 
 
+def get_git_commit_hash(ref: str) -> str:
+    """Resolve a git ref to its full commit hash."""
+    return subprocess.run(
+        ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+        stdout=subprocess.PIPE,
+        check=True,
+        text=True,
+        timeout=60,
+    ).stdout.strip()
+
+
 def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     """Returns the paths of files modified since the base reference commit.
 
@@ -43,7 +55,7 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     Returns:
         List of relative file paths that were modified, or None if the operation times out
     """
-    print(f"Computing modified paths with: git diff --name-only {base_ref}")
+    print(f"Computing modified paths with: 'git diff --name-only {base_ref}'")
     try:
         base_ref_is_sha = _FULL_GIT_SHA_RE.fullmatch(base_ref) is not None
         # Push events can advance a branch by multiple commits. The setup

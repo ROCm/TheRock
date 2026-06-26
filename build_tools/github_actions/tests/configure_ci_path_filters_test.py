@@ -12,6 +12,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from configure_ci_path_filters import (
     _GITHUB_WORKFLOWS_CI_FILENAMES,
+    get_git_commit_hash,
     get_git_modified_paths,
     is_ci_run_required,
 )
@@ -119,6 +120,26 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
 
         with self.assertRaises(subprocess.CalledProcessError):
             get_git_modified_paths(base_sha)
+
+    @patch("configure_ci_path_filters.subprocess.run")
+    def test_get_git_commit_hash_resolves_ref(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["git", "rev-parse", "--verify", "HEAD^{commit}"],
+            returncode=0,
+            stdout="0123456789abcdef0123456789abcdef01234567\n",
+        )
+
+        self.assertEqual(
+            get_git_commit_hash("HEAD"),
+            "0123456789abcdef0123456789abcdef01234567",
+        )
+        mock_run.assert_called_once_with(
+            ["git", "rev-parse", "--verify", "HEAD^{commit}"],
+            stdout=subprocess.PIPE,
+            check=True,
+            text=True,
+            timeout=60,
+        )
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
         """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
