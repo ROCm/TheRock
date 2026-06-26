@@ -207,13 +207,13 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.base_ref, "abc123def456")
 
-    def test_push_created_ref_uses_head_parent(self):
-        """Push events for newly created refs fall back to HEAD^1."""
+    def test_push_created_ref_disables_path_filtering(self):
+        """Push events for newly created refs do not have a reliable diff base."""
         inputs = _run_from_environ(
             event_name="push",
             event_payload={"before": "0" * 40},
         )
-        self.assertEqual(inputs.base_ref, "HEAD^1")
+        self.assertIsNone(inputs.base_ref)
 
 
 # ---------------------------------------------------------------------------

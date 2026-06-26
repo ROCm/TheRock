@@ -130,7 +130,7 @@ class CIInputs:
     run_id: str  # GITHUB_RUN_ID value
     event_name: str  # GITHUB_EVENT_NAME value (e.g. "push", "pull_request", "schedule", "workflow_dispatch")
     commit_ref: str  # GITHUB_REF_NAME value
-    base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
+    base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
 
@@ -186,7 +186,7 @@ class CIInputs:
         release_type = os.environ.get("RELEASE_TYPE", "ci")
 
         pr_labels: list[str] = []
-        base_ref = "HEAD^1"
+        base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
@@ -204,10 +204,10 @@ class CIInputs:
             if before_ref and before_ref != _NULL_GIT_SHA:
                 base_ref = before_ref
             elif before_ref == _NULL_GIT_SHA:
-                # Note: we could also use no base ref here. If we would choose
-                # to run only a subset of CI jobs due to changed files, for
-                # branch creation we could just always run all jobs.
-                base_ref = "HEAD^1"
+                # Branch creation pushes do not have a prior branch tip to
+                # diff against. HEAD^1 would only diff the final pushed commit
+                # against its parent, missing earlier commits in the push.
+                base_ref = None
 
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
@@ -291,7 +291,7 @@ class GitContext:
     def log(self) -> None:
         """Log git context for CI diagnostics."""
         if self.changed_files is None:
-            print("GitContext: no changed files (schedule/workflow_dispatch)")
+            print("GitContext: no changed files computed")
             return
         print(f"GitContext: {len(self.changed_files)} changed file(s)")
         for path in self.changed_files[:20]:
@@ -1181,12 +1181,19 @@ def main():
     if skip_path_filters:
         # External repo: skip path filtering, run everything
         git_context = GitContext.empty()
-    elif ci_inputs.is_pull_request or ci_inputs.is_push:
+    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
         print("=== Git Diff ===")
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
         print()
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
+        # Some push events, such as branch creation, do not have a reliable
+        # base ref for changed-file filtering. Run without path filters.
+        print("=== Git Diff ===")
+        print("No diff base is available; running without changed-file filtering")
+        print()
+        git_context = GitContext.empty()
     else:
         # 'workflow_dispatch' and 'schedule' events don't have as natural
         # a "prior commit" to compare against.
