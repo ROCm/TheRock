@@ -296,7 +296,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
-  # When binutils is bundled, use its libiberty; otherwise let rocprofiler-systems build its own.
+  # When libiberty is bundled; otherwise let rocprofiler-systems build its own.
   if(THEROCK_BUNDLED_LIBIBERTY)
     set(_rocprofsys_build_libiberty OFF)
   else()

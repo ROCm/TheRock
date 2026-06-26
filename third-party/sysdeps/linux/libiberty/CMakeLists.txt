@@ -6,7 +6,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
 
-    therock_subproject_fetch(therock-binutils-sources
+    therock_subproject_fetch(therock-libiberty-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "https://ftpmirror.gnu.org/gnu/binutils/binutils-2.46.0.tar.gz"
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/binutils-2.46.0.tar.gz"
@@ -15,7 +15,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
-    therock_cmake_subproject_declare(therock-binutils
+    therock_cmake_subproject_declare(therock-libiberty
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -39,15 +39,15 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         "${_download_stamp}"
     )
 
-    therock_cmake_subproject_provide_package(therock-binutils LibIberty lib/rocm_sysdeps/lib/cmake/libiberty)
-    therock_cmake_subproject_activate(therock-binutils)
+    therock_cmake_subproject_provide_package(therock-libiberty LibIberty lib/rocm_sysdeps/lib/cmake/libiberty)
+    therock_cmake_subproject_activate(therock-libiberty)
 
     return()
 endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(BINUTILS_BUILD VERSION 2.46.0)
+project(LIBIBERTY_BUILD VERSION 2.46.0)
 
 include(ProcessorCount)
 ProcessorCount(PAR_JOBS)

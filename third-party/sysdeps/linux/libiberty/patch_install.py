@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Post-install fixup script for the binutils/libiberty build.
+"""Post-install fixup script for the libiberty build (source: binutils tarball).
 
 Creates a versioned libiberty shared library from the PIC-compiled static
 archive, and removes build artifacts that are not needed at runtime.
@@ -23,7 +23,7 @@ def main():
     prefix = sys.argv[1]
     patchelf = os.environ.get("PATCHELF", "patchelf")
 
-    print("Patching binutils install...")
+    print("Patching libiberty install...")
 
     lib_dir = os.path.join(prefix, "lib")
     lib64_dir = os.path.join(prefix, "lib64")
@@ -94,7 +94,7 @@ def main():
         if os.path.isdir(entry):
             shutil.rmtree(entry)
 
-    print("Done patching binutils install.")
+    print("Done patching libiberty install.")
 
 
 if __name__ == "__main__":
