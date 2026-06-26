@@ -107,6 +107,49 @@ subprocess.check_call(
     env=env,
 )
 
+# === Tarball diagnostic dump (for debugging ci.yml vs PSDB tarball divergence) ===
+logging.info("=== Tarball diagnostic dump ===")
+import hashlib
+
+cxx_path = rocm_path / "bin" / "amdclang++"
+if cxx_path.is_file():
+    result = subprocess.run([str(cxx_path), "--version"], capture_output=True, text=True, env=env)
+    logging.info(f"amdclang++ version: {result.stdout.splitlines()[0] if result.returncode == 0 else 'FAILED'}")
+
+rocisa_so = list((tensilelite_root / "rocisa").glob("_rocisa*"))
+for f in rocisa_so:
+    md5 = hashlib.md5(f.read_bytes()).hexdigest()
+    logging.info(f"{f.name}: md5={md5}, size={f.stat().st_size}")
+
+sol_py = tensilelite_root / "Tensile" / "SolutionStructs" / "Solution.py"
+if sol_py.is_file():
+    md5 = hashlib.md5(sol_py.read_bytes()).hexdigest()
+    logging.info(f"Solution.py: md5={md5}")
+
+kw_py = tensilelite_root / "Tensile" / "KernelWriter.py"
+if kw_py.is_file():
+    md5 = hashlib.md5(kw_py.read_bytes()).hexdigest()
+    logging.info(f"KernelWriter.py: md5={md5}")
+
+for subdir in ["gemm/gfx12", "sparse/gfx1250", "streamk/gfx1250", "gradient/gfx1250"]:
+    yaml_dir = tensilelite_root / "Tensile" / "Tests" / "common" / subdir
+    if yaml_dir.is_dir():
+        count = len(list(yaml_dir.glob("*.yaml")))
+        logging.info(f"YAML files in {subdir}: {count}")
+
+client = rocm_path / "libexec" / "hipblaslt" / "tensilelite" / "tensilelite-client"
+if client.is_file():
+    md5 = hashlib.md5(client.read_bytes()).hexdigest()
+    logging.info(f"tensilelite-client: md5={md5}, size={client.stat().st_size}")
+    ldd = subprocess.run(["ldd", str(client)], capture_output=True, text=True, env=env)
+    for line in ldd.stdout.splitlines():
+        if "not found" in line:
+            logging.warning(f"  MISSING: {line.strip()}")
+else:
+    logging.info("tensilelite-client: NOT FOUND in tarball")
+
+logging.info("=== End diagnostic dump ===")
+
 # rocisa tests (includes GPU tests — runner has GPU access).
 logging.info("=== Running rocisa tests ===")
 subprocess.check_call(
