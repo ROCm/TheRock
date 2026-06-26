@@ -85,4 +85,4 @@ jobs:
           REPO: ${{ github.event.repository.name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
-        run: python skills/therock_pr_bot/policy_check.py --policy skills/therock_pr_bot/policy.yml --timeout-seconds 900 --poll-seconds 15
+        run: python skills/therock_pr_bot/policy_check.py --timeout-seconds 900 --poll-seconds 15
