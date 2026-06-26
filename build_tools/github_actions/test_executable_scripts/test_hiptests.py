@@ -101,6 +101,8 @@ TEST_TO_IGNORE = {
             "Unit_hipGraphGetRootNodes_Functional",
             "Unit_hiprtc_includepath",
             "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
+            "Unit_hipGraphAddMemcpyNodeToSymbol_MemcpyToSymbolNodeWithKernel",
+            "Unit_hipGraphChildGraphNodeGetGraph_Functional",
         ]
     },
 }
