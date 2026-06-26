@@ -44,14 +44,20 @@ EXCLUDED_LABELS = [
     "thread_limit",
 ]
 
-# Limited to 15 minutes
-QUICK_TESTS_REGEX = [
+# Limited to 5 minutes
+QUICK_TESTS_REGEX_INCLUDES = [
     "transpose.*",
-    "rocprofiler-systems.*",  # Binary tests
-    "config.*",
-    "openmp.*",
-    "roctx.*",
-    "trace-time-window.*",
+    "rocprofiler-systems.*",  # rocprof-sys-* binary smoke tests
+    "config-invalid",
+    "config-missing",
+    "cli-help.*",
+    "openmp-fortran-offload-sys-run",
+    "roctx-sampling",
+    # Jpeg and video decode should be added once the binaries can be built on TheRock
+]
+
+QUICK_TESTS_REGEX_EXCLUDES = [
+    "transpose-runtime-instrument",
 ]
 
 logging.basicConfig(level=logging.INFO)
@@ -102,6 +108,8 @@ def execute_tests():
     # Actual tests
     # Keep passing tests quiet in CI.
     excluded_tests = list(EXCLUDED_TESTS)
+    if test_type == "quick":
+        excluded_tests.extend(QUICK_TESTS_REGEX_EXCLUDES)
 
     cmd = ctest_base + [
         "--output-on-failure",
@@ -115,7 +123,7 @@ def execute_tests():
         # f"{shard_index},,{total_shards}",
     ]
     if test_type == "quick":
-        cmd.extend(["--tests-regex", "|".join(QUICK_TESTS_REGEX)])
+        cmd.extend(["--tests-regex", "|".join(QUICK_TESTS_REGEX_INCLUDES)])
 
     logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=THEROCK_PATH, check=True, env=environ_vars)
