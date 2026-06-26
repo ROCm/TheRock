@@ -210,12 +210,16 @@ jobs:
             --print-cmd \
             ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
 
-      - name: Stop dmesg monitoring
+      - name: Print dmesg log
         if: ${{ always() && runner.os == 'Linux' }}
         run: |
           if [ -f /tmp/dmesg_pid ]; then
             kill $(cat /tmp/dmesg_pid) 2>/dev/null || true
           fi
+          echo "=== dmesg log ==="
+          cat ${{ github.workspace }}/dmesg.log || true
+          echo "=== GPU-related messages ==="
+          grep -iE "amdgpu|drm|gpu|fault|hang|reset|error" ${{ github.workspace }}/dmesg.log || echo "No GPU-related messages found"
 
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}
