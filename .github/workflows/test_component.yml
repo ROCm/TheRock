@@ -217,15 +217,6 @@ jobs:
             kill $(cat /tmp/dmesg_pid) 2>/dev/null || true
           fi
 
-      - name: Upload dmesg log
-        if: ${{ always() && runner.os == 'Linux' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: dmesg-${{ inputs.amdgpu_families }}-${{ fromJSON(inputs.component).job_name }}-shard${{ matrix.shard }}
-          path: ${{ github.workspace }}/dmesg.log
-          retention-days: 7
-          if-no-files-found: ignore
-
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}
         timeout-minutes: 5
