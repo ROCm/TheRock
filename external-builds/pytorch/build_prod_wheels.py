@@ -22,8 +22,8 @@ builds, etc):
 
 The following commands check out custom patched versions into this directory,
 which the script will use by default if they exist. Otherwise, checkout your
-own and specify with `--pytorch-dir`, `--pytorch-audio-dir`, `--pytorch-vision-dir`
-during the build step.
+own and specify `--root-checkout-dir` or the more specific `--pytorch-dir`,
+`--pytorch-audio-dir`, and `--pytorch-vision-dir` options during the build step.
 
 ```
 # On Linux, using default paths (nested under this folder):
@@ -402,6 +402,28 @@ def directory_if_exists(dir: Path) -> Path | None:
         return None
 
 
+def apply_root_checkout_dir(args: argparse.Namespace) -> None:
+    """Default per-project source dirs from --root-checkout-dir."""
+    root_checkout_dir: Path | None = args.root_checkout_dir
+    if not root_checkout_dir:
+        return
+
+    if args.pytorch_dir is None:
+        args.pytorch_dir = directory_if_exists(root_checkout_dir / "pytorch")
+    if args.pytorch_audio_dir is None:
+        args.pytorch_audio_dir = directory_if_exists(
+            root_checkout_dir / "pytorch_audio"
+        )
+    if args.pytorch_vision_dir is None:
+        args.pytorch_vision_dir = directory_if_exists(
+            root_checkout_dir / "pytorch_vision"
+        )
+    if args.triton_dir is None:
+        args.triton_dir = directory_if_exists(root_checkout_dir / "triton")
+    if args.apex_dir is None:
+        args.apex_dir = directory_if_exists(root_checkout_dir / "apex")
+
+
 def do_install_rocm(args: argparse.Namespace):
     # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
@@ -478,9 +500,7 @@ def _setup_common_build_env(
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
 
-    # GLOO enabled for only Linux
-    if not is_windows:
-        env["USE_GLOO"] = "ON"
+    env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
@@ -934,6 +954,18 @@ def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(omp_path, target_lib)
 
 
+def copy_libuv_to_torch_lib(pytorch_dir: Path):
+    libuv_root = os.environ.get("libuv_ROOT", "")
+    if not libuv_root:
+        return
+    uv_dll = Path(libuv_root) / "bin" / "uv.dll"
+    if not uv_dll.exists():
+        raise RuntimeError(f"Did not find uv.dll at '{uv_dll}'")
+    target_lib = pytorch_dir / "torch" / "lib"
+    print(f"Copying libuv from '{uv_dll}' to '{target_lib}'")
+    shutil.copy2(uv_dll, target_lib)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -1063,6 +1095,7 @@ def do_build_pytorch(
     # Windows-specific settings.
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
+        copy_libuv_to_torch_lib(pytorch_dir)
 
         use_flash_attention = (
             "1"
@@ -1313,7 +1346,7 @@ def main(argv: list[str]):
             ),
         )
 
-    sub_p = p.add_subparsers(required=True)
+    sub_p = p.add_subparsers(dest="command", required=True)
     install_rocm_p = sub_p.add_parser(
         "install-rocm", help="Install rocm-sdk wheels to the current venv"
     )
@@ -1360,32 +1393,43 @@ def main(argv: list[str]):
         "when hipcc lacks HIP_CLANG_LAUNCHER support.",
     )
     build_p.add_argument(
+        "--root-checkout-dir",
+        default=script_dir,
+        type=Path,
+        help=(
+            "Root directory containing PyTorch source checkouts named pytorch, "
+            "pytorch_audio, pytorch_vision, triton, and apex. Explicit "
+            "--pytorch-dir, --pytorch-audio-dir, --pytorch-vision-dir, "
+            "--triton-dir, and --apex-dir arguments override this."
+        ),
+    )
+    build_p.add_argument(
         "--pytorch-dir",
-        default=directory_if_exists(script_dir / "pytorch"),
+        default=None,
         type=Path,
         help="PyTorch source directory",
     )
     build_p.add_argument(
         "--pytorch-audio-dir",
-        default=directory_if_exists(script_dir / "pytorch_audio"),
+        default=None,
         type=Path,
         help="pytorch_audio source directory",
     )
     build_p.add_argument(
         "--pytorch-vision-dir",
-        default=directory_if_exists(script_dir / "pytorch_vision"),
+        default=None,
         type=Path,
         help="pytorch_vision source directory",
     )
     build_p.add_argument(
         "--triton-dir",
-        default=directory_if_exists(script_dir / "triton"),
+        default=None,
         type=Path,
         help="pinned triton directory",
     )
     build_p.add_argument(
         "--apex-dir",
-        default=directory_if_exists(script_dir / "apex"),
+        default=None,
         type=Path,
         help="apex source directory",
     )
@@ -1453,6 +1497,8 @@ def main(argv: list[str]):
     build_p.set_defaults(func=do_build)
 
     args = p.parse_args(argv)
+    if args.command == "build":
+        apply_root_checkout_dir(args)
     args.func(args)
 
 

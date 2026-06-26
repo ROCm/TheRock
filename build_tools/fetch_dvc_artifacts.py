@@ -259,7 +259,16 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
             os.link(src, tmp)
         except OSError:
             shutil.copy2(src, tmp)
-        os.replace(tmp, cache_file)
+        try:
+            os.replace(tmp, cache_file)
+        except PermissionError:
+            # Windows raises PermissionError when two workers race to os.replace
+            # the same cache_file simultaneously (POSIX permits this silently).
+            # If the winner already wrote the correct content, treat as success.
+            if cache_file.exists() and src.stat().st_size == cache_file.stat().st_size:
+                if _md5_of(src) == _md5_of(cache_file):
+                    return
+            raise
     finally:
         if tmp.exists():
             try:

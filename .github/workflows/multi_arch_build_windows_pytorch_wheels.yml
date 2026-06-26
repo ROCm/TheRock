@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Reusable multi-arch build variant of build_windows_pytorch_wheels_ci.yml.
+# Reusable multi-arch PyTorch build workflow for Windows.
 #
 # Built shape:
 #   - One fat build_prod_wheels.py invocation for one python_version and
@@ -11,10 +11,10 @@
 #     triton_windows (matching legacy release_windows_pytorch_wheels.yml).
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
-#     torchaudio and triton_windows ship as-is (no split).
+#     other packages ship as-is (nothing to split).
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl/
-#     (server-side indexing handles the index page) via
-#     publish_pytorch_to_release_bucket.py.
+#     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
+#     happens server-side).
 #
 # For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
@@ -52,9 +52,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type; selects the S3 bucket.'
         type: string
@@ -100,9 +104,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -187,6 +195,17 @@ jobs:
           choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ninja --version 1.13.1
 
+      # Build a fixed version of libuv from source, no matter the pytorch ref.
+      # gloo requires >= 1.26; v1.47.0 matches upstream's source build.
+      # https://github.com/pytorch/pytorch/blob/main/.ci/pytorch/windows/arm64/bootstrap_libuv.bat
+      - name: Build libuv from source for GLOO
+        run: |
+          git clone https://github.com/libuv/libuv.git -b v1.47.0 --depth 1
+          cmake -S libuv -B libuv/build -DBUILD_TESTING=OFF
+          cmake --build libuv/build --config Release
+          cmake --install libuv/build --prefix "${{ github.workspace }}/libuv-install"
+          echo "libuv_ROOT=${{ github.workspace }}/libuv-install" >> $GITHUB_ENV
+
       - name: Install sccache
         if: ${{ inputs.cache_type == 'sccache' }}
         run: |
@@ -206,19 +225,20 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --repo-hashtag nightly \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
             --repo-hashtag nightly \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag nightly
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
+            --repo-hashtag nightly \
+            --no-commit-hipify
           python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --no-commit-hipify
 
       - name: Checkout PyTorch source repos (stable)
@@ -226,18 +246,18 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --require-related-commit \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch  \
             --require-related-commit \
             --no-commit-hipify
 
@@ -290,10 +310,9 @@ jobs:
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --find-links "${{ inputs.rocm_package_find_links_url }}" ^
-            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
-            --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
-            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            --index-url="${{ inputs.rocm_package_index_url }}" ^
+            --find-links="${{ inputs.rocm_package_find_links_url }}" ^
+            --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             %TRITON_ARGS% ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
@@ -433,8 +452,18 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Checkout CI config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
       - name: Configure PyTorch test matrix
         id: configure
+        env:
+          CI_CONFIG_PATH: ci-config
         run: |
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
