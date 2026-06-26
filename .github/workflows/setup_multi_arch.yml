@@ -55,6 +55,10 @@ on:
         description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
         type: string
         default: ""
+      ci_config_ref:
+        description: "Branch/tag/SHA of ROCm/therock-ci-config to checkout. Defaults to 'main'."
+        type: string
+        default: "main"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -125,7 +129,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: ${{ inputs.ci_config_ref || 'main' }}
           path: ci-config
         continue-on-error: true
 
