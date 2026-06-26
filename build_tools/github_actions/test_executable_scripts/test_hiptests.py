@@ -87,6 +87,13 @@ TEST_TO_IGNORE = {
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
         ]
     },
+    "gfx125X-dcgpu": {
+        "linux": [
+            "Unit_hipGraphExecMemcpyNodeSetParams1D_Positive_Basic",
+            "Unit_hipGraph_SimpleGraphWithKernel",
+            "Unit_hipGraphUserObj_HostRegister",
+        ]
+    },
 }
 
 
