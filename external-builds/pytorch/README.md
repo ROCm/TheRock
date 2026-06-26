@@ -96,8 +96,8 @@ See also:
 - The upstream PyTorch
   [release documentation](https://github.com/pytorch/pytorch/blob/main/RELEASE.md)
 - Workflow source code:
-  - [`.github/workflows/build_portable_linux_pytorch_wheels.yml`](/.github/workflows/build_portable_linux_pytorch_wheels.yml)
-  - [`.github/workflows/build_windows_pytorch_wheels.yml`](/.github/workflows/build_windows_pytorch_wheels.yml)
+  - [`.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml)
+  - [`.github/workflows/multi_arch_build_windows_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_windows_pytorch_wheels.yml)
 
 ## Build instructions
 
@@ -257,6 +257,23 @@ python run_pytorch_tests.py -k "test_nn and not test_dropout"
 
 # Explicit pytorch repo path (for test sources) and GPU family (for filtering)
 python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+
+# GPU selection happens in two stages:
+#   1. --device-query  decides which GPUs enter the candidate set.
+#   2. --gpu-policy    decides how many candidates are made visible to tests.
+#
+# All GPUs visible at once (for multi-GPU tests):
+python run_pytorch_tests.py --device-query all --gpu-policy all
+
+# All GPUs discovered, but only one visible at a time:
+python run_pytorch_tests.py --device-query all --gpu-policy single
+
+# One GPU per architecture discovered, all of them visible:
+python run_pytorch_tests.py --device-query unique --gpu-policy all
+
+# Multi-GPU run on a single architecture (e.g., use both gfx1201 GPUs on a
+# machine where visible devices are {'gfx1100': [0], 'gfx1201': [1, 2]}):
+python run_pytorch_tests.py --amdgpu-family=gfx1201 --device-query all --gpu-policy all
 ```
 
 Tests can also be run by following the ROCm documentation at
@@ -410,6 +427,14 @@ Note the sequence of commits and tags that were created:
 
 - `main` is checked out initially and is tagged `THEROCK_UPSTREAM_DIFFBASE`
 - hipify is run and its changes are tagged `THEROCK_HIPIFY_DIFFBASE`
+
+For build workflows that need package metadata such as
+`torch.version.git_version` to identify the fetched upstream PyTorch commit,
+pass `--no-commit-hipify`. That still runs HIPIFY, but leaves the source tree
+dirty instead of creating a local `DO NOT SUBMIT: HIPIFY` commit.
+
+For test-only source checkouts, pass `--no-hipify --no-submodules` to fetch the
+PyTorch test files without HIPIFY preprocessing or submodule checkout.
 
 ### Alternative branches and versions
 

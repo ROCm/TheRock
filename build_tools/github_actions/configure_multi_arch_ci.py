@@ -59,13 +59,13 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
     select_build_runner,
-    select_weighted_label,
 )
 from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
 )
+from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
@@ -101,8 +101,8 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     Reads stage names from BUILD_TOPOLOGY.toml when 'all' is specified.
 
     Example:
-        "foundation,compiler-runtime" → ["foundation", "compiler-runtime"]
-        "all" → ["foundation", "compiler-runtime", "math-libs", ...]
+        "compiler-runtime,runtime-tests" → ["compiler-runtime", "runtime-tests"]
+        "all" → ["compiler-runtime", "runtime-tests", "math-libs", ...]
     """
     stages = _parse_comma_list(raw)
     if "all" in stages:
@@ -129,7 +129,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
-    release_type: str = ""  # "" for CI, or "dev", "nightly", "prerelease" for releases
+    release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -180,7 +180,7 @@ class CIInputs:
         # setup_multi_arch.yml. GitHub-specific context (PR labels,
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
-        release_type = os.environ.get("RELEASE_TYPE", "")
+        release_type = os.environ.get("RELEASE_TYPE", "ci")
 
         pr_labels: list[str] = []
         base_ref = "HEAD^1"
@@ -426,9 +426,9 @@ class BuildConfig:
     build_variant_label: str
     build_variant_suffix: str
     build_variant_cmake_preset: str
-    expect_failure: bool
     build_native_linux: bool
     build_pytorch: bool
+    test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -614,7 +614,7 @@ def _determine_test_type(
     ):
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
         if matching:
-            return "full", f"submodule(s) changed: {sorted(matching)}"
+            return "standard", f"submodule(s) changed: {sorted(matching)}"
 
     # Default: quick tests for fast CI feedback.
     return "quick", "default"
@@ -819,12 +819,9 @@ def _expand_build_config_for_platform(
     platform: str,
     all_families: dict[str, dict],
     variant_config: dict,
-    test_type: str,
-    pr_labels: list[str],
-    is_schedule: bool,
-    is_workflow_dispatch: bool,
-    prebuilt_stages: list[str] | None = None,
-    baseline_run_id: str = "",
+    ci_inputs: CIInputs,
+    jobs: JobDecisions,
+    git_context: GitContext,
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -842,7 +839,7 @@ def _expand_build_config_for_platform(
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
     test_runner_kernel = ""
-    for label in pr_labels:
+    for label in ci_inputs.pr_labels:
         if label.startswith("test_runner:"):
             test_runner_kernel = label.split(":")[1]
             break
@@ -863,14 +860,22 @@ def _expand_build_config_for_platform(
             continue
 
         # Determine test runner label.
+        # Note: Per-component weighted runner selection is handled in
+        # fetch_test_configurations.py for better load distribution.
+        # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # Handle multi-label configuration with weighted random selection.
-        # Some families (e.g. gfx94x) have multiple runner labels available.
-        if "test-runs-on-labels" in platform_info:
-            test_runs_on = select_weighted_label(
-                platform_info["test-runs-on-labels"], family_name
-            )
+        # TODO: use hard-coded label (vultr machines) as we try to determine core42 regression
+        # This is a temporary measure to get good signal for submodule bumps while we determine core42 issues
+        if (
+            platform == "linux"
+            and family_name == "gfx94x"
+            and git_context.changed_files is not None
+            and git_context.submodule_paths is not None
+        ):
+            matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+            if matching:
+                test_runs_on = "linux-gfx942-1gpu-ossci-rocm"
 
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
@@ -893,7 +898,7 @@ def _expand_build_config_for_platform(
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant == "asan" or build_variant == "host-asan":
             # Only run ASAN tests on scheduled or workflow_dispatch runs
-            if not (is_schedule or is_workflow_dispatch):
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
@@ -910,7 +915,10 @@ def _expand_build_config_for_platform(
                 )
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
-        if platform_info.get("run-full-tests-only", False) and test_type == "quick":
+        if (
+            platform_info.get("run-full-tests-only", False)
+            and jobs.test_rocm.test_type == "quick"
+        ):
             test_runs_on = ""
             print(
                 f"  {family_name}: run-full-tests-only flag set, "
@@ -920,7 +928,7 @@ def _expand_build_config_for_platform(
         # If nightly_check_only_for_family is set for schedule runs only
         if (
             platform_info.get("nightly_check_only_for_family", False)
-            and not is_schedule
+            and not ci_inputs.is_schedule
         ):
             test_runs_on = ""
             print(
@@ -928,27 +936,34 @@ def _expand_build_config_for_platform(
                 f"disabling test runner for non-scheduled runs"
             )
 
-        per_family_info.append(
-            {
-                "amdgpu_family": platform_info["family"],
-                "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
-                "test-runs-on": test_runs_on,
-                "sanity_check_only_for_family": platform_info.get(
-                    "sanity_check_only_for_family", False
-                ),
-            }
-        )
+        family_info = {
+            "amdgpu_family": platform_info["family"],
+            "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
+            "test-runs-on": test_runs_on,
+            "sanity_check_only_for_family": platform_info.get(
+                "sanity_check_only_for_family", False
+            ),
+        }
+        if test_runs_on and "test-runs-on-labels" in platform_info:
+            family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        per_family_info.append(family_info)
 
     if not per_family_info:
         return None
 
     family_names = [f["amdgpu_family"] for f in per_family_info]
-    expect_failure = variant_config.get("expect_failure", False)
-    expect_pytorch_failure = variant_config.get("expect_pytorch_failure", False)
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
+
+    test_python_packages_matrix = build_rocm_python_test_matrix(
+        per_family_info=per_family_info,
+        platform=platform,
+    )
+    # TODO: Use jobs.build_rocm_python so this matrix is empty when the ROCm
+    # Python package build is disabled. Then multi_arch_ci_* can also condition
+    # build_python_packages on that decision.
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -957,23 +972,20 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        expect_failure=expect_failure,
-        build_native_linux=(not expect_failure and suffix != "asan"),
-        build_pytorch=(
-            not expect_failure and not expect_pytorch_failure and suffix != "asan"
-        ),
+        build_native_linux=(suffix != "asan"),
+        build_pytorch=(suffix != "asan"),
         build_runs_on=build_runs_on,
-        prebuilt_stages=prebuilt_stages or [],
-        baseline_run_id=baseline_run_id,
+        test_python_packages_matrix=test_python_packages_matrix,
+        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
 
 
 def expand_build_configs(
-    targets: TargetSelection,
     ci_inputs: CIInputs,
-    test_type: str,
-    prebuilt_stages: list[str] | None = None,
-    baseline_run_id: str = "",
+    git_context: GitContext,
+    targets: TargetSelection,
+    jobs: JobDecisions,
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
 
@@ -1008,12 +1020,9 @@ def expand_build_configs(
             platform=platform,
             all_families=all_families,
             variant_config=variant_config,
-            test_type=test_type,
-            pr_labels=ci_inputs.pr_labels,
-            is_schedule=ci_inputs.is_schedule,
-            is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
-            prebuilt_stages=prebuilt_stages,
-            baseline_run_id=baseline_run_id,
+            ci_inputs=ci_inputs,
+            jobs=jobs,
+            git_context=git_context,
         )
         if platform == "linux":
             linux_config = config
@@ -1114,11 +1123,10 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(
-        targets=targets,
         ci_inputs=ci_inputs,
-        test_type=jobs.test_rocm.test_type,
-        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
-        baseline_run_id=jobs.build_rocm.baseline_run_id,
+        git_context=git_context,
+        targets=targets,
+        jobs=jobs,
     )
     builds.log()
 

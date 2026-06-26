@@ -225,7 +225,7 @@ def cmd_extract_gfx_arch(args: argparse.Namespace) -> int:
 # Maps OS profile prefixes to container images (checked in order).
 _OS_PROFILE_TO_IMAGE: list[tuple[tuple[str, ...], str]] = [
     (("sles",), "registry.suse.com/bci/bci-base:16.0"),
-    (("ubuntu", "debian"), "ubuntu:24.04"),
+    (("ubuntu", "debian"), "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
     ((), "registry.access.redhat.com/ubi10/ubi:10.1"),  # default (e.g. rhel*)
 ]
 
@@ -234,8 +234,8 @@ def get_container_image(os_profile: str) -> str:
     """Return the container image for a given OS profile.
 
     Examples:
-        ubuntu2404  -> ubuntu:24.04
-        debian12    -> ubuntu:24.04
+        ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+        debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
         sles16      -> registry.suse.com/bci/bci-base:16.0
         rhel10      -> registry.access.redhat.com/ubi10/ubi:10.1
     """

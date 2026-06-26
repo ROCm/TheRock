@@ -36,6 +36,7 @@ Choose one of these options to specify where to install from:
 | `--debug-tools` | Flag | Include ROCm debugging tools artifacts             |
 | `--fft`         | Flag | Include FFT artifacts                              |
 | `--hipdnn`      | Flag | Include hipDNN artifacts                           |
+| `--hiptensor`   | Flag | Include hipTensor artifacts                        |
 | `--libhipcxx`   | Flag | Include libhipcxx artifacts                        |
 | `--miopen`      | Flag | Include MIOpen artifacts                           |
 | `--prim`        | Flag | Include primitives artifacts                       |
@@ -44,6 +45,7 @@ Choose one of these options to specify where to install from:
 | `--rocdecode`   | Flag | Include rocDecode artifacts (Linux only)           |
 | `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
 | `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
+| `--rocalution`  | Flag | Include rocALUTION artifacts                       |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
