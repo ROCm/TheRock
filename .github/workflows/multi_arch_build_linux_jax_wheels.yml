@@ -223,10 +223,18 @@ jobs:
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
 
+          # Workaround: Force --find-links (S3 index is not PEP 503)
+          sed -i 's|--pre --index-url "${THERROCK_INDEX_URL}"|--pre --find-links "${THERROCK_INDEX_URL}"|' \
+            Dockerfile.jax-manylinux_2_28-therock
+
+          CLEAN_URL=$(echo "${ROCM_PACKAGE_FIND_LINKS_URL}" | sed 's|/index.html$||')
+
+          echo "DEBUG: Using find-links URL = ${CLEAN_URL}"
+
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --build-arg=THEROCK_INDEX_URL="${CLEAN_URL}" \
             --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
             --progress=plain \
