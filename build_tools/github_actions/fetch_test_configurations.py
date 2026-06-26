@@ -148,11 +148,11 @@ test_matrix = {
     "hip-tests": {
         "job_name": "hip-tests",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 400,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 4,
+            "linux": 1,
             "windows": 4,
         },
     },
