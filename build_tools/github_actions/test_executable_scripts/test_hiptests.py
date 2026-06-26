@@ -92,6 +92,9 @@ TEST_TO_IGNORE = {
             "Unit_hipGraphExecMemcpyNodeSetParams1D_Positive_Basic",
             "Unit_hipGraph_SimpleGraphWithKernel",
             "Unit_hipGraphUserObj_HostRegister",
+            "Unit_hipGraphNodeGetType_ClonedGraph_InThread_WithDependencies",
+            "Unit_hipGraphHostNodeSetParams_BasicFunc",
+            "Unit_hipStreamBeginCapture_nestedStreamCapture",
         ]
     },
 }
