@@ -12,13 +12,7 @@ import requests
 THEROCK_REPO = "ROCm/TheRock"
 
 ROCM_SYSTEMS_FILES = [
-    ".github/workflows/therock-ci-linux.yml",
-    ".github/workflows/therock-ci-windows.yml",
-    ".github/workflows/therock-rccl-ci-linux.yml",
-    ".github/workflows/therock-rccl-test-packages-multi-node.yml",
-    ".github/workflows/therock-rccl-test-packages-single-node.yml",
-    ".github/workflows/therock-test-component.yml",
-    ".github/workflows/therock-test-packages.yml",
+    ".github/actions/ci-env/action.yml",
 ]
 
 ROCM_LIBRARIES_FILES = [
@@ -29,7 +23,7 @@ SUBMODULE_CONFIG = {
     "rocm-systems": {
         "repo": "ROCm/rocm-systems",
         "files": ROCM_SYSTEMS_FILES,
-        "updater": "ref",
+        "updater": "ci-env",
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
