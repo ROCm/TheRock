@@ -24,6 +24,7 @@ from github_actions_api import (
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
     gha_resolve_git_ref,
+    gha_update_pr_comment,
     is_authenticated_github_api_available,
 )
 
@@ -468,6 +469,215 @@ class GitHubAPITest(unittest.TestCase):
 
             self.assertIn("Invalid JSON", str(ctx.exception))
             self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
+
+    def test_rest_api_post_sends_json_body(self):
+        """REST API POST should send JSON body with Content-Type header."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b'{"id": 99}'
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch(
+            "github_actions_api.urlopen", return_value=mock_response
+        ) as urlopen:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {"id": 99})
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(request.data, b'{"body": "hello"}')
+        self.assertEqual(request.headers["Content-type"], "application/json")
+
+    def test_rest_api_patch_sends_json_body(self):
+        """REST API PATCH should send JSON body."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b'{"id": 42, "body": "updated"}'
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch(
+            "github_actions_api.urlopen", return_value=mock_response
+        ) as urlopen:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/comments/42",
+                method="PATCH",
+                body={"body": "updated"},
+            )
+
+        self.assertEqual(result["id"], 42)
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.method, "PATCH")
+
+    def test_gh_cli_post_uses_method_and_stdin_body(self):
+        """gh CLI POST should pass --method and JSON on stdin."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = '{"id": 7}'
+
+        with mock.patch(
+            "github_actions_api.subprocess.run", return_value=mock_result
+        ) as subprocess_run:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {"id": 7})
+        cmd = subprocess_run.call_args[0][0]
+        self.assertEqual(cmd[0:4], ["/usr/bin/gh", "api", "--method", "POST"])
+        self.assertEqual(cmd[4], "/repos/test/test/issues/1/comments")
+        self.assertIn("--input", cmd)
+        self.assertEqual(subprocess_run.call_args[1]["input"], '{"body": "hello"}')
+
+    def test_rest_api_get_empty_body_raises_github_api_error(self):
+        """REST API GET with empty body should raise GitHubAPIError (unchanged behavior)."""
+        import json
+
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b""
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("Invalid JSON", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
+
+    def test_rest_api_post_empty_body_returns_empty_dict(self):
+        """REST API POST with empty body may return {} without parsing JSON."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b""
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {})
+
+
+class GhaUpdatePrCommentTest(unittest.TestCase):
+    """Tests for gha_update_pr_comment."""
+
+    def test_posts_new_comment_when_marker_not_found(self):
+        marker = "<!-- therock-report-manifest-diff -->"
+        body = f"{marker}\n### Report\n\n[View report](https://example.com)\n"
+        comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
+
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            side_effect=[
+                [{"id": 1, "body": "unrelated comment"}],
+                {"id": 99, "body": body},
+            ],
+        ) as gha_send_request:
+            result = gha_update_pr_comment(
+                pr_number=42,
+                marker=marker,
+                body=body,
+            )
+
+        self.assertEqual(result["id"], 99)
+        self.assertEqual(gha_send_request.call_count, 2)
+        gha_send_request.assert_any_call(
+            f"{comments_url}?per_page=100&page=1",
+        )
+        gha_send_request.assert_any_call(
+            comments_url,
+            method="POST",
+            body={"body": body},
+        )
+
+    def test_patches_existing_comment_when_marker_found(self):
+        marker = "<!-- therock-report-manifest-diff -->"
+        body = f"{marker}\n### Report\n\n[View report](https://example.com/v2)\n"
+        comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
+
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            side_effect=[
+                [{"id": 10, "body": f"{marker}\nold content"}],
+                {"id": 10, "body": body},
+            ],
+        ) as gha_send_request:
+            result = gha_update_pr_comment(
+                pr_number=42,
+                marker=marker,
+                body=body,
+            )
+
+        self.assertEqual(result["id"], 10)
+        self.assertEqual(gha_send_request.call_count, 2)
+        gha_send_request.assert_any_call(
+            "https://api.github.com/repos/ROCm/TheRock/issues/comments/10",
+            method="PATCH",
+            body={"body": body},
+        )
+        gha_send_request.assert_any_call(f"{comments_url}?per_page=100&page=1")
+
+    def test_paginates_until_marker_found(self):
+        marker = "<!-- therock-breadcrumb-unmapped-6057 -->"
+        body = f"{marker}\n### Unmapped\n"
+        comments_url = (
+            "https://api.github.com/repos/ROCm/rocm-libraries/issues/7/comments"
+        )
+
+        page_1 = [{"id": i, "body": f"comment {i}"} for i in range(100)]
+        page_2 = [{"id": 200, "body": f"{marker}\nstale"}]
+
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            side_effect=[
+                page_1,
+                page_2,
+                {"id": 200, "body": body},
+            ],
+        ) as gha_send_request:
+            result = gha_update_pr_comment(
+                pr_number=7,
+                marker=marker,
+                body=body,
+                github_repository="ROCm/rocm-libraries",
+            )
+
+        self.assertEqual(result["id"], 200)
+        self.assertEqual(gha_send_request.call_count, 3)
+        gha_send_request.assert_any_call(f"{comments_url}?per_page=100&page=1")
+        gha_send_request.assert_any_call(f"{comments_url}?per_page=100&page=2")
+
+    def test_raises_when_comment_response_is_not_dict(self):
+        marker = "<!-- therock-report-manifest-diff -->"
+        body = f"{marker}\nbody"
+
+        with mock.patch(
+            "github_actions_api.gha_send_request",
+            side_effect=[[], "not-a-dict"],
+        ):
+            with self.assertRaisesRegex(GitHubAPIError, "Expected comment object"):
+                gha_update_pr_comment(pr_number=1, marker=marker, body=body)
 
 
 class GitHubActionsUtilsTest(unittest.TestCase):
