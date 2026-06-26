@@ -70,25 +70,22 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
     @patch("configure_ci_path_filters.subprocess.run")
     def test_missing_base_sha_is_fetched_before_diffing(self, mock_run):
         base_sha = "f5c168058a7ceaa0f179cc36784b491a11a3adc7"
+        fetched = False
 
         def run_side_effect(args, **kwargs):
-            if args == ["git", "cat-file", "-e", f"{base_sha}^{{commit}}"]:
+            nonlocal fetched
+            if args[:2] == ["git", "cat-file"]:
                 return subprocess.CompletedProcess(args=args, returncode=1)
-            if args == ["git", "diff", "--name-only", base_sha]:
+            if args[:2] == ["git", "diff"]:
+                if not fetched:
+                    raise subprocess.CalledProcessError(128, args)
                 return subprocess.CompletedProcess(
                     args=args,
                     returncode=0,
                     stdout="compiler/amd-llvm\ncompiler/spirv-llvm-translator\n",
                 )
-            if args == [
-                "git",
-                "fetch",
-                "--no-tags",
-                "--no-recurse-submodules",
-                "--depth=1",
-                "origin",
-                base_sha,
-            ]:
+            if args[:2] == ["git", "fetch"]:
+                fetched = True
                 return subprocess.CompletedProcess(
                     args=args,
                     returncode=0,
@@ -110,9 +107,9 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         base_sha = "f5c168058a7ceaa0f179cc36784b491a11a3adc7"
 
         def run_side_effect(args, **kwargs):
-            if args == ["git", "cat-file", "-e", f"{base_sha}^{{commit}}"]:
+            if args[:2] == ["git", "cat-file"]:
                 return subprocess.CompletedProcess(args=args, returncode=0)
-            if args == ["git", "diff", "--name-only", base_sha]:
+            if args[:2] == ["git", "diff"]:
                 raise subprocess.CalledProcessError(128, args)
             self.fail(f"Unexpected subprocess.run call: {args!r}")
 
@@ -140,6 +137,36 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             text=True,
             timeout=60,
         )
+
+    @patch("configure_ci_path_filters.subprocess.run")
+    def test_get_git_commit_hash_fetches_missing_sha_before_resolving(self, mock_run):
+        base_sha = "f5c168058a7ceaa0f179cc36784b491a11a3adc7"
+        fetched = False
+
+        def run_side_effect(args, **kwargs):
+            nonlocal fetched
+            if args[:2] == ["git", "cat-file"]:
+                return subprocess.CompletedProcess(args=args, returncode=1)
+            if args[:2] == ["git", "fetch"]:
+                fetched = True
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout="",
+                )
+            if args[:2] == ["git", "rev-parse"]:
+                if not fetched:
+                    raise subprocess.CalledProcessError(128, args)
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=f"{base_sha}\n",
+                )
+            self.fail(f"Unexpected subprocess.run call: {args!r}")
+
+        mock_run.side_effect = run_side_effect
+
+        self.assertEqual(get_git_commit_hash(base_sha), base_sha)
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
         """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of

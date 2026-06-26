@@ -27,6 +27,42 @@ from typing import Iterable, Optional
 _FULL_GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
+def _ensure_git_commit_available(ref: str) -> None:
+    """Fetch a full SHA when it is missing from the shallow checkout."""
+    if _FULL_GIT_SHA_RE.fullmatch(ref) is None:
+        return
+
+    is_commit_available_locally = (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=60,
+        ).returncode
+        == 0
+    )
+    if is_commit_available_locally:
+        return
+
+    print(f"Commit {ref} is not available locally. Fetching it...")
+    subprocess.run(
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--depth=1",
+            "origin",
+            ref,
+        ],
+        stdout=subprocess.PIPE,
+        check=True,
+        text=True,
+        timeout=60,
+    )
+
+
 # ============================================================================
 # Public API
 # ============================================================================
@@ -34,6 +70,7 @@ _FULL_GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 def get_git_commit_hash(ref: str) -> str:
     """Resolve a git ref to its full commit hash."""
+    _ensure_git_commit_available(ref)
     return subprocess.run(
         ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
         stdout=subprocess.PIPE,
@@ -57,46 +94,10 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     """
     print(f"Computing modified paths with: 'git diff --name-only {base_ref}'")
     try:
-        base_ref_is_sha = _FULL_GIT_SHA_RE.fullmatch(base_ref) is not None
         # Push events can advance a branch by multiple commits. The setup
         # checkout is intentionally shallow, so event.before may be older than
         # the fetched history even though it is a valid reachable commit.
-        if base_ref_is_sha:
-            is_commit_available_locally = (
-                subprocess.run(
-                    ["git", "cat-file", "-e", f"{base_ref}^{{commit}}"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    timeout=60,
-                ).returncode
-                == 0
-            )
-        else:
-            is_commit_available_locally = True
-
-        if not is_commit_available_locally:
-            print(
-                f"Base ref {base_ref} is not available locally. "
-                "Fetching it for path filtering..."
-            )
-            subprocess.run(
-                [
-                    "git",
-                    "fetch",
-                    "--no-tags",
-                    "--no-recurse-submodules",
-                    "--depth=1",
-                    "origin",
-                    base_ref,
-                ],
-                stdout=subprocess.PIPE,
-                check=True,
-                text=True,
-                timeout=60,
-            )
-        elif base_ref_is_sha:
-            print(f"Base ref {base_ref} is available locally")
+        _ensure_git_commit_available(base_ref)
 
         # We have the commit, now run the diff.
         return subprocess.run(
