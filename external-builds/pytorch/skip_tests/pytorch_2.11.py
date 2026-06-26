@@ -43,6 +43,39 @@ skip_tests = {
             "test_3d_mlp_with_nd_mesh",
             # AssertionError: False is not true : cuda:0 used 2615148544.0 bytes after collective, 70% more than the status before (1495269376.0 bytes). Extra CUDA context may have been created.
             "test_extra_cuda_context",
+            # Distributed failures triaged from gfx94X-dcgpu 2.11 run:
+            # https://github.com/ROCm/TheRock/actions/runs/28242115579
+            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            "test_replicate_device_id",
+            # TestMultiProc - process join timeout (~300s)
+            "test_get_pg_attr",
+            # TestFullyShard1DTrainingCore - child exit code 10 (Scalars not close)
+            "test_post_optim_event",
+            # SymmMemEmptySetDeviceTest - child exit code 10
+            # Collapsed: covers set_device_{True,False} x persistent variants
+            "test_empty_strided_p2p",
+            # SymmetricMemoryTest / SymmMemCollectiveTest / SymmMemPoolTest /
+            # NCCLCopyEngineCollectives - Exception in worker process
+            # Collapsed: covers reduce_op_{sum,avg} x symm_mem_input_{True,False}
+            "test_low_contention_reduce_scatter",
+            # Collapsed: covers symm_mem_input_{True,False}
+            "test_low_contention_all_gather",
+            "test_allow_overlapping_devices",
+            "test_dispatcher_torchbind_symmetric_memory",
+            "test_set_signal_pad_size_with_allocation",
+            "test_large_alloc",
+            "test_get_signal_pad",
+            "test_subgroup",
+            "test_one_shot_all_reduce",
+            "test_two_shot_all_reduce",
+            # Collapsed: covers test_reduce_scatter and test_reduce_scatter_corner_cases
+            "test_reduce_scatter",
+            "test_mempool_tensor_factory",
+            "test_mempool_compute_ops",
+            "test_ce_allgather",
+            "test_ce_alltoall",
+            # SymmMemSingleProcTest - CUDA error: out of memory
+            "test_memset32",
         ],
     },
     "gfx942": {
