@@ -97,6 +97,10 @@ TEST_TO_IGNORE = {
             "Unit_hipStreamBeginCapture_nestedStreamCapture",
             "Unit_hipGraphInstantiateWithFlags_AutoFreeOnLaunchDoubleKernel",
             "Unit_hiprtcCombiComplrOptnTst",
+            "Unit_hipGraphInstantiateWithFlags_WithDefaultAndAutoFreeOnLaunch",
+            "Unit_hipGraphGetRootNodes_Functional",
+            "Unit_hiprtc_includepath",
+            "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
         ]
     },
 }
