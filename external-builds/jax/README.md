@@ -30,15 +30,15 @@ For upstream JAX development references, see:
 
 ### Supported JAX versions
 
-Support for JAX is provided via stable release branches of
-[ROCm/rocm-jax](https://github.com/ROCm/rocm-jax).
+Support for JAX is provided via stable release branches.
+
+JAX 0.9.1 uses release branch from [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax).
+Starting with JAX 0.10.0, build support uses the [ROCm/jax](https://github.com/ROCm/jax) repository.
 
 | JAX version | Linux                                                                                                           | Windows          |
 | ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 0.9.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.2) | ❌ Not supported |
+| 0.10.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.0)         | ❌ Not supported |
 | 0.9.1       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.1`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.1) | ❌ Not supported |
-| 0.9.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.0) | ❌ Not supported |
-| 0.8.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.2) | ❌ Not supported |
 
 See also:
 
@@ -61,60 +61,79 @@ This repository builds the following ROCm-enabled JAX artifacts:
 ### How building with TheRock differs from upstream
 
 The upstream [rocm-jax build instructions](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md)
-assume that a stable ROCm version is already installed on the system. When
-building through TheRock, we instead build ROCm from the latest sources and
-provide it via **tarballs** with arbitrary install locations.
+assume that a stable ROCm version is already installed on the system.
 
-> [!IMPORTANT]
-> JAX currently requires a **tarball-based** ROCm installation. TheRock Python
-> wheel packages (`rocm[libraries,devel]`) are **not yet supported** for
-> building JAX. This is because the JAX build system expects a traditional
-> filesystem-based ROCm installation layout (e.g. `/opt/rocm-<version>/`) that
-> tarballs provide but Python wheel packages do not.
+TheRock currently supports two build paths depending on the JAX release branch:
+
+- **JAX 0.9.1** uses the legacy tarball-based build flow via
+  `build/ci_build --therock-path`.
+- **JAX 0.10.0** builds against ROCm Python packages installed from the
+  TheRock multi-arch Python package index.
 
 ### Prerequisites
 
 - **OS**: Linux (supported distributions with ROCm)
 - **Python**: 3.12 recommended
-- **Compiler**: Clang (provided via the TheRock tarball)
-- **ROCm**: Provided via a TheRock tarball (see
-  [RELEASES.md](/RELEASES.md#installing-from-tarballs) for tarball download
-  locations and installation instructions)
+- **Compiler**:
+  - JAX 0.9.1: Clang provided by the TheRock tarball
+  - JAX 0.10.0: Clang provided by the manylinux build environment
+- **ROCm**:
+  - JAX 0.9.1: TheRock tarball
+  - JAX 0.10.0: ROCm Python packages from the TheRock multi-arch package index
 
 ### Steps
 
-1. Checkout rocm-jax and jax:
+1. Checkout the source repository for your JAX version.
+
+   **JAX 0.9.1**
 
    ```bash
    git clone https://github.com/ROCm/rocm-jax.git
    git clone https://github.com/ROCm/jax.git
+
    pushd rocm-jax
-   git checkout rocm-jaxlib-v<JAX_VERSION>
+   git checkout rocm-jaxlib-v0.9.1
    popd
+
    pushd jax
-   git checkout rocm-jaxlib-v<JAX_VERSION>
+   git checkout rocm-jaxlib-v0.9.1
+   popd
+   ```
+
+   **JAX 0.10.0**
+
+   ```bash
+   git clone https://github.com/ROCm/jax.git
+
+   pushd jax
+   git checkout rocm-jaxlib-v0.10.0
    popd
    ```
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.9.1`, `0.9.0`, or `0.8.2`
+   - **JAX version**: e.g. `0.9.1` or `0.10.0`
    - **Python version**: e.g. `3.12`
-   - **TheRock tarball**: A tarball URL, a local tarball file path, or a
-     directory containing a ROCm installation. Nightly tarballs are available
-     at <https://rocm.nightlies.amd.com/tarball/>.
 
-1. Build all wheels:
+   For **JAX 0.9.1**:
+
+   - TheRock tarball URL, local tarball, or extracted ROCm installation.
+
+   For **JAX 0.10.0**:
+
+   - TheRock multi-arch Python package index.
+
+1. Build JAX 0.9.1 (legacy tarball flow)
 
    ```bash
    pushd rocm-jax
-   python3 build/ci_build \
-     --compiler=clang \
-     --python-versions="3.12" \
-     --rocm-version="<rocm_version>" \
-     --therock-path="<path_to_tarball_or_rocm_dir>" \
-     --jax-source-dir="<path_to_jax_directory>" \
-     dist_wheels
+      PYTHON_VERSION=<python versions, comma separated>
+      ROCM_VERSION=<rocm_version>
+
+      python3 build/ci_build --therock-path "<path_to_tarball_or_rocm_dir>"
+      --python-versions="$PYTHON_VERSION"
+      --rocm-version="$ROCM_VERSION"
+      dist_wheels
    popd
    ```
 
@@ -124,7 +143,19 @@ provide it via **tarballs** with arbitrary install locations.
    > For JAX >= 0.9.1, jaxlib is installed from upstream PyPI, so this flag
    > can be omitted.
 
+1. Build JAX 0.10.0 (multi-arch package flow)
+
+   JAX 0.10.0 builds are performed by the GitHub Actions workflow:
+
+   - `.github/workflows/multi_arch_build_linux_jax_wheels.yml`
+
+   The workflow installs ROCm Python packages from the configured TheRock
+   multi-arch package index before building `jax_rocm7_plugin` and
+   `jax_rocm7_pjrt`.
+
 1. Locate built wheels:
+
+   **JAX 0.9.1**
 
    After a successful build, wheels will be available in:
 
@@ -132,9 +163,20 @@ provide it via **tarballs** with arbitrary install locations.
    rocm-jax/jax_rocm_plugin/wheelhouse/
    ```
 
-For more detailed build options (including building `jax_rocm7_plugin` and
-`jax_rocm7_pjrt` wheels individually), see
-[ROCm/rocm-jax BUILDING.md](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md#building).
+   **JAX 0.10.0**
+
+   After a successful build, wheels will be available in:
+
+   ```text
+   jax/dist/
+   ```
+
+For more detailed build options, see the build instructions for the JAX
+release branch you are using.
+
+- JAX 0.9.1: [ROCm/rocm-jax BUILDING.md](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md#building)
+- JAX 0.10.0: See the `ROCm/jax` repository and the
+  `.github/workflows/multi_arch_build_linux_jax_wheels.yml` workflow in TheRock.
 
 ## Test instructions
 
@@ -165,27 +207,26 @@ For more detailed build options (including building `jax_rocm7_plugin` and
 1. Install requirements:
 
    ```bash
-   pip install -r external-builds/jax/requirements-jax.txt
+   cd jax
+   pip install -r build/test-requirements.txt
+   pip install pytest-html pytest-csv uv pytest-json-report
    ```
 
-1. Install ROCm from TheRock tarball:
+1. Install ROCm Python packages:
 
    ```bash
-   python build_tools/install_rocm_from_artifacts.py \
-     --release "<rocm_version>" \
-     --artifact-group "<amdgpu_family>" \
-     --output-dir "/opt/rocm-<rocm_version>"
+   pip install \
+   --index-url <package_index_url> \
+   "rocm[libraries,device-<gfx_arch>]==<rocm_version>"
    ```
-
-   For detailed instructions and example usage, see the
-   [TheRock RELEASES.md](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#automated-tarball-extraction).
 
 1. Install JAX wheels from the package index:
 
    ```bash
-   # Install jaxlib, jax_rocm7_plugin, and jax_rocm7_pjrt from the GPU-family index
-   pip install --index-url "https://rocm.nightlies.amd.com/v2/<amdgpu_family>/" \
-     jaxlib jax_rocm7_plugin jax_rocm7_pjrt
+   pip install \
+   --index-url <package_index_url> \
+   jax_rocm7_plugin \
+   jax_rocm7_pjrt
 
    # Install jax from PyPI to match the version
    pip install jax==<JAX_VERSION>
@@ -200,21 +241,14 @@ For more detailed build options (including building `jax_rocm7_plugin` and
    pytest jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
    ```
 
-We are planning to expand our test coverage and update the testing workflow.
-Upcoming changes will include running smoke tests, unit tests, and multi-GPU
-tests using the `pip install` packaging method for improved reliability and
-consistency. Tracking issue:
-[ROCm/TheRock#2592](https://github.com/ROCm/TheRock/issues/2592)
-
 ## Nightly releases
 
 ### Gating releases with JAX tests
 
-With passing builds we upload `jaxlib`, `jax_rocm7_plugin`, and
-`jax_rocm7_pjrt` wheels to subfolders of the `v2-staging` directory in the
-nightly release S3 bucket with a public URL at
-<https://rocm.nightlies.amd.com/v2-staging/>.
+Successful builds publish JAX wheels to the nightly multi-arch Python package
+index:
 
-Only with passing JAX tests we promote passed wheels to the `v2` directory in
-the nightly release S3 bucket with a public URL at
-<https://rocm.nightlies.amd.com/v2/>.
+<https://rocm.nightlies.amd.com/whl-multi-arch/>
+
+The published wheels are validated by the JAX test workflow as part of the
+nightly release process before being made available for use.

@@ -2,6 +2,20 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_RAND)
+  # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
+  # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
+  # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
+  # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
+  if(WIN32 OR NOT TARGET amdsmi)
+    set(_primlibs_benchmark_enable "OFF")
+    set(_primlibs_benchmark_deps)
+    set(_primlibs_benchmark_includes)
+  else()
+    set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
+    set(_primlibs_benchmark_deps amdsmi)
+    set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
+  endif()
+
   ##############################################################################
   # rocRAND
   ##############################################################################
@@ -16,12 +30,15 @@ if(THEROCK_ENABLE_RAND)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+    CMAKE_INCLUDES
+      ${_primlibs_benchmark_includes}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
       therock-googletest
+      ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
     TEST_SUBPROJECTS
@@ -38,6 +55,7 @@ if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # hipRAND
   ##############################################################################
+  # Note: hipRAND has no benchmarks
 
   therock_cmake_subproject_declare(hipRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand"
@@ -114,28 +132,28 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
+  # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
+  # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
+  # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
+  # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
+  if(WIN32 OR NOT TARGET amdsmi)
+    set(_primlibs_benchmark_enable "OFF")
+    set(_primlibs_benchmark_deps)
+    set(_primlibs_benchmark_includes)
+  else()
+    set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
+    set(_primlibs_benchmark_deps amdsmi)
+    set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
+  endif()
+
   if(THEROCK_BUILD_TESTING)
     ##############################################################################
     # rocPRIM tests
     ##############################################################################
 
     # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
-    # that depend on rocPRIM
-    # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
-    # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
-    # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
-    # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
-    # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
-    if(WIN32 OR NOT TARGET amdsmi)
-      set(_rocprim_benchmark_enable "OFF")
-      set(_rocprim_benchmark_deps)
-      set(_rocprim_benchmark_includes)
-    else()
-      set(_rocprim_benchmark_enable "ON")
-      set(_rocprim_benchmark_deps amdsmi)
-      set(_rocprim_benchmark_includes therock_rocprim_benchmark_deps.cmake)
-    endif()
-
+    # that depend on rocPRIM.
+    # Passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding.
     therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
@@ -145,17 +163,17 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_TEST=ON
-        -DBUILD_BENCHMARK=${_rocprim_benchmark_enable}
+        -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
       CMAKE_INCLUDES
-        ${_rocprim_benchmark_includes}
+        ${_primlibs_benchmark_includes}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
         rocm-cmake
         therock-googletest
         rocPRIM
-        ${_rocprim_benchmark_deps}
+        ${_primlibs_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
     )
@@ -176,13 +194,16 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+    CMAKE_INCLUDES
+      ${_primlibs_benchmark_includes}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
       rocPRIM
       therock-googletest
+      ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
   )
@@ -202,7 +223,9 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+    CMAKE_INCLUDES
+      ${_primlibs_benchmark_includes}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -210,6 +233,7 @@ if(THEROCK_ENABLE_PRIM)
       rocPRIM
       rocRAND
       therock-googletest
+      ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
