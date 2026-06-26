@@ -46,11 +46,20 @@ on:
         type: string
         default: ""
         description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
+      windows_cpu_build_label:
+        type: choice
+        description: "Windows CPU build runner label (selects which nodepool to build on)"
+        default: "azure-windows-scale-rocm"
+        options:
+          - azure-windows-scale-rocm
+          - aws-windows-scale-rocm-customer-dev
+          - aws-windows-scale-rocm-customer-dev-large
+          - aws-windows-scale-rocm-customer-dev-xlarge
+          - aws-windows-scale-rocm-customer-dev-xlarge2
+      ci_config_branch_prefix:
+        type: string
+        description: "Branch prefix in therock-ci-config (prepended to windows_cpu_build_label to form full ref)"
+        default: "users/justchen/"
 
 permissions:
   contents: read
@@ -78,6 +87,7 @@ jobs:
       windows_test_labels: ${{ inputs.windows_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      ci_config_ref: ${{ inputs.ci_config_branch_prefix && inputs.windows_cpu_build_label && format('{0}{1}', inputs.ci_config_branch_prefix, inputs.windows_cpu_build_label) || 'main' }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
