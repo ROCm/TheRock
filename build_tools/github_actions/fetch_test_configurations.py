@@ -245,7 +245,7 @@ test_matrix = {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 180,
-        "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
@@ -419,7 +419,7 @@ test_matrix = {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards_dict": {
@@ -431,7 +431,7 @@ test_matrix = {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_hipfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 2,

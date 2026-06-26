@@ -77,6 +77,7 @@ COMPONENT_DIR_MAPPING = {
     "rocalution": "rocalution",
     "hipsparse": "hipsparse",
     "hipsparselt": "hipsparselt",
+    "hipblaslt": "hipblaslt",
     "rocroller": "rocroller",
     "hipblas": "hipblas",
     "hiptensor": "hiptensor",
@@ -443,8 +444,12 @@ def build_ctest_command(
             print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
 
     # Add label options together for readability: -L ... -LE ...
+    # Anchor each include label with ^...$ so ctest matches it exactly. ctest's
+    # -L uses partial regex matching, so an unanchored "-L full" also matches
+    # labels that merely contain "full" (e.g. "multigpu_full", "ffm-full"),
+    # which would wrongly pull those suites into the run.
     for label in include_labels:
-        cmd.extend(["-L", label])
+        cmd.extend(["-L", f"^{label}$"])
     if le_patterns:
         cmd.extend(["-LE", "|".join(le_patterns)])
 
