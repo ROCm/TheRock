@@ -182,7 +182,8 @@ jobs:
       # TODO: Simplify to just `needs.build_python_packages.outputs.package_find_links_url`
       # once kpack split is always enabled.
       package_find_links_url: >-
-        ${{\n          needs.build_python_packages.outputs.kpack_split == 'true'
+        ${{
+          needs.build_python_packages.outputs.kpack_split == 'true'
           && needs.build_python_packages.outputs.package_find_links_url
           || format('{0}/{1}/index.html',
               needs.build_python_packages.outputs.package_find_links_url,
