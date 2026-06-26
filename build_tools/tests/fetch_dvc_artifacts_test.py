@@ -15,6 +15,7 @@ import io
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -401,6 +402,81 @@ class TestDownloadBlob(unittest.TestCase):
             with self.assertRaisesRegex(fda.FetchError, "size mismatch"):
                 fda._download_blob(s3, remote, md5, dest, expected_size=len(data) + 100)
             self.assertFalse(dest.exists())
+
+
+class TestStoreInCacheConcurrency(unittest.TestCase):
+    """Regression test for #5943.
+
+    Multiple .dvc pointer files can reference files with the same content hash
+    (e.g. identical small tensors in different subdirectories). When fetched
+    concurrently, all workers call _store_in_cache with the same cache_file
+    path. Each uses a unique temp name, but the final os.replace races on
+    Windows and raises PermissionError. The fix catches PermissionError and
+    verifies the winner wrote the correct content before treating it as success.
+    """
+
+    def test_concurrent_calls_with_same_cache_file_do_not_raise(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            data = b"shared content"
+            md5 = _md5_hex(data)
+            cache_file = fda._cache_path(tmp / "cache", md5)
+
+            # Simulate the Windows race: both workers arrive at os.replace
+            # concurrently. Caller 1 writes cache_file; caller 2 then gets
+            # PermissionError because Windows won't replace a file another
+            # handle still has open. We model this with a two-phase barrier:
+            # both workers reach the gate, then caller 1 does the real replace
+            # and only after that does caller 2 raise PermissionError, so
+            # cache_file already exists when the exception handler checks it.
+            original_replace = os.replace
+            call_count = [0]
+            lock = threading.Lock()
+            gate = threading.Barrier(2)
+            done = threading.Event()
+
+            def patched_replace(src, dst):
+                with lock:
+                    call_count[0] += 1
+                    n = call_count[0]
+                gate.wait(timeout=5)
+                if n == 1:
+                    original_replace(src, dst)
+                    done.set()
+                else:
+                    done.wait(timeout=5)
+                    raise PermissionError("[WinError 5] Access is denied")
+
+            src1 = tmp / "src1.bin"
+            src2 = tmp / "src2.bin"
+            src1.write_bytes(data)
+            src2.write_bytes(data)
+
+            errors = []
+
+            def worker(src):
+                try:
+                    fda._store_in_cache(src, cache_file)
+                except Exception as e:
+                    errors.append(e)
+
+            # Patch fda's reference to os.replace (not the os module itself)
+            # so both threads see the same controlled replacement.
+            with mock.patch.object(fda.os, "replace", side_effect=patched_replace):
+                threads = [
+                    threading.Thread(target=worker, args=(src1,)),
+                    threading.Thread(target=worker, args=(src2,)),
+                ]
+                for th in threads:
+                    th.start()
+                for th in threads:
+                    th.join()
+
+            self.assertEqual(errors, [], f"unexpected errors: {errors}")
+            self.assertTrue(cache_file.exists())
+            self.assertEqual(cache_file.read_bytes(), data)
+            leftover = list(cache_file.parent.glob("*.tmp"))
+            self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
 
 
 class TestMaterializeFile(unittest.TestCase):
