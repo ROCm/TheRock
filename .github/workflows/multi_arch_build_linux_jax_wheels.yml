@@ -46,8 +46,8 @@ on:
         description: "ROCm package version to install and build against."
         type: string
         required: true
-      rocm_package_index_url:
-        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
       tar_url:
@@ -112,8 +112,8 @@ on:
         description: "ROCm package version to install and build against."
         type: string
         required: true
-      rocm_package_index_url:
-        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
       tar_url:
@@ -210,14 +210,15 @@ jobs:
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${TAR_URL}" \
             dist_wheels
-
+      # TODO: THEROCK_INDEX_URL need to be renamed in the future to
+      # THEROCK_FIND_LINKS_URL to avoid confusion with pip --index-url.
       - name: Build manylinux image
         if: ${{ inputs.build_mode == 'manylinux' }}
         working-directory: jax-source
         env:
           THEROCK_VERSION: ""
           GFX_ARCH: ${{ inputs.gfx_arch }}
-          THEROCK_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
         run: |
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
@@ -225,7 +226,7 @@ jobs:
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${THEROCK_INDEX_URL}" \
+            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
             --progress=plain \
@@ -285,7 +286,6 @@ jobs:
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
 
-
   generate_target_to_run:
     name: Generate target_to_run
     if: ${{ inputs.test_amdgpu_family != '' }}
@@ -327,7 +327,7 @@ jobs:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
       rocm_version: ${{ inputs.rocm_version }}
-      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       release_type: ${{ inputs.release_type }}
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}

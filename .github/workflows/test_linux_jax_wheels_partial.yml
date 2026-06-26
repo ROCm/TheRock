@@ -18,8 +18,8 @@ on:
         description: ROCm version
         required: true
         type: string
-      rocm_package_index_url:
-        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
       release_type:
@@ -76,8 +76,8 @@ on:
         description: ROCm version
         type: string
         default: "7.14.0.dev0"
-      rocm_package_index_url:
-        description: "URL for pip --index-url to install ROCm packages for the JAX manylinux build."
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
       release_type:
@@ -152,7 +152,7 @@ jobs:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
-      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
       - name: Checkout
@@ -224,7 +224,7 @@ jobs:
           fi
 
           python -m pip install --pre \
-            --index-url "${ROCM_PACKAGE_INDEX_URL}" \
+            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}" \
             "${pkg}==${{ inputs.rocm_version }}"
 
           echo "ROCM_ROOT=$(rocm-sdk path --root)" >> "$GITHUB_ENV"
