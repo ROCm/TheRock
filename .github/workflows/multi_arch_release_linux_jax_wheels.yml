@@ -3,7 +3,6 @@
 
 # Multi-arch release entry point for Linux JAX wheels.
 #
-# Currently this workflow is uses only rocm-jaxlib-v0.9.1
 # This workflow owns the release matrix and delegates each matrix cell to the
 # reusable single-build workflow.
 
@@ -24,6 +23,10 @@ on:
         description: "ROCm package version to build against."
         type: string
         required: true
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
       tar_url:
         description: "URL to the TheRock tarball used for the build."
         type: string
@@ -52,6 +55,10 @@ on:
         description: "ROCm package version to build against."
         type: string
         required: true
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
       tar_url:
         description: "URL to the TheRock tarball used for the build."
         type: string
@@ -69,7 +76,6 @@ run-name: Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_
 
 permissions:
   contents: read
-#TODO: Add rocm-jaxlib-v0.10.0 once it is released and tested.
 jobs:
   build_jax_wheels:
     name: Build | py ${{ matrix.python_version }} | jax ${{ matrix.jax_ref }}
@@ -79,9 +85,17 @@ jobs:
         python_version: ["3.11", "3.12", "3.13", "3.14"]
         jax_ref:
           - "rocm-jaxlib-v0.9.1"
+          - "rocm-jaxlib-v0.10.0"
         include:
           - jax_ref: "rocm-jaxlib-v0.9.1"
-            build_jaxlib: false
+            jax_repository: "ROCm/rocm-jax"
+            build_mode: "native"
+            gfx_arch: ""
+
+          - jax_ref: "rocm-jaxlib-v0.10.0"
+            jax_repository: "ROCm/jax"
+            build_mode: "manylinux"
+            gfx_arch: "device-all"
 
     permissions:
       id-token: write
@@ -91,8 +105,11 @@ jobs:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       python_version: ${{ matrix.python_version }}
       jax_ref: ${{ matrix.jax_ref }}
-      build_jaxlib: ${{ matrix.build_jaxlib }}
+      jax_repository: ${{ matrix.jax_repository }}
+      build_mode: ${{ matrix.build_mode }}
+      gfx_arch: ${{ matrix.gfx_arch }}
       rocm_version: ${{ inputs.rocm_version }}
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       tar_url: ${{ inputs.tar_url }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
