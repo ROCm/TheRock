@@ -255,6 +255,77 @@
     "Gfxarch": "False"
   },
   {
+    "Package": "amdrocm-wsl",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD ROCm WSL support library",
+    "Description_Long": "AMD ROCm DXG support library for Windows Subsystem for Linux (WSL)",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "wsl-rocdxg",
+        "Artifact_Subdir": [
+          {
+            "Name": "wsl-rocdxg",
+            "Components": [
+              "lib",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-wsl-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-wsl"
+    ],
+    "RPMRequires": [
+      "amdrocm-wsl"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD ROCm WSL support library development files",
+    "Description_Long": "Development files for AMD ROCm DXG support library for Windows Subsystem for Linux (WSL)",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "wsl-rocdxg",
+        "Artifact_Subdir": [
+          {
+            "Name": "wsl-rocdxg",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-runtime-devel",
     "Version": "",
     "Architecture": "amd64",
@@ -1037,6 +1108,224 @@
   },
 
   {
+    "Package": "amdrocm-rocalution",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-blas",
+      "amdrocm-sparse",
+      "amdrocm-rand",
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-blas",
+      "amdrocm-sparse",
+      "amdrocm-rand",
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocALUTION sparse iterative solver library for AMD GPUs",
+    "Description_Long": "rocALUTION is AMD's library of iterative sparse solvers and preconditioners, built on top of rocSPARSE and rocBLAS.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rocalution",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocALUTION",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-rocalution-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocalution"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocalution"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocALUTION sparse iterative solver library for AMD GPUs",
+    "Description_Long": "Provides development files for the rocALUTION library.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rocalution",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocALUTION",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-rocalution-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocalution-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocalution-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocALUTION sparse iterative solver library for AMD GPUs test binaries",
+    "Description_Long": "Provides test binaries for the rocALUTION library.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rocalution",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocALUTION",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-hiptensor",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "hipTensor library for high-performance tensor operations on AMD GPUs",
+    "Description_Long": "hipTensor is AMD's C++ library for accelerating tensor primitives based on the Composable Kernel library.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "hiptensor",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipTensor",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-hiptensor-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-hiptensor"
+    ],
+    "RPMRequires": [
+      "amdrocm-hiptensor"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "hipTensor library for high-performance tensor operations on AMD GPUs",
+    "Description_Long": "Provides development files for the hipTensor library.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "hiptensor",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipTensor",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-hiptensor-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-hiptensor-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-hiptensor-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "hipTensor library for high-performance tensor operations on AMD GPUs test binaries",
+    "Description_Long": "Provides test and sample binaries for the hipTensor library.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "hiptensor",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipTensor",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-rand",
     "Version": "",
     "Architecture": "amd64",
@@ -1812,6 +2101,17 @@
               "dev",
               "doc",
               "run"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "sysdeps-util-linux",
+        "Artifact_Subdir": [
+          {
+            "Name": "util-linux",
+            "Components": [
+              "lib"
             ]
           }
         ]
@@ -2996,6 +3296,122 @@
   },
 
   {
+    "Package": "amdrocm-hipfile",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "hipFile Maintainer <hipfile-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm hipFile library",
+    "Description_Long": "hipFile is a library for high-performance file I/O between storage and GPU memory",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "hipfile",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipfile",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-hipfile-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-hipfile"
+    ],
+    "RPMRequires": [
+      "amdrocm-hipfile"
+    ],
+    "Maintainer": "hipFile Maintainer <hipfile-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm hipFile library development files",
+    "Description_Long": "Provides development files for the hipFile library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "hipfile",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipfile",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-hipfile-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-hipfile-devel",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-hipfile-devel",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "hipFile Maintainer <hipfile-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm hipFile library test files",
+    "Description_Long": "Provides test files for the hipFile library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "hipfile",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipfile",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
     "Version": "",
@@ -3019,6 +3435,7 @@
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
+      "amdrocm-hipfile",
       "amdrocm-decode",
       "amdrocm-jpeg"
     ],
@@ -3040,6 +3457,7 @@
       "amdrocm-math-common",
       "amdrocm-amdsmi",
       "amdrocm-hipify",
+      "amdrocm-hipfile",
       "amdrocm-decode",
       "amdrocm-jpeg"
     ],
@@ -3080,6 +3498,86 @@
     "Gfxarch": "True"
   },
   {
+    "Comments": "Opt-in HPC SDK metapackages. Built with Core but NOT pulled in by the default amdrocm metapackage. See docs/rfcs HPC SDK Release Model.",
+    "Package": "amdrocm-hpc",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocalution",
+      "amdrocm-hiptensor"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocalution",
+      "amdrocm-hiptensor"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm HPC SDK runtime metapackage",
+    "Description_Long": "Opt-in metapackage that installs the HPC SDK runtime libraries. Use this to run HPC SDK applications.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-hpc-sdk",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-hpc",
+      "amdrocm-rocalution-devel",
+      "amdrocm-hiptensor-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-hpc",
+      "amdrocm-rocalution-devel",
+      "amdrocm-hiptensor-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm HPC SDK development metapackage",
+    "Description_Long": "Opt-in metapackage that installs the HPC SDK headers and build files. Use this to develop and build new code against HPC SDK libraries.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-hpc-tests",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-hpc-sdk",
+      "amdrocm-rocalution-test",
+      "amdrocm-hiptensor-test"
+    ],
+    "RPMRequires": [
+      "amdrocm-hpc-sdk",
+      "amdrocm-rocalution-test",
+      "amdrocm-hiptensor-test"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm HPC SDK test metapackage",
+    "Description_Long": "Opt-in metapackage that installs HPC SDK test binaries. Intended for internal use to validate HPC SDK builds.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-core-devel",
     "Version": "",
     "Architecture": "amd64",
@@ -3099,6 +3597,7 @@
       "amdrocm-rccl-devel",
       "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
+      "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
     ],
@@ -3117,6 +3616,7 @@
       "amdrocm-rccl-devel",
       "amdrocm-rocshmem-devel",
       "amdrocm-dnn-devel",
+      "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
       "amdrocm-jpeg-devel"
     ],

@@ -89,6 +89,10 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       "lib"
     INTERFACE_PKG_CONFIG_DIRS
       "share/pkgconfig"
+    TEST_SUBPROJECTS
+      rocgdb-cpu
+      rocgdb-gpu
+      rocr-debug-agent-tests
   )
 
   therock_cmake_subproject_glob_c_sources(amd-dbgapi SUBDIRS
@@ -156,6 +160,8 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      rocr-debug-agent-tests
   )
 
   therock_cmake_subproject_glob_c_sources(rocr-debug-agent SUBDIRS
@@ -296,6 +302,9 @@ if(THEROCK_ENABLE_ROCGDB)
       "bin"
     INTERFACE_LINK_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      rocgdb-cpu
+      rocgdb-gpu
   )
 
   # We may want to adjust this to optimize rebuilds.

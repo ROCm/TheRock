@@ -1,0 +1,66 @@
+name: TheRock PR Bot
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main, pr-bot-test]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  checks: read
+  security-events: none
+
+jobs:
+  policy:
+    name: therock-pr-bot
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Detect GitHub App secrets
+        id: app-secrets
+        shell: bash
+        env:
+          APP_ID: ${{ secrets.THEROCK_PR_BOT_APPID }}
+          APP_KEY: ${{ secrets.THEROCK_PRBOT_KEY }}
+        run: |
+          if [[ -n "$APP_ID" && -n "$APP_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub App token
+        id: app-token
+        if: steps.app-secrets.outputs.available == 'true'
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.THEROCK_PR_BOT_APPID }}
+          private-key: ${{ secrets.THEROCK_PRBOT_KEY }}
+
+      - name: Install deps
+        run: python -m pip install --upgrade pip requests pyyaml
+
+      - name: Enforce policy
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+
+          HAS_GITHUB_APP_TOKEN: ${{ steps.app-secrets.outputs.available }}
+          READ_SECURITY_ALERTS: ${{ steps.app-secrets.outputs.available }}
+          POST_COMMENTS: ${{ steps.app-secrets.outputs.available }}
+          MUTATE_PR: ${{ steps.app-secrets.outputs.available }}
+
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: python skills/therock_pr_bot/policy_check.py --policy skills/therock_pr_bot/policy.yml --timeout-seconds 900 --poll-seconds 15

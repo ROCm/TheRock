@@ -17,6 +17,10 @@ containing all targets in a single install prefix.
 A shared download cache avoids re-downloading generic (host) artifacts
 when processing multiple families.
 
+By default, generated tarballs exclude test artifacts and fftw3. Pass
+``--include-test-tarballs`` to also generate full tarballs, named with a
+``-tests`` suffix, that include test artifacts.
+
 Tarball naming follows the existing release convention:
     therock-dist-{platform}-{family}-{version}.tar.gz
     therock-dist-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
@@ -55,12 +59,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
+DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
 
-def log(msg: str):
+
+def log(msg: str) -> None:
     print(msg, flush=True)
 
 
-def run_command(args: list[str | Path], cwd: Path | None = None):
+def run_command(args: list[str | Path], cwd: Path | None = None) -> None:
     args = [str(arg) for arg in args]
     log(f"++ Exec{f' [{cwd}]' if cwd else ''}$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd) if cwd else None, stdin=subprocess.DEVNULL)
@@ -74,11 +81,17 @@ def fetch_and_flatten(
     output_dir: Path,
     download_cache_dir: Path,
     run_github_repo: str | None = None,
-):
+    exclude_components: list[str] | None = None,
+    exclude_artifacts: list[str] | None = None,
+) -> None:
     """Fetch artifacts for one or more families and flatten into output_dir."""
     families_str = ";".join(amdgpu_families)
     log(f"\n{'='*60}")
     log(f"Fetching artifacts for {families_str}")
+    if exclude_components:
+        log(f"Excluding components: {', '.join(exclude_components)}")
+    if exclude_artifacts:
+        log(f"Excluding artifacts: {', '.join(exclude_artifacts)}")
     log(f"{'='*60}")
 
     cmd = [
@@ -94,6 +107,10 @@ def fetch_and_flatten(
         "--flatten",
         f"--download-cache-dir={download_cache_dir}",
     ]
+    if exclude_components:
+        cmd.append(f"--exclude-components={','.join(exclude_components)}")
+    if exclude_artifacts:
+        cmd.append(f"--exclude-artifacts={','.join(exclude_artifacts)}")
     if run_github_repo:
         cmd.append(f"--run-github-repo={run_github_repo}")
     run_command(cmd)
@@ -108,7 +125,7 @@ def is_kpack_split(flatten_dir: Path) -> bool:
     return manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
 
 
-def compress_tarball(*, source_dir: Path, tarball_path: Path):
+def compress_tarball(*, source_dir: Path, tarball_path: Path) -> None:
     """Compress a directory into a .tar.gz tarball.
 
     Uses subprocess ``tar cfz`` rather than Python's ``tarfile`` module
@@ -126,7 +143,7 @@ def compress_tarball(*, source_dir: Path, tarball_path: Path):
     log(f"  Created {tarball_path.name} ({size_mb:.1f} MB)")
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Fetch multi-arch artifacts and package into per-family tarballs"
     )
@@ -160,6 +177,11 @@ def main(argv=None):
         required=True,
         help="Output directory for tarballs",
     )
+    parser.add_argument(
+        "--include-test-tarballs",
+        action="store_true",
+        help="Also produce -tests tarballs that include test artifacts",
+    )
     args = parser.parse_args(argv)
     # Normalize empty string to None (workflow inputs default to "")
     args.run_github_repo = args.run_github_repo or None
@@ -176,6 +198,7 @@ def main(argv=None):
     log(f"  Platform: {args.platform}")
     log(f"  Version: {args.package_version}")
     log(f"  Output: {args.output_dir}")
+    log(f"  Include test tarballs: {args.include_test_tarballs}")
 
     # Phase 1: Fetch and flatten sequentially.
     # Sequential so the shared download cache avoids re-downloading generic
@@ -191,12 +214,29 @@ def main(argv=None):
             output_dir=flatten_dir,
             download_cache_dir=download_cache_dir,
             run_github_repo=args.run_github_repo,
+            exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
+            exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
         )
         family_dirs.append(flatten_dir)
         tarball_name = (
             f"therock-dist-{args.platform}-{family}-{args.package_version}.tar.gz"
         )
         compress_tasks.append((flatten_dir, args.output_dir / tarball_name))
+        if args.include_test_tarballs:
+            tests_dir = work_dir / "tests" / family
+            fetch_and_flatten(
+                run_id=args.run_id,
+                amdgpu_families=[family],
+                platform=args.platform,
+                output_dir=tests_dir,
+                download_cache_dir=download_cache_dir,
+                run_github_repo=args.run_github_repo,
+            )
+            tests_tarball_name = (
+                f"therock-dist-{args.platform}-{family}-tests-"
+                f"{args.package_version}.tar.gz"
+            )
+            compress_tasks.append((tests_dir, args.output_dir / tests_tarball_name))
 
     # Phase 1.5: If KPACK_SPLIT_ARTIFACTS is enabled, fetch all families
     # into a single combined directory. With KPACK split, device-specific
@@ -213,11 +253,30 @@ def main(argv=None):
             output_dir=multiarch_dir,
             download_cache_dir=download_cache_dir,
             run_github_repo=args.run_github_repo,
+            exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
+            exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
         )
         tarball_name = (
             f"therock-dist-{args.platform}-multiarch-{args.package_version}.tar.gz"
         )
         compress_tasks.append((multiarch_dir, args.output_dir / tarball_name))
+        if args.include_test_tarballs:
+            tests_multiarch_dir = work_dir / "tests" / "multiarch"
+            fetch_and_flatten(
+                run_id=args.run_id,
+                amdgpu_families=families,
+                platform=args.platform,
+                output_dir=tests_multiarch_dir,
+                download_cache_dir=download_cache_dir,
+                run_github_repo=args.run_github_repo,
+            )
+            tests_tarball_name = (
+                f"therock-dist-{args.platform}-multiarch-tests-"
+                f"{args.package_version}.tar.gz"
+            )
+            compress_tasks.append(
+                (tests_multiarch_dir, args.output_dir / tests_tarball_name)
+            )
 
     # Phase 2: Compress all tarballs in parallel.
     # Each tar cfz is single-threaded, so running N families concurrently
