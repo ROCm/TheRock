@@ -996,9 +996,12 @@ def expand_build_configs(
         ["presubmit", "postsubmit", "nightly"]
     )
     build_variant = ci_inputs.build_variant
-    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push events run "host-asan"
-    if build_variant == "asan" and ci_inputs.is_push:
+    # For ASAN CI runs, workflow_dispatch and scheduled events run full "asan".
+    # Push events (postsubmit) and PRs with submodule changes run "host-asan"
+    # to provide faster feedback while still catching host-side ASAN issues.
+    # TODO: Revert PRs to full "asan" once CI capacity is increased. Currently
+    # using host-asan for submodule bump PRs to reduce queue times.
+    if build_variant == "asan" and (ci_inputs.is_push or ci_inputs.is_pull_request):
         build_variant = "host-asan"
 
     linux_config: BuildConfig | None = None

@@ -18,10 +18,10 @@ on:
         description: ROCm version
         required: true
         type: string
-      tar_url:
-        description: URL to TheRock tarball
-        required: true
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
+        default: ""
       release_type:
         description: "Release type"
         type: string
@@ -76,8 +76,8 @@ on:
         description: ROCm version
         type: string
         default: "7.14.0.dev0"
-      tar_url:
-        description: URL to TheRock tarball
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
       release_type:
@@ -134,6 +134,7 @@ jobs:
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
       options: >-
+        --shm-size=128g
         --device /dev/kfd
         --device /dev/dri
         --group-add render
@@ -149,9 +150,9 @@ jobs:
 
     env:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
-      TAR_URL: ${{ inputs.tar_url }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
       - name: Checkout
@@ -192,19 +193,6 @@ jobs:
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
 
-      - name: Configure ROCm from TheRock tarball
-        run: |
-          DEST="/opt/rocm-${{ inputs.rocm_version }}"
-          TARBALL="${RUNNER_TEMP}/therock.tar.gz"
-
-          rm -rf "${DEST}"
-          mkdir -p "${DEST}"
-
-          wget -O "${TARBALL}" "${TAR_URL}"
-          tar -xzf "${TARBALL}" -C "${DEST}"
-
-          ln -sfn "${DEST}" /opt/rocm
-
       - name: Determine JAX package versions
         run: |
           if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
@@ -219,6 +207,27 @@ jobs:
               --rocm-version "${{ inputs.rocm_version }}" \
               --jax-requirements rocm-jax/build/requirements.txt
           fi
+      - name: Compute ROCm device extras
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.test_amdgpu_family }}" \
+            --output-mode=device-extras
+
+      - name: Install ROCm packages
+        run: |
+          python -m pip install --upgrade pip
+
+          pkg="rocm[libraries]"
+          if [ -n "${{ steps.expand.outputs.device_extras }}" ]; then
+            pkg="${pkg%]},${{ steps.expand.outputs.device_extras }}]"
+          fi
+
+          python -m pip install --pre \
+            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            "${pkg}==${{ inputs.rocm_version }}"
+
+          echo "ROCM_ROOT=$(rocm-sdk path --root)" >> "$GITHUB_ENV"
 
       - name: Install JAX wheels from package index
         run: |
@@ -244,11 +253,31 @@ jobs:
 
       - name: Run JAX tests
         env:
-          JAX_PLATFORMS: rocm
-          HIP_DEVICE_LIB_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
-          JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH: /opt/rocm/lib/llvm/amdgcn/bitcode
-          JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH: /opt/rocm/lib/llvm/bin
+          # Avoid large upfront GPU memory reservation.
+          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+
+          # Set XLA allocator.
+          XLA_PYTHON_CLIENT_ALLOCATOR: platform
+
+          # Reduce compilation/autotune memory pressure.
+          XLA_FLAGS: >-
+            --xla_gpu_force_compilation_parallelism=1
+            --xla_gpu_enable_nccl_comm_splitting=false
+            --xla_gpu_enable_command_buffer=
+
         run: |
+          set -euxo pipefail
+
+          unset ROCM_ROOT
+          unset HIP_DEVICE_LIB_PATH
+          unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
+          unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
+          unset HIP_VISIBLE_DEVICES
+          unset ROCR_VISIBLE_DEVICES
+
+          python -c "import jax; print(jax.local_devices())"
+
+          echo "=== Starting full test suite ==="
           pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
           pytest jax/tests/core_test.py -q --log-cli-level=INFO
           pytest jax/tests/util_test.py -q --log-cli-level=INFO
