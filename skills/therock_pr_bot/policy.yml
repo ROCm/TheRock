@@ -2,24 +2,46 @@ version: 2
 
 pr:
   # Branch naming rules:
-  #   users/[username]/[feature-or-bug-name]
+  #   A recognised PREFIX must be present; anything AFTER the prefix is allowed
+  #   (including nested namespace/feature segments). We mostly care that a
+  #   known prefix is there. Uppercase letters ARE allowed (acronyms / module
+  #   names are common, e.g. ROCm, SMP, RFC).
   # Examples:
   #   users/chi/ucicd_setup_visible_devices
-  #   users/samathew121/docker
-  #   bump-rocm-libraries-936a6c7            (single-segment automation branch)
-  #   dependabot/github_actions/github-actions-3dfd2199fc   (dependabot branch)
-  #   revert-5217-users/derobins/add_hipfile_support        (auto-revert branch)
-  # NOTE: username allows lowercase + digits + hyphens.
-  #   branch name allows lowercase + digits + hyphens + underscores.
+  #   users/frepaul/ROCm-end-user-project-workflow   (uppercase in branch)
+  #   users/dgaliffi/fix/remove-build-boost-option    (nested namespace/feature)
+  #   shared/add-runner-health
+  #   compiler-ww-24-SMP-2                             (single-segment, uppercase)
+  #   ZIP-packaging-RFC                                (single-segment, uppercase)
+  #   dependabot/github_actions/github-actions-3dfd2199fc
+  #   revert-5217-users/derobins/add_hipfile_support  (auto-revert)
   branch_name_patterns:
-    - '^users\/[a-z0-9][a-z0-9\-]*\/[a-z0-9][a-z0-9\-_]*$'
-    - '^[a-z0-9]+\/[a-z0-9][a-z0-9\-_]*$'
-    # Single-segment automation branches, e.g. bump-rocm-libraries-936a6c7
-    - '^[a-z0-9][a-z0-9\-_]*$'
-    # Dependabot branches, e.g. dependabot/github_actions/github-actions-3dfd2199fc
-    - '^dependabot\/[a-z0-9\-_]+(\/[a-z0-9][a-z0-9\-_.]*)+$'
+    # users/<username>/<anything> — username may use upper/lower/digits/hyphens.
+    - '^users\/[A-Za-z0-9][A-Za-z0-9\-]*\/.+'
+    # shared/<anything>
+    - '^shared\/.+'
+    # Single-segment branches, e.g. ZIP-packaging-RFC, bump-rocm-libraries-936a6c7
+    - '^[A-Za-z0-9][A-Za-z0-9\-_]*$'
+    # dependabot/<anything>
+    - '^dependabot\/.+'
     # GitHub auto-revert branches, e.g. revert-5217-users/derobins/add_hipfile_support
-    - '^revert-[0-9]+-[a-z0-9][a-z0-9\-_\/]*$'
+    - '^revert-[0-9]+-.+'
+
+  # Special case: automated dependency "bump" PRs.
+  #
+  # WHY: These bots open routine, high-volume dependency-bump PRs (e.g.
+  # "Bumps ROCm/rocm-systems from a0952b2 to 971dc69") that don't follow the
+  # human branch/title/description conventions and don't need the full policy
+  # gate. Auto-approving them keeps the bot from blocking trusted automation and
+  # spamming "Not ready to Review" on every bump.
+  #
+  # If the PR author is one of these bot accounts, ALL policy checks are
+  # auto-approved (every row in the results table is marked Pass). The '[bot]'
+  # suffix on the GitHub login is matched automatically.
+  #
+  bump_bot_authors:
+    - assistant-librarian
+    - systems-assistant
 
   # PR title rules (Conventional Commits style):
   #   type(optional-scope): short description
@@ -44,9 +66,32 @@ pr:
     #   ISSUE ID : AITESTUTO-3334
     #   ISSUE ID - AITESTAUTO-3433
     #   ISSUE ID : https://github.com/ROCm/TheRock-Infra/issues/1234
+    #
+    # ALTERNATIVELY, a GitHub closing keyword + issue reference is accepted.
+    # Keywords (case-insensitive, optional trailing colon):
+    #   close / closes / closed / fix / fixes / fixed / resolve / resolves / resolved
+    # The reference may be '#<number>' or '<org>/<repo>#<number>'.
+    # Valid examples:
+    #   Closes #10
+    #   Fixes octo-org/octo-repo#100
+    #   Resolves #10
+    #   resolves #123
+    #   resolves octo-org/octo-repo#100
+    #   Closes: #10
+    #   CLOSES #10
+    #   CLOSES: #10
+    #
+    # ALSO accepted (plain GitHub issue references, no keyword needed):
+    #   #123
+    #   https://github.com/<org>/<repo>/issues/123
     issue_reference_patterns:
       - '(?im)^\s*JIRA\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
       - '(?im)^\s*ISSUE\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
+      - '(?im)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]+)?#\d+'
+      # Bare GitHub issue reference, e.g. #123
+      - '(?m)(?:^|\s)#\d+\b'
+      # GitHub issue URL, e.g. https://github.com/org/repo/issues/123
+      - '(?i)https?:\/\/github\.com\/[^\/\s]+\/[^\/\s]+\/issues\/\d+'
 
   # Unit test requirement:
   #   - Doc/config-only PRs (e.g. .md, .txt, .yml, .ini) never need a unit test
@@ -76,10 +121,12 @@ pr:
     test_file_patterns:
       - 'test_*'
       - '*_test.*'
-    exempt_paths:
-      - '.github/**'
-      - 'tools/**'
-      - 'scripts/**'
+    # Unit tests are required for source code ANYWHERE in the repository — there
+    # are NO folder-based exemptions. A test file may also live in any folder;
+    # it is recognised by its name (test_* / *_test.*), not its location.
+    # Doc/config files are still skipped by EXTENSION (they are simply not in
+    # `code_extensions`), not by path.
+    exempt_paths: []
 
 diff:
   # Block risky / unwanted files

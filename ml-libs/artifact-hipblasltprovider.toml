@@ -7,8 +7,11 @@ exclude = [
 [components.test."ml-libs/hipblasltprovider/stage"]
 include = [
   "bin/hipblaslt_*_test*",
-  "bin/hipblaslt_plugin/CTestTestfile.cmake",
+  # Bundle the entire bin/hipblaslt_plugin/ install tree so test_runner.py can
+  # drive `ctest --test-dir bin/hipblaslt_plugin -L {quick|standard|...}` from
+  # the rocm-libraries CMakeLists.txt-generated CTestTestfile.cmake.
   # Test config TOMLs (e.g. HIPBLASLT_ENGINE.toml) consumed by the cross-provider
-  # integration suite (hipdnn_integration_tests --test-config).
-  "bin/hipblaslt_plugin/*.toml",
+  # integration suite (hipdnn_integration_tests --test-config) are picked up by
+  # this glob as well.
+  "bin/hipblaslt_plugin/**",
 ]
