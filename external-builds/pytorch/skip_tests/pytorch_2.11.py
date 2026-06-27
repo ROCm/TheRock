@@ -43,8 +43,9 @@ skip_tests = {
             "test_3d_mlp_with_nd_mesh",
             # AssertionError: False is not true : cuda:0 used 2615148544.0 bytes after collective, 70% more than the status before (1495269376.0 bytes). Extra CUDA context may have been created.
             "test_extra_cuda_context",
-            # Distributed failures triaged from gfx94X-dcgpu 2.11 run:
+            # Distributed failures triaged from gfx94X-dcgpu 2.11 runs:
             # https://github.com/ROCm/TheRock/actions/runs/28242115579
+            # https://github.com/ROCm/TheRock/actions/runs/28266889171
             # ReplicateFullyShardInit - pytest-timeout (>900s)
             "test_replicate_device_id",
             # TestMultiProc - process join timeout (~300s)
@@ -76,6 +77,21 @@ skip_tests = {
             "test_ce_alltoall",
             # SymmMemSingleProcTest - CUDA error: out of memory
             "test_memset32",
+            # From run 28266889171 (skips-verification run):
+            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            "test_replicate_fully_shard_init",
+            # TestParityWithDDPCUDA - child exit code 10 (Tensor parity)
+            "test_transformer_offload_true_no_shard_cuda",
+            # ReplicateTest - child exit code 10 (compiled replicate parity)
+            "test_compile_fp16",
+            "test_compile_bf16",
+            # CustomSchedulesTest - Exception in worker process (zero-bubble schedule)
+            "test_schedule_with_native_zero_bubble_ScheduleClass0",
+            # CPFlexAttentionTest - child exit code 10
+            # Collapsed: covers causal_mask and document_mask variants
+            "test_cp_flex_attention",
+            # TestMultiProc - child exit code 10 (Scalars not equal)
+            "test_compiler_collectives_automatic_dynamic_tensor",
         ],
     },
     "gfx942": {
