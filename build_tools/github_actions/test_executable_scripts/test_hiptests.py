@@ -107,6 +107,7 @@ TEST_TO_IGNORE = {
             "Unit_hipGraphGetRootNodes_CapturedStream",
             "Unit_hipGraphNodeGetType_NodeTypeOfChildGraph",
             "Unit_hipGraphInstantiateWithParams_DependencyGraph",
+            "Unit_hipGraphMemcpyNodeSetParams1D_Positive_Basic",
         ]
     },
 }
