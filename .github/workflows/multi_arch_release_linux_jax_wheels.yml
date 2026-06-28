@@ -86,6 +86,7 @@ jobs:
         jax_ref:
           - "rocm-jaxlib-v0.9.1"
           - "rocm-jaxlib-v0.10.0"
+          - "rocm-jaxlib-v0.10.2"
         include:
           - jax_ref: "rocm-jaxlib-v0.9.1"
             jax_repository: "ROCm/rocm-jax"
@@ -93,6 +94,11 @@ jobs:
             gfx_arch: ""
 
           - jax_ref: "rocm-jaxlib-v0.10.0"
+            jax_repository: "ROCm/jax"
+            build_mode: "manylinux"
+            gfx_arch: "device-all"
+
+          - jax_ref: "rocm-jaxlib-v0.10.2"
             jax_repository: "ROCm/jax"
             build_mode: "manylinux"
             gfx_arch: "device-all"

@@ -37,6 +37,7 @@ Starting with JAX 0.10.0, build support uses the [ROCm/jax](https://github.com/R
 
 | JAX version | Linux                                                                                                           | Windows          |
 | ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.10.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.2)         | ❌ Not supported |
 | 0.10.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.0)         | ❌ Not supported |
 | 0.9.1       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.1`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.1) | ❌ Not supported |
 

@@ -256,8 +256,9 @@ jobs:
           # Avoid large upfront GPU memory reservation.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
 
-          # Set XLA allocator.
-          XLA_PYTHON_CLIENT_ALLOCATOR: platform
+          # Set XLA allocator. JAX 0.10.2 uses the default allocator; all
+          # other releases keep the platform allocator.
+          XLA_PYTHON_CLIENT_ALLOCATOR: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && 'default' || 'platform' }}
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
