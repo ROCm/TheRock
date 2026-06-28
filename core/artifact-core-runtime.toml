@@ -33,3 +33,6 @@ optional = true
 include = [
   "lib/hrx/share/hrx-cts/**",
 ]
+
+#Hotswap HSA hookup
+[components.lib."core/hsa-hotswap/stage"]
