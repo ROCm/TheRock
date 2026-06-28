@@ -29,10 +29,14 @@ if test_type == "quick":
 else:
     # Standard/comprehensive: "--test_prob" is the probability that a given test will run.
     # Due to the large number of tests for hipFFT, we only run a subset.
+    # On a standard workstation, --test_prob=0.01 takes about 1 minute.
+    # Setting the static seed is a temporary measure to help the
+    # therock CI team understand the variation in test execution time.
     test_filter = [
         "--gtest_filter=-*multi_gpu*",
         "--test_prob",
         "0.01",
+        "--seed=0",
     ]
 
 cmd = [f"{THEROCK_BIN_DIR}/hipfft-test"] + test_filter
