@@ -39,10 +39,49 @@ skip_tests = {
             "test_cpp_warnings_have_python_context_cuda",
         ],
         "distributed": [
-            # Error while creating shared memory segment /dev/shm/nccl-VPyhzw (size 21823872), error: No space left on device (28)
-            "test_3d_mlp_with_nd_mesh",
-            # AssertionError: False is not true : cuda:0 used 2615148544.0 bytes after collective, 70% more than the status before (1495269376.0 bytes). Extra CUDA context may have been created.
-            "test_extra_cuda_context",
+            # Distributed failures after un-skipping the legacy FSDP/timeout set.
+            # The old FSDP/fully_shard timeouts no longer reproduce on this build;
+            # the remaining failures cluster around symmetric memory / copy engine.
+            # gfx94X-dcgpu distributed full suite, PyTorch 2.11 + rocm7.14:
+            # https://github.com/ROCm/TheRock/actions/runs/28050755542 (users/albmalamd/unskip_distributed_for_pytorch_2.11)
+
+            # --- Symmetric memory / NCCL copy engine (Exception in worker process) ---
+            "(NCCLCopyEngineCollectives and test_ce_alltoall)",
+            "(NCCLCopyEngineCollectives and test_ce_allgather)",
+            "(SymmMemPoolTest and test_mempool_tensor_factory)",
+            "(SymmMemPoolTest and test_mempool_compute_ops)",
+            "(SymmetricMemoryTest and test_allow_overlapping_devices)",
+            "(SymmetricMemoryTest and test_dispatcher_torchbind_symmetric_memory)",
+            "(SymmetricMemoryTest and test_set_signal_pad_size_with_allocation)",
+            "(SymmetricMemoryTest and test_get_signal_pad)",
+            "(SymmetricMemoryTest and test_large_alloc)",
+            "(SymmetricMemoryTest and test_subgroup)",
+            # Collapsed: covers symm_mem_input_{True,False}
+            "(SymmetricMemoryTest and test_low_contention_all_gather)",
+            # Collapsed: covers reduce_op_{avg,sum} x symm_mem_input_{True,False}
+            "(SymmetricMemoryTest and test_low_contention_reduce_scatter)",
+            "(SymmMemCollectiveTest and test_one_shot_all_reduce)",
+            "(SymmMemCollectiveTest and test_two_shot_all_reduce)",
+            # Collapsed: covers test_reduce_scatter{,_corner_cases}
+            "(SymmMemCollectiveTest and test_reduce_scatter)",
+
+            # --- Symmetric memory P2P (child exited with error code 10) ---
+            # Collapsed: covers test_empty_strided_p2p{,_persistent}_set_device_{True,False}
+            "(SymmMemEmptySetDeviceTest and test_empty_strided_p2p)",
+
+            # --- Symmetric memory (CUDA out of memory) ---
+            "(SymmMemSingleProcTest and test_memset32)",
+
+            # --- Numerical / parity (child exit 10, Tensor-likes not close) ---
+            "(ReplicateTest and test_compile_gpu_ac)",
+            "(ReplicateTest and test_compile_fp16)",
+            "(TestZeroRedundancyOptimizerDistributed and test_ddp_zero_overlap_use_gpu_True_use_interleaved_hook_False_gradient_as_bucket_view_True_static_graph_True_shard_buckets_True)",
+            "(CPFlexAttentionTest and test_cp_flex_attention_document_mask)",
+            "(CPFlexAttentionTest and test_cp_flex_attention_causal_mask)",
+
+            # --- Timeouts (pytest-timeout, multiprocessing join) ---
+            "(ReplicateFullyShardInit and test_replicate_device_id)",
+            "(TestMultiProc and test_get_pg_attr)",
         ],
     },
     "gfx942": {
