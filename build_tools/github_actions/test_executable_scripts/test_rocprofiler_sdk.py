@@ -29,6 +29,13 @@ THEROCK_LLVM_BIN_PATH = THEROCK_PATH / "llvm" / "bin"
 THEROCK_CLANG_PATH = THEROCK_LLVM_BIN_PATH / "amdclang"
 THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
 
+# Determine host triple
+host_triple = subprocess.check_output(
+    [str(THEROCK_CLANG_PATH), "--print-target-triple"], text=True
+).strip()
+
+THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
+
 # SDK Paths
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
@@ -90,7 +97,11 @@ def setup_env():
     environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
     environ_vars["HIP_PLATFORM"] = "amd"
 
-    ld_lib_paths = [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"]
+    ld_lib_paths = [
+        f"{THEROCK_LIB_PATH}",
+        f"{THEROCK_SYSDEPS_LIB_PATH}",
+        f"{THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}",
+    ]
 
     if is_asan():
         # Installed test binaries are built with -shared-libsan, so the clang
@@ -110,7 +121,6 @@ def setup_env():
     # Avoid conflicting agent visibility; HIP_VISIBLE_DEVICES supersedes.
     if environ_vars.get("HIP_VISIBLE_DEVICES"):
         environ_vars.pop("GPU_DEVICE_ORDINAL", None)
-
 
 def cmake_config():
     cmake_config_cmd = [

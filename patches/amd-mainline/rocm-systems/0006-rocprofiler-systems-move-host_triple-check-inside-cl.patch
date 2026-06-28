@@ -1,0 +1,44 @@
+From 8f80927ad053b15291cd707c1f156187f8e0264b Mon Sep 17 00:00:00 2001
+From: Ethan Stewart <ethan.stewart@amd.com>
+Date: Mon, 22 Jun 2026 11:39:21 -0500
+Subject: [PATCH] [rocprofiler-systems] - move host_triple check inside clang
+ exists guard
+
+---
+ .../tests/pytest/rocprofsys/config.py              | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/projects/rocprofiler-systems/tests/pytest/rocprofsys/config.py b/projects/rocprofiler-systems/tests/pytest/rocprofsys/config.py
+index e1dff96811..a805c45786 100644
+--- a/projects/rocprofiler-systems/tests/pytest/rocprofsys/config.py
++++ b/projects/rocprofiler-systems/tests/pytest/rocprofsys/config.py
+@@ -84,19 +84,19 @@ class RocprofsysConfig:
+         """
+         found_paths = []
+         if self.rocm_path:
++            # Match discover_llvm_libdir_for_ompt() logic
++            candidates = [
++                self.rocm_path / "llvm" / "lib",
++                self.rocm_path / "lib" / "llvm" / "lib",
++            ]
+             # Determine host triple
+             clang_path = self.rocm_path / "lib" / "llvm" / "bin" / "amdclang"
+             if clang_path.exists():
+                 host_triple = subprocess.check_output(
+                     [str(clang_path), "--print-target-triple"], text=True
+                 ).strip()
+-            # Match discover_llvm_libdir_for_ompt() logic
+-            candidates = [
+-                self.rocm_path / "llvm" / "lib",
+-                self.rocm_path / "lib" / "llvm" / "lib",
+-            ]
+-            if host_triple:
+-                candidates.append(self.rocm_path / "lib" / "llvm" / "lib" / host_triple)
++                if host_triple:
++                    candidates.append(self.rocm_path / "lib" / "llvm" / "lib" / host_triple)
+             for candidate in candidates:
+                 if candidate.exists():
+                     found_paths.append(candidate)
+-- 
+2.34.1
+
