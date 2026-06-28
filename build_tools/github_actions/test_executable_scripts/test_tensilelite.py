@@ -222,4 +222,19 @@ if common_tests.is_dir() and "gfx1250" in amdgpu_family:
         common_cmd += [f"--tensile-options=--cxx-compiler,{cxx},--gpu-targets,gfx1250"]
     # HSA_MODEL_NUM_THREADS: number of threads inside the FFM emulator per process.
     env["HSA_MODEL_NUM_THREADS"] = os.getenv("HSA_MODEL_NUM_THREADS", "8")
+
+    logging.info("=== Split-test debug: pytest invocation ===")
+    logging.info(f"  common_cmd: {common_cmd}")
+    logging.info(f"  cwd: {THEROCK_DIR}")
+    logging.info(f"  PYTHONPATH: {env.get('PYTHONPATH', '(unset)')}")
+    logging.info(f"  TMPDIR: {env.get('TMPDIR', '(unset)')}")
+    logging.info(f"  client_path exists: {client_path.is_file()}")
+    logging.info(f"  common_tests: {common_tests}")
+    logging.info(f"  conftest.py exists: {(common_tests / 'conftest.py').is_file()}")
+    logging.info(f"  test_config.py exists: {(common_tests / 'test_config.py').is_file()}")
+    logging.info(f"  test_config_build.py exists: {(common_tests / 'test_config_build.py').is_file()}")
+    logging.info(f"  test_config_run.py exists: {(common_tests / 'test_config_run.py').is_file()}")
+    logging.info(f"  artifact_helpers.py exists: {(common_tests / 'artifact_helpers.py').is_file()}")
+    logging.info("=== End split-test debug ===")
+
     subprocess.check_call(common_cmd, cwd=str(THEROCK_DIR), env=env)
