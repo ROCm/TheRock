@@ -64,6 +64,26 @@ Follow these steps:
 
    That should start a workflow run like https://github.com/ROCm/TheRock/actions/runs/27648661730.
 
+For Windows, use the same flow with
+[`.github/workflows/build_windows_pytorch_wheels.yml`](/.github/workflows/build_windows_pytorch_wheels.yml)
+instead of the Linux workflow linked above. Use a "dev" release, set
+`amdgpu_family` for your target family, and set `pytorch_git_ref: nightly` if
+you need `triton_windows` (stable `release/*` refs currently build
+`torch`/`torchaudio`/`torchvision` without Triton).
+
+> [!NOTE]
+> [`build_windows_pytorch_wheels_ci.yml`](/.github/workflows/build_windows_pytorch_wheels_ci.yml)
+> (per-commit CI) still builds `torch` only, not `triton_windows`. See
+> [Issue #3291](https://github.com/ROCm/TheRock/issues/3291).
+>
+> [`test_pytorch_wheels.yml`](/.github/workflows/test_pytorch_wheels.yml) runs
+> general PyTorch tests, not a dedicated Triton test suite.
+
+Multi-arch Windows PyTorch releases use
+[`.github/workflows/multi_arch_release_windows_pytorch_wheels.yml`](/.github/workflows/multi_arch_release_windows_pytorch_wheels.yml)
+and publish to https://rocm.nightlies.amd.com/whl-multi-arch/ (including
+`triton_windows` for nightly refs).
+
 ## Connecting to Kubernetes runners for interactive debugging
 
 While we don't have anything as sophisticated as
@@ -172,6 +192,12 @@ cmake --build "B:\build" --target MIOpen+dist
 
 - https://github.com/ROCm/TheRock/issues/840: Builds hitting 6 hour timeouts
 - https://github.com/ROCm/TheRock/issues/1407: Flaky compiler crashes during builds
+- https://github.com/ROCm/TheRock/issues/827: Windows PyTorch wheel builds use
+  MSVC (`ilammy/msvc-dev-cmd`) during the build step; the Triton build must run
+  under `cmd`, not `bash`. The workflow enables Windows long paths before tests.
+- Windows wheel install failures with `WinError 206` (path too long): enable long
+  paths on the runner; see
+  [Windows support — long paths](./windows_support.md#important-tool-settings).
 
 ## Working effectively from forks
 
