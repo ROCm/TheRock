@@ -39,7 +39,7 @@ def main():
         os.remove(la_file)
 
     # Create a versioned libiberty shared library from the PIC-compiled static
-    # archive. libiberty is GPL-licensed so it must be dynamically linked (not
+    # archive. libiberty is LGPL-licensed so it must be dynamically linked (not
     # statically) in this MIT-licensed project.
     #
     # We follow the standard Linux SO versioning convention:
@@ -77,6 +77,10 @@ def main():
         os.symlink("libiberty.so.0", so_link)
         print(f"Created {so_versioned}")
         print(f"Created symlink {so_link} -> libiberty.so.0")
+        # Remove the static archive so downstream consumers cannot
+        # accidentally link libiberty statically instead of via the .so.
+        os.remove(libiberty_a)
+        print(f"Removed {libiberty_a}")
 
     # Remove internal build artifacts we do not need.
     for subdir in ["bfd-plugins", "gprofng"]:

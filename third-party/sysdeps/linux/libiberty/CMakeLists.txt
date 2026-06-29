@@ -82,6 +82,12 @@ add_custom_target(
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --enable-install-libiberty
+      # --disable-shared and -fPIC together are intentional: we ask
+      # autoconf not to build a shared library (we do that ourselves in
+      # patch_install.py from the PIC-compiled static archive), while
+      # -fPIC ensures the object files can be relinked into a shared
+      # library.  This satisfies the LGPL relinking requirement without
+      # relying on autoconf's shared-library support.
       --disable-shared
       --libdir="${CMAKE_INSTALL_PREFIX}/lib"
       --includedir="${CMAKE_INSTALL_PREFIX}/include"
