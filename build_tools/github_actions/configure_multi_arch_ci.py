@@ -946,6 +946,11 @@ def _expand_build_config_for_platform(
         }
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        # Per-family test labels allow limiting which tests run for specific architectures
+        if "test_labels_for_family" in platform_info:
+            family_info["test_labels_for_family"] = platform_info[
+                "test_labels_for_family"
+            ]
         per_family_info.append(family_info)
 
     if not per_family_info:
@@ -981,6 +986,40 @@ def _expand_build_config_for_platform(
     )
 
 
+def _apply_external_family_overrides(all_families: dict) -> dict:
+    """Apply external family overrides from EXTERNAL_FAMILY_OVERRIDES env var.
+
+    TEMPORARY: This function supports MI455 bringup in rocm-systems by allowing
+    external repos to specify per-family config overrides (test runners, test labels).
+
+    To revert: Delete this function and its call in expand_build_configs().
+    """
+    external_overrides_json = os.environ.get("EXTERNAL_FAMILY_OVERRIDES", "")
+    if not external_overrides_json:
+        return all_families
+
+    try:
+        import json
+
+        external_overrides = json.loads(external_overrides_json)
+        for family_name, family_config in external_overrides.items():
+            if family_name in all_families:
+                # Merge overrides into existing family config
+                for platform, platform_config in family_config.items():
+                    if platform in all_families[family_name]:
+                        all_families[family_name][platform].update(platform_config)
+                    else:
+                        all_families[family_name][platform] = platform_config
+            else:
+                # Add new family
+                all_families[family_name] = family_config
+            print(f"  Applied external family override for {family_name}")
+    except json.JSONDecodeError as e:
+        print(f"  Warning: Failed to parse EXTERNAL_FAMILY_OVERRIDES: {e}")
+
+    return all_families
+
+
 def expand_build_configs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -995,6 +1034,15 @@ def expand_build_configs(
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
     )
+
+    # =========================================================================
+    # TEMPORARY: External family overrides for MI455 bringup in rocm-systems
+    # TODO(geomin12): Remove this block once MI455 is fully enabled in
+    #                 therock-ci-config or this bringup phase is complete.
+    # To revert: delete this block and the corresponding EXTERNAL_FAMILY_OVERRIDES
+    #            env var in setup_multi_arch.yml
+    # =========================================================================
+    all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
     # For ASAN CI runs, workflow_dispatch and scheduled events run full "asan".
     # Push events (postsubmit) and PRs with submodule changes run "host-asan"
