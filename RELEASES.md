@@ -896,7 +896,15 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 > [!NOTE]
 > By default, pip will install the latest stable versions of each package.
 >
-> See also
+> - If you want to install other versions, the currently supported versions are:
+>
+>   | jax version | jaxlib version   |
+>   | ----------- | ---------------- |
+>   | 0.9.2       | 0.9.2 (upstream) |
+>   | 0.9.1       | 0.9.1 (upstream) |
+>   | 0.8.2       | 0.8.2            |
+>
+>   See also
 >
 > - [Supported JAX versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/jax#supported-jax-versions)
 
