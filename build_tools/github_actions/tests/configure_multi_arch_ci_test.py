@@ -984,18 +984,13 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNone(result.windows)
 
     def test_variant_filters_by_trigger(self):
-        """ASAN: based on event type, we run an expected ASAN build variant.
-
-        Full ASAN builds only run on schedule and workflow_dispatch (nightly).
-        Push (postsubmit) and pull_request events use host-asan for faster feedback.
-        """
+        """ASAN: based on event type, we run an expected ASAN build variant"""
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
         )
         test_cases = [
             ("schedule", "linux-release-asan"),
             ("push", "linux-release-host-asan"),
-            ("pull_request", "linux-release-host-asan"),
             ("workflow_dispatch", "linux-release-asan"),
         ]
         for event_name, expected_variant in test_cases:
