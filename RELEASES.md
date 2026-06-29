@@ -447,6 +447,17 @@ sudo dnf install amdrocm-core-sdk
 ROCm supports WSL via the DXG kernel interface. DXG detection is enabled by
 default as of rocm-systems@901f9a5 — no environment variable setup is required.
 
+To use ROCm on WSL, install the optional `amdrocm-wsl` package which provides
+the DXG support library:
+
+```bash
+# For Debian/Ubuntu:
+sudo apt install amdrocm-wsl
+
+# For RHEL/CentOS/Fedora:
+sudo dnf install amdrocm-wsl
+```
+
 To explicitly disable DXG detection, set:
 
 ```bash

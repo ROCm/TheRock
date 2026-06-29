@@ -265,6 +265,7 @@ def _run_kpack_split(
             "rocjitsu",
             "composable-kernel",
             "libhipcxx",
+            "mirage",
         ],
         exclude_components=["test"],
         tarball_compression=args.devel_tarball_compression,
@@ -354,6 +355,7 @@ def _run_legacy(
                 "nlohmann-json",
                 # rocjitsu emulation suite.
                 "rocjitsu",
+                "mirage",
             ],
             tarball_compression=args.devel_tarball_compression,
         )

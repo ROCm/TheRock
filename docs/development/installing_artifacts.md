@@ -45,6 +45,7 @@ Choose one of these options to specify where to install from:
 | `--rocdecode`   | Flag | Include rocDecode artifacts (Linux only)           |
 | `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
 | `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
+| `--mirage`      | Flag | Include mirage artifacts (Linux only)              |
 | `--rocalution`  | Flag | Include rocALUTION artifacts                       |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
