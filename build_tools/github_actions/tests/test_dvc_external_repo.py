@@ -30,12 +30,18 @@ class TestDVCProjectsConfiguration(unittest.TestCase):
         config = get_repo_config("rocm-systems")
 
         # Verify dvc_projects key exists
-        self.assertIn("dvc_projects", config,
-                     "rocm-systems config must have dvc_projects for wsl-rocdxg builds")
+        self.assertIn(
+            "dvc_projects",
+            config,
+            "rocm-systems config must have dvc_projects for wsl-rocdxg builds",
+        )
 
         # Verify it contains external-rocm-systems
-        self.assertEqual(config["dvc_projects"], ["external-rocm-systems"],
-                        "dvc_projects should contain external-rocm-systems path")
+        self.assertEqual(
+            config["dvc_projects"],
+            ["external-rocm-systems"],
+            "dvc_projects should contain external-rocm-systems path",
+        )
 
     def test_rocm_systems_has_all_required_keys(self):
         """Test that rocm-systems config has all required keys including dvc_projects."""
@@ -58,8 +64,9 @@ class TestDVCProjectsConfiguration(unittest.TestCase):
         config = get_repo_config("rocm-libraries")
 
         # rocm-libraries doesn't use DVC for external builds
-        self.assertNotIn("dvc_projects", config,
-                        "rocm-libraries doesn't need dvc_projects")
+        self.assertNotIn(
+            "dvc_projects", config, "rocm-libraries doesn't need dvc_projects"
+        )
 
 
 class TestFetchSourcesArgsGeneration(unittest.TestCase):
@@ -97,10 +104,16 @@ class TestFetchSourcesArgsGeneration(unittest.TestCase):
 
         # Verify fetch_sources_args contains both skip-submodules and dvc-projects
         self.assertIn("fetch_sources_args=", output)
-        self.assertIn("--skip-submodules rocm-systems", output,
-                     "Should include --skip-submodules rocm-systems")
-        self.assertIn("--dvc-projects external-rocm-systems", output,
-                     "Should include --dvc-projects external-rocm-systems")
+        self.assertIn(
+            "--skip-submodules rocm-systems",
+            output,
+            "Should include --skip-submodules rocm-systems",
+        )
+        self.assertIn(
+            "--dvc-projects external-rocm-systems",
+            output,
+            "Should include --dvc-projects external-rocm-systems",
+        )
 
     def test_rocm_systems_config_json_includes_dvc(self):
         """Test that config_json includes dvc_projects in fetch_sources_args."""
@@ -123,7 +136,9 @@ class TestFetchSourcesArgsGeneration(unittest.TestCase):
 
         # Extract and verify the fetch_sources_args within config_json
         # It should contain both arguments
-        config_json_line = [line for line in output.split("\n") if "config_json=" in line][0]
+        config_json_line = [
+            line for line in output.split("\n") if "config_json=" in line
+        ][0]
         self.assertIn("--skip-submodules rocm-systems", config_json_line)
         self.assertIn("--dvc-projects external-rocm-systems", config_json_line)
 
@@ -143,8 +158,11 @@ class TestFetchSourcesArgsGeneration(unittest.TestCase):
 
         # rocm-libraries should only have skip-submodules
         self.assertIn("--skip-submodules rocm-libraries", output)
-        self.assertNotIn("--dvc-projects", output,
-                        "rocm-libraries shouldn't generate dvc-projects args")
+        self.assertNotIn(
+            "--dvc-projects",
+            output,
+            "rocm-libraries shouldn't generate dvc-projects args",
+        )
 
 
 class TestDVCArgsFormat(unittest.TestCase):
@@ -163,9 +181,7 @@ class TestDVCArgsFormat(unittest.TestCase):
 
     def test_args_separated_by_space(self):
         """Test that skip-submodules and dvc-projects are separated by space."""
-        rc = detect_external_repo_config_main(
-            ["--repository", "rocm-systems"]
-        )
+        rc = detect_external_repo_config_main(["--repository", "rocm-systems"])
 
         self.assertEqual(rc, 0)
 
@@ -179,14 +195,12 @@ class TestDVCArgsFormat(unittest.TestCase):
                 self.assertRegex(
                     line,
                     r"--skip-submodules rocm-systems --dvc-projects external-rocm-systems",
-                    "Arguments should be space-separated with correct order"
+                    "Arguments should be space-separated with correct order",
                 )
 
     def test_external_prefix_in_dvc_path(self):
         """Test that DVC projects use 'external-' prefix for checkout path."""
-        rc = detect_external_repo_config_main(
-            ["--repository", "rocm-systems"]
-        )
+        rc = detect_external_repo_config_main(["--repository", "rocm-systems"])
 
         self.assertEqual(rc, 0)
 
@@ -194,12 +208,16 @@ class TestDVCArgsFormat(unittest.TestCase):
             output = f.read()
 
         # DVC projects should reference external-rocm-systems, not just rocm-systems
-        self.assertIn("external-rocm-systems", output,
-                     "DVC path should use external- prefix")
+        self.assertIn(
+            "external-rocm-systems", output, "DVC path should use external- prefix"
+        )
 
         # Skip-submodules should reference the base name without prefix
-        self.assertIn("--skip-submodules rocm-systems", output,
-                     "Skip-submodules should use base repo name")
+        self.assertIn(
+            "--skip-submodules rocm-systems",
+            output,
+            "Skip-submodules should use base repo name",
+        )
 
 
 if __name__ == "__main__":

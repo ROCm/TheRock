@@ -14,12 +14,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, call, patch
 
+
 # Mock PullResult before importing fetch_sources
 @dataclass
 class MockPullResult:
     fetched: int = 0
     cached: int = 0
     skipped: int = 0
+
 
 # Mock fetch_dvc_artifacts before import to avoid boto3 dependency
 fetch_dvc_mock = Mock()
@@ -236,9 +238,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
 
         # Verify DEFAULT_JOBS was used
         mock_dvc_pull.assert_called_once()
-        self.assertEqual(
-            mock_dvc_pull.call_args[1]["jobs"], 4  # DEFAULT_JOBS
-        )
+        self.assertEqual(mock_dvc_pull.call_args[1]["jobs"], 4)  # DEFAULT_JOBS
 
 
 class TestPullLargeFilesIntegration(unittest.TestCase):
