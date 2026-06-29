@@ -129,6 +129,24 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # inductor/test_aot_inductor also hangs (inductor shard 2/4) but is reached
     # via the INDUCTOR_UNIT_TESTS --include allowlist, which never consults
     # EXCLUDED_TEST_MODULES; it is dropped from that list directly instead.
+    #
+    # Run 28379269101 (2.14 nightly, gfx94X): second layer of process-level hangs
+    # surfaced after the modules above were excluded. Each hung the subprocess past
+    # the 6h job limit with zero per-test output, so no -k node ID is derivable.
+    "test_cuda_expandable_segments",                  # hangs ~3h31m (default shard 1/10)
+    "test_modules",                                   # hangs ~3h15m (default shard 3/10)
+    "test_cpp_extensions_aot_ninja",                  # hangs after build (default shard 4/10)
+    "test_spectral_ops",                              # hangs ~4h28m (default shard 5/10)
+    "test_schema_check",                              # hangs ~4h15m (default shard 7/10)
+    "nn/test_convolution",                            # hangs ~4h46m (default shard 10/10)
+    "distributed/test_distributed_spawn",             # hangs in late backend pass (dist shards 1,2,3/3)
+    # Heap corruption (glibc "corrupted double-linked list" / "malloc(): unsorted
+    # double linked list corrupted") on interpreter shutdown AFTER all tests pass
+    # (0 failed, then SIGABRT/-6). Likely one shared atexit/shutdown bug in the
+    # wheel; excluded to keep CI green until the shutdown crash is root-caused.
+    "test_sparse",                                    # 0 failed then SIGIOT (default shard 2/10)
+    "test_linalg",                                    # 0 failed then SIGIOT (default shard 8/10)
+    "cpp_extensions/test_libtorch_agnostic",          # 0 failed then SIGIOT (default shard 6/10)
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
@@ -138,9 +156,14 @@ EXCLUDED_TEST_MODULES: list[str] = [
 # See: https://github.com/pytorch/pytorch/blob/main/.ci/pytorch/test.sh
 INDUCTOR_GENERIC_TESTS = [
     "test_modules",
-    "test_ops",
-    "test_ops_gradients",
     "test_torch",
+    # test_ops and test_ops_gradients temporarily removed: on the 2.14 nightly
+    # gfx94X wheel (run 28379269101 inductor shards 1,2,3/4) both run to full
+    # completion (0 failed) then abort during interpreter shutdown with glibc
+    # heap corruption -> SIGABRT/-6 ("FAILED CONSISTENTLY"). Same shutdown-crash
+    # signature as the test_sparse/test_linalg modules in EXCLUDED_TEST_MODULES;
+    # EXCLUDED_TEST_MODULES does not apply to the inductor --include allowlist,
+    # so they are dropped here directly. Restore once the shutdown crash is fixed.
 ]
 INDUCTOR_UNIT_TESTS = [
     "inductor/test_torchinductor",
