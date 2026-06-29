@@ -923,24 +923,11 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 
 ##### jax for gfx94X-dcgpu
 
-\`\`bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
-
-# Install matching jax from PyPI
-
 Supported devices in this family:
 
 | Product Name  | GFX Target |
 | ------------- | ---------- |
 | MI300A/MI300X | gfx942     |
-
-##### For JAX 0.8.2:
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
-# Install matching jax from PyPI
-pip install jax==0.8.2
-```
 
 ###### For JAX 0.8.2:
 
