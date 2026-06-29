@@ -160,7 +160,6 @@ def setup_env(env):
     # Set env vars for gfx125X-dcgpu
     if AMDGPU_FAMILIES == "gfx125X-dcgpu":
         env["HSA_ENABLE_SDMA"] = "1"
-        env["ROCR_VISIBLE_DEVICES"] = "0"
 
 
 def execute_tests(env):

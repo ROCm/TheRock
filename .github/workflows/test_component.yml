@@ -159,15 +159,6 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
-      - name: Start dmesg monitoring
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          # Capture dmesg continuously to detect GPU hangs/page faults if runner crashes
-          dmesg --clear || true
-          dmesg -w > ${{ github.workspace }}/dmesg.log 2>&1 &
-          echo $! > /tmp/dmesg_pid
-          echo "Started dmesg monitoring (PID: $(cat /tmp/dmesg_pid))"
-
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -209,17 +200,6 @@ jobs:
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
             --print-cmd \
             ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
-
-      - name: Print dmesg log
-        if: ${{ always() && runner.os == 'Linux' }}
-        run: |
-          if [ -f /tmp/dmesg_pid ]; then
-            kill $(cat /tmp/dmesg_pid) 2>/dev/null || true
-          fi
-          echo "=== dmesg log ==="
-          cat ${{ github.workspace }}/dmesg.log || true
-          echo "=== GPU-related messages ==="
-          grep -iE "amdgpu|drm|gpu|fault|hang|reset|error" ${{ github.workspace }}/dmesg.log || echo "No GPU-related messages found"
 
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}
