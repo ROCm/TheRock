@@ -36,6 +36,8 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
 
   # Debug info handling.
   THEROCK_SPLIT_DEBUG_INFO
+  THEROCK_GENERATE_DEBUG_INFO
+  THEROCK_DEBUG_INFO_LEVEL
 )
 
 # Whenever a new package is advertised by the super-project, it is added here.
@@ -1043,7 +1045,7 @@ function(therock_cmake_subproject_activate target_name)
 
     # stage install target.
     set(_install_strip_option)
-    if(THEROCK_SPLIT_DEBUG_INFO)
+    if(THEROCK_GENERATE_DEBUG_INFO AND THEROCK_SPLIT_DEBUG_INFO)
       set(_install_strip_option "--strip")
     endif()
     # Set up install command(s) for optional components. If INSTALL_COMPONENTS is specified, run cmake
@@ -1689,21 +1691,36 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
 
   # Customize debug info generation.
-  if(THEROCK_MINIMAL_DEBUG_INFO)
-    # System toolchain can be either MSVC or another system compiler.
+  if(THEROCK_GENERATE_DEBUG_INFO)
+    if(THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal")
+      set(_therock_debug_g_level "-g1")
+    else()
+      set(_therock_debug_g_level "-g2")
+    endif()
     if(MSVC AND NOT compiler_toolchain)
-      # Set MSVC style debug options.
-      # TODO: For now, just set the default.
+      # No-toolchain MSVC bootstrap (cl.exe / clang-cl). /Z7 comes from
+      # CMAKE_MSVC_DEBUG_INFORMATION_FORMAT; link emits the PDB, and 'minimal'
+      # also emits a stripped public PDB.
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /DEBUG:FULL\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /DEBUG:FULL\")\n")
+      if(THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /PDBSTRIPPED:stripped\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /PDBSTRIPPED:stripped\")\n")
+      endif()
     elseif((NOT compiler_toolchain AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
            OR compiler_toolchain)
-      # If the system compiler and GCC/clang or an explicit toolchain (which are all
-      # LLVM based).
-      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_DEBUG \" -g1 -gz\")\n")
-      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO \" -g1 -gz\")\n")
-      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_DEBUG \" -g1 -gz\")\n")
-      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_RELWITHDEBINFO \" -g1 -gz\")\n")
+      # GNU-style: the amd-llvm/amd-hip toolchain (clang/clang++ GNU driver) on
+      # any OS, plus a non-toolchain GCC/clang or mingw bootstrap. Clear CMake's
+      # built-in -g from RelWithDebInfo so the detail level is governed only by
+      # THEROCK_DEBUG_INFO_LEVEL, then inject into Debug, RelWithDebInfo, Release.
+      string(APPEND _toolchain_contents "string(REGEX REPLACE \"(^| )-g( |$)\" \" \" CMAKE_CXX_FLAGS_RELWITHDEBINFO \"\${CMAKE_CXX_FLAGS_RELWITHDEBINFO}\")\n")
+      string(APPEND _toolchain_contents "string(REGEX REPLACE \"(^| )-g( |$)\" \" \" CMAKE_C_FLAGS_RELWITHDEBINFO \"\${CMAKE_C_FLAGS_RELWITHDEBINFO}\")\n")
+      foreach(_cfg DEBUG RELWITHDEBINFO RELEASE)
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_${_cfg} \" ${_therock_debug_g_level} -gz\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_${_cfg} \" ${_therock_debug_g_level} -gz\")\n")
+      endforeach()
     else()
-      message(WARNING "Cannot setup THEROCK_MINIMAL_DEBUG_INFO mode for unknown compiler")
+      message(WARNING "Cannot setup THEROCK_GENERATE_DEBUG_INFO mode for unknown compiler")
     endif()
   endif()
 

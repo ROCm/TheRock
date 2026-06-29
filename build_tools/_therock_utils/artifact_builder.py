@@ -74,6 +74,8 @@ ComponentDefaults(
     includes=[
         # Linux build-id based debug files.
         ".build-id/**/*.debug",
+        # Windows PDB debug files.
+        "**/*.pdb",
     ],
     extends=["run"],
 )

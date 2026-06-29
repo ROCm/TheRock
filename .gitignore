@@ -31,3 +31,5 @@ __pycache__
 /install/
 /output-*/
 /out/
+
+.cache/

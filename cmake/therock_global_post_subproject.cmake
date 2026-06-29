@@ -94,7 +94,7 @@ endblock()
 
 # Process all shared library and executable targets and emit install time code
 # to process their build id and split debug files out.
-if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(THEROCK_GENERATE_DEBUG_INFO AND THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   include(CMakeFindBinUtils)
   block(SCOPE_FOR POLICIES VARIABLES)
     install(
