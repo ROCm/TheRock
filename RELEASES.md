@@ -308,6 +308,9 @@ Install JAX with ROCm support using the unified multi-arch index.
 > You must install ROCm first.
 
 ```bash
+# Set the version (currently supported: 0.9.1 and 0.10.0)
+JAX_VERSION=0.10.0
+
 # 1. Install ROCm (replace device-gfx942 with your GPU)
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "rocm[libraries,device-gfx942]"
