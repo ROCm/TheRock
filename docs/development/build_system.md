@@ -313,3 +313,29 @@ therock_cmake_subproject_provide_package(ROCR-Runtime hsa-runtime64 lib/cmake/hs
 # to `FetchContent_MakeAvailable()` for that facility.
 therock_cmake_subproject_activate(ROCR-Runtime)
 ```
+
+## Forwarding `CMAKE_PROJECT_TOP_LEVEL_INCLUDES` to Sub-Projects
+
+Each sub-project is configured by its own nested `cmake` invocation, separate
+from the super-project's configure. The super-project always injects a generated
+`_init.cmake` for every sub-project via
+[`CMAKE_PROJECT_TOP_LEVEL_INCLUDES`](https://cmake.org/cmake/help/latest/variable/CMAKE_PROJECT_TOP_LEVEL_INCLUDES.html),
+which CMake reads at the top of the sub-project's first `project()` call.
+
+If you pass `-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=<file>` to the super-project, that
+file is appended to each sub-project's list and forwarded to every sub-project
+configure as well. This lets an external hook customize CMake behavior across the
+entire build - the super-project and all sub-projects - without editing TheRock:
+
+```bash
+cmake -B build -GNinja \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1100 \
+  -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=/abs/path/my_hook.cmake
+```
+
+- **Ordering**: a sub-project's own generated `_init.cmake` is included first,
+  then your forwarded file(s). Your hook can therefore observe/override what the
+  generated init established.
+- **Multiple files**: use a standard CMake `;`-separated list.
+- **Absolute paths**: forwarded include files should be absolute, since each
+  sub-project configures from a different working directory.
