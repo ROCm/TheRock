@@ -73,6 +73,7 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn": "hipdnn",
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
+    "miopenprovider": "miopen_plugin",
     "rocsparse": "rocsparse",
     "rocalution": "rocalution",
     "hipsparse": "hipsparse",
@@ -80,6 +81,8 @@ COMPONENT_DIR_MAPPING = {
     "hipblaslt": "hipblaslt",
     "rocroller": "rocroller",
     "hipblas": "hipblas",
+    "hipblasltprovider": "hipblaslt_plugin",
+    "hiptensor": "hiptensor",
     # Add more mappings as needed
 }
 

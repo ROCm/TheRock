@@ -143,6 +143,33 @@ class TestMain(unittest.TestCase):
             ["therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz"],
         )
 
+    def test_kpack_builds_common_tarball_with_one_family(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "tarballs"
+            fetch_mock, compress_mock, _ = self._run_main_with_mocks(
+                [
+                    "--run-id=123",
+                    "--dist-amdgpu-families=gfx94X-dcgpu",
+                    "--platform=linux",
+                    "--package-version=7.13.0",
+                    f"--output-dir={output_dir}",
+                ],
+                kpack_split=True,
+            )
+
+        self.assertEqual(fetch_mock.call_count, 2)
+
+        compressed_names = [
+            call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
+        ]
+        self.assertEqual(
+            sorted(compressed_names),
+            [
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "therock-dist-linux-multiarch-7.13.0.tar.gz",
+            ],
+        )
+
     def test_include_test_tarballs_builds_both_sets(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
@@ -171,7 +198,7 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            compressed_names,
+            sorted(compressed_names),
             [
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
@@ -207,12 +234,12 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            compressed_names,
+            sorted(compressed_names),
             [
-                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
-                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx110X-all-7.13.0.tar.gz",
                 "therock-dist-linux-gfx110X-all-tests-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
                 "therock-dist-linux-multiarch-7.13.0.tar.gz",
                 "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
             ],

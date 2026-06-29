@@ -23,6 +23,16 @@ else()
   )
 endif()
 
+# hipTensor is only built when composable_kernel is also built (CK is a hard
+# build dependency). _ck_enabled, set by math-libs/CMakeLists.txt, is OFF when
+# CK was filtered out for the selected gfx targets, in which case hipTensor is
+# not declared even though THEROCK_ENABLE_HIPTENSOR is ON. Reflect the actual
+# built status so the example does not find_package() a missing hiptensor.
+set(_hiptensor_available OFF)
+if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
+  set(_hiptensor_available ON)
+endif()
+
 # Examples are configured against the installed ROCm prefix. The
 # cpp-sdk-user project requires HIP (LANGUAGES CXX HIP), so skip when
 # HIP is not enabled (e.g. in early multi-arch CI stages) or when
@@ -42,6 +52,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
           "-DTHEROCK_ENABLE_HIPDNN=${THEROCK_ENABLE_HIPDNN}"
           "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
           "-DTHEROCK_ENABLE_MIOPEN=${THEROCK_ENABLE_MIOPEN}"
+          "-DTHEROCK_ENABLE_HIPTENSOR=${_hiptensor_available}"
           "-DTHEROCK_ENABLE_PRIM=${THEROCK_ENABLE_PRIM}"
           "-DTHEROCK_ENABLE_RAND=${THEROCK_ENABLE_RAND}"
           "-DTHEROCK_ENABLE_RCCL=${THEROCK_ENABLE_RCCL}"

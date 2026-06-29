@@ -243,7 +243,7 @@ def main(argv: list[str] | None = None) -> None:
     # files are per individual GPU target and don't conflict, so all
     # families can coexist in a single install prefix.
     kpack_split = is_kpack_split(family_dirs[0])
-    if kpack_split and len(families) > 1:
+    if kpack_split:
         log("::: KPACK_SPLIT_ARTIFACTS detected — building multi-arch tarball")
         multiarch_dir = work_dir / "multiarch"
         fetch_and_flatten(

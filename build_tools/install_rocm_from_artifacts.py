@@ -37,6 +37,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocjitsu | --no-rocjitsu]
+    [--mirage | --no-mirage]
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
@@ -44,6 +45,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
     [--rocwmma | --no-rocwmma]
+    [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
@@ -378,6 +380,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipfile,
             args.miopen,
             args.miopenprovider,
+            args.hiptensor,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
@@ -387,6 +390,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocdecode,
             args.rocjpeg,
             args.rocjitsu,
+            args.mirage,
             args.rocprofiler_compute,
             args.rocprofiler_sdk,
             args.rocprofiler_systems,
@@ -446,6 +450,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
             extra_artifacts.append("hipkernelprovider")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -469,6 +475,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocjitsu:
             extra_artifacts.append("rocjitsu")
             argv.append("rocjitsu_run")
+        if args.mirage:
+            extra_artifacts.append("mirage")
+            argv.append("mirage_run")
         if args.hipblasltprovider:
             extra_artifacts.append("hipblasltprovider")
         if args.prim:
@@ -780,6 +789,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocdecode",
         default=False,
         help="Include 'rocdecode' artifacts",
@@ -797,6 +813,13 @@ def main(argv):
         "--rocjitsu",
         default=False,
         help="Include 'rocjitsu' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--mirage",
+        default=False,
+        help="Include 'mirage' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
