@@ -305,7 +305,7 @@ Install JAX with ROCm support using the unified multi-arch index.
 Select your GPU target using the `[device-*]` extras from the
 [table above](#supported-python-device--install-extras):
 
-````bash
+```bash
 # Single device (replace device-gfx942 with your GPU):
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "jax_rocm7_plugin[device-gfx942]" "jax_rocm7_pjrt[device-gfx942]"
@@ -337,7 +337,7 @@ install/
   lib/
   libexec/
   share/
-````
+```
 
 Tarballs are _just_ these raw files. They do not come with "install" steps
 such as setting environment variables.
