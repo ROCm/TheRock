@@ -1819,9 +1819,14 @@ function(_therock_cmake_subproject_setup_toolchain
     # CMakeDetermineHIPCompiler, which scans the system and silently picks up
     # /opt/rocm-*/bin/* when present. See ROCm/TheRock#102 and the matching
     # pattern in examples/CMakeLists.txt.
+    # CACHE ... FORCE is required because CMakeDetermineHIPCompiler runs after
+    # the toolchain file is processed and would override plain set() calls.
+    # Forcing into the cache makes the values visible to the determine module
+    # so it skips detection entirely.
     string(APPEND _toolchain_contents "set(CMAKE_HIP_PLATFORM \"amd\" CACHE STRING \"\" FORCE)\n")
     string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_ROCM_ROOT \"@_hip_dist_dir@\" CACHE PATH \"\" FORCE)\n")
     string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\" CACHE FILEPATH \"\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\" CACHE STRING \"\" FORCE)\n")
 
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
