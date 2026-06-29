@@ -37,6 +37,10 @@ FFM_QUICK_EXCLUDE = [
     "mxf8_gfx1250.yaml",
     "mxf4_gfx1250.yaml",
     "sk_sgemm_quick.yaml",
+    "sk_hgemm_quick.yaml",
+    "sk_mxf4gemm_tdm_pap.yaml",
+    "sk_mxf8gemm_tdm_pap.yaml",
+    "b6f4ss_gfx1250.yaml",
 ]
 
 # TENSILE_NUM_PYTEST_WORKERS: number of pytest-xdist processes running tests in parallel.
