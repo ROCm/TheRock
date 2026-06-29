@@ -328,6 +328,9 @@ pip install "jax==${JAX_VERSION}"
 > Always pin jax, jax_rocm7_plugin, and jax_rocm7_pjrt to the same version.
 > Currently supported versions: 0.9.1 and 0.10.0.
 
+> [!TIP]
+> For multiple devices (e.g. Dockerfile supporting MI300X + MI355X):Bash
+
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "rocm[libraries,device-gfx942,device-gfx950]"
