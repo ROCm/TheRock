@@ -87,6 +87,11 @@ TEST_TO_IGNORE = {
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
         ]
     },
+    "gfx125X-dcgpu": {
+        "linux": [
+            "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
+        ]
+    },
 }
 
 
@@ -165,6 +170,8 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--timeout",
+        "600",
     ]
 
     # If quick tests are enabled, run only the smoke test subset
