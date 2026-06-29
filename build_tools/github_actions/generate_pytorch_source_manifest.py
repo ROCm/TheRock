@@ -183,8 +183,10 @@ def read_triton_windows_pin() -> str:
         THEROCK_DIR
         / "external-builds"
         / "pytorch"
+        / ".ci"
+        / "docker"
         / "ci_commit_pins"
-        / "triton-windows.txt"
+        / "triton_windows.txt"
     )
     if not pin_file.is_file():
         raise FileNotFoundError(f"Windows Triton pin file does not exist: {pin_file}")
@@ -206,9 +208,11 @@ def _resolve_triton(
 
     The triton base version lives in pytorch's ``.ci/docker/triton_version.txt``.
     On Linux the commit comes from ``ci_commit_pins/triton.txt``.
+    On Windows the commit comes from ``ci_commit_pins/triton_windows.txt``.
     See:
     https://github.com/pytorch/pytorch/blob/main/.ci/docker/triton_version.txt
     https://github.com/pytorch/pytorch/blob/main/.ci/docker/ci_commit_pins/triton.txt
+    https://github.com/pytorch/pytorch/blob/main/.ci/docker/ci_commit_pins/triton_windows.txt
     """
     is_windows = platform == "windows"
 

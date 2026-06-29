@@ -7,8 +7,12 @@
 This script runs after `pytorch_torch_repo.py` and checks out the proper triton
 repository based on pins in the torch repo.
 
-On Windows, uses triton-windows (https://github.com/triton-lang/triton-windows).
-The commit pin is stored in ci_commit_pins/triton-windows.txt.
+On Windows nightly builds, uses triton-lang/triton-windows:
+https://github.com/triton-lang/triton-windows
+
+The nightly commit pin is stored in the PyTorch tree at
+``.ci/docker/ci_commit_pins/triton_windows.txt``.
+Stable Windows release builds do not build triton_windows.
 
 This procedure is adapted from `pytorch/.github/scripts/build_triton_wheel.py`
 """
@@ -22,7 +26,6 @@ import repo_management
 
 THIS_MAIN_REPO_NAME = "triton"
 THIS_DIR = Path(__file__).resolve().parent
-COMMIT_PINS_DIR = THIS_DIR / "ci_commit_pins"
 
 # Platform detection
 IS_WINDOWS = platform.system() == "Windows"
@@ -43,7 +46,9 @@ def get_triton_version(torch_dir: Path) -> str:
 
 
 def get_triton_windows_pin() -> str | None:
-    pin_file = COMMIT_PINS_DIR / "triton-windows.txt"
+    pin_file = (
+        torch_dir / ".ci" / "docker" / "ci_commit_pins" / "triton_windows.txt"
+    )
     if pin_file.exists():
         return pin_file.read_text().strip()
     return None
@@ -63,12 +68,12 @@ def do_checkout(args: argparse.Namespace):
 
         # PyTorch nightly CI passes --repo-hashtag nightly for every sibling repo.
         # triton-windows does not mirror PyTorch's nightly branch name; the pin
-        # lives in ci_commit_pins/triton-windows.txt (or we fall back to main-windows).
+        # lives in pytorch/.ci/docker/ci_commit_pins/triton_windows.txt.
         if args.repo_hashtag == "nightly":
             args.repo_hashtag = None
 
         if args.repo_hashtag is None:
-            triton_windows_pin = get_triton_windows_pin()
+            triton_windows_pin = get_triton_windows_pin(torch_dir)
             if triton_windows_pin:
                 args.repo_hashtag = triton_windows_pin
                 print(f"Triton-windows commit pin: {args.repo_hashtag}")
