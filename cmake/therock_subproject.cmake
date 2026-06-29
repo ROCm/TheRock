@@ -1830,7 +1830,7 @@ function(_therock_cmake_subproject_setup_toolchain
 
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
-      message(STATUS "CMAKE_HIP_COMPILER = ${AMD_LLVM_CXX_COMPILER}")
+      message(STATUS "CMAKE_HIP_COMPILER = ${CMAKE_HIP_COMPILER}")
     endif()
   endif()
 
