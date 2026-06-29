@@ -15,26 +15,29 @@ Requires a GPU and OUTPUT_ARTIFACTS_DIR pointing at the merged artifact tree.
 
 import logging
 import os
+import platform
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-
-from libhipcxx_utils import build_rocm_loader_env
 
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACK_WHEEL_SCRIPT = SCRIPT_DIR / "hipdnn" / "pack_frontend_wheel.py"
 
 # build_tools/ on sys.path so we can reuse the shared venv helpers instead of
-# re-implementing platform-specific python-exe discovery here.
+# re-implementing platform-specific python-exe discovery here. SCRIPT_DIR too,
+# for the shared ROCm loader-env helper that sits beside this test.
 _BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+sys.path.insert(0, str(SCRIPT_DIR))
 from setup_venv import create_venv, find_venv_python_exe  # noqa: E402
+from libhipcxx_utils import build_rocm_loader_env  # noqa: E402
 
-_HIPDNN_SHARE_RELPATH = Path("share/hipdnn")
-_HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "tests" / "python"
-_HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_SHARE_RELPATH / "python" / "hipdnn_frontend"
+_HIPDNN_PY_RELPATH = Path("lib/python")
+_HIPDNN_TESTS_ARTIFACT_RELPATH = _HIPDNN_PY_RELPATH / "tests"
+_HIPDNN_PKG_ARTIFACT_RELPATH = _HIPDNN_PY_RELPATH / "hipdnn_frontend"
 
 # Per-step timeouts (seconds). Bounded so a hung GPU / deadlocked pytest fails
 # the step instead of consuming the full CI matrix budget.
@@ -58,6 +61,38 @@ def _require_artifact_dir(
     if not candidate.is_dir():
         raise FileNotFoundError(f"{label} not found at: {candidate}\n{hint}")
     return candidate
+
+
+def _find_frontend_extension(artifacts_path: Path) -> Path:
+    """Locate the compiled extension, which is co-located with libhipdnn_backend
+    (lib/ on Linux, bin/ on Windows) rather than inside the lib/python package
+    dir, so a bare dlopen resolves the backend as a sibling. The wheel reunites
+    it with the package's __init__.py at pack time.
+    """
+    subdir = "bin" if platform.system() == "Windows" else "lib"
+    search_dir = artifacts_path / subdir
+    matches = [
+        p
+        for p in search_dir.glob("hipdnn_frontend_python*")
+        if p.suffix in (".so", ".pyd")
+    ]
+    if not matches:
+        raise FileNotFoundError(
+            f"hipdnn_frontend_python extension not found in {search_dir}. "
+            "Expected it co-located with libhipdnn_backend (hipDNN built with "
+            "HIPDNN_BUILD_PYTHON_BINDINGS=ON)."
+        )
+    return matches[0]
+
+
+def stage_package(pkg_dir: Path, ext_path: Path, dest: Path) -> Path:
+    """Reunite the lib/python package (pure-Python: __init__.py) with the
+    co-located extension into a single directory the wheel packer can consume.
+    """
+    staged = dest / pkg_dir.name
+    shutil.copytree(pkg_dir, staged)
+    shutil.copy2(ext_path, staged / ext_path.name)
+    return staged
 
 
 def build_wheel(pkg_dir: Path, wheel_dir: Path) -> Path:
@@ -100,10 +135,17 @@ def install_wheel(python: Path, wheel_path: Path) -> None:
 
 
 def run_pytests(python: Path, tests_dir: Path, env: dict) -> None:
-    """Run the upstream hipDNN Python test suite."""
+    """Run the upstream hipDNN Python test suite.
+
+    `--import-mode=importlib` stops pytest's default prepend mode from inserting
+    the tests' parent (lib/python) onto sys.path[0]. That parent also holds the
+    source-only hipdnn_frontend package (no compiled extension), which would
+    otherwise shadow the wheel-installed package and break
+    `import hipdnn_frontend`.
+    """
     # Pin cwd so pytest discovery cannot pick up a sibling conftest.py.
     subprocess.run(
-        [str(python), "-m", "pytest", "-v", str(tests_dir)],
+        [str(python), "-m", "pytest", "-v", "--import-mode=importlib", str(tests_dir)],
         env=env,
         cwd=str(tests_dir),
         check=True,
@@ -122,7 +164,7 @@ if __name__ == "__main__":
         artifacts_path,
         _HIPDNN_TESTS_ARTIFACT_RELPATH,
         "hipDNN upstream pytest directory",
-        "Ensure the hipDNN test artifact includes share/hipdnn/tests/python.",
+        "Ensure the hipDNN test artifact includes lib/python.",
     )
     logging.info(f"Using hipDNN pytest dir: {tests_dir}")
 
@@ -134,6 +176,9 @@ if __name__ == "__main__":
     )
     logging.info(f"Found hipdnn_frontend at: {pkg_dir}")
 
+    ext_path = _find_frontend_extension(artifacts_path)
+    logging.info(f"Found hipdnn_frontend_python extension at: {ext_path}")
+
     env = build_rocm_loader_env(artifacts_path)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -142,7 +187,8 @@ if __name__ == "__main__":
         wheel_dir.mkdir()
         venv_dir = tmp_path / "venv"
 
-        wheel_path = build_wheel(pkg_dir, wheel_dir)
+        staged_pkg = stage_package(pkg_dir, ext_path, tmp_path / "pkg")
+        wheel_path = build_wheel(staged_pkg, wheel_dir)
         logging.info(f"Built wheel: {wheel_path.name}")
 
         create_venv(venv_dir)

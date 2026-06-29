@@ -3,7 +3,16 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
-  "share/hipdnn/python/**",
+  # The Python bindings ship only via the test artifact and the dedicated
+  # wheel, never the runtime tree: the package source
+  # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
+  # (lib/python/tests/*.py), and the STABLE_ABI compiled extension
+  # (hipdnn_frontend_python.abi3.so in lib/ on Linux,
+  # hipdnn_frontend_python.pyd in bin/ on Windows) are all excluded here.
+  "lib/python/hipdnn_frontend/__init__.py",
+  "lib/python/tests/**/*.py",
+  "lib/hipdnn_frontend_python.abi3.so",
+  "bin/hipdnn_frontend_python.pyd",
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
@@ -12,7 +21,16 @@ include = [
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
 exclude = [
-  "share/hipdnn/python/**",
+  # The Python bindings ship only via the test artifact and the wheel, never
+  # the devel tree: the package source
+  # (lib/python/hipdnn_frontend/__init__.py), the pytest suite
+  # (lib/python/tests/*.py), and the STABLE_ABI compiled extension
+  # (hipdnn_frontend_python.abi3.so in lib/ on Linux,
+  # hipdnn_frontend_python.pyd in bin/ on Windows) are all excluded here.
+  "lib/python/hipdnn_frontend/__init__.py",
+  "lib/python/tests/**/*.py",
+  "lib/hipdnn_frontend_python.abi3.so",
+  "bin/hipdnn_frontend_python.pyd",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
@@ -20,11 +38,12 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-]
-# Exclude python frontend from the test artifact; ships with a dead CI RPATH
-# and is ABI-locked to cp312. See https://github.com/ROCm/TheRock/issues/5678
-# Needed because single-arch builds don't exclude test artifacts (multi-arch
-# does); remove this once single-arch is removed.
-exclude = [
-  "share/hipdnn/python/**",
+  # Python package source (__init__.py) staged into the wheel at pack time.
+  "lib/python/hipdnn_frontend/__init__.py",
+  # pytest suite run against the installed wheel.
+  "lib/python/tests/**/*.py",
+  # STABLE_ABI compiled extension (Linux lib/, Windows bin/): reunited with
+  # __init__.py into the wheel by the test, and the sole place it ships.
+  "lib/hipdnn_frontend_python.abi3.so",
+  "bin/hipdnn_frontend_python.pyd",
 ]
