@@ -26,6 +26,10 @@ skip_tests = {
             # pool race condition under concurrent conv2d threads, independent of whether
             # expandable segments are enabled. Expression covers both files.
             "(TestCuda and test_cudnn_multiple_threads_same_device)",
+            # Run 28379269101 default shard 9/10, job 84077240401:
+            # TestBlockStateAbsorption::test_no_triton_on_import spawns a subprocess
+            # (import torch; torch.rand(2, device='cuda')) that dies with SIGABRT.
+            "(TestBlockStateAbsorption and test_no_triton_on_import)",
         ],
         "nn": [
             # TestNNDeviceTypeCUDA - AssertionError: Scalars are not close!
@@ -37,6 +41,13 @@ skip_tests = {
             # TestNNDeviceTypeCUDA::test_linear_cross_entropy_loss_default_bias_False_cuda_float32
             # input-grad ULP worst case 952 > 854 on ROCm June 12 wheel.
             "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
+        ],
+        "binary_ufuncs": [
+            # Run 28379269101 default shard 6/10, job 84077240385:
+            # TestBinaryUfuncs::test_laguerre_legendre_polynomial_nan_propagation
+            # AssertionError: tensor(False) is not true - NaN not propagated for
+            # special_laguerre_polynomial_l / special_legendre_polynomial_p on ROCm.
+            "(TestBinaryUfuncs and test_laguerre_legendre_polynomial_nan_propagation)",
         ],
         "export": [
             # Run 27246343570 default shard 10/10, job 80461205617:
@@ -90,6 +101,14 @@ skip_tests = {
             # TestGpuWrapper::test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code
             # expects at::vec:: in generated cpp wrapper; ROCm codegen omits CPU vec ISA.
             "(TestGpuWrapper and test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code)",
+            # Run 28379269101 default shard 2/10, job 84077240381:
+            # CudaReproTests::test_triton_interpret (TRITON_INTERPRET=1 + torch.compile)
+            # spawns a child that dies with SIGABRT (subprocess.CalledProcessError).
+            "(CudaReproTests and test_triton_interpret)",
+            # Run 28379269101 default shard 8/10, job 84077240436:
+            # TestExternKernelCaller::test_extern_kernel_benchmark_valid_timing
+            # InductorError: AssertionError - incorrect result from extern-kernel choice.
+            "(TestExternKernelCaller and test_extern_kernel_benchmark_valid_timing)",
         ],
         "extension_backend": [
             # Run 27361388921 default shard 4/10, job 80849478614:
