@@ -33,80 +33,14 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # TODO: move this skip logic into the pytest conftest so the wrapper stays thin.
 UNIT_TEST_SKIP_FAMILIES = {"gfx1250"}
 
-# Curated subset for ffm-quick (~20 min test time, 30 min total with setup).
-# Covers all kernel features: gemm dtypes, TDM, mixed precision, sparse, streamk,
-# gradient, activation. See ~/gfx1250_test_failures.md for full timing data.
-FFM_QUICK_INCLUDE = [
-    # GEMM data types (8 tests, ~2.9 min)
-    "fp16_use_e_gfx1250.yaml",
-    "b8b8s_gfx1250.yaml",
-    "f8f8s_gfx1250.yaml",
-    "f6b6ss_gfx1250.yaml",
-    "i8ii_gfx1250.yaml",
-    "b6f4ss_gfx1250.yaml",
-    "gfx12/f4_gfx1250.yaml",
-    "f32_gfx1250.yaml",
-    # GEMM TDM (3 tests, ~1.0 min)
-    "bf6_tdm_gfx1250.yaml",
-    "f4f6ss_tdm_gfx1250.yaml",
-    "mxf6_tdm_gfx1250.yaml",
-    # GEMM features (2 tests, ~0.6 min)
-    "largeLds_gfx1250.yaml",
-    "1024_vgpr_gfx1250.yaml",
-    # GEMM extra dtypes (3 tests, ~2.1 min)
-    "f8f8s_sr_gfx1250.yaml",
-    "f8b6ss_gfx1250.yaml",
-    "xfp32_gfx1250.yaml",
-    # GEMM mixed precision (4 tests, ~2.4 min)
-    "f6b8ss_gfx1250.yaml",
-    "f8b8ss_gfx1250.yaml",
-    "gfx12/f8f4ss_gfx1250.yaml",
-    "gfx12/f6_tdm_gfx1250.yaml",
-    # Sparse (11 tests, ~3.3 min)
-    "spmm_b8f8_sb.yaml",
-    "spmm_f8hs_sb.yaml",
-    "spmm_i8bs_sb.yaml",
-    "spmm_tdm_f16_transposes.yaml",
-    "spmm_b8.yaml",
-    "spmm_f8bs.yaml",
-    "spmm_bf16.yaml",
-    "spmm_f16_sb.yaml",
-    "spmm_b8hs_sb.yaml",
-    "spmm_b8f8.yaml",
-    "spmm_tdm_all.yaml",
-    # StreamK (2 tests, ~2.6 min)
-    "sk_f8gemm_quick.yaml",
-    "gfx1250/sk_hgemm_quick.yaml",
-    # Gradient (8 tests, ~2.0 min)
-    "hhs_dgelu_gfx1250.yaml",
-    "bbs_dgelu_gfx1250.yaml",
-    "bbs_bgrada_gfx1250.yaml",
-    "hhs_bgrada_gfx1250.yaml",
-    "bbs_bgradb_gfx1250.yaml",
-    "hhs_bgradb_gfx1250.yaml",
-    "bbs_bgradd_gfx1250.yaml",
-    "hhs_bgradd_gfx1250.yaml",
-    # Activation (2 tests, ~0.8 min)
-    "bf16_activation.yaml",
-    "gfx1250/f16_activation.yaml",
-    # Additional sparse coverage (~6.3 min)
-    "spmm_f8b8_sb.yaml",
-    "spmm_b8_sb.yaml",
-    "gfx1250/spmm_i8_sb.yaml",
-    "spmm_b8bs_sb.yaml",
-    "spmm_f8_sb.yaml",
-    "spmm_i8hs.yaml",
-    # Round 2: fill 20-min budget (~3.5 min extra)
-    "spmm_f8b8.yaml",
-    "gfx12/f6_gfx1250.yaml",
-    "fp8_gfx1250.yaml",
-    "spmm_fp16_ml1.yaml",
-    "f4b8ss_gfx1250.yaml",
-    "spmm_f8bs_sb.yaml",
-    # Feature gap coverage
-    "f64_gfx1250.yaml",
-    "nt_th_nv_gfx1250.yaml",
+FFM_QUICK_EXCLUDE = [
+    "mxf8_gfx1250.yaml",
+    "mxf4_gfx1250.yaml",
+    "sk_sgemm_quick.yaml",
 ]
+
+# TENSILE_NUM_PYTEST_WORKERS: number of pytest-xdist processes running tests in parallel.
+NUM_PYTEST_WORKERS = os.getenv("TENSILE_NUM_PYTEST_WORKERS", "16")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
@@ -227,6 +161,8 @@ if common_tests.is_dir() and "gfx1250" in amdgpu_family:
         "pytest",
         "-v",
         "--durations=0",
+        "-n",
+        NUM_PYTEST_WORKERS,
         str(common_tests),
         "-m",
         "gfx1250 or gfx12",
@@ -234,11 +170,13 @@ if common_tests.is_dir() and "gfx1250" in amdgpu_family:
         "gfx1250",
     ]
     if test_profile != "nightly":
-        include = " or ".join(FFM_QUICK_INCLUDE)
-        common_cmd[-1] = include
+        exclude = " and not ".join(["gfx1250"] + FFM_QUICK_EXCLUDE)
+        common_cmd[-1] = exclude
     if client_path.is_file():
         common_cmd += [f"--prebuilt-client={client_path}"]
         common_cmd += ["--global-parameters=LibraryFormat='msgpack'"]
     if cxx.is_file():
         common_cmd += [f"--tensile-options=--cxx-compiler,{cxx},--gpu-targets,gfx1250"]
+    # HSA_MODEL_NUM_THREADS: number of threads inside the FFM emulator per process.
+    env["HSA_MODEL_NUM_THREADS"] = os.getenv("HSA_MODEL_NUM_THREADS", "8")
     subprocess.check_call(common_cmd, cwd=str(THEROCK_DIR), env=env)

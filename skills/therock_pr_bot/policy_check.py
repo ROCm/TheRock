@@ -1,9 +1,12 @@
 """
-Main test script to policy-check PRs and report results in a comment. This is the core of the bot's
+Main script to policy-check PRs and report results in a comment. This is the
+core of the bot's logic: it loads policy.yml, validates the pull request
+(branch name, title, description, forbidden files, unit tests), waits for the
+required CI checks, posts a single results-table comment, and manages the
+"Not ready to Review" label.
 """
 
 #!/usr/bin/env python3
-from __future__ import annotations
 
 import argparse
 import fnmatch
@@ -22,17 +25,42 @@ import yaml
 
 NOT_READY_LABEL = "Not ready to Review"
 
-# CodeQL is disabled at the bot level for now. When False, the bot never queries
-# the Code Scanning API and the CodeQL row always renders as "To Be Enabled".
-CODEQL_ENABLED = False
+# Anchor file paths to THIS script's location rather than the current working
+# directory or a ".git"/".github" walk-up (which breaks with nested repos /
+# submodules). See the Python style guide:
+# https://github.com/ROCm/TheRock/blob/main/docs/development/style_guides/python_style_guide.md#dont-make-assumptions-about-the-current-working-directory
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def _env_flag(name: str, default: bool = True) -> bool:
+    """Read a boolean capability flag set by the workflow.
+
+    On PRs from FORKS the GitHub App secrets are unavailable, so the fallback
+    GITHUB_TOKEN is READ-ONLY and every write (comment / label) returns HTTP
+    403. The workflow sets POST_COMMENTS / MUTATE_PR / READ_SECURITY_ALERTS to
+    'false' in that case so the bot can DEGRADE GRACEFULLY: it still evaluates
+    policy and sets the check's pass/fail exit code, but skips the writes it is
+    not permitted to perform instead of crashing.
+    """
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Whether this run may write to the PR (comments / labels).
+CAN_POST_COMMENTS = _env_flag("POST_COMMENTS")
+CAN_MUTATE_PR = _env_flag("MUTATE_PR")
 
 # Only these policy checks trigger the "Not ready to Review" label when they
-# fail. Failures of other checks (Branch Name, PR Size, Draft PR, pre-commit,
-# CodeQL, …) do NOT add the label.
+# fail. Per current policy, the label is added ONLY for:
+#   • Unit Test failures, and
+#   • the JIRA/ISSUE ID reference part of the description (detected separately
+#     in main() via `jira_issue_failed`).
+# All other failures (Branch Name, title format, description length/checklist,
+# Forbidden Files, PR Size, pre-commit, …) do NOT add the label.
 LABEL_TRIGGER_CHECKS = {
-    "PR Title/Description",
     "Unit Test",
-    "Forbidden Files",
 }
 
 # Fixed display order for rows in the results table (by check name). Any row
@@ -47,7 +75,6 @@ TABLE_ORDER = [
     "PR Size",
     "Feature Flag",
     "Code Coverage",
-    "CodeQL",
     "therock-pr-bot",
 ]
 
@@ -67,6 +94,7 @@ class CheckResult:
     pending: bool = False
     wip: bool = False
     tbe: bool = False
+    note: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +105,7 @@ class Policy:
     title_max_length: int
     description_min_length: int
     description_issue_patterns: List[re.Pattern[str]]
+    description_checklist_patterns: List[re.Pattern[str]]
     block_draft: bool
     forbidden_title_patterns: List[re.Pattern[str]]
     max_files_changed: int
@@ -86,25 +115,18 @@ class Policy:
     unit_test_code_extensions: List[str]
     unit_test_patterns: List[str]
     unit_test_exempt_paths: List[str]
+    bump_bot_authors: List[str]
     required_checks: List[str]
     precommit_failure_comment: Optional[FailureComment]
 
 
-def find_repo_root(start: Path) -> Path:
-    """
-    Location-independent: works from any directory.
-    """
-    cur = start.resolve()
-    for _ in range(50):
-        if (cur / ".git").exists() or (cur / ".github").exists():
-            return cur
-        if cur.parent == cur:
-            break
-        cur = cur.parent
-    raise RuntimeError(f"Could not locate repo root from: {start}")
-
-
 def load_policy(policy_path: Path) -> Policy:
+    """Parse `policy.yml` into a typed, immutable `Policy` object.
+
+    Reads the `pr`, `diff`, and `checks` sections, compiles all regex patterns,
+    and applies sensible defaults for any missing fields. Raises ValueError if
+    the file is not a mapping.
+    """
     raw = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("policy.yml must be a mapping/object")
@@ -128,6 +150,12 @@ def load_policy(policy_path: Path) -> Policy:
     description_min_length = int(description_cfg.get("min_length", 0) or 0)
     description_issue_raw = description_cfg.get("issue_reference_patterns", []) or []
     description_issue_patterns = [re.compile(str(p)) for p in description_issue_raw]
+    description_checklist_raw = (
+        description_cfg.get("required_checklist_patterns", []) or []
+    )
+    description_checklist_patterns = [
+        re.compile(str(p)) for p in description_checklist_raw
+    ]
 
     # Block drafts / WIP titles.
     block_draft = bool(pr.get("block_draft", False))
@@ -151,6 +179,9 @@ def load_policy(policy_path: Path) -> Policy:
     ]
     unit_test_exempt_paths = [str(p) for p in (unit_cfg.get("exempt_paths", []) or [])]
 
+    # Bump-PR bot authors that bypass all policy checks.
+    bump_bot_authors = [str(a) for a in (pr.get("bump_bot_authors", []) or [])]
+
     required_checks = [str(x) for x in (checks.get("required_check_runs", []) or [])]
 
     fc = ((checks.get("failure_comments", {}) or {}).get("pre-commit")) or None
@@ -168,6 +199,7 @@ def load_policy(policy_path: Path) -> Policy:
         title_max_length=title_max_length,
         description_min_length=description_min_length,
         description_issue_patterns=description_issue_patterns,
+        description_checklist_patterns=description_checklist_patterns,
         block_draft=block_draft,
         forbidden_title_patterns=forbidden_title_patterns,
         max_files_changed=max_files_changed,
@@ -177,12 +209,14 @@ def load_policy(policy_path: Path) -> Policy:
         unit_test_code_extensions=unit_test_code_extensions,
         unit_test_patterns=unit_test_patterns,
         unit_test_exempt_paths=unit_test_exempt_paths,
+        bump_bot_authors=bump_bot_authors,
         required_checks=required_checks,
         precommit_failure_comment=precommit_failure_comment,
     )
 
 
 def gh_headers(token: str) -> Dict[str, str]:
+    """Build the standard GitHub REST API request headers for the given token."""
     return {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
@@ -192,6 +226,10 @@ def gh_headers(token: str) -> Dict[str, str]:
 
 
 def gh_get(url: str, token: str) -> Any:
+    """Perform an authenticated GET and return the parsed JSON.
+
+    Raises RuntimeError on any non-2xx response.
+    """
     r = requests.get(url, headers=gh_headers(token), timeout=30)
     if r.status_code >= 300:
         raise RuntimeError(f"GET {url} -> {r.status_code}: {r.text}")
@@ -199,6 +237,10 @@ def gh_get(url: str, token: str) -> Any:
 
 
 def gh_post(url: str, token: str, payload: Dict[str, Any]) -> Any:
+    """Perform an authenticated POST with a JSON body and return parsed JSON.
+
+    Raises RuntimeError on any non-2xx response.
+    """
     r = requests.post(url, headers=gh_headers(token), json=payload, timeout=30)
     if r.status_code >= 300:
         raise RuntimeError(f"POST {url} -> {r.status_code}: {r.text}")
@@ -206,6 +248,10 @@ def gh_post(url: str, token: str, payload: Dict[str, Any]) -> Any:
 
 
 def gh_patch(url: str, token: str, payload: Dict[str, Any]) -> Any:
+    """Perform an authenticated PATCH with a JSON body and return parsed JSON.
+
+    Raises RuntimeError on any non-2xx response.
+    """
     r = requests.patch(url, headers=gh_headers(token), json=payload, timeout=30)
     if r.status_code >= 300:
         raise RuntimeError(f"PATCH {url} -> {r.status_code}: {r.text}")
@@ -213,6 +259,7 @@ def gh_patch(url: str, token: str, payload: Dict[str, Any]) -> Any:
 
 
 def get_pr(owner: str, repo: str, pr_number: int, token: str) -> Dict[str, Any]:
+    """Fetch a single pull request's metadata (title, body, head/base, etc.)."""
     data = gh_get(
         f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}", token
     )
@@ -224,6 +271,11 @@ def get_pr(owner: str, repo: str, pr_number: int, token: str) -> Dict[str, Any]:
 def iter_pr_files(
     owner: str, repo: str, pr_number: int, token: str
 ) -> Iterable[Dict[str, Any]]:
+    """Yield every file object changed in the PR, transparently paginating.
+
+    Each yielded dict includes keys such as `filename`, `status`, `additions`,
+    `deletions`, and `changes`.
+    """
     page = 1
     while True:
         data = gh_get(
@@ -241,6 +293,7 @@ def iter_pr_files(
 
 
 def get_check_runs(owner: str, repo: str, sha: str, token: str) -> List[Dict[str, Any]]:
+    """Return the list of check-runs associated with a commit SHA."""
     data = gh_get(
         f"https://api.github.com/repos/{owner}/{repo}/commits/{sha}/check-runs?per_page=100",
         token,
@@ -252,6 +305,11 @@ def get_check_runs(owner: str, repo: str, sha: str, token: str) -> List[Dict[str
 
 
 def ensure_branch_name(policy: Policy, branch_name: str, errors: List[str]) -> None:
+    """Validate the branch name against the allowed patterns.
+
+    Appends a descriptive message to `errors` if the name matches none of
+    `policy.branch_patterns`.
+    """
     if not policy.branch_patterns:
         return
     if any(p.match(branch_name) for p in policy.branch_patterns):
@@ -275,6 +333,11 @@ def _short(value: str, limit: int = 80) -> str:
 
 
 def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
+    """Validate the PR title (length, Conventional Commits style, forbidden words).
+
+    Appends a structured Error/Expected/Desired-format message to `errors` for
+    each rule that fails.
+    """
     title = (title or "").strip()
     fmt = "**Desired format:** `type(optional-scope): short description`"
 
@@ -315,6 +378,10 @@ def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
 
 
 def ensure_pr_not_draft(policy: Policy, is_draft: bool, errors: List[str]) -> None:
+    """Block draft PRs when `policy.block_draft` is enabled.
+
+    Appends a message to `errors` if the PR is still a draft.
+    """
     if policy.block_draft and is_draft:
         errors.append(
             "This PR is a draft. Please mark it as 'Ready for review' before "
@@ -323,6 +390,11 @@ def ensure_pr_not_draft(policy: Policy, is_draft: bool, errors: List[str]) -> No
 
 
 def ensure_pr_description(policy: Policy, body: str, errors: List[str]) -> None:
+    """Validate the PR description (minimum length, JIRA/ISSUE reference, checklist).
+
+    Appends a structured message to `errors` if the body is too short, does
+    not contain a recognised tracking reference, or has an unticked checklist item.
+    """
     body = (body or "").strip()
     if policy.description_min_length and len(body) < policy.description_min_length:
         errors.append(
@@ -335,22 +407,44 @@ def ensure_pr_description(policy: Policy, body: str, errors: List[str]) -> None:
         p.search(body) for p in policy.description_issue_patterns
     ):
         errors.append(
-            "**Error:** PR description must reference a JIRA ID or ISSUE ID.\n"
-            "**Expected:** include a `JIRA ID` or `ISSUE ID` line. The separator "
-            "may be `:` or `-` (or omitted), and the value can be a JIRA key, a "
-            "number (with or without `#`), or a link. Accepted examples:\n"
+            "**Error:** PR description must reference a JIRA ID, ISSUE ID, or a "
+            "GitHub closing keyword.\n"
+            "**Expected:** include a `JIRA ID` / `ISSUE ID` line (separator `:` "
+            "or `-`, or omitted; value may be a JIRA key, a number with/without "
+            "`#`, or a link), OR a closing keyword + issue reference. "
+            "Accepted examples:\n"
             "• `JIRA ID : TESTAUTO-6039`\n"
-            "• `JIRA ID -` [#330](https://github.com/<org_name>/<repo_name>/issues/330)\n"
-            "• `JIRA ID` [#330](https://github.com/<org_name>/<repo_name>/issues/330)\n"
+            "• `JIRA ID - #330`\n"
+            "• `JIRA ID #330`\n"
             "• `ISSUE ID : TESTUTO-3334`\n"
-            "• `ISSUE ID` [#3334](https://github.com/<org_name>/<repo_name>/issues/3334)\n"
+            "• `ISSUE ID #3334`\n"
             "• `ISSUE ID - TESTAUTO-3433`\n"
             "• `ISSUE ID : https://github.com/<org_name>/<repo_name>/issues/1234`\n"
-            "**Current:** no valid JIRA/ISSUE reference found"
+            "• `Closes #10`\n"
+            "• `Fixes octo-org/octo-repo#100`\n"
+            "• `Resolves: #123`\n"
+            "• `#123`\n"
+            "• `https://github.com/<org_name>/<repo_name>/issues/123`\n"
+            "**Current:** no valid JIRA/ISSUE/closing-keyword reference found"
         )
+
+    # Submission Checklist: every configured checklist item must be ticked.
+    for pat in policy.description_checklist_patterns:
+        if not pat.search(body):
+            errors.append(
+                "**Error:** Submission Checklist item is not completed.\n"
+                "**Expected:** read the contributing guidelines and tick the box "
+                "by changing `- [ ]` to `- [x]`:\n"
+                "- [x] Look over the contributing guidelines …\n"
+                "**Current:** the required checklist item is unchecked"
+            )
 
 
 def _matches_forbidden(filename: str, pattern: str) -> bool:
+    """Return True if `filename` matches a forbidden glob `pattern`.
+
+    Handles `**/<x>` patterns so they also match root-level files (e.g. `.env`).
+    """
     # GitHub returns POSIX-style paths.
     if fnmatch.fnmatch(filename, pattern):
         return True
@@ -363,6 +457,11 @@ def _matches_forbidden(filename: str, pattern: str) -> bool:
 def ensure_no_forbidden_files(
     policy: Policy, pr_files: Iterable[Dict[str, Any]], errors: List[str]
 ) -> None:
+    """Flag any added/modified file matching a forbidden path pattern.
+
+    Removed files are ignored. Appends one message per offending file to
+    `errors`.
+    """
     if not policy.forbidden_paths:
         return
     for f in pr_files:
@@ -433,6 +532,32 @@ def ensure_unit_tests(
         )
 
 
+def pr_has_code_files(policy: Policy, pr_files: Iterable[Dict[str, Any]]) -> bool:
+    """True if the PR changes at least one real source/code file.
+
+    Doc/config files (.md, .txt, .yml, .ini, ...), exempt paths, and test files
+    do NOT count as code.
+    """
+    for f in pr_files:
+        status = str(f.get("status") or "")
+        if status == "removed":
+            continue
+        filename = Path(str(f.get("filename") or "")).as_posix()
+        if not filename:
+            continue
+        if any(
+            _matches_forbidden(filename, pat) for pat in policy.unit_test_exempt_paths
+        ):
+            continue
+        base = Path(filename).name
+        ext = Path(filename).suffix.lower()
+        if any(fnmatch.fnmatch(base, pat) for pat in policy.unit_test_patterns):
+            continue
+        if ext in policy.unit_test_code_extensions:
+            return True
+    return False
+
+
 def ensure_pr_reviewable(
     policy: Policy, pr_files: List[Dict[str, Any]], errors: List[str]
 ) -> None:
@@ -482,7 +607,8 @@ def summarize_required_checks(
     policy: Policy,
     check_runs: List[Dict[str, Any]],
 ) -> Tuple[List[str], List[str], Dict[str, str]]:
-    """
+    """Summarise the state of the required check-runs.
+
     Returns:
       - missing: required checks not present
       - failing: required checks that concluded not-success
@@ -519,128 +645,82 @@ def summarize_required_checks(
 def upsert_comment(
     owner: str, repo: str, pr_number: int, token: str, marker: str, body: str
 ) -> None:
-    comments = gh_get(
-        f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments?per_page=100",
-        token,
-    )
-    if isinstance(comments, list):
-        for c in comments:
-            if isinstance(c, dict) and marker in str(c.get("body", "")):
-                gh_patch(c["url"], token, {"body": body})
-                return
-    gh_post(
-        f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments",
-        token,
-        {"body": body},
-    )
+    """Create or update a single marker-tagged bot comment on the PR.
+
+    Looks for an existing comment whose body contains `marker`; if found it is
+    PATCHed in place, otherwise a new comment is POSTed. This keeps the bot to
+    one self-updating comment per marker instead of spamming new ones.
+    """
+    if not CAN_POST_COMMENTS:
+        print("ℹ️  Skipping PR comment — no write access (e.g. fork PR).")
+        return
+    try:
+        comments = gh_get(
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments?per_page=100",
+            token,
+        )
+        if isinstance(comments, list):
+            for c in comments:
+                if isinstance(c, dict) and marker in str(c.get("body", "")):
+                    gh_patch(c["url"], token, {"body": body})
+                    return
+        gh_post(
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments",
+            token,
+            {"body": body},
+        )
+    except RuntimeError as exc:
+        print(f"⚠️  Could not post/update comment (continuing): {exc}", file=sys.stderr)
 
 
-def delete_comment_by_marker(
-    owner: str, repo: str, pr_number: int, token: str, marker: str
+def update_comment_if_exists(
+    owner: str, repo: str, pr_number: int, token: str, marker: str, body: str
 ) -> None:
-    """Delete any comment whose body contains the given marker."""
-    comments = gh_get(
-        f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments?per_page=100",
-        token,
-    )
+    """Edit an EXISTING bot comment in place — never create or delete.
+
+    Finds the comment whose body contains the given bot `marker` and PATCHes it
+    to `body`. If no such comment exists, this does nothing.
+
+    We deliberately do NOT delete comments: bot code must never risk removing a
+    developer's comment. Only comments authored by THIS bot (identified by an
+    HTML marker) are ever touched, and only via an in-place edit.
+    """
+    if not CAN_POST_COMMENTS:
+        return
+    try:
+        comments = gh_get(
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments?per_page=100",
+            token,
+        )
+    except RuntimeError as exc:
+        print(f"⚠️  Could not list comments (continuing): {exc}", file=sys.stderr)
+        return
     if isinstance(comments, list):
         for c in comments:
             if isinstance(c, dict) and marker in str(c.get("body", "")):
-                r = requests.delete(c["url"], headers=gh_headers(token), timeout=30)
-                if r.status_code not in (200, 204, 404):
+                try:
+                    gh_patch(c["url"], token, {"body": body})
+                except RuntimeError as exc:
                     print(
-                        f"⚠️  Could not delete comment: {r.status_code}: {r.text}",
+                        f"⚠️  Could not update comment (continuing): {exc}",
                         file=sys.stderr,
                     )
-
-
-def _fetch_cs_alerts_for_ref(
-    owner: str, repo: str, ref: str, token: str
-) -> Optional[List[Dict[str, Any]]]:
-    """Return alerts for a ref, or None on 403 (stop retrying — permission problem)."""
-    url = (
-        f"https://api.github.com/repos/{owner}/{repo}/code-scanning/alerts"
-        f"?state=open&tool_name=CodeQL&per_page=100&ref={ref}"
-    )
-    r = requests.get(url, headers=gh_headers(token), timeout=30)
-    if r.status_code == 403:
-        print(
-            f"⚠️  Code Scanning API 403 for ref={ref} — missing "
-            "'security-events: read' permission or wrong token.",
-            file=sys.stderr,
-        )
-        return None
-    if r.status_code == 404:
-        print(f"ℹ️  Code Scanning: 404 for ref={ref} (no analysis stored there yet).")
-        return []
-    if r.status_code >= 300:
-        print(
-            f"⚠️  Code Scanning API {r.status_code} for ref={ref}: {r.text}",
-            file=sys.stderr,
-        )
-        return []
-    data = r.json()
-    alerts = data if isinstance(data, list) else []
-    if alerts:
-        print(f"ℹ️  Code Scanning: {len(alerts)} alert(s) from ref={ref}.")
-        for a in alerts[:3]:  # print first 3 for debug
-            rule = a.get("rule", {}) or {}
-            print(
-                f"    rule.id={rule.get('id')} "
-                f"severity={rule.get('severity')} "
-                f"security_severity_level={rule.get('security_severity_level')}"
-            )
-    return alerts
-
-
-def get_code_scanning_alerts(
-    owner: str,
-    repo: str,
-    pr_number: int,
-    head_sha: Optional[str],
-    token: str,
-    retries: int = 4,
-    delay: int = 8,
-) -> Optional[List[Dict[str, Any]]]:
-    """
-    Returns:
-      None  — 403 permission error; caller must not override the job conclusion.
-      []    — no open error-level alerts (all clear).
-      [...] — open alerts found; caller should check severity.
-    """
-    refs = [f"refs/pull/{pr_number}/merge", f"refs/pull/{pr_number}/head"]
-    if head_sha:
-        refs.append(str(head_sha))
-
-    for attempt in range(retries):
-        for ref in refs:
-            alerts = _fetch_cs_alerts_for_ref(owner, repo, ref, token)
-            if alerts is None:
-                return None  # 403 — permission denied, retrying won't help
-            if alerts:
-                print(
-                    f"ℹ️  Code Scanning: {len(alerts)} open alert(s) found "
-                    f"(ref={ref}, attempt {attempt + 1})."
-                )
-                return alerts
-        if attempt < retries - 1:
-            print(
-                f"ℹ️  Code Scanning: no alerts yet — retrying in {delay}s "
-                f"(attempt {attempt + 1}/{retries})."
-            )
-            time.sleep(delay)
-
-    print(
-        "ℹ️  Code Scanning: no open CodeQL alerts found for this PR after all retries."
-    )
-    return []
+                return
 
 
 def build_policy_table_comment(
     results: List[CheckResult],
     marker: str,
     ready: bool = False,
+    note: Optional[str] = None,
 ) -> str:
+    """Render the results as a single Markdown comment with a status table.
+
+    Rows are sorted into `TABLE_ORDER`, each showing ✅/❌/⏳/🚧/🔜 status and
+    full details. The footer summarises failures (or success) and a FAQ link is
+    appended. `ready` switches the heading to "Ready for Review"; `note` adds an
+    optional banner (used for the bump-PR special case).
+    """
     # Render rows in a fixed, human-friendly order regardless of the order in
     # which they were appended (policy rows + required-check rows).
     order_index = {name: i for i, name in enumerate(TABLE_ORDER)}
@@ -665,7 +745,9 @@ def build_policy_table_comment(
             status = "✅ Pass"
         else:
             status = "❌ Fail"
-        if r.passed or r.wip or r.tbe or not r.details:
+        if r.passed and r.note:
+            detail = r.note
+        elif r.passed or r.wip or r.tbe or not r.details:
             detail = "—"
         else:
             blocks: List[str] = []
@@ -705,7 +787,7 @@ def build_policy_table_comment(
     else:
         footer = "\n\n> 🎉 All policy checks passed!"
 
-    faq_url = "https://github.com/ROCm/TheRock/tree/main/skills/therock_pr_bot/FAQ.md"
+    faq_url = "https://github.com/ROCm/TheRock/blob/main/skills/therock_pr_bot/FAQ.md"
 
     faq_link = (
         "\n\n📖 **Need help?** See the "
@@ -713,16 +795,23 @@ def build_policy_table_comment(
         "for details on every check and how to fix failures."
     )
 
-    return f"{marker}\n{heading}\n\n{table}{footer}{faq_link}"
+    note_block = f"\n\n{note}" if note else ""
+    return f"{marker}\n{heading}{note_block}\n\n{table}{footer}{faq_link}"
 
 
 def build_check_results(
     policy: Policy,
     check_runs: List[Dict[str, Any]],
-    code_scanning_alerts: Optional[List[Dict[str, Any]]] = None,
     include_self: bool = False,
 ) -> List[CheckResult]:
-    """Turn required check-runs into table rows (so they appear in one table)."""
+    """Turn required check-runs into table rows (so they appear in one table).
+
+    Required CI workflows (e.g. pre-commit, and any security workflow such as
+    CodeQL) are reported purely by their OWN check-run conclusion. This bot does
+    NOT query the Code Scanning Alerts API — that is owned by codeql.yml /
+    pre_commit_security.yml. To gate on such a workflow, add its check-run name
+    to `checks.required_check_runs` in policy.yml.
+    """
     ok = {"success", "neutral", "skipped"}
     by_name = {
         r.get("name"): r
@@ -730,98 +819,26 @@ def build_check_results(
         if isinstance(r, dict) and isinstance(r.get("name"), str)
     }
 
-    # Count error/critical/high-level alerts per language from Code Scanning API.
-    lang_alert_counts: Dict[str, int] = {}
-    if code_scanning_alerts:
-        error_levels = {"error", "critical", "high"}
-        print(
-            f"ℹ️  build_check_results: processing {len(code_scanning_alerts)} alert(s)."
-        )
-        for alert in code_scanning_alerts:
-            rule = alert.get("rule", {}) or {}
-            sev = str(rule.get("severity") or "").lower()
-            sec_sev = str(rule.get("security_severity_level") or "").lower()
-            rule_id = str(rule.get("id") or "")
-            print(f"    → rule_id={rule_id!r} sev={sev!r} sec_sev={sec_sev!r}")
-            if sev in error_levels or sec_sev in error_levels:
-                if rule_id.startswith("py/"):
-                    lang_alert_counts["python"] = lang_alert_counts.get("python", 0) + 1
-                elif rule_id.startswith("actions/"):
-                    lang_alert_counts["actions"] = (
-                        lang_alert_counts.get("actions", 0) + 1
-                    )
-                elif rule_id.startswith(("js/", "ts/")):
-                    lang_alert_counts["javascript"] = (
-                        lang_alert_counts.get("javascript", 0) + 1
-                    )
-                else:
-                    # Catch-all so no error-level alert is ever missed.
-                    lang_alert_counts["other"] = lang_alert_counts.get("other", 0) + 1
-        print(f"ℹ️  lang_alert_counts after processing: {lang_alert_counts}")
-
-    # CodeQL job names that get folded into a single "CodeQL" row.
-    codeql_names = {"Analyze (python)", "Analyze (actions)"}
-
     def status_of(name: str) -> Tuple[bool, bool, Optional[str]]:
         """Return (passed, pending, conclusion) for one check-run."""
         r = by_name.get(name)
         if not r:
-            return False, True, None  # not reported yet -> pending
+            return False, True, None
         conc = r.get("conclusion")
         if conc is None:
-            return False, True, None  # still running -> pending
+            return False, True, None
         return str(conc) in ok, False, str(conc)
 
     results: List[CheckResult] = []
-    codeql_done = False
-
     for name in policy.required_checks:
-        if name in codeql_names:
-            if codeql_done:
-                continue
-            codeql_done = True
-
-            sub_pending = False
-            details: List[str] = []  # type: ignore[no-redef]
-            for n in [x for x in policy.required_checks if x in codeql_names]:
-                p, pend, conc = status_of(n)
-                if pend:
-                    sub_pending = True
-                elif not p:
-                    details.append(f"{n}: conclusion={conc}")
-
-            # A concrete job failure takes precedence over a still-running
-            # sibling: show Fail (not Pending) as soon as any job has failed.
-            if details:
-                passed, pending = False, False
-            elif sub_pending:
-                passed, pending = False, True
-            else:
-                passed, pending = True, False
-
-            # Even if jobs succeeded, fail if CodeQL reported error-level alerts.
-            if code_scanning_alerts is not None:
-                total = sum(lang_alert_counts.values())
-                if total > 0:
-                    passed, pending = False, False
-                    details = [
-                        f"**Error:** {total} error-level CodeQL alert(s) found.\n"
-                        "**Expected:** no error / critical / high severity alerts.\n"
-                        "**Current:** see Security → Code scanning alerts"
-                    ]
-
-            if pending and not details:
-                details = ["⏳ CodeQL analysis still running…"]
-            results.append(CheckResult("CodeQL", "🔎", passed, details, pending))
+        passed, pending, conc = status_of(name)
+        if pending:
+            details: List[str] = ["⏳ Still running…"]
+        elif passed:
+            details = []
         else:
-            passed, pending, conc = status_of(name)
-            if pending:
-                details = ["⏳ Still running…"]
-            elif passed:
-                details = []
-            else:
-                details = [f"**Error:** Check concluded with `{conc}`."]
-            results.append(CheckResult(name, "🔎", passed, details, pending))
+            details = [f"**Error:** Check concluded with `{conc}`."]
+        results.append(CheckResult(name, "🔎", passed, details, pending))
 
     if include_self:
         results.append(CheckResult("therock-pr-bot", "🤖", True, []))
@@ -836,6 +853,11 @@ def maybe_comment_precommit_failure(
     policy: Policy,
     check_runs: List[Dict[str, Any]],
 ) -> None:
+    """Post the configured pre-commit failure help comment, if applicable.
+
+    Does nothing unless `policy.precommit_failure_comment` is set and the
+    `pre-commit` check-run concluded in a failed state.
+    """
     if not policy.precommit_failure_comment:
         return
 
@@ -860,37 +882,17 @@ def maybe_comment_precommit_failure(
     upsert_comment(owner, repo, pr_number, token, marker, msg)
 
 
-LABEL_STYLES = {
-    "Not ready to Review": (
-        "e11d48",
-        "PR has unresolved policy failures — reviews blocked",
-    ),
-}
-
-
-def ensure_label_exists(owner: str, repo: str, token: str, label: str) -> None:
-    """Create the label in the repo if it does not already exist."""
-    color, description = LABEL_STYLES.get(label, ("ededed", ""))
-    encoded = urllib.parse.quote(label, safe="")
-    r = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}/labels/{encoded}",
-        headers=gh_headers(token),
-        timeout=30,
-    )
-    if r.status_code == 200:
-        return
-    try:
-        gh_post(
-            f"https://api.github.com/repos/{owner}/{repo}/labels",
-            token,
-            {"name": label, "color": color, "description": description},
-        )
-    except RuntimeError:
-        pass  # already exists (race condition) — safe to ignore
-
-
 def add_label(owner: str, repo: str, pr_number: int, token: str, label: str) -> None:
-    ensure_label_exists(owner, repo, token, label)
+    """Attach an EXISTING repository label to this PR.
+
+    This intentionally does NOT create or manage repository label definitions.
+    The `Not ready to Review` label must be created ONCE by a maintainer with
+    triage access (repo → Issues → Labels → New label). If the label is missing,
+    we log a clear setup hint instead of creating it automatically.
+    """
+    if not CAN_MUTATE_PR:
+        print(f"ℹ️  Skipping add label '{label}' — no write access (fork PR).")
+        return
     try:
         gh_post(
             f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/labels",
@@ -898,10 +900,23 @@ def add_label(owner: str, repo: str, pr_number: int, token: str, label: str) -> 
             {"labels": [label]},
         )
     except RuntimeError as exc:
-        print(f"⚠️  Could not add label '{label}': {exc}", file=sys.stderr)
+        print(
+            f"⚠️  Could not add label '{label}': {exc}\n"
+            f"    If the label does not exist, a maintainer with triage access "
+            f"must create it ONCE in {owner}/{repo} (Issues → Labels).",
+            file=sys.stderr,
+        )
 
 
 def remove_label(owner: str, repo: str, pr_number: int, token: str, label: str) -> None:
+    """Detach the label from THIS PR only.
+
+    NOTE: This does NOT delete the repository's label definition — it only
+    removes the label association from the current pull request.
+    """
+    if not CAN_MUTATE_PR:
+        print(f"ℹ️  Skipping remove label '{label}' — no write access (fork PR).")
+        return
     encoded = urllib.parse.quote(label, safe="")
     r = requests.delete(
         f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/labels/{encoded}",
@@ -915,14 +930,58 @@ def remove_label(owner: str, repo: str, pr_number: int, token: str, label: str) 
         )
 
 
+def is_bump_pr(policy: Policy, author_login: str) -> bool:
+    """True if the PR author is one of the configured bump bots.
+
+    Matches case-insensitively and ignores the GitHub App '[bot]' suffix
+    (e.g. 'assistant-librarian[bot]' == 'assistant-librarian').
+    """
+
+    def norm(s: str) -> str:
+        s = s.strip().lower()
+        if s.endswith("[bot]"):
+            s = s[: -len("[bot]")]
+        return s
+
+    target = norm(author_login)
+    if not target:
+        return False
+    return target in {norm(a) for a in policy.bump_bot_authors}
+
+
+def build_bump_pr_results(policy: Policy) -> List[CheckResult]:
+    """All-pass table rows for an automated dependency bump PR."""
+    bump_note = "Bump PR — check auto-approved (automated dependency update)"
+    rows: List[CheckResult] = [
+        CheckResult("Branch Name", "🌿", True, [], note=bump_note),
+        CheckResult("PR Title/Description", "📝", True, [], note=bump_note),
+        CheckResult("Draft PR", "🚫", True, [], note=bump_note),
+        CheckResult("Forbidden Files", "⛔", True, [], note=bump_note),
+        CheckResult("Unit Test", "🧪", True, [], note=bump_note),
+        CheckResult("Feature Flag", "🚩", True, [], note=bump_note),
+        CheckResult("Code Coverage", "📊", True, [], note=bump_note),
+    ]
+    for name in policy.required_checks:
+        rows.append(CheckResult(name, "🔎", True, [], note=bump_note))
+    rows.append(CheckResult("therock-pr-bot", "🤖", True, [], note=bump_note))
+    return rows
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    """Entry point: evaluate all policies and report results on the PR.
+
+    Reads PR context from the environment, runs every policy check, posts the
+    combined results table, manages the `Not ready to Review` label, and waits
+    for required CI checks (e.g. pre-commit / CodeQL) to conclude. Returns 0
+    when everything passes and 1 on any policy or required-check failure.
+    """
     parser = argparse.ArgumentParser(
         description="TheRock PR Bot policy check (pre-review gate)"
     )
     parser.add_argument(
         "--policy",
-        default="skills/therock_pr_bot/policy.yml",
-        help="Path to policy.yml",
+        default=str(THIS_SCRIPT_DIR / "policy.yml"),
+        help="Path to policy.yml (defaults to the file next to this script)",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -960,52 +1019,99 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     pr_number = int(pr_number_s)  # type: ignore[arg-type]
 
-    repo_root = find_repo_root(Path.cwd())
-    policy_path = (repo_root / args.policy).resolve()
+    # Resolve the policy path. A relative --policy is resolved FIRST against the
+    # current working directory (the repo root, which is how the workflow passes
+    # `tools/systems_pr_bot/policy.yml`); only if not found there do we fall back
+    # to the directory next to THIS script. This prevents accidentally doubling
+    # the path (e.g. `tools/systems_pr_bot/tools/systems_pr_bot/policy.yml`).
+    policy_path = Path(args.policy)
+    if not policy_path.is_absolute():
+        cwd_candidate = (Path.cwd() / policy_path).resolve()
+        if cwd_candidate.is_file():
+            policy_path = cwd_candidate
+        else:
+            policy_path = (THIS_SCRIPT_DIR / policy_path).resolve()
     policy = load_policy(policy_path)
-
-    # GITHUB_TOKEN has `security-events: read` from workflow permissions.
-    # The App token does not — use GITHUB_TOKEN specifically for Code Scanning.
-    cs_token = os.environ.get("GITHUB_TOKEN") or token
-    if cs_token == token:
-        print(
-            "⚠️  GITHUB_TOKEN not set — Code Scanning API will use the App token "
-            "(may 403 if the App lacks security-events permission).",
-            file=sys.stderr,
-        )
-    else:
-        print("ℹ️  Using GITHUB_TOKEN for Code Scanning API calls.")
-
-    errors: List[str] = []
 
     pr = get_pr(owner=owner, repo=repo, pr_number=pr_number, token=token)  # type: ignore[arg-type]
     branch_name = str((pr.get("head") or {}).get("ref") or "")
     title = str(pr.get("title") or "")
     body = str(pr.get("body") or "")
+
+    # --- Special case: automated dependency "bump" PRs ---
+    # If the author is a configured bump bot, bypass all policy checks.
+    author = str((pr.get("user") or {}).get("login") or "")
+    if is_bump_pr(policy, author):
+        marker = "<!-- therock-pr-bot-policy-check -->"
+        note = (
+            f"> 🤖 **Bump PR detected** (author `@{author}`). All policy checks "
+            "are auto-approved for automated dependency bumps."
+        )
+        upsert_comment(
+            owner,
+            repo,
+            pr_number,
+            token,  # type: ignore[arg-type]
+            marker,
+            build_policy_table_comment(
+                build_bump_pr_results(policy), marker, ready=True, note=note
+            ),
+        )
+        remove_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
+        update_comment_if_exists(
+            owner,
+            repo,
+            pr_number,
+            token,  # type: ignore[arg-type]
+            "<!-- therock-pr-bot-fix-policies -->",
+            "<!-- therock-pr-bot-fix-policies -->\n"
+            "✅ Auto-approved — this is an automated dependency bump PR.",
+        )
+        print(f"✅ Bump PR by @{author} — all checks auto-passed.")
+        return 0
+
     pr_files = list(iter_pr_files(owner, repo, pr_number, token))  # type: ignore[arg-type]
 
     results: List[CheckResult] = []
 
-    _e: List[str] = []
-    ensure_branch_name(policy, branch_name, _e)
-    results.append(CheckResult("Branch Name", "🌿", not _e, _e))
+    # Each check appends its failure messages to `check_errors`; an empty list
+    # means the check passed. We reset it before every check.
+    # NOTE: all policies — including branch name — are enforced for BOTH
+    # same-repo PRs and fork PRs. `pull_request_target` gives us write access
+    # for forks, so there is no reason to skip any check.
+    check_errors: List[str] = []
+    ensure_branch_name(policy, branch_name, check_errors)
+    results.append(CheckResult("Branch Name", "🌿", not check_errors, check_errors))
 
-    _e = []
-    ensure_pr_title(policy, title, _e)
-    ensure_pr_description(policy, body, _e)
-    results.append(CheckResult("PR Title/Description", "📝", not _e, _e))
+    check_errors = []
+    ensure_pr_title(policy, title, check_errors)
+    desc_errors: List[str] = []
+    ensure_pr_description(policy, body, desc_errors)
+    check_errors.extend(desc_errors)
+    results.append(
+        CheckResult("PR Title/Description", "📝", not check_errors, check_errors)
+    )
+
+    # Only the JIRA/ISSUE ID reference rule of the description triggers the
+    # "Not ready to Review" label — not the title, length, or checklist rules.
+    jira_issue_failed = any("must reference a JIRA ID" in e for e in desc_errors)
 
     # Draft PR check is "Enabled soon" — logic kept in ensure_pr_not_draft but
     # not enforced yet (no check is performed).
     results.append(CheckResult("Draft PR", "🚫", passed=True, details=[], tbe=True))
 
-    _e = []
-    ensure_no_forbidden_files(policy, pr_files, _e)
-    results.append(CheckResult("Forbidden Files", "⛔", not _e, _e))
+    check_errors = []
+    ensure_no_forbidden_files(policy, pr_files, check_errors)
+    results.append(CheckResult("Forbidden Files", "⛔", not check_errors, check_errors))
 
-    _e = []
-    ensure_unit_tests(policy, pr_files, _e)
-    results.append(CheckResult("Unit Test", "🧪", not _e, _e))
+    check_errors = []
+    ensure_unit_tests(policy, pr_files, check_errors)
+    ut_note = None
+    if not check_errors and not pr_has_code_files(policy, pr_files):
+        ut_note = "PR does not contain code files — Unit Test auto-passed"
+    results.append(
+        CheckResult("Unit Test", "🧪", not check_errors, check_errors, note=ut_note)
+    )
 
     # "Enabled soon" placeholders — logic to be implemented later.
     results.append(CheckResult("Feature Flag", "🚩", passed=True, details=[], tbe=True))
@@ -1020,12 +1126,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if errors:
         current_runs = get_check_runs(owner=owner, repo=repo, sha=sha, token=token)  # type: ignore[arg-type]
-        current_alerts = get_code_scanning_alerts(
-            owner, repo, pr_number, sha, cs_token, retries=1, delay=0  # type: ignore[arg-type]
-        )
-        combined = results + build_check_results(
-            policy, current_runs, code_scanning_alerts=current_alerts
-        )
+        combined = results + build_check_results(policy, current_runs)
         upsert_comment(
             owner,
             repo,
@@ -1035,9 +1136,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             build_policy_table_comment(combined, marker),
         )
 
-        # Add "Not ready to Review" ONLY when one of the key policy checks
-        # (Branch Name, PR Title/Description, Unit Test, Forbidden Files) fails.
-        if any(not r.passed and r.name in LABEL_TRIGGER_CHECKS for r in results):
+        # Add "Not ready to Review" ONLY when Unit Test fails OR the JIRA/ISSUE
+        # ID reference is missing from the description. All other failures
+        # (title format, description length/checklist, branch name, forbidden
+        # files, PR size, pre-commit) do NOT add the label.
+        should_label = jira_issue_failed or any(
+            not r.passed and r.name in LABEL_TRIGGER_CHECKS for r in results
+        )
+        if should_label:
             add_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
         else:
             remove_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
@@ -1073,12 +1179,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 for n in policy.required_checks
             )
             if all_concluded:
-                poll_alerts = get_code_scanning_alerts(
-                    owner, repo, pr_number, sha, cs_token  # type: ignore[arg-type]
-                )
-                final_combined = results + build_check_results(
-                    policy, poll_runs, code_scanning_alerts=poll_alerts
-                )
+                final_combined = results + build_check_results(policy, poll_runs)
                 upsert_comment(
                     owner,
                     repo,
@@ -1156,34 +1257,19 @@ def main(argv: Optional[List[str]] = None) -> int:
                 all_ok = False
 
         if all_present and all_ok:
-            # Query Code Scanning API — CodeQL job exits 0 even when it finds
-            # vulnerabilities, so we check the alerts API ourselves.
-            code_alerts = get_code_scanning_alerts(
-                owner, repo, pr_number, sha, cs_token  # type: ignore[arg-type]
-            )
-
             final_results = results + build_check_results(
                 policy,
                 runs,
-                code_scanning_alerts=code_alerts,
                 include_self=True,
             )
-            has_alert_failures = any(not r.passed for r in final_results)
             upsert_comment(
                 owner,
                 repo,
                 pr_number,
                 token,
                 marker,
-                build_policy_table_comment(
-                    final_results, marker, ready=not has_alert_failures
-                ),
+                build_policy_table_comment(final_results, marker, ready=True),
             )
-            if has_alert_failures:
-                # CodeQL found vulnerabilities — keep the not-ready label.
-                add_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
-                print("❌ CodeQL found error-level vulnerabilities.")
-                return 1
 
             # Update the "fix policies" comment to reflect success.
             fix_marker = "<!-- therock-pr-bot-fix-policies -->"
@@ -1196,13 +1282,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 f"{fix_marker}\n🎉 All checks passed! This PR is ready for review.",
             )
 
-            # Remove the "blocked reviewer/assignee" gate comment if present.
-            delete_comment_by_marker(
+            # Mark any stale "blocked reviewer/assignee" gate comment as
+            # resolved (edit in place — we never delete comments).
+            update_comment_if_exists(
                 owner,
                 repo,
                 pr_number,
                 token,  # type: ignore[arg-type]
                 "<!-- therock-pr-bot-review-gate -->",
+                "<!-- therock-pr-bot-review-gate -->\n"
+                "✅ All policy checks passed — this PR is ready for review.",
             )
 
             # All clean — remove the "Not ready to Review" label.

@@ -1,4 +1,17 @@
-# TheRock PR Bot — Policy FAQ Document
+# TheRock PR Bot — Policy FAQ Doc
+
+**TheRock PR Bot** is an automated Pull Request (PR) gatekeeper.
+On every Pull Request, it runs a set of policy checks — branch naming,
+title/description, forbidden files, unit tests, and required CI checks —
+then posts a single results table comment summarising what passed or failed.
+PRs that fail key checks are flagged with a **`Not ready to Review`** label
+until the issues are resolved.
+
+It helps save time on the **first level of PR review** by automating the basic
+checks a reviewer would otherwise perform manually, reducing first-pass review
+time. Reviewers can filter out **`Not ready to Review`** PRs from their pending
+review list and only start reviewing once that label has been removed — i.e.
+once all policy checks have passed.
 
 This document explains what each policy check means, why it exists, and how to fix a failure.
 
@@ -11,18 +24,22 @@ Your branch name must follow the agreed naming convention so PRs are easy to tra
 
 **Allowed formats**
 
-| Pattern                                  | Example                                               |
-| ---------------------------------------- | ----------------------------------------------------- |
-| `users/<username>/<feature-or-bug-name>` | `users/chi/ucicd_setup_visible_devices`               |
-| `<namespace>/<feature-or-bug-name>`      | `samathew121/docker`                                  |
-| `<single-segment-name>`                  | `bump-rocm-libraries-936a6c7`                         |
-| `dependabot/<ecosystem>/<dependency>`    | `dependabot/github_actions/github-actions-3dfd2199fc` |
-| `revert-<pr-number>-<original-branch>`   | `revert-5217-users/derobins/add_hipfile_support`      |
+| Pattern                         | Example                                             |
+| ------------------------------- | --------------------------------------------------- |
+| `users/<username>/<anything>`   | users/dgaliffi/fix/remove-build-boost-option        |
+| `users/<username>/<anything>`   | users/frepaul/ROCm-end-user-project-workflow        |
+| `shared/<anything>`             | shared/add-runner-health                            |
+| `<single-segment-name>`         | bump-rocm-libraries-936a6c7                         |
+| `<single-segment-name>`         | ZIP-packaging-RFC                                   |
+| `dependabot/<anything>`         | dependabot/github_actions/github-actions-3dfd2199fc |
+| `revert-<pr-number>-<anything>` | revert-5217-users/derobins/add_hipfile_support      |
 
 Rules:
 
-- `username` — lowercase letters, digits, hyphens only.
-- `branch name` — lowercase letters, digits, hyphens, underscores only.
+- A recognised **prefix** must be present (`users/`, `shared/`, `dependabot/`, `revert-…`) — or the branch must be a single segment.
+- **Uppercase letters are allowed** (acronyms and module names are common, e.g. `ROCm`, `SMP`, `RFC`).
+- For `users/`, the `<username>` segment may contain letters (upper or lower), digits, and hyphens.
+- **Anything after the prefix is allowed**, including nested `namespace/feature` paths (e.g. `users/dgaliffi/fix/remove-build-boost-option`).
 
 **How to fix**
 Rename your branch before opening the PR:
@@ -80,44 +97,38 @@ fix(ci): correct codeql workflow trigger
 
 ______________________________________________________________________
 
-## 🚫 Draft PR
-
-> **Status: 🔜 To Be Enabled.** This check is planned but **not yet enforced**.
-> It currently shows as *To Be Enabled* in the results table and never fails a PR.
-
-**What it will check (once enabled)**
-Draft PRs (and PRs with `WIP` / `do not merge` in the title) will be blocked from passing policy, so reviews are only requested on finished work.
-
-**How to prepare**
-Click **"Ready for review"** on the GitHub PR page once your work is complete, and remove any `WIP` prefix from the title.
-
-______________________________________________________________________
-
 ## 📄 PR Description
 
 **What does it check?**
 The PR body (description) must be at least **30 characters** long **and** reference a tracking item (JIRA ID or ISSUE ID).
 An empty or one-line description makes it hard for reviewers to understand the context.
 
-**Required tracking reference** — include **one** of the following lines:
+**Required tracking reference** — include **one** of the following. Type the line
+**exactly as shown, without surrounding backticks**:
 
-| Field      | Example                                                  |
-| ---------- | -------------------------------------------------------- |
-| `JIRA ID`  | `JIRA ID : TESTAUTO-6039`                                |
-| `JIRA ID`  | `JIRA ID - #330`                                         |
-| `JIRA ID`  | `JIRA ID #330`                                           |
-| `ISSUE ID` | `ISSUE ID : TESTUTO-3334`                                |
-| `ISSUE ID` | `ISSUE ID - TESTAUTO-3433`                               |
-| `ISSUE ID` | `ISSUE ID : https://github.com/abc/abc_repo/issues/1234` |
+| Type             | Example                                                |
+| ---------------- | ------------------------------------------------------ |
+| JIRA ID          | JIRA ID : TESTAUTO-6039                                |
+| JIRA ID          | JIRA ID - #330                                         |
+| JIRA ID          | JIRA ID #330                                           |
+| ISSUE ID         | ISSUE ID : TESTUTO-3334                                |
+| ISSUE ID         | ISSUE ID - TESTAUTO-3433                               |
+| ISSUE ID (link)  | ISSUE ID : https://github.com/abc/abc_repo/issues/1234 |
+| Closing keyword  | Closes #10                                             |
+| Closing keyword  | Fixes octo-org/octo-repo#100                           |
+| Closing keyword  | Resolves: #123                                         |
+| GitHub issue     | #123                                                   |
+| GitHub issue URL | https://github.com/abc/abc_repo/issues/123             |
 
-> **Note:** The separator is **optional** and may be `:` or `-` (`JIRA ID #330`, `JIRA ID : #330`, and `JIRA ID - #330` all work). Each field accepts a JIRA key (`PREFIX-<number>` — any project), a number (with or without `#`), or a link.
+> **Note:** For `JIRA ID` / `ISSUE ID`, the separator is **optional** and may be `:` or `-` (`ISSUE ID #330`, `ISSUE ID : #330`, and `ISSUE ID - #330` all work). Each accepts a JIRA key (`PREFIX-<number>` — any project), a number (with or without `#`), or a link.
+>
+> **Closing keywords** (case-insensitive, optional colon): `close` / `closes` / `closed`, `fix` / `fixes` / `fixed`, `resolve` / `resolves` / `resolved` — followed by `#<number>` or `<org>/<repo>#<number>`.
 
 **How to fix**
 Edit the PR description and explain:
 
 - *What* changed and *why*.
-- A `JIRA ID :` or `ISSUE ID :` line referencing the tracking item (required).
-- Any related issue numbers (`Fixes #123`).
+- A tracking reference from the table above (required) — e.g. a `JIRA ID :` / `ISSUE ID :` line, a `Closes #123`, or a plain `#123`.
 - Testing steps if applicable.
 
 ______________________________________________________________________
@@ -182,7 +193,7 @@ PRs that change real source code must include at least one accompanying unit tes
   `.md`, `.txt`, `.yml`, `.yaml`, `.ini`, the check **passes automatically** — no test required.
 - **Code PRs require a test.** If your PR changes source files such as
   `.py`, `.cpp`, `.cc`, `.c`, `.h`, `.js`, `.ts`, `.go`, `.java`, it must also
-  add a test file.
+  include changes to a test file (a new test, or edits to an existing one).
 
 **How a test file is recognised**
 
@@ -247,6 +258,15 @@ Common findings include:
 ______________________________________________________________________
 
 ## General Questions
+
+### Why did all checks pass automatically on a "bump" PR?
+
+PRs opened by automated dependency-bump bots (e.g. `assistant-librarian`,
+`systems-assistant`) are a **special case**: every row in the results table is
+auto-marked **✅ Pass** and the PR is never gated. These are routine version
+bumps (e.g. *"Bumps ROCm/rocm-systems from a0952b2 to 971dc69"*) and don't need
+the full policy gate. The bot list is configured under `pr.bump_bot_authors` in
+`policy.yml`.
 
 ### What is the "Not ready to Review" label?
 

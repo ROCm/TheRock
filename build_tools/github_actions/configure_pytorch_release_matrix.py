@@ -40,9 +40,7 @@ PYTORCH_REFS_LINUX: list[dict] = [
     },
     {
         "pytorch_git_ref": "release/2.11",
-        # gfx125x not yet upstreamed to pytorch/pytorch.
-        # See https://github.com/ROCm/TheRock/issues/5833.
-        "exclude_amdgpu_families": {"gfx125x"},
+        # gfx125x upstreamed via https://github.com/ROCm/pytorch/pull/3346.
     },
     {
         "pytorch_git_ref": "release/2.12",
