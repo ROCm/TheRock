@@ -68,6 +68,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --device /dev/dri - Direct Rendering Infrastructure devices
 # --group-add 993,992,110 - Additional GPU-related groups
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+# -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
 _GPU_CONTAINER_OPTIONS = [
     "--group-add video",
     "--device /dev/kfd",
@@ -76,6 +77,7 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 992",
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+    "-e ROCR_VISIBLE_DEVICES",
 ]
 
 
