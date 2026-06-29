@@ -884,17 +884,10 @@ instructions in the AMD ROCm documentation.
 #### Installing JAX Python packages
 
 Using the index pages [listed above](#installing-rocm-python-packages), you can
-also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
+also install `jax_rocm7_plugin` and `jax_rocm7_pjrt`.
 
 > [!NOTE]
 > By default, pip will install the latest stable versions of each package.
->
-> - If you want to install other versions, the currently supported versions are:
->
->   | jax version | jaxlib version    |
->   | ----------- | ----------------- |
->   | 0.10.0      | 0.10.0 (upstream) |
->   | 0.9.1       | 0.9.1 (upstream)  |
 >
 >   See also
 >
@@ -905,21 +898,6 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 > as a dependency. You must have ROCm installed separately via a
 > [tarball installation](#installing-from-tarballs) or use `pip install --index-url https://rocm.nightlies.amd.com/v2/<your_gfx_arch>/ rocm[libraries,devel]`.
 
-> [!IMPORTANT]
-> The `jax` package itself is **not** published to the TheRock index.
->
-> **For JAX 0.8.2 version:** install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`
-> from the GPU-family index, then install JAX from [PyPI](https://pypi.org/project/jax/)
-> with `pip install jax==0.8.2`.
->
-> **For JAX versions > 0.8.2:** install `jax_rocm7_plugin` and `jax_rocm7_pjrt` from the
-> GPU-family index, then install JAX from [PyPI](https://pypi.org/project/jax/) with
-> `pip install jax==<jax_version>`.
->
-> Always pin all four packages (`jax`, `jaxlib` if applicable, `jax_rocm7_plugin`,
-> `jax_rocm7_pjrt`) to the **same** `<jax_version>` from the table above (e.g. `0.9.2`,
-> `0.9.1`, `0.8.2`). The `==<version>` pin matches the `+rocm...` local-version
-> wheels published on the GPU-family index.
 
 ##### jax for gfx94X-dcgpu
 
@@ -929,13 +907,6 @@ Supported devices in this family:
 | ------------- | ---------- |
 | MI300A/MI300X | gfx942     |
 
-###### For JAX 0.8.2:
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ jaxlib==0.10.0 jax_rocm7_plugin==0.10.0 jax_rocm7_pjrt==0.10.0
-# Install matching jax from PyPI
-pip install jax==0.8.2
-```
 
 ###### For JAX versions > 0.8.2:
 
@@ -976,13 +947,6 @@ Supported devices in this family:
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
 | AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
-###### For JAX 0.8.2:
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
-# Install matching jax from PyPI
-pip install jax==0.8.2
-```
 
 ###### For JAX versions > 0.8.2:
 
@@ -1002,13 +966,6 @@ Supported devices in this family:
 | ------------------- | ---------- |
 | AMD Strix Halo iGPU | gfx1151    |
 
-###### For JAX 0.8.2:
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
-# Install matching jax from PyPI
-pip install jax==0.8.2
-```
 
 ###### For JAX versions > 0.8.2:
 
@@ -1029,13 +986,6 @@ Supported devices in this family:
 | AMD RX 9060 / XT | gfx1200    |
 | AMD RX 9070 / XT | gfx1201    |
 
-###### For JAX 0.8.2:
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ jaxlib==0.8.2 jax_rocm7_plugin==0.8.2 jax_rocm7_pjrt==0.8.2
-# Install matching jax from PyPI
-pip install jax==0.8.2
-```
 
 ###### For JAX versions > 0.8.2:
 
