@@ -332,10 +332,10 @@ pip install "jax==${JAX_VERSION}"
 > [!TIP]
 > For multiple devices (e.g. Dockerfile supporting MI300X + MI355X):
 >
->```bash
->pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+> ```bash
+> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 >    "rocm[libraries,device-gfx942,device-gfx950]"
->```
+> ```
 
 After installing, verify JAX can see your GPU:
 
