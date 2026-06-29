@@ -34,6 +34,13 @@ option(THEROCK_ENABLE_LIBHIPCXX "Whether libhipcxx is available" ON)
 option(THEROCK_ENABLE_SOLVER "Whether rocsolver/hipsolver are available" ON)
 option(THEROCK_ENABLE_SPARSE "Whether rocsparse/hipsparse/hipsparselt are available" ON)
 option(ENABLE_DEVICE_TEST "Whether to enable testing that requires a device" OFF)
+cmake_dependent_option(
+    ENABLE_GFX1250_HOTSWAP_TEST
+    "Whether to enable the gfx1250 B0-to-A0 hotswap device smoke test"
+    OFF
+    "ENABLE_DEVICE_TEST;THEROCK_ENABLE_HIP"
+    OFF
+)
 
 set(TEST_PATH)
 if(WIN32)
@@ -141,6 +148,26 @@ if(THEROCK_ENABLE_HIP)
         if(TEST_PATH)
             set_tests_properties(
                 sample-kernel-test
+                PROPERTIES ENVIRONMENT "PATH=${TEST_PATH}"
+            )
+        endif()
+    endif()
+
+    if(ENABLE_GFX1250_HOTSWAP_TEST)
+        add_executable(gfx1250-hotswap-a0-smoke hotswap-gfx1250-a0-smoke.hip)
+        set_source_files_properties(hotswap-gfx1250-a0-smoke.hip PROPERTIES LANGUAGE HIP)
+        set_target_properties(gfx1250-hotswap-a0-smoke PROPERTIES HIP_ARCHITECTURES gfx1250)
+        target_link_libraries(gfx1250-hotswap-a0-smoke PRIVATE hip::host)
+        add_test(NAME gfx1250-hotswap-a0-smoke COMMAND gfx1250-hotswap-a0-smoke)
+        set_tests_properties(
+            gfx1250-hotswap-a0-smoke
+            PROPERTIES
+                LABELS "device;gfx1250;hotswap"
+                TIMEOUT 30
+        )
+        if(TEST_PATH)
+            set_tests_properties(
+                gfx1250-hotswap-a0-smoke
                 PROPERTIES ENVIRONMENT "PATH=${TEST_PATH}"
             )
         endif()
