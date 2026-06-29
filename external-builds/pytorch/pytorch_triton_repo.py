@@ -45,13 +45,12 @@ def get_triton_version(torch_dir: Path) -> str:
     return version_file.read_text().strip()
 
 
-def get_triton_windows_pin() -> str | None:
-    pin_file = (
-        torch_dir / ".ci" / "docker" / "ci_commit_pins" / "triton_windows.txt"
-    )
-    if pin_file.exists():
-        return pin_file.read_text().strip()
-    return None
+def get_triton_windows_pin(torch_dir: Path) -> str | None:
+    pin_file = torch_dir / ".ci" / "docker" / "ci_commit_pins" / "triton_windows.txt"
+    if not pin_file.is_file():
+        return None
+    pin = pin_file.read_text(encoding="utf-8").strip()
+    return pin or None
 
 
 def do_checkout(args: argparse.Namespace):
