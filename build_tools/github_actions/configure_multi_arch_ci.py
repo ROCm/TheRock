@@ -819,13 +819,9 @@ def _expand_build_config_for_platform(
     platform: str,
     all_families: dict[str, dict],
     variant_config: dict,
-    test_type: str,
-    pr_labels: list[str],
-    is_schedule: bool,
-    is_workflow_dispatch: bool,
+    ci_inputs: CIInputs,
+    jobs: JobDecisions,
     git_context: GitContext,
-    prebuilt_stages: list[str] | None = None,
-    baseline_run_id: str = "",
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -843,7 +839,7 @@ def _expand_build_config_for_platform(
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
     test_runner_kernel = ""
-    for label in pr_labels:
+    for label in ci_inputs.pr_labels:
         if label.startswith("test_runner:"):
             test_runner_kernel = label.split(":")[1]
             break
@@ -902,7 +898,7 @@ def _expand_build_config_for_platform(
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant == "asan" or build_variant == "host-asan":
             # Only run ASAN tests on scheduled or workflow_dispatch runs
-            if not (is_schedule or is_workflow_dispatch):
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
@@ -919,7 +915,10 @@ def _expand_build_config_for_platform(
                 )
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
-        if platform_info.get("run-full-tests-only", False) and test_type == "quick":
+        if (
+            platform_info.get("run-full-tests-only", False)
+            and jobs.test_rocm.test_type == "quick"
+        ):
             test_runs_on = ""
             print(
                 f"  {family_name}: run-full-tests-only flag set, "
@@ -929,7 +928,7 @@ def _expand_build_config_for_platform(
         # If nightly_check_only_for_family is set for schedule runs only
         if (
             platform_info.get("nightly_check_only_for_family", False)
-            and not is_schedule
+            and not ci_inputs.is_schedule
         ):
             test_runs_on = ""
             print(
@@ -962,9 +961,9 @@ def _expand_build_config_for_platform(
         per_family_info=per_family_info,
         platform=platform,
     )
-    # TODO: Thread jobs.build_rocm_python into expand_build_configs() so this
-    # matrix is empty when the ROCm Python package build is disabled. Then
-    # multi_arch_ci_* can also condition build_python_packages on that decision.
+    # TODO: Use jobs.build_rocm_python so this matrix is empty when the ROCm
+    # Python package build is disabled. Then multi_arch_ci_* can also condition
+    # build_python_packages on that decision.
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -977,18 +976,16 @@ def _expand_build_config_for_platform(
         build_pytorch=(suffix != "asan"),
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
-        prebuilt_stages=prebuilt_stages or [],
-        baseline_run_id=baseline_run_id,
+        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        baseline_run_id=jobs.build_rocm.baseline_run_id,
     )
 
 
 def expand_build_configs(
-    targets: TargetSelection,
     ci_inputs: CIInputs,
-    test_type: str,
     git_context: GitContext,
-    prebuilt_stages: list[str] | None = None,
-    baseline_run_id: str = "",
+    targets: TargetSelection,
+    jobs: JobDecisions,
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
 
@@ -999,9 +996,12 @@ def expand_build_configs(
         ["presubmit", "postsubmit", "nightly"]
     )
     build_variant = ci_inputs.build_variant
-    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push events run "host-asan"
-    if build_variant == "asan" and ci_inputs.is_push:
+    # For ASAN CI runs, workflow_dispatch and scheduled events run full "asan".
+    # Push events (postsubmit) and PRs with submodule changes run "host-asan"
+    # to provide faster feedback while still catching host-side ASAN issues.
+    # TODO: Revert PRs to full "asan" once CI capacity is increased. Currently
+    # using host-asan for submodule bump PRs to reduce queue times.
+    if build_variant == "asan" and (ci_inputs.is_push or ci_inputs.is_pull_request):
         build_variant = "host-asan"
 
     linux_config: BuildConfig | None = None
@@ -1023,12 +1023,8 @@ def expand_build_configs(
             platform=platform,
             all_families=all_families,
             variant_config=variant_config,
-            test_type=test_type,
-            pr_labels=ci_inputs.pr_labels,
-            is_schedule=ci_inputs.is_schedule,
-            is_workflow_dispatch=ci_inputs.is_workflow_dispatch,
-            prebuilt_stages=prebuilt_stages,
-            baseline_run_id=baseline_run_id,
+            ci_inputs=ci_inputs,
+            jobs=jobs,
             git_context=git_context,
         )
         if platform == "linux":
@@ -1130,12 +1126,10 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(
-        targets=targets,
         ci_inputs=ci_inputs,
-        test_type=jobs.test_rocm.test_type,
-        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
-        baseline_run_id=jobs.build_rocm.baseline_run_id,
         git_context=git_context,
+        targets=targets,
+        jobs=jobs,
     )
     builds.log()
 

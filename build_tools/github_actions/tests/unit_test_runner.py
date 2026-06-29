@@ -86,7 +86,8 @@ class BuildCtestCommandTest(unittest.TestCase):
         cmd = self._build("quick", "", set())
         self.assertEqual(cmd[0], "ctest")
         idx = cmd.index("-L")
-        self.assertEqual(cmd[idx + 1], "quick")
+        # Include labels are anchored (^...$) for exact ctest -L matching.
+        self.assertEqual(cmd[idx + 1], "^quick$")
 
     def test_generic_gpu_excludes_ex_gpu(self):
         cmd = self._build("quick", "generic", set())
@@ -104,10 +105,10 @@ class BuildCtestCommandTest(unittest.TestCase):
         available = {"gfx115X", "gfx11X"}
         cmd = self._build("quick", "gfx1151", available)
         label_indices = [i for i, v in enumerate(cmd) if v == "-L"]
-        # Should have category label and GPU label
+        # Should have category label and GPU label, both anchored (^...$).
         labels = [cmd[i + 1] for i in label_indices]
-        self.assertIn("quick", labels)
-        self.assertIn("ex_gpu_gfx115X", labels)
+        self.assertIn("^quick$", labels)
+        self.assertIn("^ex_gpu_gfx115X$", labels)
 
     def test_no_matching_gpu_excludes_ex_gpu(self):
         available = {"gfx94X"}
@@ -146,12 +147,24 @@ class BuildCtestCommandTest(unittest.TestCase):
     def test_comprehensive_category(self):
         cmd = self._build("comprehensive", "", set())
         idx = cmd.index("-L")
-        self.assertEqual(cmd[idx + 1], "comprehensive")
+        self.assertEqual(cmd[idx + 1], "^comprehensive$")
 
     def test_full_category(self):
         cmd = self._build("full", "", set())
         idx = cmd.index("-L")
-        self.assertEqual(cmd[idx + 1], "full")
+        self.assertEqual(cmd[idx + 1], "^full$")
+
+    def test_include_labels_are_anchored(self):
+        # ctest -L is a partial regex match, so include labels must be anchored
+        # (^...$) to avoid e.g. "full" matching "multigpu_full" or "ffm-full".
+        cmd = self._build("full", "gfx1151", {"gfx115X"})
+        label_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-L"]
+        self.assertTrue(label_values)
+        for value in label_values:
+            self.assertTrue(
+                value.startswith("^") and value.endswith("$"),
+                f"include label not anchored: {value}",
+            )
 
 
 class ValidTestCategoriesTest(unittest.TestCase):

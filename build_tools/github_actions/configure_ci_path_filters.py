@@ -145,22 +145,28 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 # ============================================================================
 
 # File path patterns that don't trigger CI runs.
-# Changes to files matching these patterns are considered
-# documentation/configuration that don't affect build or test workflows.
+# Changes matching these patterns shouldn't affect CI build/test workflows.
 _SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "*.gitignore",
     "*.md",
+    "*.mdc",
     "*.pre-commit-config.*",
     ".github/dependabot.yml",
     "*CODEOWNERS",
     "*LICENSE",
+    # Files used by gitleaks, no impact on CI.
+    "gitleaks.toml",
+    "build_tools/scan_tools/*",
     # Changes to dockerfiles do not currently affect CI workflows directly.
     # Docker images are built and published after commits are pushed, then
     # workflows can be updated to use the new image sha256 values.
     "dockerfiles/*",
     # Changes to experimental code do not run standard build/test workflows.
     "experimental/*",
+    # This directory contains a collection of AI skills and other developer
+    # utilities. It includes some Python scripts, none of which affect CI.
+    "skills/*",
 ]
 
 # GitHub workflow files that are used by CI workflows. Changes to any of
