@@ -9,7 +9,24 @@ include = [
 ]
 [components.dbg."core/ocl-clr/stage"]
 [components.dev."core/ocl-clr/stage"]
+exclude = [
+  # ROCR Runtime (hsa-runtime64) and HSAKMT cmake configs and import libs are
+  # also installed by the hip-clr build into core-hip_dev on Windows, because
+  # both CLR builds compile ROCR internally when ROCCLR_ENABLE_HSA=ON.
+  # Exclude them here to avoid cross-artifact overlap; the canonical copy lives
+  # in core-hip. See https://github.com/ROCm/TheRock/issues/3796.
+  "lib/cmake/hsa-runtime64/**",
+  "lib/cmake/hsakmt/**",
+  "lib/hsa-runtime64.lib",
+  "lib/hsakmt-staticdrm.lib",
+  "lib/hsakmt.lib",
+  "lib/wkmi.lib",
+]
 [components.doc."core/ocl-clr/stage"]
+exclude = [
+  # ROCR LICENSE.md is already packaged in core-hip_doc on Windows.
+  "share/doc/rocr/**",
+]
 [components.test."core/ocl-clr/stage"]
 include = [
   "tests/**",
