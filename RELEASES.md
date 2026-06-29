@@ -25,6 +25,7 @@ Table of contents:
   - [Multi-arch release status](#multi-arch-release-status)
   - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
   - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
+  - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
   - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
   - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
@@ -329,12 +330,12 @@ pip install "jax==${JAX_VERSION}"
 > Currently supported versions: 0.9.1 and 0.10.0.
 
 > [!TIP]
-> For multiple devices (e.g. Dockerfile supporting MI300X + MI355X):Bash
-
-```bash
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
-    "rocm[libraries,device-gfx942,device-gfx950]"
-```
+> For multiple devices (e.g. Dockerfile supporting MI300X + MI355X):
+>
+>```bash
+>pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+>    "rocm[libraries,device-gfx942,device-gfx950]"
+>```
 
 After installing, verify JAX can see your GPU:
 
