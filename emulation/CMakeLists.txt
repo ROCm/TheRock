@@ -51,3 +51,40 @@ if(THEROCK_ENABLE_ROCJITSU)
       rocjitsu
   )
 endif()
+
+if(THEROCK_ENABLE_MIRAGE)
+  ##############################################################################
+  # mirage
+  #
+  # User-facing UX (CLI + embedded web dashboard) for the rocjitsu GPU emulator
+  # and other emulator backends. The project is a Rust workspace wrapped by a
+  # thin CMake layer that drives cargo; the build produces the unified `mirage`
+  # binary. Building the dashboard SPA requires Node.js 20.19+ and npm on PATH.
+  ##############################################################################
+
+  therock_cmake_subproject_declare(mirage
+    DISABLE_AMDGPU_TARGETS
+    NO_MERGE_COMPILE_COMMANDS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/mirage"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/mirage"
+    CMAKE_ARGS
+      -DMIRAGE_CARGO_PROFILE=release
+  )
+
+  therock_cmake_subproject_activate(mirage)
+
+  therock_cmake_subproject_build_test(mirage
+    COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+  )
+
+  therock_provide_artifact(mirage
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-mirage.toml
+    COMPONENTS
+      dbg
+      dev
+      run
+    SUBPROJECT_DEPS
+      mirage
+  )
+endif()

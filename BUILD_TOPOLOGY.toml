@@ -813,3 +813,10 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
+
+[artifacts.mirage]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "EMULATION"
+disable_platforms = ["windows"]
