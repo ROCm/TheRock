@@ -318,8 +318,19 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 # All supported devices:
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "jax_rocm7_plugin[device-all]" "jax_rocm7_pjrt[device-all]"
-[!NOTE]
-Always pin jax, jax_rocm7_plugin, and jax_rocm7_pjrt to the same version (0.9.1 or 0.10.0).
+```
+
+> [!NOTE]
+> Always pin jax, jax_rocm7_plugin, and jax_rocm7_pjrt to the same version (0.9.1 or 0.10.0).
+
+After installing, verify JAX can see your GPU:
+
+```python
+import jax
+
+print(jax.devices())
+# [RocmDevice(id=0), RocmDevice(id=1), ...]
+```
 
 ### Installing multi-arch tarballs
 
