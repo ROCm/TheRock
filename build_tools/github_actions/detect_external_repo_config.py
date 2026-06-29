@@ -51,6 +51,7 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
         "submodule_path": "rocm-systems",
         "skip_submodules": ["rocm-systems"],
+        "dvc_projects": ["external-rocm-systems"],
     },
     # Future repos can be added here:
     # "llvm-project": {...},
@@ -410,10 +411,17 @@ def main(argv=None):
         # Use "external-" prefix to avoid collisions with submodule paths
         checkout_path = f"external-{args.repository}"
 
-        # Generate fetch_sources_args from skip_submodules
+        # Generate fetch_sources_args from skip_submodules and dvc_projects
+        fetch_args_parts = []
         if "skip_submodules" in config and config["skip_submodules"]:
             skip_args = " ".join(config["skip_submodules"])
-            config["fetch_sources_args"] = f"--skip-submodules {skip_args}"
+            fetch_args_parts.append(f"--skip-submodules {skip_args}")
+        if "dvc_projects" in config and config["dvc_projects"]:
+            dvc_args = " ".join(config["dvc_projects"])
+            fetch_args_parts.append(f"--dvc-projects {dvc_args}")
+
+        if fetch_args_parts:
+            config["fetch_sources_args"] = " ".join(fetch_args_parts)
             print(
                 f"Generated fetch_sources_args: {config['fetch_sources_args']}",
                 file=sys.stderr,
