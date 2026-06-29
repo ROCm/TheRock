@@ -818,8 +818,7 @@ def run():
         if (
             "include_family" in selected_matrix[key]
             and platform in selected_matrix[key]["include_family"]
-            and amdgpu_families
-            not in selected_matrix[key]["include_family"][platform]
+            and amdgpu_families not in selected_matrix[key]["include_family"][platform]
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform}: family {amdgpu_families} not in include_family list"
