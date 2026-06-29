@@ -435,12 +435,16 @@ def main(argv=None):
             .replace("_SOURCE_DIR", "")
         )
 
-        # Extract projects from external_repo JSON if provided
+        # Extract projects and family_overrides from external_repo JSON if provided
         projects = ""
+        family_overrides = {}
         if args.external_repo_json:
             try:
                 external_repo = json.loads(args.external_repo_json)
                 projects = external_repo.get("projects", "")
+                # family_overrides allows external repos to specify per-family config
+                # (e.g., test runners, test_labels_for_family) for their CI runs only
+                family_overrides = external_repo.get("family_overrides", {})
             except json.JSONDecodeError as e:
                 print(
                     f"Warning: failed to parse external_repo_json: {e}",
@@ -454,6 +458,7 @@ def main(argv=None):
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
             "projects": projects,
+            "family_overrides": family_overrides,
         }
         config["config_json"] = json.dumps(config_json)
         print(
