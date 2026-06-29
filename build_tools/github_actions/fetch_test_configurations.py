@@ -403,6 +403,22 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # rocRAND tests under the rocjitsu CPU simulator (no GPU required).
+    # Only runs for CDNA3/4 families where rocjitsu has KMD configs.
+    "rocrand-simulator": {
+        "job_name": "rocrand-simulator",
+        "fetch_artifact_args": "--rand --rocjitsu --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('simulator_runner.py')} --component rocrand --filter-preset basic",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "include_family": {
+            "linux": ["gfx94X-dcgpu", "gfx950-dcgpu"],
+        },
+    },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
@@ -795,6 +811,18 @@ def run():
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
+            )
+            continue
+
+        # If the test is only enabled for specific families, skip if not in the list
+        if (
+            "include_family" in selected_matrix[key]
+            and platform in selected_matrix[key]["include_family"]
+            and amdgpu_families
+            not in selected_matrix[key]["include_family"][platform]
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform}: family {amdgpu_families} not in include_family list"
             )
             continue
 
