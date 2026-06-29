@@ -89,25 +89,7 @@ TEST_TO_IGNORE = {
     },
     "gfx125X-dcgpu": {
         "linux": [
-            "Unit_hipGraphExecMemcpyNodeSetParams1D_Positive_Basic",
-            "Unit_hipGraph_SimpleGraphWithKernel",
-            "Unit_hipGraphUserObj_HostRegister",
-            "Unit_hipGraphNodeGetType_ClonedGraph_InThread_WithDependencies",
-            "Unit_hipGraphHostNodeSetParams_BasicFunc",
-            "Unit_hipStreamBeginCapture_nestedStreamCapture",
-            "Unit_hipGraphInstantiateWithFlags_AutoFreeOnLaunchDoubleKernel",
-            "Unit_hiprtcCombiComplrOptnTst",
-            "Unit_hipGraphInstantiateWithFlags_WithDefaultAndAutoFreeOnLaunch",
-            "Unit_hipGraphGetRootNodes_Functional",
-            "Unit_hiprtc_includepath",
             "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
-            "Unit_hipGraphAddMemcpyNodeToSymbol_MemcpyToSymbolNodeWithKernel",
-            "Unit_hipGraphChildGraphNodeGetGraph_Functional",
-            "Unit_hipGraphExecMemcpyNodeSetParams_Positive_Basic",
-            "Unit_hipGraphGetRootNodes_CapturedStream",
-            "Unit_hipGraphNodeGetType_NodeTypeOfChildGraph",
-            "Unit_hipGraphInstantiateWithParams_DependencyGraph",
-            "Unit_hipGraphMemcpyNodeSetParams1D_Positive_Basic",
         ]
     },
 }
@@ -189,6 +171,8 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--timeout",
+        "600",
     ]
 
     # If quick tests are enabled, run only the smoke test subset
