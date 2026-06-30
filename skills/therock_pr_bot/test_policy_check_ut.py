@@ -541,6 +541,38 @@ class LoadPolicyTests(unittest.TestCase):
         self.assertIn("pre-commit", policy.required_checks)
         self.assertGreaterEqual(policy.title_max_length, policy.title_min_length)
 
+    def test_multiline_jira_issue_patterns_loaded(self) -> None:
+        """Verify multiline JIRA/ISSUE ID patterns are in the loaded policy."""
+        policy_path = THIS_DIR / "policy.yml"
+        if not policy_path.exists():
+            self.skipTest("policy.yml not present next to tests")
+        policy = pc.load_policy(policy_path)
+
+        # Should have at least 5 issue reference patterns (inline + multiline + closing keywords + bare refs + urls)
+        self.assertGreaterEqual(len(policy.description_issue_patterns), 5)
+
+        # Verify multiline patterns work by testing them directly
+        multiline_jira_pattern = None
+        multiline_issue_pattern = None
+
+        for pat in policy.description_issue_patterns:
+            if pat.search("JIRA ID\nROCM-25757"):
+                multiline_jira_pattern = pat
+            if pat.search("ISSUE ID\nAIRUNTIME-2352"):
+                multiline_issue_pattern = pat
+
+        self.assertIsNotNone(multiline_jira_pattern, "Multiline JIRA ID pattern not found in policy")
+        self.assertIsNotNone(multiline_issue_pattern, "Multiline ISSUE ID pattern not found in policy")
+
+    def test_unit_test_patterns_include_unit_glob(self) -> None:
+        """Verify 'unit/**' pattern is in the loaded unit_test_patterns."""
+        policy_path = THIS_DIR / "policy.yml"
+        if not policy_path.exists():
+            self.skipTest("policy.yml not present next to tests")
+        policy = pc.load_policy(policy_path)
+
+        self.assertIn("unit/**", policy.unit_test_patterns)
+
 
 if __name__ == "__main__":
     unittest.main()
