@@ -627,6 +627,12 @@ def _determine_test_type(
     # Default: quick tests for fast CI feedback.
     return "quick", "default"
 
+def _stage_reuse_target_families(ci_inputs: "CIInputs") -> list[str]:
+    families = list(dict.fromkeys(
+        [*ci_inputs.linux_amdgpu_families, *ci_inputs.windows_amdgpu_families]))
+    if "generic" not in families:
+        families.append("generic")
+    return families
 
 def decide_jobs(
     ci_inputs: CIInputs,
@@ -635,14 +641,38 @@ def decide_jobs(
     """Determine which job groups to run, skip, or satisfy with prebuilt files."""
 
     # Build ROCm.
-    # TODO(#3399): Use changed files and build_topology.py to:
-    #   1. set per-stage prebuilt decisions
-    #   2. skip job groups that aren't reachable from the changed files
-    # Parse explicit prebuilt stages from workflow_dispatch input.
+    # Parse explicit prebuilt stages from workflow_dispatch input. These are
+    # the MANUAL inputs and are always honored, unchanged, in every mode.
+
     stage_decisions: dict[str, JobAction] = {}
     if ci_inputs.prebuilt_stages:
         for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
+
+    # Behind STAGE_REUSE_MODE: in dry-run we only PRINT
+    # which stages WOULD be skipped and apply nothing; in "skip-stage" the
+    # eligible stages are merged into stage_decisions so the orchestrator
+    # skips their builds and copies artifacts instead.
+    from stage_reuse_decision import (
+        StageReuseMode,
+        compute_auto_stage_reuse,
+        render_step_summary,
+    )
+    target_families = _stage_reuse_target_families(ci_inputs)
+    auto = compute_auto_stage_reuse(
+        changed_files=git_context.changed_files,
+        mode=StageReuseMode.from_environ(),
+        target_families=target_families,
+    )
+    for line in auto.report_lines:
+        print(line)
+    try:
+        gha_append_step_summary(render_step_summary(auto))
+    except Exception as exc:  # never fail CI config on a reporting
+        print(f"[STAGE-REUSE] could not write step summary: {exc}")
+    # Only skip-stage mode returns non-empty applied_reuse_stages.
+    for stage in auto.applied_reuse_stages:
+        stage_decisions.setdefault(stage, JobAction.PREBUILT)
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
