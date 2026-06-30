@@ -26,8 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from _therock_utils.s3_buckets import _is_current_run_pr_from_fork
-from github_actions_api import gha_set_output
+from github_actions_api import gha_set_output, is_current_run_pr_from_fork
 
 
 def compute_cache_type(cache_type: str, github_repository: str) -> str:
@@ -40,7 +39,7 @@ def compute_cache_type(cache_type: str, github_repository: str) -> str:
     if cache_type != "sccache":
         return cache_type
 
-    if _is_current_run_pr_from_fork() or github_repository != "ROCm/TheRock":
+    if is_current_run_pr_from_fork() or github_repository != "ROCm/TheRock":
         print(
             "sccache is unavailable for fork PRs / external repositories "
             "(no OIDC access to the sccache IAM role); using cache_type=none."

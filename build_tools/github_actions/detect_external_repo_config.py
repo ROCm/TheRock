@@ -51,6 +51,7 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
         "submodule_path": "rocm-systems",
         "skip_submodules": ["rocm-systems"],
+        "dvc_projects": ["external-rocm-systems"],
     },
     # Future repos can be added here:
     # "llvm-project": {...},
@@ -377,11 +378,12 @@ def main(argv=None):
             external_repo = json.loads(args.external_repo_json)
             source_repository = external_repo.get("repository", "")
             source_ref = external_repo.get("ref", "")
-            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries")
+            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries").
+            # Lowercase so REPO_CONFIGS lookup is case-insensitive (e.g. "ROCgdb" -> "rocgdb").
             if "/" in source_repository:
-                repo_name = source_repository.split("/")[-1]
+                repo_name = source_repository.split("/")[-1].lower()
             else:
-                repo_name = source_repository
+                repo_name = source_repository.lower()
             args.repository = repo_name
             print(
                 f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
@@ -409,10 +411,17 @@ def main(argv=None):
         # Use "external-" prefix to avoid collisions with submodule paths
         checkout_path = f"external-{args.repository}"
 
-        # Generate fetch_sources_args from skip_submodules
+        # Generate fetch_sources_args from skip_submodules and dvc_projects
+        fetch_args_parts = []
         if "skip_submodules" in config and config["skip_submodules"]:
             skip_args = " ".join(config["skip_submodules"])
-            config["fetch_sources_args"] = f"--skip-submodules {skip_args}"
+            fetch_args_parts.append(f"--skip-submodules {skip_args}")
+        if "dvc_projects" in config and config["dvc_projects"]:
+            dvc_args = " ".join(config["dvc_projects"])
+            fetch_args_parts.append(f"--dvc-projects {dvc_args}")
+
+        if fetch_args_parts:
+            config["fetch_sources_args"] = " ".join(fetch_args_parts)
             print(
                 f"Generated fetch_sources_args: {config['fetch_sources_args']}",
                 file=sys.stderr,
@@ -425,12 +434,31 @@ def main(argv=None):
             .replace("THEROCK_", "")
             .replace("_SOURCE_DIR", "")
         )
+
+        # Extract projects and family_overrides from external_repo JSON if provided
+        projects = ""
+        family_overrides = {}
+        if args.external_repo_json:
+            try:
+                external_repo = json.loads(args.external_repo_json)
+                projects = external_repo.get("projects", "")
+                # family_overrides allows external repos to specify per-family config
+                # (e.g., test runners, test_labels_for_family) for their CI runs only
+                family_overrides = external_repo.get("family_overrides", {})
+            except json.JSONDecodeError as e:
+                print(
+                    f"Warning: failed to parse external_repo_json: {e}",
+                    file=sys.stderr,
+                )
+
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
             "checkout_path": checkout_path,
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "projects": projects,
+            "family_overrides": family_overrides,
         }
         config["config_json"] = json.dumps(config_json)
         print(

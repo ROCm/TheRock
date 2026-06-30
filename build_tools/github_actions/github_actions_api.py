@@ -431,6 +431,26 @@ def gha_load_github_event() -> dict[str, Any]:
     return data
 
 
+def is_current_run_pr_from_fork() -> bool:
+    """Whether the current workflow run is a pull request from a fork.
+
+    Reads the GitHub event payload to check the ``.fork`` property on the head
+    repo, matching the GitHub Actions expression
+    ``github.event.pull_request.head.repo.fork``.
+
+    Returns False for non-pull_request events or if the event payload is not
+    available (e.g. local development).
+    """
+    if os.environ.get("GITHUB_EVENT_NAME", "") != "pull_request":
+        return False
+    if not os.environ.get("GITHUB_EVENT_PATH"):
+        return False
+    event = gha_load_github_event()
+    return bool(
+        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
+    )
+
+
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
     """Sends a request to the given GitHub REST API URL and returns the response.
 
@@ -750,9 +770,3 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
             logging.info(f"Detected GPU architecture: {gpu_arch}")
             return gpu_arch
     raise RuntimeError("No GPU architecture found in rocminfo output")
-
-
-def is_asan():
-    """Using artifact_group, determines if this is an asan build"""
-    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
-    return "asan" in ARTIFACT_GROUP

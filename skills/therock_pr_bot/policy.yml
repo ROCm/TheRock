@@ -1,0 +1,171 @@
+version: 2
+
+pr:
+  # Branch naming rules:
+  #   A recognised PREFIX must be present; anything AFTER the prefix is allowed
+  #   (including nested namespace/feature segments). We mostly care that a
+  #   known prefix is there. Uppercase letters ARE allowed (acronyms / module
+  #   names are common, e.g. ROCm, SMP, RFC).
+  # Examples:
+  #   users/chi/ucicd_setup_visible_devices
+  #   users/frepaul/ROCm-end-user-project-workflow   (uppercase in branch)
+  #   users/dgaliffi/fix/remove-build-boost-option    (nested namespace/feature)
+  #   shared/add-runner-health
+  #   compiler-ww-24-SMP-2                             (single-segment, uppercase)
+  #   ZIP-packaging-RFC                                (single-segment, uppercase)
+  #   dependabot/github_actions/github-actions-3dfd2199fc
+  #   revert-5217-users/derobins/add_hipfile_support  (auto-revert)
+  branch_name_patterns:
+    # users/<username>/<anything> — username may use upper/lower/digits/hyphens.
+    - '^users\/[A-Za-z0-9][A-Za-z0-9\-]*\/.+'
+    # shared/<anything>
+    - '^shared\/.+'
+    # Single-segment branches, e.g. ZIP-packaging-RFC, bump-rocm-libraries-936a6c7
+    - '^[A-Za-z0-9][A-Za-z0-9\-_]*$'
+    # dependabot/<anything>
+    - '^dependabot\/.+'
+    # GitHub auto-revert branches, e.g. revert-5217-users/derobins/add_hipfile_support
+    - '^revert-[0-9]+-.+'
+
+  # Special case: automated dependency "bump" PRs.
+  #
+  # WHY: These bots open routine, high-volume dependency-bump PRs (e.g.
+  # "Bumps ROCm/rocm-systems from a0952b2 to 971dc69") that don't follow the
+  # human branch/title/description conventions and don't need the full policy
+  # gate. Auto-approving them keeps the bot from blocking trusted automation and
+  # spamming "Not ready to Review" on every bump.
+  #
+  # If the PR author is one of these bot accounts, ALL policy checks are
+  # auto-approved (every row in the results table is marked Pass). The '[bot]'
+  # suffix on the GitHub login is matched automatically.
+  #
+  bump_bot_authors:
+    - assistant-librarian
+    - systems-assistant
+
+  # PR title rules (Conventional Commits style):
+  #   type(optional-scope): short description
+  # Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+  title:
+    pattern:
+      - '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9\-]+\))?(!)?: .+'
+    title_min_length: 10
+    title_max_length: 80
+
+  # Require a meaningful description
+  description:
+    min_length: 30
+    # A PR must reference a JIRA ID or ISSUE ID (a key, number, or link).
+    # The separator is OPTIONAL and may be ':' or '-'. Either field accepts:
+    # a JIRA key (PREFIX-<number>), a number (with or without '#'), or a link.
+    # Any JIRA project key is accepted — not just one project.
+    # Valid examples:
+    #   JIRA ID : AITESTAUTO-6039
+    #   JIRA ID - #330
+    #   JIRA ID #330
+    #   ISSUE ID : AITESTUTO-3334
+    #   ISSUE ID - AITESTAUTO-3433
+    #   ISSUE ID : https://github.com/ROCm/TheRock-Infra/issues/1234
+    #
+    # ALTERNATIVELY, a GitHub closing keyword + issue reference is accepted.
+    # Keywords (case-insensitive, optional trailing colon):
+    #   close / closes / closed / fix / fixes / fixed / resolve / resolves / resolved
+    # The reference may be '#<number>' or '<org>/<repo>#<number>'.
+    # Valid examples:
+    #   Closes #10
+    #   Fixes octo-org/octo-repo#100
+    #   Resolves #10
+    #   resolves #123
+    #   resolves octo-org/octo-repo#100
+    #   Closes: #10
+    #   CLOSES #10
+    #   CLOSES: #10
+    #
+    # ALSO accepted (plain GitHub issue references, no keyword needed):
+    #   #123
+    #   https://github.com/<org>/<repo>/issues/123
+    issue_reference_patterns:
+      - '(?im)^\s*JIRA\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
+      - '(?im)^\s*ISSUE\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
+      - '(?im)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]+)?#\d+'
+      # Bare GitHub issue reference, e.g. #123
+      - '(?m)(?:^|\s)#\d+\b'
+      # GitHub issue URL, e.g. https://github.com/org/repo/issues/123
+      - '(?i)https?:\/\/github\.com\/[^\/\s]+\/[^\/\s]+\/issues\/\d+'
+
+  # Unit test requirement:
+  #   - Doc/config-only PRs (e.g. .md, .txt, .yml, .ini) never need a unit test
+  #     and PASS automatically.
+  #   - PRs that change real source code (.py, .cpp, .js, ...) must include at
+  #     least one accompanying test file (e.g. test_xxx.py, test_xxx.cpp).
+  unit_tests:
+    # Source/code file extensions that REQUIRE an accompanying unit test.
+    code_extensions:
+      - .py
+      - .cpp
+      - .cc
+      - .cxx
+      - .c
+      - .h
+      - .hpp
+      - .js
+      - .ts
+      - .jsx
+      - .tsx
+      - .go
+      - .java
+      - .rb
+      - .rs
+    # A changed file is treated as a unit test if its basename matches one of
+    # these glob patterns (e.g. test_parser.py, parser_test.cpp).
+    test_file_patterns:
+      - 'test_*'
+      - '*_test.*'
+    # Unit tests are required for source code ANYWHERE in the repository — there
+    # are NO folder-based exemptions. A test file may also live in any folder;
+    # it is recognised by its name (test_* / *_test.*), not its location.
+    # Doc/config files are still skipped by EXTENSION (they are simply not in
+    # `code_extensions`), not by path.
+    exempt_paths: []
+
+diff:
+  # Block risky / unwanted files
+  forbidden_paths:
+    - '**/*.pem'
+    - '**/*.key'
+    - '**/.env'
+    - '**/*.exe'
+    # Certificates / signing requests
+    - '**/*.crt'
+    - '**/*.cer'
+    - '**/*.p12'
+    - '**/*.pfx'
+    - '**/*.der'
+    - '**/*.csr'
+    # SSH private keys
+    - '**/id_rsa'
+    - '**/id_dsa'
+    - '**/id_ecdsa'
+    - '**/id_ed25519'
+    # GPG keys / signatures
+    - '**/*.gpg'
+    - '**/*.asc'
+
+checks:
+  # External checks that must be GREEN before PR is "ready for review"
+  # (Do NOT include therock-pr-bot here to avoid circular dependency.)
+  required_check_runs:
+    - pre-commit
+
+  failure_comments:
+    pre-commit:
+      title: "Pre-commit check failed"
+      body: |
+        ⛔ **pre-commit failed**
+
+        Please run locally:
+        - `python -m pip install pre-commit`
+        - `pre-commit install`
+        - `pre-commit run --all-files --show-diff-on-failure`
+
+        This repo uses `.pre-commit-config.yaml`.
