@@ -24,46 +24,40 @@ Table of contents:
 - [Multi-arch releases](#multi-arch-releases)
   - [Multi-arch release status](#multi-arch-release-status)
   - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
+    - [Using multi-arch ROCm Python packages](#using-multi-arch-rocm-python-packages)
   - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
+    - [Using multi-arch PyTorch Python packages](#using-multi-arch-pytorch-python-packages)
   - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
   - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
   - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
   - [Using ROCm from WSL](#using-rocm-from-wsl)
-- [Per-family releases](#per-family-releases)
-  - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
-    - [Python packages release status](#python-packages-release-status)
-    - [Installing ROCm Python packages](#installing-rocm-python-packages)
-    - [Using ROCm Python packages](#using-rocm-python-packages)
-    - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
-    - [Using PyTorch Python packages](#using-pytorch-python-packages)
-    - [Installing JAX Python packages](#installing-jax-python-packages)
-    - [Using JAX Python packages](#using-jax-python-packages)
-  - [Installing from tarballs](#installing-from-tarballs)
-    - [Browsing release tarballs](#browsing-release-tarballs)
-    - [Manual tarball extraction](#manual-tarball-extraction)
-    - [Automated tarball extraction](#automated-tarball-extraction)
-    - [Using installed tarballs](#using-installed-tarballs)
-  - [Installing from native packages](#installing-from-native-packages)
-    - [Native packages release status](#native-packages-release-status)
-    - [Installing on Debian-based systems](#installing-on-debian-based-systems-ubuntu-debian-etc)
-    - [Installing on RPM-based systems](#installing-on-rpm-based-systems-rhel-sles-almalinux-etc)
 - [Verifying your installation](#verifying-your-installation)
+
+<!-- TODO: fold away the "multi-arch releases -->
+
+<!-- TODO: add new "Python Packages" section to include ROCm,PyTorch,JAX -->
+
+<!-- TODO: move tarballs under native linux -->
+
+<!-- TODO: add "Native Packages" section to include Linux, WSL, Windows -->
 
 ## Multi-arch releases
 
 > [!IMPORTANT]
-> We are introducing multi-arch releases with
+> We introduced multi-arch releases with
 > [#3323](https://github.com/ROCm/TheRock/issues/3323). Rather than build
-> ROCm for GPU family subsets like the [per-family releases](#per-family-releases),
+> ROCm for GPU family subsets like the
+> [legacy per-family releases](/docs/packaging/legacy_per_family_releases.md),
 > these multi-arch releases build all GPU architectures together and split
 > GPU-specific code (kernel packs) from architecture-neutral host code as a
 > packaging step.
 >
-> This new setup will streamline package installation, so please note the
+> This new setup streamlines package installation, so please note the
 > differences in the install instructions.
 
-Key differences from [per-family releases](#per-family-releases):
+Key differences from
+[legacy per-family releases](/docs/packaging/legacy_per_family_releases.md):
 
 - **One index URL for all GPUs**: select your target with a pip extra like
   `[device-gfx942]` instead of finding a per-family index URL
@@ -95,13 +89,13 @@ Key differences from [per-family releases](#per-family-releases):
 
 **Package availability:**
 
-| Package type            | Linux                                                                                                                                               | Windows                                                           |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| ROCm Python packages    | ✅ Available                                                                                                                                        | ✅ Available                                                      |
-| PyTorch Python packages | ✅ Available<ul><li>Torch versions 2.10, 2.11, 2.12 only -<br>other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)</li></ul> | ✅ Available                                                      |
-| JAX Python packages     | 🟠 In progress ([#5634](https://github.com/ROCm/TheRock/issues/5634))                                                                               | -                                                                 |
-| ROCm tarballs           | ✅ Available                                                                                                                                        | ✅ Available                                                      |
-| Native packages         | ✅ Available                                                                                                                                        | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
+| Package type            | Linux        | Windows                                                           |
+| ----------------------- | ------------ | ----------------------------------------------------------------- |
+| ROCm Python packages    | ✅ Available | ✅ Available                                                      |
+| PyTorch Python packages | ✅ Available | ✅ Available                                                      |
+| JAX Python packages     | ✅ Available | -                                                                 |
+| ROCm tarballs           | ✅ Available | ✅ Available                                                      |
+| Native packages         | ✅ Available | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
 
 ### Installing multi-arch ROCm Python packages
 
@@ -152,21 +146,14 @@ Select your GPU using the `[device-*]` extras from the
 > succeed, but device enumeration, kernel launch, or library loads may fail at
 > runtime. Please file an issue if you hit one.
 
-> [!WARNING]
-> Known issue ([#5347](https://github.com/ROCm/TheRock/issues/5347)): some
-> `rocm` meta-package device extras may be missing from the published `rocm`
-> package metadata. If a `rocm[device-*]` extra does not install the expected
-> device package, install the device package directly, for example:
->
-> ```bash
-> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
->     rocm-sdk-device-gfx942 rocm-sdk-device-gfx950
-> ```
-
 ```bash
 # Single device (replace device-gfx942 with your GPU):
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "rocm[libraries,device-gfx942]"
+
+# Also install the 'devel' package:
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    "rocm[libraries,devel,device-gfx942]"
 
 # Multiple devices (e.g. for a Dockerfile used by both MI300X and MI355X):
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
@@ -179,17 +166,68 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 
 <!-- TODO: Advertise wheel variants / WheelNext once available  -->
 
-After installing, verify your installation:
+#### Using multi-arch ROCm Python packages
+
+After installing the ROCm Python packages, you should see them in your
+environment:
 
 ```bash
-rocm-sdk test
+pip freeze | grep rocm
+# rocm==7.15.0a20260630
+# rocm-sdk-core==7.15.0a20260630
+# rocm-sdk-device-gfx1100==7.15.0a20260630
+# rocm-sdk-libraries==7.15.0a20260630
 ```
 
-The `rocm-sdk-devel` development files (headers, CMake config, and the device
-`.kpack`/kernel files from your `rocm-sdk-device-*` wheels) are expanded on first
-use. To expand them eagerly, run `rocm-sdk init`.
+You should also see various tools on your `PATH` and in the `bin` directory:
 
-> [!NOTE]
+```bash
+which rocm-sdk
+# .../.venv/bin/rocm-sdk
+
+ls .venv/bin
+# activate       amdclang++    hipcc      python                 rocm-sdk
+# activate.csh   amdclang-cl   hipconfig  python3                rocm-smi
+# activate.fish  amdclang-cpp  pip        python3.12             roc-obj
+# Activate.ps1   amdflang      pip3       rocm_agent_enumerator  roc-obj-extract
+# amdclang       amdlld        pip3.12    rocminfo               roc-obj-ls
+```
+
+The `rocm-sdk` tool can be used to inspect and test the installation:
+
+```console
+$ rocm-sdk --help
+usage: rocm-sdk {command} ...
+
+ROCm SDK Python CLI
+
+positional arguments:
+  {path,test,version,targets,init}
+    path                Print various paths to ROCm installation
+    test                Run installation tests to verify integrity
+    version             Print version information
+    targets             Print information about the GPU targets that are supported
+    init                Expand devel contents to initialize rocm[devel]
+
+$ rocm-sdk test
+...
+Ran 22 tests in 8.284s
+OK
+
+$ rocm-sdk targets
+gfx1100;gfx1101;gfx1102;gfx1103;gfx1151;gfx1200;gfx1201;...
+```
+
+If you also installed the `rocm-sdk-devel` development package using the
+`rocm[devel]` extra and want to use it outside of Python, you can _eagerly_
+expand its contents using `rocm-sdk init`:
+
+```console
+$ rocm-sdk init
+Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
+```
+
+> [!TIP]
 > The devel tree is expanded - and its device files linked from the installed
 > `rocm-sdk-device-*` wheels - only once: on the first `rocm-sdk init` /
 > `rocm-sdk test`, or the first use of a devel tool such as `hipcc`. If you
@@ -245,6 +283,8 @@ Install PyTorch with ROCm support using the unified multi-arch index.
 Select your GPU target using the `[device-*]` extras from the
 [table above](#supported-python-device--install-extras):
 
+<!-- TODO: add version table here (2.9, 2.10, 2.11, 2.12, 2.13, 2.14) -->
+
 ```bash
 # Single device (replace device-gfx942 with your GPU):
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
@@ -286,6 +326,8 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 > # gfx110X-all [gfx1100, gfx1101, gfx1102, gfx1103] is ~600 MB.
 > ```
 
+#### Using multi-arch PyTorch Python packages
+
 After installing, verify PyTorch can see your GPU:
 
 ```python
@@ -300,9 +342,15 @@ print(torch.cuda.get_device_name(0))
 See [external-builds/pytorch/README.md](/external-builds/pytorch/README.md) for
 more details on supported PyTorch versions and building from source.
 
+See also the
+[Testing the PyTorch installation](https://rocm.docs.amd.com/projects/install-on-linux/en/develop/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation)
+instructions in the AMD ROCm documentation.
+
 ### Installing multi-arch JAX Python packages
 
 Install JAX with ROCm support using the unified multi-arch index.
+
+<!-- TODO: add version table here (0.9.1, 0.10.0, 0.10.2) -->
 
 > [!IMPORTANT]
 > Unlike PyTorch, the JAX wheels do **not** automatically install ROCm packages as a dependency.
@@ -326,7 +374,7 @@ pip install "jax==${JAX_VERSION}"
 ```
 
 > [!NOTE]
-> Always pin jax, jax_rocm7_plugin, and jax_rocm7_pjrt to the same version.
+> Always pin `jax`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt` to the same version.
 > Currently supported versions: 0.9.1 and 0.10.0.
 
 > [!TIP]
@@ -418,7 +466,7 @@ multi-arch pipeline.
 > currently **unsigned**.
 
 Multi-arch native packages use a simplified package model compared to the
-[per-family native packages](#installing-from-native-packages):
+[legacy per-family releases](/docs/packaging/legacy_per_family_releases.md):
 
 | Package name       | Description                                                                                                      |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------- |
