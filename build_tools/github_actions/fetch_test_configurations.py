@@ -411,7 +411,7 @@ test_matrix = {
         "job_name": "rocrand-simulator",
         "fetch_artifact_args": "--rand --rocjitsu --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('simulator_runner.py')} --component rocrand --filter-preset basic",
+        "test_script": f"python {_get_script_path('simulator_runner.py')} --component rocrand --filter-preset smoke",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "total_shards_dict": {

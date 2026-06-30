@@ -64,6 +64,42 @@ rocrand:
         - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/0"
       ctest_regex: "^test_rocrand_basic$"
       min_gtests: 3
+    # Intermediate step above `basic`. Stays pinned to test_rocrand_basic - the
+    # one binary proven to initialize cleanly under rocjitsu - so no new
+    # (untimed) ctest binaries enter scope and the run cannot wander into the
+    # test_rocrand_cpp_basic hang class (Rocjitsu_003.txt). It broadens coverage
+    # from 3 -> 17 gtests: both non-parameterized API tests plus all three
+    # TEST_P families (create/destroy, set_stream, initialize) across a
+    # representative RNG spread - /0 PHILOX (proven), /3 XORWOW, /4 MTGP32,
+    # /6 THREEFRY2_32_20, and /11 SCRAMBLED_SOBOL32 (quasi).
+    #
+    # The whole binary ran ~43 cases in ~120s previously (~2.8s/case), so 17
+    # cases is ~45s - comfortably under the 60-min step budget, and the 600s
+    # per-test cap bounds any single stall. set_stream/initialize are not yet
+    # proven under the simulator: if a specific (test, RNG) case fails or
+    # stalls, move that one entry to the component `skip:` list with a one-line
+    # reason rather than reverting the whole preset.
+    smoke:
+      allow:
+        - "rocrand_basic_tests.rocrand_get_version_test"
+        - "rocrand_basic_tests.rocrand_generator_test"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/0"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/3"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/4"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/6"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/11"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_set_stream_test/0"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_set_stream_test/3"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_set_stream_test/4"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_set_stream_test/6"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_set_stream_test/11"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_initialize_generator_test/0"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_initialize_generator_test/3"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_initialize_generator_test/4"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_initialize_generator_test/6"
+        - "rocrand_basic_tests/rocrand_basic_tests.rocrand_initialize_generator_test/11"
+      ctest_regex: "^test_rocrand_basic$"
+      min_gtests: 17
     # Mirror of QUICK_TESTS in test_rocrand.py. Promoted in PR-2 once `basic`
     # is stably green for a few runs. ctest_regex left unset (defaults to ".*")
     # so all 52 rocRAND binaries run; the per-binary filter then selects only
