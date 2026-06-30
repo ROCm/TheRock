@@ -102,7 +102,12 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
 endif(THEROCK_ENABLE_CORE_AMDSMI)
 
 
-if(THEROCK_ENABLE_CORE_RUNTIME)
+set(_therock_enable_hsa_runtime ON)
+if(WIN32)
+  set(_therock_enable_hsa_runtime "${THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME}")
+endif()
+
+if(THEROCK_ENABLE_CORE_RUNTIME AND _therock_enable_hsa_runtime)
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -229,7 +234,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       ${_core_runtime_subproject_deps}
   )
 
-endif(THEROCK_ENABLE_CORE_RUNTIME)
+endif()
 
 if(THEROCK_ENABLE_HIP_RUNTIME)
   ##############################################################################
@@ -257,8 +262,12 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   else()
     # Non-Windows CLR options.
     list(APPEND HIP_CLR_RUNTIME_DEPS
-      rocminfo  # Various things expect to be able to find the rocminfo tools
       rocprofiler-register
+    )
+  endif()
+  if(_therock_enable_hsa_runtime)
+    list(APPEND HIP_CLR_RUNTIME_DEPS
+      rocminfo  # Various things expect to be able to find the rocminfo tools
       ROCR-Runtime
     )
   endif()
@@ -462,12 +471,16 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   else()
     # Non-Windows CLR options.
     list(APPEND OCL_CLR_RUNTIME_DEPS
-      rocminfo  # Various things expect to be able to find the rocminfo tools
       rocprofiler-register
-      ROCR-Runtime
     )
     list(APPEND OCL_CLR_CMAKE_ARGS
       "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+    )
+  endif()
+  if(_therock_enable_hsa_runtime)
+    list(APPEND OCL_CLR_RUNTIME_DEPS
+      rocminfo  # Various things expect to be able to find the rocminfo tools
+      ROCR-Runtime
     )
   endif()
 

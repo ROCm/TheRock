@@ -37,6 +37,15 @@ platform_package_name = my_package.get_py_package_name()
 packages.append(platform_package_name)
 print("Found packages:", packages)
 
+WINDOWS_CONSOLE_SCRIPTS = [
+    "hipInfo=rocm_sdk_core._cli:hipInfo",
+]
+if (
+    platform.system() == "Windows"
+    and (THIS_DIR / "platform" / platform_package_name / "bin" / "rocminfo.exe").exists()
+):
+    WINDOWS_CONSOLE_SCRIPTS.append("rocminfo=rocm_sdk_core._cli:rocm_info")
+
 setup(
     name=f"rocm-sdk-core",
     version=dist_info.__version__,
@@ -90,10 +99,7 @@ setup(
                 "rocprofv3-avail=rocm_sdk_core._cli:rocprofv3_avail",
             ]
             if platform.system() != "Windows"
-            else [
-                "hipInfo=rocm_sdk_core._cli:hipInfo",
-                "rocminfo=rocm_sdk_core._cli:rocm_info",
-            ]
+            else WINDOWS_CONSOLE_SCRIPTS
         ),
     },
 )

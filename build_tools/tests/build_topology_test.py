@@ -11,6 +11,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -21,6 +22,7 @@ from _therock_utils.build_topology import (
     Artifact,
     BuildTopology,
 )
+from topology_to_cmake import generate_feature_declarations
 
 
 class BuildTopologyTest(unittest.TestCase):
@@ -265,6 +267,58 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertEqual(hip.type, "target-specific")
         self.assertEqual(hip.artifact_deps, ["rocm-core"])
         self.assertEqual(hip.platform, "linux")
+
+    def test_parse_conditional_disabled_platform_flags(self):
+        """Test parsing flags that can remove artifact platform disables."""
+        self.write_topology(
+            """
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            disable_platforms = ["windows"]
+            enable_on_disabled_platforms_if_flags = ["HSA_WINDOWS_SHARED_RUNTIME"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["core-runtime"]
+
+        self.assertEqual(artifact.disable_platforms, ["windows"])
+        self.assertEqual(
+            artifact.enable_on_disabled_platforms_if_flags,
+            ["HSA_WINDOWS_SHARED_RUNTIME"],
+        )
+
+    def test_generates_conditional_disabled_platform_feature(self):
+        """Test conditional platform disables in generated feature CMake."""
+        self.write_topology(
+            """
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            feature_name = "CORE_RUNTIME"
+            feature_group = "CORE"
+            disable_platforms = ["windows"]
+            enable_on_disabled_platforms_if_flags = ["HSA_WINDOWS_SHARED_RUNTIME"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        output = StringIO()
+        generate_feature_declarations(topology, output)
+        cmake = output.getvalue()
+
+        self.assertIn("if(THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)", cmake)
+        self.assertIn("else()", cmake)
+        self.assertIn("DISABLE_PLATFORMS windows", cmake)
 
     def test_get_artifacts_in_group(self):
         """Test getting artifacts belonging to a group."""

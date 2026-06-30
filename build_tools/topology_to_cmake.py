@@ -210,6 +210,25 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
                     if artifact not in artifacts_in_order:
                         artifacts_in_order.append(artifact)
 
+    def write_feature_declaration(
+        artifact: Artifact,
+        feature_name: str,
+        feature_group: str,
+        *,
+        disable_platforms: list[str],
+    ):
+        f.write(f"therock_add_feature({feature_name}\n")
+        f.write(f"  GROUP {feature_group}\n")
+        f.write(f'  DESCRIPTION "Enables {artifact.name}"\n')
+
+        if requires:
+            f.write(f"  REQUIRES {' '.join(requires)}\n")
+
+        if disable_platforms:
+            f.write(f"  DISABLE_PLATFORMS {' '.join(disable_platforms)}\n")
+
+        f.write(")\n")
+
     for artifact in artifacts_in_order:
         feature_name = topology.get_artifact_feature_name(artifact)
         feature_group = topology.get_artifact_feature_group(artifact)
@@ -222,18 +241,32 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
                 dep_feature = topology.get_artifact_feature_name(dep_artifact)
                 requires.append(dep_feature)
 
-        # Generate the feature declaration
-        f.write(f"therock_add_feature({feature_name}\n")
-        f.write(f"  GROUP {feature_group}\n")
-        f.write(f'  DESCRIPTION "Enables {artifact.name}"\n')
-
-        if requires:
-            f.write(f"  REQUIRES {' '.join(requires)}\n")
-
-        if artifact.disable_platforms:
-            f.write(f"  DISABLE_PLATFORMS {' '.join(artifact.disable_platforms)}\n")
-
-        f.write(")\n\n")
+        flags = artifact.enable_on_disabled_platforms_if_flags
+        if flags and artifact.disable_platforms:
+            flag_condition = " OR ".join(f"THEROCK_FLAG_{flag}" for flag in flags)
+            f.write(f"if({flag_condition})\n")
+            write_feature_declaration(
+                artifact,
+                feature_name,
+                feature_group,
+                disable_platforms=[],
+            )
+            f.write("else()\n")
+            write_feature_declaration(
+                artifact,
+                feature_name,
+                feature_group,
+                disable_platforms=artifact.disable_platforms,
+            )
+            f.write("endif()\n\n")
+        else:
+            write_feature_declaration(
+                artifact,
+                feature_name,
+                feature_group,
+                disable_platforms=artifact.disable_platforms,
+            )
+            f.write("\n")
 
 
 def generate_validation_metadata(topology: BuildTopology, f: TextIO):

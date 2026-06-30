@@ -114,6 +114,9 @@ class Artifact:
     disable_platforms: List[str] = field(
         default_factory=list
     )  # Platforms where disabled
+    enable_on_disabled_platforms_if_flags: List[str] = field(
+        default_factory=list
+    )  # Build flags that allow disabled platforms
     python_requires: List[str] = field(
         default_factory=list
     )  # pip install args (e.g., ["-r path/to/req.txt"])
@@ -216,6 +219,9 @@ class BuildTopology:
                 feature_name=artifact_data.get("feature_name"),
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
+                enable_on_disabled_platforms_if_flags=artifact_data.get(
+                    "enable_on_disabled_platforms_if_flags", []
+                ),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
             )
@@ -435,6 +441,12 @@ class BuildTopology:
                     errors.append(
                         f"Artifact '{artifact_name}' has invalid disable_platform '{platform}' "
                         f"(expected: {valid_platforms})"
+                    )
+            for flag in artifact.enable_on_disabled_platforms_if_flags:
+                if not feature_pattern.match(flag):
+                    errors.append(
+                        f"Artifact '{artifact_name}' enable_on_disabled_platforms_if_flags "
+                        f"entry '{flag}' should be UPPERCASE_WITH_UNDERSCORES"
                     )
 
         # Validate source set disable_platforms

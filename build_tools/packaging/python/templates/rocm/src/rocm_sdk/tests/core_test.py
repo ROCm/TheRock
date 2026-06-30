@@ -53,7 +53,7 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [
     ("hipInfo", [], "", True),
-    ("rocminfo", [], "", True),
+    ("rocminfo", [], "", False),
 ]
 
 CONSOLE_SCRIPT_TESTS = COMMON_CONSOLE_SCRIPT_TESTS + (
