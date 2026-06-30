@@ -1,13 +1,16 @@
-## Per-family releases
+# Legacy per-family releases
+
+> [!CAUTION]
+> Per-family releases have been replaced with multi-arch releases, documented in
+> [RELEASES.md](/RELEASES.md).
+>
+> This page documents historical per-family releases while they are still
+> available but *no new per-family releases will be generated and previous*
+> *per-family releases may be deleted as file retention policies take effect*.
 
 Per-family releases use **GPU-family-specific index URLs** - you choose the
 index URL that matches your GPU family, and all packages for that family are
 served from that URL.
-
-> [!CAUTION]
-> Multi-arch releases (above) are the newer approach and have replaced
-> per-family releases. Historical per-family releases are still available but
-> no new per-family releases will be generated.
 
 ## Installing per-family releases using pip
 
@@ -30,26 +33,11 @@ We currently support Python 3.10, 3.11, 3.12, 3.13, and 3.14 (PyTorch 2.9+ only)
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual environment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
-### Python packages release status
-
-> [!IMPORTANT]
-> Known issues with the Python wheels are tracked at
-> https://github.com/ROCm/TheRock/issues/808.
-
-| Platform |                                                                                                                                                                                                                                         ROCm Python packages |                                                                                                                                                                                                                                               PyTorch Python packages |                                                                                                                                                                                                                                       JAX Python packages |
-| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) | [![Release Linux JAX Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_jax_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_jax_wheels.yml?query=branch%3Amain) |
-| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) |             [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |                                                                                                                                                                                                                                                         — |
-
 ### Index page listing
 
-For now, `rocm`, `torch`, and `jax` packages are published to GPU-architecture-specific index
-pages and must be installed using an appropriate `--find-links` argument to `pip`.
-They may later be pushed to the
-[Python Package Index (PyPI)](https://pypi.org/) or other channels using a process
-like https://wheelnext.dev/. **Please check back regularly
-as these instructions will change as we migrate to official indexes and adjust
-project layouts.**
+Per-family `rocm`, `torch`, and `jax` packages were published to
+GPU-architecture-specific index pages and must be installed using an appropriate
+`--find-links` argument to `pip`.
 
 | Product Name                       | GFX Target | GFX Family   | Install instructions                                                                               |
 | ---------------------------------- | ---------- | ------------ | -------------------------------------------------------------------------------------------------- |
@@ -67,7 +55,7 @@ project layouts.**
 
 We provide several Python packages which together form the complete ROCm SDK.
 
-- See [ROCm Python Packaging via TheRock](./docs/packaging/python_packaging.md)
+- See [ROCm Python Packaging via TheRock](/docs/packaging/python_packaging.md)
   for information about the each package.
 - The packages are defined in the
   [`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
@@ -82,7 +70,7 @@ We provide several Python packages which together form the complete ROCm SDK.
 
 #### Optional profiler package
 
-A new optional package `rocm-profiler` is available, providing ROCm profiling tools:
+An optional package `rocm-profiler` is also available, providing ROCm profiling tools:
 
 - ROCm Systems Profiler (rocprofiler-systems)
 - ROCm Compute Profiler (rocprofiler-compute)
@@ -598,13 +586,12 @@ such as setting environment variables.
 >
 > For most users, we recommend installing via package managers:
 >
-> - [Installing multi-arch releases using pip](#installing-multi-arch-rocm-python-packages)
 > - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
 > - [Installing from native packages](#installing-from-native-packages)
 
 ### Browsing release tarballs
 
-Release tarballs are uploaded to the following locations:
+Per-family release tarballs were uploaded to the following locations:
 
 | Tarball index                             | S3 bucket                                                                                | Description                                        |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -629,9 +616,9 @@ mkdir install && tar -xf *.tar.gz -C install
 For more control over artifact installation—including per-commit CI builds,
 specific release versions, the latest nightly release, and component
 selection—see the
-[Installing Artifacts](docs/development/installing_artifacts.md) developer
+[Installing Artifacts](/docs/development/installing_artifacts.md) developer
 documentation. The
-[`install_rocm_from_artifacts.py`](build_tools/install_rocm_from_artifacts.py)
+[`install_rocm_from_artifacts.py`](/build_tools/install_rocm_from_artifacts.py)
 script can be used to install artifacts from a variety of sources.
 
 ### Using installed tarballs
@@ -676,18 +663,11 @@ ls install
 
 ## Installing from native packages
 
-In addition to Python wheels and tarballs, ROCm native Linux packages are
-published for Debian-based and RPM-based distributions.
+In addition to Python wheels and tarballs, per-family ROCm native Linux packages
+were published for Debian-based and RPM-based distributions.
 
 > [!WARNING]
-> These builds are primarily intended for development and testing and are currently **unsigned**.
-
-### Native packages release status
-
-| Platform |                                                                                                                                                                                                                                  Native packages |
-| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| Linux    | [![Build Native Linux Packages](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml?query=branch%3Amain) |
-| Windows  |                                                                                                                                                                                                                                    (Coming soon) |
+> These builds were primarily intended for development and testing and are **unsigned**.
 
 ### GPU family and package mapping
 
