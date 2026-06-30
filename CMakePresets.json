@@ -40,10 +40,10 @@
         "aqlprofile_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
-        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
-        "CMAKE_CXX_FLAGS": "-g1",
-        "CMAKE_C_FLAGS": "-g1",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
@@ -65,10 +65,10 @@
         "aqlprofile_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
-        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
-        "CMAKE_CXX_FLAGS": "-g1",
-        "CMAKE_C_FLAGS": "-g1",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
@@ -91,10 +91,10 @@
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "rocprofiler-sdk_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
-        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
-        "CMAKE_CXX_FLAGS": "-g1",
-        "CMAKE_C_FLAGS": "-g1",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
