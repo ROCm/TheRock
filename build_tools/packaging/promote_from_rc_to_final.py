@@ -627,19 +627,20 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
 
 
 def _scan_multiarch_dist_info_py(path: pathlib.Path) -> set[str]:
-    """Multi-arch iff `AVAILABLE_TARGET_FAMILIES.append(...)` appears more than
-    once. Returns the set of all appended archs (regardless of count).
-    If it only occurs once it is a single-arch package.
+    """Multi-arch iff `AVAILABLE_TARGET_FAMILIES.append(...)` references more
+    than one distinct arch. Returns the set of appended archs. Duplicate
+    appends of the same arch count once, so a single distinct arch (even if
+    appended multiple times) is treated as single-arch.
     """
     text = path.read_text(encoding="utf-8")
     append_re = re.compile(
         rf"^\s*AVAILABLE_TARGET_FAMILIES\.append\(['\"]({_GFX_ARCH})['\"]\)\s*$",
         re.MULTILINE,
     )
-    archs = [m.group(1) for m in append_re.finditer(text)]
+    archs = {m.group(1) for m in append_re.finditer(text)}
     if len(archs) <= 1:
         return set()
-    return set(archs)
+    return archs
 
 
 def _apply_keep_list_to_dist_info_py(path: pathlib.Path, keep_archs: list[str]) -> None:
