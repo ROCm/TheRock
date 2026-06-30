@@ -37,6 +37,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocjitsu | --no-rocjitsu]
+    [--mirage | --no-mirage]
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
@@ -389,6 +390,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocdecode,
             args.rocjpeg,
             args.rocjitsu,
+            args.mirage,
             args.rocprofiler_compute,
             args.rocprofiler_sdk,
             args.rocprofiler_systems,
@@ -473,6 +475,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocjitsu:
             extra_artifacts.append("rocjitsu")
             argv.append("rocjitsu_run")
+        if args.mirage:
+            extra_artifacts.append("mirage")
+            argv.append("mirage_run")
         if args.hipblasltprovider:
             extra_artifacts.append("hipblasltprovider")
         if args.prim:
@@ -808,6 +813,13 @@ def main(argv):
         "--rocjitsu",
         default=False,
         help="Include 'rocjitsu' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--mirage",
+        default=False,
+        help="Include 'mirage' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
