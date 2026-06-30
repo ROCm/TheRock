@@ -1,20 +1,19 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Reusable multi-arch build variant of build_windows_pytorch_wheels_ci.yml.
+# Reusable multi-arch PyTorch build workflow for Windows.
 #
 # Built shape:
 #   - One fat build_prod_wheels.py invocation for one python_version and
 #     pytorch_git_ref, covering all gfx targets expanded from the
 #     inputs.amdgpu_families set. Builds torch, torchaudio, and torchvision
-#     in a single invocation. (No triton on Windows,
-#     matching the legacy release_windows_pytorch_wheels.yml shape.)
+#     in a single invocation.
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
-#     torchaudio ships as-is (no split).
+#     other packages ship as-is (nothing to split).
 #   - Upload the result to s3://therock-{release_type}-python/v4/whl/
-#     (server-side indexing handles the index page) via
-#     publish_pytorch_to_release_bucket.py.
+#     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
+#     happens server-side).
 #
 # For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
@@ -52,9 +51,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type; selects the S3 bucket.'
         type: string
@@ -100,9 +103,13 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -161,7 +168,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -171,7 +178,7 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -184,7 +191,7 @@ jobs:
       - name: Install requirements
         run: |
           choco source disable -n=chocolatey
-          choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
+          choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ninja --version 1.13.1
 
       # Build a fixed version of libuv from source, no matter the pytorch ref.
@@ -217,15 +224,15 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --repo-hashtag nightly \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
             --repo-hashtag nightly \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
             --repo-hashtag nightly \
             --no-commit-hipify
 
@@ -234,18 +241,18 @@ jobs:
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --require-related-commit \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch  \
             --require-related-commit \
             --no-commit-hipify
 
@@ -258,7 +265,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
@@ -295,10 +302,9 @@ jobs:
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --find-links "${{ inputs.rocm_package_find_links_url }}" ^
-            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
-            --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
-            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            --index-url="${{ inputs.rocm_package_index_url }}" ^
+            --find-links="${{ inputs.rocm_package_find_links_url }}" ^
+            --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
@@ -432,13 +438,23 @@ jobs:
       matrix: ${{ steps.configure.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Checkout CI config
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
       - name: Configure PyTorch test matrix
         id: configure
+        env:
+          CI_CONFIG_PATH: ci-config
         run: |
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \

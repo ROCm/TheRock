@@ -69,6 +69,35 @@ def _run_from_environ(
         os.unlink(event_path)
 
 
+def _jobs(
+    *,
+    test_type: str = "quick",
+    prebuilt_stages: list[str] | None = None,
+    baseline_run_id: str = "",
+    build_pytorch: bool = True,
+) -> cm.JobDecisions:
+    """Construct default job decisions for tests that exercise later stages."""
+    prebuilt_stages = prebuilt_stages or []
+    return cm.JobDecisions(
+        build_rocm=cm.BuildRocmDecision(
+            action=cm.JobAction.RUN,
+            stage_decisions={stage: cm.JobAction.PREBUILT for stage in prebuilt_stages},
+            baseline_run_id=baseline_run_id,
+        ),
+        test_rocm=cm.TestRocmDecision(
+            action=cm.JobAction.RUN,
+            test_type=test_type,
+        ),
+        build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+        build_pytorch=cm.JobGroupDecision(
+            action=cm.JobAction.RUN if build_pytorch else cm.JobAction.SKIP
+        ),
+        test_pytorch=cm.JobGroupDecision(
+            action=cm.JobAction.RUN if build_pytorch else cm.JobAction.SKIP
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # CIInputs — construction and properties
 # ---------------------------------------------------------------------------
@@ -739,11 +768,11 @@ class TestSelectTargets(unittest.TestCase):
 
 
 class TestExpandBuildConfigs(unittest.TestCase):
-    """Test expand_build_configs: TargetSelection × CIInputs → BuildConfigs.
+    """Test expand_build_configs: TargetSelection + CIInputs + JobDecisions -> BuildConfigs.
 
     Tests verify structural properties of the output, not specific data values
-    from amdgpu_family_matrix.py. Changing a runner label or flipping
-    expect_failure in the matrix data should not require test updates here.
+    from amdgpu_family_matrix.py. Changing a runner label should not require
+    test updates here.
     """
 
     def _inputs(self, **kwargs):
@@ -766,7 +795,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="",
-            expect_failure=False,
             build_pytorch=True,
             build_native_linux=True,
         )
@@ -779,10 +807,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Empty targets on both platforms → both None."""
         targets = cm.TargetSelection()
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNone(result.linux)
         self.assertIsNone(result.windows)
@@ -797,7 +825,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="release",
-            expect_failure=False,
             build_pytorch=True,
             build_native_linux=True,
         )
@@ -823,10 +850,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         targets = cm.select_targets(inputs)
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=inputs,
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         required_keys = {
             "amdgpu_family",
@@ -834,16 +861,15 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "sanity_check_only_for_family",
         }
+        optional_keys = {"test-runs-on-labels"}
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info
             self.assertGreater(len(per_family), 0)
             for entry in per_family:
-                self.assertEqual(
-                    set(entry.keys()),
-                    required_keys,
-                    f"unexpected keys in per-family info: {entry}",
-                )
+                entry_keys = set(entry.keys())
+                self.assertLessEqual(required_keys, entry_keys)
+                self.assertLessEqual(entry_keys, required_keys | optional_keys)
 
     def test_build_config_structure(self):
         """BuildConfig has correct structure: families, metadata, consistency.
@@ -876,10 +902,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
 
         # All target families that support the variant appear in output.
@@ -897,8 +923,45 @@ class TestExpandBuildConfigs(unittest.TestCase):
         config = result.linux
         self.assertTrue(len(config.build_variant_label) > 0)
         self.assertIn("release", config.artifact_group)
-        self.assertIsInstance(config.expect_failure, bool)
         self.assertIsInstance(config.build_pytorch, bool)
+
+    def test_build_config_includes_python_package_test_matrix(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertEqual(len(result.linux.test_python_packages_matrix), 6)
+        self.assertEqual(
+            {row["python_version"] for row in result.linux.test_python_packages_matrix},
+            {"3.10", "3.11", "3.12"},
+        )
+        self.assertEqual(
+            {
+                row["container_image_name"]
+                for row in result.linux.test_python_packages_matrix
+            },
+            {"ubuntu24.04", "ubi10"},
+        )
+
+        self.assertEqual(
+            result.windows.test_python_packages_matrix,
+            [
+                {
+                    "amdgpu_family": "gfx110X-all",
+                    "test_runs_on": "windows-gfx110X-gpu-rocm",
+                    "python_version": "3.12",
+                    "container_image_name": "native",
+                    "container_image_url": "",
+                }
+            ],
+        )
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -908,10 +971,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             windows_families=["gfx110x"],
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(build_variant="asan"),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         # Only gfx94x on linux survives.
         self.assertIsNotNone(result.linux)
@@ -921,13 +984,18 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNone(result.windows)
 
     def test_variant_filters_by_trigger(self):
-        """ASAN: based on event type, we run an expected ASAN build variant"""
+        """ASAN: based on event type, we run an expected ASAN build variant.
+
+        Full ASAN builds only run on schedule and workflow_dispatch (nightly).
+        Push (postsubmit) and pull_request events use host-asan for faster feedback.
+        """
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
         )
         test_cases = [
             ("schedule", "linux-release-asan"),
             ("push", "linux-release-host-asan"),
+            ("pull_request", "linux-release-host-asan"),
             ("workflow_dispatch", "linux-release-asan"),
         ]
         for event_name, expected_variant in test_cases:
@@ -941,10 +1009,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 )
                 ci_inputs = cm.CIInputs(**defaults)
                 result = cm.expand_build_configs(
-                    targets=targets,
                     ci_inputs=ci_inputs,
-                    test_type="quick",
                     git_context=cm.GitContext(),
+                    targets=targets,
+                    jobs=_jobs(),
                 )
                 # Only gfx94x on linux survives.
                 self.assertIsNotNone(result.linux)
@@ -971,10 +1039,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant="asan",
         )
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=ci_inputs,
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         # Verify it's a host-asan build
@@ -991,10 +1059,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1005,10 +1073,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # gfx94x has no test-runs-on-kernel entry
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1018,10 +1086,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """Without test_runner: label, default runner labels are used."""
         targets = cm.TargetSelection(linux_families=["gfx908"])
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
         entry = result.linux.per_family_info[0]
@@ -1036,20 +1104,20 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
         # Schedule: uses sandbox runner
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
 
         # PR: disables tests (empty runner)
         result = cm.expand_build_configs(
-            targets=targets,
             ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            test_type="quick",
             git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
@@ -1263,7 +1331,21 @@ class TestFamilyTestFilters(unittest.TestCase):
 
 
 class TestMultiLabelRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of multi-label runner configurations."""
+    """Test weighted random selection of multi-label runner configurations.
+
+    These tests validate local amdgpu_family_matrix.py definitions.
+    CI_CONFIG_PATH is cleared to ensure external config is not loaded.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        # Ensure tests use local fallback, not external config
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
 
     def test_gfx94x_has_multi_label_config(self):
         """Verify gfx94x has the multi-label configuration."""
@@ -1327,7 +1409,10 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
         builds = cm.expand_build_configs(
-            targets, ci_inputs, test_type="quick", git_context=cm.GitContext()
+            ci_inputs=ci_inputs,
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
         )
 
         self.assertIsNotNone(builds.linux)
@@ -1352,7 +1437,10 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         # Run multiple times to ensure consistency
         for _ in range(10):
             builds = cm.expand_build_configs(
-                targets, ci_inputs, test_type="full", git_context=cm.GitContext()
+                ci_inputs=ci_inputs,
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(test_type="full"),
             )
             if builds.linux and builds.linux.per_family_info:
                 gfx103x_info = builds.linux.per_family_info[0]
@@ -1366,7 +1454,21 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 class TestBuildRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of build runners (Azure vs AWS)."""
+    """Test weighted random selection of build runners (Azure vs AWS).
+
+    These tests validate local amdgpu_family_matrix.py definitions.
+    CI_CONFIG_PATH is cleared to ensure external config is not loaded.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        # Ensure tests use local fallback, not external config
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
 
     def test_select_build_runner_weighted_selection(self):
         """Test weighted selection: 100% AWS for default Linux builds."""
