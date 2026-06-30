@@ -144,6 +144,38 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   )
 
   ##############################################################################
+  # hsa-hotswap
+  # HSA_TOOLS_LIB tool (libhsa-hotswap.so) from rocm-systems projects/hotswap.
+  ##############################################################################
+
+  if(THEROCK_ENABLE_HOTSWAP AND NOT WIN32)
+    therock_cmake_subproject_declare(hsa-hotswap
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hotswap"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hsa-hotswap"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      BUILD_DEPS
+        rocm-cmake
+      RUNTIME_DEPS
+        amd-comgr
+        ROCR-Runtime
+      INTERFACE_LINK_DIRS
+        "lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+    )
+    therock_cmake_subproject_glob_c_sources(hsa-hotswap SUBDIRS .)
+    therock_cmake_subproject_activate(hsa-hotswap)
+
+    therock_test_validate_shared_lib(
+      PATH hsa-hotswap/dist/lib
+      LIB_NAMES libhsa-hotswap.so
+    )
+  endif()
+
+  ##############################################################################
   # rocminfo
   ##############################################################################
 
@@ -173,6 +205,10 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     lib
     run
   )
+
+  if(THEROCK_ENABLE_HOTSWAP AND NOT WIN32)
+    list(APPEND _core_runtime_subproject_deps hsa-hotswap)
+  endif()
 
   if(THEROCK_FLAG_INCLUDE_HRX)
     ############################################################################
@@ -632,3 +668,63 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
       rocrtst
   )
 endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)
+
+    # kfdtest statically links libhsakmt and LLVM (AMDGPUAsmParser, Core, Support).
+    # It needs LLVM headers at build time and libhsakmt.a for linking.
+    set(_kfdtest_build_deps
+      amd-llvm
+      ROCR-Runtime
+      therock-yaml-cpp
+    )
+
+    # Get the ROCR-Runtime binary directory to locate libhsakmt
+    get_target_property(_rocr_binary_dir ROCR-Runtime THEROCK_BINARY_DIR)
+
+    therock_cmake_subproject_declare(kfdtest
+      USE_TEST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/tests/kfdtest"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/kfdtest"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DCMAKE_PREFIX_PATH="
+        "-DLLVM_DIR="
+        "-DROCM_DIR="
+        "-DLIBHSAKMT_PATH=${_rocr_binary_dir}/libhsakmt"
+        "-DCMAKE_EXE_LINKER_FLAGS=-ldl"
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      BUILD_DEPS
+        ${_kfdtest_build_deps}
+      RUNTIME_DEPS
+        amd-llvm
+        ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_NUMACTL}
+        ${THEROCK_BUNDLED_ZLIB}
+        ${THEROCK_BUNDLED_ZSTD}
+      INTERFACE_LINK_DIRS
+        "lib"
+        "lib/rocm_sysdeps/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocm_sysdeps/lib"
+    )
+    therock_cmake_subproject_glob_c_sources(kfdtest SUBDIRS .)
+    therock_cmake_subproject_activate(kfdtest)
+
+    therock_provide_artifact(kfdtest
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-kfdtest.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        kfdtest
+    )
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)

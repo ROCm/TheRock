@@ -163,3 +163,75 @@ class TestROCmSanity:
         return_code = process.returncode
         check.equal(return_code, 0)
         check.is_true(output)
+
+    # The hotswap HSA tool (libhsa-hotswap.so) is Linux-only.
+    @pytest.mark.skipif(is_windows(), reason="hotswap HSA tool is Linux-only")
+    # TODO(#3312): rocminfo currently fails under ASAN builds.
+    @pytest.mark.skipif(
+        is_asan(), reason="rocminfo test fails with ASAN build, see TheRock#3312"
+    )
+    def test_hotswap_tool_loads(self):
+        """When hotswap is enabled, the HSA tool must load cleanly under ROCr.
+
+        THEROCK_ENABLE_HOTSWAP builds comgr with the hotswap transpiler, so
+        libamd_comgr.so exports ``amd_comgr_hotswap_rewrite``; that symbol is a
+        reliable signal that hotswap was enabled in this build. When it is, the
+        HSA_TOOLS_LIB tool ``libhsa-hotswap.so`` must be packaged and must load
+        cleanly. Running rocminfo triggers hsa_init, which is when ROCr dlopen's
+        HSA_TOOLS_LIB tools. The forwarding allowlist is gfx1250->gfx1250 only,
+        so the tool stays inert on other targets and rocminfo must still succeed.
+
+        Skipped when hotswap is not enabled in the build.
+        """
+        lib_dir = THEROCK_BIN_DIR.parent / "lib"
+        # libamd_comgr.so may only be present versioned (e.g. libamd_comgr.so.3.3.0)
+        # in the lib component; the unversioned symlink can live in the dev package.
+        comgr_libs = sorted(lib_dir.glob("libamd_comgr.so*"))
+        if not comgr_libs:
+            pytest.skip(f"libamd_comgr.so* not found in {lib_dir}")
+        comgr = comgr_libs[0]
+
+        # comgr exports amd_comgr_hotswap_rewrite only when hotswap is enabled.
+        nm = subprocess.run(
+            ["nm", "-D", "--defined-only", str(comgr)],
+            capture_output=True,
+            text=True,
+        )
+        if nm.returncode != 0:
+            pytest.skip("could not inspect libamd_comgr.so symbols (nm unavailable)")
+        if "amd_comgr_hotswap_rewrite" not in nm.stdout:
+            pytest.skip(
+                "hotswap not enabled in this build "
+                "(libamd_comgr.so does not export amd_comgr_hotswap_rewrite)"
+            )
+
+        # Hotswap is enabled -> the HSA tool must be packaged.
+        tool = lib_dir / "libhsa-hotswap.so"
+        assert tool.exists(), (
+            "hotswap is enabled (libamd_comgr.so exports amd_comgr_hotswap_rewrite) "
+            f"but the HSA tool is missing: {tool}"
+        )
+
+        # rocminfo triggers hsa_init -> ROCr LoadTools dlopen's the tool.
+        env = os.environ.copy()
+        env["HSA_TOOLS_LIB"] = str(tool)
+        env["HSA_TOOLS_REPORT_LOAD_FAILURE"] = "1"
+        process = subprocess.run(
+            [f"{THEROCK_BIN_DIR}/rocminfo"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        combined = process.stdout + process.stderr
+        logger.info(combined)
+        # ROCr prints "Tool lib \"...\" failed to load." if the dlopen fails.
+        check.is_not_in(
+            "failed to load",
+            combined,
+            "ROCr failed to load the hotswap tool via HSA_TOOLS_LIB",
+        )
+        check.equal(
+            process.returncode,
+            0,
+            "rocminfo failed with the hotswap tool loaded via HSA_TOOLS_LIB",
+        )

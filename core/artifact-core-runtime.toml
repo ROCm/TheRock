@@ -10,6 +10,18 @@
 [components.dbg."core/rocminfo/stage"]
 [components.doc."core/rocminfo/stage"]
 
+# hsa-hotswap (only built when THEROCK_ENABLE_HOTSWAP)
+[components.lib."core/hsa-hotswap/stage"]
+optional = true
+[components.run."core/hsa-hotswap/stage"]
+optional = true
+[components.dbg."core/hsa-hotswap/stage"]
+optional = true
+[components.dev."core/hsa-hotswap/stage"]
+optional = true
+[components.doc."core/hsa-hotswap/stage"]
+optional = true
+
 # hrx
 [components.lib."core/hrx/stage"]
 optional = true
