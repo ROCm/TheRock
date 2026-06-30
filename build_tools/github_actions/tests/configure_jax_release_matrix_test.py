@@ -42,7 +42,6 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         )
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
-        # The generate_jax_matrix script produces matrix JSON for use in a
         # workflow file like:
         #
         #   matrix:

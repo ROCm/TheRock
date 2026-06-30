@@ -88,7 +88,7 @@ def build_rocm_python_test_matrix(
         # [
         #   {
         #     "amdgpu_family": "gfx94X-dcgpu",
-        #     "test_runs_on": "linux-gfx942-1gpu-core42-ossci-rocm",
+        #     "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
         #     "python_version": "3.10",
         #     "container_image_name": "ubuntu24.04",
         #     "container_image_url": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:..."
@@ -103,7 +103,7 @@ def build_rocm_python_test_matrix(
         #   ...
         #   {
         #     "amdgpu_family": "gfx94X-dcgpu",
-        #     "test_runs_on": "linux-gfx942-1gpu-core42-ossci-rocm",
+        #     "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
         #     "python_version": "3.12",
         #     "container_image_name": "ubi10",
         #     "container_image_url": "ghcr.io/rocm/no_rocm_image_ubi10@sha256:..."
