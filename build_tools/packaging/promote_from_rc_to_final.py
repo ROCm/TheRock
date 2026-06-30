@@ -253,13 +253,14 @@ def update_metadata_rocm_requires_dist(
             inplace=True,
         ) as f:
             for line in f:
-                if line.startswith("Summary:") and ("TheRock" in line or "rocm" in line):
+                if line.startswith("Summary:") and (
+                    "TheRock" in line or "rocm" in line
+                ):
                     print(line.replace(old_rocm_version, new_rocm_version), end="")
                 elif line.startswith("Requires-Dist") and "rocm" in line:
                     print(line.replace(old_rocm_version, new_rocm_version), end="")
                 else:
                     print(line, end="")
-
 
 
 def compute_new_version_str(
@@ -441,7 +442,7 @@ def _apply_keep_arch_list_to_metadata(
             # package arch (e.g. `amd-torch-device-gfx11` for the `gfx1100`
             # extra must go when gfx1100 is not in the keep list).
             if qualifier and qualifier.startswith("device-"):
-                qualifier_arch = qualifier[len("device-"):]
+                qualifier_arch = qualifier[len("device-") :]
                 if (
                     re.fullmatch(_GFX_ARCH, qualifier_arch)
                     and qualifier_arch not in keep_set
@@ -815,7 +816,10 @@ def wheel_change_extra_files(
     # rocm-* package to the build's rocm version. Rewrite those, then return.
     if "device_gfx" in new_dir_path.name:
         return
-    if "jax_rocm7_plugin" in package_name_no_version or "jax_rocm7_pjrt" in package_name_no_version:
+    if (
+        "jax_rocm7_plugin" in package_name_no_version
+        or "jax_rocm7_pjrt" in package_name_no_version
+    ):
         return
 
     # rocm packages needing extra handling

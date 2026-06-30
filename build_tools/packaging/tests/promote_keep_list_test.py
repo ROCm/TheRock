@@ -435,7 +435,9 @@ class ParseArgumentsMutexTest(unittest.TestCase):
             self._parse(["--input-dir", "/tmp", "--dest-version", "a20260230"])
 
     def test_multi_arch_targets_passthrough(self):
-        ns = self._parse(["--input-dir", "/tmp", "--multi-arch-targets", "gfx1010,gfx1201"])
+        ns = self._parse(
+            ["--input-dir", "/tmp", "--multi-arch-targets", "gfx1010,gfx1201"]
+        )
         self.assertEqual(ns.multi_arch_targets, "gfx1010,gfx1201")
 
 
