@@ -161,6 +161,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocdecode=False,
         rocjpeg=False,
         rocjitsu=False,
+        mirage=False,
         rocprofiler_compute=False,
         rocprofiler_sdk=False,
         rocprofiler_systems=False,
