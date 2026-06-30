@@ -9,7 +9,8 @@ hipThreads test/lit.cfg). This script:
 
   1. Points lit at the test sources packaged in the `test` artifact
      (OUTPUT_ARTIFACTS_DIR/hipthreads, produced by HIPTHREADS_COPY_TO_BUILD).
-  2. Makes the pre-built static library (libhipthreads.a) discoverable at the
+  2. Makes the pre-built static library (libhipthreads.a / hipthreads.lib)
+     discoverable at the
      `<GPULIB_BUILD_DIR>/lib` path that lit.cfg's link flags expect.
   3. Invokes lit directly.
 """
@@ -17,14 +18,21 @@ hipThreads test/lit.cfg). This script:
 import json
 import logging
 import os
+import platform
 import shlex
 import subprocess
 from pathlib import Path
+
+from libhipcxx_utils import prepend_env_path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+IS_WINDOWS = platform.system() == "Windows"
+# The static library is libhipthreads.a on Linux but hipthreads.lib on Windows.
+STATIC_LIB_NAME = "hipthreads.lib" if IS_WINDOWS else "libhipthreads.a"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -60,21 +68,17 @@ environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
 # Honored by the vendored test executor (test/utils/run.py).
 environ_vars["GPULIB_TEST_TIMEOUT"] = "20"
 
-# Add ROCm binaries to PATH
-rocm_bin = str(THEROCK_BIN_PATH)
-if "PATH" in environ_vars:
-    environ_vars["PATH"] = f"{rocm_bin}{os.pathsep}{environ_vars['PATH']}"
-else:
-    environ_vars["PATH"] = rocm_bin
+# Add ROCm binaries to PATH (also the hipcc location).
+prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
 
-# Set library paths. The HIP runtime libs live under <artifacts>/lib.
-rocm_lib = str(OUTPUT_ARTIFACTS_PATH / "lib")
-if "LD_LIBRARY_PATH" in environ_vars:
-    environ_vars["LD_LIBRARY_PATH"] = (
-        f"{rocm_lib}{os.pathsep}{environ_vars['LD_LIBRARY_PATH']}"
-    )
+# Set library / loader paths. On Windows the ROCm DLLs live in bin/ and PATH is
+# the DLL search path; on Linux the shared libs are under lib/ on LD_LIBRARY_PATH.
+if IS_WINDOWS:
+    prepend_env_path(environ_vars, "PATH", str(OUTPUT_ARTIFACTS_PATH / "bin"))
 else:
-    environ_vars["LD_LIBRARY_PATH"] = rocm_lib
+    prepend_env_path(
+        environ_vars, "LD_LIBRARY_PATH", str(OUTPUT_ARTIFACTS_PATH / "lib")
+    )
 
 # The hipThreads lit suite is self-contained and resolves all of its paths from
 # these three environment variables (see hipThreads test/lit.cfg):
@@ -85,14 +89,30 @@ GPULIB_SOURCE_DIR = OUTPUT_ARTIFACTS_PATH / "hipthreads"
 environ_vars["GPULIB_SOURCE_DIR"] = str(GPULIB_SOURCE_DIR)
 
 # lit.cfg links against `-L <GPULIB_BUILD_DIR>/lib -lhipthreads`. The dev artifact
-# stages the static library at <artifacts>/lib/hipthreads/libhipthreads.a, so we
-# point GPULIB_BUILD_DIR at a location whose `lib/` contains libhipthreads.a.
+# stages the static library at <artifacts>/lib/hipthreads/<lib> (libhipthreads.a on
+# Linux, hipthreads.lib on Windows), so we point GPULIB_BUILD_DIR at a location
+# whose `lib/` contains that archive.
 GPULIB_BUILD_DIR = OUTPUT_ARTIFACTS_PATH / "hipthreads"
 gpulib_lib_dir = GPULIB_BUILD_DIR / "lib"
 gpulib_lib_dir.mkdir(parents=True, exist_ok=True)
-staged_lib = OUTPUT_ARTIFACTS_PATH / "lib" / "hipthreads" / "libhipthreads.a"
-linked_lib = gpulib_lib_dir / "libhipthreads.a"
-if staged_lib.exists() and not linked_lib.exists():
+
+staged_lib_dir = OUTPUT_ARTIFACTS_PATH / "lib" / "hipthreads"
+staged_lib = staged_lib_dir / STATIC_LIB_NAME
+if not staged_lib.exists():
+    # Fall back to globbing in case the staged name/path differs from expectation,
+    # so a naming surprise surfaces a clear log instead of a silent link failure.
+    candidates = sorted(staged_lib_dir.glob("*hipthreads*"))
+    logging.error(
+        f"Pre-built library not found at {staged_lib}. "
+        f"Candidates in {staged_lib_dir}: {[p.name for p in candidates]}"
+    )
+    if not candidates:
+        raise FileNotFoundError(staged_lib)
+    staged_lib = candidates[0]
+    logging.warning(f"Falling back to staged library: {staged_lib}")
+
+linked_lib = gpulib_lib_dir / staged_lib.name
+if not linked_lib.exists():
     # Hard link (fall back to copy) so lit's -L <build>/lib finds the archive.
     try:
         os.link(staged_lib, linked_lib)
@@ -107,15 +127,11 @@ logging.info(f"GPULIB_SOURCE_DIR: {environ_vars['GPULIB_SOURCE_DIR']}")
 logging.info(f"GPULIB_BUILD_DIR: {environ_vars['GPULIB_BUILD_DIR']}")
 logging.info(f"PATH: {environ_vars['PATH']}")
 
-if not staged_lib.exists():
-    logging.error(f"Pre-built library not found at: {staged_lib}")
-    raise FileNotFoundError(staged_lib)
-
 # Report the size of the (now target-neutral) static archive so each CI run
-# records how large the all-architecture libhipthreads.a is.
+# records how large the all-architecture library is.
 _lib_size_bytes = staged_lib.stat().st_size
 logging.info(
-    f"libhipthreads.a size: {_lib_size_bytes} bytes "
+    f"{staged_lib.name} size: {_lib_size_bytes} bytes "
     f"({_lib_size_bytes / (1024 * 1024):.2f} MiB) at {staged_lib}"
 )
 
