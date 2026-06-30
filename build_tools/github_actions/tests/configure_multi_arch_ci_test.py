@@ -1490,6 +1490,32 @@ class TestFamilyTestFilters(unittest.TestCase):
         self.assertIsNotNone(gfx90a_info)
         self.assertEqual(gfx90a_info["test-runs-on"], "")
 
+    def test_workflow_dispatch_allows_nightly_check_only_family(self):
+        """workflow_dispatch should allow testing nightly_check_only families."""
+        # gfx90a has nightly_check_only_for_family=True for linux
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_amdgpu_families=["gfx90a"],
+        )
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx90a in the linux build config
+        gfx90a_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx90a":
+                    gfx90a_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx90a_info)
+        # workflow_dispatch should have test-runs-on set (not empty)
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+
 
 # ---------------------------------------------------------------------------
 # Multi-label runner selection
@@ -1532,28 +1558,27 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-ccs-csp-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
         # Verify weights sum to ~1.0
         total_weight = sum(l["weight"] for l in labels)
         self.assertAlmostEqual(total_weight, 1.0, places=1)
 
-    def test_gfx94x_multi_gpu_has_dual_label_config(self):
-        """Verify gfx94x has the multi-gpu dual-label configuration."""
+    def test_gfx94x_multi_gpu_has_label_config(self):
+        """Verify gfx94x has the multi-gpu label configuration."""
         from amdgpu_family_matrix import get_all_families_for_trigger_types
 
         all_families = get_all_families_for_trigger_types(["presubmit"])
         gfx94x_linux = all_families["gfx94x"].get("linux", {})
 
-        # Verify we have 2 labels for 8-gpu
+        # Verify we have 1 label for 8-gpu
         labels = gfx94x_linux["test-runs-on-multi-gpu-labels"]
-        self.assertEqual(len(labels), 2)
+        self.assertEqual(len(labels), 1)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-8gpu-core42-ossci-rocm", label_names)
 
         # Verify weights sum to 1.0
         total_weight = sum(l["weight"] for l in labels)
@@ -1583,9 +1608,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         self.assertIsNotNone(builds.linux)
         gfx94x_info = builds.linux.per_family_info[0]
-        # Should use the default test-runs-on label (core42)
+        # Should use the default test-runs-on label (ccs-csp)
         self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
         )
 
     def test_families_without_multi_label_use_primary_only(self):

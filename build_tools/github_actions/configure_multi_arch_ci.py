@@ -885,18 +885,6 @@ def _expand_build_config_for_platform(
         # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # TODO: use hard-coded label (vultr machines) as we try to determine core42 regression
-        # This is a temporary measure to get good signal for submodule bumps while we determine core42 issues
-        if (
-            platform == "linux"
-            and family_name == "gfx94x"
-            and git_context.changed_files is not None
-            and git_context.submodule_paths is not None
-        ):
-            matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-            if matching:
-                test_runs_on = "linux-gfx942-1gpu-ossci-rocm"
-
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
@@ -945,15 +933,15 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
-        # If nightly_check_only_for_family is set for schedule runs only
-        if (
-            platform_info.get("nightly_check_only_for_family", False)
-            and not ci_inputs.is_schedule
+        # If nightly_check_only_for_family is set, only run tests for schedule
+        # or workflow_dispatch triggers (to allow manual testing of nightly-only archs)
+        if platform_info.get("nightly_check_only_for_family", False) and not (
+            ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
         ):
             test_runs_on = ""
             print(
                 f"  {family_name}: nightly_check_only_for_family flag set, "
-                f"disabling test runner for non-scheduled runs"
+                f"disabling test runner for non-scheduled/non-dispatch runs"
             )
 
         family_info = {
