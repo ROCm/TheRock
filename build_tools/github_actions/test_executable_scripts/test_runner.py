@@ -172,18 +172,16 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   failing tests still show their full output; only passing-test noise is
 #   suppressed.
 COMPONENT_OVERRIDES = {
-    # For rocprofiler-compute, we need the following additional paths:
-    # - PATH=ROCM_PATH/bin:$PATH
-    # - LD_LIBRARY_PATH=ROCM_PATH/lib:ROCM_PATH/lib/rocm_sysdeps/lib:$LD_LIBRARY_PATH
+    # ctest fragments live under libexec, not bin.
+    # ctest_parallel pinned to 1: tests are pytest runs that parallelize
+    # internally (-n), so concurrent ctest jobs over-subscribe.
     "rocprofiler-compute": {
         "test_dir": ["libexec", "rocprofiler-compute"],
         "additional_env_paths": {
             "PATH": [["bin"]],
-            "LD_LIBRARY_PATH": [
-                ["lib"],
-                ["lib", "rocm_sysdeps", "lib"],
-            ],
+            "LD_LIBRARY_PATH": [["lib"]],
         },
+        "ctest_parallel": 1,
     },
     # rocprofiler-systems tests are pytest-driven CTests living under
     # share/rocprofiler-systems/tests. They need the rocm bin on PATH so the
@@ -264,9 +262,15 @@ def _prepend_env_paths(env, base_path, additional_paths_dict):
 
 
 def apply_component_overrides(
-    job_name, test_type, rocm_path, therock_dir, default_test_dir, env
+    job_name,
+    test_type,
+    rocm_path,
+    therock_dir,
+    default_test_dir,
+    env,
+    default_parallel_count,
 ):
-    """Apply component-specific overrides for test_dir and environment variables.
+    """Apply component-specific overrides; returns (test_dir, ctest_parallel).
 
     Precedence for test_dir resolution (highest -> lowest):
       1. test_dir_by_type[test_type] - TEST_TYPE-aware route (e.g. rocwmma
@@ -283,10 +287,13 @@ def apply_component_overrides(
       libraries straight out of the build tree.
     - 'env' sets literal environment variables (str.format() with the
       "{rocm_path}" placeholder).
+
+    ctest_parallel: per-component ctest -j override; falls back to
+    default_parallel_count when the component does not pin one.
     """
     overrides = COMPONENT_OVERRIDES.get(job_name)
     if not overrides:
-        return default_test_dir
+        return default_test_dir, default_parallel_count
 
     test_dir = default_test_dir
     by_type = overrides.get("test_dir_by_type") or {}
@@ -299,17 +306,18 @@ def apply_component_overrides(
     _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
     for env_key, value_template in overrides.get("env", {}).items():
         env[env_key] = value_template.format(rocm_path=str(rocm_path))
-    return test_dir
+    return test_dir, overrides.get("ctest_parallel", default_parallel_count)
 
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
-TEST_DIR = apply_component_overrides(
+TEST_DIR, ctest_parallel_count = apply_component_overrides(
     test_component_job_name,
     TEST_TYPE,
     ROCM_PATH,
     THEROCK_DIR,
     TEST_DIR,
     environ_vars,
+    ctest_parallel_count,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -347,7 +355,8 @@ def check_available_labels():
 
     Parses labels of the form:
     - ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950)
-    - {category}_exclude (e.g. quick_exclude, standard_exclude)
+    - {category}_exclude, incl. {category}_therock_ci_exclude
+      (e.g. quick_exclude, quick_therock_ci_exclude)
 
     Returns (gpu_archs, exclude_labels) where:
     - gpu_archs is a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950')
@@ -471,11 +480,14 @@ def build_ctest_command(
     le_patterns = []
     include_labels = [category]
 
-    # Exclude tests labeled with {category}_exclude if that label exists
-    category_exclude_label = f"{category}_exclude"
-    if category_exclude_label in exclude_labels:
-        le_patterns.append(category_exclude_label)
-        print(f"# Excluding tests with label: {category_exclude_label}")
+    # Exclude {category}_exclude and {category}_therock_ci_exclude when present.
+    for category_exclude_label in (
+        f"{category}_exclude",
+        f"{category}_therock_ci_exclude",
+    ):
+        if category_exclude_label in exclude_labels:
+            le_patterns.append(category_exclude_label)
+            print(f"# Excluding tests with label: {category_exclude_label}")
 
     if gpu_arch.lower() in ["generic", "none", ""]:
         le_patterns.append("ex_gpu")
