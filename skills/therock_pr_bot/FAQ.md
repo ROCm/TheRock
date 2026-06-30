@@ -328,4 +328,3 @@ Push any commit (including `--allow-empty`) to the PR branch.
 The `synchronize` event triggers a fresh policy check automatically.
 
 ______________________________________________________________________
-
