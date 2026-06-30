@@ -161,6 +161,7 @@ jobs:
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: "72"
+          STAGE_REUSE_COMMIT_HISTORY: "50"
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config

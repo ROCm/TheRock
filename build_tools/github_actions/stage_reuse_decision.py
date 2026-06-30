@@ -224,6 +224,40 @@ def _default_baseline_selector(*, platform: str | None) -> BaselineSelector:
     current_commit_sha = os.environ.get("STAGE_REUSE_CURRENT_SHA") or None
     max_age_hours_raw = os.environ.get("STAGE_REUSE_MAX_AGE_HOURS")
     max_age_hours = float(max_age_hours_raw) if max_age_hours_raw else None
+    history_count_raw = os.environ.get("STAGE_REUSE_COMMIT_HISTORY", "50")
+    try:
+        history_count = max(1, int(history_count_raw))
+    except ValueError:
+        history_count = 50
+    # The commit-compatibility rule needs the branch history (newest-first) to
+    # establish ancestry. select_baseline_run only accepts a candidate whose
+    # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
+    # window every candidate resolves to `unknown` and is rejected, so reuse
+    # never activates. Fetch the real history here. If the SHA is set but the
+    # history fetch fails (or returns empty), disable the commit rule (pass both
+    # as None) rather than enabling it with an empty window -- recency and
+    # artifact availability still gate the selection.
+    ordered_commit_shas = None
+    effective_commit_sha = current_commit_sha
+    if current_commit_sha is not None:
+        try:
+            from github_actions_api import gha_query_recent_branch_commits
+
+            ordered_commit_shas = gha_query_recent_branch_commits(
+                github_repository_name=github_repository,
+                branch=branch,
+                max_count=history_count,
+            )
+            if not ordered_commit_shas:
+                effective_commit_sha = None
+                ordered_commit_shas = None
+        except Exception as exc:  
+            print(
+                f"{LOG_PREFIX} could not fetch branch history "
+                f"({exc}); skipping commit-compatibility rule."
+            )
+            effective_commit_sha = None
+            ordered_commit_shas = None
 
     def _select(required):
         return select_baseline_run(
@@ -232,8 +266,8 @@ def _default_baseline_selector(*, platform: str | None) -> BaselineSelector:
             workflow_name=workflow_name,
             branch=branch,
             platform=platform or "linux",
-            current_commit_sha=current_commit_sha,
-            ordered_commit_shas=None if current_commit_sha is None else [],
+            current_commit_sha=effective_commit_sha,
+            ordered_commit_shas=ordered_commit_shas,
             max_age_hours=max_age_hours,
         )
 
