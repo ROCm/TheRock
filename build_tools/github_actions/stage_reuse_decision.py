@@ -316,27 +316,36 @@ def _format_report(*, mode, candidates, rebuild, full_rebuild_required,
                      f"still build.")
     return tuple(lines)
 
+def _format_stage_list(stages: tuple[str, ...]) -> str:
+    """Render a tuple of stage names as backticked, comma-separated markdown."""
+    if not stages:
+        return "_none_"
+    return ", ".join(f"`{stage}`" for stage in stages)
 
 def render_step_summary(result: AutoStageReuse) -> str:
-    """Render a GitHub step-summary markdown block for the analysis."""
+    """Render a GitHub step-summary markdown block for the analysis.
+    """
+    baseline = f"`{result.baseline_run_id}`" if result.baseline_run_id else "_none_"
+    candidates = _format_stage_list(result.candidate_stages)
+    available = _format_stage_list(result.available_stages)
+    applied = _format_stage_list(result.applied_reuse_stages)
+
     out = ["### Stage reuse analysis", ""]
     out.append(f"- mode: `{result.mode.value}`")
     out.append(f"- full rebuild required: `{result.full_rebuild_required}`")
-    out.append("- baseline run checked: "
-                (f"`{result.baseline_run_id}`" if result.baseline_run_id else "_none_"))
-    out.append("- unaffected candidates: "
-                (", ".join(f"`{s}`" for s in result.candidate_stages) or "_none_"))
-    out.append("- available in baseline: "
-                (", ".join(f"`{s}`" for s in result.available_stages) or "_none_"))
-    out.append("- applied: "
-                (", ".join(f"`{s}`" for s in result.applied_reuse_stages) or "_none_"))
+    out.append(f"- baseline run checked: {baseline}")
+    out.append(f"- unaffected candidates: {candidates}")
+    out.append(f"- available in baseline: {available}")
+    out.append(f"- applied: {applied}")
     if result.reasons:
         out.append("- reasons:")
         for reason in result.reasons:
             out.append(f"  - {reason}")
     if result.mode is StageReuseMode.DRY_RUN and result.available_stages:
         out.append("")
-        out.append("> Dry-run only: no build steps were skipped. Artifacts were "
-                   "verified against the baseline run above. Set "
-                   "`STAGE_REUSE_MODE=skip-stage`.")
+        out.append(
+            "> Dry-run only: no build steps were skipped. Artifacts were "
+            "verified against the baseline run above. Set "
+            "`STAGE_REUSE_MODE=skip-stage` after review to enable skipping."
+        )
     return "\n".join(out)
