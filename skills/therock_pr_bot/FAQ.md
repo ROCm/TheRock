@@ -329,10 +329,3 @@ The `synchronize` event triggers a fresh policy check automatically.
 
 ______________________________________________________________________
 
-## Still stuck?
-
-- **Workflow file:** [`.github/workflows/therock-pr-bot.yml`](../.github/workflows/therock-pr-bot.yml)
-- **Policy file:** [`skills/therock_pr_bot/policy.yml`](./policy.yml)
-- **Bot source:** [`skills/therock_pr_bot/policy_check.py`](./policy_check.py)
-- **Repo docs:** [TheRock Contributing Guide](../../docs/development/CONTRIBUTING.md)
-- **GitHub issues:** Open an issue on the repo or ask in team channels
