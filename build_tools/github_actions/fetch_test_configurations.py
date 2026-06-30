@@ -665,9 +665,10 @@ test_matrix = {
         "fetch_artifact_args": "--hipthreads --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipthreads.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
     },
     # hipthreads example apps (build + run consumer samples against the artifact)
@@ -678,9 +679,10 @@ test_matrix = {
         "fetch_artifact_args": "--hipthreads --prim --rand --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         }
     },
     "rocdecode": {
