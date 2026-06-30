@@ -165,7 +165,7 @@ if(THEROCK_ENABLE_MIGRAPHX)
         -DROCM_PATH=
         -DROCM_DIR=
         "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-        "-DMIGRAPHX_ENABLE_PYTHON=OFF"
+        "-DMIGRAPHX_ENABLE_PYTHON=OFF" # TODO: enable
         "-DMIGRAPHX_USE_COMPOSABLEKERNEL=OFF" # TODO: enable
         "-DMIGRAPHX_ENABLE_MLIR=OFF" # TODO: enable
       CMAKE_INCLUDES
@@ -180,7 +180,10 @@ if(THEROCK_ENABLE_MIGRAPHX)
         therock-msgpack-cxx
         therock-grpc
       RUNTIME_DEPS
+        hipBLAS-common
         hip-clr
+        hipBLAS
+        hipBLASLt
         rocm-half
         rocBLAS
         rocRAND
