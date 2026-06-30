@@ -9,5 +9,6 @@ include = [
 [components.dev."emulation/rocjitsu/stage"]
 [components.run."emulation/rocjitsu/stage"]
 include = [
+  "bin/rocjitsu",
   "share/rocjitsu/**",
 ]

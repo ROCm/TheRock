@@ -404,7 +404,9 @@ test_matrix = {
         },
     },
     # rocRAND tests under the rocjitsu CPU simulator (no GPU required).
-    # Only runs for CDNA3/4 families where rocjitsu has KMD configs.
+    # Runs for every family that has a rocjitsu config mapping in
+    # simulator_runner.py (FAMILY_TO_ROCJITSU_CONFIG): CDNA3/4 and RDNA3/4 plus
+    # gfx1250. Keep this family list in sync with that mapping.
     "rocrand-simulator": {
         "job_name": "rocrand-simulator",
         "fetch_artifact_args": "--rand --rocjitsu --tests",
@@ -416,7 +418,13 @@ test_matrix = {
             "linux": 1,
         },
         "include_family": {
-            "linux": ["gfx94X-dcgpu", "gfx950-dcgpu"],
+            "linux": [
+                "gfx94X-dcgpu",
+                "gfx950-dcgpu",
+                "gfx110X-all",
+                "gfx120X-all",
+                "gfx125X-dcgpu",
+            ],
         },
     },
     "hiprand": {

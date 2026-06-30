@@ -7,14 +7,16 @@
 Wraps an existing per-component test driver (e.g. ``test_rocrand.py``) so the
 tests execute against the rocjitsu simulator instead of a physical AMD GPU.
 
-The simulator runs entirely on CPU. We arrange three things before delegating
+The simulator runs entirely on CPU. We arrange two things before delegating
 to the existing test driver, then enforce two post-run guards:
 
-1. The rocjitsu KFD interposer is preloaded so the real HIP/HSA stack talks to
-   the simulated driver.
-2. The rocjitsu JSON config and FlatBuffers schema are pointed at via env vars
-   that the interposer reads at process start.
-3. A ``GTEST_FILTER`` is composed from a preset (allow patterns) and a per-
+1. The existing per-component driver is launched through the ``rocjitsu`` CLI
+   (``rocjitsu --config <config.json> -- <driver>``). The CLI writes the
+   interposer config-discovery file, sets ``LD_PRELOAD`` to the KFD interposer
+   and execs the driver; ``ctest`` and the test binaries it spawns inherit
+   both, so the real HIP/HSA stack talks to the simulated driver. This mirrors
+   how rocjitsu's own corpus CI wraps ``pytest``.
+2. A ``GTEST_FILTER`` is composed from a preset (allow patterns) and a per-
    component skip-list (deny patterns), both defined in
    ``simulator_runner_filters.yaml``. The preset also supplies a
    ``ctest_regex`` to narrow which ctest binaries run, and a ``min_gtests``
@@ -42,11 +44,11 @@ Required env (set by the workflow):
       ``<rocm_root>/bin``). This mirrors the convention used by the rest of
       TheRock's per-component test drivers (e.g. ``test_rocdecode.py``,
       ``test_runner.py``) which compute the ROCm root as
-      ``Path(THEROCK_BIN_DIR).parent``. Rocjitsu's interposer, config and
-      schema are looked up under that ROCm root:
+      ``Path(THEROCK_BIN_DIR).parent``. Rocjitsu's CLI, interposer and config
+      are looked up under that ROCm root:
+      ``<root>/bin/rocjitsu``,
       ``<root>/lib/librocjitsu_kmd.so``,
-      ``<root>/share/rocjitsu/configs/...``,
-      ``<root>/share/rocjitsu/schemas/...``.
+      ``<root>/share/rocjitsu/configs/...``.
 
 Usage:
   python simulator_runner.py --component rocrand --filter-preset basic
@@ -104,17 +106,23 @@ DEFAULT_MIN_GTESTS = 1
 # Stable across gtest versions (see googletest/src/gtest.cc).
 EMPTY_FILTER_SENTINEL = "did not match any test; no tests were run"
 
-# Map AMDGPU_FAMILIES value -> the rocjitsu KMD config JSON shipped under
+# Map AMDGPU_FAMILIES value -> the rocjitsu config JSON shipped under
 # <root>/share/rocjitsu/configs/. rocjitsu's install rule (rocm-systems
 # emulation/rocjitsu/CMakeLists.txt) copies the whole `configs/` directory
-# wholesale, so both files are present in every dist; we only need to pick
-# the right one at runtime based on the family the caller is testing.
-# Keep this in sync with the matching case statement in the workflow's
-# "Verify rocjitsu interposer + ctest layout are present" step in
-# .github/workflows/test-simulator.yml.
-FAMILY_TO_KMD_CONFIG = {
-    "gfx94X-dcgpu": "amdgpu_cdna3_kmd.json",
-    "gfx950-dcgpu": "amdgpu_cdna4_kmd.json",
+# wholesale, so every config is present in each dist; we only pick the right
+# one at runtime based on the family the caller is testing.
+#
+# Config variants mirror rocjitsu's own corpus CI
+# (rocm-systems .github/workflows/rocjitsu-corpus-tests.yml): the plain
+# (non-`_kmd`) configs for CDNA, the per-board `_kmd` configs for RDNA, and the
+# dedicated config for gfx1250. Keep this in sync with the families enabled for
+# the `rocrand-simulator` job in fetch_test_configurations.py.
+FAMILY_TO_ROCJITSU_CONFIG = {
+    "gfx94X-dcgpu": "amdgpu_cdna3.json",
+    "gfx950-dcgpu": "amdgpu_cdna4.json",
+    "gfx110X-all": "amdgpu_rdna3_gfx1100_w7900_kmd.json",
+    "gfx120X-all": "amdgpu_rdna4_gfx1201_r9700_kmd.json",
+    "gfx125X-dcgpu": "amdgpu_gfx1250.json",
 }
 
 
@@ -137,39 +145,37 @@ class ComponentConfig:
 
 
 def _resolve_rocjitsu_paths(bin_dir: Path, amdgpu_family: str) -> dict[str, Path]:
-    """Locate the rocjitsu interposer, config and schema in a populated dist.
+    """Locate the rocjitsu CLI, interposer and config in a populated dist.
 
     ``bin_dir`` is the ``bin/`` directory of the unified ROCm install (the
     value of ``THEROCK_BIN_DIR`` in TheRock's test harness). The rocjitsu
     artifact installs side-by-side with the rest of ROCm, so we resolve
     everything relative to the ROCm root (``bin_dir.parent``)::
 
+        <root>/bin/rocjitsu
         <root>/lib/librocjitsu_kmd.so
-        <root>/share/rocjitsu/configs/amdgpu_<cdna3|cdna4>_kmd.json
-        <root>/share/rocjitsu/schemas/simulation_config.fbs
+        <root>/share/rocjitsu/configs/<config>.json
 
-    The exact KMD config filename is picked from ``amdgpu_family`` via
-    ``FAMILY_TO_KMD_CONFIG`` (gfx94X-dcgpu -> cdna3, gfx950-dcgpu -> cdna4).
-    Unknown families raise ``KeyError`` rather than silently falling back,
-    so a misconfigured caller cannot quietly exercise the wrong KMD config.
+    The exact config filename is picked from ``amdgpu_family`` via
+    ``FAMILY_TO_ROCJITSU_CONFIG``. Unknown families raise ``KeyError`` rather
+    than silently falling back, so a misconfigured caller cannot quietly
+    exercise the wrong config. The interposer lib is not preloaded directly;
+    the ``rocjitsu`` CLI discovers and preloads it (via ``bin/../lib``), but we
+    still validate it is present so failures are reported up front.
     """
     try:
-        kmd_config_name = FAMILY_TO_KMD_CONFIG[amdgpu_family]
+        config_name = FAMILY_TO_ROCJITSU_CONFIG[amdgpu_family]
     except KeyError as e:
         raise KeyError(
-            f"AMDGPU_FAMILIES={amdgpu_family!r} has no rocjitsu KMD config "
+            f"AMDGPU_FAMILIES={amdgpu_family!r} has no rocjitsu config "
             f"mapping. Supported families: "
-            f"{sorted(FAMILY_TO_KMD_CONFIG.keys())}."
+            f"{sorted(FAMILY_TO_ROCJITSU_CONFIG.keys())}."
         ) from e
     rocm_root = bin_dir.parent
     paths = {
-        "preload": rocm_root / "lib" / "librocjitsu_kmd.so",
-        "config": rocm_root / "share" / "rocjitsu" / "configs" / kmd_config_name,
-        "schema": rocm_root
-        / "share"
-        / "rocjitsu"
-        / "schemas"
-        / "simulation_config.fbs",
+        "cli": rocm_root / "bin" / "rocjitsu",
+        "interposer": rocm_root / "lib" / "librocjitsu_kmd.so",
+        "config": rocm_root / "share" / "rocjitsu" / "configs" / config_name,
     }
     missing = [str(p) for p in paths.values() if not p.exists()]
     if missing:
@@ -256,24 +262,13 @@ def _compose_gtest_filter(allow: list[str], skip: list[str]) -> str:
 
 
 def _build_env(
-    bin_dir: Path,
     gtest_filter: str,
     ctest_dir: Path,
     ctest_regex: str,
-    amdgpu_family: str,
 ) -> dict[str, str]:
-    paths = _resolve_rocjitsu_paths(bin_dir, amdgpu_family)
+    # The rocjitsu CLI owns LD_PRELOAD and the config-discovery file; we only
+    # set the test-harness knobs here. See main() for the CLI wrapper command.
     env = os.environ.copy()
-    # Compose LD_PRELOAD so we don't drop an existing preload set by the user.
-    existing_preload = env.get("LD_PRELOAD", "").strip()
-    preload_value = (
-        f"{paths['preload']}:{existing_preload}"
-        if existing_preload
-        else str(paths["preload"])
-    )
-    env["LD_PRELOAD"] = preload_value
-    env["RJ_CONFIG"] = str(paths["config"])
-    env["RJ_SCHEMA"] = str(paths["schema"])
     # SDMA is needed by the HIP runtime path the interposer emulates; mirror
     # the value used by rocjitsu's own ctest suite.
     env["HSA_ENABLE_SDMA"] = env.get("HSA_ENABLE_SDMA", "1")
@@ -523,9 +518,9 @@ def main(argv: list[str] | None = None) -> int:
     if not amdgpu_family:
         print(
             "ERROR: AMDGPU_FAMILIES is not set. The simulator runner needs it "
-            "to pick the rocjitsu KMD config under "
+            "to pick the rocjitsu config under "
             "<rocm_root>/share/rocjitsu/configs/. Supported values: "
-            f"{sorted(FAMILY_TO_KMD_CONFIG.keys())}.",
+            f"{sorted(FAMILY_TO_ROCJITSU_CONFIG.keys())}.",
             file=sys.stderr,
         )
         return 2
@@ -533,12 +528,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         comp_cfg, preset_cfg = _load_config(args.component, args.filter_preset)
         ctest_dir = bin_dir / comp_cfg.ctest_dir
+        paths = _resolve_rocjitsu_paths(bin_dir, amdgpu_family)
         env = _build_env(
-            bin_dir,
             _compose_gtest_filter(preset_cfg.allow, preset_cfg.skip),
             ctest_dir,
             preset_cfg.ctest_regex,
-            amdgpu_family,
         )
     except (FileNotFoundError, KeyError, TypeError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -550,15 +544,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: driver script not found: {driver_script}", file=sys.stderr)
         return 2
 
-    cmd = [sys.executable, str(driver_script)]
+    # Launch the driver through the rocjitsu CLI: it writes the interposer
+    # config-discovery file, sets LD_PRELOAD and execs the driver. ctest and the
+    # test binaries it spawns inherit both. Mirrors rocjitsu's corpus CI, which
+    # wraps `pytest` the same way.
+    cmd = [
+        str(paths["cli"]),
+        "--config",
+        str(paths["config"]),
+        "--",
+        sys.executable,
+        str(driver_script),
+    ]
     logging.info(
         "[simulator_runner] component=%s preset=%s", args.component, args.filter_preset
     )
     logging.info("[simulator_runner] THEROCK_BIN_DIR=%s", bin_dir)
     logging.info("[simulator_runner] AMDGPU_FAMILIES=%s", amdgpu_family)
-    logging.info("[simulator_runner] LD_PRELOAD=%s", env["LD_PRELOAD"])
-    logging.info("[simulator_runner] RJ_CONFIG=%s", env["RJ_CONFIG"])
-    logging.info("[simulator_runner] RJ_SCHEMA=%s", env["RJ_SCHEMA"])
+    logging.info("[simulator_runner] rocjitsu_cli=%s", paths["cli"])
+    logging.info("[simulator_runner] rocjitsu_config=%s", paths["config"])
     logging.info("[simulator_runner] GTEST_FILTER=%s", gtest_filter)
     logging.info("[simulator_runner] CTEST_TEST_TIMEOUT=%s", env["CTEST_TEST_TIMEOUT"])
     logging.info(
