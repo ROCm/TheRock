@@ -195,12 +195,15 @@ PRs that change real source code must include at least one accompanying unit tes
   `.py`, `.cpp`, `.cc`, `.c`, `.h`, `.js`, `.ts`, `.go`, `.java`, it must also
   include changes to a test file (a new test, or edits to an existing one).
 
-**How a test file is recognised**
+**What counts as a test file?**
 
-| Pattern    | Example          |
-| ---------- | ---------------- |
-| `test_*`   | `test_parser.py` |
-| `*_test.*` | `parser_test.py` |
+- Basename matches one of: `test_*`, `*_test.*`, or `Test*`
+  - ✅ `test_parser.py`, `parser_test.cpp`, `TestUtils.cpp`
+  - ❌ `test.py` (does NOT have the `test_` prefix)
+- **Any file under a `unit/` directory** (at any depth)
+  - ✅ `unit/memory/hipHostRegister.cc`
+  - ✅ `projects/hip-tests/catch/unit/memory/hipHostRegister.cc`
+  - ✅ `tests/unit/my_test.cpp`
 
 **How to fix**
 Add a unit test for the code you changed, named `test_<something>`:
@@ -257,28 +260,57 @@ Common findings include:
 
 ______________________________________________________________________
 
+## 🌿 Bump PRs (Automated Dependency Updates)
+
+**What is a "Bump PR"?**
+
+A **Bump PR** is an automated pull request that updates dependencies (e.g. from Dependabot or a bot like `assistant-librarian`). These PRs are routine, high-volume, and do not follow the standard PR conventions.
+
+**Why did my Bump PR skip policy checks?**
+
+When a PR is detected as a bump update from a configured bot account (e.g. `@assistant-librarian[bot]`), **all policy checks are auto-approved**. This includes:
+
+- Branch name validation
+- Conventional Commits title check
+- JIRA/ISSUE ID reference requirement
+- Unit test requirement
+- And all other policies
+
+This keeps automated bots from being blocked by human-oriented policy gates and prevents spam of "Not ready to Review" labels.
+
+**How does the bot know it's a Bump PR?**
+
+The PR author's login is checked against a configured list of bump bot accounts. Currently recognized:
+
+- `assistant-librarian` (and `assistant-librarian[bot]`)
+- `systems-assistant` (and `systems-assistant[bot]`)
+
+If a different bot opens dependency-bump PRs in your repo, request that the maintainers add it to `bump_bot_authors` in `policy.yml`.
+
+______________________________________________________________________
+
 ## General Questions
 
-### Why did all checks pass automatically on a "bump" PR?
+**Why did my PR get the "Not ready to Review" label?**
 
-PRs opened by automated dependency-bump bots (e.g. `assistant-librarian`,
-`systems-assistant`) are a **special case**: every row in the results table is
-auto-marked **✅ Pass** and the PR is never gated. These are routine version
-bumps (e.g. *"Bumps ROCm/rocm-systems from a0952b2 to 971dc69"*) and don't need
-the full policy gate. The bot list is configured under `pr.bump_bot_authors` in
-`policy.yml`.
+The label is added when:
 
-### What is the "Not ready to Review" label?
+1. **Unit Test check fails** — your PR changes source code but has no accompanying test file.
+1. **JIRA/ISSUE ID reference is missing** — your PR description does not include a tracking reference.
+
+All other policy failures (branch name, title format, description length, forbidden files, etc.) do NOT add the label; they are still reported in the table but do not block the PR.
+
+**What is the "Not ready to Review" label?**
 
 When **PR Title/Description**, **Unit Test**, or **Forbidden Files** fails, the bot adds a **`Not ready to Review`** label to the PR so it is clearly gated.
 The label is removed automatically once all policy checks pass.
 Other failures (Branch Name, PR Size, Draft PR, pre-commit, CodeQL) do **not** add the label.
 
-### How are pre-commit and CodeQL shown?
+**How are pre-commit and CodeQL shown?**
 
 These run as separate CI workflows. The bot waits for them and folds their results into the same table — `pre-commit` and a single combined `CodeQL` row. The CodeQL row fails if CodeQL reports any error / critical / high severity alert.
 
-### The bot timed out — what do I do?
+**The bot timed out — what do I do?**
 
 If `pre-commit` or CodeQL takes longer than 15 minutes, the bot times out.
 Push an empty commit to re-trigger the workflow:
@@ -288,204 +320,12 @@ git commit --allow-empty -m "ci: retrigger policy check"
 git push
 ```
 
-### How do I re-run the bot after fixing issues?
+**How do I re-run the bot after fixing issues?**
 
 Push any commit (including `--allow-empty`) to the PR branch.
 The `synchronize` event triggers a fresh policy check automatically.
 
----
-
-# TheRock PR Bot — Frequently Asked Questions
-
-## General
-
-### What is the PR Bot?
-The PR Bot (`therock-pr-bot`) is an automated quality gate that runs on every pull request. It enforces consistent branch naming, commit message style (Conventional Commits), PR descriptions, forbidden file patterns, unit test requirements, and integrates with external CI checks (pre-commit, CodeQL, etc.).
-
-### Why did my PR get the "Not ready to Review" label?
-The label is added when:
-1. **Unit Test check fails** — your PR changes source code but has no accompanying test file.
-2. **JIRA/ISSUE ID reference is missing** — your PR description does not include a tracking reference.
-
-All other policy failures (branch name, title format, description length, forbidden files, etc.) do NOT add the label; they are still reported in the table but do not block the PR.
-
----
-
-## PR Description — JIRA/ISSUE ID Reference
-
-### What tracking reference formats are accepted?
-
-#### Inline format (on the same line):
-- `JIRA ID : TESTAUTO-6039`
-- `JIRA ID - #330`
-- `JIRA ID #330`
-- `ISSUE ID : TESTUTO-3334`
-- `ISSUE ID - TESTAUTO-3433`
-- `ISSUE ID : https://github.com/<org>/<repo>/issues/1234`
-
-#### Multiline format (label on one line, ID on the next):
-```
-JIRA ID
-ROCM-25757
-```
-
-```
-ISSUE ID
-AIRUNTIME-2352
-```
-
-#### GitHub closing keywords (no label needed):
-- `Closes #10`
-- `Fixes octo-org/octo-repo#100`
-- `Resolves: #123`
-- `resolves #456` (case-insensitive)
-
-#### Bare references (no keyword needed):
-- `#123` (anywhere in the description)
-- `https://github.com/<org>/<repo>/issues/123`
-
-**Note:** Any JIRA project key is accepted — not just one specific project. The format is flexible to accommodate different teams and workflows.
-
----
-
-## Unit Tests
-
-### Why did my PR fail the Unit Test check?
-The Unit Test check requires that every PR changing **source/code files** must also include at least one **test file**.
-
-**What counts as a source/code file?**
-- `.py`, `.cpp`, `.cc`, `.cxx`, `.c`, `.h`, `.hpp`, `.js`, `.ts`, `.jsx`, `.tsx`, `.go`, `.java`, `.rb`, `.rs`
-
-**What counts as a test file?**
-- Basename matches one of: `test_*`, `*_test.*`, or `Test*`
-  - ✅ `test_parser.py`, `parser_test.cpp`, `TestUtils.cpp`
-  - ❌ `test.py` (does NOT have the `test_` prefix)
-
-**What does NOT trigger the requirement?**
-- Doc/config files: `.md`, `.txt`, `.yml`, `.ini`, `.json`, `.xml`, etc.
-- Files in exempt paths (if configured)
-- Removed files
-
-**What if my PR only changes docs?**
-If your PR changes ONLY documentation or configuration files (no code files), the Unit Test check automatically passes.
-
----
-
-## Branch Names
-
-### What are the allowed branch name patterns?
-
-- `users/<username>/<anything>` — team/individual feature branches
-  - ✅ `users/sam/add-auth-feature`
-  - ✅ `users/chi/ROCm-end-user-project-workflow` (uppercase allowed)
-- `shared/<anything>` — shared/common branches
-  - ✅ `shared/add-runner-health`
-- Single-segment branches (e.g. single feature or bump)
-  - ✅ `compiler-ww-24-SMP-2`
-  - ✅ `bump-rocm-libraries-936a6c7`
-- `dependabot/<anything>` — automated dependency updates
-- `revert-<number>-<original-branch>` — auto-reverts
-
-### My branch name is valid but the check still fails
-Ensure:
-- No spaces in the branch name
-- Uses hyphens/underscores, not other special characters
-- Follows one of the patterns listed above exactly
-
----
-
-## PR Title
-
-### What is the correct title format?
-TheRock uses **Conventional Commits** style:
-
-```
-type(optional-scope): short description
-```
-
-**Allowed types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
-
-**Examples:**
-- ✅ `feat(auth): add token refresh support`
-- ✅ `fix: resolve parser edge case`
-- ✅ `docs(readme): update installation steps`
-- ✅ `chore(deps): bump rocm-libraries`
-- ❌ `feature: add something` (invalid type)
-- ❌ `fix it` (too short, < 10 chars)
-- ❌ `WIP: add stuff` (contains forbidden word)
-
-**Length:** 10–80 characters
-
----
-
-## Forbidden Files
-
-### What files are blocked from the repository?
-The PR Bot prevents accidentally committing:
-- Private keys: `*.pem`, `*.key`, `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`
-- Certificates: `*.crt`, `*.cer`, `*.p12`, `*.pfx`, `*.der`, `*.csr`
-- Environment files: `.env`
-- Compiled executables: `*.exe`
-- GPG keys: `*.gpg`, `*.asc`
-
-### I accidentally added a secret — what do I do?
-1. Remove the file from your branch immediately
-2. Force-push to update the PR
-3. **Do not reuse this secret elsewhere** — assume it was exposed
-4. If it's a real credential, rotate it in the system it controls
-
----
-
-## Bump PRs (Automated Dependency Updates)
-
-### What is a "Bump PR"?
-A **Bump PR** is an automated pull request that updates dependencies (e.g. from Dependabot or a bot like `assistant-librarian`). These PRs are routine, high-volume, and do not follow the standard PR conventions.
-
-### Why did my Bump PR skip policy checks?
-When a PR is detected as a bump update from a configured bot account (e.g. `@assistant-librarian[bot]`), **all policy checks are auto-approved**. This includes:
-- Branch name validation
-- Conventional Commits title check
-- JIRA/ISSUE ID reference requirement
-- Unit test requirement
-- And all other policies
-
-This keeps automated bots from being blocked by human-oriented policy gates and prevents spam of "Not ready to Review" labels.
-
-### How does the bot know it's a Bump PR?
-The PR author's login is checked against a configured list of bump bot accounts. Currently recognized:
-- `assistant-librarian` (and `assistant-librarian[bot]`)
-- `systems-assistant` (and `systems-assistant[bot]`)
-
-If a different bot opens dependency-bump PRs in your repo, request that the maintainers add it to `bump_bot_authors` in `policy.yml`.
-
----
-
-## Pre-commit
-
-### What is the pre-commit check?
-`pre-commit` is an external CI workflow that runs code formatters, linters, and security scanners. It ensures code style consistency and catches common issues (trailing whitespace, YAML syntax, etc.).
-
-### Why did pre-commit fail?
-Common reasons:
-- Code formatting issues (trailing whitespace, line length, indentation)
-- YAML/JSON/Markdown syntax errors
-- Trailing newlines missing
-- Commit contains binary files
-
-### How do I fix pre-commit failures locally?
-1. Install pre-commit:
-   ```bash
-   python -m pip install pre-commit
-   pre-commit install
-   ```
-2. Run the checks on all files:
-   ```bash
-   pre-commit run --all-files --show-diff-on-failure
-   ```
-3. Fix any reported issues (many are auto-fixed)
-4. Re-run and commit the corrected files
-
----
+______________________________________________________________________
 
 ## Still stuck?
 
@@ -494,4 +334,3 @@ Common reasons:
 - **Bot source:** [`skills/therock_pr_bot/policy_check.py`](./policy_check.py)
 - **Repo docs:** [TheRock Contributing Guide](../../docs/development/CONTRIBUTING.md)
 - **GitHub issues:** Open an issue on the repo or ask in team channels
-

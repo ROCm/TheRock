@@ -369,6 +369,32 @@ class UnitTestRuleTests(unittest.TestCase):
         pc.ensure_unit_tests(policy, [make_file("tools/build.py")], e)
         self.assertEqual(e, [])
 
+    def test_unit_folder_files_pass(self) -> None:
+        # Files under any 'unit/' directory are treated as test files.
+        policy = make_policy()
+        files = [
+            make_file("src/module.py"),
+            make_file("projects/hip-tests/catch/unit/memory/hipHostRegister.cc"),
+        ]
+        e: List[str] = []
+        pc.ensure_unit_tests(policy, files, e)
+        self.assertEqual(e, [])
+
+    def test_unit_folder_nested_paths(self) -> None:
+        # Unit folder can be at any depth and contain any nesting.
+        policy = make_policy()
+        for test_path in [
+            "unit/test.py",
+            "tests/unit/my_test.cpp",
+            "deep/nested/unit/subdir/test.cpp",
+            "projects/hip-tests/catch/unit/memory/hipHostRegister.cc",
+        ]:
+            with self.subTest(test_path=test_path):
+                files = [make_file("src/module.py"), make_file(test_path)]
+                e: List[str] = []
+                pc.ensure_unit_tests(policy, files, e)
+                self.assertEqual(e, [])
+
 
 # ----------------------------- reviewable size -------------------------------
 

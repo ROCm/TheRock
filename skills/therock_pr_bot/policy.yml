@@ -121,11 +121,14 @@ pr:
       - .rb
       - .rs
     # A changed file is treated as a unit test if its basename matches one of
-    # these glob patterns (e.g. test_parser.py, parser_test.cpp).
+    # these glob patterns (e.g. test_parser.py, parser_test.cpp) OR if it is
+    # located under a 'unit/' directory anywhere in the repo
+    # (e.g. projects/hip-tests/catch/unit/memory/hipHostRegister.cc).
     test_file_patterns:
       - 'test_*'
       - '*_test.*'
       - 'Test*'
+      - 'unit/**'
     # Unit tests are required for source code ANYWHERE in the repository — there
     # are NO folder-based exemptions. A test file may also live in any folder;
     # it is recognised by its name (test_* / *_test.*), not its location.
