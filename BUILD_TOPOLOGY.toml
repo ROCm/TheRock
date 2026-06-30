@@ -65,7 +65,7 @@
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
-#   enable_on_disabled_platforms_if_flags = ["FOO"]  # Optional: flags that remove disable_platforms
+#   disable_platforms_if_flags_not_set = { windows = "FOO" }  # Optional: conditional platform disables
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
@@ -513,8 +513,7 @@ type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
-disable_platforms = ["windows"]
-enable_on_disabled_platforms_if_flags = ["HSA_WINDOWS_SHARED_RUNTIME"]
+disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
