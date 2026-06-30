@@ -13,21 +13,64 @@ The steps for the release are:
 
 Need:
 
-- `build_tools/packaging/download_prerelease_packages.py`
+- `build_tools/packaging/download_python_packages.py`
 - IAM role: read and list bucket access for therock-prerelease-python and therock-prerelease-tarball
+
+By default, the script operates in single-architecture mode using per-arch
+directories (e.g., `v3/whl/<arch>/`).
 
 Example: Download all prerelease candidates 7.10.0rc2 to ./promotion/download
 
 ```bash
 # 1. (Optional) Check which architectures are available
-python build_tools/packaging/download_prerelease_packages.py --version=7.10.0rc2 --list-archs
+python build_tools/packaging/download_python_packages.py --version=7.10.0rc2 --list-archs
 
 # 2. (Recommended) Check which packages are available and their sizes
 #    Make sure you have enough disk space available for what you want to download!
-python build_tools/packaging/download_prerelease_packages.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
+python build_tools/packaging/download_python_packages.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
 
 # 3. Download all ROCm/PyTorch packages that need promotion (all architectures)
-python build_tools/packaging/download_prerelease_packages.py --version=7.10.0rc2 --output-dir=./promotion/download/ --include-tarballs
+python build_tools/packaging/download_python_packages.py --version=7.10.0rc2 --output-dir=./promotion/download/ --include-tarballs
+```
+
+### Multi-arch packages (flat layout)
+
+Use this mode when packages are stored without per-architecture subdirectories
+(e.g., `v4/whl/` layout).
+
+Requirements for multi-arch mode:
+
+- Must use a compatible bucket prefix (e.g., `v4/whl/`)
+- Output is a flat directory (no `<arch>/` folders)
+- All downloaded wheels are placed under `<output-dir>/wheels/`.
+
+#### List multi-arch packages
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.10.0rc2 \
+  --bucket-prefix=v4/whl/ \
+  --multi-arch \
+  --list-multi-arch-packages
+```
+
+#### Download multi-arch packages
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.10.0rc2 \
+  --bucket-prefix=v4/whl/ \
+  --multi-arch \
+  --output-dir=./promotion/download/
+
+```
+
+Output structure:
+
+```
+<output-dir>/
+  wheels/
+    *.whl
 ```
 
 ## 2. Promote prerelease candidates to release
@@ -63,7 +106,7 @@ Need:
 - IAM role:
   - for testing: write access to therock-testing-bucket
   - for production: write access to therock-release-python and therock-release-tarball
-- Same folder structure as created by `download_prerelease_packages.py`:
+- Same folder structure as created by `download_python_packages.py`:
 
 ```
 <input-dir>/

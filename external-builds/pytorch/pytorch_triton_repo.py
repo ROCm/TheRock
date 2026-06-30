@@ -153,14 +153,7 @@ def main(cl_args: list[str]):
         action=argparse.BooleanOptionalAction,
         help="Build a release Triton (vs nightly pin)",
     )
-    checkout_p.add_argument("--depth", type=int, help="Fetch depth")
-    checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
-    checkout_p.add_argument(
-        "--hipify",
-        action=argparse.BooleanOptionalAction,
-        default=default_hipify,
-        help="Run hipify",
-    )
+    repo_management.add_checkout_options(checkout_p, default_hipify=default_hipify)
     checkout_p.set_defaults(func=do_checkout)
 
     args = p.parse_args(cl_args)

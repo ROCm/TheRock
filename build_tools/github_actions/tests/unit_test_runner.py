@@ -86,7 +86,8 @@ class BuildCtestCommandTest(unittest.TestCase):
         cmd = self._build("quick", "", set())
         self.assertEqual(cmd[0], "ctest")
         idx = cmd.index("-L")
-        self.assertEqual(cmd[idx + 1], "quick")
+        # Include labels are anchored (^...$) for exact ctest -L matching.
+        self.assertEqual(cmd[idx + 1], "^quick$")
 
     def test_generic_gpu_excludes_ex_gpu(self):
         cmd = self._build("quick", "generic", set())
@@ -104,10 +105,10 @@ class BuildCtestCommandTest(unittest.TestCase):
         available = {"gfx115X", "gfx11X"}
         cmd = self._build("quick", "gfx1151", available)
         label_indices = [i for i, v in enumerate(cmd) if v == "-L"]
-        # Should have category label and GPU label
+        # Should have category label and GPU label, both anchored (^...$).
         labels = [cmd[i + 1] for i in label_indices]
-        self.assertIn("quick", labels)
-        self.assertIn("ex_gpu_gfx115X", labels)
+        self.assertIn("^quick$", labels)
+        self.assertIn("^ex_gpu_gfx115X$", labels)
 
     def test_no_matching_gpu_excludes_ex_gpu(self):
         available = {"gfx94X"}
@@ -128,26 +129,85 @@ class BuildCtestCommandTest(unittest.TestCase):
     def test_category_exclude_label_applied(self):
         exclude_labels = {"quick_exclude", "standard_exclude"}
         cmd = self._build("quick", "", set(), exclude_labels)
+        # build_ctest_command emits a single -LE flag with all exclude
+        # patterns joined by "|" (ctest regex OR). Split the value back
+        # into its component patterns so the assertion matches logical
+        # excludes rather than the emitted -LE arg string.
         le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
-        le_values = [cmd[i + 1] for i in le_indices]
-        self.assertIn("quick_exclude", le_values)
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertIn("quick_exclude", le_patterns)
 
     def test_category_exclude_label_not_applied_when_absent(self):
         exclude_labels = {"standard_exclude"}
         cmd = self._build("quick", "generic", set(), exclude_labels)
         le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
-        le_values = [cmd[i + 1] for i in le_indices]
-        self.assertNotIn("quick_exclude", le_values)
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertNotIn("quick_exclude", le_patterns)
+
+    def test_therock_ci_exclude_label_applied(self):
+        exclude_labels = {"quick_therock_ci_exclude"}
+        cmd = self._build("quick", "", set(), exclude_labels)
+        le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertIn("quick_therock_ci_exclude", le_patterns)
+
+    def test_category_and_therock_ci_exclude_combined(self):
+        exclude_labels = {"quick_exclude", "quick_therock_ci_exclude"}
+        cmd = self._build("quick", "", set(), exclude_labels)
+        le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertIn("quick_exclude", le_patterns)
+        self.assertIn("quick_therock_ci_exclude", le_patterns)
 
     def test_comprehensive_category(self):
         cmd = self._build("comprehensive", "", set())
         idx = cmd.index("-L")
-        self.assertEqual(cmd[idx + 1], "comprehensive")
+        self.assertEqual(cmd[idx + 1], "^comprehensive$")
 
     def test_full_category(self):
         cmd = self._build("full", "", set())
         idx = cmd.index("-L")
-        self.assertEqual(cmd[idx + 1], "full")
+        self.assertEqual(cmd[idx + 1], "^full$")
+
+    def test_include_labels_are_anchored(self):
+        # ctest -L is a partial regex match, so include labels must be anchored
+        # (^...$) to avoid e.g. "full" matching "multigpu_full" or "ffm-full".
+        cmd = self._build("full", "gfx1151", {"gfx115X"})
+        label_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-L"]
+        self.assertTrue(label_values)
+        for value in label_values:
+            self.assertTrue(
+                value.startswith("^") and value.endswith("$"),
+                f"include label not anchored: {value}",
+            )
+
+
+class ApplyComponentOverridesTest(unittest.TestCase):
+    """Tests for apply_component_overrides()."""
+
+    def _apply(self, job_name, default_parallel_count):
+        return test_runner.apply_component_overrides(
+            job_name,
+            "quick",
+            Path("/rocm"),
+            Path("/therock"),
+            "/rocm/bin/default",
+            {},
+            default_parallel_count,
+        )
+
+    def test_rocprofiler_compute_pins_serial_ctest(self):
+        _, parallel = self._apply("rocprofiler-compute", 8)
+        self.assertEqual(parallel, 1)
+
+    def test_unknown_component_uses_default_parallel(self):
+        test_dir, parallel = self._apply("some-unknown-component", 4)
+        self.assertEqual(parallel, 4)
+        self.assertEqual(test_dir, "/rocm/bin/default")
+
+    def test_component_without_parallel_override_uses_default(self):
+        _, parallel = self._apply("rocwmma", 4)
+        self.assertEqual(parallel, 4)
 
 
 class ValidTestCategoriesTest(unittest.TestCase):
@@ -156,7 +216,16 @@ class ValidTestCategoriesTest(unittest.TestCase):
     def test_all_expected_categories_present(self):
         self.assertEqual(
             test_runner.VALID_TEST_CATEGORIES,
-            {"quick", "standard", "comprehensive", "full"},
+            {
+                "quick",
+                "standard",
+                "comprehensive",
+                "full",
+                "ffm-quick",
+                "ffm-standard",
+                "ffm-comprehensive",
+                "ffm-full",
+            },
         )
 
     def test_valid_category_accepted(self):

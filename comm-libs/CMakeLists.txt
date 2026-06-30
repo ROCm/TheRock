@@ -123,6 +123,13 @@ if(THEROCK_ENABLE_ROCSHMEM)
   # rocSHMEM
   ##############################################################################
   set(_rocshmem_subproject_names)
+  # amdsmi is optional: only available on Linux and when explicitly enabled.
+  set(_rocshmem_optional_runtime_deps)
+  if(NOT WIN32)
+    if(TARGET amdsmi)
+      list(APPEND _rocshmem_optional_runtime_deps amdsmi)
+    endif()
+  endif()
   therock_cmake_subproject_declare(rocshmem
     # rocshmem uses .hip_fatbin/.hip_gpubin_* ELF sections for device code
     # instead of .hipFatBinSegment, making it incompatible with kpack injection.
@@ -164,9 +171,10 @@ if(THEROCK_ENABLE_ROCSHMEM)
       rocm-cmake
       therock-fmt
       therock-googletest
-      ${THEROCK_BUNDLED_NUMACTL}
     RUNTIME_DEPS
       hip-clr
+      ${THEROCK_BUNDLED_NUMACTL}
+      ${_rocshmem_optional_runtime_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocshmem
     SUBDIRS

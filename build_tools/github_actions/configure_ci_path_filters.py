@@ -145,22 +145,28 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 # ============================================================================
 
 # File path patterns that don't trigger CI runs.
-# Changes to files matching these patterns are considered
-# documentation/configuration that don't affect build or test workflows.
+# Changes matching these patterns shouldn't affect CI build/test workflows.
 _SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "*.gitignore",
     "*.md",
+    "*.mdc",
     "*.pre-commit-config.*",
     ".github/dependabot.yml",
     "*CODEOWNERS",
     "*LICENSE",
+    # Files used by gitleaks, no impact on CI.
+    "gitleaks.toml",
+    "build_tools/scan_tools/*",
     # Changes to dockerfiles do not currently affect CI workflows directly.
     # Docker images are built and published after commits are pushed, then
     # workflows can be updated to use the new image sha256 values.
     "dockerfiles/*",
     # Changes to experimental code do not run standard build/test workflows.
     "experimental/*",
+    # This directory contains a collection of AI skills and other developer
+    # utilities. It includes some Python scripts, none of which affect CI.
+    "skills/*",
 ]
 
 # GitHub workflow files that are used by CI workflows. Changes to any of
@@ -168,40 +174,31 @@ _SKIPPABLE_PATH_PATTERNS = [
 # unrelated workflows are never accidentally included.
 #
 # This list is maintained manually and a unit test verifies that every
-# workflow transitively called by ci.yml / multi_arch_ci.yml is listed here.
+# workflow transitively called by multi_arch_ci.yml is listed here.
 #
 # TODO: Compute this set dynamically by scanning workflow files for
 # ``uses: ./.github/workflows/...`` references instead of maintaining it
 # by hand.
 _GITHUB_WORKFLOWS_CI_FILENAMES = {
-    # ci.yml only
-    "ci.yml",
-    "setup.yml",
-    "ci_linux.yml",
-    "ci_windows.yml",
-    "build_native_linux_packages.yml",
-    "build_portable_linux_artifacts.yml",
-    "build_windows_artifacts.yml",
-    # multi_arch_ci.yml only
-    "multi_arch_ci.yml",
+    "build_portable_linux_python_packages.yml",
+    "build_windows_python_packages.yml",
+    "manifest-diff.yml",
+    "multi_arch_build_native_linux_packages.yml",
+    "multi_arch_build_portable_linux_artifacts.yml",
+    "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
+    "multi_arch_build_portable_linux.yml",
+    "multi_arch_build_windows_artifacts.yml",
+    "multi_arch_build_windows_pytorch_wheels_ci.yml",
+    "multi_arch_build_windows.yml",
+    "multi_arch_build_wsl_rocdxg_artifacts.yml",
     "multi_arch_ci_linux.yml",
     "multi_arch_ci_windows.yml",
-    "multi_arch_build_native_linux_packages.yml",
-    "multi_arch_build_portable_linux.yml",
-    "multi_arch_build_portable_linux_artifacts.yml",
-    "multi_arch_build_windows.yml",
-    "multi_arch_build_windows_artifacts.yml",
-    "multi_arch_build_wsl_rocdxg_artifacts.yml",
+    "multi_arch_ci.yml",
     "setup_multi_arch.yml",
     "test_artifacts_structure.yml",
-    "test_native_linux_packages_install.yml",
-    # both
-    "build_portable_linux_python_packages.yml",
-    "build_portable_linux_pytorch_wheels_ci.yml",
-    "build_windows_python_packages.yml",
-    "build_windows_pytorch_wheels_ci.yml",
     "test_artifacts.yml",
     "test_component.yml",
+    "test_native_linux_packages_install.yml",
     "test_rocm_wheels.yml",
 }
 

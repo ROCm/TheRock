@@ -52,14 +52,6 @@ on:
           on the runner (required for Windows and native Linux runners).
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26"
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
-        type: string
-        default: ""
-      ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
-        type: string
-        default: ""
 
   workflow_call:
     inputs:
@@ -114,11 +106,11 @@ on:
 permissions:
   contents: read
 
-run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version }}, ${{ inputs.test_runs_on }})
+run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, py${{ inputs.python_version }}, ${{ inputs.rocm_version }}, ${{ inputs.test_runs_on }})
 
 jobs:
   test_wheels:
-    name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | ${{ inputs.container_image_name }}
+    name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | py${{ inputs.python_version }} | ${{ inputs.container_image_name }}
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
@@ -140,7 +132,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -148,7 +140,7 @@ jobs:
       # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python
         if: ${{ inputs.container_image_url == '' || contains(inputs.container_image_name, 'ubuntu') }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python_version }}
 

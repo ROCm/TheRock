@@ -79,6 +79,12 @@ on:
           (e.g. torch[device-gfx942]) instead of per-family index subdirs.
         type: boolean
         default: false
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
 
   workflow_call:
     inputs:
@@ -151,7 +157,7 @@ jobs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -207,13 +213,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -237,13 +243,15 @@ jobs:
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY or apply any patches, so we skip those steps to save time.
+      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
+      # steps to save time.
       - name: Checkout PyTorch Source
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Set up virtual environment
         timeout-minutes: 15

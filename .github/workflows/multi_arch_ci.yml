@@ -42,6 +42,14 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+      changed_projects:
+        type: string
+        default: ""
+        description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
+      build_pytorch:
+        type: boolean
+        default: true
+        description: "Build PyTorch wheels"
   pull_request:
     types:
       - labeled
@@ -74,6 +82,7 @@ jobs:
       windows_test_labels: ${{ inputs.windows_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -92,6 +101,7 @@ jobs:
       rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      changed_projects: ${{ inputs.changed_projects || '' }}
     permissions:
       contents: read
       id-token: write
@@ -111,6 +121,17 @@ jobs:
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      changed_projects: ${{ inputs.changed_projects || '' }}
+    permissions:
+      contents: read
+      id-token: write
+
+  manifest_diff:
+    name: Manifest Diff
+    # Refs are auto-derived from push / pull_request events only.
+    # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
       id-token: write
@@ -122,9 +143,10 @@ jobs:
       - setup
       - linux_build_and_test
       - windows_build_and_test
+      - manifest_diff
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
