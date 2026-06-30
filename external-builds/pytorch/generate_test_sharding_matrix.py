@@ -38,9 +38,9 @@ import os
 #   inductor (2):
 #     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/inductor-rocm-mi300.yml#L51-L52
 SHARDS_PER_CONFIG: dict[str, int] = {
-    "default": 6,
+    "default": 10,
     "distributed": 3,
-    "inductor": 2,
+    "inductor": 4,
 }
 DEFAULT_SHARDS = 4
 
