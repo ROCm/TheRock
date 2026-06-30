@@ -65,6 +65,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
+from configure_jax_release_matrix import generate_jax_matrix
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
@@ -132,6 +133,7 @@ class CIInputs:
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
     build_pytorch: bool = True
+    build_jax: bool = False
     python_versions: list[str] = field(default_factory=list)
 
     # PR labels (from event payload for pull_request events)
@@ -185,6 +187,7 @@ class CIInputs:
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
+        build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -221,6 +224,7 @@ class CIInputs:
             build_variant=build_variant,
             release_type=release_type,
             build_pytorch=build_pytorch,
+            build_jax=build_jax,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
@@ -404,6 +408,7 @@ class JobDecisions:
     build_rocm_python: JobGroupDecision
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
+    build_jax: JobGroupDecision
 
     def log(self) -> None:
         """Log job decisions for CI diagnostics."""
@@ -417,6 +422,7 @@ class JobDecisions:
         print(f"  build_rocm_python: {self.build_rocm_python.action.value}")
         print(f"  build_pytorch: {self.build_pytorch.action.value}")
         print(f"  test_pytorch: {self.test_pytorch.action.value}")
+        print(f"  build_jax: {self.build_jax.action.value}")
 
 
 @dataclass(frozen=True)
@@ -435,8 +441,10 @@ class BuildConfig:
     build_variant_cmake_preset: str
     build_native_linux: bool
     build_pytorch: bool
+    build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
+    jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -672,6 +680,7 @@ def decide_jobs(
             )
 
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
+    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
@@ -682,6 +691,7 @@ def decide_jobs(
         build_rocm_python=JobGroupDecision(action=JobAction.RUN),
         build_pytorch=JobGroupDecision(action=build_pytorch_action),
         test_pytorch=JobGroupDecision(action=build_pytorch_action),
+        build_jax=JobGroupDecision(action=build_jax_action),
     )
 
 
@@ -985,6 +995,13 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_pytorch = bool(pytorch_build_matrix)
 
+    jax_build_matrix: list[dict[str, str]] = []
+    build_jax = jobs.build_jax.action == JobAction.RUN and platform == "linux"
+    if build_jax:
+        jax_build_matrix = generate_jax_matrix(ci_inputs.python_versions or None)
+        # Flip back to False if the generated matrix is empty.
+        build_jax = bool(jax_build_matrix)
+
     test_python_packages_matrix = build_rocm_python_test_matrix(
         per_family_info=per_family_info,
         platform=platform,
@@ -1002,7 +1019,9 @@ def _expand_build_config_for_platform(
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         build_native_linux=(suffix != "asan"),
         build_pytorch=build_pytorch,
+        build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
+        jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,

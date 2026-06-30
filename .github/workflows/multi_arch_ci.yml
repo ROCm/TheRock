@@ -83,6 +83,7 @@ jobs:
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
+      build_jax: false
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
