@@ -11,4 +11,13 @@ include = [
   # Test config TOMLs (e.g. HIP_KERNEL_ENGINE.toml) consumed by the cross-provider
   # integration suite (hipdnn_integration_tests --test-config).
   "bin/hip_kernel_provider/*.toml",
+  # rocKE Python smoke test (placeholder rocke Python CI test) + the co-located
+  # rocke package it imports. Only present when HIPKERNELPROVIDER_ENABLE_ROCKE=ON.
+  "bin/hip_kernel_provider/rocke_installed_smoke.py",
+  "bin/hip_kernel_provider/rocke/**",
+  # rocKE host-only golden IR byte-stability gate: relocatable runner, the parity
+  # harness it imports, and the committed golden digest JSON.
+  "bin/hip_kernel_provider/rocke_installed_golden.py",
+  "bin/hip_kernel_provider/rocke_ir_parity_harness.py",
+  "bin/hip_kernel_provider/golden/**",
 ]
