@@ -163,6 +163,9 @@ jobs:
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
+          # ROCM-966: disable deprecated rocm-smi during component tests to
+          # surface which components still depend on it at runtime.
+          ROCM_SMI_DISABLE: "1"
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
