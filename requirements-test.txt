@@ -20,6 +20,7 @@ joblib>=1.4.0
 numpy>=1.26.0
 filelock>=3.0.0
 hip-python; sys_platform != "win32"
+pytest-xdist>=1.32.0
 
 # libhipcxx test requirement
 lit==18.1.8

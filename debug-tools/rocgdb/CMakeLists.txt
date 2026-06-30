@@ -90,6 +90,15 @@ endfunction()
 # By default install the ROCgdb testsuite files.
 option(ENABLE_TESTS "Enable installation of ROCgdb testsuite files" OFF)
 
+# Upstream build mode: skips AMD-specific files not yet in upstream master
+# (NOTICES.txt, roccoremerge program/manpage).
+option(ROCGDB_UPSTREAM_BUILD "Building from upstream master (skips AMD-specific files)" OFF)
+
+# When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py
+# (e.g. an upstream branch), fetch it from ROCm/ROCgdb amd-staging at configure
+# time so that it can be installed into tests/rocgdb for TheRock CI to invoke.
+option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py from amd-staging if missing in source tree" OFF)
+
 # Find standard build tools.
 find_program(MAKE_EXECUTABLE NAMES make REQUIRED)
 
@@ -284,6 +293,14 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
   set(ROCGDB_PDF_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc")
   set(ROCGDB_INFO_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/info/rocgdb")
 
+  # Build AMD-specific install commands (conditionally included).
+  set(AMD_SPECIFIC_INSTALL_COMMANDS "")
+  if(NOT ROCGDB_UPSTREAM_BUILD)
+    list(APPEND AMD_SPECIFIC_INSTALL_COMMANDS
+      COMMAND ${CMAKE_COMMAND} -E copy ${ROCGDB_SOURCE_DIR}/gdb/NOTICES.txt ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc/
+    )
+  endif()
+
   add_custom_target("${ROCGDB_TARGET_NAME}"
     ALL
     VERBATIM
@@ -360,11 +377,11 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     COMMAND
       ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
       ${MAKE_EXECUTABLE} -s -C binutils install
-    # Add in the AMD licences file.
+    # Create doc directory and add AMD-specific files (NOTICES.txt) if not building upstream.
     COMMAND
       ${CMAKE_COMMAND} -E make_directory ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc
-    COMMAND
-      ${CMAKE_COMMAND} -E copy ${ROCGDB_SOURCE_DIR}/gdb/NOTICES.txt ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc/
+    ${AMD_SPECIFIC_INSTALL_COMMANDS}
+
     # Rename rocgcore to rocgcore-py<python version>.
     COMMAND
       ${CMAKE_COMMAND} -E rename ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore-py${minor_version}
@@ -387,7 +404,6 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
   # Executable files.
   set(ROCGDB_EXEC_FILES_TO_INSTALL
-    "bin/roccoremerge"
     "bin/rocgcore-py${minor_version}"
     "bin/rocgdb-py${minor_version}"
   )
@@ -396,11 +412,16 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
   set(ROCGDB_MISC_FILES_TO_INSTALL
     "share/info/rocgdb/annotate.info"
     "share/info/rocgdb/gdb.info"
-    "share/man/man1/roccoremerge.1"
     "share/man/man1/rocgdb.1"
     "share/man/man1/rocgcore.1"
     "share/man/man1/rocgdb-add-index.1"
   )
+
+  # AMD-specific files not yet in upstream master.
+  if(NOT ROCGDB_UPSTREAM_BUILD)
+    list(APPEND ROCGDB_EXEC_FILES_TO_INSTALL "bin/roccoremerge")
+    list(APPEND ROCGDB_MISC_FILES_TO_INSTALL "share/man/man1/roccoremerge.1")
+  endif()
 
   # Register the final installation step for this variant's files.
   # This basically moves the variant files from the intermediate install
@@ -527,9 +548,12 @@ endif()
 
 # List of all the files in bin we need to patch in RUNPATH's.
 # This excludes rocgdb executables as we patch those separately.
-set(ROCGDB_EXECS_TO_PATCH
-  "bin/roccoremerge"
-)
+set(ROCGDB_EXECS_TO_PATCH)
+
+# roccoremerge is only present in ROCm's branch (not yet in upstream master).
+if(NOT ROCGDB_UPSTREAM_BUILD)
+  list(APPEND ROCGDB_EXECS_TO_PATCH "bin/roccoremerge")
+endif()
 
 foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
   set(rocgdb_exec_file "${CMAKE_INSTALL_PREFIX}/${rocgdb_exec_filename}")
@@ -637,8 +661,15 @@ if(BUILD_TESTING)
     "share/man/man1/rocgdb-add-index.1"
     "share/man/man1/rocgcore.1"
     "share/man/man1/rocgdb.1"
-    "share/man/man1/roccoremerge.1"
   )
+
+  # AMD-specific files not yet in upstream master.
+  if(NOT ROCGDB_UPSTREAM_BUILD)
+    list(APPEND ROCGDB_EXPECTED_FILES
+      "share/doc/NOTICES.txt"
+      "share/man/man1/roccoremerge.1"
+    )
+  endif()
 
   list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXPECTED_FILES})
 
@@ -706,10 +737,53 @@ if(BUILD_TESTING)
       USE_SOURCE_PERMISSIONS)
   endforeach()
 
-  # Also install the CI wrapper script to invoke rocgdb tests.
-  # This is used in the context of TheRock CI.
+  # Install the CI wrapper script that invokes the rocgdb testsuite. This is
+  # used by TheRock CI. If the script is not in the source tree and
+  # ROCGDB_DOWNLOAD_CI_SCRIPT is enabled, fetch it from amd-staging.
+  set(TEST_ROCGDB_SCRIPT "${ROCGDB_SOURCE_DIR}/.github/scripts/test_rocgdb.py")
+  if(NOT EXISTS "${TEST_ROCGDB_SCRIPT}")
+    if(ROCGDB_DOWNLOAD_CI_SCRIPT)
+      set(TEST_ROCGDB_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/test_rocgdb.py")
+      # The source of truth for the CI script is the one in amd-staging.
+      set(TEST_ROCGDB_URL "https://raw.githubusercontent.com/ROCm/ROCgdb/amd-staging/.github/scripts/test_rocgdb.py")
+
+      # Use curl rather than file(DOWNLOAD): file(DOWNLOAD)'s STATUS is the
+      # libcurl transfer code, so HTTP 404/500 responses are reported as
+      # success and the error-page body is written to disk. curl --fail
+      # returns non-zero on HTTP >= 400, and verifies TLS by default.
+      find_program(CURL_EXECUTABLE curl REQUIRED)
+      set(download_success FALSE)
+      foreach(attempt RANGE 1 3)
+        message(STATUS "Attempting to download test_rocgdb.py (attempt ${attempt}/3)")
+        execute_process(
+          COMMAND "${CURL_EXECUTABLE}"
+            --fail --silent --show-error --location
+            --max-time 60
+            --output "${TEST_ROCGDB_SCRIPT}"
+            "${TEST_ROCGDB_URL}"
+          RESULT_VARIABLE curl_result
+          ERROR_VARIABLE  curl_error
+        )
+        if(curl_result EQUAL 0)
+          set(download_success TRUE)
+          message(STATUS "Successfully downloaded test_rocgdb.py to ${TEST_ROCGDB_SCRIPT}")
+          break()
+        else()
+          message(WARNING "Download attempt ${attempt} failed: ${curl_error}")
+          file(REMOVE "${TEST_ROCGDB_SCRIPT}")
+        endif()
+      endforeach()
+
+      if(NOT download_success)
+        message(FATAL_ERROR "Failed to download test_rocgdb.py after 3 attempts")
+      endif()
+    else()
+      message(FATAL_ERROR "test_rocgdb.py not found at ${TEST_ROCGDB_SCRIPT} and ROCGDB_DOWNLOAD_CI_SCRIPT is OFF. Re-configure with -DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON to fetch it from amd-staging.")
+    endif()
+  endif()
+
   install(
-    PROGRAMS ${ROCGDB_SOURCE_DIR}/.github/scripts/test_rocgdb.py
+    PROGRAMS ${TEST_ROCGDB_SCRIPT}
     DESTINATION tests/rocgdb
     COMPONENT tests
   )
