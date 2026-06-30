@@ -30,6 +30,9 @@ import policy_check as pc  # noqa: E402
 _ISSUE_PATTERNS = [
     r"(?im)^\s*JIRA\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)",
     r"(?im)^\s*ISSUE\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)",
+    # JIRA/ISSUE ID on a separate line (blank lines + trailing spaces allowed).
+    r"(?im)^[ \t]*JIRA[ \t]+ID[ \t]*\r?\n[ \t\r\n]*([A-Z][A-Z0-9]+-\d+)",
+    r"(?im)^[ \t]*ISSUE[ \t]+ID[ \t]*\r?\n[ \t\r\n]*([A-Z][A-Z0-9]+-\d+|\d+)",
     r"(?im)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*"
     r"(?:[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]+)?#\d+",
     # Bare GitHub issue reference, e.g. #123
@@ -219,10 +222,15 @@ class DescriptionTests(unittest.TestCase):
             "JIRA ID\nROCM-25757",
             "JIRA ID\n\nROCM-25757",
             "jira id\nROCM-25757",  # case-insensitive
+            # Trailing spaces after label + blank line before key
+            "JIRA ID  \n\nAIRUNTIME-2352",
+            "JIRA ID\t\n\n\nROCM-25757",
+            "JIRA ID  \r\n\r\nROCM-25757",  # CRLF line endings
             # Multiline format with ISSUE ID
             "ISSUE ID\nAIRUNTIME-2352",
             "ISSUE ID\n\nAIRUNTIME-2352",
             "issue id\nAIRUNTIME-2352",  # case-insensitive
+            "ISSUE ID  \n\nAIRUNTIME-2352",  # trailing spaces + blank line
         ]:
             with self.subTest(body=body):
                 e: List[str] = []

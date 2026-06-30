@@ -87,10 +87,12 @@ pr:
     issue_reference_patterns:
       - '(?im)^\s*JIRA\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
       - '(?im)^\s*ISSUE\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
-      # JIRA ID on separate line (multiline format)
-      - '(?im)^\s*JIRA\s+ID\s*\n\s*([A-Z][A-Z0-9]+-\d+)'
-      # ISSUE ID on separate line (multiline format)
-      - '(?im)^\s*ISSUE\s+ID\s*\n\s*([A-Z][A-Z0-9]+-\d+|\d+)'
+      # JIRA ID on a separate line — allows trailing spaces/tabs after the
+      # label and any number of blank lines before the key
+      # (e.g. "JIRA ID  \n\nAIRUNTIME-2352").
+      - '(?im)^[ \t]*JIRA[ \t]+ID[ \t]*\r?\n[ \t\r\n]*([A-Z][A-Z0-9]+-\d+)'
+      # ISSUE ID on a separate line — same flexibility as above.
+      - '(?im)^[ \t]*ISSUE[ \t]+ID[ \t]*\r?\n[ \t\r\n]*([A-Z][A-Z0-9]+-\d+|\d+)'
       - '(?im)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]+)?#\d+'
       # Bare GitHub issue reference, e.g. #123
       - '(?m)(?:^|\s)#\d+\b'
