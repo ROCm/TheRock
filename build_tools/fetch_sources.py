@@ -559,10 +559,15 @@ def pull_large_files(dvc_projects, projects, jobs=None):
         return
     pull_jobs = jobs if jobs is not None else fetch_dvc_artifacts.DEFAULT_JOBS
     for project in dvc_projects:
-        if not project in projects:
-            continue
-        submodule_path = get_submodule_path(project)
-        project_dir = THEROCK_DIR / submodule_path
+        # For submodules in TheRock's topology, use get_submodule_path
+        if project in projects:
+            submodule_path = get_submodule_path(project)
+            project_dir = THEROCK_DIR / submodule_path
+        # For external repositories (e.g., external-rocm-systems),
+        # use the path directly since they're checked out relative to THEROCK_DIR
+        else:
+            project_dir = THEROCK_DIR / project
+
         dvc_config_file = project_dir / ".dvc" / "config"
         if not dvc_config_file.exists():
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")

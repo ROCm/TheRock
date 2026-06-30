@@ -4,9 +4,10 @@
 name: Multi-Arch CI ASAN
 
 on:
-  push:
-    branches:
-      - main
+  # TODO: Enable postsubmit ASAN once we have capacity
+  # push:
+  #   branches:
+  #     - main
   schedule:
     # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
     - cron: '0 02 * * *'
@@ -58,6 +59,7 @@ jobs:
       linux_test_labels: ${{ inputs.linux_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      build_pytorch: false
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -88,7 +90,7 @@ jobs:
       - linux_build_and_test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
