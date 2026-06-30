@@ -627,12 +627,6 @@ def _determine_test_type(
     # Default: quick tests for fast CI feedback.
     return "quick", "default"
 
-def _stage_reuse_target_families(ci_inputs: "CIInputs") -> list[str]:
-    families = list(dict.fromkeys(
-        [*ci_inputs.linux_amdgpu_families, *ci_inputs.windows_amdgpu_families]))
-    if "generic" not in families:
-        families.append("generic")
-    return families
 
 def decide_jobs(
     ci_inputs: CIInputs,
@@ -658,6 +652,7 @@ def decide_jobs(
         compute_auto_stage_reuse,
         render_step_summary,
     )
+    from github_actions_api import gha_append_step_summary
     target_families = _stage_reuse_target_families(ci_inputs)
     auto = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
@@ -719,6 +714,12 @@ def decide_jobs(
 # Step 4: Select Targets
 # ---------------------------------------------------------------------------
 
+def _stage_reuse_target_families(ci_inputs: "CIInputs") -> list[str]:
+    families = list(dict.fromkeys(
+        [*ci_inputs.linux_amdgpu_families, *ci_inputs.windows_amdgpu_families]))
+    if "generic" not in families:
+        families.append("generic")
+    return families
 
 def _validate_family_names(
     names: list[str],
