@@ -34,34 +34,15 @@ skip_tests = {
         "cuda_expandable_segments": [
             # test_cuda_expandable_segments un-excluded from EXCLUDED_TEST_MODULES
             # (the prior "hang" was the rocprofiler shutdown bug, fixed by
-            # HSA_TOOLS_DISABLE_REGISTER). 17 genuine residual failures remain with
-            # the env var. NOTE: most of these PASS on upstream PyTorch's CUDA HUD,
-            # so they are ROCm/config divergence (this module re-runs test_cuda.py
-            # under PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True), NOT PyTorch
-            # bugs. Skipped to get CI green; root-cause is tracked separately.
-            # CAVEAT: these class/test names also exist in plain test_cuda.py, so the
-            # -k substring skips them there too — revisit when narrowing.
-            # "Booleans mismatch: True is not False" cluster (allocator introspection
-            # under expandable segments):
-            "(TestCudaAllocator and test_allocation_traceback)",
-            "(TestCudaAllocator and test_allocation_traceback_no_recording)",
-            "(TestCudaAllocator and test_allocator_fuzz)",
-            "(TestCudaAllocator and test_allocator_memory_fraction_setting)",
-            "(TestCudaAllocator and test_allocator_settings)",
-            "(TestCudaAllocator and test_cachingAllocator_raw_alloc)",
-            "(TestCudaAllocator and test_cpp_memory_snapshot_pickle)",
-            "(TestCudaAllocator and test_cycles)",
-            "(TestCudaAllocator and test_direct_traceback)",
-            "(TestCudaAllocator and test_memory_snapshot_script)",
-            # Other residual failures (snapshot tooling / OOM semantics / stats /
-            # graph / streams / mempool) under expandable segments:
-            "(TestCuda and test_graph_memory_stats_and_use_result_after_destroy_graph)",
+            # HSA_TOOLS_DISABLE_REGISTER). Verified the faithful CI way (run_test.py
+            # runs the file as a script so its __main__ sets the expandable-segments
+            # allocator): only test_out_of_memory genuinely fails (test_hip_device_count
+            # is already skipped above). TestCuda::test_out_of_memory asserts an OOM
+            # tensor flag that is False on ROCm expandable segments. TODO: root-cause.
+            # (NB: a large apparent failure cluster under raw `pytest file.py` was a
+            # harness artifact — without __main__, EXPANDABLE_SEGMENTS mismatches the
+            # runtime allocator — NOT real; do not re-add those.)
             "(TestCuda and test_out_of_memory)",
-            "(TestCuda and test_out_of_memory_retry)",
-            "(TestCuda and test_streaming_backwards_multiple_streams)",
-            "(TestBlockStateAbsorption and test_allocate_in_thread_to_pool)",
-            "(TestBlockStateAbsorption and test_allocated_in_middle_of_segment)",
-            "(TestMemPool and test_mempool_ctx_multithread)",
         ],
         "nn": [
             # TestNNDeviceTypeCUDA - AssertionError: Scalars are not close!
@@ -74,17 +55,30 @@ skip_tests = {
             # input-grad ULP worst case 952 > 854 on ROCm June 12 wheel.
             "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
             # Run 28411211813 default shard 3/10: TestNNDeviceTypeCUDA::
-            # test_module_to_empty_cuda_float32 - regex match on the expected error
-            # message fails because ROCm's Copy.cpp appends a C++ CapturedTraceback
-            # to the NotImplementedError string. Consistent (3x). TODO: narrow/fix.
+            # test_module_to_empty_cuda_float32 FAILED CONSISTENTLY (regex match on the
+            # expected error message fails because ROCm's Copy.cpp appends a C++
+            # CapturedTraceback to the NotImplementedError string). NOTE: passes when
+            # run in isolation via run_test.py, so it is order/state-dependent within
+            # the full shard. Kept because it fails in the real sharded CI run.
+            # TODO: find the polluting test / narrow.
             "(TestNNDeviceTypeCUDA and test_module_to_empty_cuda_float32)",
         ],
         "optim": [
             # Run 28411211813 default shard 4/10: TestOptimRenewedCUDA::
-            # test_rosenbrock_sparse_with_lrsched_False_SGD_cuda_float64 hangs in the
-            # sparse SGD step (device_params.add_(grads, alpha=-lr)); 900s
-            # pytest-timeout, consistent across initial run + 2 reruns. TODO: root-cause.
+            # test_rosenbrock_sparse_with_lrsched_False_SGD_cuda_float64 hit the 900s
+            # pytest-timeout (x3 reruns) in the sparse SGD step. NOTE: passes in ~8s
+            # when run in isolation via run_test.py, so it is order/state-dependent
+            # within the full shard. Kept because it times out in the real sharded CI
+            # run. TODO: find the polluting test / root-cause the hang.
             "(TestOptimRenewedCUDA and test_rosenbrock_sparse_with_lrsched_False_SGD_cuda_float64)",
+        ],
+        "ops": [
+            # test_ops un-excluded from EXCLUDED_TEST_MODULES (prior crash was the
+            # rocprofiler shutdown bug, fixed by HSA_TOOLS_DISABLE_REGISTER). Verified
+            # faithfully via run_test.py: TestCommonCUDA::test_dtypes_sparse_sampled_addmm
+            # fails CONSISTENTLY ("supported dtypes for sparse.sampled_addmm on cuda are
+            # incorrect") on ROCm. TODO: root-cause the dtype-support divergence.
+            "(TestCommonCUDA and test_dtypes_sparse_sampled_addmm_cuda)",
         ],
         "binary_ufuncs": [
             # Run 28379269101 default shard 6/10, job 84077240385:
@@ -112,15 +106,14 @@ skip_tests = {
             # TestLinalgCUDA::test_cholesky_solve_batched_many_batches fails in the
             # large broadcasted batched solve case (A_dims=(5,256,256), b_dims=(5,10)).
             # Nightly passes after upstream cholesky_solve batched/solver-dispatch changes.
-            "(TestLinalgCUDA and test_cholesky_solve_batched_many_batches)",
             # test_linalg un-excluded from EXCLUDED_TEST_MODULES (the prior "0 failed
             # then SIGIOT" was the rocprofiler shutdown bug, fixed by
-            # HSA_TOOLS_DISABLE_REGISTER). Two genuine residual failures remain
-            # (consistent across 3 local reruns on MI300X, 2.14 nightly):
-            # svd_lowrank complex128 fails with _LinAlgError "svd failed to converge
-            # (ill-conditioned)"; tunableop call-count off. TODO: root-cause + narrow.
-            "(TestLinalgCUDA and test_svd_lowrank_cuda_complex128)",
-            "(TestLinalgCudaOnlyCUDA and test_call_count_tunableop_cuda_float32)",
+            # HSA_TOOLS_DISABLE_REGISTER). Verified the faithful CI way (run_test.py):
+            # the only residual failures are the 4 cholesky_solve_batched_many_batches
+            # dtype variants already covered by the substring skip above. (svd_lowrank
+            # / test_call_count_tunableop are auto-skipped via --import-disabled-tests,
+            # upstream-disabled per pytorch/pytorch#186872 — no skip needed here.)
+            "(TestLinalgCUDA and test_cholesky_solve_batched_many_batches)",
         ],
         "modules": [
             # Run 27228539427 inductor shard 1/4:
