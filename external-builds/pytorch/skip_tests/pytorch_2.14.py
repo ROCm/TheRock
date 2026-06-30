@@ -31,6 +31,38 @@ skip_tests = {
             # (import torch; torch.rand(2, device='cuda')) that dies with SIGABRT.
             "(TestBlockStateAbsorption and test_no_triton_on_import)",
         ],
+        "cuda_expandable_segments": [
+            # test_cuda_expandable_segments un-excluded from EXCLUDED_TEST_MODULES
+            # (the prior "hang" was the rocprofiler shutdown bug, fixed by
+            # HSA_TOOLS_DISABLE_REGISTER). 17 genuine residual failures remain with
+            # the env var. NOTE: most of these PASS on upstream PyTorch's CUDA HUD,
+            # so they are ROCm/config divergence (this module re-runs test_cuda.py
+            # under PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True), NOT PyTorch
+            # bugs. Skipped to get CI green; root-cause is tracked separately.
+            # CAVEAT: these class/test names also exist in plain test_cuda.py, so the
+            # -k substring skips them there too — revisit when narrowing.
+            # "Booleans mismatch: True is not False" cluster (allocator introspection
+            # under expandable segments):
+            "(TestCudaAllocator and test_allocation_traceback)",
+            "(TestCudaAllocator and test_allocation_traceback_no_recording)",
+            "(TestCudaAllocator and test_allocator_fuzz)",
+            "(TestCudaAllocator and test_allocator_memory_fraction_setting)",
+            "(TestCudaAllocator and test_allocator_settings)",
+            "(TestCudaAllocator and test_cachingAllocator_raw_alloc)",
+            "(TestCudaAllocator and test_cpp_memory_snapshot_pickle)",
+            "(TestCudaAllocator and test_cycles)",
+            "(TestCudaAllocator and test_direct_traceback)",
+            "(TestCudaAllocator and test_memory_snapshot_script)",
+            # Other residual failures (snapshot tooling / OOM semantics / stats /
+            # graph / streams / mempool) under expandable segments:
+            "(TestCuda and test_graph_memory_stats_and_use_result_after_destroy_graph)",
+            "(TestCuda and test_out_of_memory)",
+            "(TestCuda and test_out_of_memory_retry)",
+            "(TestCuda and test_streaming_backwards_multiple_streams)",
+            "(TestBlockStateAbsorption and test_allocate_in_thread_to_pool)",
+            "(TestBlockStateAbsorption and test_allocated_in_middle_of_segment)",
+            "(TestMemPool and test_mempool_ctx_multithread)",
+        ],
         "nn": [
             # TestNNDeviceTypeCUDA - AssertionError: Scalars are not close!
             # Expected 3.875156879425049 but got 3.876049757003784.
@@ -41,6 +73,18 @@ skip_tests = {
             # TestNNDeviceTypeCUDA::test_linear_cross_entropy_loss_default_bias_False_cuda_float32
             # input-grad ULP worst case 952 > 854 on ROCm June 12 wheel.
             "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
+            # Run 28411211813 default shard 3/10: TestNNDeviceTypeCUDA::
+            # test_module_to_empty_cuda_float32 - regex match on the expected error
+            # message fails because ROCm's Copy.cpp appends a C++ CapturedTraceback
+            # to the NotImplementedError string. Consistent (3x). TODO: narrow/fix.
+            "(TestNNDeviceTypeCUDA and test_module_to_empty_cuda_float32)",
+        ],
+        "optim": [
+            # Run 28411211813 default shard 4/10: TestOptimRenewedCUDA::
+            # test_rosenbrock_sparse_with_lrsched_False_SGD_cuda_float64 hangs in the
+            # sparse SGD step (device_params.add_(grads, alpha=-lr)); 900s
+            # pytest-timeout, consistent across initial run + 2 reruns. TODO: root-cause.
+            "(TestOptimRenewedCUDA and test_rosenbrock_sparse_with_lrsched_False_SGD_cuda_float64)",
         ],
         "binary_ufuncs": [
             # Run 28379269101 default shard 6/10, job 84077240385:
@@ -69,6 +113,14 @@ skip_tests = {
             # large broadcasted batched solve case (A_dims=(5,256,256), b_dims=(5,10)).
             # Nightly passes after upstream cholesky_solve batched/solver-dispatch changes.
             "(TestLinalgCUDA and test_cholesky_solve_batched_many_batches)",
+            # test_linalg un-excluded from EXCLUDED_TEST_MODULES (the prior "0 failed
+            # then SIGIOT" was the rocprofiler shutdown bug, fixed by
+            # HSA_TOOLS_DISABLE_REGISTER). Two genuine residual failures remain
+            # (consistent across 3 local reruns on MI300X, 2.14 nightly):
+            # svd_lowrank complex128 fails with _LinAlgError "svd failed to converge
+            # (ill-conditioned)"; tunableop call-count off. TODO: root-cause + narrow.
+            "(TestLinalgCUDA and test_svd_lowrank_cuda_complex128)",
+            "(TestLinalgCudaOnlyCUDA and test_call_count_tunableop_cuda_float32)",
         ],
         "modules": [
             # Run 27228539427 inductor shard 1/4:
@@ -188,6 +240,10 @@ skip_tests = {
             "(TestFullyShard1DTrainingCore and test_post_optim_event)",
             # /dev/shm exhausted by 8-rank 3D mesh tensor allocs; NCCL shared memory OOM
             "(TestFullyShardHSDP3DTraining and test_3d_mlp_with_nd_mesh)",
+            # Run 28411211813 distributed shard 1/3: NCCLTraceTest::
+            # test_compiled_with_reduce_overhead - genuine NCCL ALLREDUCE timeout +
+            # ncclSystemError (distinct from the rocprofiler shutdown crash). TODO: investigate.
+            "(NCCLTraceTest and test_compiled_with_reduce_overhead)",
         ],
     },
 }

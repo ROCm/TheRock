@@ -113,40 +113,29 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # catch (e.g. hanging during import or in C extensions).
 # TODO: investigate root causes and narrow exclusions over time.
 EXCLUDED_TEST_MODULES: list[str] = [
-    # Run 28001683693 (2.14 nightly, gfx94X): all 17 shards hit the 6h timeout.
-    # These modules hang at the process level, bypassing the 900s pytest-timeout.
-    # EXCLUDED_TEST_MODULES only applies to the default/distributed configs.
-    # For inductor, hangers are removed from INDUCTOR_GENERIC_TESTS /
-    # INDUCTOR_UNIT_TESTS below.
-    "functorch/test_vmap",                            # hangs ~5h50m (shard 2/10)
-    "test_decomp",                                    # hangs ~4h24-4h36m (shards 3,5/10)
-    "test_meta",                                      # hangs ~4h24m (shard 4/10)
-    "inductor/test_torchinductor_dynamic_shapes",     # hangs ~5h17m (shard 8/10)
-    "inductor/test_torchinductor_codegen_dynamic_shapes",  # hangs ~4h27m (shard 6/10)
-    "test_ops",                                       # hangs (default shards 1,7,10 + shard 5 internal)
-    "distributed/test_c10d_gloo",                     # hangs at bootstrap (dist shards 1,3/3)
-    "distributed/fsdp/test_fsdp_checkpoint",          # 300s-timeout x3 reruns burns ~4h (dist shard 2/3)
-    # inductor/test_aot_inductor also hangs (inductor shard 2/4) but is reached
-    # via the INDUCTOR_UNIT_TESTS --include allowlist, which never consults
-    # EXCLUDED_TEST_MODULES; it is dropped from that list directly instead.
+    # Most of the modules formerly excluded here as "hangs" were NOT real
+    # deadlocks: they ran to completion then aborted at interpreter shutdown with
+    # the rocprofiler-sdk heap-corruption bug (see HSA_TOOLS_DISABLE_REGISTER in
+    # setup_env), and run_test.py's --reruns=2 re-ran the whole long module up to
+    # 3x, blowing past the 6h shard cap. With that env var set they exit cleanly,
+    # so they were un-excluded and any genuine residual per-test failures moved to
+    # the per-version -k skip list instead. Verified locally on MI300X (gfx942)
+    # with the 2.14 nightly wheel: functorch/test_vmap, test_decomp, test_meta,
+    # test_modules, test_spectral_ops, test_schema_check, nn/test_convolution,
+    # test_sparse, test_linalg, cpp_extensions/test_libtorch_agnostic,
+    # test_cpp_extensions_aot_ninja, distributed/test_c10d_gloo,
+    # distributed/fsdp/test_fsdp_checkpoint, distributed/test_distributed_spawn
+    # all complete cleanly with the env var.
     #
-    # Run 28379269101 (2.14 nightly, gfx94X): second layer of process-level hangs
-    # surfaced after the modules above were excluded. Each hung the subprocess past
-    # the 6h job limit with zero per-test output, so no -k node ID is derivable.
-    "test_cuda_expandable_segments",                  # hangs ~3h31m (default shard 1/10)
-    "test_modules",                                   # hangs ~3h15m (default shard 3/10)
-    "test_cpp_extensions_aot_ninja",                  # hangs after build (default shard 4/10)
-    "test_spectral_ops",                              # hangs ~4h28m (default shard 5/10)
-    "test_schema_check",                              # hangs ~4h15m (default shard 7/10)
-    "nn/test_convolution",                            # hangs ~4h46m (default shard 10/10)
-    "distributed/test_distributed_spawn",             # hangs in late backend pass (dist shards 1,2,3/3)
-    # Heap corruption (glibc "corrupted double-linked list" / "malloc(): unsorted
-    # double linked list corrupted") on interpreter shutdown AFTER all tests pass
-    # (0 failed, then SIGABRT/-6). Likely one shared atexit/shutdown bug in the
-    # wheel; excluded to keep CI green until the shutdown crash is root-caused.
-    "test_sparse",                                    # 0 failed then SIGIOT (default shard 2/10)
-    "test_linalg",                                    # 0 failed then SIGIOT (default shard 8/10)
-    "cpp_extensions/test_libtorch_agnostic",          # 0 failed then SIGIOT (default shard 6/10)
+    # Remaining genuine module-level excludes (NOT fixed by the env var):
+    # rocSHMEM device bitcode (librocshmem_device_gfx942.bc) is not packaged on the
+    # runner, so the whole module errors at import/collection.
+    "distributed/test_shmem_triton",
+    # _SymmetricMemory.empty_strided_p2p fails with hipErrorOutOfMemory: symmetric
+    # memory needs fabric-addressable P2P VRAM (XGMI) not available here; ~all tests
+    # fail fast (no heap-corruption marker), so a module exclude is cleaner than a
+    # large -k block.
+    "distributed/test_symmetric_memory",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
@@ -157,22 +146,21 @@ EXCLUDED_TEST_MODULES: list[str] = [
 INDUCTOR_GENERIC_TESTS = [
     "test_modules",
     "test_torch",
-    # test_ops and test_ops_gradients temporarily removed: on the 2.14 nightly
-    # gfx94X wheel (run 28379269101 inductor shards 1,2,3/4) both run to full
-    # completion (0 failed) then abort during interpreter shutdown with glibc
-    # heap corruption -> SIGABRT/-6 ("FAILED CONSISTENTLY"). Same shutdown-crash
-    # signature as the test_sparse/test_linalg modules in EXCLUDED_TEST_MODULES;
-    # EXCLUDED_TEST_MODULES does not apply to the inductor --include allowlist,
-    # so they are dropped here directly. Restore once the shutdown crash is fixed.
+    # test_ops and test_ops_gradients were previously dropped here because they
+    # aborted at interpreter shutdown with the rocprofiler-sdk heap-corruption bug
+    # (the inductor --include allowlist does not consult EXCLUDED_TEST_MODULES).
+    # HSA_TOOLS_DISABLE_REGISTER=1 (setup_env) fixes that crash, so they are
+    # restored to match upstream test_inductor_shard() coverage.
+    "test_ops",
+    "test_ops_gradients",
 ]
 INDUCTOR_UNIT_TESTS = [
     "inductor/test_torchinductor",
     "inductor/test_torchinductor_opinfo",
-    # inductor/test_aot_inductor temporarily removed: hangs at the process level
-    # on the 2.14 nightly gfx94X wheel (run 28001683693 inductor shard 2/4,
-    # internal shard 6/7). The module produces no per-test output before hanging,
-    # so a targeted -k skip is not derivable; EXCLUDED_TEST_MODULES does not apply
-    # to the inductor --include allowlist. Restore once the deadlock is bisected.
+    # inductor/test_aot_inductor was previously dropped here as a "hang"; it was
+    # actually the rocprofiler-sdk shutdown crash + --reruns amplification, fixed
+    # by HSA_TOOLS_DISABLE_REGISTER=1 (setup_env). Restored.
+    "inductor/test_aot_inductor",
 ]
 
 
@@ -445,10 +433,20 @@ def build_run_test_cmd(
     if args.include:
         cmd.extend(["--include"] + args.include)
     test_dir = args.pytorch_dir / "test"
+    # run_test.py also accepts a few virtual module names that have no matching
+    # <name>.py file (e.g. test_cpp_extensions_aot_ninja / _no_ninja, which it
+    # synthesizes from test_cpp_extensions_aot.py). Don't gate those on file
+    # existence, or they get silently dropped from --exclude and run anyway.
+    VIRTUAL_TEST_MODULES = {
+        "test_cpp_extensions_aot_ninja",
+        "test_cpp_extensions_aot_no_ninja",
+    }
     excludes = []
     if not args.no_module_excludes:
         excludes = [
-            m for m in EXCLUDED_TEST_MODULES if (test_dir / (m + ".py")).exists()
+            m
+            for m in EXCLUDED_TEST_MODULES
+            if m in VIRTUAL_TEST_MODULES or (test_dir / (m + ".py")).exists()
         ]
     if args.exclude:
         excludes.extend(args.exclude)
