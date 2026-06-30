@@ -1432,6 +1432,32 @@ class TestFamilyTestFilters(unittest.TestCase):
         self.assertIsNotNone(gfx90a_info)
         self.assertEqual(gfx90a_info["test-runs-on"], "")
 
+    def test_workflow_dispatch_allows_nightly_check_only_family(self):
+        """workflow_dispatch should allow testing nightly_check_only families."""
+        # gfx90a has nightly_check_only_for_family=True for linux
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_amdgpu_families=["gfx90a"],
+        )
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx90a in the linux build config
+        gfx90a_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx90a":
+                    gfx90a_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx90a_info)
+        # workflow_dispatch should have test-runs-on set (not empty)
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+
 
 # ---------------------------------------------------------------------------
 # Multi-label runner selection
