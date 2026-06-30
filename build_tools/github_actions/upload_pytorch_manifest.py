@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import create_storage_backend
+from github_actions.github_actions_api import gha_append_step_summary
 
 
 PLATFORM = platform.system().lower()
@@ -139,6 +140,11 @@ def main(argv: list[str]) -> None:
 
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     backend.upload_file(manifest_path, dest)
+
+    # Add manifest link to GitHub Actions job summary.
+    manifest_url = dest.https_url
+    log(f"Manifest URL: {manifest_url}")
+    gha_append_step_summary(f"[PyTorch Manifest]({manifest_url})")
 
 
 if __name__ == "__main__":
