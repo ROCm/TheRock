@@ -19,6 +19,7 @@ import sys
 import subprocess
 import re
 import os
+import platform
 
 import logging
 import shlex
@@ -27,7 +28,17 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
+VALID_TEST_CATEGORIES = {
+    "quick",
+    "standard",
+    "comprehensive",
+    "full",
+    # ffm-specific categories
+    "ffm-quick",
+    "ffm-standard",
+    "ffm-comprehensive",
+    "ffm-full",
+}
 # Normalize + validate TEST_TYPE once at module load so all downstream
 # consumers (apply_component_overrides at import time, main() at run
 # time) see the same lower-cased, validated value. `or "quick"` covers
@@ -62,11 +73,16 @@ COMPONENT_DIR_MAPPING = {
     "hipdnn": "hipdnn",
     "hipdnn-samples": "hipdnn_samples",
     "miopen_plugin": "miopen_legacy_plugin",
+    "miopenprovider": "miopen_plugin",
     "rocsparse": "rocsparse",
+    "rocalution": "rocalution",
     "hipsparse": "hipsparse",
     "hipsparselt": "hipsparselt",
+    "hipblaslt": "hipblaslt",
     "rocroller": "rocroller",
     "hipblas": "hipblas",
+    "hipblasltprovider": "hipblaslt_plugin",
+    "hiptensor": "hiptensor",
     # Add more mappings as needed
 }
 
@@ -87,12 +103,21 @@ TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 
-# CTest parallel jobs (use fewer in less capable platforms)
-ctest_parallel_count = 8
-if AMDGPU_FAMILIES and "gfx1152" in AMDGPU_FAMILIES:
-    ctest_parallel_count = 4
-elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
-    ctest_parallel_count = 4
+# Components whose category label matches MULTIPLE ctest entries (e.g. rocsparse
+# registers both *_full_suite and *_ffm-full_suite under the same label). For
+# these we must NOT combine the ctest `--tests-information` stride with the
+# gtest GTEST_TOTAL_SHARDS sharding: the two axes compound and silently drop
+# ~(1 - 1/N) of the suite (only one (entry x gtest-sub-shard) pair runs per
+# shard). Instead, shard purely at the gtest case level -- every shard runs all
+# ctest entries and gtest splits the cases -- which yields complete, disjoint
+# coverage for any number of (gtest-binary) entries. Single-entry components are
+# unaffected either way, so this is safe to keep narrowly scoped.
+GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse"}
+use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
+
+# CTest runs serially by default; per-GPU overrides can be added below.
+# Example: if AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES: ctest_parallel_count = 4
+ctest_parallel_count = 1
 
 # CTest per-test timeout (default 2 hours, in seconds)
 # There should be a timeout set from component level, but this can be used as an override
@@ -338,7 +363,55 @@ def check_available_labels():
         sys.exit(1)
 
 
-def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels):
+def generate_resource_spec():
+    """Generate a CTest resource-spec file for components that ship the
+    `generate_resource_spec` helper (currently hipcub, rocthrust, rocprim).
+
+    These components pin each test to a GPU slot via the RESOURCE_GROUPS test
+    property, which CTest only honors when a resource spec file is supplied.
+    Returns the resource-spec filename to pass to ctest via --resource-spec-file.
+    """
+    exe_dir = Path(TEST_DIR).resolve()
+    exe_name = (
+        "generate_resource_spec.exe"
+        if platform.system() == "Windows"
+        else "generate_resource_spec"
+    )
+    gen_exe = exe_dir / exe_name
+    if not gen_exe.is_file():
+        # Component does not use CTest resource allocation; nothing to do.
+        return None
+
+    # generate_resource_spec links against the HIP runtime; prepend the ROCm
+    # bin/lib dirs so it resolves on every platform (Windows via PATH, Linux
+    # via LD_LIBRARY_PATH / RPATH).
+    gen_env = environ_vars.copy()
+    gen_env["PATH"] = os.pathsep.join(
+        filter(None, [str(Path(THEROCK_BIN_DIR).resolve()), gen_env.get("PATH", "")])
+    )
+    gen_env["LD_LIBRARY_PATH"] = os.pathsep.join(
+        filter(None, [str(ROCM_PATH / "lib"), gen_env.get("LD_LIBRARY_PATH", "")])
+    )
+
+    # Write resources.json into the test dir and pass it to ctest as a bare
+    # name; ctest changes into --test-dir, so it resolves to the same file.
+    resource_spec_file = "resources.json"
+    gen_cmd = [str(gen_exe), str(exe_dir / resource_spec_file)]
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(gen_cmd)}")
+    try:
+        subprocess.run(gen_cmd, cwd=THEROCK_DIR, check=True, env=gen_env)
+    except subprocess.CalledProcessError as e:
+        print(
+            f"Error generating CTest resource spec via {gen_exe}: {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return resource_spec_file
+
+
+def build_ctest_command(
+    category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file=None
+):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
 
@@ -373,8 +446,12 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
             print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
 
     # Add label options together for readability: -L ... -LE ...
+    # Anchor each include label with ^...$ so ctest matches it exactly. ctest's
+    # -L uses partial regex matching, so an unanchored "-L full" also matches
+    # labels that merely contain "full" (e.g. "multigpu_full", "ffm-full"),
+    # which would wrongly pull those suites into the run.
     for label in include_labels:
-        cmd.extend(["-L", label])
+        cmd.extend(["-L", f"^{label}$"])
     if le_patterns:
         cmd.extend(["-LE", "|".join(le_patterns)])
 
@@ -389,10 +466,21 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
             "--test-dir",
             TEST_DIR,
             "-V",
-            "--tests-information",
-            f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         ]
     )
+
+    # Shard via the ctest entry stride only when we are NOT relying on gtest
+    # case-level sharding. Applying both compounds and drops tests on multi-entry
+    # suites (see GTEST_ONLY_SHARDING_COMPONENTS). For gtest-only sharding, ctest
+    # runs every entry and GTEST_TOTAL_SHARDS splits the cases within each.
+    if not use_gtest_only_sharding:
+        cmd.extend(["--tests-information", f"{SHARD_INDEX},,{TOTAL_SHARDS}"])
+
+    # Constrain GPU tests to the available GPU slots when the component
+    # provides a resource spec. Without this, RESOURCE_GROUPS properties are
+    # ignored and GPU tests run unconstrained under --parallel.
+    if resource_spec_file:
+        cmd.extend(["--resource-spec-file", resource_spec_file])
 
     return cmd
 
@@ -432,8 +520,15 @@ def main():
         print(f"# Found exclude labels: {sorted(exclude_labels)}")
     print()
 
+    # Generate a CTest resource-spec file when the component provides the
+    # generate_resource_spec helper. Without a spec, CTest ignores each test's
+    # RESOURCE_GROUPS property and would run GPU tests unconstrained.
+    resource_spec_file = generate_resource_spec()
+
     # Build the ctest command
-    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs, exclude_labels)
+    cmd = build_ctest_command(
+        category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file
+    )
 
     print(f"# Running: {' '.join(cmd)}")
     print()

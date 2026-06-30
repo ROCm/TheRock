@@ -11,6 +11,7 @@ These tests cover:
 
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -442,12 +443,17 @@ class DevicePackagingTest(TmpDirTestCase):
             f.write_text(content)
         (subdir / "artifact_manifest.txt").write_text("stage\n")
 
-    def _make_params(self, artifact_dir: Path, kpack_split: bool = False) -> Parameters:
+    def _make_params(
+        self,
+        artifact_dir: Path,
+        kpack_split: bool = False,
+        version: str = "0.0.1.test",
+    ) -> Parameters:
         dest_dir = self.temp_dir / "packages"
         dest_dir.mkdir(parents=True, exist_ok=True)
         return Parameters(
             dest_dir=dest_dir,
-            version="0.0.1.test",
+            version=version,
             version_suffix="",
             artifacts=ArtifactCatalog(artifact_dir),
             kpack_split=kpack_split,
@@ -498,6 +504,31 @@ class DevicePackagingTest(TmpDirTestCase):
         # Should not raise.
         lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
         self.assertIsNotNone(lib.path)
+
+    def test_kpack_split_libraries_setup_uses_unsuffixed_pure_package(self):
+        """setup.py must not turn target_family=None into a package name suffix."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(
+            artifact_dir,
+            kpack_split=True,
+            version="0.0.1.dev0",
+        )
+
+        lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
+        result = subprocess.run(
+            [sys.executable, "setup.py", "--name"],
+            cwd=lib.path,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        self.assertIn(
+            "Found packages: ['rocm_sdk_libraries', '_rocm_sdk_libraries']",
+            result.stdout,
+        )
+        self.assertNotIn("rocm_sdk_libraries_None", result.stdout)
 
     def test_populate_device_files_copies_all_files(self):
         """populate_device_files() should copy .kpack and kernel DB files."""

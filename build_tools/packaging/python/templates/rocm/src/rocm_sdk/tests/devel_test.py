@@ -131,10 +131,6 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
         for so_path in so_paths:
-            if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
-                # TODO: Library preloads for amdsmi need to be implement.
-                # Though this is not needed for the amd-smi client.
-                continue
             if "clang_rt" in str(so_path):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
@@ -169,6 +165,11 @@ class ROCmDevelTest(unittest.TestCase):
             if "opencl" in str(so_path):
                 # We use OpenCL ICD from distro rather than TheRock
                 # and we do not build it
+                continue
+            if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
+                # Python C extensions use symbols resolved at import time,
+                # not via dlopen — ctypes.CDLL fails across interpreter
+                # versions (e.g. .abi3.so using PyType_FromMetaclass on <3.12).
                 continue
 
             extra_setup = ""

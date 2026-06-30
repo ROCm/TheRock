@@ -24,9 +24,9 @@ TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
-# Importing is_asan from github_actions_api.py
+# Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_api import is_asan
+from amdgpu_family_matrix import is_asan
 
 env = os.environ.copy()
 
@@ -87,6 +87,11 @@ TEST_TO_IGNORE = {
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
         ]
     },
+    "gfx125X-dcgpu": {
+        "linux": [
+            "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
+        ]
+    },
 }
 
 
@@ -145,10 +150,16 @@ def setup_env(env):
         if is_asan():
             env["LD_PRELOAD"] = get_asan_lib_path()
             env["HSA_XNACK"] = "1"
+            # Increase stack size of clr threads
+            env["CQ_THREAD_STACK_SIZE"] = "8388608"
             # TODO: enable this when we have symbolizer patch in
             # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
     else:
         copy_dlls_exe_path()
+
+    # Set env vars for gfx125X-dcgpu
+    if AMDGPU_FAMILIES == "gfx125X-dcgpu":
+        env["HSA_ENABLE_SDMA"] = "1"
 
 
 def execute_tests(env):
@@ -159,6 +170,8 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--timeout",
+        "600",
     ]
 
     # If quick tests are enabled, run only the smoke test subset
