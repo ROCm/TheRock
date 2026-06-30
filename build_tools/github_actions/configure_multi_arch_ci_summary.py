@@ -201,6 +201,18 @@ def _append_build_rocm(
         lines.append(
             f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
         )
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=ci_inputs.run_id, platform="linux"
+    )
+    manifest_diff_url = output_root.log_file("manifest-diff", "index.html").https_url
+    lines.append(f"Manifest diff | {manifest_diff_url} | — | —")
+    lines.append("")
+    lines.append(
+        "> The manifest-diff report compares submodules across the CI commit range. "
+        "Expect no changes when this run does not advance any submodule pointers. "
+        "Manifest-diff is not run on ASAN workflows yet — the report link may be "
+        "unavailable on those runs."
+    )
 
 
 def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
