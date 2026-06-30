@@ -213,7 +213,9 @@ def _diff_range(event_name: str, event: dict[str, object]) -> tuple[str, str] | 
         before = _event_str(event, "before")
         after = _event_str(event, "after")
         if not before or not after:
-            log.warning("Push event missing before/after SHA; falling back to full scan")
+            log.warning(
+                "Push event missing before/after SHA; falling back to full scan"
+            )
             return None
         # All-zero SHA means a new ref: nothing to diff against.
         if set(before) <= {"0"}:
@@ -233,7 +235,7 @@ def _is_audited_path(relpath: str) -> bool:
         if fnmatch.fnmatchcase(norm, pattern):
             return True
         if pattern.startswith("**/") and fnmatch.fnmatchcase(
-            norm, pattern[len("**/"):]
+            norm, pattern[len("**/") :]
         ):
             return True
     return False
