@@ -114,6 +114,9 @@ therock_cmake_subproject_declare(origami
     rocm-cmake
     therock-catch2
     therock-nanobind
+    # nanobind_add_module() pulls find_dependency(tsl-robin-map) via nanobind's
+    # config; declare the provider so the super-project dep provider allows it.
+    therock-robin-map
   RUNTIME_DEPS
     hip-clr
 )
