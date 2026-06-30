@@ -9,17 +9,33 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
 endif()
 
 if(THEROCK_ENABLE_MIOPEN)
-  # MIOpen's CK use is gated on both the per-arch CK availability
-  # (math-libs/CMakeLists.txt) and the user-facing
-  # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
-  # someone build CK for other consumers while keeping it out of MIOpen.
+  # MIOpen is host-only with respect to Composable Kernel since
+  # rocm-libraries#6170: the host libMIOpen.so never links CK device code; it
+  # dlopens per-arch libMIOpenCKGroupedConv_<arch>.so at runtime
+  # (CkImplLibLoader) and degrades gracefully when a plugin is absent. The host
+  # therefore MUST be compiled with MIOPEN_USE_COMPOSABLEKERNEL=ON on every
+  # shard: this flag only controls host-side solver registration
+  # (mlo_dir_conv.cpp) and the dlopen path, not any per-arch device code. If a
+  # CK-unsupported-only shard (e.g. gfx103X) builds the host with CK=OFF, the
+  # grouped-conv XDLOPS solvers are preprocessed out of the registry, and because
+  # the host is published as the device-neutral _generic artifact, that CK-less
+  # libMIOpen.so can win the generic slot and disable fast conv on ALL arches,
+  # including gfx942 (ROCM-27359). So default CK ON and gate ONLY on the explicit
+  # opt-outs, NOT on per-arch CK plugin availability (_ck_enabled).
   set(_miopen_use_ck OFF)
-  if(_ck_enabled AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+  if(THEROCK_ENABLE_COMPOSABLE_KERNEL AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
     set(_miopen_use_ck ON)
   endif()
 
+  # Only build-depend on the CK subproject where it is actually built for this
+  # shard's arch set (_ck_enabled). On CK-unsupported-only shards CK is skipped
+  # (math-libs) to avoid CK's empty-HIP_ARCHITECTURES configure failure; MIOpen
+  # still builds with CK=ON because the host has no compile/link dependency on CK:
+  # find_package(composable_kernel) is non-REQUIRED, MIOPEN_CK_UNBUNDLE_PER_ARCH
+  # defaults OFF, and MIOpen's src/ck_impl early-returns when no supported arch is
+  # present (so no per-arch plugin and no CK target reference).
   set(optional_miopen_build_deps)
-  if(_miopen_use_ck)
+  if(_miopen_use_ck AND _ck_enabled)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
