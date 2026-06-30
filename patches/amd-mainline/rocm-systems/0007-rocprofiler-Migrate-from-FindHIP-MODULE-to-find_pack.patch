@@ -1,0 +1,343 @@
+From 5d26b14a69d34c04cb6122d76a8eccb873693bcd Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Fri, 8 May 2026 17:41:04 -0500
+Subject: [PATCH 7/7] [rocprofiler] Migrate from FindHIP MODULE to
+ find_package(hip CONFIG)
+
+Replace find_package(HIP REQUIRED MODULE) with find_package(hip CONFIG)
++ enable_language(HIP) in rocprofiler samples and legacy test files.
+Also replace legacy FindHIP macros with CMake-native equivalents:
+  - hip_add_executable() -> add_executable() + target_link_libraries(hip::device)
+  - HIP_SOURCE_PROPERTY_FORMAT 1 -> LANGUAGE HIP
+
+hipconfig and hipcc are no longer required for these builds; HIP is
+discovered via hip-config.cmake which is built and installed by TheRock.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ projects/rocprofiler/samples/CMakeLists.txt   | 26 ++++-------
+ .../featuretests/profiler/CMakeLists.txt      | 44 +++++++------------
+ .../featuretests/tracer/CMakeLists.txt        | 26 ++++-------
+ .../tests-v2/microbenchmarks/CMakeLists.txt   | 19 +++-----
+ 4 files changed, 40 insertions(+), 75 deletions(-)
+
+diff --git a/projects/rocprofiler/samples/CMakeLists.txt b/projects/rocprofiler/samples/CMakeLists.txt
+index 7e39ed4921..be0bba4ff2 100644
+--- a/projects/rocprofiler/samples/CMakeLists.txt
++++ b/projects/rocprofiler/samples/CMakeLists.txt
+@@ -16,17 +16,8 @@ find_file(
+ get_filename_component(HSA_RUNTIME_INC_PATH ${HSA_H} DIRECTORY)
+ include_directories(${HSA_RUNTIME_INC_PATH})
+ 
+-# Set the HIP language runtime link flags as FindHIP does not set them.
+-set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG})
+-set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG_SEP ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG_SEP})
+-set(CMAKE_EXECUTABLE_RPATH_LINK_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RPATH_LINK_CXX_FLAG})
+-
+-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ROCM_PATH}/lib/cmake/hip")
+-set(CMAKE_HIP_ARCHITECTURES OFF)
+-if(DEFINED ROCM_PATH)
+-    set(HIP_ROOT_DIR "${ROCM_PATH}/bin")
+-endif()
+-find_package(HIP REQUIRED MODULE)
++find_package(hip CONFIG REQUIRED PATHS "${ROCM_PATH}")
++enable_language(HIP)
+ 
+ find_package(
+     Clang REQUIRED CONFIG
+@@ -71,7 +62,8 @@ function(rocprofiler_sample_add_test _TARGET _ARGS)
+ endfunction()
+ 
+ function(rocprofiler_sample_add_executable _TARGET)
+-    hip_add_executable(${_TARGET} ${ARGN})
++    add_executable(${_TARGET} ${ARGN})
++    target_link_libraries(${_TARGET} PRIVATE hip::device)
+     rocprofiler_sample_add_test(${_TARGET} "")
+ endfunction()
+ 
+@@ -87,7 +79,7 @@ endfunction()
+ 
+ # Build Kernel No Replay Sample
+ set_source_files_properties(profiler/kernel_profiling_no_replay_sample.cpp
+-                            PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++                            PROPERTIES LANGUAGE HIP)
+ rocprofiler_sample_add_executable(
+     profiler_kernel_no_replay profiler/kernel_profiling_no_replay_sample.cpp
+     ${ROCPROFILER_UTIL_SRC_FILES})
+@@ -103,7 +95,7 @@ install(TARGETS profiler_kernel_no_replay
+ 
+ # Build Device Profiling Sample
+ set_source_files_properties(profiler/device_profiling_sample.cpp
+-                            PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++                            PROPERTIES LANGUAGE HIP)
+ rocprofiler_sample_add_executable(
+     profiler_device_profiling profiler/device_profiling_sample.cpp
+     ${ROCPROFILER_UTIL_SRC_FILES})
+@@ -120,7 +112,7 @@ set_tests_properties(profiler_device_profiling PROPERTIES DISABLED TRUE)
+ 
+ # Build Counters Sampling example
+ set_source_files_properties(counters_sampler/pcie_counters_example.cpp
+-                            PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++                            PROPERTIES LANGUAGE HIP)
+ rocprofiler_sample_add_executable(
+     pcie_counters_sampler counters_sampler/pcie_counters_example.cpp
+     ${ROCPROFILER_UTIL_SRC_FILES})
+@@ -136,7 +128,7 @@ install(TARGETS pcie_counters_sampler
+ 
+ # Build XGMI Counters Sampling example
+ set_source_files_properties(counters_sampler/xgmi_counters_sampler_example.cpp
+-                            PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++                            PROPERTIES LANGUAGE HIP)
+ rocprofiler_sample_add_executable(
+     xgmi_counters_sampler counters_sampler/xgmi_counters_sampler_example.cpp
+     ${ROCPROFILER_UTIL_SRC_FILES})
+@@ -158,7 +150,7 @@ set_tests_properties(xgmi_counters_sampler PROPERTIES DISABLED TRUE)
+ # ########################################################################################
+ 
+ # Build HIP/HSA Trace Sample
+-set_source_files_properties(tracer/sample.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++set_source_files_properties(tracer/sample.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_sample_add_executable(tracer_hip_hsa tracer/sample.cpp
+                                   ${ROCPROFILER_UTIL_SRC_FILES})
+ target_include_directories(tracer_hip_hsa PRIVATE ${PROJECT_SOURCE_DIR}
+diff --git a/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt b/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt
+index e78f1e53ef..08d7e2c541 100644
+--- a/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt
++++ b/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt
+@@ -20,18 +20,9 @@ find_package(
+     PATHS "${ROCM_PATH}"
+     PATH_SUFFIXES "llvm/lib/cmake/clang")
+ 
+-# Set the HIP language runtime link flags as FindHIP does not set them.
+ set(CMAKE_INSTALL_TESTDIR test/${PROJECT_NAME})
+-set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG})
+-set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG_SEP ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG_SEP})
+-set(CMAKE_EXECUTABLE_RPATH_LINK_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RPATH_LINK_CXX_FLAG})
+-
+-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ROCM_PATH}/lib/cmake/hip")
+-set(CMAKE_HIP_ARCHITECTURES OFF)
+-if(NOT DEFINED HIP_ROOT_DIR)
+-    set(HIP_ROOT_DIR "${CMAKE_INSTALL_PREFIX}")
+-endif()
+-find_package(HIP REQUIRED MODULE)
++find_package(hip CONFIG REQUIRED PATHS "${ROCM_PATH}")
++enable_language(HIP)
+ 
+ # Enable CLANG-TIDY for static analysis search for clang-tidy
+ find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
+@@ -57,7 +48,8 @@ function(rocprofiler_featuretests_profiler_add_test _TARGET)
+ endfunction()
+ 
+ function(rocprofiler_featuretests_profiler_add_executable _TARGET)
+-    hip_add_executable(${_TARGET} ${ARGN})
++    add_executable(${_TARGET} ${ARGN})
++    target_link_libraries(${_TARGET} PRIVATE hip::device)
+     rocprofiler_featuretests_profiler_add_test(${_TARGET})
+ endfunction()
+ 
+@@ -76,8 +68,7 @@ foreach(file ${files})
+ endforeach()
+ 
+ # Compile Applications hip_helloworld
+-set_source_files_properties(apps/hello_world_hip.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT
+-                                                                1)
++set_source_files_properties(apps/hello_world_hip.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(hip_helloworld apps/hello_world_hip.cpp)
+ set_target_properties(
+     hip_helloworld PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+@@ -91,8 +82,7 @@ install(
+         COMPONENT tests)
+ 
+ # hip_vectoradd
+-set_source_files_properties(apps/vector_add_hip.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT
+-                                                               1)
++set_source_files_properties(apps/vector_add_hip.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(hip_vectoradd apps/vector_add_hip.cpp)
+ set_target_properties(
+     hip_vectoradd PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+@@ -119,7 +109,7 @@ endif()
+ 
+ if(USE_MPI)
+     set_source_files_properties(apps/vector_add_mpi.cpp
+-                                PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++                                PROPERTIES LANGUAGE HIP)
+     rocprofiler_featuretests_profiler_add_executable(mpi_vectoradd
+                                                      apps/vector_add_mpi.cpp)
+     set_target_properties(
+@@ -153,7 +143,7 @@ endif()
+ 
+ # if(USE_OpenMP)
+ #     set_source_files_properties(apps/hello_world_omp.cpp
+-#                                 PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++#                                 PROPERTIES LANGUAGE HIP)
+ #     rocprofiler_featuretests_profiler_add_executable(openmp_helloworld
+ #                                                      apps/hello_world_omp.cpp)
+ #     set_target_properties(
+@@ -173,7 +163,7 @@ endif()
+ # endif()
+ 
+ # pmc correctness vectoradd
+-set_source_files_properties(apps/vectoradd.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++set_source_files_properties(apps/vectoradd.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(pmc_vectoradd apps/vectoradd.cpp)
+ set_target_properties(
+     pmc_vectoradd PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+@@ -187,7 +177,7 @@ install(
+         COMPONENT tests)
+ 
+ # pmc correctness hstogram
+-set_source_files_properties(apps/histogram.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++set_source_files_properties(apps/histogram.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(pmc_histogram apps/histogram.cpp)
+ set_target_properties(
+     pmc_histogram PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+@@ -201,7 +191,7 @@ install(
+         COMPONENT tests)
+ 
+ # pmc correctness transpose
+-set_source_files_properties(apps/transpose.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++set_source_files_properties(apps/transpose.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(pmc_transpose apps/transpose.cpp)
+ set_target_properties(
+     pmc_transpose PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+@@ -215,7 +205,7 @@ install(
+         COMPONENT tests)
+ 
+ # ATT correctness vectoradd
+-set_source_files_properties(apps/att_vectoradd.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++set_source_files_properties(apps/att_vectoradd.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(att_vectoradd apps/att_vectoradd.cpp)
+ set_target_properties(
+     att_vectoradd PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+@@ -229,8 +219,7 @@ install(
+         COMPONENT tests)
+ 
+ # hsa-mem_async_copy -- Not Enabled for Now
+-set_source_files_properties(apps/async_mem_copy.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT
+-                                                               1)
++set_source_files_properties(apps/async_mem_copy.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(hsa_async_mem_copy
+                                                  apps/async_mem_copy.cpp)
+ set_target_properties(
+@@ -263,7 +252,7 @@ set(GTEST_MAIN_DIR ${PROJECT_SOURCE_DIR}/tests-v2/featuretests)
+ file(GLOB GTEST_MAIN_SRC_FILE ${GTEST_MAIN_DIR}/gtests_main.cpp)
+ 
+ set_source_files_properties(apps/multithreaded_testapp.cpp
+-                            PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++                            PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_profiler_add_executable(
+     multithreaded_testapp apps/multithreaded_testapp.cpp ../utils/test_utils.cpp)
+ target_include_directories(
+@@ -347,8 +336,9 @@ set(runFeatureTests_SOURCES
+     profiler_gtest.cpp apps/hip_kernels.cpp ${GTEST_MAIN_SRC_FILE} ${CORE_HSA_SRC_FILES}
+     ${CORE_HW_SRC_FILES} ${CORE_UTILS_SRC_FILES} ${TEST_UTILS_SRC_FILES})
+ 
+-set_source_files_properties(apps/hip_kernels.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
+-hip_add_executable(runFeatureTests ${runFeatureTests_SOURCES})
++set_source_files_properties(apps/hip_kernels.cpp PROPERTIES LANGUAGE HIP)
++add_executable(runFeatureTests ${runFeatureTests_SOURCES})
++target_link_libraries(runFeatureTests PRIVATE hip::device)
+ 
+ # link MPI and OpenMP to runFeatureTests for visibility
+ if(USE_MPI)
+diff --git a/projects/rocprofiler/tests-v2/featuretests/tracer/CMakeLists.txt b/projects/rocprofiler/tests-v2/featuretests/tracer/CMakeLists.txt
+index 53c46cfecf..b4e25149f9 100644
+--- a/projects/rocprofiler/tests-v2/featuretests/tracer/CMakeLists.txt
++++ b/projects/rocprofiler/tests-v2/featuretests/tracer/CMakeLists.txt
+@@ -1,15 +1,6 @@
+-# Set the HIP language runtime link flags as FindHIP does not set them.
+ set(CMAKE_INSTALL_TESTDIR test/${PROJECT_NAME})
+-set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG})
+-set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG_SEP ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG_SEP})
+-set(CMAKE_EXECUTABLE_RPATH_LINK_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RPATH_LINK_CXX_FLAG})
+-
+-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ROCM_PATH}/lib/cmake/hip")
+-set(CMAKE_HIP_ARCHITECTURES OFF)
+-if(DEFINED ROCM_PATH)
+-    set(HIP_ROOT_DIR "${ROCM_PATH}/bin")
+-endif()
+-find_package(HIP REQUIRED MODULE)
++find_package(hip CONFIG REQUIRED PATHS "${ROCM_PATH}")
++enable_language(HIP)
+ 
+ # ########################################################################################
+ function(rocprofiler_featuretests_tracer_add_test _TARGET)
+@@ -28,7 +19,8 @@ function(rocprofiler_featuretests_tracer_add_test _TARGET)
+ endfunction()
+ 
+ function(rocprofiler_featuretests_tracer_add_executable _TARGET)
+-    hip_add_executable(${_TARGET} ${ARGN})
++    add_executable(${_TARGET} ${ARGN})
++    target_link_libraries(${_TARGET} PRIVATE hip::device)
+     rocprofiler_featuretests_tracer_add_test(${_TARGET})
+ endfunction()
+ 
+@@ -52,7 +44,7 @@ set(GTEST_MAIN_DIR ${PROJECT_SOURCE_DIR}/tests-v2/featuretests)
+ file(GLOB GTEST_MAIN_SRC_FILE ${GTEST_MAIN_DIR}/*.cpp)
+ 
+ # Compile Applications hip_helloworld
+-set_source_files_properties(apps/hello_world.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++set_source_files_properties(apps/hello_world.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_tracer_add_executable(tracer_hip_helloworld apps/hello_world.cpp)
+ set_target_properties(
+     tracer_hip_helloworld
+@@ -67,8 +59,7 @@ install(
+         COMPONENT tests)
+ 
+ # hsa-mem_async_copy and async_copy_on_engine
+-set_source_files_properties(apps/copy_on_engine.cpp PROPERTIES HIP_SOURCE_PROPERTY_FORMAT
+-                                                               1)
++set_source_files_properties(apps/copy_on_engine.cpp PROPERTIES LANGUAGE HIP)
+ rocprofiler_featuretests_tracer_add_executable(copy_on_engine apps/copy_on_engine.cpp)
+ set_target_properties(
+     copy_on_engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+@@ -90,8 +81,9 @@ find_library(
+     HINTS ${ROCM_PATH}/lib)
+ if(ROCTX_LIBRARY)
+     set_source_files_properties(apps/MatrixTranspose.cpp
+-                                PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
+-    hip_add_executable(tracer_matrix_transpose apps/MatrixTranspose.cpp)
++                                PROPERTIES LANGUAGE HIP)
++    add_executable(tracer_matrix_transpose apps/MatrixTranspose.cpp)
++    target_link_libraries(tracer_matrix_transpose PRIVATE hip::device)
+     set_target_properties(
+         tracer_matrix_transpose
+         PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+diff --git a/projects/rocprofiler/tests-v2/microbenchmarks/CMakeLists.txt b/projects/rocprofiler/tests-v2/microbenchmarks/CMakeLists.txt
+index 0591228495..62df1f6b58 100644
+--- a/projects/rocprofiler/tests-v2/microbenchmarks/CMakeLists.txt
++++ b/projects/rocprofiler/tests-v2/microbenchmarks/CMakeLists.txt
+@@ -1,25 +1,16 @@
+ find_library(ROCM_SMI_LIB rocm_smi64 HINTS ${ROCM_PATH}/lib)
+ 
+ if(ROCM_SMI_LIB)
+-    # Set the HIP language runtime link flags as FindHIP does not set them.
+     set(CMAKE_INSTALL_TESTDIR test/${PROJECT_NAME})
+-    set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG})
+-    set(CMAKE_EXECUTABLE_RUNTIME_HIP_FLAG_SEP
+-        ${CMAKE_SHARED_LIBRARY_RUNTIME_CXX_FLAG_SEP})
+-    set(CMAKE_EXECUTABLE_RPATH_LINK_HIP_FLAG ${CMAKE_SHARED_LIBRARY_RPATH_LINK_CXX_FLAG})
+-
+-    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${ROCM_PATH}/lib/cmake/hip")
+-    set(CMAKE_HIP_ARCHITECTURES OFF)
+-    if(DEFINED ROCM_PATH)
+-        set(HIP_ROOT_DIR "${ROCM_PATH}/bin")
+-    endif()
+-    find_package(HIP REQUIRED MODULE)
++    find_package(hip CONFIG REQUIRED PATHS "${ROCM_PATH}")
++    enable_language(HIP)
+ 
+     set(TEST_DIR ${PROJECT_SOURCE_DIR}/tests-v2/microbenchmarks)
+     file(GLOB TEST_SRC_FILE ${TEST_DIR}/*.cpp)
+ 
+-    set_source_files_properties(${TEST_SRC_FILE} PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
+-    hip_add_executable(pcie_bw_test ${TEST_SRC_FILE})
++    set_source_files_properties(${TEST_SRC_FILE} PROPERTIES LANGUAGE HIP)
++    add_executable(pcie_bw_test ${TEST_SRC_FILE})
++    target_link_libraries(pcie_bw_test PRIVATE hip::device)
+     add_test(
+         NAME pcie_bw_test
+         COMMAND $<TARGET_FILE:pcie_bw_test>
+-- 
+2.53.0
+

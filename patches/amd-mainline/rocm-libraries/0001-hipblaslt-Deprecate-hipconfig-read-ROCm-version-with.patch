@@ -1,0 +1,96 @@
+From 67129a0a549c54ef0d485f228953b68841b7e5ee Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Fri, 8 May 2026 21:30:58 -0500
+Subject: [PATCH 1/2] [hipblaslt] Deprecate hipconfig: read ROCm version
+ without hipconfig
+
+Replace hipconfig dependency in tensilelite with alternatives:
+
+- hipblaslt_python.cmake: pass ROCM_VERSION=${hip_VERSION} (from
+  find_package(hip CONFIG)) into the Python env at configure time
+- Component.py: read ROCM_VERSION env var first, then fall back to
+  $ROCM_PATH/.info/version, $HIP_PATH/.info/version, /opt/rocm/.info/version
+- TensileCreateLibrary/Run.py: remove hipconfig from validateToolchain
+  call; its result was already discarded and it is no longer needed
+
+hipconfig is deprecated in favor of amdclang++ directly.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ .../hipblaslt/cmake/hipblaslt_python.cmake    |  1 +
+ .../Tensile/TensileCreateLibrary/Run.py       |  3 +--
+ .../Tensile/Toolchain/Component.py            | 24 +++++++++++++++----
+ 3 files changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/projects/hipblaslt/cmake/hipblaslt_python.cmake b/projects/hipblaslt/cmake/hipblaslt_python.cmake
+index 658f50fe23..0eb4c71e01 100644
+--- a/projects/hipblaslt/cmake/hipblaslt_python.cmake
++++ b/projects/hipblaslt/cmake/hipblaslt_python.cmake
+@@ -38,6 +38,7 @@ function(hipblaslt_configure_bundled_python_command python_binary_dir asan_optio
+         "${CMAKE_COMMAND}" -E env
+         "PYTHONPATH=${_python_path}"
+         "PATH=${_path}"
++        "ROCM_VERSION=${hip_VERSION}"
+         "${asan_options}"
+         --
+         "${Python3_EXECUTABLE}"
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+index 04254a4bc5..3607115464 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+@@ -821,12 +821,11 @@ def run():
+     arguments = parseArguments()
+     setVerbosity(arguments["PrintLevel"])
+     outputPath = Path(ensurePath(os.path.abspath(arguments["OutputPath"])))
+-    cxxCompiler, _, offloadBundler, _, _ = validateToolchain(
++    cxxCompiler, _, offloadBundler, _ = validateToolchain(
+         arguments["CxxCompiler"],
+         arguments["CCompiler"],
+         arguments["OffloadBundler"],
+         arguments["Assembler"],
+-        ToolchainDefaults.HIP_CONFIG,
+     )
+ 
+     if ";" in arguments["Architecture"]:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+index fd5a986f44..f85821846a 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+@@ -80,14 +80,30 @@ def _getVersion(executable: str, versionFlag: str, regex: str) -> str:
+ 
+ 
+ def get_rocm_version() -> str:
+-    """Compute the ROCm version string using hipconfig.
++    """Compute the ROCm version string.
++
++    Reads ROCM_VERSION env var (set by CMake from hip_VERSION) if available,
++    otherwise falls back to reading .info/version from ROCM_PATH, HIP_PATH,
++    or /opt/rocm. Avoids calling hipconfig (deprecated; use amdclang++ directly).
+ 
+     Raises:
+-        RuntimeError: If hipconfig fails to execute.
++        RuntimeError: If the version cannot be determined.
+     Return:
+-        ROCm version string
++        ROCm SemanticVersion
+     """
+-    return _getVersion(ToolchainDefaults.HIP_CONFIG, "--version", r'(.+)')
++    version_str = environ.get("ROCM_VERSION")
++    if not version_str:
++        for root in [environ.get("ROCM_PATH"), environ.get("HIP_PATH"), "/opt/rocm"]:
++            if root:
++                try:
++                    version_str = (Path(root) / ".info" / "version").read_text().strip()
++                    break
++                except OSError:
++                    continue
++    if not version_str:
++        raise RuntimeError("Failed to get ROCm version: ROCM_VERSION not set and "
++                           ".info/version not found in ROCM_PATH, HIP_PATH, or /opt/rocm")
++    return SemanticVersion(*[int(c.split("-")[0]) for c in version_str.split(".")[:3]])
+ 
+ 
+ class Component:
+-- 
+2.53.0
+
