@@ -326,7 +326,7 @@ jobs:
       - name: Install C++ build tools and register test library paths
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential cmake pkg-config
+          apt-get install -y --no-install-recommends pkg-config
           ROCM_CORE="${ROCM_HOME%/*}/_rocm_sdk_core"
           PY_BIN="$(readlink -f "$(command -v python)")"
           PY_LIBDIR="$(ldd "${PY_BIN}" 2>/dev/null | awk '/libpython/ {print $3}' | head -n1 | xargs -r dirname)"
