@@ -6,7 +6,6 @@ include = [
 [components.run."comm-libs/rocshmem/stage"]
 include = [
   "bin/rocshmem_info",
-  "bin/rocshmem_functional_tests",
   "share/rocshmem/rocshmem_functional_driver.sh",
 ]
 [components.dbg."comm-libs/rocshmem/stage"]
@@ -25,9 +24,12 @@ include = [
   # Install-tree CTest files: test_runner.py runs `ctest --test-dir bin/rocshmem`,
   # whose root CTestTestfile.cmake subdirs into tests/functional and tests/unit.
   "bin/rocshmem/**",
-  # Unit test binary (the functional test binary and rocshmem_info come from the
-  # run component, fetched via rocshmem_run).
-  "bin/rocshmem_unit_tests",
+  # Test binaries. Both the functional and unit test executables install to
+  # share/rocshmem/ (CMAKE_INSTALL_DATADIR), not bin/. The install-tree
+  # CTestTestfile.cmake invokes them via the relative path
+  # ../../../../share/rocshmem/rocshmem_*_tests from bin/rocshmem/tests/*/.
+  "share/rocshmem/rocshmem_functional_tests",
+  "share/rocshmem/rocshmem_unit_tests",
   # CTest wrapper scripts referenced (by relative path) from the install-tree
   # CTestTestfile.cmake, plus the retry helper.
   "share/rocshmem/test_wrapper.sh",
