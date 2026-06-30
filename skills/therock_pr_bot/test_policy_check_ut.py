@@ -380,20 +380,32 @@ class UnitTestRuleTests(unittest.TestCase):
         pc.ensure_unit_tests(policy, files, e)
         self.assertEqual(e, [])
 
-    def test_unit_folder_nested_paths(self) -> None:
-        # Unit folder can be at any depth and contain any nesting.
+    def test_unit_folder_files_fail_without_matching_basename(self) -> None:
+        # Since 'unit/**' is no longer a recognized test pattern, files under
+        # unit/ folders do NOT satisfy the unit test requirement unless their
+        # basename also matches test_* / *_test.* / Test*.
         policy = make_policy()
-        for test_path in [
-            "unit/test.py",
-            "tests/unit/my_test.cpp",
-            "deep/nested/unit/subdir/test.cpp",
-            "projects/hip-tests/catch/unit/memory/hipHostRegister.cc",
-        ]:
-            with self.subTest(test_path=test_path):
-                files = [make_file("src/module.py"), make_file(test_path)]
-                e: List[str] = []
-                pc.ensure_unit_tests(policy, files, e)
-                self.assertEqual(e, [])
+        files = [
+            make_file("src/module.py"),
+            # File under unit/ but basename does NOT match test pattern.
+            make_file("projects/hip-tests/catch/unit/memory/hipHostRegister.cc"),
+        ]
+        e: List[str] = []
+        pc.ensure_unit_tests(policy, files, e)
+        # This should FAIL because hipHostRegister.cc is not a test file by basename.
+        self.assertTrue(e, "File under unit/ folder without test_* basename should fail")
+
+    def test_unit_folder_with_matching_basename_passes(self) -> None:
+        # Files under unit/ ARE treated as tests ONLY if their basename matches.
+        policy = make_policy()
+        files = [
+            make_file("src/module.py"),
+            make_file("projects/hip-tests/catch/unit/test_memory.cc"),
+        ]
+        e: List[str] = []
+        pc.ensure_unit_tests(policy, files, e)
+        # This PASSES because test_memory.cc matches the test_* pattern.
+        self.assertEqual(e, [])
 
 
 # ----------------------------- reviewable size -------------------------------
@@ -564,14 +576,20 @@ class LoadPolicyTests(unittest.TestCase):
         self.assertIsNotNone(multiline_jira_pattern, "Multiline JIRA ID pattern not found in policy")
         self.assertIsNotNone(multiline_issue_pattern, "Multiline ISSUE ID pattern not found in policy")
 
-    def test_unit_test_patterns_include_unit_glob(self) -> None:
-        """Verify 'unit/**' pattern is in the loaded unit_test_patterns."""
+    def test_unit_test_patterns_exclude_unit_glob(self) -> None:
+        """Verify 'unit/**' pattern is NOT in the loaded unit_test_patterns."""
         policy_path = THIS_DIR / "policy.yml"
         if not policy_path.exists():
             self.skipTest("policy.yml not present next to tests")
         policy = pc.load_policy(policy_path)
 
-        self.assertIn("unit/**", policy.unit_test_patterns)
+        # Per team lead request, 'unit/**' was removed from unit_test_patterns.
+        # Test files are now recognized ONLY by basename (test_*, *_test.*, Test*).
+        self.assertNotIn("unit/**", policy.unit_test_patterns)
+        # Verify the three allowed patterns ARE present.
+        self.assertIn("test_*", policy.unit_test_patterns)
+        self.assertIn("*_test.*", policy.unit_test_patterns)
+        self.assertIn("Test*", policy.unit_test_patterns)
 
 
 if __name__ == "__main__":

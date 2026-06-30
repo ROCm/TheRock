@@ -200,10 +200,12 @@ PRs that change real source code must include at least one accompanying unit tes
 - Basename matches one of: `test_*`, `*_test.*`, or `Test*`
   - ✅ `test_parser.py`, `parser_test.cpp`, `TestUtils.cpp`
   - ❌ `test.py` (does NOT have the `test_` prefix)
-- **Any file under a `unit/` directory** (at any depth)
-  - ✅ `unit/memory/hipHostRegister.cc`
-  - ✅ `projects/hip-tests/catch/unit/memory/hipHostRegister.cc`
-  - ✅ `tests/unit/my_test.cpp`
+
+| Pattern          | Example              |
+| ---------------- | -------------------- |
+| `test_*`         | `test_parser.py`     |
+| `*_test.*`       | `parser_test.cpp`    |
+| `Test*`          | `TestUtils.cpp`      |
 
 **How to fix**
 Add a unit test for the code you changed, named `test_<something>`:
