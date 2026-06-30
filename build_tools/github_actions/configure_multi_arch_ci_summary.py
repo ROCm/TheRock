@@ -68,6 +68,10 @@ def format_summary(
     lines.append("")
     _append_test_rocm(lines, outputs)
 
+    lines.append("### build-pytorch")
+    lines.append("")
+    _append_build_pytorch(lines, outputs)
+
     return "\n".join(lines)
 
 
@@ -197,6 +201,32 @@ def _append_build_rocm(
         lines.append(
             f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
         )
+
+
+def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
+    lines.append("| Platform | Python | PyTorch ref | Families |")
+    lines.append("|----------|--------|-------------|----------|")
+
+    rows = 0
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
+        for row in config.pytorch_build_matrix:
+            families = ", ".join(
+                f"`{family}`" for family in row["amdgpu_families"].split(";")
+            )
+            lines.append(
+                f"| {platform} | `{row['python_version']}` | "
+                f"`{row['pytorch_git_ref']}` | {families} |"
+            )
+            rows += 1
+
+    if rows == 0:
+        lines.append("| — | — | — | — |")
+    lines.append("")
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:

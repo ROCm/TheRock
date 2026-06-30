@@ -43,6 +43,14 @@ on:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
         default: ""
+      build_pytorch:
+        description: "Build PyTorch wheels."
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds; empty uses the default matrix."
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -138,6 +146,8 @@ jobs:
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_PYTORCH: ${{ inputs.build_pytorch }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}

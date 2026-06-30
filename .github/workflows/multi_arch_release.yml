@@ -105,6 +105,8 @@ jobs:
       build_variant: "release"
       release_type: ${{ inputs.release_type }}
       prerelease_version: ${{ inputs.prerelease_version }}
+      build_pytorch: ${{ inputs.build_pytorch }}
+      python_version: ${{ inputs.python_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
