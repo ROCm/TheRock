@@ -23,6 +23,9 @@ skip_tests = {
             #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
             # Seems to fails on Linux and Windows across torch versions and all tested GPUs.
             "test_side_stream_backward_overlap",
+            # Flaky test that starts a CPU computation and a GPU one, and tests based on the assumption
+            # that the CPU one finishes first, but there's no mechanism ensures that.
+            "test_reentrant_parent_error_on_cpu_cuda",
         ],
         "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
