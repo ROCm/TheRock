@@ -25,7 +25,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -185,20 +184,34 @@ def _resolve_config_path() -> str:
     return _CONFIG_PATH
 
 
-def _diff_range(event_name: str, event: dict[str, Any]) -> tuple[str, str] | None:
+def _event_str(event: dict[str, object], *keys: str) -> str:
+    """Return the nested string at `event[keys[0]][keys[1]]...`, or `""`.
+
+    The GitHub event payload is untyped JSON (`dict[str, object]`), so we
+    walk it defensively: any missing key or non-dict/non-string value
+    along the path collapses to the empty string rather than raising.
+    """
+    current: object = event
+    for key in keys:
+        if not isinstance(current, dict):
+            return ""
+        current = current.get(key)
+    return current if isinstance(current, str) else ""
+
+
+def _diff_range(event_name: str, event: dict[str, object]) -> tuple[str, str] | None:
     """Return `(base_sha, head_sha)` for the calling event, or `None`."""
 
     if event_name in ("pull_request", "pull_request_target"):
-        pr = event.get("pull_request") or {}
-        base = ((pr.get("base") or {}).get("sha")) or ""
-        head = ((pr.get("head") or {}).get("sha")) or ""
+        base = _event_str(event, "pull_request", "base", "sha")
+        head = _event_str(event, "pull_request", "head", "sha")
         if not base or not head:
             log.warning("PR event missing base/head SHA; falling back to full scan")
             return None
         return (base, head)
     if event_name == "push":
-        before = event.get("before") or ""
-        after = event.get("after") or ""
+        before = _event_str(event, "before")
+        after = _event_str(event, "after")
         if not before or not after:
             log.warning("Push event missing before/after SHA; falling back to full scan")
             return None
@@ -228,7 +241,7 @@ def _is_audited_path(relpath: str) -> bool:
 
 def _determine_changed_audited_files(
     event_name: str,
-    event: dict[str, Any],
+    event: dict[str, object],
     scan_path: Path,
 ) -> list[Path] | None:
     """Return the changed audited files inside `scan_path`, or `None`.
