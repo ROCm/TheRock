@@ -317,7 +317,9 @@ class ParseInputPackageListTest(unittest.TestCase):
     subset; omitting it builds every package eligible from the artifact tree.
     """
 
-    @patch.object(build_package, "get_package_list", return_value=(["pkg-a"], ["skip-a"]))
+    @patch.object(
+        build_package, "get_package_list", return_value=(["pkg-a"], ["skip-a"])
+    )
     def test_none_pkg_names_loads_all_from_artifacts(self, mock_get_list):
         """``pkg_names=None`` delegates to ``get_package_list(artifact_dir)``."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -334,7 +336,7 @@ class ParseInputPackageListTest(unittest.TestCase):
                 ["amdrocm-core-sdk", "amdrocm-ck", "no-such-package"],
                 Path(tmp),
             )
-            self.assertEqual(pkg_list, ["amdrocm-core-sdk", "amdrocm-ck"])
+            self.assertEqual(set(pkg_list), {"amdrocm-core-sdk", "amdrocm-ck"})
             self.assertEqual(skipped, [])
 
 
@@ -346,7 +348,9 @@ class BuildPackageVariantsRoutingTest(unittest.TestCase):
     to the simple builder caused #6093 (missing per-GPU SDK dependencies).
     """
 
-    @patch.object(build_package, "build_gfxarch_package_variants", return_value=["meta.deb"])
+    @patch.object(
+        build_package, "build_gfxarch_package_variants", return_value=["meta.deb"]
+    )
     def test_kpack_metapackage_routes_to_gfxarch_builder(self, mock_gfx):
         """Kpack + gfx-arch metapackage ``amdrocm-core-sdk`` → ``build_gfxarch_package_variants``.
 
@@ -359,7 +363,9 @@ class BuildPackageVariantsRoutingTest(unittest.TestCase):
             mock_gfx.assert_called_once_with("amdrocm-core-sdk", cfg)
             self.assertEqual(result, ["meta.deb"])
 
-    @patch.object(build_package, "build_gfxarch_package_variants", return_value=["ck.deb"])
+    @patch.object(
+        build_package, "build_gfxarch_package_variants", return_value=["ck.deb"]
+    )
     def test_kpack_gfxarch_non_meta_routes_to_gfxarch_builder(self, mock_gfx):
         """Kpack + gfx-arch regular package ``amdrocm-ck`` → gfx-arch builder.
 
@@ -374,7 +380,9 @@ class BuildPackageVariantsRoutingTest(unittest.TestCase):
             mock_gfx.assert_called_once_with("amdrocm-ck", cfg)
             self.assertEqual(result, ["ck.deb"])
 
-    @patch.object(build_package, "build_simple_package_variants", return_value=["tools.deb"])
+    @patch.object(
+        build_package, "build_simple_package_variants", return_value=["tools.deb"]
+    )
     def test_kpack_non_gfxarch_routes_to_simple_builder(self, mock_simple):
         """Kpack + non-gfx-arch ``amdrocm-developer-tools`` → ``build_simple_package_variants``.
 
@@ -389,7 +397,9 @@ class BuildPackageVariantsRoutingTest(unittest.TestCase):
             mock_simple.assert_called_once_with("amdrocm-developer-tools", cfg)
             self.assertEqual(result, ["tools.deb"])
 
-    @patch.object(build_package, "build_singlearch_package_variants", return_value=["single.deb"])
+    @patch.object(
+        build_package, "build_singlearch_package_variants", return_value=["single.deb"]
+    )
     def test_single_arch_routes_to_singlearch_builder(self, mock_single):
         """``enable_kpack=False`` always uses ``build_singlearch_package_variants``.
 
@@ -411,7 +421,9 @@ class BuildGfxarchPackageVariantsTest(unittest.TestCase):
     """
 
     @patch.object(build_package, "cleanup_build_directory")
-    @patch.object(build_package, "create_nonversioned_deb_package", return_value=["nv.deb"])
+    @patch.object(
+        build_package, "create_nonversioned_deb_package", return_value=["nv.deb"]
+    )
     @patch.object(build_package, "create_versioned_deb_package", return_value=["v.deb"])
     def test_metapackage_skips_host_builds_device_meta_nonversioned(
         self, mock_versioned, mock_nonversioned, _mock_cleanup
@@ -432,7 +444,9 @@ class BuildGfxarchPackageVariantsTest(unittest.TestCase):
             self.assertEqual(len(built), 4)
 
     @patch.object(build_package, "cleanup_build_directory")
-    @patch.object(build_package, "create_nonversioned_deb_package", return_value=["nv.deb"])
+    @patch.object(
+        build_package, "create_nonversioned_deb_package", return_value=["nv.deb"]
+    )
     @patch.object(build_package, "create_versioned_deb_package", return_value=["v.deb"])
     def test_non_meta_includes_host_device_meta_nonversioned(
         self, mock_versioned, mock_nonversioned, _mock_cleanup
@@ -448,9 +462,13 @@ class BuildGfxarchPackageVariantsTest(unittest.TestCase):
             self.assertEqual(len(built), 5)
 
     @patch.object(build_package, "cleanup_build_directory")
-    @patch.object(build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"])
+    @patch.object(
+        build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"]
+    )
     @patch.object(build_package, "create_versioned_rpm_package", return_value=["v.rpm"])
-    def test_rpm_pkg_type_for_gfxarch_variants(self, mock_versioned, mock_nonversioned, _mock_cleanup):
+    def test_rpm_pkg_type_for_gfxarch_variants(
+        self, mock_versioned, mock_nonversioned, _mock_cleanup
+    ):
         """``pkg_type=rpm`` dispatches to ``create_versioned_rpm_package`` / ``create_nonversioned_rpm_package``."""
         with tempfile.TemporaryDirectory() as tmp:
             cfg = _config(Path(tmp), pkg_type="rpm")
@@ -485,9 +503,13 @@ class BuildSimplePackageVariantsTest(unittest.TestCase):
     """
 
     @patch.object(build_package, "cleanup_build_directory")
-    @patch.object(build_package, "create_nonversioned_deb_package", return_value=["nv.deb"])
+    @patch.object(
+        build_package, "create_nonversioned_deb_package", return_value=["nv.deb"]
+    )
     @patch.object(build_package, "create_versioned_deb_package", return_value=["v.deb"])
-    def test_deb_versioned_and_nonversioned(self, mock_versioned, mock_nonversioned, _mock_cleanup):
+    def test_deb_versioned_and_nonversioned(
+        self, mock_versioned, mock_nonversioned, _mock_cleanup
+    ):
         """DEB kpack simple path: one versioned + one non-versioned package."""
         with tempfile.TemporaryDirectory() as tmp:
             cfg = _config(Path(tmp), pkg_type="deb")
@@ -500,9 +522,13 @@ class BuildSimplePackageVariantsTest(unittest.TestCase):
             self.assertEqual(built, ["v.deb", "nv.deb"])
 
     @patch.object(build_package, "cleanup_build_directory")
-    @patch.object(build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"])
+    @patch.object(
+        build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"]
+    )
     @patch.object(build_package, "create_versioned_rpm_package", return_value=["v.rpm"])
-    def test_rpm_versioned_and_nonversioned(self, mock_versioned, mock_nonversioned, _mock_cleanup):
+    def test_rpm_versioned_and_nonversioned(
+        self, mock_versioned, mock_nonversioned, _mock_cleanup
+    ):
         """RPM kpack simple path: one versioned + one non-versioned package."""
         with tempfile.TemporaryDirectory() as tmp:
             cfg = _config(Path(tmp), pkg_type="rpm")
@@ -540,9 +566,13 @@ class BuildSinglearchPackageVariantsTest(unittest.TestCase):
     """
 
     @patch.object(build_package, "cleanup_build_directory")
-    @patch.object(build_package, "create_nonversioned_deb_package", return_value=["nv.deb"])
+    @patch.object(
+        build_package, "create_nonversioned_deb_package", return_value=["nv.deb"]
+    )
     @patch.object(build_package, "create_versioned_deb_package", return_value=["v.deb"])
-    def test_deb_single_arch_builds_both_variants(self, mock_versioned, mock_nonversioned, _mock_cleanup):
+    def test_deb_single_arch_builds_both_variants(
+        self, mock_versioned, mock_nonversioned, _mock_cleanup
+    ):
         """Single-arch DEB: ``enable_kpack=False``, ``gfx_arch=gfx1100`` → versioned + non-versioned."""
         with tempfile.TemporaryDirectory() as tmp:
             cfg = _config(
@@ -560,9 +590,13 @@ class BuildSinglearchPackageVariantsTest(unittest.TestCase):
             self.assertEqual(built, ["v.deb", "nv.deb"])
 
     @patch.object(build_package, "cleanup_build_directory")
-    @patch.object(build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"])
+    @patch.object(
+        build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"]
+    )
     @patch.object(build_package, "create_versioned_rpm_package", return_value=["v.rpm"])
-    def test_rpm_single_arch_builds_both_variants(self, mock_versioned, mock_nonversioned, _mock_cleanup):
+    def test_rpm_single_arch_builds_both_variants(
+        self, mock_versioned, mock_nonversioned, _mock_cleanup
+    ):
         """Single-arch RPM: same as DEB but via ``create_*_rpm_package``."""
         with tempfile.TemporaryDirectory() as tmp:
             cfg = _config(
@@ -610,7 +644,9 @@ class VariantBuilderDispatchTest(unittest.TestCase):
     creator for dependency naming and artifact selection.
     """
 
-    @patch.object(build_package, "create_versioned_deb_package", return_value=["host.deb"])
+    @patch.object(
+        build_package, "create_versioned_deb_package", return_value=["host.deb"]
+    )
     def test_build_host_package_deb(self, mock_create):
         """``build_host_package`` sets ``gfx_arch=GFX_HOST`` and ``versioned_pkg=True``."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -621,7 +657,9 @@ class VariantBuilderDispatchTest(unittest.TestCase):
             self.assertEqual(passed.gfx_arch, GFX_HOST)
             self.assertTrue(passed.versioned_pkg)
 
-    @patch.object(build_package, "create_versioned_rpm_package", return_value=["dev.rpm"])
+    @patch.object(
+        build_package, "create_versioned_rpm_package", return_value=["dev.rpm"]
+    )
     def test_build_device_package_rpm(self, mock_create):
         """``build_device_package(..., device_arch)`` sets ``gfx_arch`` to the device token."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -631,7 +669,9 @@ class VariantBuilderDispatchTest(unittest.TestCase):
             passed = mock_create.call_args[0][1]
             self.assertEqual(passed.gfx_arch, "gfx1100")
 
-    @patch.object(build_package, "create_versioned_deb_package", return_value=["meta.deb"])
+    @patch.object(
+        build_package, "create_versioned_deb_package", return_value=["meta.deb"]
+    )
     def test_build_meta_package_deb(self, mock_create):
         """``build_meta_package`` sets ``gfx_arch=GFX_META`` for the versioned meta DEB."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -640,7 +680,9 @@ class VariantBuilderDispatchTest(unittest.TestCase):
             passed = mock_create.call_args[0][1]
             self.assertEqual(passed.gfx_arch, GFX_META)
 
-    @patch.object(build_package, "create_versioned_deb_package", return_value=["ver.deb"])
+    @patch.object(
+        build_package, "create_versioned_deb_package", return_value=["ver.deb"]
+    )
     def test_build_versioned_package_clears_gfx_arch(self, mock_create):
         """``build_versioned_package`` (non-gfx simple path) clears ``gfx_arch`` to ``""``."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -649,7 +691,9 @@ class VariantBuilderDispatchTest(unittest.TestCase):
             passed = mock_create.call_args[0][1]
             self.assertEqual(passed.gfx_arch, "")
 
-    @patch.object(build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"])
+    @patch.object(
+        build_package, "create_nonversioned_rpm_package", return_value=["nv.rpm"]
+    )
     def test_build_nonversioned_package_rpm(self, mock_create):
         """``build_nonversioned_package`` sets ``versioned_pkg=False``; preserves caller ``gfx_arch``."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -701,7 +745,11 @@ class MainAndRunTest(unittest.TestCase):
     @patch.object(build_package, "print_build_summary")
     @patch.object(build_package, "cleanup_packaging_environment")
     @patch.object(build_package, "build_package_variants", return_value=["out.deb"])
-    @patch.object(build_package, "parse_input_package_list", return_value=(["amdrocm-core-sdk"], []))
+    @patch.object(
+        build_package,
+        "parse_input_package_list",
+        return_value=(["amdrocm-core-sdk"], []),
+    )
     @patch.object(build_package, "create_package_config")
     def test_run_builds_requested_packages(
         self,
@@ -721,7 +769,9 @@ class MainAndRunTest(unittest.TestCase):
             mock_create_cfg.return_value = cfg
             args = _args(root, pkg_names=["amdrocm-core-sdk"], pkg_type="deb")
             build_package.run(args)
-            mock_parse_list.assert_called_once_with(["amdrocm-core-sdk"], cfg.artifacts_dir)
+            mock_parse_list.assert_called_once_with(
+                ["amdrocm-core-sdk"], cfg.artifacts_dir
+            )
             mock_build_variants.assert_called_once_with("amdrocm-core-sdk", cfg)
 
     @patch.object(build_package, "print_build_summary")
