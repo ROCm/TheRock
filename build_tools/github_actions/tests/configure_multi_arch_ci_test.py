@@ -439,6 +439,20 @@ class TestDecideJobs(unittest.TestCase):
                 self._inputs(pr_labels=["test_filter:bogus"]), git_context=git
             )
 
+    def test_workflow_dispatch_test_filter_label_overrides(self):
+        """test_filter in workflow_dispatch test_labels overrides test_type."""
+        # workflow_dispatch with test_filter:comprehensive should use comprehensive,
+        # not fall through to "full" because of _has_test_labels
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                linux_test_labels=["test_filter:comprehensive"],
+            ),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+        self.assertIn("test_filter", result.test_rocm.test_type_reason)
+
     def test_explicit_prebuilt_stages(self):
         """workflow_dispatch prebuilt_stages input → stage_decisions on BuildRocmDecision."""
         result = cm.decide_jobs(
