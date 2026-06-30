@@ -218,6 +218,18 @@ EXAMPLES_ROOT = OUTPUT_ARTIFACTS_PATH / "hipthreads" / "examples"
 ROCM_VERSION = load_rocm_version()
 logging.info(f"ROCm version: {ROCM_VERSION}")
 
+# offload-arch must resolve a CONCRETE arch (e.g. gfx1100) for
+# -DCMAKE_HIP_ARCHITECTURES. The AMDGPU_FAMILIES env var is unsuitable here: for
+# the gfx110X testers it holds the wildcard family "gfx110X-all", which is not a
+# compilable target. So we probe offload-arch like libhipcxx does. On Windows
+# offload-arch.exe loads ROCm DLLs from PATH, which is also the DLL search path,
+# so prepend the artifact bin/ dir before probing (see TheRock #2019, mirrored in
+# test_sanity.py) or detection returns None.
+if IS_WINDOWS:
+    os.environ["PATH"] = (
+        str(OUTPUT_ARTIFACTS_PATH / "bin") + os.pathsep + os.environ.get("PATH", "")
+    )
+
 gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
 logging.info(f"++ Detected GPU architecture: {gpu_arch}")
 if not gpu_arch:

@@ -23,7 +23,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from libhipcxx_utils import prepend_env_path
+from libhipcxx_utils import get_gpu_architecture_portable, prepend_env_path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
@@ -79,6 +79,33 @@ else:
     prepend_env_path(
         environ_vars, "LD_LIBRARY_PATH", str(OUTPUT_ARTIFACTS_PATH / "lib")
     )
+
+# Windows ONLY: hipcc has no GPU auto-detection there, so without --offload-arch
+# it defaults to gfx906 and links against the wrong arch. lit.cfg turns the
+# HIP_ARCHITECTURES env var into --offload-arch, so resolve a CONCRETE arch (e.g.
+# gfx1100) here and pass it through. We probe offload-arch (like libhipcxx) rather
+# than parsing AMDGPU_FAMILIES, whose gfx110X testers report the wildcard family
+# "gfx110X-all" that is not a compilable target. offload-arch.exe loads ROCm DLLs
+# from PATH, so prime os.environ's PATH first (the helper runs it with os.environ);
+# see TheRock #2019 / test_sanity.py.
+#
+# On Linux we deliberately do NOT set this: hipcc auto-detects the GPU and the lit
+# suite has always run green without --offload-arch, so leave that path untouched.
+if IS_WINDOWS:
+    os.environ["PATH"] = (
+        str(OUTPUT_ARTIFACTS_PATH / "bin") + os.pathsep + os.environ.get("PATH", "")
+    )
+    gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
+    logging.info(f"++ Detected GPU architecture: {gpu_arch}")
+    if gpu_arch:
+        environ_vars["HIP_ARCHITECTURES"] = gpu_arch
+    else:
+        # A miss means hipcc's gfx906 default kicks in and the link fails loudly
+        # on its own; surface why here.
+        logging.warning(
+            "Could not detect GPU architecture; lit will fall back to hipcc's "
+            "gfx906 default and likely fail to link."
+        )
 
 # The hipThreads lit suite is self-contained and resolves all of its paths from
 # these three environment variables (see hipThreads test/lit.cfg):
