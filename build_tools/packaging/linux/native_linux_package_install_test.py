@@ -72,7 +72,7 @@ Example invocations:
          --release-type prerelease \\
          --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
- # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
+ # Nightly RPM (RHEL 8) - run inside a rhel8/UBI 8 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile rhel8 \\
          --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
@@ -184,6 +184,7 @@ APT_UPDATE_TIMEOUT_SEC = 120
 ZYPP_CLEAN_TIMEOUT_SEC = 60
 ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
+DNF_MAKECACHE_TIMEOUT_SEC = 120
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
 RDHC_TIMEOUT_SEC = 30
@@ -292,6 +293,11 @@ def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
         raise
 
 
+def _is_rhel8_profile(os_profile: str) -> bool:
+    """True only for the ``rhel8`` OS profile (not other EL8/RHEL-like names)."""
+    return os_profile.lower() == "rhel8"
+
+
 class NativeLinuxPackageInstallTest:
     """Runner for the native Linux package install test (repo setup, install, verification)."""
 
@@ -352,6 +358,10 @@ class NativeLinuxPackageInstallTest:
         True if SLES, False otherwise
         """
         return self.os_profile.lower().startswith("sles")
+
+    def _is_rhel8(self) -> bool:
+        """Check if the OS profile is ``rhel8``."""
+        return _is_rhel8_profile(self.os_profile)
 
     def __init__(
         self,
@@ -707,8 +717,25 @@ gpgcheck=0
         except subprocess.TimeoutExpired:
             print("[WARN] dnf clean timed out (may not be critical)")
 
-        print("\n[PASS] DNF repository setup complete")
-        return True
+        # Refresh metadata (required on EL8 before first ``dnf install`` from a new .repo)
+        print(f"\nRefreshing repository metadata (dnf makecache --repo={repo_name})...")
+        try:
+            makecache_cmd = ["dnf", "makecache", f"--repo={repo_name}"]
+            return_code = _run_streaming(makecache_cmd, DNF_MAKECACHE_TIMEOUT_SEC)
+            if return_code == 0:
+                print("\n[PASS] DNF repository metadata refreshed")
+                return True
+            print(
+                f"\n[FAIL] dnf makecache failed for repo '{repo_name}' "
+                f"(exit code: {return_code})"
+            )
+            return False
+        except subprocess.TimeoutExpired:
+            print("\n[FAIL] dnf makecache timed out")
+            return False
+        except OSError as e:
+            print(f"\n[FAIL] Error refreshing DNF repository metadata: {e}")
+            return False
 
     def setup_rpm_repository(self) -> bool:
         """Setup RPM repository on the system.
@@ -805,7 +832,11 @@ gpgcheck=0
                 ] + self.package_names
             print("[INFO] Using zypper for SLES package installation")
         else:
-            cmd = ["dnf", "install", "-y"] + self.package_names
+            dnf_args = ["dnf", "install", "-y"]
+            if self._is_rhel8():
+                # rhel8 only: EL8 repos occasionally need --nobest for ROCm deps.
+                dnf_args.append("--nobest")
+            cmd = dnf_args + self.package_names
         print(f"\nRunning: {' '.join(cmd)}")
         print("=" * 80)
         print("Installation progress (streaming output):\n")
@@ -1054,6 +1085,11 @@ Examples:
 
  # Nightly RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
+ --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type full on RHEL 8 (rdhc needs pciutils/kmod on the host — install before running)
+ python native_linux_package_install_test.py --test-type full --os-profile rhel8 \\
  --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
