@@ -652,7 +652,6 @@ def decide_jobs(
         compute_auto_stage_reuse,
         render_step_summary,
     )
-    from github_actions_api import gha_append_step_summary
     target_families = _stage_reuse_target_families(ci_inputs)
     auto = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
