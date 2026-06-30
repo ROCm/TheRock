@@ -21,27 +21,55 @@ Usage:
 
 import logging
 import os
-import platform
 import shlex
 import subprocess
 from pathlib import Path
-
-
-def is_windows():
-    return "windows" == platform.system().lower()
-
 
 logging.basicConfig(level=logging.INFO)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-AMDSMITST_BIN = (
-    THEROCK_DIR / "build" / "share" / "amd_smi" / "tests" / "amdsmitst"
-).resolve()
+TESTS_DIR = (THEROCK_DIR / "build" / "share" / "amd_smi" / "tests").resolve()
+AMDSMITST_BIN = TESTS_DIR / "amdsmitst"
 
-platform_key = "windows" if is_windows() else "linux"
-AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
+def get_asic_exclude_filter(test_dir):
+    """Source amdsmitst.exclude and detect_asic_filter.sh, return GTEST_EXCLUDE."""
+    exclude_script = test_dir / "amdsmitst.exclude"
+    detect_script = test_dir / "detect_asic_filter.sh"
+
+    if not exclude_script.exists():
+        logging.warning(f"amdsmitst.exclude not found in {test_dir}")
+        return ""
+    if not detect_script.exists():
+        logging.warning(f"detect_asic_filter.sh not found in {test_dir}")
+        return ""
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{exclude_script}" && source "{detect_script}" && echo "$GTEST_EXCLUDE"',
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(test_dir),
+    )
+
+    if result.returncode != 0:
+        logging.warning(
+            f"ASIC detection failed (rc={result.returncode}): {result.stderr.strip()}"
+        )
+        return ""
+
+    gtest_exclude = result.stdout.strip()
+    if gtest_exclude:
+        logging.info(f"ASIC exclude filter: {gtest_exclude}")
+    else:
+        logging.info("ASIC detection returned no exclusions")
+    return gtest_exclude
+
 
 # -----------------------------
 # GTest sharding
@@ -55,74 +83,34 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 test_type = os.getenv("TEST_TYPE", "standard")
 
 if test_type == "quick":
-    logging.info("Running quick tests only for amdsmitst")
-    test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
-
-else:
-    logging.info("Running standard amdsmitst test suite (include + exclude filter)")
-
     include_tests = [
-        "amdsmitstReadOnly.*",
-        "amdsmitstReadWrite.FanReadWrite",
-        "amdsmitstReadWrite.TestOverdriveReadWrite",
-        "amdsmitstReadWrite.TestPciReadWrite",
-        "amdsmitstReadWrite.TestPowerReadWrite",
-        "amdsmitstReadWrite.TestPerfCntrReadWrite",
-        "amdsmitstReadWrite.TestEvtNotifReadWrite",
         "AmdSmiDynamicMetricTest.*",
     ]
+    include_filter = ":".join(include_tests)
+    gtest_filter_arg = [f"--gtest_filter={include_filter}"]
+    logging.info(f"Quick mode: include filter = {include_filter}")
+else:
+    # Full test mode: negative-only filter matching upstream CI pattern
+    # (./amdsmitst --gtest_filter="-${GTEST_EXCLUDE}")
 
-    exclude_tests = [
-        "amdsmitstReadOnly.TempRead",
-        "amdsmitstReadOnly.TestFrequenciesRead",
-        "amdsmitstReadWrite.TestPowerReadWrite",
-    ]
+    # Manual exclusions are done in the amdsmitst.exclude file in rocm-systems
+    # ASIC-specific exclusions from detect_asic_filter.sh
+    asic_exclude = get_asic_exclude_filter(TESTS_DIR)
+    exclude_tests = [t for t in asic_exclude.split(":") if t]
 
-    # -----------------------------
-    # Arch-specific ignores (CI parity)
-    # -----------------------------
-    TESTS_TO_IGNORE = {
-        "gfx90a": {
-            "linux": [
-                "amdsmitstReadOnly.TestSysInfoRead",
-                "amdsmitstReadOnly.TestIdInfoRead",
-                "amdsmitstReadWrite.TestPciReadWrite",
-            ]
-        },
-        "gfx110X-all": {
-            "linux": [
-                "amdsmitstReadWrite.FanReadWrite",
-            ]
-        },
-        "gfx103X-all": {
-            "linux": [
-                "amdsmitstReadWrite.FanReadWrite",
-            ]
-        },
-    }
+    if exclude_tests:
+        exclude_filter = f"-{':'.join(exclude_tests)}"
+        gtest_filter_arg = [f"--gtest_filter={exclude_filter}"]
+        logging.info(f"Full mode: exclude filter = {exclude_filter}")
+    else:
+        gtest_filter_arg = []
+        logging.info("Full mode: no exclusions")
 
-    if (
-        AMDGPU_FAMILIES in TESTS_TO_IGNORE
-        and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
-    ):
-        ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
-        logging.info(f"Adding arch-specific excludes: {ignored_tests}")
-        exclude_tests.extend(ignored_tests)
-
-    logging.info(f"AMDGPU_FAMILIES={AMDGPU_FAMILIES}")
-    logging.info(f"platform_key={platform_key}")
-    logging.info(f"Final exclude_tests={exclude_tests}")
-
-    # -----------------------------
-    # Build final filter
-    # -----------------------------
-    gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
-    test_filter = [f"--gtest_filter={gtest_filter}"]
 
 # -----------------------------
 # Build command
 # -----------------------------
-cmd = [str(AMDSMITST_BIN)] + test_filter
+cmd = [str(AMDSMITST_BIN)] + gtest_filter_arg
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
