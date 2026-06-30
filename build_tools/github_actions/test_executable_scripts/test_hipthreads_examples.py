@@ -12,13 +12,13 @@ that the unit tests do not.
 
 The example sources are packaged in the `test` artifact (HIPTHREADS_COPY_TO_BUILD
 copies the source tree, including examples/, into the build dir which the test
-artifact globs as hipthreads/**/*). They are wave32-only (*-simdize), so the job
-is gated to RDNA families in fetch_test_configurations.py.
+artifact globs as hipthreads/**/*).
 """
 
 import json
 import logging
 import os
+import platform
 import shlex
 import subprocess
 from pathlib import Path
@@ -54,12 +54,26 @@ EXAMPLES = [
         "args": [],
         "marker": "P3",
     },
+    {
+        # Pass an explicit matrix path so spmm runs ONE tiny 5x5 matrix instead
+        # of its default pair (the defaults include an LFS matrix that CI does not
+        # `git lfs pull`). therock_test_matrix.mm is a committed non-LFS file; the
+        # path is relative to the example dir, which is run_example's cwd.
+        "name": "spmm",
+        "subdir": "sparse-mat-mul/step3-hipthread-port",
+        "binary": "spmm",
+        "args": ["../data/therock_test_matrix.mm"],
+        "marker": "Time(",
+    },
 ]
 
 # Per-example wall-clock cap. The examples run at full benchmark sizes and the CI
 # library is built with HIPTHREADS_VCORES_PER_WGP=1, so they can be slow; keep
 # this comfortably under the job timeout in fetch_test_configurations.py.
 RUN_TIMEOUT_SECONDS = 1800
+
+IS_WINDOWS = platform.system() == "Windows"
+EXE_SUFFIX = ".exe" if IS_WINDOWS else ""
 
 
 def load_rocm_version() -> str:
@@ -83,9 +97,16 @@ def build_environment() -> dict:
     environ_vars["CMAKE_PREFIX_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
     environ_vars["HIP_PLATFORM"] = "amd"
     environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
+    environ_vars["CMAKE_GENERATOR"] = "Ninja"
 
     prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
-    prepend_env_path(environ_vars, "LD_LIBRARY_PATH", str(OUTPUT_ARTIFACTS_PATH / "lib"))
+    if IS_WINDOWS:
+        # ROCm DLLs live in bin/ on Windows; PATH is also the DLL search path.
+        prepend_env_path(environ_vars, "PATH", str(OUTPUT_ARTIFACTS_PATH / "bin"))
+    else:
+        prepend_env_path(
+            environ_vars, "LD_LIBRARY_PATH", str(OUTPUT_ARTIFACTS_PATH / "lib")
+        )
     return environ_vars
 
 
@@ -97,8 +118,8 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
 
     build_dir = source_dir / "build"
     llvm_bin = OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin"
-    clang = llvm_bin / "clang"
-    clangxx = llvm_bin / "clang++"
+    clang = llvm_bin / f"clang{EXE_SUFFIX}"
+    clangxx = llvm_bin / f"clang++{EXE_SUFFIX}"
 
     configure_cmd = [
         "cmake",
@@ -119,6 +140,9 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
         f"-DCMAKE_HIP_COMPILER={clangxx.as_posix()}",
         f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
     ]
+    if IS_WINDOWS:
+        # clang needs the MSVC resource compiler for the CXX language on Windows.
+        configure_cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
     logging.info(f"++ Configure [{example['name']}]$ {shlex.join(configure_cmd)}")
     subprocess.run(configure_cmd, check=True, env=environ_vars)
 
@@ -126,7 +150,7 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
     logging.info(f"++ Build [{example['name']}]$ {shlex.join(build_cmd)}")
     subprocess.run(build_cmd, check=True, env=environ_vars)
 
-    binary = build_dir / "bin" / example["binary"]
+    binary = build_dir / "bin" / f"{example['binary']}{EXE_SUFFIX}"
     if not binary.exists():
         raise FileNotFoundError(f"Built binary not found: {binary}")
     return binary
