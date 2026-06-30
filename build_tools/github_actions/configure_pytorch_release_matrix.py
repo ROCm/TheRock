@@ -102,15 +102,6 @@ def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
     return list(RELEASE_PYTORCH_REFS[platform])
 
 
-def _split_values(raw: str) -> list[str]:
-    """Split comma, semicolon, or whitespace-separated workflow input values."""
-    return [
-        value.strip()
-        for value in raw.replace(",", " ").replace(";", " ").split()
-        if value.strip()
-    ]
-
-
 def _filter_families(families_str: str, exclude: set[str]) -> str:
     """Remove excluded canonical family names from a semicolon-separated list."""
     if not exclude:
