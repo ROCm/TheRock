@@ -185,12 +185,7 @@ def _resolve_config_path() -> str:
 
 
 def _event_str(event: dict[str, object], *keys: str) -> str:
-    """Return the nested string at `event[keys[0]][keys[1]]...`, or `""`.
-
-    The GitHub event payload is untyped JSON (`dict[str, object]`), so we
-    walk it defensively: any missing key or non-dict/non-string value
-    along the path collapses to the empty string rather than raising.
-    """
+    """Return the nested string at `event[keys[0]][keys[1]]...`, or `""`."""
     current: object = event
     for key in keys:
         if not isinstance(current, dict):
@@ -246,13 +241,7 @@ def _determine_changed_audited_files(
     event: dict[str, object],
     scan_path: Path,
 ) -> list[Path] | None:
-    """Return the changed audited files inside `scan_path`, or `None`.
-
-    Filters the git diff to the same set of file patterns zizmor's
-    `--collect=default` walker accepts (`_AUDITED_PATTERNS`);
-    everything else (Python, Markdown, dotfiles, etc.) is silently
-    skipped. So both scan modes look at the same set of files.
-    """
+    """Return the changed audited files inside `scan_path`, or `None`."""
     diff = _diff_range(event_name, event)
     if diff is None:
         return None

@@ -27,6 +27,5 @@ jobs:
       contents: read
       # Required so the reusable workflow can call
       # github/codeql-action/upload-sarif and have the findings
-      # appear under Security -> Code scanning, filterable by
-      # `Tool: zizmor` separately from any other scanner.
+      # appear under Security -> Code scanning
       security-events: write
