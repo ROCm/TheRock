@@ -875,18 +875,6 @@ def _expand_build_config_for_platform(
         # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # TODO: use hard-coded label (vultr machines) as we try to determine core42 regression
-        # This is a temporary measure to get good signal for submodule bumps while we determine core42 issues
-        if (
-            platform == "linux"
-            and family_name == "gfx94x"
-            and git_context.changed_files is not None
-            and git_context.submodule_paths is not None
-        ):
-            matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-            if matching:
-                test_runs_on = "linux-gfx942-1gpu-ossci-rocm"
-
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).

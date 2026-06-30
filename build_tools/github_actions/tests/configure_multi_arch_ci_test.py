@@ -1500,28 +1500,27 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-ccs-csp-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
         # Verify weights sum to ~1.0
         total_weight = sum(l["weight"] for l in labels)
         self.assertAlmostEqual(total_weight, 1.0, places=1)
 
-    def test_gfx94x_multi_gpu_has_dual_label_config(self):
-        """Verify gfx94x has the multi-gpu dual-label configuration."""
+    def test_gfx94x_multi_gpu_has_label_config(self):
+        """Verify gfx94x has the multi-gpu label configuration."""
         from amdgpu_family_matrix import get_all_families_for_trigger_types
 
         all_families = get_all_families_for_trigger_types(["presubmit"])
         gfx94x_linux = all_families["gfx94x"].get("linux", {})
 
-        # Verify we have 2 labels for 8-gpu
+        # Verify we have 1 label for 8-gpu
         labels = gfx94x_linux["test-runs-on-multi-gpu-labels"]
-        self.assertEqual(len(labels), 2)
+        self.assertEqual(len(labels), 1)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-8gpu-core42-ossci-rocm", label_names)
 
         # Verify weights sum to 1.0
         total_weight = sum(l["weight"] for l in labels)
@@ -1551,9 +1550,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         self.assertIsNotNone(builds.linux)
         gfx94x_info = builds.linux.per_family_info[0]
-        # Should use the default test-runs-on label (core42)
+        # Should use the default test-runs-on label (ccs-csp)
         self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
         )
 
     def test_families_without_multi_label_use_primary_only(self):
