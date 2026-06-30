@@ -24,7 +24,7 @@ TheRock includes:
 
 ## Project status
 
-See the unified project HUD at https://therock-hud-dev.amd.com/
+See the unified project HUD at https://therock-hud.amd.com/
 
 ### Nightly release status
 

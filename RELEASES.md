@@ -80,7 +80,7 @@ Key differences from [per-family releases](#per-family-releases):
 >
 > If you encounter issues, check
 >
-> - https://therock-hud-dev.amd.com/ for current test status
+> - https://therock-hud.amd.com/ for current test status
 > - https://github.com/ROCm/TheRock/issues for known issues
 
 | Job description                        | Status                                                                                                                                                                                                                                                     |
