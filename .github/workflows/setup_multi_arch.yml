@@ -43,6 +43,14 @@ on:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
         default: ""
+      build_pytorch:
+        description: "Build PyTorch wheels."
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds; empty uses the default matrix."
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -114,7 +122,7 @@ jobs:
     steps:
       - name: Checking out repository
         id: checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -122,7 +130,7 @@ jobs:
           fetch-depth: 2
 
       - name: Checkout CI config
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ROCm/therock-ci-config
           ref: main
@@ -138,6 +146,8 @@ jobs:
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_PYTORCH: ${{ inputs.build_pytorch }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
@@ -147,6 +157,9 @@ jobs:
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
+          # External repo family overrides allow callers to add/modify GPU family configs
+          # (e.g., adding test runners for architectures not enabled in TheRock's default config)
+          EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

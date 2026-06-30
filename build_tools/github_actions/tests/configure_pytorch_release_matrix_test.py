@@ -12,68 +12,111 @@ import configure_pytorch_release_matrix as m
 
 
 class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
-    def test_linux_matrix_uses_all_release_python_versions_and_refs(self):
-        matrix = m.generate_pytorch_matrix(
-            python_versions=None,
+    def test_ci_linux_uses_reduced_matrix(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="ci",
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
         )
 
-        self.assertEqual(len(matrix), 25)
+        # Compared to releases:
+        #   * limited to python 3.12
+        #   * not including "nightly" pytorch_git_ref
         self.assertEqual(
-            matrix[0],
-            {
-                "python_version": "3.10",
-                "pytorch_git_ref": "release/2.9",
-                "amdgpu_families": "gfx94X-dcgpu",
-            },
-        )
-        self.assertEqual(
-            matrix[-1],
-            {
-                "python_version": "3.14",
-                "pytorch_git_ref": "nightly",
-                "amdgpu_families": "gfx94X-dcgpu",
-            },
+            matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.10",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.11",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.12",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+            ],
         )
 
-    def test_windows_matrix_does_not_filter_linux_only_family(self):
-        matrix = m.generate_pytorch_matrix(
-            python_versions=["3.12"],
-            amdgpu_families="gfx125X-dcgpu",
+    def test_ci_windows_uses_reduced_matrix(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="ci",
+            amdgpu_families="gfx110X-all",
             platform="windows",
         )
 
+        # Compared to releases:
+        #   * limited to python 3.12
+        # Compared to Linux:
+        #   * limited to only a single pytorch_git_ref
         self.assertEqual(
-            matrix[0],
-            {
-                "python_version": "3.12",
-                "pytorch_git_ref": "release/2.9",
-                "amdgpu_families": "gfx125X-dcgpu",
-            },
+            matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.10",
+                    "amdgpu_families": "gfx110X-all",
+                },
+            ],
         )
-        self.assertEqual(len(matrix), 5)
 
-    def test_explicit_python_versions_narrow_matrix(self):
-        matrix = m.generate_pytorch_matrix(
-            python_versions=["3.12"],
+    def test_explicit_versions_and_refs_narrow_matrix(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            python_versions=["3.13"],
+            pytorch_git_refs=["nightly"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
         )
 
-        self.assertEqual({row["python_version"] for row in matrix}, {"3.12"})
-        self.assertEqual(len(matrix), 5)
+        self.assertEqual(
+            matrix,
+            [
+                {
+                    "python_version": "3.13",
+                    "pytorch_git_ref": "nightly",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                }
+            ],
+        )
 
-    def test_filters_unsupported_family_by_substring(self):
-        matrix = m.generate_pytorch_matrix(
+    def test_filters_exact_unsupported_family(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="dev",
             python_versions=["3.12"],
+            pytorch_git_refs=["release/2.10"],
             amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu",
             platform="linux",
         )
 
+        # gfx125X-dcgpu not supported on the release/2.10 ref, should filter
+        self.assertEqual(matrix[0]["amdgpu_families"], "gfx94X-dcgpu")
+        matrix_families = ";".join(row["amdgpu_families"] for row in matrix)
+        self.assertNotIn("gfx125X", matrix_families)
+
+    def test_unknown_explicit_ref_keeps_families(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="dev",
+            python_versions=["3.12"],
+            pytorch_git_refs=["users/alice/gfx125x-bringup"],
+            amdgpu_families="gfx125X-dcgpu",
+            platform="linux",
+        )
+
         self.assertEqual(
-            {row["amdgpu_families"] for row in matrix},
-            {"gfx94X-dcgpu"},
+            matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "users/alice/gfx125x-bringup",
+                    "amdgpu_families": "gfx125X-dcgpu",
+                }
+            ],
         )
 
 

@@ -120,7 +120,7 @@ jobs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -131,11 +131,13 @@ jobs:
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${{ inputs.python_version }}" \
             --platform=linux \
+            --release-type="${{ inputs.release_type }}" \
             --amdgpu-families="${{ inputs.amdgpu_families }}"
 
   build_pytorch_wheels:
     needs: setup_matrix
     name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    if: ${{ needs.setup_matrix.outputs.pytorch_matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:

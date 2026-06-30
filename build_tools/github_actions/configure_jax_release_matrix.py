@@ -18,7 +18,21 @@ PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
 JAX_REFS = [
     {
         "jax_ref": "rocm-jaxlib-v0.9.1",
-        "build_jaxlib": False,
+        "jax_repository": "ROCm/rocm-jax",
+        "build_mode": "native",
+        "gfx_arch": "",
+    },
+    {
+        "jax_ref": "rocm-jaxlib-v0.10.0",
+        "jax_repository": "ROCm/jax",
+        "build_mode": "manylinux",
+        "gfx_arch": "device-all",
+    },
+    {
+        "jax_ref": "rocm-jaxlib-v0.10.2",
+        "jax_repository": "ROCm/jax",
+        "build_mode": "manylinux",
+        "gfx_arch": "device-all",
     },
 ]
 
@@ -43,7 +57,9 @@ def generate_jax_matrix(
                 {
                     "python_version": py,
                     "jax_ref": ref_cfg["jax_ref"],
-                    "build_jaxlib": ref_cfg["build_jaxlib"],
+                    "jax_repository": ref_cfg["jax_repository"],
+                    "build_mode": ref_cfg["build_mode"],
+                    "gfx_arch": ref_cfg["gfx_arch"],
                 }
             )
     return matrix
@@ -60,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     python_versions = _split_values(args.python_versions) or None
+
     matrix = generate_jax_matrix(python_versions)
     gha_set_output({"jax_matrix": json.dumps(matrix)})
     return 0
