@@ -149,10 +149,6 @@ if(THEROCK_ENABLE_MIOPEN)
 endif(THEROCK_ENABLE_MIOPEN)
 
 if(THEROCK_ENABLE_MIGRAPHX)
-  if(NOT EXISTS "${THEROCK_SOURCE_DIR}/ml-frameworks/AMDMIGraphX/CMakeLists.txt")
-    message(STATUS "MIGraphX source not found. Disabling MIGraphX. If you want to enable MIGraphX run: python3 ./build_tools/fetch_sources.py --source-sets ml-frameworks")
-    set(THEROCK_ENABLE_MIGRAPHX OFF)
-  else()
     ##############################################################################
     # MIGraphX
     ##############################################################################
