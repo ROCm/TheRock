@@ -393,7 +393,9 @@ class UnitTestRuleTests(unittest.TestCase):
         e: List[str] = []
         pc.ensure_unit_tests(policy, files, e)
         # This should FAIL because hipHostRegister.cc is not a test file by basename.
-        self.assertTrue(e, "File under unit/ folder without test_* basename should fail")
+        self.assertTrue(
+            e, "File under unit/ folder without test_* basename should fail"
+        )
 
     def test_unit_folder_with_matching_basename_passes(self) -> None:
         # Files under unit/ ARE treated as tests ONLY if their basename matches.
@@ -573,8 +575,12 @@ class LoadPolicyTests(unittest.TestCase):
             if pat.search("ISSUE ID\nAIRUNTIME-2352"):
                 multiline_issue_pattern = pat
 
-        self.assertIsNotNone(multiline_jira_pattern, "Multiline JIRA ID pattern not found in policy")
-        self.assertIsNotNone(multiline_issue_pattern, "Multiline ISSUE ID pattern not found in policy")
+        self.assertIsNotNone(
+            multiline_jira_pattern, "Multiline JIRA ID pattern not found in policy"
+        )
+        self.assertIsNotNone(
+            multiline_issue_pattern, "Multiline ISSUE ID pattern not found in policy"
+        )
 
     def test_unit_test_patterns_exclude_unit_glob(self) -> None:
         """Verify 'unit/**' pattern is NOT in the loaded unit_test_patterns."""

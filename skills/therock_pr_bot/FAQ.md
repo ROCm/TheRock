@@ -201,11 +201,11 @@ PRs that change real source code must include at least one accompanying unit tes
   - ✅ `test_parser.py`, `parser_test.cpp`, `TestUtils.cpp`
   - ❌ `test.py` (does NOT have the `test_` prefix)
 
-| Pattern          | Example              |
-| ---------------- | -------------------- |
-| `test_*`         | `test_parser.py`     |
-| `*_test.*`       | `parser_test.cpp`    |
-| `Test*`          | `TestUtils.cpp`      |
+| Pattern    | Example           |
+| ---------- | ----------------- |
+| `test_*`   | `test_parser.py`  |
+| `*_test.*` | `parser_test.cpp` |
+| `Test*`    | `TestUtils.cpp`   |
 
 **How to fix**
 Add a unit test for the code you changed, named `test_<something>`:
