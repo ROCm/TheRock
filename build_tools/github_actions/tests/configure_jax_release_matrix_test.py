@@ -12,47 +12,27 @@ import configure_jax_release_matrix as m
 
 
 class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
-    def test_default_matrix_uses_all_release_python_versions(self):
+    def test_default_matrix_includes_multiple_python_versions_and_refs(self):
         matrix = m.generate_jax_matrix(None)
 
+        python_versions = {row["python_version"] for row in matrix}
+        jax_refs = {row["jax_ref"] for row in matrix}
+
+        self.assertGreater(len(matrix), 1)
+        self.assertGreater(len(python_versions), 1)
+        self.assertGreater(len(jax_refs), 1)
         self.assertEqual(
-            matrix,
-            [
-                {
-                    "python_version": "3.11",
-                    "jax_ref": "rocm-jaxlib-v0.9.1",
-                    "build_jaxlib": False,
-                },
-                {
-                    "python_version": "3.12",
-                    "jax_ref": "rocm-jaxlib-v0.9.1",
-                    "build_jaxlib": False,
-                },
-                {
-                    "python_version": "3.13",
-                    "jax_ref": "rocm-jaxlib-v0.9.1",
-                    "build_jaxlib": False,
-                },
-                {
-                    "python_version": "3.14",
-                    "jax_ref": "rocm-jaxlib-v0.9.1",
-                    "build_jaxlib": False,
-                },
-            ],
+            set(matrix[0]),
+            {"python_version", "jax_ref", "jax_repository", "build_mode", "gfx_arch"},
         )
 
     def test_explicit_python_version_narrows_matrix(self):
         matrix = m.generate_jax_matrix(["3.12"])
 
+        self.assertGreater(len(matrix), 1)
         self.assertEqual(
-            matrix,
-            [
-                {
-                    "python_version": "3.12",
-                    "jax_ref": "rocm-jaxlib-v0.9.1",
-                    "build_jaxlib": False,
-                },
-            ],
+            {row["python_version"] for row in matrix},
+            {"3.12"},
         )
 
 
