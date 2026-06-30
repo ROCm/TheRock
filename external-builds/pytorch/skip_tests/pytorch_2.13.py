@@ -1,10 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Known failures on the PyTorch nightly (2.13) wheels. These are already
-# tracked in the stable-version skip files (pytorch_2.9.py - pytorch_2.12.py)
-# and/or generic.py, but those exclusions are not picked up for the nightly
-# version, so they are mirrored here. See
+# Known failures on the PyTorch 2.13 wheels. These are already tracked in the
+# other version skip files (pytorch_2.9.py - pytorch_2.12.py) and/or generic.py,
+# but those exclusions are not picked up for the 2.13 version, so they are
+# mirrored here. See
 # https://github.com/ROCm/TheRock/issues/5596
 
 skip_tests = {
