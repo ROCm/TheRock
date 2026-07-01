@@ -127,6 +127,10 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   string(APPEND CUSTOM_CXX_FLAGS " -O0 -g3")
 endif()
 
+# Harden against stack clash attacks.
+string(APPEND CUSTOM_C_FLAGS " -fstack-clash-protection")
+string(APPEND CUSTOM_CXX_FLAGS " -fstack-clash-protection")
+
 # Compiler commands to chain to autotools.
 set(CUSTOM_CC "${CMAKE_C_COMPILER}")
 if(CMAKE_C_COMPILER_LAUNCHER)
