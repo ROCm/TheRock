@@ -25,6 +25,7 @@ Table of contents:
   - [Multi-arch release status](#multi-arch-release-status)
   - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
   - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
+  - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
   - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
   - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
@@ -298,6 +299,52 @@ print(torch.cuda.get_device_name(0))
 
 See [external-builds/pytorch/README.md](/external-builds/pytorch/README.md) for
 more details on supported PyTorch versions and building from source.
+
+### Installing multi-arch JAX Python packages
+
+Install JAX with ROCm support using the unified multi-arch index.
+
+> [!IMPORTANT]
+> Unlike PyTorch, the JAX wheels do **not** automatically install ROCm packages as a dependency.
+> You must install ROCm first.
+
+```bash
+# Set the version (currently supported: 0.9.1 and 0.10.0)
+JAX_VERSION=0.10.0
+
+# 1. Install ROCm (replace device-gfx942 with your GPU)
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    "rocm[libraries,device-gfx942]"
+
+# 2. Install JAX ROCm wheels
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    "jax_rocm7_plugin==${JAX_VERSION}" \
+    "jax_rocm7_pjrt==${JAX_VERSION}"
+
+# 3. Install matching jax from PyPI
+pip install "jax==${JAX_VERSION}"
+```
+
+> [!NOTE]
+> Always pin jax, jax_rocm7_plugin, and jax_rocm7_pjrt to the same version.
+> Currently supported versions: 0.9.1 and 0.10.0.
+
+> [!TIP]
+> For multiple devices (e.g. Dockerfile supporting MI300X + MI355X):
+>
+> ```bash
+> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+>    "rocm[libraries,device-gfx942,device-gfx950]"
+> ```
+
+After installing, verify JAX can see your GPU:
+
+```python
+import jax
+
+print(jax.devices())
+# [RocmDevice(id=0), RocmDevice(id=1), ...]
+```
 
 ### Installing multi-arch tarballs
 
