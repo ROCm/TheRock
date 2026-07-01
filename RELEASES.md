@@ -5,6 +5,14 @@ external builds like PyTorch and JAX. We produce build artifacts as part of our
 Continuous Integration (CI) build/test workflows as well as release artifacts as
 part of Continuous Delivery (CD) nightly releases.
 
+<!-- TODO: mention other release channels, link to release notes, etc. -->
+
+<!--       stable: https://repo.amd.com/rocm/ -->
+
+<!--       https://rocm.docs.amd.com/en/7.12.0-preview/index.html -->
+
+<!--       https://rocm.docs.amd.com/en/7.13.0-preview/index.html -->
+
 For the development status of GPU architecture support in TheRock, please see
 [SUPPORTED_GPUS.md](./SUPPORTED_GPUS.md) which tracks release readiness for each
 AMD GPU architecture.
@@ -21,28 +29,21 @@ AMD GPU architecture.
 
 Table of contents:
 
-- [Multi-arch releases](#multi-arch-releases)
-  - [Multi-arch release status](#multi-arch-release-status)
-  - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
-    - [Using multi-arch ROCm Python packages](#using-multi-arch-rocm-python-packages)
-  - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
-    - [Using multi-arch PyTorch Python packages](#using-multi-arch-pytorch-python-packages)
-  - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
-  - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
+- [About multi-arch releases](#multi-arch-releases)
+- [Installing multi-arch releases](#installing-multi-arch-releases)
+  - [Installing multi-arch Python packages](#installing-multi-arch-python-packages)
+    - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
+      - [Using multi-arch ROCm Python packages](#using-multi-arch-rocm-python-packages)
+      - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
+    - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
+    - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
+  - [Installing multi-arch native packages](#installing-multi-arch-native-packages)
+    - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
+    <!-- TODO: native Windows packages -->
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
-  - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
-  - [Using ROCm from WSL](#using-rocm-from-wsl)
 - [Verifying your installation](#verifying-your-installation)
 
-<!-- TODO: fold away the "multi-arch releases -->
-
-<!-- TODO: add new "Python Packages" section to include ROCm,PyTorch,JAX -->
-
-<!-- TODO: move tarballs under native linux -->
-
-<!-- TODO: add "Native Packages" section to include Linux, WSL, Windows -->
-
-## Multi-arch releases
+## About multi-arch releases
 
 > [!IMPORTANT]
 > We introduced multi-arch releases with
@@ -97,10 +98,14 @@ Key differences from
 | ROCm tarballs           | ✅ Available | ✅ Available                                                      |
 | Native packages         | ✅ Available | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
 
-### Installing multi-arch ROCm Python packages
+## Installing multi-arch releases
 
-Nightly releases of ROCm and related Python packages are published to a unified
-index at https://rocm.nightlies.amd.com/whl-multi-arch/.
+### Installing multi-arch Python packages
+
+Nightly releases of ROCm and framework Python packages are published to a
+unified index at https://rocm.nightlies.amd.com/whl-multi-arch/.
+
+<!-- TODO: mention https://repo.amd.com/rocm/whl-multi-arch/ release channel too -->
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
@@ -116,6 +121,8 @@ index at https://rocm.nightlies.amd.com/whl-multi-arch/.
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual environment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
+#### Installing multi-arch ROCm Python packages
+
 We provide several Python packages which together form the complete ROCm SDK.
 In multi-arch releases, GPU-specific device code is split into separate
 `rocm-sdk-device-{target}` packages.
@@ -126,25 +133,18 @@ In multi-arch releases, GPU-specific device code is split into separate
   [`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
   directory.
 
-| Package name               | Description                                                        |
-| -------------------------- | ------------------------------------------------------------------ |
-| `rocm`                     | Primary sdist meta package that dynamically determines other deps  |
-| `rocm-sdk-core`            | OS-specific core of the ROCm SDK (e.g. compiler and utility tools) |
-| `rocm-sdk-libraries`       | OS-specific libraries (architecture-neutral host code)             |
-| `rocm-sdk-device-{target}` | GPU-specific device code (e.g. `rocm-sdk-device-gfx942`)           |
-| `rocm-sdk-devel`           | OS-specific development tools                                      |
+| Install extra (if any)     | Package name               | Description                                                        |
+| -------------------------- | -------------------------- | ------------------------------------------------------------------ |
+| `rocm`                     | `rocm`                     | Primary sdist meta package that dynamically determines other deps  |
+| `rocm`                     | `rocm-sdk-core`            | OS-specific core of the ROCm SDK (e.g. compiler and utility tools) |
+| `rocm[libraries]`          | `rocm-sdk-libraries`       | OS-specific libraries (architecture-neutral host code)             |
+| `rocm[device-gfx{target}]` | `rocm-sdk-device-{target}` | GPU-specific device code (e.g. `rocm-sdk-device-gfx942`)           |
+| `rocm[devel]`              | `rocm-sdk-devel`           | OS-specific development tools                                      |
 
-Install ROCm with device support for your GPU using the unified index.
-Select your GPU using the `[device-*]` extras from the
-[table below](#supported-python-device--install-extras):
-
-> [!WARNING]
-> A `device-*` extra (or a single-family per-architecture index) being
-> installable does **not** mean the runtime is functional on that target.
-> Targets without ✅ in **Sanity Tested** in
-> [SUPPORTED_GPUS.md](SUPPORTED_GPUS.md) are unverified. `pip install` will
-> succeed, but device enumeration, kernel launch, or library loads may fail at
-> runtime. Please file an issue if you hit one.
+Install ROCm with device support for your GPU by looking up the appropriate
+`[device-*]` extras from the
+[Supported Python `[device-*]` install extras](#supported-python-device--install-extras) table below
+and then running an install command such as:
 
 ```bash
 # Single device (replace device-gfx942 with your GPU):
@@ -164,9 +164,19 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "rocm[libraries,device-all]"
 ```
 
+> [!WARNING]
+> A `device-*` extra (or a single-family per-architecture index) being
+> installable does **not** mean the runtime is functional on that target.
+> Targets without ✅ in **Sanity Tested** in
+> [SUPPORTED_GPUS.md](SUPPORTED_GPUS.md) are unverified. `pip install` will
+> succeed, but device enumeration, kernel launch, or library loads may fail at
+> runtime. Please file an issue if you hit one.
+
 <!-- TODO: Advertise wheel variants / WheelNext once available  -->
 
-#### Using multi-arch ROCm Python packages
+<!-- TODO(#5289): Advertise backwards-compatible index once available -->
+
+##### Using multi-arch ROCm Python packages
 
 After installing the ROCm Python packages, you should see them in your
 environment:
@@ -227,6 +237,26 @@ $ rocm-sdk init
 Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
 ```
 
+The paths in the devel package can be used like so:
+
+```console
+$ rocm-sdk path --root
+.venv/Lib/site-packages/_rocm_sdk_devel
+$ rocm-sdk path --bin
+.venv/Lib/site-packages/_rocm_sdk_devel/bin
+$ rocm-sdk path --cmake
+.venv/Lib/site-packages/_rocm_sdk_devel/lib/cmake
+```
+
+```bash
+-DCMAKE_PREFIX_PATH=$(rocm-sdk path --cmake)
+-DROCM_HOME=$(rocm-sdk path --root)
+export PATH="$(rocm-sdk path --bin):$PATH"
+```
+
+For more details on using the `rocm-sdk-devel` package to build projects, see
+[Using Packages from Frameworks in `docs/packaging/python_packaging.md`](https://github.com/ROCm/TheRock/blob/main/docs/packaging/python_packaging.md#using-packages-from-frameworks).
+
 > [!TIP]
 > The devel tree is expanded - and its device files linked from the installed
 > `rocm-sdk-device-*` wheels - only once: on the first `rocm-sdk init` /
@@ -239,7 +269,7 @@ Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
 > via `pip`. If the devel tree ever ends up in a bad state, recreate the virtual
 > environment.
 
-#### Supported Python `[device-*]` install extras
+##### Supported Python `[device-*]` install extras
 
 For packages which include device-specific code (such as `rocm`, `torch`, and
 `torchvision`), select your GPU using a `[device-*]` install extra from the
@@ -277,7 +307,7 @@ for a full list of supported AMD GPUs.
 | AMD Radeon Pro V520                                  | gfx1011    | `device-gfx1011` |
 | AMD Radeon Pro W5500                                 | gfx1012    | `device-gfx1012` |
 
-### Installing multi-arch PyTorch Python packages
+#### Installing multi-arch PyTorch Python packages
 
 Install PyTorch with ROCm support using the unified multi-arch index.
 Select your GPU target using the `[device-*]` extras from the
@@ -326,7 +356,7 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 > # gfx110X-all [gfx1100, gfx1101, gfx1102, gfx1103] is ~600 MB.
 > ```
 
-#### Using multi-arch PyTorch Python packages
+##### Using multi-arch PyTorch Python packages
 
 After installing, verify PyTorch can see your GPU:
 
@@ -346,7 +376,7 @@ See also the
 [Testing the PyTorch installation](https://rocm.docs.amd.com/projects/install-on-linux/en/develop/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation)
 instructions in the AMD ROCm documentation.
 
-### Installing multi-arch JAX Python packages
+#### Installing multi-arch JAX Python packages
 
 Install JAX with ROCm support using the unified multi-arch index.
 
@@ -392,6 +422,112 @@ import jax
 
 print(jax.devices())
 # [RocmDevice(id=0), RocmDevice(id=1), ...]
+```
+
+### Installing multi-arch native packages
+
+#### Installing multi-arch native Linux packages
+
+In addition to Python wheels and tarballs, ROCm native Linux packages are
+published for Debian-based and RPM-based distributions via the
+multi-arch pipeline.
+
+> [!WARNING]
+> These builds are primarily intended for development and testing and are
+> currently **unsigned**.
+
+Multi-arch native packages use a simplified package model compared to the
+[legacy per-family releases](/docs/packaging/legacy_per_family_releases.md):
+
+| Package name       | Description                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `amdrocm`          | Installs all base ROCm libraries and runtime support for all supported GPU architectures                         |
+| `amdrocm-core-sdk` | Installs the full ROCm SDK including runtime, development tools, and headers for all supported GPU architectures |
+
+> [!TIP]
+> To find the latest available release, browse the index pages:
+>
+> - **Debian packages**: https://rocm.nightlies.amd.com/packages-multi-arch/deb/
+> - **RPM packages**: https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
+>
+> Look for directories in the format `YYYYMMDD-<action-run-id>`
+> (e.g., `20260501-25200531110`) and use the latest in the commands below.
+
+##### Installing on Debian-based systems (Ubuntu, Debian, etc.)
+
+```bash
+# Step 1: Find the latest release from
+#         https://rocm.nightlies.amd.com/packages-multi-arch/deb/
+#         Look for directories like "20260501-25200531110"
+# Step 2: Set the variable below
+export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
+
+# Step 3: Add repository and install
+sudo apt update
+sudo apt install -y ca-certificates
+echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-multi-arch/deb/${RELEASE_ID} stable main" \
+  | sudo tee /etc/apt/sources.list.d/rocm-multiarch-nightly.list
+sudo apt update
+
+# Install base runtime for all supported GPU architectures:
+sudo apt install amdrocm
+# Or install full SDK (runtime + dev tools + headers) for all supported GPU architectures:
+sudo apt install amdrocm-core-sdk
+```
+
+##### Installing on RPM-based systems (RHEL, SLES, AlmaLinux, etc.)
+
+```bash
+# Step 1: Find the latest release from
+#         https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
+#         Look for directories like "20260501-25200531110"
+# Step 2: Set the variable below
+export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
+
+# Step 3: Add repository and install
+sudo dnf install -y ca-certificates
+sudo tee /etc/yum.repos.d/rocm-multiarch-nightly.repo <<EOF
+[rocm-multiarch-nightly]
+name=ROCm Multi-Arch Nightly Repository
+baseurl=https://rocm.nightlies.amd.com/packages-multi-arch/rpm/${RELEASE_ID}/x86_64
+enabled=1
+gpgcheck=0
+priority=50
+EOF
+
+# Install base runtime for all supported GPU architectures:
+sudo dnf clean all
+sudo dnf install amdrocm
+# Or install full SDK (runtime + dev tools + headers) for all supported GPU architectures:
+sudo dnf install amdrocm-core-sdk
+```
+
+> [!NOTE]
+> To install support for a specific GPU architecture only, you can use the
+> per-arch package variant (e.g., `apt install amdrocm-gfx942` or `dnf install amdrocm-gfx942`). For a full list of
+> supported GPU targets and their identifiers, see
+> [Supported Python `[device-*]` install extras](#supported-python-device--install-extras).
+
+##### Using ROCm from WSL
+
+ROCm supports WSL via the DXG kernel interface. DXG detection is enabled by
+default as of ROCm 7.13.
+
+To use ROCm on WSL, install the optional `amdrocm-wsl` package which provides
+the DXG support library:
+
+```bash
+# For Debian/Ubuntu:
+sudo apt install amdrocm-wsl
+
+# For RHEL/CentOS/Fedora:
+sudo dnf install amdrocm-wsl
+```
+
+To explicitly disable DXG detection, set:
+
+```bash
+export HSA_ENABLE_DXG_DETECTION=0
 ```
 
 ### Installing multi-arch tarballs
@@ -455,110 +591,6 @@ ls install/.kpack/
 > See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
 > relevant environment variables.
 
-### Installing multi-arch native Linux packages
-
-In addition to Python wheels and tarballs, ROCm native Linux packages are
-published for Debian-based and RPM-based distributions via the
-multi-arch pipeline.
-
-> [!WARNING]
-> These builds are primarily intended for development and testing and are
-> currently **unsigned**.
-
-Multi-arch native packages use a simplified package model compared to the
-[legacy per-family releases](/docs/packaging/legacy_per_family_releases.md):
-
-| Package name       | Description                                                                                                      |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `amdrocm`          | Installs all base ROCm libraries and runtime support for all supported GPU architectures                         |
-| `amdrocm-core-sdk` | Installs the full ROCm SDK including runtime, development tools, and headers for all supported GPU architectures |
-
-> [!TIP]
-> To find the latest available release, browse the index pages:
->
-> - **Debian packages**: https://rocm.nightlies.amd.com/packages-multi-arch/deb/
-> - **RPM packages**: https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
->
-> Look for directories in the format `YYYYMMDD-<action-run-id>`
-> (e.g., `20260501-25200531110`) and use the latest in the commands below.
-
-#### Installing on Debian-based systems (Ubuntu, Debian, etc.)
-
-```bash
-# Step 1: Find the latest release from
-#         https://rocm.nightlies.amd.com/packages-multi-arch/deb/
-#         Look for directories like "20260501-25200531110"
-# Step 2: Set the variable below
-export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
-
-# Step 3: Add repository and install
-sudo apt update
-sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-multi-arch/deb/${RELEASE_ID} stable main" \
-  | sudo tee /etc/apt/sources.list.d/rocm-multiarch-nightly.list
-sudo apt update
-
-# Install base runtime for all supported GPU architectures:
-sudo apt install amdrocm
-# Or install full SDK (runtime + dev tools + headers) for all supported GPU architectures:
-sudo apt install amdrocm-core-sdk
-```
-
-#### Installing on RPM-based systems (RHEL, SLES, AlmaLinux, etc.)
-
-```bash
-# Step 1: Find the latest release from
-#         https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
-#         Look for directories like "20260501-25200531110"
-# Step 2: Set the variable below
-export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
-
-# Step 3: Add repository and install
-sudo dnf install -y ca-certificates
-sudo tee /etc/yum.repos.d/rocm-multiarch-nightly.repo <<EOF
-[rocm-multiarch-nightly]
-name=ROCm Multi-Arch Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/packages-multi-arch/rpm/${RELEASE_ID}/x86_64
-enabled=1
-gpgcheck=0
-priority=50
-EOF
-
-# Install base runtime for all supported GPU architectures:
-sudo dnf clean all
-sudo dnf install amdrocm
-# Or install full SDK (runtime + dev tools + headers) for all supported GPU architectures:
-sudo dnf install amdrocm-core-sdk
-```
-
-> [!NOTE]
-> To install support for a specific GPU architecture only, you can use the
-> per-arch package variant (e.g., `apt install amdrocm-gfx942` or `dnf install amdrocm-gfx942`). For a full list of
-> supported GPU targets and their identifiers, see
-> [Supported Python `[device-*]` install extras](#supported-python-device--install-extras).
-
-### Using ROCm from WSL
-
-ROCm supports WSL via the DXG kernel interface. DXG detection is enabled by
-default as of rocm-systems@901f9a5 — no environment variable setup is required.
-
-To use ROCm on WSL, install the optional `amdrocm-wsl` package which provides
-the DXG support library:
-
-```bash
-# For Debian/Ubuntu:
-sudo apt install amdrocm-wsl
-
-# For RHEL/CentOS/Fedora:
-sudo dnf install amdrocm-wsl
-```
-
-To explicitly disable DXG detection, set:
-
-```bash
-export HSA_ENABLE_DXG_DETECTION=0
-```
-
 ## Verifying your installation
 
 After installing ROCm via any of the methods above, you can verify that your
@@ -591,7 +623,3 @@ If your GPU is not recognized or you encounter issues:
   for GTT configuration on unified memory systems)
 - Ensure you have the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation)
   on Linux or [Adrenalin driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
-- For platform-specific troubleshooting when using PyTorch or JAX, see:
-  - [Using ROCm Python packages](#using-rocm-python-packages)
-  - [Using PyTorch Python packages](#using-pytorch-python-packages)
-  - [Using JAX Python packages](#using-jax-python-packages)
