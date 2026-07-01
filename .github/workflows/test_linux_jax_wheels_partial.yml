@@ -128,7 +128,7 @@ permissions:
 
 jobs:
   test_jax_wheels:
-    name: Test JAX Wheels | Python ${{ inputs.python_version }}
+    name: Test JAX Wheels | Python ${{ inputs.python_version }} | JAX ${{ inputs.jax_version }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
 
