@@ -301,7 +301,13 @@ jobs:
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
-          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
+          # pandas==2.0.3 (pinned by PyTorch's requirements-ci.txt) has no cp312
+          # wheel, so pip builds it from source. Its setup.py imports
+          # pkg_resources, which setuptools>=81 no longer ships. Constrain the
+          # isolated build environment to a setuptools that still bundles it.
+          echo "setuptools<81" > /tmp/pip-build-constraints.txt
+          PIP_CONSTRAINT=/tmp/pip-build-constraints.txt \
+            python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
       - name: Runner health status
