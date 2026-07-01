@@ -1073,7 +1073,7 @@ def expand_build_configs(
     # To revert: delete this block and the corresponding EXTERNAL_FAMILY_OVERRIDES
     #            env var in setup_multi_arch.yml
     # =========================================================================
-    all_families = _apply_external_family_overrides(all_families)
+    # all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
     # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
     # Otherwise, push events run "host-asan"
