@@ -824,6 +824,7 @@ def wheel_change_extra_files(
 
     # rocm packages needing extra handling
     if new_dir_path.name.startswith("rocm"):
+        # Workaround needed for multiarch until Jun 19, 2026 (see #6266 and #5984)
         if "rocm_sdk_libraries" in new_dir_path.name and "gfx" not in new_dir_path.name:
             package_name_no_version = "rocm_sdk_libraries_None"
         files_to_change = [
