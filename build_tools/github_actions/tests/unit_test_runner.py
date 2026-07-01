@@ -144,6 +144,21 @@ class BuildCtestCommandTest(unittest.TestCase):
         le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
         self.assertNotIn("quick_exclude", le_patterns)
 
+    def test_therock_ci_exclude_label_applied(self):
+        exclude_labels = {"quick_therock_ci_exclude"}
+        cmd = self._build("quick", "", set(), exclude_labels)
+        le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertIn("quick_therock_ci_exclude", le_patterns)
+
+    def test_category_and_therock_ci_exclude_combined(self):
+        exclude_labels = {"quick_exclude", "quick_therock_ci_exclude"}
+        cmd = self._build("quick", "", set(), exclude_labels)
+        le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
+        le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+        self.assertIn("quick_exclude", le_patterns)
+        self.assertIn("quick_therock_ci_exclude", le_patterns)
+
     def test_comprehensive_category(self):
         cmd = self._build("comprehensive", "", set())
         idx = cmd.index("-L")
@@ -165,6 +180,34 @@ class BuildCtestCommandTest(unittest.TestCase):
                 value.startswith("^") and value.endswith("$"),
                 f"include label not anchored: {value}",
             )
+
+
+class ApplyComponentOverridesTest(unittest.TestCase):
+    """Tests for apply_component_overrides()."""
+
+    def _apply(self, job_name, default_parallel_count):
+        return test_runner.apply_component_overrides(
+            job_name,
+            "quick",
+            Path("/rocm"),
+            Path("/therock"),
+            "/rocm/bin/default",
+            {},
+            default_parallel_count,
+        )
+
+    def test_rocprofiler_compute_pins_serial_ctest(self):
+        _, parallel = self._apply("rocprofiler-compute", 8)
+        self.assertEqual(parallel, 1)
+
+    def test_unknown_component_uses_default_parallel(self):
+        test_dir, parallel = self._apply("some-unknown-component", 4)
+        self.assertEqual(parallel, 4)
+        self.assertEqual(test_dir, "/rocm/bin/default")
+
+    def test_component_without_parallel_override_uses_default(self):
+        _, parallel = self._apply("rocwmma", 4)
+        self.assertEqual(parallel, 4)
 
 
 class ValidTestCategoriesTest(unittest.TestCase):

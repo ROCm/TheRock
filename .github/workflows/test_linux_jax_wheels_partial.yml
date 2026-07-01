@@ -121,7 +121,7 @@ on:
       test_runs_on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
-        default: "linux-gfx942-1gpu-core42-ossci-rocm"
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
 permissions:
   contents: read
   id-token: write
@@ -130,6 +130,7 @@ jobs:
   test_jax_wheels:
     name: Test JAX Wheels | Python ${{ inputs.python_version }}
     runs-on: ${{ inputs.test_runs_on }}
+    timeout-minutes: 120
 
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
@@ -156,27 +157,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: jax
           repository: ROCm/jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python_version }}
           check-latest: true
@@ -252,12 +253,14 @@ jobs:
           fi
 
       - name: Run JAX tests
+        timeout-minutes: 60
         env:
           # Avoid large upfront GPU memory reservation.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
 
-          # Set XLA allocator.
-          XLA_PYTHON_CLIENT_ALLOCATOR: platform
+          # Set XLA allocator. JAX 0.10.2 uses the default allocator; all
+          # other releases keep the platform allocator.
+          XLA_PYTHON_CLIENT_ALLOCATOR: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && 'default' || 'platform' }}
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
