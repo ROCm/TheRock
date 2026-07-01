@@ -102,10 +102,22 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
 endif(THEROCK_ENABLE_CORE_AMDSMI)
 
 
-if(THEROCK_ENABLE_CORE_RUNTIME)
+set(_therock_enable_hsa_runtime "${THEROCK_ENABLE_CORE_RUNTIME}")
+if(WIN32)
+  set(_therock_enable_hsa_runtime OFF)
+  if(THEROCK_ENABLE_CORE_RUNTIME AND THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)
+    set(_therock_enable_hsa_runtime ON)
+  endif()
+endif()
+
+if(_therock_enable_hsa_runtime)
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
+  set(_rocr_optional_deps)
+  if(NOT WIN32)
+    list(APPEND _rocr_optional_deps rocprofiler-register)
+  endif()
 
   therock_cmake_subproject_declare(ROCR-Runtime
     USE_DIST_AMDGPU_TARGETS
@@ -120,10 +132,12 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       amd-llvm
       therock-simde
     RUNTIME_DEPS
-      rocprofiler-register
+      ${_rocr_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_NUMACTL}
+      ${THEROCK_BUNDLED_ZLIB}
+      ${THEROCK_BUNDLED_ZSTD}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
@@ -223,7 +237,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       ${_core_runtime_subproject_deps}
   )
 
-endif(THEROCK_ENABLE_CORE_RUNTIME)
+endif()
 
 if(THEROCK_ENABLE_HIP_RUNTIME)
   ##############################################################################
@@ -251,8 +265,12 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   else()
     # Non-Windows CLR options.
     list(APPEND HIP_CLR_RUNTIME_DEPS
-      rocminfo  # Various things expect to be able to find the rocminfo tools
       rocprofiler-register
+    )
+  endif()
+  if(_therock_enable_hsa_runtime)
+    list(APPEND HIP_CLR_RUNTIME_DEPS
+      rocminfo  # Various things expect to be able to find the rocminfo tools
       ROCR-Runtime
     )
   endif()
@@ -456,12 +474,16 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   else()
     # Non-Windows CLR options.
     list(APPEND OCL_CLR_RUNTIME_DEPS
-      rocminfo  # Various things expect to be able to find the rocminfo tools
       rocprofiler-register
-      ROCR-Runtime
     )
     list(APPEND OCL_CLR_CMAKE_ARGS
       "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+    )
+  endif()
+  if(_therock_enable_hsa_runtime)
+    list(APPEND OCL_CLR_RUNTIME_DEPS
+      rocminfo  # Various things expect to be able to find the rocminfo tools
+      ROCR-Runtime
     )
   endif()
 
@@ -579,7 +601,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
   list(APPEND _hip_tests_subproject_names hip-tests)
 endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
 
-if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
   # rocrtst may optionally build against amdsmi when available (Linux).
   set(_rocrtst_build_deps
     amd-llvm
@@ -631,4 +653,4 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
     SUBPROJECT_DEPS
       rocrtst
   )
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
