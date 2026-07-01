@@ -139,6 +139,12 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
         f"-DCMAKE_CXX_COMPILER={clangxx.as_posix()}",
         f"-DCMAKE_HIP_COMPILER={clangxx.as_posix()}",
         f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
+        # The packaged hipthreads.lib is built Release (dynamic CRT, msvcrt,
+        # _ITERATOR_DEBUG_LEVEL=0). Pin the examples to Release too: without an
+        # explicit build type the Windows/Ninja default links the debug CRT
+        # (msvcrtd, _ITERATOR_DEBUG_LEVEL=2) and lld-link /failifmismatch aborts.
+        # Matches the documented per-example Windows build command.
+        "-DCMAKE_BUILD_TYPE=Release",
     ]
     if IS_WINDOWS:
         # clang needs the MSVC resource compiler for the CXX language on Windows.
