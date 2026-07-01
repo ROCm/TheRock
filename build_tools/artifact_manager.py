@@ -69,6 +69,7 @@ from _therock_utils.artifact_backend import (
     create_backend_from_env,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
@@ -583,15 +584,12 @@ def _read_sha256sum_value(hash_path: Path) -> str:
     return content.split()[0]
 
 
-def _artifact_sha256(source_path: Path) -> str:
-    return _read_sha256sum_value(_hash_file_path(source_path))
-
-
 def compress_artifact(request: CompressRequest) -> Optional[Path]:
     """Compress a single artifact directory using fileset_tool.py artifact-archive."""
     try:
         log(f"  ++ Compressing {request.source_dir.name}")
         request.archive_path.parent.mkdir(parents=True, exist_ok=True)
+        hash_path = _hash_file_path(request.archive_path)
 
         # Use fileset_tool.py artifact-archive for proper archive creation
         import subprocess
@@ -613,7 +611,7 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
         cmd.extend(
             [
                 "--hash-file",
-                str(_hash_file_path(request.archive_path)),
+                str(hash_path),
                 str(request.source_dir),
             ]
         )
@@ -624,7 +622,7 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
                 f"fileset_tool.py artifact-archive failed (returncode={result.returncode}): {result.stderr}"
             )
 
-        sha256 = _artifact_sha256(request.archive_path)
+        sha256 = _read_sha256sum_value(hash_path)
         file_count_and_size = _directory_file_count_and_size_sum(request.source_dir)
         if file_count_and_size is None:
             file_count = "unknown"
@@ -653,25 +651,32 @@ def upload_artifact(request: UploadRequest) -> bool:
     for attempt in range(MAX_RETRIES):
         try:
             # Upload the artifact itself.
-            sha256 = _artifact_sha256(request.source_path)
+            sha_path = _hash_file_path(request.source_path)
+            sha256 = calculate_hash(request.source_path, "sha256").hexdigest()
             compressed_size = request.source_path.stat().st_size
             log(
                 f"  ++ Uploading {request.artifact_key} "
-                f"(sha256={sha256}, "
-                f"compressed_size={_format_bytes(compressed_size)})"
+                f"(compressed_size={_format_bytes(compressed_size)}, "
+                f"sha256={sha256})"
             )
             request.backend.upload_artifact(request.source_path, request.artifact_key)
 
             # Upload the artifact's sha256sum file.
-            sha_path = _hash_file_path(request.source_path)
-            log(
-                f"  ++ Uploading {request.artifact_key}.sha256sum "
-                f"(artifact_sha256={sha256}, "
-                f"size={_format_bytes(sha_path.stat().st_size)})"
-            )
-            request.backend.upload_artifact(
-                sha_path, f"{request.artifact_key}.sha256sum"
-            )
+            if sha_path.exists():
+                sha256sum_sha256 = _read_sha256sum_value(sha_path)
+                if sha256sum_sha256 != sha256:
+                    log(
+                        f"  !! WARNING: sha256 mismatch for {request.artifact_key}: "
+                        f"computed_sha256={sha256}, sha256sum_sha256={sha256sum_sha256}"
+                    )
+                log(
+                    f"  ++ Uploading {request.artifact_key}.sha256sum "
+                    f"(artifact_sha256={sha256sum_sha256}, "
+                    f"size={_format_bytes(sha_path.stat().st_size)})"
+                )
+                request.backend.upload_artifact(
+                    sha_path, f"{request.artifact_key}.sha256sum"
+                )
 
             return True
         except Exception as e:
