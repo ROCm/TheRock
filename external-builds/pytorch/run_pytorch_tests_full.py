@@ -164,6 +164,41 @@ INDUCTOR_UNIT_TESTS = [
 ]
 
 
+def _register_rocm_libs_with_ldconfig() -> None:
+    """Register TheRock's wheel-shipped ROCm lib dirs with the dynamic linker.
+
+    TheRock installs ROCm under <site-packages>/_rocm_sdk_core/lib (plus a nested
+    rocm_sysdeps/lib for bundled system deps). Those dirs are not on the default
+    loader search path, so child processes started with a clean environment (e.g.
+    torch_shm_manager) and standalone C++/JIT link steps fail to find libraries
+    such as librocprofiler-sdk.so.1 / libamdhip64.so.7. Writing an ld.so.conf.d
+    entry + running ldconfig makes them resolvable system-wide, without relying on
+    LD_LIBRARY_PATH being inherited.
+
+    Best-effort: silently returns if the SDK dir is absent or ldconfig/write fails
+    (e.g. non-root); the tests that need it will just remain in their prior state.
+    """
+    try:
+        import sysconfig
+
+        candidates = []
+        site = sysconfig.get_paths().get("purelib", "")
+        for pkg in ("_rocm_sdk_core", "_rocm_sdk_devel"):
+            base = Path(site) / pkg / "lib"
+            if base.is_dir():
+                candidates.append(str(base))
+                sysdeps = base / "rocm_sysdeps" / "lib"
+                if sysdeps.is_dir():
+                    candidates.append(str(sysdeps))
+        if not candidates:
+            return
+        conf = Path("/etc/ld.so.conf.d/therock-rocm-sdk.conf")
+        conf.write_text("\n".join(candidates) + "\n")
+        subprocess.run(["ldconfig"], check=False)
+    except Exception as exc:  # noqa: BLE001 - best-effort, never fail setup
+        print(f"[WARNING] could not register ROCm libs with ldconfig: {exc}")
+
+
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     os.environ.setdefault("CI", "1")
     build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
