@@ -42,7 +42,9 @@ WINDOWS_CONSOLE_SCRIPTS = [
 ]
 if (
     platform.system() == "Windows"
-    and (THIS_DIR / "platform" / platform_package_name / "bin" / "rocminfo.exe").exists()
+    and (
+        THIS_DIR / "platform" / platform_package_name / "bin" / "rocminfo.exe"
+    ).exists()
 ):
     WINDOWS_CONSOLE_SCRIPTS.append("rocminfo=rocm_sdk_core._cli:rocm_info")
 
