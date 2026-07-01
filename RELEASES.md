@@ -37,6 +37,7 @@ Table of contents:
     - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
   - [Installing multi-arch native packages](#installing-multi-arch-native-packages)
     - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
+      - [Using ROCm from WSL](#using-rocm-from-wsl)
     <!-- TODO: native Windows packages -->
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
 - [Verifying your installation](#verifying-your-installation)
@@ -88,7 +89,7 @@ Key differences from
 
 **Package availability:**
 
-| Package type            | Linux        | Windows                                                           |
+| Package type            | Linux/WSL    | Windows                                                           |
 | ----------------------- | ------------ | ----------------------------------------------------------------- |
 | ROCm Python packages    | ✅ Available | ✅ Available                                                      |
 | PyTorch Python packages | ✅ Available | ✅ Available                                                      |
