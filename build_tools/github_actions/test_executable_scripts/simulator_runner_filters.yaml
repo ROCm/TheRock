@@ -218,6 +218,12 @@ rocrand:
     - "*Large*"
     # rocrand basic create/destroy: a known-slow case from test_rocrand.py.
     - "*basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/10*"
+    # These two poisson/3 cases (lambda=100) never complete under the simulator
+    # and are the exact cases running when test_rocrand_kernel_philox4x32_10 and
+    # test_rocrand_kernel_xorwow each hit the 600s ctest cap (***Timeout),
+    # blowing the 60-min step budget. Every other poisson/3 generator completes.
+    - "*kernel_philox4x32_10_poisson*rocrand_poisson/3"
+    - "*kernel_xorwow_poisson*rocrand_poisson/3"
 
 # Placeholder for the PR-3 hipRAND integration. The hipRAND ctest suite is
 # small enough that the basic preset reuses everything; presets are kept
