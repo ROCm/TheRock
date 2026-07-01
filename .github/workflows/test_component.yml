@@ -186,6 +186,7 @@ jobs:
           if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
             export OPENBLAS_NUM_THREADS="${KUBE_CPU_REQUEST%.*}"
             export OMP_NUM_THREADS="${KUBE_CPU_REQUEST%.*}"
+            echo "Thread limits set from KUBE_CPU_REQUEST=${KUBE_CPU_REQUEST}: OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS}, OMP_NUM_THREADS=${OMP_NUM_THREADS}"
           fi
           ${{ fromJSON(inputs.component).test_script }}
 
