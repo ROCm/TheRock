@@ -588,8 +588,19 @@ _VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
 
 
 def _has_test_labels(ci_inputs: CIInputs) -> bool:
-    """Check whether any test labels were specified (workflow_dispatch or PR)."""
-    if ci_inputs.linux_test_labels or ci_inputs.windows_test_labels:
+    """Check whether any test labels were specified (workflow_dispatch or PR).
+
+    Note: test_filter: labels are not test labels - they control test_type,
+    not which tests to run.
+    """
+    # Filter out test_filter: labels - those control test_type, not test selection
+    linux_tests = [
+        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
+    ]
+    windows_tests = [
+        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
+    ]
+    if linux_tests or windows_tests:
         return True
     return any(label.startswith("test:") for label in ci_inputs.pr_labels)
 
@@ -612,10 +623,16 @@ def _determine_test_type(
 
     # Check in priority order - highest priority returns early.
 
-    # Priority 1: test_filter: PR label is an explicit manual override.
+    # Priority 1: test_filter: label is an explicit manual override.
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
-    for label in ci_inputs.pr_labels:
+    # Check both PR labels and workflow_dispatch test labels.
+    all_labels = (
+        ci_inputs.pr_labels
+        + ci_inputs.linux_test_labels
+        + ci_inputs.windows_test_labels
+    )
+    for label in all_labels:
         if not label.startswith("test_filter:"):
             continue
         filter_type = label.split(":")[1]
