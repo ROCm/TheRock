@@ -629,7 +629,7 @@ test_matrix = {
         "additional_requirements_files": [
             "share/rocprofiler-systems/tests/requirements.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
