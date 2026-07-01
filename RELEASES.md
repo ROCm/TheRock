@@ -474,16 +474,16 @@ Multi-arch native packages use a simplified package model compared to the
 > - **RPM packages**: https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
 >
 > Look for directories in the format `YYYYMMDD-<action-run-id>`
-> (e.g., `20260501-25200531110`) and use the latest in the commands below.
+> (e.g., `20260701-28484694006`) and use the latest in the commands below.
 
 ##### Installing on Debian-based systems (Ubuntu, Debian, etc.)
 
 ```bash
 # Step 1: Find the latest release from
 #         https://rocm.nightlies.amd.com/packages-multi-arch/deb/
-#         Look for directories like "20260501-25200531110"
+#         Look for directories like "20260701-28484694006"
 # Step 2: Set the variable below
-export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
+export RELEASE_ID=20260701-28484694006  # Replace with the latest date-runid
 
 # Step 3: Add repository and install
 sudo apt update
@@ -503,9 +503,9 @@ sudo apt install amdrocm-core-sdk
 ```bash
 # Step 1: Find the latest release from
 #         https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
-#         Look for directories like "20260501-25200531110"
+#         Look for directories like "20260701-28484694006"
 # Step 2: Set the variable below
-export RELEASE_ID=20260501-25200531110  # Replace with the latest date-runid
+export RELEASE_ID=20260701-28484694006  # Replace with the latest date-runid
 
 # Step 3: Add repository and install
 sudo dnf install -y ca-certificates
