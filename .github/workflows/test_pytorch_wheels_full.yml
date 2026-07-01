@@ -196,7 +196,12 @@ jobs:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       # SYS_PTRACE is required by PyTorch's test infra which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
-      options: --shm-size=10g
+      # 64g /dev/shm: the 8-rank FSDP HSDP 3D-mesh test
+      # (distributed/_composable/fsdp/test_fully_shard_training.py::
+      # TestFullyShardHSDP3DTraining::test_3d_mlp_with_nd_mesh) exhausts a 10g
+      # /dev/shm with RCCL shared-memory segments ("No space left on device") and
+      # fails; it passes at 64g. Matches upstream PyTorch's ROCm CI shm size.
+      options: --shm-size=64g
         --cap-add=SYS_PTRACE
         --group-add video
         --device /dev/kfd

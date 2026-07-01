@@ -164,6 +164,41 @@ INDUCTOR_UNIT_TESTS = [
 ]
 
 
+def _register_rocm_libs_with_ldconfig() -> None:
+    """Register TheRock's wheel-shipped ROCm lib dirs with the dynamic linker.
+
+    TheRock installs ROCm under <site-packages>/_rocm_sdk_core/lib (plus a nested
+    rocm_sysdeps/lib for bundled system deps). Those dirs are not on the default
+    loader search path, so child processes started with a clean environment (e.g.
+    torch_shm_manager) and standalone C++/JIT link steps fail to find libraries
+    such as librocprofiler-sdk.so.1 / libamdhip64.so.7. Writing an ld.so.conf.d
+    entry + running ldconfig makes them resolvable system-wide, without relying on
+    LD_LIBRARY_PATH being inherited.
+
+    Best-effort: silently returns if the SDK dir is absent or ldconfig/write fails
+    (e.g. non-root); the tests that need it will just remain in their prior state.
+    """
+    try:
+        import sysconfig
+
+        candidates = []
+        site = sysconfig.get_paths().get("purelib", "")
+        for pkg in ("_rocm_sdk_core", "_rocm_sdk_devel"):
+            base = Path(site) / pkg / "lib"
+            if base.is_dir():
+                candidates.append(str(base))
+                sysdeps = base / "rocm_sysdeps" / "lib"
+                if sysdeps.is_dir():
+                    candidates.append(str(sysdeps))
+        if not candidates:
+            return
+        conf = Path("/etc/ld.so.conf.d/therock-rocm-sdk.conf")
+        conf.write_text("\n".join(candidates) + "\n")
+        subprocess.run(["ldconfig"], check=False)
+    except Exception as exc:  # noqa: BLE001 - best-effort, never fail setup
+        print(f"[WARNING] could not register ROCm libs with ldconfig: {exc}")
+
+
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     os.environ.setdefault("CI", "1")
     build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
@@ -190,6 +225,29 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
     # distributed and more. Profiling is never used in this suite, so this is safe.
     # TODO: file a ROCm/rocprofiler-sdk issue and drop this once fixed upstream.
     os.environ.setdefault("HSA_TOOLS_DISABLE_REGISTER", "1")
+
+    # Match upstream PyTorch CI: .ci/pytorch/test.sh exports TORCH_SERIALIZATION_DEBUG=1
+    # for all CI runs. Without it, test_serialization.py::{TestSerialization,
+    # TestOldSerialization}::test_debug_set_in_ci fail (they assert the flag is set
+    # when IS_CI). TheRock CI didn't set it, so those two failed spuriously.
+    os.environ.setdefault("TORCH_SERIALIZATION_DEBUG", "1")
+
+    # Make TheRock's wheel-shipped ROCm libs resolvable for CHILD PROCESSES and for
+    # standalone C++/JIT links. TheRock ROCm installs under
+    # <site-packages>/_rocm_sdk_core/lib (+ .../lib/rocm_sysdeps/lib); that dir is
+    # only on this process's LD_LIBRARY_PATH, which does NOT reach subprocesses that
+    # start with a clean env. Two failures come from this:
+    #   - test_multiprocessing test_fs*: torch_shm_manager subprocess exits 127
+    #     ("librocprofiler-sdk.so.1 / libamdhip64.so.7: cannot open shared object file")
+    #   - test_utils TestStandaloneCPPJIT::test_load_standalone: ld fails with
+    #     "libaotriton_v2.so: undefined reference to hipModuleLoadDataEx@hip_4.2"
+    # Registering the ROCm lib dirs with ldconfig makes them resolvable system-wide.
+    # LIMITATION: the proper fix is to bake $ORIGIN-relative RPATH into the torch .so's
+    # at WHEEL BUILD time (see upstream pytorch/pytorch#188454, which does exactly this
+    # via patch_rocm_sysdeps_rpath + ldconfig). We cannot patch an already-built wheel
+    # from the test harness, so we register with ldconfig here as the test-side
+    # equivalent. Drop this once #188454 (or the RPATH bake) lands in the wheels.
+    _register_rocm_libs_with_ldconfig()
 
     if test_config:
         os.environ.setdefault("TEST_CONFIG", test_config)
