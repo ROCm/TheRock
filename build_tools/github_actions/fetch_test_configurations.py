@@ -410,7 +410,11 @@ test_matrix = {
     "rocrand-simulator": {
         "job_name": "rocrand-simulator",
         "fetch_artifact_args": "--rand --rocjitsu --tests",
-        "timeout_minutes": 60,
+        # The extended preset runs the 13 kernel binaries plus the
+        # _quick_suite/_standard_suite/_ffm-quick_suite variants under PDES,
+        # measured at ~120-160 min; 180 gives margin. 60 min was hit in run
+        # 28490994039.
+        "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('simulator_runner.py')} --component rocrand --filter-preset extended",
         "platform": ["linux"],
         "linux_cpu_runner": True,
