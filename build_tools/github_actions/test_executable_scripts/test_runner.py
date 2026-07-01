@@ -208,6 +208,10 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # RCCL runs its ctest entries in parallel across the available GPUs.
+    "rccl": {
+        "ctest_parallel": 8,
+    },
 }
 
 
