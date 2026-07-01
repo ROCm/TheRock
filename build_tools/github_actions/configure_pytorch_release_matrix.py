@@ -27,12 +27,8 @@ PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 #   pytorch_git_ref         – git branch/tag passed to the build job
 #   exclude_amdgpu_families – (optional) set[str] of family names to drop
 
+# adjusted for release/therock-7.14
 PYTORCH_REFS_LINUX: list[dict] = [
-    {
-        "pytorch_git_ref": "release/2.9",
-        # gfx125x not supported for PyTorch 2.9.
-        "exclude_amdgpu_families": {"gfx125x"},
-    },
     {
         "pytorch_git_ref": "release/2.10",
         # gfx125x not supported for PyTorch 2.10.
@@ -49,21 +45,14 @@ PYTORCH_REFS_LINUX: list[dict] = [
         # See https://github.com/ROCm/TheRock/issues/5833.
         "exclude_amdgpu_families": {"gfx125x"},
     },
-    {
-        "pytorch_git_ref": "nightly",
-        # gfx125x not yet upstreamed to pytorch/pytorch.
-        # See https://github.com/ROCm/TheRock/issues/5833.
-        "exclude_amdgpu_families": {"gfx125x"},
-    },
 ]
 
+# adjusted for release/therock-7.14
 # gfx125x is Linux-only; no exclusion needed for Windows.
 PYTORCH_REFS_WINDOWS: list[dict] = [
-    {"pytorch_git_ref": "release/2.9"},
     {"pytorch_git_ref": "release/2.10"},
     {"pytorch_git_ref": "release/2.11"},
     {"pytorch_git_ref": "release/2.12"},
-    {"pytorch_git_ref": "nightly"},
 ]
 
 
