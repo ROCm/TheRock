@@ -252,18 +252,6 @@ jobs:
               "jaxlib==${JAX_VERSION}"
           fi
 
-      # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid the pytest
-      # slowdown/hang tracked in ROCM-27290. Scoped via `if` so the vars are
-      # never defined for other JAX releases (no behavior change for them).
-      - name: Set ROCm runtime env for JAX 0.10.2 (ROCM-27290)
-        if: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' }}
-        run: |
-          {
-            echo "ROCPROFILER_QUEUE_INTERPOSITION=0"
-            echo "DEBUG_HIP_DYNAMIC_QUEUES=0"
-            echo "HSA_NO_SCRATCH_RECLAIM=1"
-          } >> "$GITHUB_ENV"
-
       - name: Run JAX tests
         timeout-minutes: 60
         env:
@@ -273,6 +261,12 @@ jobs:
           # Set XLA allocator. JAX 0.10.2 uses the default allocator; all
           # other releases keep the platform allocator.
           XLA_PYTHON_CLIENT_ALLOCATOR: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && 'default' || 'platform' }}
+
+          # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid a pytest
+          # slowdown/hang; other releases keep the runtime defaults.
+          ROCPROFILER_QUEUE_INTERPOSITION: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' || '' }}
+          DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' || '' }}
+          HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' || '' }}
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
