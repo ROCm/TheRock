@@ -162,6 +162,9 @@ def generate_pytorch_matrix_for_release_type(
             families = _filter_families(amdgpu_families, exclude)
             if not families:
                 continue
+            # These row keys are the contract with workflow files which use them
+            # via matrix.<key> expressions. Empty values are allowed when the
+            # workflow handles them explicitly, but undefined keys are not.
             row: dict[str, str] = {
                 "python_version": py,
                 "pytorch_git_ref": ref,
