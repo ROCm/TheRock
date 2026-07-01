@@ -62,6 +62,20 @@ skip_tests = {
             # the full shard. Kept because it fails in the real sharded CI run.
             # TODO: find the polluting test / narrow.
             "(TestNNDeviceTypeCUDA and test_module_to_empty_cuda_float32)",
+            # Run 28446166928 default shard 5/10:
+            # TestConvolutionNN::test_ConvTranspose2d_output_size_downsample_upsample
+            # hits the 900s pytest-timeout in F.conv2d() inside ConvTranspose2d forward.
+            # CPU-path hang; reproduced consistently across all retries (~30min total).
+            "(TestConvolutionNN and test_ConvTranspose2d_output_size_downsample_upsample)",
+        ],
+        "legacy_vmap": [
+            # Run 28545046175 default shard 6/10: TestVmapAPILegacy::
+            # test_fallback_masked_fill exceeds the 900s pytest-timeout on every
+            # attempt (1652s total across reruns in RC0 run 28546068730 as well).
+            # The vmap fallback path invokes the eager masked_fill op element-wise;
+            # hangs consistently on gfx942 across both rocm7.15.0a20260629 and
+            # rocm7.14.0rc0 wheels. True hang (not the rocprofiler crash pattern).
+            "(TestVmapAPILegacy and test_fallback_masked_fill)",
         ],
         "optim": [
             # Run 28411211813 default shard 4/10: TestOptimRenewedCUDA::
@@ -202,6 +216,21 @@ skip_tests = {
             # extension paths (`_v1`/`_v2`) while the test expects the base path.
             "(TestStandaloneCPPJIT and test_load_standalone)",
         ],
+        "matmul_cuda": [
+            # Run 28446166928 default shard 6/10:
+            # TestMatmulCudaCUDA::test_grouped_gemm_rocm_ck_flag_cuda asserts that the
+            # Composable Kernel (CK) grouped GEMM backend is available; it is not enabled
+            # in the TheRock wheel build. Genuine ROCm build-configuration gap.
+            "(TestMatmulCudaCUDA and test_grouped_gemm_rocm_ck_flag_cuda)",
+        ],
+        "reductions": [
+            # Run 28446166928 default shard 8/10:
+            # ROCm's quantile kernel has a lower element limit than CUDA's reference.
+            # RuntimeError: "quantile() input tensor is too large" at Sorting.cpp:289.
+            "(TestReductionsCUDA and test_quantile_large_input_cuda_float32)",
+            "(TestReductionsCUDA and test_quantile_large_input_cuda_float64)",
+            "(TestReductionsCUDA and test_quantile_size_limit_cuda)",
+        ],
         "multiprocessing": [
             # Run 27228539427 default shard 1/10:
             # torch_shm_manager cannot load librocprofiler-sdk.so.1 in CI, so
@@ -215,6 +244,10 @@ skip_tests = {
         "distributed": [
             # torch.linalg.eig has no non-MAGMA backend; MAGMA not linked in this build
             "test_linalg_ops",
+            # Run 28528513481 distributed shard 2/3:
+            # TestFileSystem::test_fsspec_without_fileno_support fails consistently.
+            # Root cause TBD; confirmed genuine on rocm7.14.0rc0 debug run.
+            "(TestFileSystem and test_fsspec_without_fileno_support)",
             # Child process exits with SIGABRT inside torchelastic launcher (test_run.py)
             "(ElasticLaunchTest and test_virtual_local_rank)",
             # Rock 2.13 Kineto/NCCL annotation metadata missing on recorded GPU kernels
