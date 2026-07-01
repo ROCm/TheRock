@@ -45,6 +45,15 @@ SUBMODULE_CONFIG = {
         "updater": "ci-env",
         "token_key": "libraries",
     },
+    "debug-tools/rocgdb/source": {
+        "repo": "ROCm/rocgdb",
+        "files": [],
+        "updater": "submodule-only",
+        "token_key": "rocgdb",
+        "bump_branch": "bump-rocgdb",
+        "bump_label": "autobump:rocgdb",
+        "branch": "amd-staging-rocgdb-16",
+    },
 }
 
 
@@ -92,9 +101,12 @@ def gh_api(
     return response.json()
 
 
-def latest_commit(repo: str, token: str) -> str:
-    """Return the SHA of the latest commit on the default branch of repo."""
-    data = gh_api(token, f"repos/{repo}/commits")
+def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
+    """Return the SHA of the latest commit on the given branch, or the default branch."""
+    url = f"repos/{repo}/commits"
+    if branch:
+        url += f"?sha={branch}"
+    data = gh_api(token, url)
     return data[0]["sha"]
 
 
@@ -246,6 +258,109 @@ def _git_commit(title: str) -> None:
     )
 
 
+def find_open_bump_pr(token: str, label: str) -> dict | None:
+    """Return the first open PR with the given label, or None."""
+    prs = gh_api(token, f"repos/{THEROCK_REPO}/pulls?state=open&per_page=100")
+    for pr in prs:
+        if any(l["name"] == label for l in pr.get("labels", [])):
+            return pr
+    return None
+
+
+def _update_existing_bump_pr(
+    token: str, existing_pr: dict, title: str, body: str
+) -> None:
+    """Force-push a new commit onto an existing bump PR's branch and retitle it."""
+    branch_name = existing_pr["head"]["ref"]
+    print(
+        f"[INFO] Updating existing bump PR #{existing_pr['number']} on branch {branch_name}"
+    )
+    run(["git", "checkout", "-b", branch_name])
+    _git_commit(title)
+    run(["git", "push", "--force", "origin", branch_name])
+    gh_api(
+        token,
+        f"repos/{THEROCK_REPO}/pulls/{existing_pr['number']}",
+        method="PATCH",
+        data={"title": title, "body": body},
+    )
+
+
+def _create_new_bump_pr(
+    token: str, title: str, body: str, branch_name: str, label: str
+) -> None:
+    """Push a new branch and open a fresh bump PR."""
+    print(f"[INFO] Creating new bump PR on branch {branch_name}")
+    run(["git", "checkout", "-b", branch_name])
+    _git_commit(title)
+    run(["git", "push", "origin", branch_name])
+    pr = gh_api(
+        token,
+        f"repos/{THEROCK_REPO}/pulls",
+        method="POST",
+        data={
+            "title": title,
+            "head": branch_name,
+            "base": THEROCK_MAIN_BRANCH,
+            "body": body,
+        },
+    )
+    try:
+        gh_api(
+            token,
+            f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
+            method="POST",
+            data={"labels": [label, CI_LABEL]},
+        )
+    except RuntimeError as e:
+        print(f"[WARN] Failed to apply labels to PR #{pr['number']}: {e}")
+    print(f"[INFO] Created bump PR #{pr['number']}")
+
+
+def create_or_update_bump_pr(submodule: str, token: str) -> None:
+    """Open a bump PR for the given submodule, or update the existing one in-place."""
+    config = SUBMODULE_CONFIG[submodule]
+    repo = config["repo"]
+    bump_branch = config["bump_branch"]
+    bump_label = config["bump_label"]
+
+    branch = config.get("branch")
+    original_cwd = os.getcwd()
+    latest = latest_commit(repo, token, branch)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        clone_dir = os.path.join(tmpdir, "TheRock")
+        print(f"[INFO] Cloning TheRock into {clone_dir}")
+        run(
+            ["git", "clone", "--depth", "1", _clone_url(THEROCK_REPO, token), clone_dir]
+        )
+        os.chdir(clone_dir)
+
+        run(["git", "submodule", "update", "--init", "--depth", "1", submodule])
+        current_sha = get_submodule_sha("HEAD", submodule)
+
+        if current_sha == latest:
+            print(f"[INFO] {submodule} already at latest ({latest[:7]}), nothing to do")
+            os.chdir(original_cwd)
+            return
+
+        existing_pr = find_open_bump_pr(token, bump_label)
+
+        # Fetch and check out the new SHA in the submodule
+        run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
+        run(["git", "-C", submodule, "checkout", latest])
+        run(["git", "add", submodule])
+
+        title = f"Bump {submodule} from {current_sha[:7]} to {latest[:7]}"
+        body = generate_pr_body(repo, current_sha, latest)
+
+        if existing_pr:
+            _update_existing_bump_pr(token, existing_pr, title, body)
+        else:
+            _create_new_bump_pr(token, title, body, bump_branch, bump_label)
+
+        os.chdir(original_cwd)
+
+
 def create_therock_bump(submodule: str, token: str) -> None:
     """Create a bump PR for the given submodule in TheRock."""
     config = SUBMODULE_CONFIG[submodule]
@@ -320,6 +435,7 @@ def handle_schedule(tokens: dict[str, str]) -> None:
     """Create bump PRs for both submodules."""
     create_therock_bump("rocm-systems", tokens["systems"])
     create_therock_bump("rocm-libraries", tokens["libraries"])
+    create_or_update_bump_pr("debug-tools/rocgdb/source", tokens["rocgdb"])
 
 
 def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
@@ -338,6 +454,12 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
     old_sha = get_submodule_sha(before, changed)
 
     print(f"[INFO] Detected {changed} change: {old_sha[:7]} -> {after[:7]}")
+
+    # submodule-only entries have no back-ref files to update in the upstream
+    # repo; their bumps are handled exclusively by the schedule path.
+    if config.get("updater") == "submodule-only":
+        print(f"[INFO] {changed} uses submodule-only bumping, skipping push handler")
+        return
 
     close_stale_prs(changed, old_sha, token)
 
@@ -388,6 +510,7 @@ def main() -> None:
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
+    parser.add_argument("--rocgdb_token", required=True)
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
@@ -396,6 +519,7 @@ def main() -> None:
     tokens = {
         "systems": args.systems_token,
         "libraries": args.libraries_token,
+        "rocgdb": args.rocgdb_token,
     }
 
     if args.event_type == "schedule":
