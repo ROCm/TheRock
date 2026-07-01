@@ -100,6 +100,32 @@ rocrand:
         - "rocrand_basic_tests/rocrand_basic_tests.rocrand_initialize_generator_test/11"
       ctest_regex: "^test_rocrand_basic$"
       min_gtests: 17
+    # Tier above `smoke`. Broadens scope from the single test_rocrand_basic
+    # binary to also cover the 13 test_rocrand_kernel_* binaries - the RNG
+    # device kernels that rocjitsu exists to simulate (philox, xorwow, mrg,
+    # lfsr113, mtgp32, sobol32/64, scrambled_sobol32/64, and the four threefry
+    # variants). Each kernel binary is small: ~5-7 plain launches over 8192
+    # elements plus 2 TEST_P poisson/discrete families over 6 lambdas.
+    #
+    # ctest_regex deliberately EXCLUDES test_rocrand_cpp_basic (hangs >57 min
+    # under the simulator, see Rocjitsu_003.txt) and test_rocrand_hipgraphs
+    # (hipgraphs are not modeled by the interposer). The generate*/host/
+    # cpp_wrapper binaries are deferred to a later tier until their per-binary
+    # timing under PDES is known.
+    #
+    # allow: ["*"] runs every (non-skipped) case in each in-scope binary, which
+    # keeps Guard A happy (no in-scope binary can run zero gtests) without
+    # hand-maintaining per-binary patterns; the component skip: list below still
+    # applies and gtest drops DISABLED_ cases by default. Estimated ~10-20 min
+    # vs the 60-min step budget, and the 600s per-test cap bounds any outlier.
+    # min_gtests: 50 is an intentionally loose first-measurement floor (well
+    # above a basic-only run of ~42); tighten it to the observed gtests_ran
+    # once this tier is stably green.
+    extended:
+      allow:
+        - "*"
+      ctest_regex: "^test_rocrand_(basic|kernel_.*)$"
+      min_gtests: 50
     # Mirror of QUICK_TESTS in test_rocrand.py. Promoted in PR-2 once `basic`
     # is stably green for a few runs. ctest_regex left unset (defaults to ".*")
     # so all 52 rocRAND binaries run; the per-binary filter then selects only
