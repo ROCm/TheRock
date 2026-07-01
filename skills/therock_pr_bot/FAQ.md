@@ -54,31 +54,8 @@ ______________________________________________________________________
 ## 📝 PR Title
 
 **What does it check?**
-The PR title must follow **Conventional Commits** style so the changelog and release notes can be generated automatically.
 
 > **Note:** In the results table, the title and description checks are reported together as a single **PR Title/Description** row. Any title *or* description failure shows up there.
-
-**Required format**
-
-```
-type(optional-scope): short description
-```
-
-**Allowed types**
-
-| Type       | When to use                              |
-| ---------- | ---------------------------------------- |
-| `feat`     | A new feature                            |
-| `fix`      | A bug fix                                |
-| `docs`     | Documentation only changes               |
-| `style`    | Formatting, whitespace — no logic change |
-| `refactor` | Code restructure — no feature or fix     |
-| `perf`     | Performance improvement                  |
-| `test`     | Adding or fixing tests                   |
-| `build`    | Build system or dependency changes       |
-| `ci`       | CI / workflow changes                    |
-| `chore`    | Maintenance tasks                        |
-| `revert`   | Reverting a previous commit              |
 
 **Length rules**
 
@@ -91,8 +68,8 @@ type(optional-scope): short description
 Edit the PR title on GitHub (top of the PR page → pencil icon) to match the format, e.g.:
 
 ```
-feat(auth): add token refresh support
-fix(ci): correct codeql workflow trigger
+Add token refresh support
+Correct codeql workflow trigger
 ```
 
 ______________________________________________________________________
