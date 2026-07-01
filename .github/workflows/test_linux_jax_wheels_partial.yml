@@ -128,7 +128,7 @@ permissions:
 
 jobs:
   test_jax_wheels:
-    name: Test JAX Wheels | Python ${{ inputs.python_version }}
+    name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
 
