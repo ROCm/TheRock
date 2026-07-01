@@ -183,8 +183,10 @@ def read_triton_windows_pin() -> str:
         THEROCK_DIR
         / "external-builds"
         / "pytorch"
+        / ".ci"
+        / "docker"
         / "ci_commit_pins"
-        / "triton-windows.txt"
+        / "triton_windows.txt"
     )
     if not pin_file.is_file():
         raise FileNotFoundError(f"Windows Triton pin file does not exist: {pin_file}")
@@ -206,9 +208,11 @@ def _resolve_triton(
 
     The triton base version lives in pytorch's ``.ci/docker/triton_version.txt``.
     On Linux the commit comes from ``ci_commit_pins/triton.txt``.
+    On Windows the commit comes from ``ci_commit_pins/triton_windows.txt``.
     See:
     https://github.com/pytorch/pytorch/blob/main/.ci/docker/triton_version.txt
     https://github.com/pytorch/pytorch/blob/main/.ci/docker/ci_commit_pins/triton.txt
+    https://github.com/pytorch/pytorch/blob/main/.ci/docker/ci_commit_pins/triton_windows.txt
     """
     is_windows = platform == "windows"
 
@@ -264,16 +268,8 @@ def default_projects_for_pytorch_ref(platform: str, pytorch_ref: str) -> list[st
     """Return default projects for a platform and PyTorch ref."""
     projects = default_projects_for_platform(platform)
 
-    if False:
-        # TODO: Flip this once Windows Triton nightly builds are ready by
-        # default. Release branches still need a shared PyTorch-hosted pin
-        # format.
-        if (
-            platform == "windows"
-            and pytorch_ref == "nightly"
-            and "triton" not in projects
-        ):
-            projects.append("triton")
+    if platform == "windows" and pytorch_ref == "nightly" and "triton" not in projects:
+        projects.append("triton")
     return projects
 
 

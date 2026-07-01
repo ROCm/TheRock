@@ -126,6 +126,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "rocm_sdk_libraries",
     # ---- triton ----
     "triton",
+    "triton_windows",
     "pytorch_triton_rocm",
     # ---- triton additional packages ----
     "Arpeggio",
@@ -189,7 +190,6 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "torchtune",
     "torchvision",
     "torchvision_extra_decoders",
-    "triton",
     "tqdm",
     "typing_extensions",
     "typing_inspect",
