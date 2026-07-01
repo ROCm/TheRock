@@ -5,13 +5,11 @@ external builds like PyTorch and JAX. We produce build artifacts as part of our
 Continuous Integration (CI) build/test workflows as well as release artifacts as
 part of Continuous Delivery (CD) nightly releases.
 
-<!-- TODO: mention other release channels, link to release notes, etc. -->
-
-<!--       stable: https://repo.amd.com/rocm/ -->
-
-<!--       https://rocm.docs.amd.com/en/7.12.0-preview/index.html -->
-
-<!--       https://rocm.docs.amd.com/en/7.13.0-preview/index.html -->
+<!-- TODO: mention other release channels, link to release notes, etc.
+       stable: https://repo.amd.com/rocm/
+       https://rocm.docs.amd.com/en/7.12.0-preview/index.html
+       https://rocm.docs.amd.com/en/7.13.0-preview/index.html
+-->
 
 For the development status of GPU architecture support in TheRock, please see
 [SUPPORTED_GPUS.md](./SUPPORTED_GPUS.md) which tracks release readiness for each
@@ -313,7 +311,42 @@ Install PyTorch with ROCm support using the unified multi-arch index.
 Select your GPU target using the `[device-*]` extras from the
 [table above](#supported-python-device--install-extras):
 
-<!-- TODO: add version table here (2.9, 2.10, 2.11, 2.12, 2.13, 2.14) -->
+> [!NOTE]
+> By default, pip will install the latest stable versions of each package.
+>
+> - If you want to allow installing prerelease versions, use the `--pre`
+>
+> - If you want to install other versions, take note of the compatibility
+>   matrix:
+>
+>   | torch version | torchaudio version | torchvision version | apex version |
+>   | ------------- | ------------------ | ------------------- | ------------ |
+>   | 2.14          | 2.11               | 0.29                | ?            |
+>   | 2.13          | 2.11               | 0.28                | ?            |
+>   | 2.12          | 2.11               | 0.27                | ?            |
+>   | 2.11          | 2.11               | 0.26                | 1.11.0       |
+>   | 2.10          | 2.10               | 0.25                | 1.10.0       |
+>   | 2.9           | 2.9                | 0.24                | 1.9.0        |
+>
+>   For example, `torch` 2.11 and compatible wheels can be installed by specifying
+>
+>   ```
+>   torch==2.11 torchaudio==2.11 torchvision==0.26 apex==1.11.0
+>   ```
+>
+>   See also
+>
+>   - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+>   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
+>   - [torchvision installation - compatibility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+>   - [torchaudio installation - compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   - [apex installation - compatibility matrix](https://github.com/ROCm/apex/tree/master?tab=readme-ov-file#supported-versions)
+
+> [!WARNING]
+> The `torch` packages depend on `rocm[libraries]`, so the compatible ROCm packages
+> should be installed automatically for you and you do not need to explicitly install
+> ROCm first. If ROCm is already installed this may result in a downgrade if the
+> `torch` wheel to be installed requires a different version.
 
 ```bash
 # Single device (replace device-gfx942 with your GPU):
@@ -380,14 +413,15 @@ instructions in the AMD ROCm documentation.
 
 Install JAX with ROCm support using the unified multi-arch index.
 
-<!-- TODO: add version table here (0.9.1, 0.10.0, 0.10.2) -->
-
 > [!IMPORTANT]
-> Unlike PyTorch, the JAX wheels do **not** automatically install ROCm packages as a dependency.
-> You must install ROCm first.
+> Unlike PyTorch, the JAX wheels do **not** automatically install ROCm packages
+> as a dependency. You must install ROCm first by following
+> [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages).
+>
+> Always pin `jax`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt` to the same version.
 
 ```bash
-# Set the version (currently supported: 0.9.1 and 0.10.0)
+# Set the version (currently supported: 0.9.1, 0.10.0, and 0.10.2)
 JAX_VERSION=0.10.0
 
 # 1. Install ROCm (replace device-gfx942 with your GPU)
@@ -403,18 +437,6 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 pip install "jax==${JAX_VERSION}"
 ```
 
-> [!NOTE]
-> Always pin `jax`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt` to the same version.
-> Currently supported versions: 0.9.1 and 0.10.0.
-
-> [!TIP]
-> For multiple devices (e.g. Dockerfile supporting MI300X + MI355X):
->
-> ```bash
-> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
->    "rocm[libraries,device-gfx942,device-gfx950]"
-> ```
-
 After installing, verify JAX can see your GPU:
 
 ```python
@@ -426,14 +448,15 @@ print(jax.devices())
 
 ### Installing multi-arch native packages
 
+Native packages are installable via operating system package managers.
+
 #### Installing multi-arch native Linux packages
 
-In addition to Python wheels and tarballs, ROCm native Linux packages are
-published for Debian-based and RPM-based distributions via the
-multi-arch pipeline.
+ROCm native Linux packages are published for Debian-based and RPM-based
+distributions.
 
 > [!WARNING]
-> These builds are primarily intended for development and testing and are
+> Nightly builds are primarily intended for development and testing and are
 > currently **unsigned**.
 
 Multi-arch native packages use a simplified package model compared to the
