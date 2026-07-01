@@ -299,7 +299,6 @@ if(THEROCK_ENABLE_FFT)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-googletest
       therock-fftw3
       therock-fftw3f
@@ -335,7 +334,6 @@ if(THEROCK_ENABLE_FFT)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-googletest
       therock-fftw3
       therock-fftw3f
