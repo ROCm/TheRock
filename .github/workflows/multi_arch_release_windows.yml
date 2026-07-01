@@ -156,7 +156,7 @@ jobs:
   trigger_release_pytorch_wheels:
     needs: [build_artifacts, build_python_packages]
     name: Trigger Release PyTorch Wheels
-    if: ${{ inputs.build_pytorch != false }}
+    if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write

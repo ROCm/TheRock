@@ -75,6 +75,7 @@ def _jobs(
     prebuilt_stages: list[str] | None = None,
     baseline_run_id: str = "",
     build_pytorch: bool = True,
+    build_jax: bool = False,
 ) -> cm.JobDecisions:
     """Construct default job decisions for tests that exercise later stages."""
     prebuilt_stages = prebuilt_stages or []
@@ -94,6 +95,9 @@ def _jobs(
         ),
         test_pytorch=cm.JobGroupDecision(
             action=cm.JobAction.RUN if build_pytorch else cm.JobAction.SKIP
+        ),
+        build_jax=cm.JobGroupDecision(
+            action=cm.JobAction.RUN if build_jax else cm.JobAction.SKIP
         ),
     )
 
@@ -158,12 +162,18 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "WINDOWS_TEST_LABELS": "",
                 "PREBUILT_STAGES": "compiler-runtime,runtime-tests",
                 "BASELINE_RUN_ID": "12345",
+                "BUILD_PYTORCH": "false",
+                "BUILD_JAX": "true",
+                "PYTHON_VERSION": "3.12",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
         self.assertEqual(inputs.linux_test_labels, ["test:rocprim"])
         self.assertEqual(inputs.prebuilt_stages, "compiler-runtime,runtime-tests")
         self.assertEqual(inputs.baseline_run_id, "12345")
+        self.assertFalse(inputs.build_pytorch)
+        self.assertTrue(inputs.build_jax)
+        self.assertEqual(inputs.python_versions, ["3.12"])
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -332,6 +342,24 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_rocm_python.action, cm.JobAction.RUN)
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
+
+    def test_build_pytorch_input_skips_pytorch_jobs(self):
+        result = cm.decide_jobs(
+            self._inputs(build_pytorch=False),
+            git_context=cm.GitContext(),
+        )
+
+        self.assertEqual(result.build_pytorch.action, cm.JobAction.SKIP)
+        self.assertEqual(result.test_pytorch.action, cm.JobAction.SKIP)
+
+    def test_build_jax_input_runs_jax_job(self):
+        result = cm.decide_jobs(
+            self._inputs(build_jax=True),
+            git_context=cm.GitContext(),
+        )
+
+        self.assertEqual(result.build_jax.action, cm.JobAction.RUN)
 
     def test_default_test_type_is_quick(self):
         """Default test_type for PR/push with no special conditions."""
@@ -796,6 +824,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_suffix="",
             build_variant_cmake_preset="",
             build_pytorch=True,
+            build_jax=False,
             build_native_linux=True,
         )
         d = config.to_dict()
@@ -826,6 +855,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_suffix="",
             build_variant_cmake_preset="release",
             build_pytorch=True,
+            build_jax=False,
             build_native_linux=True,
         )
         # Present config → valid JSON
@@ -962,6 +992,142 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 }
             ],
         )
+
+    def test_build_config_includes_pytorch_build_matrix(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertEqual(
+            result.linux.pytorch_build_matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.10",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.11",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.12",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+            ],
+        )
+        self.assertEqual(
+            result.windows.pytorch_build_matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.10",
+                    "amdgpu_families": "gfx110X-all",
+                }
+            ],
+        )
+
+    def test_build_config_uses_requested_pytorch_python_versions(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                release_type="dev",
+                python_versions=["3.13"],
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertEqual(
+            {row["python_version"] for row in result.linux.pytorch_build_matrix},
+            {"3.13"},
+        )
+
+    def test_build_config_disables_pytorch_when_job_skipped(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_pytorch=False),
+        )
+
+        self.assertFalse(result.linux.build_pytorch)
+        self.assertEqual(result.linux.pytorch_build_matrix, [])
+
+    def test_build_config_disables_pytorch_when_matrix_is_empty(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        # If the pytorch matrix is empty for some reason (such as only
+        # trying to build one GPU target for a pytorch version where that
+        # GPU target is unsupported), the build_pytorch result should be false.
+        with patch(
+            "configure_multi_arch_ci.generate_pytorch_matrix_for_release_type",
+            return_value=[],
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(),
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(),
+            )
+
+        self.assertFalse(result.linux.build_pytorch)
+        self.assertEqual(result.linux.pytorch_build_matrix, [])
+
+    def test_build_config_includes_jax_build_matrix(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(python_versions=["3.12"]),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_jax=True),
+        )
+
+        self.assertTrue(result.linux.build_jax)
+        self.assertGreater(len(result.linux.jax_build_matrix), 1)
+        self.assertEqual(
+            {row["python_version"] for row in result.linux.jax_build_matrix},
+            {"3.12"},
+        )
+        self.assertFalse(result.windows.build_jax)
+        self.assertEqual(result.windows.jax_build_matrix, [])
+
+    def test_build_config_disables_jax_when_job_skipped(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_jax=False),
+        )
+
+        self.assertFalse(result.linux.build_jax)
+        self.assertEqual(result.linux.jax_build_matrix, [])
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -1153,6 +1319,7 @@ class TestFormatSummary(unittest.TestCase):
             build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
             build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
             test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
         result = format_summary(self._inputs(), outputs)
@@ -1261,32 +1428,36 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             f"Available fields: {sorted(python_fields)}",
         )
 
-    def test_linux_workflow_uses_all_fields(self):
-        """Linux workflow should reference every BuildConfig field."""
+    def test_linux_workflow_uses_all_ci_fields(self):
+        """Linux CI workflow should reference every BuildConfig field it consumes."""
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
+        # JAX builds are release-only for now, so CI workflows do not consume
+        # the JAX matrix fields even though setup reports them in summaries.
+        release_only_fields = {"build_jax", "jax_build_matrix"}
         self.assertEqual(
             yaml_fields,
-            python_fields,
+            python_fields - release_only_fields,
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
-            f"  In Python but not YAML: {python_fields - yaml_fields}",
+            f"  In Python but not YAML: {python_fields - yaml_fields - release_only_fields}",
         )
 
-    def test_windows_workflow_uses_all_fields(self):
-        """Windows workflow should reference every BuildConfig field."""
+    def test_windows_workflow_uses_all_ci_fields(self):
+        """Windows CI workflow should reference every BuildConfig field it consumes."""
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
-        # build_native_linux is Linux-only, not used in Windows workflow
-        linux_only_fields = {"build_native_linux"}
+        # build_native_linux is Linux-only. JAX builds are release-only and
+        # Linux-only for now, so Windows CI workflows do not consume them.
+        unused_fields = {"build_native_linux", "build_jax", "jax_build_matrix"}
         self.assertEqual(
             yaml_fields,
-            python_fields - linux_only_fields,
+            python_fields - unused_fields,
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
-            f"  In Python but not YAML: {python_fields - yaml_fields - linux_only_fields}",
+            f"  In Python but not YAML: {python_fields - yaml_fields - unused_fields}",
         )
 
 
@@ -1318,6 +1489,32 @@ class TestFamilyTestFilters(unittest.TestCase):
 
         self.assertIsNotNone(gfx90a_info)
         self.assertEqual(gfx90a_info["test-runs-on"], "")
+
+    def test_workflow_dispatch_allows_nightly_check_only_family(self):
+        """workflow_dispatch should allow testing nightly_check_only families."""
+        # gfx90a has nightly_check_only_for_family=True for linux
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_amdgpu_families=["gfx90a"],
+        )
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx90a in the linux build config
+        gfx90a_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx90a":
+                    gfx90a_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx90a_info)
+        # workflow_dispatch should have test-runs-on set (not empty)
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
 
 # ---------------------------------------------------------------------------
@@ -1361,28 +1558,27 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-1gpu-core42-ossci-rocm", label_names)
+        self.assertIn("linux-gfx942-1gpu-ccs-csp-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
         # Verify weights sum to ~1.0
         total_weight = sum(l["weight"] for l in labels)
         self.assertAlmostEqual(total_weight, 1.0, places=1)
 
-    def test_gfx94x_multi_gpu_has_dual_label_config(self):
-        """Verify gfx94x has the multi-gpu dual-label configuration."""
+    def test_gfx94x_multi_gpu_has_label_config(self):
+        """Verify gfx94x has the multi-gpu label configuration."""
         from amdgpu_family_matrix import get_all_families_for_trigger_types
 
         all_families = get_all_families_for_trigger_types(["presubmit"])
         gfx94x_linux = all_families["gfx94x"].get("linux", {})
 
-        # Verify we have 2 labels for 8-gpu
+        # Verify we have 1 label for 8-gpu
         labels = gfx94x_linux["test-runs-on-multi-gpu-labels"]
-        self.assertEqual(len(labels), 2)
+        self.assertEqual(len(labels), 1)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-8gpu-core42-ossci-rocm", label_names)
 
         # Verify weights sum to 1.0
         total_weight = sum(l["weight"] for l in labels)
@@ -1412,9 +1608,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
         self.assertIsNotNone(builds.linux)
         gfx94x_info = builds.linux.per_family_info[0]
-        # Should use the default test-runs-on label (core42)
+        # Should use the default test-runs-on label (ccs-csp)
         self.assertEqual(
-            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-core42-ossci-rocm"
+            gfx94x_info["test-runs-on"], "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
         )
 
     def test_families_without_multi_label_use_primary_only(self):

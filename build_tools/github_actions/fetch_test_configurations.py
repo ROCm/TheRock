@@ -620,7 +620,7 @@ test_matrix = {
         ],
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
-        "total_shards_dict": {"linux": 2},
+        "total_shards_dict": {"linux": 1},
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",

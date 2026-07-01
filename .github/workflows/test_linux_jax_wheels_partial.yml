@@ -121,7 +121,7 @@ on:
       test_runs_on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
-        default: "linux-gfx942-1gpu-core42-ossci-rocm"
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
 permissions:
   contents: read
   id-token: write
