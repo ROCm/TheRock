@@ -181,6 +181,11 @@ jobs:
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
+          # Set thread limits from KUBE_CPU_REQUEST (if available) to avoid CPU oversubscription
+          if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
+            export OPENBLAS_NUM_THREADS="${KUBE_CPU_REQUEST%.*}"
+            export OMP_NUM_THREADS="${KUBE_CPU_REQUEST%.*}"
+          fi
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction command

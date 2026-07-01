@@ -80,9 +80,6 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
     "-e ROCR_VISIBLE_DEVICES",
-    # Pass thread limit env vars from host to container (set per-runner to avoid oversubscription)
-    "-e OPENBLAS_NUM_THREADS",
-    "-e OMP_NUM_THREADS",
 ]
 
 
