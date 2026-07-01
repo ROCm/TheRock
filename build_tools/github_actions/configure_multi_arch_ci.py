@@ -561,8 +561,12 @@ def _has_test_labels(ci_inputs: CIInputs) -> bool:
     not which tests to run.
     """
     # Filter out test_filter: labels - those control test_type, not test selection
-    linux_tests = [l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")]
-    windows_tests = [l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")]
+    linux_tests = [
+        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
+    ]
+    windows_tests = [
+        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
+    ]
     if linux_tests or windows_tests:
         return True
     return any(label.startswith("test:") for label in ci_inputs.pr_labels)
