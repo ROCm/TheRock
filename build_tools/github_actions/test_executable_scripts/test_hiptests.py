@@ -152,6 +152,8 @@ def setup_env(env):
 
 
 def execute_tests(env):
+    # Allow for more time in ASAN mode to run the tests.
+    timeout = 1500 if is_asan() else 600
     cmd = [
         "ctest",
         "--tests-information",
@@ -160,7 +162,7 @@ def execute_tests(env):
         CATCH_TESTS_PATH,
         "--output-on-failure",
         "--timeout",
-        "1500"
+        f"{timeout}",
     ]
 
     # If quick tests are enabled, run only the smoke test subset
