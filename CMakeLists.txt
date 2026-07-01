@@ -264,8 +264,8 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # The HIP runtime for ROCm uses different implementations per platform today:
 #   * HIP on Linux uses the HSA runtime in ROCR-Runtime, used by CLR.
 #   * HIP on Windows uses the PAL runtime included directly as part of CLR.
-#     The ROCR-Runtime/rocminfo artifact can be enabled experimentally with
-#     THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME.
+#     The ROCR-Runtime/rocminfo payload in core-runtime can be enabled
+#     experimentally with THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME.
 # https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
 # Platform-specific dependencies are handled automatically by therock_add_feature().
 

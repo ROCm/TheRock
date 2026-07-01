@@ -114,9 +114,6 @@ class Artifact:
     disable_platforms: List[str] = field(
         default_factory=list
     )  # Platforms where disabled
-    disable_platforms_if_flags_not_set: Dict[str, str] = field(
-        default_factory=dict
-    )  # Platforms disabled unless the named build flag is set
     python_requires: List[str] = field(
         default_factory=list
     )  # pip install args (e.g., ["-r path/to/req.txt"])
@@ -210,16 +207,6 @@ class BuildTopology:
                     f"Artifact '{artifact_name}' python_requires must be a list, "
                     f"got {type(python_requires).__name__}"
                 )
-            disable_platforms_if_flags_not_set = artifact_data.get(
-                "disable_platforms_if_flags_not_set", {}
-            )
-            if disable_platforms_if_flags_not_set and not isinstance(
-                disable_platforms_if_flags_not_set, dict
-            ):
-                raise ValueError(
-                    f"Artifact '{artifact_name}' disable_platforms_if_flags_not_set "
-                    f"must be a table, got {type(disable_platforms_if_flags_not_set).__name__}"
-                )
             self.artifacts[artifact_name] = Artifact(
                 name=artifact_name,
                 artifact_group=artifact_data.get("artifact_group", ""),
@@ -229,7 +216,6 @@ class BuildTopology:
                 feature_name=artifact_data.get("feature_name"),
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
-                disable_platforms_if_flags_not_set=disable_platforms_if_flags_not_set,
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
             )
@@ -449,17 +435,6 @@ class BuildTopology:
                     errors.append(
                         f"Artifact '{artifact_name}' has invalid disable_platform '{platform}' "
                         f"(expected: {valid_platforms})"
-                    )
-            for platform, flag in artifact.disable_platforms_if_flags_not_set.items():
-                if platform not in valid_platforms:
-                    errors.append(
-                        f"Artifact '{artifact_name}' has invalid conditional disable_platform '{platform}' "
-                        f"(expected: {valid_platforms})"
-                    )
-                if not isinstance(flag, str) or not feature_pattern.match(flag):
-                    errors.append(
-                        f"Artifact '{artifact_name}' disable_platforms_if_flags_not_set "
-                        f"entry for '{platform}' should be UPPERCASE_WITH_UNDERSCORES"
                     )
 
         # Validate source set disable_platforms

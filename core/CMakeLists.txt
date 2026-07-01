@@ -102,12 +102,15 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
 endif(THEROCK_ENABLE_CORE_AMDSMI)
 
 
-set(_therock_enable_hsa_runtime ON)
+set(_therock_enable_hsa_runtime "${THEROCK_ENABLE_CORE_RUNTIME}")
 if(WIN32)
-  set(_therock_enable_hsa_runtime "${THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME}")
+  set(_therock_enable_hsa_runtime OFF)
+  if(THEROCK_ENABLE_CORE_RUNTIME AND THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)
+    set(_therock_enable_hsa_runtime ON)
+  endif()
 endif()
 
-if(THEROCK_ENABLE_CORE_RUNTIME AND _therock_enable_hsa_runtime)
+if(_therock_enable_hsa_runtime)
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -598,7 +601,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
   list(APPEND _hip_tests_subproject_names hip-tests)
 endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
 
-if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
   # rocrtst may optionally build against amdsmi when available (Linux).
   set(_rocrtst_build_deps
     amd-llvm
@@ -650,4 +653,4 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
     SUBPROJECT_DEPS
       rocrtst
   )
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)

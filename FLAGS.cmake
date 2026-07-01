@@ -48,7 +48,7 @@ therock_declare_flag(
 therock_declare_flag(
   NAME HSA_WINDOWS_SHARED_RUNTIME
   DEFAULT_VALUE OFF
-  DESCRIPTION "Build ROCR-Runtime and rocminfo in core-runtime on Windows"
+  DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
   ISSUE https://github.com/ROCm/rocm-systems/issues/7923
 )
 
