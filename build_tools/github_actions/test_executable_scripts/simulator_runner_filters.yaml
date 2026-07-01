@@ -116,15 +116,24 @@ rocrand:
     # allow: ["*"] runs every (non-skipped) case in each in-scope binary, which
     # keeps Guard A happy (no in-scope binary can run zero gtests) without
     # hand-maintaining per-binary patterns; the component skip: list below still
-    # applies and gtest drops DISABLED_ cases by default. Estimated ~10-20 min
-    # vs the 60-min step budget, and the 600s per-test cap bounds any outlier.
-    # min_gtests: 50 is an intentionally loose first-measurement floor (well
-    # above a basic-only run of ~42); tighten it to the observed gtests_ran
-    # once this tier is stably green.
+    # applies and gtest drops DISABLED_ cases by default. min_gtests: 50 is an
+    # intentionally loose first-measurement floor (well above a basic-only run of
+    # ~42); tighten it to the observed gtests_ran once this tier is stably green.
+    #
+    # ctest_regex enumerates the 13 base kernel binaries explicitly (plus
+    # test_rocrand_basic) with a trailing '$' so it deliberately EXCLUDES the
+    # test_rocrand_kernel_*_quick_suite / _standard_suite / _ffm-quick_suite
+    # ctest entries. Those suite variants carry their own CMake-baked
+    # GTEST_FILTER that OVERRIDES the runner's exported GTEST_FILTER, so the
+    # component skip: list below cannot reach them - in run 28503430843 the
+    # philox _quick_suite/_standard_suite re-ran the poisson hangs and blew the
+    # 180-min step wall (only 24/53 entries completed). They are also pure
+    # duplicates of the base binaries' coverage, so dropping them removes no
+    # unique codegen paths. A plain "kernel_.*" would re-include them.
     extended:
       allow:
         - "*"
-      ctest_regex: "^test_rocrand_(basic|kernel_.*)$"
+      ctest_regex: "^test_rocrand_(basic|kernel_(lfsr113|mrg|mtgp32|philox4x32_10|scrambled_sobol32|scrambled_sobol64|sobol32|sobol64|threefry2x32_20|threefry2x64_20|threefry4x32_20|threefry4x64_20|xorwow))$"
       min_gtests: 50
     # Mirror of QUICK_TESTS in test_rocrand.py. Promoted in PR-2 once `basic`
     # is stably green for a few runs. ctest_regex left unset (defaults to ".*")
@@ -218,12 +227,15 @@ rocrand:
     - "*Large*"
     # rocrand basic create/destroy: a known-slow case from test_rocrand.py.
     - "*basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/10*"
-    # These two poisson/3 cases (lambda=100) never complete under the simulator
-    # and are the exact cases running when test_rocrand_kernel_philox4x32_10 and
-    # test_rocrand_kernel_xorwow each hit the 600s ctest cap (***Timeout),
-    # blowing the 60-min step budget. Every other poisson/3 generator completes.
-    - "*kernel_philox4x32_10_poisson*rocrand_poisson/3"
-    - "*kernel_xorwow_poisson*rocrand_poisson/3"
+    # The philox4x32_10 and xorwow poisson sweeps hang under the simulator on
+    # the high-lambda cases. Excluding only poisson/3 (lambda=100) was
+    # insufficient: run 28503430843 showed the hang simply moved to poisson/4
+    # (lambda=1234.5), so both binaries still hit the 600s ctest cap (***Timeout).
+    # Exclude the whole poisson family for these two generators (the low-lambda
+    # cases fail on accuracy anyway; the high-lambda ones never complete). Other
+    # generators' poisson sweeps complete and stay in scope.
+    - "*kernel_philox4x32_10_poisson*"
+    - "*kernel_xorwow_poisson*"
 
 # Placeholder for the PR-3 hipRAND integration. The hipRAND ctest suite is
 # small enough that the basic preset reuses everything; presets are kept
