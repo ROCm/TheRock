@@ -1,0 +1,9 @@
+# rpp
+[components.lib."cv-libs/rpp/stage"]
+[components.dbg."cv-libs/rpp/stage"]
+[components.dev."cv-libs/rpp/stage"]
+[components.doc."cv-libs/rpp/stage"]
+[components.test."cv-libs/rpp/stage"]
+include = [
+  "share/rpp/**",
+]

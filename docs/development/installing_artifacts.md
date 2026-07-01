@@ -48,6 +48,7 @@ Choose one of these options to specify where to install from:
 | `--mirage`      | Flag | Include mirage artifacts (Linux only)              |
 | `--rocalution`  | Flag | Include rocALUTION artifacts                       |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
+| `--rpp`         | Flag | Include RPP artifacts                              |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
 > [!NOTE]

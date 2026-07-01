@@ -202,6 +202,7 @@ advisory and never post to GitHub/Jira without explicit human approval.
 base/           # rocm-systems (driver, runtime foundations)
 compiler/       # LLVM/Clang/LLD, device libraries
 core/           # HIP, CLR, ROCr
+cv-libs/        # RPP (computer vision)
 math-libs/      # rocBLAS, rocFFT, etc.
 media-libs/     # rocDecode, rocJPEG
 ml-libs/        # MIOpen, composable_kernel
