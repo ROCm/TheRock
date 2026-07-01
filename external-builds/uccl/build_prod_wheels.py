@@ -57,6 +57,41 @@ script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
 
+# Map rocm-sdk wheel family names (the trailing component of the package index
+# URL, e.g. "gfx94X-dcgpu") to the concrete --offload-arch list that hipcc /
+# clang++ actually accepts. UCCL's ep/setup.py reads PYTORCH_ROCM_ARCH and
+# passes each entry to --offload-arch=..., so the values here must be real
+# GPU arch IDs (gfx942, gfx950, ...), not family names.
+FAMILY_TO_DEFAULT_ARCH: dict[str, str] = {
+    "gfx94X-dcgpu": "gfx942",
+}
+
+
+def parse_family_from_index_url(index_url: str) -> str | None:
+    # Index URLs look like https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu
+    tail = index_url.rstrip("/").rsplit("/", 1)[-1]
+    return tail if tail.startswith("gfx") else None
+
+
+def resolve_rocm_arch(args: argparse.Namespace) -> str | None:
+    # Priority: explicit env override > --amdgpu-family flag > parsed from --index-url.
+    env_arch = os.environ.get("PYTORCH_ROCM_ARCH")
+    if env_arch:
+        return env_arch
+    family = args.amdgpu_family or parse_family_from_index_url(args.index_url)
+    if family is None:
+        return None
+    arch = FAMILY_TO_DEFAULT_ARCH.get(family)
+    if arch is None:
+        print(
+            f"WARNING: no PYTORCH_ROCM_ARCH mapping for family '{family}'. "
+            f"Falling back to ep/setup.py defaults; build may fail with "
+            f"'unsupported HIP gpu architecture'. Override with "
+            f"PYTORCH_ROCM_ARCH=<gfxNNN> or --amdgpu-family.",
+            file=sys.stderr,
+        )
+    return arch
+
 
 def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
@@ -103,6 +138,12 @@ def do_build(args: argparse.Namespace):
 
     # Build UCCL
     if uccl_dir:
+        build_env: dict[str, str] = {}
+        rocm_arch = resolve_rocm_arch(args)
+        if rocm_arch:
+            # build.sh forwards PYTORCH_ROCM_ARCH into the build container, and
+            # uccl's ep/setup.py reads it to drive --offload-arch.
+            build_env["PYTORCH_ROCM_ARCH"] = rocm_arch
         run_command(
             [
                 "./build.sh",
@@ -113,6 +154,7 @@ def do_build(args: argparse.Namespace):
                 args.image,
             ],
             cwd=uccl_dir,
+            env=build_env or None,
         )
 
         built_wheel = find_built_wheel(uccl_dir / "wheelhouse-therock", "uccl")
@@ -150,6 +192,17 @@ def main(argv: list[str]):
     )
     p.add_argument(
         "--index-url", required=True, help="Base URL of the Python Package Index."
+    )
+    p.add_argument(
+        "--amdgpu-family",
+        default=None,
+        help=(
+            "AMD GPU family name as used by the rocm-sdk wheels (e.g. "
+            "'gfx94X-dcgpu'). Defaults to the trailing path component of "
+            "--index-url. Maps to a concrete PYTORCH_ROCM_ARCH via "
+            "FAMILY_TO_DEFAULT_ARCH. Override directly via the "
+            "PYTORCH_ROCM_ARCH environment variable."
+        ),
     )
 
     args = p.parse_args(argv)
