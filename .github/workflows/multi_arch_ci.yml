@@ -42,6 +42,10 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+      stage_reuse_mode:
+        type: string
+        default: "dry-run"
+        description: "dry-run (report only) | skip-stage (actually skip unaffected stages)"
       changed_projects:
         type: string
         default: ""
@@ -82,6 +86,7 @@ jobs:
       windows_test_labels: ${{ inputs.windows_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: false
 
