@@ -215,9 +215,6 @@ skip_tests = {
         "distributed": [
             # torch.linalg.eig has no non-MAGMA backend; MAGMA not linked in this build
             "test_linalg_ops",
-            # Native SIGSEGV during bf16 forward in the mixed-precision cast path
-            "(TestFullyShardMixedPrecisionCasts and test_norm_modules_bf16)",
-            "(TestReplicateMixedPrecisionCasts and test_norm_modules_bf16)",
             # Child process exits with SIGABRT inside torchelastic launcher (test_run.py)
             "(ElasticLaunchTest and test_virtual_local_rank)",
             # Rock 2.13 Kineto/NCCL annotation metadata missing on recorded GPU kernels
@@ -231,12 +228,6 @@ skip_tests = {
             # post-optimizer event. Direct Rock/nightly and local TheRock wrapper
             # runs pass at world size 8, so this appears nondeterministic.
             "(TestFullyShard1DTrainingCore and test_post_optim_event)",
-            # /dev/shm exhausted by 8-rank 3D mesh tensor allocs; NCCL shared memory OOM
-            "(TestFullyShardHSDP3DTraining and test_3d_mlp_with_nd_mesh)",
-            # Run 28411211813 distributed shard 1/3: NCCLTraceTest::
-            # test_compiled_with_reduce_overhead - genuine NCCL ALLREDUCE timeout +
-            # ncclSystemError (distinct from the rocprofiler shutdown crash). TODO: investigate.
-            "(NCCLTraceTest and test_compiled_with_reduce_overhead)",
         ],
     },
 }
