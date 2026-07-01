@@ -24,7 +24,7 @@ on:
         default: ""
       linux_test_labels:
         type: string
-        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'. ex: test:rocprim, test:hipcub"
+        description: "Comma-separated test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (quick, standard, comprehensive, full)."
         default: ""
       windows_amdgpu_families:
         type: string
@@ -32,7 +32,7 @@ on:
         default: ""
       windows_test_labels:
         type: string
-        description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:' ex: test:rocprim, test:hipcub"
+        description: "Comma-separated test options. Use test:* to filter tests (e.g. test:rocprim). Use test_filter:* to set test type (quick, standard, comprehensive, full)."
         default: ""
       prebuilt_stages:
         type: string
