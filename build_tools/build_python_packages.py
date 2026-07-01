@@ -263,6 +263,8 @@ def _run_kpack_split(
             "nlohmann-json",
             "rocshmem",
             "rocjitsu",
+            "composable-kernel",
+            "libhipcxx",
             "mirage",
         ],
         exclude_components=["test"],

@@ -568,7 +568,7 @@ class PopulatedDistPackage:
         # Exclude profiler-owned artifacts from the devel package.
         #
         # The profiler runtime (rocprofiler-compute and rocprofiler-systems)
-        # is now packaged in the separate `rocm-profiler` wheel. However,
+        # is now packaged in `rocm-profiler` wheel. However,
         # devel packaging automatically includes all runtime artifacts via
         # `runtime_artifact_names`, which would otherwise pull these profiler
         # artifacts back into the devel package.
@@ -577,13 +577,15 @@ class PopulatedDistPackage:
         # shared libraries without their full dependency closure (e.g. missing
         # rocprofiler-sdk or libomp resolution).
         #
-        # Explicitly removing them here ensures correct package ownership:
-        #   - rocm-profiler → owns profiler runtime
-        #   - rocm-sdk-devel → does NOT include profiler runtime
+        # Explicitly removing rocprofiler-compute here ensures correct package
+        # ownership. Note: rocprofiler-systems is now included in the devel package
+        #
+        # Package ownership:
+        #   - rocm-profiler → owns profiler runtime (rocprofiler-compute, rocprofiler-systems)
+        #   - rocm-sdk-devel → includes rocprofiler-systems, excludes rocprofiler-compute
         devel_artifact_names.difference_update(
             {
                 "rocprofiler-compute",
-                "rocprofiler-systems",
             }
         )
         excluded = set(exclude_components)
