@@ -16,7 +16,7 @@ import tempfile
 import unittest
 from dataclasses import fields
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
@@ -216,6 +216,14 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             event_payload={"before": "abc123def456"},
         )
         self.assertEqual(inputs.base_ref, "abc123def456")
+
+    def test_push_created_ref_disables_path_filtering(self):
+        """Push events for newly created refs do not have a reliable diff base."""
+        inputs = _run_from_environ(
+            event_name="push",
+            event_payload={"before": "0" * 40},
+        )
+        self.assertIsNone(inputs.base_ref)
 
 
 # ---------------------------------------------------------------------------
