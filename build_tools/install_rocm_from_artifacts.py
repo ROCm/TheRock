@@ -404,6 +404,7 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        needs_amd_llvm_dev = False
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -421,6 +422,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("mpfr")
             extra_artifacts.append("expat")
             extra_artifacts.append("ncurses")
+            # rocgdb tests require amd-llvm_dev for compiler headers/tools.
+            needs_amd_llvm_dev = True
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -458,7 +461,7 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocdecode_dev")
             argv.append("rocdecode_test")
             argv.append("base_dev")
-            argv.append("amd-llvm_dev")
+            needs_amd_llvm_dev = True
         if args.mpi:
             extra_artifacts.append("openmpi")
             # Ensure binaries like mpiexec are installed
@@ -471,7 +474,7 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocjpeg_dev")
             argv.append("rocjpeg_test")
             argv.append("base_dev")
-            argv.append("amd-llvm_dev")
+            needs_amd_llvm_dev = True
         if args.rocjitsu:
             extra_artifacts.append("rocjitsu")
             argv.append("rocjitsu_run")
@@ -518,9 +521,12 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocwmma_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
-            argv.append("amd-llvm_dev")
+            needs_amd_llvm_dev = True
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
+
+        if needs_amd_llvm_dev:
+            argv.append("amd-llvm_dev")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test

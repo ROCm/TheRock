@@ -4,6 +4,7 @@
 
 """Unit tests for install_rocm_from_artifacts.py."""
 
+import argparse
 from datetime import datetime
 from pathlib import Path
 import os
@@ -127,6 +128,98 @@ class TestReleaseDiscovery(unittest.TestCase):
             families = mod.list_available_nightly_gpu_families("linux")
 
         self.assertEqual(families, {"gfx94X-dcgpu"})
+
+
+def _make_run_id_args(**overrides) -> argparse.Namespace:
+    """Return a minimal args namespace suitable for retrieve_artifacts_by_run_id."""
+    defaults = dict(
+        run_id="12345",
+        artifact_group="gfx110X-all",
+        output_dir=Path("/tmp/therock-test"),
+        # Non-empty amdgpu_targets skips the expand_families call.
+        amdgpu_targets="gfx1100",
+        dry_run=False,
+        run_github_repo=None,
+        base_only=False,
+        aqlprofile=False,
+        blas=False,
+        debug_tools=False,
+        fft=False,
+        hipdnn=False,
+        hipdnn_integration_tests=False,
+        hipdnn_samples=False,
+        hipfile=False,
+        miopen=False,
+        miopenprovider=False,
+        hipkernelprovider=False,
+        hiptensor=False,
+        hipblasltprovider=False,
+        prim=False,
+        rand=False,
+        rccl=False,
+        mpi=False,
+        rocdecode=False,
+        rocjpeg=False,
+        rocjitsu=False,
+        mirage=False,
+        rocprofiler_compute=False,
+        rocprofiler_sdk=False,
+        rocprofiler_systems=False,
+        rocprofiler_systems_examples=False,
+        rocrtst=False,
+        rocalution=False,
+        rocwmma=False,
+        libhipcxx=False,
+        tests=False,
+    )
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
+
+
+def _captured_fetch_argv(args: argparse.Namespace) -> list[str]:
+    """Run retrieve_artifacts_by_run_id and return the argv passed to fetch_artifacts_main."""
+    with mock.patch.object(mod, "fetch_artifacts_main") as mock_fetch:
+        mod.retrieve_artifacts_by_run_id(args)
+        (argv,), _ = mock_fetch.call_args
+    return argv
+
+
+class TestDebugToolsAmdLlvmDev(unittest.TestCase):
+    """Tests that --debug-tools pulls amd-llvm_dev (required for rocgdb testing)."""
+
+    def test_debug_tools_includes_amd_llvm_dev(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(debug_tools=True))
+        self.assertIn("amd-llvm_dev", argv)
+
+    def test_debug_tools_includes_rocgdb_run(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(debug_tools=True))
+        self.assertIn("rocgdb_run", argv)
+
+    def test_no_amd_llvm_dev_without_requiring_flag(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rand=True))
+        self.assertNotIn("amd-llvm_dev", argv)
+
+    def test_amd_llvm_dev_appears_exactly_once_when_multiple_flags_set(self) -> None:
+        # debug_tools, rocdecode, rocjpeg, and libhipcxx all need amd-llvm_dev;
+        # combining them must not produce duplicate entries.
+        argv = _captured_fetch_argv(
+            _make_run_id_args(
+                debug_tools=True, rocdecode=True, rocjpeg=True, libhipcxx=True
+            )
+        )
+        self.assertEqual(argv.count("amd-llvm_dev"), 1)
+
+    def test_rocdecode_includes_amd_llvm_dev(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocdecode=True))
+        self.assertIn("amd-llvm_dev", argv)
+
+    def test_rocjpeg_includes_amd_llvm_dev(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocjpeg=True))
+        self.assertIn("amd-llvm_dev", argv)
+
+    def test_libhipcxx_includes_amd_llvm_dev(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(libhipcxx=True))
+        self.assertIn("amd-llvm_dev", argv)
 
 
 if __name__ == "__main__":
