@@ -181,7 +181,10 @@ jobs:
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
-          # Set thread limits from KUBE_CPU_REQUEST (if available) to avoid CPU oversubscription
+          # Set thread limits from KUBE_CPU_REQUEST to avoid CPU oversubscription.
+          # This must be done at shell runtime because KUBE_CPU_REQUEST is injected
+          # by the container runtime (Kubernetes) and isn't available in GitHub's
+          # env context (${{ env.* }}) which is evaluated before the container starts.
           if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
             export OPENBLAS_NUM_THREADS="${KUBE_CPU_REQUEST%.*}"
             export OMP_NUM_THREADS="${KUBE_CPU_REQUEST%.*}"
