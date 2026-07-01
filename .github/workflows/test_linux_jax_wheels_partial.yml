@@ -252,6 +252,18 @@ jobs:
               "jaxlib==${JAX_VERSION}"
           fi
 
+      # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid the pytest
+      # slowdown/hang tracked in ROCM-27290. Scoped via `if` so the vars are
+      # never defined for other JAX releases (no behavior change for them).
+      - name: Set ROCm runtime env for JAX 0.10.2 (ROCM-27290)
+        if: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' }}
+        run: |
+          {
+            echo "ROCPROFILER_QUEUE_INTERPOSITION=0"
+            echo "DEBUG_HIP_DYNAMIC_QUEUES=0"
+            echo "HSA_NO_SCRATCH_RECLAIM=1"
+          } >> "$GITHUB_ENV"
+
       - name: Run JAX tests
         timeout-minutes: 60
         env:
