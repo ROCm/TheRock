@@ -212,6 +212,53 @@ skip_tests = {
             "test_fs_preserve_sharing",
             "test_fs_sharing",
         ],
+        "profiler": [
+            # Run 28446166928 default shard 2/10: all profiler tests that rely on
+            # GPU kernel-level trace events fail because HSA_TOOLS_DISABLE_REGISTER=1
+            # prevents rocprofiler-sdk from registering as an HSA tool, so Kineto
+            # captures no GPU activity. This is an EXPECTED side-effect of the
+            # workaround for the rocprofiler-sdk shutdown heap-corruption crash
+            # (ROCM-27116). Remove these once rocprofiler-sdk is fixed and
+            # HSA_TOOLS_DISABLE_REGISTER is dropped.
+            "(CppThreadTestCUDA and test_with_enable_profiler_in_child_thread_cuda)",
+            "(CppThreadTestCUDA and test_without_enable_profiler_in_child_thread_cuda)",
+            "(CppThreadTestCUDA and test_profile_memory_cuda)",
+            "(TestProfilerCUDA and test_compile_timeline_provenance_survives_reset_scope)",
+            "(TestProfilerDeviceCUDA and test_dynamic_toggle_cuda)",
+            "(TestProfilerDeviceCUDA and test_kineto_cuda)",
+            "(TestProfilerDeviceCUDA and test_profiler_cuda)",
+            "(TestMetadataJsonFormat and test_kernel_metadata_field_types)",
+            "(TestMetadataJsonFormat and test_kernel_metadata_has_expected_fields)",
+            "(TestMetadataJsonFormat and test_metadata_json_is_valid_json_fragment)",
+            "(TestMetadataJsonFormat and test_metadata_json_key_value_format)",
+        ],
+        "inductor_profiler": [
+            # Same root cause as the profiler section above — these inductor tests
+            # use torch.profiler or inductor_do_bench_using_profiling internally
+            # and get zero device events under HSA_TOOLS_DISABLE_REGISTER=1.
+            # Run 28446166928 default shards 4/10 and 10/10.
+            # Remove once HSA_TOOLS_DISABLE_REGISTER is dropped.
+            "(TestBenchmarker and test_torch_profiler_benchmarker_reuses_inductor_helpers_hip_value0_expected_buffer_size_bytes_1024)",
+            "(TestBenchmarker and test_torch_profiler_benchmarker_reuses_inductor_helpers_hip_value_mock-hip_expected_buffer_size_bytes_268435456)",
+            "(TestExternKernelCaller and test_extern_kernel_benchmark_request_variations)",
+            "(TestBench and test_do_bench_using_profiling)",
+            # combo_kernel tests inspect Triton kernel trace events (triton_events[0])
+            # which are empty when profiling is disabled.
+            "test_combo_kernel_dynamic_shapes_grid_changes",
+            "test_combo_kernel_per_config_subkernel_block_size",
+            "test_combo_kernel_yz_overflow",
+            # fp8 layernorm benchmark tests use inductor_do_bench_using_profiling.
+            "(TestFP8TypesCUDA and test_layernorm_fp8_quant_benchmark)",
+        ],
+        "logging": [
+            # Run 28446166928 default shard 3/10:
+            # LoggingTests::test_logs_out captures stdout/stderr and does exact-string
+            # comparison. The ROCm runtime emits spurious agent.cpp warnings
+            # ("Attempt to enable hip visibility for agent-N which is not visible to HSA")
+            # mid-capture, breaking the expected output. Side-effect of
+            # HSA_TOOLS_DISABLE_REGISTER=1 changing HSA agent visibility.
+            "(LoggingTests and test_logs_out)",
+        ],
         "distributed": [
             # torch.linalg.eig has no non-MAGMA backend; MAGMA not linked in this build
             "test_linalg_ops",
