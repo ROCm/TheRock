@@ -27,7 +27,7 @@ AMD GPU architecture.
 
 Table of contents:
 
-- [About multi-arch releases](#multi-arch-releases)
+- [About multi-arch releases](#about-multi-arch-releases)
 - [Installing multi-arch releases](#installing-multi-arch-releases)
   - [Installing multi-arch Python packages](#installing-multi-arch-python-packages)
     - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
@@ -63,7 +63,7 @@ Key differences from
 - **Broader GPU support**: adding support for a new GPU target is just one
   more device package, so more GPUs can be supported without impacting build
   times or download sizes for other targets
-- **Smaller downloads**: kernels downloads can be scoped to a single GPU
+- **Smaller downloads**: kernels downloaded can be scoped to a single GPU
   instead of always being scoped to a family or "all"
 
 ### Multi-arch release status
@@ -117,7 +117,7 @@ unified index at https://rocm.nightlies.amd.com/whl-multi-arch/.
 
 > [!WARNING]
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual environment.
-> In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
+> In this case, command-line interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
 #### Installing multi-arch ROCm Python packages
 
@@ -579,7 +579,7 @@ directory. Two variants are available:
 
 - **Per-family tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz`)
   that include `.kpack` files only for one family.
-- **Multiarch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260430.tar.gz`)
+- **Multi-arch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260430.tar.gz`)
   that include `.kpack` files for all supported targets.
 
 Browse and download tarballs from

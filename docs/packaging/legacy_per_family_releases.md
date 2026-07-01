@@ -31,13 +31,13 @@ We currently support Python 3.10, 3.11, 3.12, 3.13, and 3.14 (PyTorch 2.9+ only)
 
 > [!WARNING]
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual environment.
-> In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
+> In this case, command-line interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
 ### Index page listing
 
 Per-family `rocm`, `torch`, and `jax` packages were published to
 GPU-architecture-specific index pages and must be installed using an appropriate
-`--find-links` argument to `pip`.
+`--index-url` argument to `pip`.
 
 | Product Name                       | GFX Target | GFX Family   | Install instructions                                                                               |
 | ---------------------------------- | ---------- | ------------ | -------------------------------------------------------------------------------------------------- |
@@ -562,7 +562,7 @@ For building JAX from source or running the full JAX test suite, see the
 ## Installing from tarballs
 
 Standalone "ROCm SDK tarballs" are a flattened view of ROCm
-[artifacts](docs/development/artifacts.md) matching the familiar folder
+[artifacts](/docs/development/artifacts.md) matching the familiar folder
 structure seen with system installs on Linux to `/opt/rocm/` or on Windows via
 the HIP SDK:
 
