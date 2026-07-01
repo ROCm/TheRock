@@ -544,6 +544,9 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       .
   )
   therock_cmake_subproject_require_host_program(libhipcxx lit)
+  # Make libhipcxx's CMake package resolvable by dependents (e.g. hipthreads)
+  # via find_package(libhipcxx).
+  therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
   therock_cmake_subproject_activate(libhipcxx)
 
   therock_provide_artifact(libhipcxx
@@ -679,3 +682,75 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
       hipTensor
   )
 endif()
+
+if(THEROCK_ENABLE_HIPTHREADS)
+  ##############################################################################
+  # hipthreads
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipthreads
+    # TODO: use this in case hipthreads is moved to e.g. rocm-libraries
+    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipthreads"
+    EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/hipthreads"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipthreads"
+    BACKGROUND_BUILD
+    # libhipthreads.a is a static archive of device bitcode that is identical
+    # regardless of which per-arch shard builds it. Build all test targets once
+    # and publish a single target-neutral (_generic) artifact (see TARGET_NEUTRAL
+    # on therock_provide_artifact below) so per-arch CI upload races are harmless.
+    USE_TEST_AMDGPU_TARGETS
+    DEFAULT_GPU_TARGETS
+      gfx1201  # Fixes issue with empty target list for unsupported architectures.
+    CMAKE_ARGS
+      -DHIPTHREADS_COPY_TO_BUILD=ON
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_CXX_STANDARD=17
+      # hipThreads compiles with -Werror plus strict warnings (-Wshadow,
+      # -Wold-style-cast, ...). The HIP runtime headers are included with -I
+      # (not -isystem) and trip those warnings, so disable -Werror here.
+      -DDISABLE_WERROR=ON
+      # TEMPORARY (CI bring-up): hipThreads' persistent scheduler kernel spawns
+      # numVcores = CU_count * HIPTHREADS_VCORES_PER_WGP workgroups, which by
+      # default (16) occupies the whole GPU and can deadlock the test suite under
+      # shared/over-subscribed conditions. Force 1 vcore/WGP so the test job
+      # passes. NOTE: this value is baked into the shipped libhipthreads.a (build
+      # and test share one artifact), so this is NOT the desired release default
+      # and must be revisited before this is considered production-ready.
+      # TODO(hipthreads): determine the correct default and stop overriding here.
+      -DHIPTHREADS_VCORES_PER_WGP=1
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+      hipcc
+    BUILD_DEPS
+      rocm-cmake
+      libhipcxx
+    RUNTIME_DEPS
+      amd-llvm
+      hip-clr
+      hipcc
+      libhipcxx
+  )
+  therock_cmake_subproject_glob_c_sources(hipthreads
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_require_host_program(hipthreads lit)
+  therock_cmake_subproject_activate(hipthreads)
+
+  therock_provide_artifact(hipthreads
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipthreads.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipthreads
+  )
+endif(THEROCK_ENABLE_HIPTHREADS)

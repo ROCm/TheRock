@@ -109,7 +109,7 @@ submodules = ["rocm-libraries"]
 
 [source_sets.math-libs]
 description = "Additional math library submodules"
-submodules = ["libhipcxx"]
+submodules = ["libhipcxx", "hipthreads"]
 
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
@@ -637,6 +637,15 @@ disable_platforms = ["windows"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+
+[artifacts.hipthreads]
+# target-neutral: libhipthreads.a is a static archive of device bitcode that is
+# identical across per-arch shards. Built for all targets once (see
+# USE_TEST_AMDGPU_TARGETS in math-libs/CMakeLists.txt) and published as a single
+# _generic artifact, making per-arch CI upload races harmless (latest write wins).
+artifact_group = "math-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
 
 [artifacts.support]
 artifact_group = "math-libs"
