@@ -159,6 +159,8 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--timeout",
+        "1500"
     ]
 
     # If quick tests are enabled, run only the smoke test subset
