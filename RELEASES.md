@@ -321,12 +321,12 @@ Select your GPU target using the `[device-*]` extras from the
 >
 >   | torch version | torchaudio version | torchvision version | apex version |
 >   | ------------- | ------------------ | ------------------- | ------------ |
->   | 2.14          | 2.11               | 0.29                | ?            |
->   | 2.13          | 2.11               | 0.28                | ?            |
->   | 2.12          | 2.11               | 0.27                | ?            |
->   | 2.11          | 2.11               | 0.26                | 1.11.0       |
->   | 2.10          | 2.10               | 0.25                | 1.10.0       |
->   | 2.9           | 2.9                | 0.24                | 1.9.0        |
+>   | 2.14          | 2.11               | 0.29                | 1.14         |
+>   | 2.13          | 2.11               | 0.28                | 1.13         |
+>   | 2.12          | 2.11               | 0.27                | 1.12         |
+>   | 2.11          | 2.11               | 0.26                | 1.11         |
+>   | 2.10          | 2.10               | 0.25                | 1.10         |
+>   | 2.9           | 2.9                | 0.24                | 1.9          |
 >
 >   For example, `torch` 2.11 and compatible wheels can be installed by specifying
 >
