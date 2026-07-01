@@ -678,4 +678,4 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
     SUBPROJECT_DEPS
       hipTensor
   )
-endif(THEROCK_ENABLE_HIPTENSOR)
+endif()

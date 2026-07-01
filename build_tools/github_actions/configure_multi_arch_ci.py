@@ -61,10 +61,12 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
 )
+from configure_jax_release_matrix import generate_jax_matrix
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
@@ -72,6 +74,8 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+
+_NULL_GIT_SHA = "0" * 40
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -128,10 +132,11 @@ class CIInputs:
     run_id: str  # GITHUB_RUN_ID value
     event_name: str  # GITHUB_EVENT_NAME value (e.g. "push", "pull_request", "schedule", "workflow_dispatch")
     commit_ref: str  # GITHUB_REF_NAME value
-    base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
+    base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
     build_pytorch: bool = True
+    build_jax: bool = False
     python_versions: list[str] = field(default_factory=list)
 
     # PR labels (from event payload for pull_request events)
@@ -185,10 +190,11 @@ class CIInputs:
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
+        build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
-        base_ref = "HEAD^1"
+        base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
@@ -199,7 +205,17 @@ class CIInputs:
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
         elif event_name == "push":
-            base_ref = event.get("before", "HEAD^1")
+            before_ref = event.get("before")
+            # GitHub uses the null SHA when a push creates a new ref. That
+            # is not a real object, and this workflow only fetches HEAD and
+            # its parent for path filtering.
+            if before_ref and before_ref != _NULL_GIT_SHA:
+                base_ref = before_ref
+            elif before_ref == _NULL_GIT_SHA:
+                # Branch creation pushes do not have a prior branch tip to
+                # diff against. HEAD^1 would only diff the final pushed commit
+                # against its parent, missing earlier commits in the push.
+                base_ref = None
 
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
@@ -221,6 +237,7 @@ class CIInputs:
             build_variant=build_variant,
             release_type=release_type,
             build_pytorch=build_pytorch,
+            build_jax=build_jax,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
@@ -245,6 +262,11 @@ class GitContext:
     construct GitContext directly without touching git.
     """
 
+    # Resolved commit range used for changed_files.
+    diff_head_commit: str | None = None
+    diff_base_ref: str | None = None
+    diff_base_commit: str | None = None
+
     # List of relative file paths modified relative to a base ref
     changed_files: list[str] | None = None
 
@@ -254,11 +276,18 @@ class GitContext:
     @staticmethod
     def from_repo(base_ref: str) -> "GitContext":
         """Compute from the actual repo. Only called from main()."""
+        print(f"Computing GitContext using base ref {base_ref!r}")
+        diff_head_commit = get_git_commit_hash("HEAD")
+        diff_base_commit = get_git_commit_hash(base_ref)
+        print(f"Diff commit range: {diff_base_commit} -> {diff_head_commit}")
         changed_files = get_git_modified_paths(base_ref)
         submodule_paths = list(get_git_submodule_paths() or [])
         return GitContext(
             changed_files=changed_files,
             submodule_paths=submodule_paths,
+            diff_base_ref=base_ref,
+            diff_base_commit=diff_base_commit,
+            diff_head_commit=diff_head_commit,
         )
 
     @staticmethod
@@ -273,7 +302,7 @@ class GitContext:
     def log(self) -> None:
         """Log git context for CI diagnostics."""
         if self.changed_files is None:
-            print("GitContext: no changed files (schedule/workflow_dispatch)")
+            print("GitContext: no changed files computed")
             return
         print(f"GitContext: {len(self.changed_files)} changed file(s)")
         for path in self.changed_files[:20]:
@@ -404,6 +433,7 @@ class JobDecisions:
     build_rocm_python: JobGroupDecision
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
+    build_jax: JobGroupDecision
 
     def log(self) -> None:
         """Log job decisions for CI diagnostics."""
@@ -417,6 +447,7 @@ class JobDecisions:
         print(f"  build_rocm_python: {self.build_rocm_python.action.value}")
         print(f"  build_pytorch: {self.build_pytorch.action.value}")
         print(f"  test_pytorch: {self.test_pytorch.action.value}")
+        print(f"  build_jax: {self.build_jax.action.value}")
 
 
 @dataclass(frozen=True)
@@ -435,8 +466,10 @@ class BuildConfig:
     build_variant_cmake_preset: str
     build_native_linux: bool
     build_pytorch: bool
+    build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
+    jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
     # Build runner label for this platform/variant combination
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -672,6 +705,7 @@ def decide_jobs(
             )
 
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
+    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
 
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
@@ -682,6 +716,7 @@ def decide_jobs(
         build_rocm_python=JobGroupDecision(action=JobAction.RUN),
         build_pytorch=JobGroupDecision(action=build_pytorch_action),
         test_pytorch=JobGroupDecision(action=build_pytorch_action),
+        build_jax=JobGroupDecision(action=build_jax_action),
     )
 
 
@@ -875,18 +910,6 @@ def _expand_build_config_for_platform(
         # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # TODO: use hard-coded label (vultr machines) as we try to determine core42 regression
-        # This is a temporary measure to get good signal for submodule bumps while we determine core42 issues
-        if (
-            platform == "linux"
-            and family_name == "gfx94x"
-            and git_context.changed_files is not None
-            and git_context.submodule_paths is not None
-        ):
-            matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-            if matching:
-                test_runs_on = "linux-gfx942-1gpu-ossci-rocm"
-
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
@@ -935,15 +958,15 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
-        # If nightly_check_only_for_family is set for schedule runs only
-        if (
-            platform_info.get("nightly_check_only_for_family", False)
-            and not ci_inputs.is_schedule
+        # If nightly_check_only_for_family is set, only run tests for schedule
+        # or workflow_dispatch triggers (to allow manual testing of nightly-only archs)
+        if platform_info.get("nightly_check_only_for_family", False) and not (
+            ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
         ):
             test_runs_on = ""
             print(
                 f"  {family_name}: nightly_check_only_for_family flag set, "
-                f"disabling test runner for non-scheduled runs"
+                f"disabling test runner for non-scheduled/non-dispatch runs"
             )
 
         family_info = {
@@ -985,6 +1008,13 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_pytorch = bool(pytorch_build_matrix)
 
+    jax_build_matrix: list[dict[str, str]] = []
+    build_jax = jobs.build_jax.action == JobAction.RUN and platform == "linux"
+    if build_jax:
+        jax_build_matrix = generate_jax_matrix(ci_inputs.python_versions or None)
+        # Flip back to False if the generated matrix is empty.
+        build_jax = bool(jax_build_matrix)
+
     test_python_packages_matrix = build_rocm_python_test_matrix(
         per_family_info=per_family_info,
         platform=platform,
@@ -1002,7 +1032,9 @@ def _expand_build_config_for_platform(
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         build_native_linux=(suffix != "asan"),
         build_pytorch=build_pytorch,
+        build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
+        jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
@@ -1228,10 +1260,19 @@ def main():
     if skip_path_filters:
         # External repo: skip path filtering, run everything
         git_context = GitContext.empty()
-    elif ci_inputs.is_pull_request or ci_inputs.is_push:
+    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
+        print("=== Git Diff ===")
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
+        print()
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
+        # Some push events, such as branch creation, do not have a reliable
+        # base ref for changed-file filtering. Run without path filters.
+        print("=== Git Diff ===")
+        print("No diff base is available; running without changed-file filtering")
+        print()
+        git_context = GitContext.empty()
     else:
         # 'workflow_dispatch' and 'schedule' events don't have as natural
         # a "prior commit" to compare against.
