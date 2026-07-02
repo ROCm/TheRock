@@ -1,0 +1,65 @@
+From 020db43c8acc23c076922b05e2a6531671aa831b Mon Sep 17 00:00:00 2001
+From: David Dixon <david.dixon@amd.com>
+Date: Thu, 2 Jul 2026 18:19:16 +0000
+Subject: [PATCH] fix(origami): emit a relocatable installed CTestTestfile
+
+The installed CTestTestfile.cmake baked the build-time absolute install
+prefix into the test paths and environment, so the packaged origami tests
+only ran from the original build/install location. Make it relocatable:
+
+- Derive the C++ and Python test paths, WORKING_DIRECTORY, LD_LIBRARY_PATH
+  and PYTHONPATH from ${CMAKE_CURRENT_LIST_DIR} (evaluated where the file is
+  unpacked) instead of the configure-time @CMAKE_INSTALL_PREFIX@.
+- Invoke python3 rather than bare python.
+- Set SKIP_RETURN_CODE 5 so an empty pytest selection does not fail the run.
+
+Consumers that carried this as a downstream patch (e.g. TheRock) can drop it
+once their pin advances past this commit.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+---
+ shared/origami/tests/CMakeLists.txt | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/shared/origami/tests/CMakeLists.txt b/shared/origami/tests/CMakeLists.txt
+index 83539511a27..33322b9dd43 100644
+--- a/shared/origami/tests/CMakeLists.txt
++++ b/shared/origami/tests/CMakeLists.txt
+@@ -41,24 +41,26 @@ set(_ctest_content [=[
+ # SPDX-License-Identifier: MIT
+ 
+ # C++ tests
+-add_test(origami-tests "../origami-tests")
+-set_tests_properties(origami-tests PROPERTIES LABELS "cpp")
++add_test(origami-tests "${CMAKE_CURRENT_LIST_DIR}/../origami-tests")
++set_tests_properties(origami-tests PROPERTIES
++    LABELS "cpp"
++    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
++)
+ 
+ ]=])
+ 
+ if(ORIGAMI_ENABLE_PYTHON)
+     find_package(Python COMPONENTS Interpreter REQUIRED)
+-    
+-    set(ORIGAMI_INSTALL_LIBDIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
+-    set(ORIGAMI_INSTALL_PYTHON_BINDIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages")
+-    
++
+     string(APPEND _ctest_content [=[
+ # Python tests (using pytest)
+-add_test(origami_python_tests python -m pytest tests/ -v)
++add_test(origami_python_tests python3 -m pytest "${CMAKE_CURRENT_LIST_DIR}/tests" -v)
+ 
+ set_tests_properties(origami_python_tests PROPERTIES
+     LABELS "python"
+-    ENVIRONMENT "LD_LIBRARY_PATH=@ORIGAMI_INSTALL_LIBDIR@:$ENV{LD_LIBRARY_PATH};PYTHONPATH=@ORIGAMI_INSTALL_PYTHON_BINDIR@:$ENV{PYTHONPATH}"
++    SKIP_RETURN_CODE 5
++    WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
++    ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_CURRENT_LIST_DIR}/../../@CMAKE_INSTALL_LIBDIR@:$ENV{LD_LIBRARY_PATH};PYTHONPATH=${CMAKE_CURRENT_LIST_DIR}/../../@CMAKE_INSTALL_LIBDIR@/python@Python_VERSION_MAJOR@.@Python_VERSION_MINOR@/site-packages:$ENV{PYTHONPATH}"
+ )
+ ]=])
+ endif()
+-- 
+2.50.1
+
