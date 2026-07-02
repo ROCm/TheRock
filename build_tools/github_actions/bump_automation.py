@@ -12,13 +12,7 @@ import requests
 THEROCK_REPO = "ROCm/TheRock"
 
 ROCM_SYSTEMS_FILES = [
-    ".github/workflows/therock-ci-linux.yml",
-    ".github/workflows/therock-ci-windows.yml",
-    ".github/workflows/therock-rccl-ci-linux.yml",
-    ".github/workflows/therock-rccl-test-packages-multi-node.yml",
-    ".github/workflows/therock-rccl-test-packages-single-node.yml",
-    ".github/workflows/therock-test-component.yml",
-    ".github/workflows/therock-test-packages.yml",
+    ".github/actions/ci-env/action.yml",
 ]
 
 ROCM_LIBRARIES_FILES = [
@@ -29,7 +23,7 @@ SUBMODULE_CONFIG = {
     "rocm-systems": {
         "repo": "ROCm/rocm-systems",
         "files": ROCM_SYSTEMS_FILES,
-        "updater": "ref",
+        "updater": "ci-env",
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
@@ -150,11 +144,20 @@ def update_ref_in_file(file_path, new_sha):
 def update_ci_env_file(file_path, new_sha):
     """Update the therock-ref value in a ci-env composite action file.
 
-    Matches:
-      therock-ref:
-        description: ...
-        value: "<old_sha>" # <date> commit
+    Handles two formats:
+
+    1. rocm-libraries style — SHA as a static output value:
+         therock-ref:
+           description: ...
+           value: "<old_sha>" # <date> commit
+
+    2. rocm-systems style — SHA as a fallback inside a bash run script:
+         THEROCK_REF="<old_sha>" # <date>
     """
+    import re
+
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     with open(file_path, "r") as f:
         lines = f.readlines()
 
@@ -162,6 +165,8 @@ def update_ci_env_file(file_path, new_sha):
     in_therock_ref = False
     for line in lines:
         stripped = line.strip()
+
+        # Format 1: static value: field under therock-ref: key
         if stripped == "therock-ref:":
             in_therock_ref = True
             updated_lines.append(line)
@@ -169,7 +174,6 @@ def update_ci_env_file(file_path, new_sha):
 
         if in_therock_ref and stripped.startswith("value:"):
             indent = line[: line.find("value:")]
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             updated_lines.append(f'{indent}value: "{new_sha}" # {date} commit\n')
             in_therock_ref = False
             continue
@@ -177,7 +181,14 @@ def update_ci_env_file(file_path, new_sha):
         if in_therock_ref and stripped and not stripped.startswith("description:"):
             in_therock_ref = False
 
-        updated_lines.append(line)
+        # Format 2: bash fallback SHA inside a run: script
+        # Matches: THEROCK_REF="<40-char-sha>" # <anything>
+        updated_line = re.sub(
+            r'(THEROCK_REF=")[0-9a-f]{40}(" # ).*',
+            rf"\g<1>{new_sha}\g<2>{date}\n",
+            line,
+        )
+        updated_lines.append(updated_line)
 
     with open(file_path, "w") as f:
         f.writelines(updated_lines)
