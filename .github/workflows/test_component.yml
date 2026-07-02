@@ -160,6 +160,19 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+      # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
+      # Must be done at runtime since container env vars aren't in GitHub's env context.
+      - name: Set thread limits
+        run: |
+          if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
+            CPU_COUNT="${KUBE_CPU_REQUEST%.*}"
+            echo "OPENBLAS_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
+            echo "OMP_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
+            echo "Thread limits set: OPENBLAS_NUM_THREADS=${CPU_COUNT}, OMP_NUM_THREADS=${CPU_COUNT} (from KUBE_CPU_REQUEST=${KUBE_CPU_REQUEST})"
+          else
+            echo "KUBE_CPU_REQUEST not set, thread limits not configured"
+          fi
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -169,9 +182,6 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
-          # Limit thread count to prevent CPU over-subscription during tests
-          OPENBLAS_NUM_THREADS: "14"
-          OMP_NUM_THREADS: "14"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}

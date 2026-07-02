@@ -128,12 +128,17 @@ amdgpu_family = os.getenv("AMDGPU_FAMILIES", "")
 skip_unit = UNIT_TEST_SKIP_FAMILIES & set(amdgpu_family.split(","))
 if not skip_unit:
     logging.info("=== Running TensileLite unit tests ===")
+    # Snapshot characterization tests own their .ambr baselines under tox, which
+    # selects a superset of cases. Running just Tensile/Tests/unit via pytest can
+    # leave some snapshots orphaned (unused); syrupy fails the session on those by
+    # default, so warn instead of failing on snapshots we don't exercise here.
     subprocess.check_call(
         [
             sys.executable,
             "-m",
             "pytest",
             "-v",
+            "--snapshot-warn-unused",
             str(tensilelite_root / "Tensile" / "Tests" / "unit"),
         ],
         cwd=str(THEROCK_DIR),
