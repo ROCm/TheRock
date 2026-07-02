@@ -425,6 +425,19 @@ skip_tests = {
             "(TestShardedTensorFromLocalShards and test_st_base_init_from_local_shards_and_global_metadata)",
             # launcher/test_run.py - ChildFailedError (same gloo instability)
             "(ElasticLaunchTest and test_virtual_local_rank)",
+            # ---------------------------------------------------------------
+            # NCCL symmetric memory (symm_mem.rendezvous) and copy-engine
+            # collectives — DistBackendError invalid usage in
+            # NCCLSymmetricMemory.cu:168 (NCCLPeerAllocInfo).
+            # CI: https://github.com/ROCm/TheRock/actions/runs/28510890622
+            "(NCCLCopyEngineCollectives and test_ce_)",
+            "(SymmetricMemoryTest and test_)",
+            "(SymmMemCollectiveTest and test_)",
+            "(SymmMemEmptySetDeviceTest and test_empty_strided_p2p)",
+            "(SymmMemPoolTest and test_mempool_compute_ops)",
+            "(SymmMemSingleProcTest and test_memset32)",
+            # test_c10d_nccl.py CommTest — child exit code 10
+            "(CommTest and test_intra_node_comm_all_reduce_custom_group_name)",
         ],
     },
 }
