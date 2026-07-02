@@ -190,12 +190,24 @@ def _resolve_rocjitsu_paths(bin_dir: Path, amdgpu_family: str) -> dict[str, Path
     return paths
 
 
-def _load_config(component: str, preset: str) -> tuple[ComponentConfig, PresetConfig]:
+def _load_config(
+    component: str,
+    preset: str,
+    shard_index: int = 1,
+    total_shards: int = 1,
+) -> tuple[ComponentConfig, PresetConfig]:
     """Load and resolve component + preset config from the YAML file.
 
     Supports both the modern mapping form (``preset: {allow: [...],
     ctest_regex: ..., min_gtests: ...}``) and the legacy flat-list form
     (``preset: [pattern1, pattern2]``) for back-compat with older entries.
+
+    A mapping-form preset may also define a ``shards`` list. When the job runs
+    with ``total_shards > 1``, the preset resolves to ``shards[shard_index-1]``
+    so each shard runs its own explicitly-curated scope (each shard is a
+    separate GHA job with its own timeout). Keys a shard omits fall back to the
+    preset-level values. With ``total_shards == 1`` (or no ``shards`` declared),
+    resolution is unchanged.
     """
     if not FILTERS_PATH.exists():
         raise FileNotFoundError(f"Simulator filter config not found: {FILTERS_PATH}")
@@ -239,6 +251,39 @@ def _load_config(component: str, preset: str) -> tuple[ComponentConfig, PresetCo
             f"Preset '{preset}' for component '{component}' has unsupported "
             f"type {type(raw_preset).__name__}; expected list or mapping."
         )
+
+    # Per-shard scope selection. A mapping-form preset may declare a `shards`
+    # list; when TOTAL_SHARDS>1 each shard runs its own curated scope so shards
+    # cover disjoint, explicit test sets rather than duplicating the whole
+    # preset. A shard inherits any key it omits from the preset-level values.
+    if total_shards > 1 and isinstance(raw_preset, dict):
+        shards = raw_preset.get("shards")
+        if shards:
+            if not isinstance(shards, list):
+                raise TypeError(
+                    f"Preset '{preset}' 'shards' must be a list; got "
+                    f"{type(shards).__name__}."
+                )
+            if len(shards) != total_shards:
+                raise ValueError(
+                    f"Preset '{preset}' declares {len(shards)} shard scope(s) "
+                    f"but TOTAL_SHARDS={total_shards}; they must match."
+                )
+            if not 1 <= shard_index <= total_shards:
+                raise ValueError(
+                    f"SHARD_INDEX={shard_index} out of range for "
+                    f"TOTAL_SHARDS={total_shards} (expected 1..{total_shards})."
+                )
+            shard_cfg = shards[shard_index - 1]
+            if not isinstance(shard_cfg, dict):
+                raise TypeError(
+                    f"Preset '{preset}' shard {shard_index} must be a mapping; "
+                    f"got {type(shard_cfg).__name__}."
+                )
+            if shard_cfg.get("allow"):
+                allow = list(shard_cfg["allow"])
+            ctest_regex = shard_cfg.get("ctest_regex") or ctest_regex
+            min_gtests = int(shard_cfg.get("min_gtests") or min_gtests)
 
     return (
         ComponentConfig(ctest_dir=ctest_dir, skip=skip),
@@ -525,8 +570,23 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    # Shard identity is injected by the CI matrix (test_component.yml). Each
+    # shard is its own GHA job with its own timeout; the preset's `shards` list
+    # (if any) decides what each shard actually runs. Default to a single shard
+    # so local/non-sharded invocations are unaffected.
+    def _env_int(name: str) -> int:
+        try:
+            return int(os.environ.get(name, "1"))
+        except ValueError:
+            return 1
+
+    shard_index = _env_int("SHARD_INDEX")
+    total_shards = _env_int("TOTAL_SHARDS")
+
     try:
-        comp_cfg, preset_cfg = _load_config(args.component, args.filter_preset)
+        comp_cfg, preset_cfg = _load_config(
+            args.component, args.filter_preset, shard_index, total_shards
+        )
         ctest_dir = bin_dir / comp_cfg.ctest_dir
         paths = _resolve_rocjitsu_paths(bin_dir, amdgpu_family)
         env = _build_env(
@@ -558,6 +618,9 @@ def main(argv: list[str] | None = None) -> int:
     ]
     logging.info(
         "[simulator_runner] component=%s preset=%s", args.component, args.filter_preset
+    )
+    logging.info(
+        "[simulator_runner] SHARD_INDEX=%d TOTAL_SHARDS=%d", shard_index, total_shards
     )
     logging.info("[simulator_runner] THEROCK_BIN_DIR=%s", bin_dir)
     logging.info("[simulator_runner] AMDGPU_FAMILIES=%s", amdgpu_family)

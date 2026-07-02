@@ -418,9 +418,17 @@ test_matrix = {
         "test_script": f"python {_get_script_path('simulator_runner.py')} --component rocrand --filter-preset extended",
         "platform": ["linux"],
         "linux_cpu_runner": True,
+        # 2 shards: each is its own GHA job with its own timeout_minutes budget.
+        # The `extended` preset's `shards` list in simulator_runner_filters.yaml
+        # assigns each shard an explicit scope (shard 1 = current 14 binaries,
+        # shard 2 = placeholder). Shard count here must match that list length.
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 2,
         },
+        # The simulator always runs the `extended` preset regardless of
+        # TEST_TYPE, so the "quick -> single shard" rule (see run()) must not
+        # collapse its shards. Keep the configured shard count under quick.
+        "shard_even_when_quick": True,
         "include_family": {
             "linux": [
                 "gfx94X-dcgpu",
@@ -895,7 +903,12 @@ def run():
 
             # If the test type is quick tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "quick":
+            # Exception: jobs that set "shard_even_when_quick" (e.g. the CPU
+            # simulator, which always runs its own preset regardless of TEST_TYPE)
+            # keep their configured shard count.
+            if test_type == "quick" and not job_config_data.get(
+                "shard_even_when_quick"
+            ):
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
