@@ -1,0 +1,18 @@
+# MIGraphX
+[components.lib."ml-libs/MIGraphX/stage"]
+include = [
+  "include/migraphx/**",
+  "lib/libmigraphx*",
+  "share/migraphx/**"
+]
+[components.run."ml-libs/MIGraphX/stage"]
+include = [
+  "bin/migraphx-driver*"
+]
+[components.dev."ml-libs/MIGraphX/stage"]
+[components.dbg."ml-libs/MIGraphX/stage"]
+[components.doc."ml-libs/MIGraphX/stage"]
+[components.test."ml-libs/MIGraphX/stage"]
+include = [
+  "bin/test_*"
+]
