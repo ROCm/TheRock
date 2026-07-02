@@ -97,7 +97,7 @@ jobs:
             --stage=all \
             --amdgpu-families="${{ inputs.amdgpu_families }}" \
             --platform="${{ env.PLATFORM }}" \
-            --output-dir="${{ github.workspace }}" \
+            --output-dir="${GITHUB_WORKSPACE}" \
             --no-extract
           # NOTE: artifact_manager.py appends /.download_cache to --output-dir
           # in --no-extract mode, so pass workspace root here so that
