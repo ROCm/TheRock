@@ -85,6 +85,11 @@ include = [
 include = [
   "bin/hipblaslt/library/**",
   "lib/hipblaslt/library/**",
+  # rocisa Python extension, installed with hipBLASLt so downstream consumers
+  # (e.g. hipSPARSELt) can import it to run device-library codegen against the
+  # staged hipBLASLt package. The .so files match the lib default glob; this
+  # claims the package __init__.py alongside them so nothing is left unmatched.
+  "lib/hipblaslt/rocisa/**",
 ]
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]
 [components.dev."math-libs/BLAS/hipBLASLt/stage"]
