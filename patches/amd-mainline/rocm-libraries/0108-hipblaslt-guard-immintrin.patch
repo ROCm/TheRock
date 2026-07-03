@@ -1,0 +1,26 @@
+From fb17e01ed055887d290924fb171b5f94dac162e9 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Fri, 3 Jul 2026 19:03:18 +0000
+Subject: [PATCH] Guard immintrin.h for x86 and powerpc64
+
+---
+ projects/hipblas/clients/include/hipblas_arguments.hpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/projects/hipblas/clients/include/hipblas_arguments.hpp b/projects/hipblas/clients/include/hipblas_arguments.hpp
+index 85671e1f656..3ac11301b5b 100644
+--- a/projects/hipblas/clients/include/hipblas_arguments.hpp
++++ b/projects/hipblas/clients/include/hipblas_arguments.hpp
+@@ -29,7 +29,9 @@
+ #include "hipblas_datatype2string.hpp"
+ #include "utility.h"
+ #include <cmath>
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+ #include <immintrin.h>
++#endif
+ #include <random>
+ #include <stdio.h>
+ #include <stdlib.h>
+-- 
+2.52.0
+
