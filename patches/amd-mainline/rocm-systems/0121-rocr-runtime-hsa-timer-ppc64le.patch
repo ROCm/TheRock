@@ -1,16 +1,16 @@
-From 12550bb2863cb96aafe81e63599f546f71e20332 Mon Sep 17 00:00:00 2001
+From 0f64cfa9f74c9e37d74b23b756097da0668121f9 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Sat, 13 Jun 2026 03:37:41 +0000
-Subject: [PATCH] rocr-runtime ppc64le-specific changes
+Date: Thu, 2 Jul 2026 02:54:16 +0000
+Subject: [PATCH] rocr-runtime ppc64le
 
 ---
- .../rocr-runtime/rocrtst/common/hsatimer.cc   | 28 ++++++++++++++-----
- .../hsa-runtime/core/util/lnx/os_linux.cpp    |  2 +-
- .../runtime/hsa-runtime/core/util/utils.h     |  6 ++++
- 3 files changed, 28 insertions(+), 8 deletions(-)
+ .../rocr-runtime/rocrtst/common/hsatimer.cc    | 18 +++++++++++++-----
+ .../hsa-runtime/core/util/lnx/os_linux.cpp     |  2 +-
+ .../runtime/hsa-runtime/core/util/utils.h      |  4 +++-
+ 3 files changed, 17 insertions(+), 7 deletions(-)
 
 diff --git a/projects/rocr-runtime/rocrtst/common/hsatimer.cc b/projects/rocr-runtime/rocrtst/common/hsatimer.cc
-index 2610ecdd06..6705eba1c4 100755
+index 2610ecdd06..3b554c42f9 100755
 --- a/projects/rocr-runtime/rocrtst/common/hsatimer.cc
 +++ b/projects/rocr-runtime/rocrtst/common/hsatimer.cc
 @@ -44,7 +44,11 @@
@@ -25,11 +25,13 @@ index 2610ecdd06..6705eba1c4 100755
  
  namespace rocrtst {
  
-@@ -167,23 +171,33 @@ uint64_t PerfTimer::CoarseTimestampUs() {
+@@ -167,23 +171,27 @@ uint64_t PerfTimer::CoarseTimestampUs() {
  }
  
  uint64_t PerfTimer::MeasureTSCFreqHz() {
 -  // Make a coarse interval measurement of TSC ticks for 1 gigacycles.
++#if defined(__x86_64__) || defined(_M_X64)
++  // Make a coarse interval measurement of TSC ticks for 1 gigacycles. 
    unsigned int unused;
 -  uint64_t tscTicksEnd;
 -
@@ -37,32 +39,22 @@ index 2610ecdd06..6705eba1c4 100755
    uint64_t coarseBeginUs = CoarseTimestampUs();
 -  uint64_t tscTicksBegin = __rdtscp(&unused);
  
-+//  --- Architecture Specific Read ---
-+#if defined(__x86_64__) || defined(_M_X64)
 +  tscTicksBegin = __rdtscp(&unused);
-+#elif defined(__powerpc64__) || defined(__PPC64__)
-+// __ppc_get_timebase() is the standard way to read TB on POWER
-+  tscTicksBegin = __ppc_get_timebase();
-+#else
-+  #error "Unsupported architecture"
-+#endif
    do {
-+#if defined(__x86_64__) || defined(_M_X64)
      tscTicksEnd = __rdtscp(&unused);
-+#elif defined(__powerpc64__) || defined(__PPC64__)
-+    tscTicksEnd = __ppc_get_timebase();
-+#endif
    } while (tscTicksEnd - tscTicksBegin < 1000000000);
 -
    uint64_t coarseEndUs = CoarseTimestampUs();
  
--  // Compute the TSC frequency and round to nearest 100MHz.
-+  // Compute the frequency
+   // Compute the TSC frequency and round to nearest 100MHz.
    uint64_t coarseIntervalNs = (coarseEndUs - coarseBeginUs) * 1000;
    uint64_t tscIntervalTicks = tscTicksEnd - tscTicksBegin;
--  return (tscIntervalTicks * 10 + (coarseIntervalNs / 2)) / coarseIntervalNs;
-+  // Frequency in Hz, rounded
-+  return (tscIntervalTicks * 1000000000 + (coarseIntervalNs / 2)) / coarseIntervalNs;
+   return (tscIntervalTicks * 10 + (coarseIntervalNs / 2)) / coarseIntervalNs;
++#elif defined(__ppc64le__) || defined(__PPC64__)
++  return __ppc_get_timebase_freq() / 100000000;
++#else
++  #error "Unsupported architecture"
++#endif
  }
  
  }  // namespace rocrtst
@@ -80,22 +72,27 @@ index d43b06d025..d3d6311bea 100644
      /*
       * Iterate through the program headers of the loaded lib and check for PT_DYNAMIC program
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
-index 1839bacb68..452c0148d0 100644
+index 1839bacb68..00551b3dfe 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
-@@ -83,6 +83,12 @@ typedef uint64_t uint64;
+@@ -62,6 +62,9 @@
+ 
+ #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+ #include <x86intrin.h>
++#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__powerpc64__))
++#define NO_WARN_X86_INTRINSICS 1
++#include <emmintrin.h>
+ #endif
+ #if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+ #include "intrin.h"
+@@ -83,7 +86,6 @@ typedef uint64_t uint64;
  void log_printf(const char* file, int line, const char* format, ...);
  
  #if defined(__GNUC__)
-+#if defined(__i386__) || defined(__x86_64__)
-+#include <x86intrin.h>
-+#elif defined(__powerpc__) || defined(__powerpc64__)            
-+#define NO_WARN_X86_INTRINSICS 1
-+#include <emmintrin.h>
-+#endif
- 
+-
  #define __forceinline __inline__ __attribute__((always_inline))
  #define __declspec(x) __attribute__((x))
+ #undef __stdcall
 -- 
 2.52.0
 
