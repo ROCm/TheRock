@@ -149,6 +149,24 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             hipblaslt_linux["total_shards"], hipblaslt_windows["total_shards"]
         )
 
+    def test_hiptensor_selected_on_linux_and_windows(self):
+        os.environ["PROJECTS_TO_TEST"] = "hiptensor"
+
+        fetch_test_configurations.run()
+        linux_components = self._get_components()
+        self.assertEqual(len(linux_components), 1)
+        self.assertEqual(linux_components[0]["job_name"], "hiptensor")
+        self.assertIn("linux", linux_components[0]["platform"])
+        self.assertEqual(linux_components[0]["total_shards"], 1)
+
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+        fetch_test_configurations.run()
+        windows_components = self._get_components()
+        self.assertEqual(len(windows_components), 1)
+        self.assertEqual(windows_components[0]["job_name"], "hiptensor")
+        self.assertIn("windows", windows_components[0]["platform"])
+        self.assertEqual(windows_components[0]["total_shards"], 1)
+
     # -----------------------
     # Exclude-family logic
     # -----------------------
