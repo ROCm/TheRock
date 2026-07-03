@@ -68,6 +68,14 @@ def format_summary(
     lines.append("")
     _append_test_rocm(lines, outputs)
 
+    lines.append("### build-pytorch")
+    lines.append("")
+    _append_build_pytorch(lines, outputs)
+
+    lines.append("### build-jax")
+    lines.append("")
+    _append_build_jax(lines, outputs)
+
     return "\n".join(lines)
 
 
@@ -75,8 +83,6 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
-    elif ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
-        reason = "PR does not have `ci:run-multi-arch` label"
     else:
         reason = "no CI-relevant files changed"
 
@@ -199,6 +205,57 @@ def _append_build_rocm(
         lines.append(
             f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
         )
+
+
+def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
+    lines.append("| Platform | Python | PyTorch ref | Families |")
+    lines.append("|----------|--------|-------------|----------|")
+
+    rows = 0
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
+        for row in config.pytorch_build_matrix:
+            families = ", ".join(
+                f"`{family}`" for family in row["amdgpu_families"].split(";")
+            )
+            lines.append(
+                f"| {platform} | `{row['python_version']}` | "
+                f"`{row['pytorch_git_ref']}` | {families} |"
+            )
+            rows += 1
+
+    if rows == 0:
+        lines.append("| — | — | — | — |")
+    lines.append("")
+
+
+def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
+    lines.append("| Platform | Python | JAX ref | Repository | Mode | GFX arch |")
+    lines.append("|----------|--------|---------|------------|------|----------|")
+
+    rows = 0
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
+        for row in config.jax_build_matrix:
+            gfx_arch = row["gfx_arch"] or "—"
+            lines.append(
+                f"| {platform} | `{row['python_version']}` | "
+                f"`{row['jax_ref']}` | `{row['jax_repository']}` | "
+                f"`{row['build_mode']}` | {gfx_arch} |"
+            )
+            rows += 1
+
+    if rows == 0:
+        lines.append("| — | — | — | — | — | — |")
+    lines.append("")
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:

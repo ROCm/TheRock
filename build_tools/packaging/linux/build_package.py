@@ -133,7 +133,7 @@ def build_package_variants(pkg_name, config: PackageConfig) -> list:
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
 
     if config.enable_kpack:
-        if is_gfxarch_package(pkg_info, config.enable_kpack):
+        if is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
             # GfxArch=True: host + devices + meta + non-versioned
             return build_gfxarch_package_variants(pkg_name, config)
         else:
@@ -504,32 +504,6 @@ def parse_input_package_list(pkg_name, artifact_dir):
 
     print(f"pkg_list:\n  {pkg_list}")
     return pkg_list, skipped_list
-
-
-def normalize_target_list(targets: list[str]) -> list[str]:
-    """Normalize target list by splitting on semicolons, commas, or spaces.
-
-    Accepts targets in multiple formats:
-    - Space-separated CLI args: ['gfx94X-dcgpu', 'gfx120X-all']
-    - Single comma-separated string: ['gfx94X-dcgpu,gfx120X-all,gfx1151']
-    - Single semicolon-separated string: ['gfx94X-dcgpu;gfx120X-all;gfx1151']
-    - Mixed: ['gfx94X-dcgpu;gfx120X-all', 'gfx1151']
-
-    Returns a flat list of individual target names.
-    """
-    normalized = []
-    for target in targets:
-        # Split by semicolon first, then comma, then whitespace
-        if ";" in target:
-            normalized.extend(target.split(";"))
-        elif "," in target:
-            normalized.extend(target.split(","))
-        else:
-            # Could be space-separated or single value
-            normalized.extend(target.split())
-
-    # Remove empty strings and strip whitespace
-    return [t.strip() for t in normalized if t.strip()]
 
 
 def create_package_config(args: argparse.Namespace) -> PackageConfig:

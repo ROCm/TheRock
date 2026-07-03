@@ -7,6 +7,7 @@ from typing import Callable, Sequence
 
 import importlib.util
 import io
+import json
 import re
 import os
 from pathlib import Path
@@ -390,13 +391,47 @@ class PopulatedDistPackage:
             log(f"  + {an}: {an_path}")
 
         package_dest_dir = self.platform_dir
+        libraries_py_package_name = package_dest_dir.name
+        devel_links: list[dict[str, str]] = []
         for relpath, dir_entry in artifacts.pm.matches():
             if self.files.has(relpath):
                 continue
             dest_path = package_dest_dir / relpath
             self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
+            if not dir_entry.is_dir():
+                # Record the relative hardlink target into the libraries overlay
+                # so that `rocm-sdk init` can mirror this per-ISA device file into
+                # the generic rocm-sdk-devel tree. The backtrack count and target
+                # layout mirror _populate_devel_file()'s symlink computation.
+                backtrack = len(Path(relpath).parts)
+                target = "/".join(
+                    [".."] * backtrack + [libraries_py_package_name, relpath]
+                )
+                devel_links.append({"relpath": relpath, "target": target})
+        self._emit_devel_links_manifest(devel_links)
         self.params.populated_packages.append(self)
         return self
+
+    def _emit_devel_links_manifest(self, devel_links: list[dict[str, str]]):
+        """Writes the `_devel_links` manifest consumed by `rocm-sdk init`.
+
+        Each device wheel ships this manifest so that, at devel expansion time,
+        its per-ISA files are hardlinked from the rocm-sdk-libraries overlay into
+        the generic rocm-sdk-devel tree (and recorded in this wheel's RECORD so
+        that `pip uninstall` prunes them). Named per target family so that
+        multiple device wheels overlay the shared libraries dir without
+        colliding.
+        """
+        manifest_dir = self.platform_dir / ".devel_links"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = manifest_dir / f"{self.target_family}.json"
+        manifest_path.write_text(
+            json.dumps(
+                {"version": self.params.version, "links": devel_links},
+                indent=2,
+            ),
+            newline="\n",
+        )
 
     def _populate_runtime_symlink(
         self, relpath: str, dest_path: Path, src_entry: os.DirEntry[str]

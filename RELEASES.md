@@ -25,9 +25,11 @@ Table of contents:
   - [Multi-arch release status](#multi-arch-release-status)
   - [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages)
   - [Installing multi-arch PyTorch Python packages](#installing-multi-arch-pytorch-python-packages)
+  - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
   - [Supported Python `[device-*]` install extras](#supported-python-device--install-extras)
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
   - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
+  - [Using ROCm from WSL](#using-rocm-from-wsl)
 - [Per-family releases](#per-family-releases)
   - [Installing per-family releases using pip](#installing-per-family-releases-using-pip)
     - [Python packages release status](#python-packages-release-status)
@@ -81,22 +83,25 @@ Key differences from [per-family releases](#per-family-releases):
 > - https://therock-hud-dev.amd.com/ for current test status
 > - https://github.com/ROCm/TheRock/issues for known issues
 
-| Job description                         | Status                                                                                                                                                                                                                                                     |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build ROCm artifacts/tarballs/packages  | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
-| Test ROCm artifacts                     | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
-| Build and test Linux PyTorch packages   | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
-| Build and test Windows PyTorch packages | [![Multi-Arch Release Windows PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
+| Job description                        | Status                                                                                                                                                                                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build ROCm artifacts/tarballs/packages | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
+| Test ROCm artifacts                    | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
+| Test ROCm native Linux packages        | [![Test Native Linux Packages Install](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml)                      |
+| PyTorch packages - Linux build/test    | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
+| PyTorch packages - Windows build/test  | [![Multi-Arch Release Windows PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
+| PyTorch packages - full tests          | [![Test PyTorch Wheels (Full Suite)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml)                                            |
+| JAX packages - Linux build/test        | [![Multi-Arch Release Linux JAX Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml)                   |
 
 **Package availability:**
 
-| Package type            | Linux                                                                                                                                                  | Windows                                                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| ROCm Python packages    | ✅ Available                                                                                                                                           | ✅ Available                                                      |
-| PyTorch Python packages | ✅ Available<ul><li>Torch versions 2.8, 2.10, and 2.11 only -<br>other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)</li></ul> | ✅ Available                                                      |
-| JAX Python packages     | 🟠 Planned                                                                                                                                             | -                                                                 |
-| ROCm tarballs           | ✅ Available                                                                                                                                           | ✅ Available                                                      |
-| Native packages         | ✅ Available                                                                                                                                           | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
+| Package type            | Linux                                                                                                                                               | Windows                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| ROCm Python packages    | ✅ Available                                                                                                                                        | ✅ Available                                                      |
+| PyTorch Python packages | ✅ Available<ul><li>Torch versions 2.10, 2.11, 2.12 only -<br>other versions pending [#4768](https://github.com/ROCm/TheRock/issues/4768)</li></ul> | ✅ Available                                                      |
+| JAX Python packages     | 🟠 In progress ([#5634](https://github.com/ROCm/TheRock/issues/5634))                                                                               | -                                                                 |
+| ROCm tarballs           | ✅ Available                                                                                                                                        | ✅ Available                                                      |
+| Native packages         | ✅ Available                                                                                                                                        | 🟠 Planned ([#1987](https://github.com/ROCm/TheRock/issues/1987)) |
 
 ### Installing multi-arch ROCm Python packages
 
@@ -179,6 +184,22 @@ After installing, verify your installation:
 ```bash
 rocm-sdk test
 ```
+
+The `rocm-sdk-devel` development files (headers, CMake config, and the device
+`.kpack`/kernel files from your `rocm-sdk-device-*` wheels) are expanded on first
+use. To expand them eagerly, run `rocm-sdk init`.
+
+> [!NOTE]
+> The devel tree is expanded - and its device files linked from the installed
+> `rocm-sdk-device-*` wheels - only once: on the first `rocm-sdk init` /
+> `rocm-sdk test`, or the first use of a devel tool such as `hipcc`. If you
+> install or remove a `rocm-sdk-device-*` wheel (for example, adding a second GPU
+> target) **after** that first expansion, re-run `rocm-sdk init` or `rocm-sdk test`
+> to link the new device files. The compiler tools do not re-scan on their own,
+> so a device wheel added later is not picked up until you run one of those again.
+> Uninstalling a `rocm-sdk-device-*` wheel removes its devel files automatically
+> via `pip`. If the devel tree ever ends up in a bad state, recreate the virtual
+> environment.
 
 #### Supported Python `[device-*]` install extras
 
@@ -278,6 +299,52 @@ print(torch.cuda.get_device_name(0))
 
 See [external-builds/pytorch/README.md](/external-builds/pytorch/README.md) for
 more details on supported PyTorch versions and building from source.
+
+### Installing multi-arch JAX Python packages
+
+Install JAX with ROCm support using the unified multi-arch index.
+
+> [!IMPORTANT]
+> Unlike PyTorch, the JAX wheels do **not** automatically install ROCm packages as a dependency.
+> You must install ROCm first.
+
+```bash
+# Set the version (currently supported: 0.9.1 and 0.10.0)
+JAX_VERSION=0.10.0
+
+# 1. Install ROCm (replace device-gfx942 with your GPU)
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    "rocm[libraries,device-gfx942]"
+
+# 2. Install JAX ROCm wheels
+pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    "jax_rocm7_plugin==${JAX_VERSION}" \
+    "jax_rocm7_pjrt==${JAX_VERSION}"
+
+# 3. Install matching jax from PyPI
+pip install "jax==${JAX_VERSION}"
+```
+
+> [!NOTE]
+> Always pin jax, jax_rocm7_plugin, and jax_rocm7_pjrt to the same version.
+> Currently supported versions: 0.9.1 and 0.10.0.
+
+> [!TIP]
+> For multiple devices (e.g. Dockerfile supporting MI300X + MI355X):
+>
+> ```bash
+> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+>    "rocm[libraries,device-gfx942,device-gfx950]"
+> ```
+
+After installing, verify JAX can see your GPU:
+
+```python
+import jax
+
+print(jax.devices())
+# [RocmDevice(id=0), RocmDevice(id=1), ...]
+```
 
 ### Installing multi-arch tarballs
 
@@ -422,15 +489,38 @@ sudo dnf install amdrocm-core-sdk
 > supported GPU targets and their identifiers, see
 > [Supported Python `[device-*]` install extras](#supported-python-device--install-extras).
 
+### Using ROCm from WSL
+
+ROCm supports WSL via the DXG kernel interface. DXG detection is enabled by
+default as of rocm-systems@901f9a5 — no environment variable setup is required.
+
+To use ROCm on WSL, install the optional `amdrocm-wsl` package which provides
+the DXG support library:
+
+```bash
+# For Debian/Ubuntu:
+sudo apt install amdrocm-wsl
+
+# For RHEL/CentOS/Fedora:
+sudo dnf install amdrocm-wsl
+```
+
+To explicitly disable DXG detection, set:
+
+```bash
+export HSA_ENABLE_DXG_DETECTION=0
+```
+
 ## Per-family releases
 
-Per-family releases use **GPU-family-specific index URLs** — you choose the
+Per-family releases use **GPU-family-specific index URLs** - you choose the
 index URL that matches your GPU family, and all packages for that family are
 served from that URL.
 
-> [!NOTE]
-> Multi-arch releases (above) are the newer approach and will soon replace
-> per-family releases. Both are available during the transition.
+> [!CAUTION]
+> Multi-arch releases (above) are the newer approach and have replaced
+> per-family releases. Historical per-family releases are still available but
+> no new per-family releases will be generated.
 
 ### Installing per-family releases using pip
 

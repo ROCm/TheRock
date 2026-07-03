@@ -107,7 +107,7 @@ jobs:
       container_image: ${{ steps.derive.outputs.container_image }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -130,7 +130,7 @@ jobs:
     needs: [prepare_install_context]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-core42-ossci-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
@@ -150,8 +150,8 @@ jobs:
           echo "Installing prerequisites for ${{ env.PKG_TYPE }} on container"
 
           if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
-            apt update
-            apt install -y \
+            sudo apt update
+            sudo apt install -y \
               wget \
               curl \
               ca-certificates \
@@ -159,7 +159,7 @@ jobs:
               lsb-release
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
-              apt install -y pciutils kmod apt-utils
+              sudo apt install -y pciutils kmod apt-utils
             fi
           elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
             # SLES prerequisites (uses BCI base - zypper)
@@ -190,7 +190,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
