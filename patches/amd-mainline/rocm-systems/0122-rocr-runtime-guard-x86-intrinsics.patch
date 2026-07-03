@@ -1,0 +1,163 @@
+From cb167ca869eb42011a46bf0770c07a088aaa33f9 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Fri, 3 Jul 2026 19:12:18 +0000
+Subject: [PATCH] [rocr-runtime] Guard x86 intrinsics for non-x86 architectures
+
+Guard _mm_sfence, _mm_mfence, _mm_pause, and _mm_clflush calls
+behind architecture checks for x86 and ppc64le. On ppc64le, GCC
+compatibility headers translate these to PowerPC equivalents.
+---
+ .../runtime/hsa-runtime/core/inc/amd_gpu_agent.h            | 4 ++++
+ .../runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp      | 4 ++++
+ .../runtime/hsa-runtime/core/runtime/amd_blit_kernel.cpp    | 2 ++
+ .../runtime/hsa-runtime/core/runtime/amd_blit_sdma.cpp      | 4 ++++
+ .../runtime/hsa-runtime/core/runtime/intercept_queue.cpp    | 6 ++++++
+ projects/rocr-runtime/runtime/hsa-runtime/core/util/locks.h | 2 ++
+ projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h | 2 ++
+ 7 files changed, 24 insertions(+)
+
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_gpu_agent.h b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_gpu_agent.h
+index 5abb19c45d..38b635840a 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_gpu_agent.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/amd_gpu_agent.h
+@@ -478,9 +478,13 @@ class GpuAgent : public GpuAgentInt {
+   /// @brief Force a WC flush on PCIe devices by doing a write and then read-back
+   __forceinline void PcieWcFlush(void *ptr, size_t size) const {
+     if (!xgmi_cpu_gpu_) {
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+       _mm_sfence();
++#endif
+       *((uint8_t*)ptr + size - 1) = *((uint8_t*)ptr + size - 1);
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+       _mm_mfence();
++#endif
+       auto readback = *(reinterpret_cast<volatile uint8_t*>(ptr) + size - 1);
+       UNUSED(readback);
+     }
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp
+index e7a4dd086b..2275f27887 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_aql_queue.cpp
+@@ -483,7 +483,9 @@ void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
+     HSAKMT_CALL(hsaKmtQueueRingDoorbell(queue_id_, value));
+   } else {
+     // Hardware doorbell supports AQL semantics.
++    #if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+     _mm_sfence();
++    #endif
+     *(signal_.hardware_doorbell_ptr) = uint64_t(value);
+     /* signal_ is allocated as uncached so we do not need read-back to flush WC */
+   }
+@@ -1687,7 +1689,9 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b, hsa_fence_scope
+   memcpy(&queue_slot[1], &slot_data[1], slot_size_b - sizeof(uint32_t));
+   if (IsDeviceMemRingBuf() && needsPcieOrdering()) {
+     // Ensure the packet body is written as header may get reordered when writing over PCIE
++    #if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+     _mm_sfence();
++    #endif
+   }
+   atomic::Store(&queue_slot[0], slot_data[0], std::memory_order_release);
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_kernel.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_kernel.cpp
+index 62366e1dc5..69978af6a3 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_kernel.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_kernel.cpp
+@@ -897,7 +897,9 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
+   std::atomic_thread_fence(std::memory_order_release);
+   if (queue_->IsDeviceMemRingBuf() && queue_->needsPcieOrdering()) {
+     // Ensure the packet body is written as header may get reordered when writing over PCIE
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+     _mm_sfence();
++#endif
+   }
+ #if defined(__linux__)
+   __atomic_store_n(&(queue_buffer[index & queue_bitmask_].full_header),
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_sdma.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_sdma.cpp
+index 91a1b95547..495a4539a6 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_sdma.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/amd_blit_sdma.cpp
+@@ -1725,7 +1725,9 @@ char* BlitSdma<useGCR, scopeFields>::AcquireWriteAddress(uint32_t cmd_size, uint
+ 
+     // CAS failed -- reuse the observed value directly, skip redundant atomic Load.
+     curr_index = observed;
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+     _mm_pause();
++#endif
+   }
+ 
+   return nullptr;
+@@ -1795,7 +1797,9 @@ void BlitSdma<useGCR, scopeFields>::PadRingToEnd(uint64_t curr_index) {
+   // Check whether the engine has finished using this region.
+   if (CanWriteUpto(new_index) == false) {
+     // Engine hasn't freed this region yet.  Pause briefly.
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+     _mm_pause();
++#endif
+     return;
+   }
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/intercept_queue.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/intercept_queue.cpp
+index 038d8230e7..a9a0218845 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/intercept_queue.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/intercept_queue.cpp
+@@ -271,7 +271,9 @@ uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
+       ring[barrier & mask].barrier_and.completion_signal = Signal::Convert(async_doorbell_);
+       if (wrapped->IsDeviceMemRingBuf() && needsPcieOrdering()) {
+         // Ensure the packet body is written as header may get reordered when writing over PCIE
++        #if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+         _mm_sfence();
++        #endif
+       }
+       atomic::Store(&ring[barrier & mask].barrier_and.header, kBarrierHeader,
+                     std::memory_order_release);
+@@ -318,7 +320,9 @@ uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
+       if (write_index != 0) {
+         if (wrapped->IsDeviceMemRingBuf() && needsPcieOrdering()) {
+           // Ensure the packet body is written as header may get reordered when writing over PCIE
++          #if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+           _mm_sfence();
++          #endif
+         }
+         atomic::Store(&ring[write & mask].packet.header, packets[first_written_packet_index].packet.header,
+                       std::memory_order_release);
+@@ -419,7 +423,9 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
+ 
+     if (IsDeviceMemRingBuf() && needsPcieOrdering()) {
+       // Ensure the packet body is written as header may get reordered when writing over PCIE
++      #if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+       _mm_sfence();
++      #endif
+     }
+   }
+   i = next_packet_;
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/locks.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/locks.h
+index 133dd06f0b..33ccce4ae3 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/locks.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/locks.h
+@@ -72,7 +72,9 @@ class HybridMutex {
+     while (!lock_.compare_exchange_strong(old, 1)) {
+       cnt--;
+       if (cnt > maxSpinIterPause) {
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+         _mm_pause();
++#endif
+       } else if (cnt-- > maxSpinIterYield) {
+         os::YieldThread();
+       } else {
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
+index 1839bacb68..0b56c7e13d 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
+@@ -427,7 +427,9 @@ inline void FlushCpuCache(const void* base, size_t offset, size_t len) {
+   cur += offset;
+   uintptr_t lastline = (uintptr_t)(cur + len - 1) | (cacheline_size - 1);
+   do {
++#if defined(__x86_64__) || defined(__i386__) || defined(__powerpc64__) || defined(__PPC64__)
+     _mm_clflush((const void*)cur);
++#endif
+     cur += cacheline_size;
+   } while (cur <= (const char*)lastline);
+ }
+-- 
+2.52.0
+
