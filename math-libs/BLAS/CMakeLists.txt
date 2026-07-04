@@ -390,9 +390,6 @@ if(THEROCK_ENABLE_SPARSE)
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        # hipSPARSELt consumes hipBLASLt via find_package(hipblaslt); the installed
-        # hipblaslt-config runs find_dependency(hipblas-common), so the transitive
-        # package must be declared for the super-project dependency provider.
         hipBLAS-common
         hipSPARSE
         rocSPARSE
@@ -400,10 +397,6 @@ if(THEROCK_ENABLE_SPARSE)
         therock-msgpack-cxx
       RUNTIME_DEPS
         hip-clr
-        # hipBLASLt provides the shared tensilelite-host + origami + rocisa that
-        # hipSPARSELt's device-library codegen resolves via find_package(hipblaslt);
-        # RUNTIME_DEPS (a superset of BUILD_DEPS) both orders the build and
-        # co-locates hipBLASLt's runtime files in hipSPARSELt's dist.
         hipBLASLt
         origami
         therock-host-blas

@@ -29,26 +29,13 @@ optional = true
 [components.dev."math-libs/BLAS/origami/stage"]
 [components.lib."math-libs/BLAS/origami/stage"]
 exclude = [
-  # Python extension modules are cpython-version-specific ABI binaries (e.g.
-  # origami.cpython-312-x86_64-linux-gnu.so). They must not be included in
-  # the python-version-agnostic rocm-sdk lib package, where
-  # testSharedLibrariesLoad would try to ctypes.CDLL() them from a different
-  # Python version and fail. They are distributed via the test component only.
   "lib/python*/**",
 ]
-# origami installs its license to share/doc/origami/. Without a doc component
-# entry for this stage dir, that file is claimed by NO component and the artifact
-# scanner fails ("unmatched"), which is what broke the rocm-sdk build on prior
-# attempts (#3820/#3237/#2813). The doc default glob (**/share/doc/**) claims it.
 [components.doc."math-libs/BLAS/origami/stage"]
 [components.test."math-libs/BLAS/origami/stage"]
 include = [
   "bin/origami-tests*",
   "bin/origami/**",
-  # Python extension is installed here so the test script can set PYTHONPATH
-  # to lib/pythonX.Y/site-packages/ for ctest Python tests. Scoped to the
-  # origami package so co-located packages in the shared site-packages tree
-  # are not pulled in.
   "lib/python*/site-packages/origami/**",
 ]
 
@@ -85,10 +72,6 @@ include = [
 include = [
   "bin/hipblaslt/library/**",
   "lib/hipblaslt/library/**",
-  # rocisa Python extension, installed with hipBLASLt so downstream consumers
-  # (e.g. hipSPARSELt) can import it to run device-library codegen against the
-  # staged hipBLASLt package. The .so files match the lib default glob; this
-  # claims the package __init__.py alongside them so nothing is left unmatched.
   "lib/hipblaslt/rocisa/**",
 ]
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]
