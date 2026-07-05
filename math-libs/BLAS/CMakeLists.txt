@@ -189,6 +189,12 @@ set(rocBLAS_extra_cmake_args)
 if(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_extra_cmake_args -DROCBLAS_CLIENTS_REFERENCE_ILP64=ON)
 endif()
+if(NOT WIN32)
+  list(APPEND rocBLAS_extra_cmake_args
+    "-DOpenMP_DIR=${_toolchain_dir}/lib/cmake/openmp"
+    "-DHIP_CLANG_ROOT=${_toolchain_dir}"
+  )
+endif()
 
 # Disable rocBLAS samples on Windows due to use of deprecated
 # <experimental/filesystem> in client_utility.cpp with MSVC.
