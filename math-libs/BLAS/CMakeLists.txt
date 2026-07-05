@@ -7,11 +7,17 @@
 # here without worrying about build deps.
 therock_cmake_subproject_dist_dir(_blas_hack_hip_dir hip-clr)
 cmake_path(APPEND _blas_hack_hip_dir lib/llvm OUTPUT_VARIABLE _toolchain_dir)
+set(_blas_hip_clang_root_cmake_args)
+if(NOT WIN32)
+  list(APPEND _blas_hip_clang_root_cmake_args
+    "-DHIP_CLANG_ROOT=${_toolchain_dir}"
+  )
+endif()
 set(_blas_openmp_toolchain_cmake_args)
 if(NOT WIN32)
   list(APPEND _blas_openmp_toolchain_cmake_args
     "-DOpenMP_DIR=${_toolchain_dir}/lib/cmake/openmp"
-    "-DHIP_CLANG_ROOT=${_toolchain_dir}"
+    ${_blas_hip_clang_root_cmake_args}
   )
 endif()
 
@@ -273,7 +279,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
-      ${_blas_openmp_toolchain_cmake_args}
+      ${_blas_hip_clang_root_cmake_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -361,7 +367,7 @@ if(THEROCK_ENABLE_SPARSE)
         -DHIPSPARSELT_ENABLE_SAMPLES=OFF
         -DHIPSPARSELT_ENABLE_FETCH=OFF
         -DHIPSPARSELT_ENABLE_THEROCK=ON
-        ${_blas_openmp_toolchain_cmake_args}
+        ${_blas_hip_clang_root_cmake_args}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
