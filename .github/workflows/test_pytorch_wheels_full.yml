@@ -15,7 +15,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-gfx942-1gpu-core42-ossci-rocm"
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       test_runs_on_multi_gpu:
         description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-multi-gpu in amdgpu_family_matrix.py
         type: string
@@ -94,7 +94,7 @@ on:
       test_runs_on:
         required: false
         type: string
-        default: "linux-gfx942-1gpu-core42-ossci-rocm"
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       test_runs_on_multi_gpu:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"
@@ -157,7 +157,7 @@ jobs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -213,13 +213,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -399,3 +399,38 @@ jobs:
             echo "No run_pytorch_tests_exit_code.txt found"
             exit 1
           fi
+
+  # Aggregate every shard's JUnit XML test reports into a single failure table
+  # on the run's summary page, so all failures across configs/shards are visible
+  # in one place without digging into individual matrix jobs or artifacts.
+  test_summary:
+    if: always()
+    needs: test_wheels
+    name: Test Summary
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+
+      - name: Download all test report artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: artifacts
+          pattern: test-reports-*
+
+      - name: Generate combined summary
+        env:
+          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+          TORCH_VERSION: ${{ inputs.torch_version }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
+          PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+          PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+        run: |
+          python external-builds/pytorch/summarize_test_results.py \
+            --combined-dir artifacts

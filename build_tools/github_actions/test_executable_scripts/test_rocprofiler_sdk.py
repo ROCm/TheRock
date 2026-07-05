@@ -12,7 +12,7 @@ import sys
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_api import is_asan
+from amdgpu_family_matrix import is_asan
 
 # Base Paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
