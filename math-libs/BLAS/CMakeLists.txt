@@ -258,6 +258,13 @@ if(THEROCK_ENABLE_SPARSE)
   # rocSPARSE
   ##############################################################################
   set(_sparse_subproject_names)
+  set(_sparse_extra_cmake_args)
+  if(NOT WIN32)
+    list(APPEND _sparse_extra_cmake_args
+      "-DOpenMP_DIR=${_toolchain_dir}/lib/cmake/openmp"
+      "-DHIP_CLANG_ROOT=${_toolchain_dir}"
+    )
+  endif()
 
   therock_cmake_subproject_declare(rocSPARSE
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsparse"
@@ -271,6 +278,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
+      ${_sparse_extra_cmake_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -311,6 +319,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
+      ${_sparse_extra_cmake_args}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
