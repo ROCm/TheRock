@@ -871,6 +871,17 @@ function(therock_cmake_subproject_activate target_name)
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
+  # Propagate compiler-cache compatibility flags from the super-project so that
+  # subproject targets cannot re-enable unity builds or precompiled headers and
+  # silently defeat sccache caching (reported as "multiple input files" /
+  # "Can't handle UnknownFlag arguments with -Xclang").
+  if(DEFINED CMAKE_UNITY_BUILD)
+    list(APPEND _cmake_args "-DCMAKE_UNITY_BUILD=${CMAKE_UNITY_BUILD}")
+  endif()
+  if(DEFINED CMAKE_DISABLE_PRECOMPILE_HEADERS)
+    list(APPEND _cmake_args "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=${CMAKE_DISABLE_PRECOMPILE_HEADERS}")
+  endif()
+
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
@@ -1665,8 +1676,6 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@CMAKE_LINKER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
-  string(APPEND _toolchain_contents "set(CMAKE_UNITY_BUILD \"@CMAKE_UNITY_BUILD@\")\n")
-  string(APPEND _toolchain_contents "set(CMAKE_DISABLE_PRECOMPILE_HEADERS \"@CMAKE_DISABLE_PRECOMPILE_HEADERS@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
   if(MSVC AND compiler_toolchain)
     # The system compiler and the toolchain compiler are incompatible, so we
