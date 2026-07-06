@@ -215,6 +215,7 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             ${COMPILER_LAUNCHER_ARGS} \
             -DCMAKE_UNITY_BUILD=OFF \
+            -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
