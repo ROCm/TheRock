@@ -421,6 +421,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("mpfr")
             extra_artifacts.append("expat")
             extra_artifacts.append("ncurses")
+            # rocgdb tests require amd-llvm_dev for compiler headers/tools.
+            argv.append("amd-llvm_dev")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
