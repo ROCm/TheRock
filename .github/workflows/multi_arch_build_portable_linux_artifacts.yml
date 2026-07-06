@@ -179,9 +179,13 @@ jobs:
           elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
             COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           fi
+          # Disable unity/jumbo builds so sccache can cache individual compilations.
+          # Unity builds pass multiple source files per compiler invocation, which
+          # sccache cannot cache (reported as "Non-cacheable: multiple input files").
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             ${COMPILER_LAUNCHER_ARGS} \
+            -DCMAKE_UNITY_BUILD=OFF \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
