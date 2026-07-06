@@ -27,6 +27,11 @@ fi
 
 mkdir -p "$build_root" "$install_root" "$stage_root"
 
+# Fetch the pre-built wkmi library required to link rocdxg.
+#echo "Fetching wkmi DVC artifacts..."
+#"@Python3_EXECUTABLE@" "@THEROCK_SOURCE_DIR@/build_tools/fetch_dvc_artifacts.py" \
+#  pull "@THEROCK_ROCM_SYSTEMS_SOURCE_DIR@"
+
 cmake -B "$build_root" -S "$rocdxg_source_dir" -G Ninja \
   -DCMAKE_BUILD_TYPE="@CMAKE_BUILD_TYPE@" \
   -DCMAKE_INSTALL_PREFIX="$install_root" \
