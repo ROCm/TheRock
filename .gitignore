@@ -31,5 +31,3 @@ __pycache__
 /install/
 /output-*/
 /out/
-
-# CI trigger: staging-experiment-0001

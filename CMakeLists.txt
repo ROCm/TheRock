@@ -535,3 +535,5 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
+
+# CI trigger: staging-experiment-0001
