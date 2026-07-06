@@ -117,7 +117,12 @@ def main():
     parser.add_argument(
         "--gha",
         action="store_true",
-        help="Write env vars to $GITHUB_ENV for use in subsequent GitHub Actions steps",
+        help=(
+            "Write HIP_CLANG_LAUNCHER to $GITHUB_ENV for use in subsequent steps. "
+            "CMAKE_C/CXX_COMPILER_LAUNCHER are intentionally excluded — setting them "
+            "globally breaks stages that use custom compiler wrappers (e.g. profiler-apps). "
+            "Those launchers are passed via cmake -D args in the Configure step instead."
+        ),
     )
     args = parser.parse_args()
 
@@ -149,10 +154,10 @@ def main():
         github_env = Path(os.environ["GITHUB_ENV"])
         with github_env.open("a") as f:
             for key, value in env.items():
-                f.write(f"{key}={value}\n")
-        print("Wrote to $GITHUB_ENV:")
-        for key, value in env.items():
-            print(f"  {key}={value}")
+                if key == "HIP_CLANG_LAUNCHER":
+                    f.write(f"{key}={value}\n")
+        if "HIP_CLANG_LAUNCHER" in env:
+            print(f"Wrote HIP_CLANG_LAUNCHER={env['HIP_CLANG_LAUNCHER']} to $GITHUB_ENV")
     else:
         print("Configure a ROCm build with:")
         for key, value in env.items():

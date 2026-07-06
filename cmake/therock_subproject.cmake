@@ -1806,6 +1806,13 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    # Propagate HIP_CLANG_LAUNCHER so hipcc routes its internal clang invocations
+    # through sccache. Scoped to amd-hip subprojects only — other stages (profiler,
+    # runtime-tests) use custom compiler wrappers that are incompatible with sccache
+    # interception and must not receive this env var.
+    if(DEFINED ENV{HIP_CLANG_LAUNCHER})
+      list(APPEND _build_env_pairs "HIP_CLANG_LAUNCHER=$ENV{HIP_CLANG_LAUNCHER}")
+    endif()
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()
