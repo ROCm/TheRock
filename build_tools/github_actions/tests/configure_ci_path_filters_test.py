@@ -3,13 +3,19 @@
 
 from pathlib import Path
 import os
+import subprocess
 import sys
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from configure_ci_path_filters import is_ci_run_required, _GITHUB_WORKFLOWS_CI_FILENAMES
+from configure_ci_path_filters import (
+    _GITHUB_WORKFLOWS_CI_FILENAMES,
+    get_git_commit_hash,
+    get_git_modified_paths,
+    is_ci_run_required,
+)
 from workflow_utils import get_transitive_workflow_uses
 
 
@@ -26,6 +32,11 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
 
     def test_dont_run_ci_if_only_experimental_files_edited(self):
         paths = ["experimental/file.h"]
+        run_ci = is_ci_run_required(paths)
+        self.assertFalse(run_ci)
+
+    def test_dont_run_ci_if_only_skipped_files_edited(self):
+        paths = ["gitleaks.toml", "build_tools/scan_tools/script.py"]
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
@@ -55,6 +66,107 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
+
+    @patch("configure_ci_path_filters.subprocess.run")
+    def test_missing_base_sha_is_fetched_before_diffing(self, mock_run):
+        base_sha = "f5c168058a7ceaa0f179cc36784b491a11a3adc7"
+        fetched = False
+
+        def run_side_effect(args, **kwargs):
+            nonlocal fetched
+            if args[:2] == ["git", "cat-file"]:
+                return subprocess.CompletedProcess(args=args, returncode=1)
+            if args[:2] == ["git", "diff"]:
+                if not fetched:
+                    raise subprocess.CalledProcessError(128, args)
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout="compiler/amd-llvm\ncompiler/spirv-llvm-translator\n",
+                )
+            if args[:2] == ["git", "fetch"]:
+                fetched = True
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout="",
+                )
+            self.fail(f"Unexpected subprocess.run call: {args!r}")
+
+        mock_run.side_effect = run_side_effect
+
+        self.assertEqual(
+            get_git_modified_paths(base_sha),
+            ["compiler/amd-llvm", "compiler/spirv-llvm-translator"],
+        )
+
+    @patch("configure_ci_path_filters.subprocess.run")
+    def test_diff_failure_for_available_base_sha_is_not_treated_as_missing(
+        self, mock_run
+    ):
+        base_sha = "f5c168058a7ceaa0f179cc36784b491a11a3adc7"
+
+        def run_side_effect(args, **kwargs):
+            if args[:2] == ["git", "cat-file"]:
+                return subprocess.CompletedProcess(args=args, returncode=0)
+            if args[:2] == ["git", "diff"]:
+                raise subprocess.CalledProcessError(128, args)
+            self.fail(f"Unexpected subprocess.run call: {args!r}")
+
+        mock_run.side_effect = run_side_effect
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            get_git_modified_paths(base_sha)
+
+    @patch("configure_ci_path_filters.subprocess.run")
+    def test_get_git_commit_hash_resolves_ref(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["git", "rev-parse", "--verify", "HEAD^{commit}"],
+            returncode=0,
+            stdout="0123456789abcdef0123456789abcdef01234567\n",
+        )
+
+        self.assertEqual(
+            get_git_commit_hash("HEAD"),
+            "0123456789abcdef0123456789abcdef01234567",
+        )
+        mock_run.assert_called_once_with(
+            ["git", "rev-parse", "--verify", "HEAD^{commit}"],
+            stdout=subprocess.PIPE,
+            check=True,
+            text=True,
+            timeout=60,
+        )
+
+    @patch("configure_ci_path_filters.subprocess.run")
+    def test_get_git_commit_hash_fetches_missing_sha_before_resolving(self, mock_run):
+        base_sha = "f5c168058a7ceaa0f179cc36784b491a11a3adc7"
+        fetched = False
+
+        def run_side_effect(args, **kwargs):
+            nonlocal fetched
+            if args[:2] == ["git", "cat-file"]:
+                return subprocess.CompletedProcess(args=args, returncode=1)
+            if args[:2] == ["git", "fetch"]:
+                fetched = True
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout="",
+                )
+            if args[:2] == ["git", "rev-parse"]:
+                if not fetched:
+                    raise subprocess.CalledProcessError(128, args)
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=f"{base_sha}\n",
+                )
+            self.fail(f"Unexpected subprocess.run call: {args!r}")
+
+        mock_run.side_effect = run_side_effect
+
+        self.assertEqual(get_git_commit_hash(base_sha), base_sha)
 
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
         """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of

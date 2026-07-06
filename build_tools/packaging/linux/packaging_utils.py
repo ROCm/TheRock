@@ -265,6 +265,9 @@ def is_gfxarch_package(
 
     # In kpack mode, verify arch-specific artifacts exist
     if enable_kpack:
+        # Metapackages don't have artifacts but should still respect Gfxarch metadata
+        if is_meta_package(pkg_info):
+            return is_key_defined(pkg_info, "Gfxarch")
         if artifacts_dir:
             return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
         # Do not fall through to Gfxarch metadata: without artifacts we cannot treat
