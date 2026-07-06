@@ -222,7 +222,12 @@ cmake_dependent_option(
 ################################################################################
 
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
-option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
+option(THEROCK_GENERATE_DEBUG_INFO "Enable host-side debug symbol generation" OFF)
+set(THEROCK_DEBUG_INFO_LEVEL "full" CACHE STRING "Debug information level to generate: 'minimal' or 'full'")
+set_property(CACHE THEROCK_DEBUG_INFO_LEVEL PROPERTY STRINGS "minimal" "full")
+if(NOT THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal" AND NOT THEROCK_DEBUG_INFO_LEVEL STREQUAL "full")
+  message(FATAL_ERROR "THEROCK_DEBUG_INFO_LEVEL must be 'minimal' or 'full' (got '${THEROCK_DEBUG_INFO_LEVEL}')")
+endif()
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)

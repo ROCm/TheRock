@@ -3,11 +3,23 @@
 
 # Project wide compiler configuration.
 
-# On win32 only support embedded debug databases project wide.
+# On win32 prefer embedded debug databases (/Z7) project wide.
 # This improves compatibility with ccache and sccache:
 # https://github.com/ccache/ccache/issues/1040
-if(WIN32 AND NOT DEFINED CMAKE_MSVC_DEBUG_INFORMATION_FORMAT)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
+# Enable embedded (/Z7) debug info if any level of debug info is requested.
+if(WIN32 AND THEROCK_GENERATE_DEBUG_INFO)
+  if(NOT DEFINED CMAKE_MSVC_DEBUG_INFORMATION_FORMAT)
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+  endif()
+
+  if((CMAKE_C_COMPILER_LAUNCHER MATCHES "ccache|sccache"
+        OR CMAKE_CXX_COMPILER_LAUNCHER MATCHES "ccache|sccache")
+      AND NOT CMAKE_MSVC_DEBUG_INFORMATION_FORMAT STREQUAL "Embedded")
+    message(WARNING
+        "ccache/sccache require embedded debug info (/Z7) to function, but "
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT is '${CMAKE_MSVC_DEBUG_INFORMATION_FORMAT}'. "
+        "Unset CMAKE_MSVC_DEBUG_INFORMATION_FORMAT to let THEROCK_GENERATE_DEBUG_INFO manage it.")
+  endif()
 endif()
 
 if(WIN32 AND NOT MSVC AND NOT THEROCK_DISABLE_MSVC_CHECK)
