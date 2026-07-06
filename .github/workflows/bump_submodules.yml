@@ -5,6 +5,16 @@ name: Bump Submodule automation
 
 on:
   workflow_dispatch:
+    inputs:
+      submodule:
+        description: 'Submodule to bump (default: all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - rocm-systems
+          - rocm-libraries
   schedule:
     - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
   push:
@@ -55,6 +65,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
+            --submodule "${{ github.event.inputs.submodule || 'all' }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}"
 

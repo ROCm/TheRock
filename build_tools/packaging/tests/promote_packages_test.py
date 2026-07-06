@@ -2,9 +2,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Test suite for the promote_from_rc_to_final package promotion script.
+"""Test suite for the promote_packages package promotion script.
 
-This test suite validates the functionality of promote_from_rc_to_final.py, which
+This test suite validates the functionality of promote_packages.py, which
 promotes release candidate (RC) packages to final releases by removing RC suffixes
 from version strings (e.g., 7.9.0rc1 → 7.9.0).
 
@@ -42,10 +42,10 @@ PREREQUISITES:
 
 USAGE:
   # Test on current platform (auto-detected):
-  python ./build_tools/packaging/tests/promote_from_rc_to_final_test.py
+  python ./build_tools/packaging/tests/promote_packages_test.py
 
   # Use cached packages to speed up repeated test runs:
-  python ./build_tools/packaging/tests/promote_from_rc_to_final_test.py --cache-dir=/tmp/package_cache
+  python ./build_tools/packaging/tests/promote_packages_test.py --cache-dir=/tmp/package_cache
 """
 
 import argparse
@@ -61,7 +61,7 @@ import urllib
 import platform as platform_module
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-import promote_from_rc_to_final
+import promote_packages
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 import setup_venv
@@ -182,7 +182,7 @@ def checkPromoteEverything(
         for file in dir_path.glob("*"):
             shutil.copy2(file, tmp_dir)
 
-        promote_from_rc_to_final.main(tmp_dir, delete=True)
+        promote_packages.main(tmp_dir, delete=True)
         success = True
 
         for func_name, res in [
@@ -235,7 +235,7 @@ def checkPromoteOnlyRocm(
         for file in dir_path.glob("*"):
             shutil.copy2(file, tmp_dir)
 
-        promote_from_rc_to_final.main(tmp_dir, match_files="rocm*", delete=True)
+        promote_packages.main(tmp_dir, match_files="rocm*", delete=True)
 
         success = True
 
@@ -293,7 +293,7 @@ def checkPromoteOnlyTorch(
         for file in dir_path.glob("*"):
             shutil.copy2(file, tmp_dir)
 
-        promote_from_rc_to_final.main(tmp_dir, match_files="*torch*", delete=True)
+        promote_packages.main(tmp_dir, match_files="*torch*", delete=True)
 
         success = True
 
