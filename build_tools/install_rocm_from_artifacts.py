@@ -48,6 +48,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
+    [--hpc | --no-hpc]
     [--base-only]
 
 Examples:
@@ -148,6 +149,17 @@ NIGHTLY_BUCKET_NAME = "therock-nightly-tarball"
 DEV_BUCKET_NAME = "therock-dev-tarball"
 
 
+def is_non_default_tarball(name: str) -> bool:
+    """True for tarballs that are not part of the default ROCm distribution.
+
+    Excludes both test tarballs (``-tests-``) and the opt-in HPC SDK expansion
+    tarballs (``-hpc-``, containing hipTensor/rocALUTION). These share the
+    ``therock-dist-{platform}-{group}-`` prefix with the default release tarball
+    and must be skipped when discovering default releases/families.
+    """
+    return "-tests-" in name or "-hpc-" in name
+
+
 def parse_nightly_version(version: str) -> Optional[datetime]:
     """
     Parse nightly version like '7.11.0a20251124' to extract date.
@@ -171,7 +183,9 @@ def extract_version_from_asset_name(
     suffix = ".tar.gz"
     if asset_name.startswith(prefix) and asset_name.endswith(suffix):
         version = asset_name[len(prefix) : -len(suffix)]
-        if version.startswith("tests-"):
+        # Skip test tarballs (tests-<version>) and opt-in HPC expansion tarballs
+        # (hpc-<version>); these are not default releases.
+        if version.startswith("tests-") or version.startswith("hpc-"):
             return None
         return version
     return None
@@ -189,7 +203,7 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
 
     for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
         for obj in page.get("Contents", []):
-            if "-tests-" in obj["Key"]:
+            if is_non_default_tarball(obj["Key"]):
                 continue
             # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
             match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
@@ -220,7 +234,7 @@ def _fetch_and_sort_nightly_releases(
             key = obj["Key"]
             if not key.endswith(".tar.gz"):
                 continue
-            if "-tests-" in key:
+            if is_non_default_tarball(key):
                 continue
             version = extract_version_from_asset_name(key, artifact_group, platform_str)
             if version:
@@ -292,20 +306,41 @@ def _create_output_directory(output_dir: Path):
     log(f"Created output directory '{output_dir.resolve()}'")
 
 
+def _release_asset_name(
+    artifact_group: str, release_version: str, hpc: bool = False
+) -> str:
+    """Build the release tarball asset name for a family/version.
+
+    When ``hpc`` is True, returns the opt-in HPC SDK expansion tarball name
+    (``...-{artifact_group}-hpc-{version}.tar.gz``) instead of the default one.
+    """
+    variant = "hpc-" if hpc else ""
+    return f"therock-dist-{PLATFORM}-{artifact_group}-{variant}{release_version}.tar.gz"
+
+
 def _retrieve_s3_release_assets(
-    release_bucket, artifact_group, release_version, output_dir
+    release_bucket, artifact_group, release_version, output_dir, hpc=False
 ):
     """
-    Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
+    Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family.
+
+    When ``hpc`` is True, also downloads and extracts the opt-in HPC SDK
+    expansion tarball on top of the default tree (extraction merges into the
+    same install prefix).
     """
-    asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
-    destination = output_dir / asset_name
+    asset_names = [_release_asset_name(artifact_group, release_version)]
+    if hpc:
+        asset_names.append(
+            _release_asset_name(artifact_group, release_version, hpc=True)
+        )
 
-    with open(destination, "wb") as f:
-        s3_client.download_fileobj(release_bucket, asset_name, f)
+    for asset_name in asset_names:
+        destination = output_dir / asset_name
+        with open(destination, "wb") as f:
+            s3_client.download_fileobj(release_bucket, asset_name, f)
 
-    # After downloading the asset, untar-ing the file
-    _untar_files(output_dir, destination)
+        # After downloading the asset, untar-ing the file
+        _untar_files(output_dir, destination)
 
 
 def retrieve_artifacts_by_run_id(args):
@@ -574,14 +609,17 @@ def retrieve_artifacts_by_release(args):
     log(f"Retrieving artifacts from release bucket {release_bucket}")
 
     if args.dry_run:
-        asset_name = (
-            f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
-        )
-        log(f"[DRY RUN] Would download: {asset_name} (version {release_version})")
+        asset_names = [_release_asset_name(artifact_group, release_version)]
+        if args.hpc:
+            asset_names.append(
+                _release_asset_name(artifact_group, release_version, hpc=True)
+            )
+        for asset_name in asset_names:
+            log(f"[DRY RUN] Would download: {asset_name} (version {release_version})")
         return
 
     _retrieve_s3_release_assets(
-        release_bucket, artifact_group, release_version, output_dir
+        release_bucket, artifact_group, release_version, output_dir, hpc=args.hpc
     )
 
 
@@ -638,6 +676,11 @@ def retrieve_artifacts_by_latest_release(args):
 
     if args.dry_run:
         log(f"[DRY RUN] Would download: {asset_name} (version {version})")
+        if args.hpc:
+            hpc_asset_name = _release_asset_name(
+                args.artifact_group, version, hpc=True
+            )
+            log(f"[DRY RUN] Would download: {hpc_asset_name} (version {version})")
         return
 
     # Reuse existing download logic
@@ -646,6 +689,7 @@ def retrieve_artifacts_by_latest_release(args):
         artifact_group=args.artifact_group,
         release_version=version,
         output_dir=args.output_dir,
+        hpc=args.hpc,
     )
 
 
@@ -710,6 +754,15 @@ def main(argv):
         "--dry-run",
         action="store_true",
         help="Show what would be downloaded/copied without actually doing it",
+    )
+
+    parser.add_argument(
+        "--hpc",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Also install the opt-in HPC SDK expansion tarball (hipTensor, "
+        "rocALUTION) on top of the default release tarball. Only applies to "
+        "--release and --latest-release installs.",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
