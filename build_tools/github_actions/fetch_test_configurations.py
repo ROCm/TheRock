@@ -80,6 +80,7 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
     "-e ROCR_VISIBLE_DEVICES",
+    "-e KUBE_CPU_REQUEST",
 ]
 
 
