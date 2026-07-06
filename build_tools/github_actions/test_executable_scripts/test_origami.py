@@ -13,7 +13,6 @@ import os
 import platform
 import shlex
 import subprocess
-import sys
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -32,19 +31,15 @@ bin_dir = Path(THEROCK_BIN_DIR).resolve()
 lib_dir = bin_dir.parent / "lib"
 origami_test_dir = bin_dir / "origami"
 
-# The origami Python extension is a CPython ABI-specific binary
-# (e.g. origami.cpython-312-x86_64-linux-gnu.so), so it can only be loaded
-# by the Python version running this script. Use that version directly rather
-# than globbing, since other components (e.g. rocprofiler-sdk) install
-# python3.10/python3.11/python3.12/python3.13 site-packages simultaneously
-# and a glob could resolve to the wrong version.
-python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
-site_packages_dir = lib_dir / python_version / "site-packages"
-if not (site_packages_dir / "origami").is_dir():
+site_packages_candidates = sorted(
+    p.parent for p in lib_dir.glob("python*/site-packages/origami") if p.is_dir()
+)
+if not site_packages_candidates:
     raise RuntimeError(
-        f"origami package not found in {site_packages_dir} -- "
-        f"was it built for {python_version}?"
+        f"origami package not found under {lib_dir}/python*/site-packages -- "
+        "was origami built and installed?"
     )
+site_packages_dir = site_packages_candidates[0]
 
 # LD_LIBRARY_PATH is needed for Python tests to find liborigami.so.
 if not is_windows:
