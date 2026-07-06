@@ -110,8 +110,8 @@ class ModeParsingTest(unittest.TestCase):
 
         for value, expected in [
             ("dry-run", StageReuseMode.DRY_RUN),
-            ("skip-stage", StageReuseMode.ENFORCE),
-            ("skip-stage", StageReuseMode.ENFORCE),
+            ("reuse-stage", StageReuseMode.ENFORCE),
+            ("reuse-stage", StageReuseMode.ENFORCE),
             ("garbage", StageReuseMode.DRY_RUN),
         ]:
             os.environ["STAGE_REUSE_MODE"] = value
@@ -346,6 +346,100 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
         self.assertEqual(calls["n"], 0)
         self.assertIsNone(captured["current_commit_sha"])
         self.assertIsNone(captured["ordered_commit_shas"])
+
+
+class PlatformAwareAvailabilityTest(unittest.TestCase):
+    """A stage is only reusable when its artifacts exist for EVERY platform.
+
+    Guards the review concern: prebuilt_stages flow to both the Linux and
+    Windows build configs, so a stage available only in the Linux baseline must
+    not be reused when Windows is also being built.
+    """
+
+    def _selector_factory(self, per_platform):
+        """Return a factory yielding a per-platform baseline selector."""
+
+        def factory(platform):
+            baseline = per_platform.get(platform)
+            return lambda required: baseline
+
+        return factory
+
+    def test_stage_reused_only_when_available_on_all_platforms(self):
+        # compiler-runtime unaffected. Linux baseline HAS base; Windows does NOT.
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("W1", ["blas_lib_generic.tar.zst"]),
+        }
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.ENFORCE,
+            platforms=["linux", "windows"],
+            target_families=["generic"],
+            topology=FakeTopology(),
+            baseline_selector_factory=self._selector_factory(per_platform),
+        )
+        # Available on linux but missing on windows -> NOT applied.
+        self.assertIn("compiler-runtime", result.candidate_stages)
+        self.assertIn("compiler-runtime", result.unavailable_stages)
+        self.assertEqual(result.applied_reuse_stages, ())
+        self.assertEqual(result.platform_available["linux"], ("compiler-runtime",))
+        self.assertEqual(result.platform_available["windows"], ())
+        joined = "\n".join(result.report_lines)
+        self.assertIn("missing on: windows", joined)
+
+    def test_stage_reused_when_present_on_both_platforms(self):
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("W1", ["base_lib_generic.tar.zst"]),
+        }
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.ENFORCE,
+            platforms=["linux", "windows"],
+            target_families=["generic"],
+            topology=FakeTopology(),
+            baseline_selector_factory=self._selector_factory(per_platform),
+        )
+        self.assertEqual(result.applied_reuse_stages, ("compiler-runtime",))
+        self.assertIn("compiler-runtime", result.available_stages)
+
+    def test_single_platform_default_is_linux(self):
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.ENFORCE,
+            target_families=["generic"],
+            topology=FakeTopology(),
+            baseline_selector=_selector(_baseline("123", ["base_lib_generic.tar.zst"])),
+        )
+        self.assertEqual(result.applied_reuse_stages, ("compiler-runtime",))
+        self.assertIn("linux", result.platform_available)
+
+
+class PlanStageReuseTest(unittest.TestCase):
+    """The pure planning step is independent of baseline/reporting."""
+
+    def test_plan_returns_candidates_without_baseline(self):
+        plan = srd.plan_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            topology=FakeTopology(),
+        )
+        self.assertIn("compiler-runtime", plan.candidate_stages)
+        self.assertFalse(plan.full_rebuild_required)
+
+    def test_plan_none_changed_files_is_full_rebuild(self):
+        plan = srd.plan_stage_reuse(changed_files=None, topology=FakeTopology())
+        self.assertTrue(plan.full_rebuild_required)
+        self.assertEqual(plan.candidate_stages, ())
+
+
+class TargetFamiliesTest(unittest.TestCase):
+    def test_always_includes_generic(self):
+        self.assertEqual(srd.stage_reuse_target_families(), ["generic"])
+
+    def test_dedupes_and_appends_generic(self):
+        fams = srd.stage_reuse_target_families(["gfx94x"], ["gfx94x", "gfx120x"])
+        self.assertEqual(fams, ["gfx94x", "gfx120x", "generic"])
 
 
 if __name__ == "__main__":

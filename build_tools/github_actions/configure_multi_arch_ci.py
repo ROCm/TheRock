@@ -681,8 +681,13 @@ def _determine_test_type(
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
+    targets: "TargetSelection | None" = None,
 ) -> JobDecisions:
-    """Determine which job groups to run, skip, or satisfy with prebuilt files."""
+    """Determine which job groups to run, skip, or satisfy with prebuilt files.
+    ``targets`` (the per-platform family selection) is used to scope automatic
+    stage reuse to the platforms actually being built, so a stage is only
+    reused when its artifacts exist for every one of those platforms.
+    """
 
     # Build ROCm.
     # Parse explicit prebuilt stages from workflow_dispatch input. These are
@@ -693,29 +698,43 @@ def decide_jobs(
         for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
 
-    # Behind STAGE_REUSE_MODE: in dry-run we only PRINT
-    # which stages WOULD be skipped and apply nothing; in "skip-stage" the
-    # eligible stages are merged into stage_decisions so the orchestrator
-    # skips their builds and copies artifacts instead.
+    # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
+    # which stages WOULD be reused and apply nothing; in "reuse-stage" the
+    # eligible stages are merged into stage_decisions so the orchestrator skips
+    # their builds and copies artifacts instead.
+    # These imports are intentionally local. stage_reuse_decision imports from
+    # sibling CI modules (baseline_runs, stage_impact, github_actions_api) that
+    # in turn pull in heavier deps; importing it lazily here keeps module import
+    # of configure_multi_arch_ci cheap and avoids an import cycle between the two
+    # modules (stage_reuse plumbing conceptually depends on this pipeline).
+
     from stage_reuse_decision import (
         StageReuseMode,
         compute_auto_stage_reuse,
         render_step_summary,
+        log_report,
+        render_step_summary,
+        stage_reuse_target_families,
     )
 
-    target_families = _stage_reuse_target_families(ci_inputs)
+    build_platforms = _stage_reuse_build_platforms(ci_inputs, targets)
+    target_families = stage_reuse_target_families(
+        ci_inputs.linux_amdgpu_families,
+        ci_inputs.windows_amdgpu_families,
+    )
     auto = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
         mode=StageReuseMode.from_environ(),
+        platforms=build_platforms,
         target_families=target_families,
     )
-    for line in auto.report_lines:
-        print(line)
+    log_report(auto)
+
     try:
         gha_append_step_summary(render_step_summary(auto))
-    except Exception as exc:  # never fail CI config on a reporting
+    except Exception as exc:  # never fail CI config on a reporting error
         print(f"[STAGE-REUSE] could not write step summary: {exc}")
-    # Only skip-stage mode returns non-empty applied_reuse_stages.
+    # Only reuse-stage mode returns non-empty applied_reuse_stages.
     for stage in auto.applied_reuse_stages:
         stage_decisions.setdefault(stage, JobAction.PREBUILT)
     build_rocm = BuildRocmDecision(
@@ -767,15 +786,31 @@ def decide_jobs(
 # ---------------------------------------------------------------------------
 
 
-def _stage_reuse_target_families(ci_inputs: "CIInputs") -> list[str]:
-    families = list(
-        dict.fromkeys(
-            [*ci_inputs.linux_amdgpu_families, *ci_inputs.windows_amdgpu_families]
-        )
-    )
-    if "generic" not in families:
-        families.append("generic")
-    return families
+def _stage_reuse_build_platforms(
+    ci_inputs: "CIInputs",
+    targets: "TargetSelection | None",
+) -> list[str]:
+    """Platforms whose baselines must contain a stage's artifacts to reuse it.
+    Automatic reuse merges into the prebuilt_stages that flow to BOTH the Linux
+    and Windows build configs, so a stage may only be reused when its artifacts
+    are available for every platform actually being built. When target selection
+    is known we use it directly; otherwise we fall back to the requested family
+    inputs, defaulting to Linux only.
+    """
+    if targets is not None:
+        platforms = []
+        if targets.linux_families:
+            platforms.append("linux")
+        if targets.windows_families:
+            platforms.append("windows")
+        return platforms or ["linux"]
+
+    platforms = []
+    if ci_inputs.linux_amdgpu_families:
+        platforms.append("linux")
+    if ci_inputs.windows_amdgpu_families:
+        platforms.append("windows")
+    return platforms or ["linux"]
 
 
 def _validate_family_names(

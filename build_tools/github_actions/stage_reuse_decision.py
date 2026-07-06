@@ -4,42 +4,99 @@
 
 """Auto-compute per-stage rebuild/reuse decisions for multi-arch CI.
 
-This script decides per build stage, whether the stage can be satisfied with prebuilt
-artifacts (reuse) instead of being rebuilt.
+This module decides, per build stage, whether the stage can be satisfied with
+prebuilt artifacts (reuse) instead of being rebuilt. It reuses the existing
+``stage_impact`` and ``baseline_runs`` tooling and adds two gates before a stage
+is reported reusable:
 
----------------------------------
-This module is wired into CI behind a two-way mode switch so it can be
-observed before it changes anything:
-* ``dry-run``  - DEFAULT. Compute the analysis and PRINT, for each stage that
-                 *would* be skipped, a line to the console + step summary, but
-                 return NO auto stages, so ``prebuilt_stages`` is unchanged and
-                 every stage still builds exactly.
-* ``skip-stage``  - Compute the analysis and actually return the reuse stages so
-                    the orchestrator copies their artifacts and skips the build.
+* Impact gate (``stage_impact.analyze_stage_impact``) - the change does not
+  affect the stage, so it is a *candidate* for reuse.
+* Availability gate (``baseline_runs.select_baseline_run``) - a single healthy,
+  commit-compatible baseline run actually contains the artifacts that stage
+  would produce, verified independently for every platform being built.
 
+Mode switch
+-----------
+The module is wired into CI behind a two-way ``STAGE_REUSE_MODE`` switch so it
+can be observed before it changes anything:
+
+* ``dry-run``    - DEFAULT. Compute the analysis and LOG, for each stage that
+                   *would* be reused, a line to the console + step summary, but
+                   return NO auto stages, so ``prebuilt_stages`` is unchanged
+                   and every stage still builds exactly.
+* ``reuse-stage`` - Compute the analysis and actually return the reuse stages so
+                     the orchestrator copies their artifacts and skips the build.
+
+Note: this ``STAGE_REUSE_MODE`` switch drives the *automatic* detection layer.
+It is orthogonal to the ``prebuilt_stages`` workflow input, which is the
+explicit, manual list of stages to reuse and is always honored regardless of
+mode.
+
+Environment contract
+--------------------
+``_default_baseline_selector`` reads the following environment variables. These
+are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
+
+* ``STAGE_REUSE_MODE``           - ``dry-run`` (default) or ``reuse-stage``.
+* ``GITHUB_REPOSITORY``          - ``owner/repo`` (default ``ROCm/TheRock``).
+* ``STAGE_REUSE_BASELINE_BRANCH``  - baseline branch to search (default ``main``).
+* ``STAGE_REUSE_BASELINE_WORKFLOW`` - baseline workflow file
+                                   (default ``multi_arch_ci.yml``).
+* ``STAGE_REUSE_CURRENT_SHA``    - current commit SHA; enables the
+                                   commit-compatibility rule when set.
+* ``STAGE_REUSE_MAX_AGE_HOURS``  - recency window in hours; disables the recency
+                                   rule when unset.
+* ``STAGE_REUSE_COMMIT_HISTORY`` - number of branch commits to fetch for
+                                   ancestry (default ``50``).
 """
+
 
 from __future__ import annotations
 
 import enum
 import os
+import logging
+import functools
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
+
+logger = logging.getLogger(__name__)
 
 
 class StageReuseMode(enum.Enum):
     DRY_RUN = "dry-run"
-    ENFORCE = "skip-stage"
+    ENFORCE = "reuse-stage"
 
     @staticmethod
     def from_environ(default: "StageReuseMode" = None) -> "StageReuseMode":
         """Read STAGE_REUSE_MODE; default to dry-run when unset/invalid."""
         default = default or StageReuseMode.DRY_RUN
         raw = (os.environ.get("STAGE_REUSE_MODE", "") or "").strip().lower()
-        for mode in StageReuseMode:
-            if raw == mode.value:
-                return mode
-        return default
+        return _STAGE_REUSE_MODE_ALIASES.get(raw, default)
+
+
+# Accepted spellings for each mode. ``skip-stage`` is the legacy alias that
+# predates the ``reuse-stage`` rename and is kept for backwards compatibility
+# with any callers still passing the old value.
+_STAGE_REUSE_MODE_ALIASES = {
+    "dry-run": StageReuseMode.DRY_RUN,
+    "reuse-stage": StageReuseMode.ENFORCE,
+    "skip-stage": StageReuseMode.ENFORCE,
+}
+
+
+@dataclass(frozen=True)
+class StageReusePlan:
+    """Result of the *planning* step: which stages are reuse candidates.
+    This is a pure function of the changed files and topology -- no baseline
+    selection, artifact verification, or reporting. Keeping it separate lets
+    callers reuse the impact decision without triggering any network/API work.
+    """
+
+    candidate_stages: tuple[str, ...]
+    rebuild_stages: tuple[str, ...]
+    full_rebuild_required: bool
+    reasons: tuple[str, ...]
 
 
 BaselineSelector = Callable[[Sequence["object"]], Optional["object"]]
@@ -47,7 +104,7 @@ BaselineSelector = Callable[[Sequence["object"]], Optional["object"]]
 
 @dataclass(frozen=True)
 class AutoStageReuse:
-    """Result of the auto stage-reuse analysis."""
+    """Result of the auto stage-reuse analysis (planning + verification)."""
 
     mode: StageReuseMode
     candidate_stages: tuple[str, ...]
@@ -60,9 +117,25 @@ class AutoStageReuse:
     applied_reuse_stages: tuple[str, ...]
     reasons: tuple[str, ...]
     report_lines: tuple[str, ...] = field(default_factory=tuple)
+    platform_available: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 LOG_PREFIX = "[STAGE-REUSE]"
+
+
+def stage_reuse_target_families(
+    linux_amdgpu_families: Sequence[str] = (),
+    windows_amdgpu_families: Sequence[str] = (),
+) -> list[str]:
+    """Family list whose artifacts must be verified for stage reuse.
+    Lives here (next to the reuse implementation) rather than in the caller,
+    since it only exists to prepare inputs for ``compute_auto_stage_reuse``.
+    Always includes ``generic`` because every stage produces a generic archive.
+    """
+    families = list(dict.fromkeys([*linux_amdgpu_families, *windows_amdgpu_families]))
+    if "generic" not in families:
+        families.append("generic")
+    return families
 
 
 def required_artifacts_for_stages(topology, stage_names, target_families):
@@ -120,25 +193,24 @@ def _stage_artifacts_available(
     return True
 
 
-def compute_auto_stage_reuse(
+def plan_stage_reuse(
     *,
     changed_files: Sequence[str] | None,
-    mode: StageReuseMode,
     platform: str | None = None,
-    target_families: Sequence[str] = (),
     topology=None,
-    baseline_selector: BaselineSelector | None = None,
-) -> AutoStageReuse:
-    """Compute auto stage-reuse decisions, verified against a baseline run."""
+) -> StageReusePlan:
+    """Planning step: which stages are unaffected reuse candidates.
+
+    Pure decision logic -- no baseline selection, artifact verification, or
+    reporting -- so it can be reused independently of the CI plumbing.
+    """
+
     if changed_files is None:
-        return _empty_result(
-            mode,
+        return StageReusePlan(
+            candidate_stages=(),
+            rebuild_stages=(),
             full_rebuild_required=True,
             reasons=("no changed-file list available",),
-            report_lines=(
-                f"{LOG_PREFIX} mode={mode.value}; no changed-file list "
-                f"Conservatively rebuilding all stages.",
-            ),
         )
 
     if topology is None:
@@ -148,22 +220,78 @@ def compute_auto_stage_reuse(
 
     from stage_impact import analyze_stage_impact
 
+    # TODO(#3399): thread build flags/variant through here for superrepos so a
+    # baseline built with different flags is not considered reusable. Not needed
+    # for the current single-variant multi-arch CI, but required before enabling
+    # reuse across superrepo builds that vary build configuration.
     impact = analyze_stage_impact(
         changed_inputs=list(changed_files),
         topology=topology,
         platform=platform,
     )
-    candidates = tuple(impact.copy_stages)
-    rebuild = tuple(impact.rebuild_stages)
-    families = tuple(target_families) or ("generic",)
+    return StageReusePlan(
+        candidate_stages=tuple(impact.copy_stages),
+        rebuild_stages=tuple(impact.rebuild_stages),
+        full_rebuild_required=impact.full_rebuild_required,
+        reasons=tuple(impact.reasons),
+    )
 
-    if impact.full_rebuild_required or not candidates:
+
+def compute_auto_stage_reuse(
+    *,
+    changed_files: Sequence[str] | None,
+    mode: StageReuseMode,
+    platform: str | None = None,
+    platforms: Sequence[str] | None = None,
+    target_families: Sequence[str] = (),
+    topology=None,
+    baseline_selector: BaselineSelector | None = None,
+    baseline_selector_factory: Callable[[str], BaselineSelector] | None = None,
+) -> AutoStageReuse:
+    """Compute auto stage-reuse decisions, verified against a baseline run.
+    A stage is only reusable when it is unaffected by the change AND its
+    artifacts are present in a healthy baseline run for *every* platform in
+    ``platforms``. This guards against the case flagged in review where the
+    resulting ``prebuilt_stages`` are applied to both Linux and Windows build
+    configs: a stage available only in the Linux baseline must not be skipped
+    on Windows. ``platform`` remains accepted as a single-platform shorthand
+    for backwards compatibility.
+    """
+    # Resolve the platform set. ``platforms`` wins; fall back to the legacy
+    # single ``platform`` arg; default to linux only when neither is given.
+    resolved_platforms = _resolve_platforms(platforms, platform)
+
+    if topology is None and changed_files is not None:
+        from _therock_utils.build_topology import get_topology
+
+        topology = get_topology()
+
+    plan = plan_stage_reuse(
+        changed_files=changed_files,
+        platform=resolved_platforms[0],
+        topology=topology,
+    )
+    candidates = plan.candidate_stages
+    rebuild = plan.rebuild_stages
+    families = tuple(target_families) or ("generic",)
+    if changed_files is None:
+        return _empty_result(
+            mode,
+            full_rebuild_required=True,
+            reasons=plan.reasons,
+            report_lines=(
+                f"{LOG_PREFIX} mode={mode.value}; no changed-file list. "
+                f"Conservatively rebuilding all stages.",
+            ),
+        )
+
+    if plan.full_rebuild_required or not candidates:
         lines = _format_report(
             mode=mode,
             candidates=candidates,
             rebuild=rebuild,
-            full_rebuild_required=impact.full_rebuild_required,
-            reasons=tuple(impact.reasons),
+            full_rebuild_required=plan.full_rebuild_required,
+            reasons=plan.reasons,
             baseline_run_id=None,
             available=(),
             unavailable=candidates,
@@ -172,53 +300,80 @@ def compute_auto_stage_reuse(
             mode=mode,
             candidate_stages=candidates,
             rebuild_stages=rebuild,
-            full_rebuild_required=impact.full_rebuild_required,
+            full_rebuild_required=plan.full_rebuild_required,
             baseline_run_id=None,
             baseline_html_url=None,
             available_stages=(),
             unavailable_stages=candidates,
             applied_reuse_stages=(),
-            reasons=tuple(impact.reasons),
+            reasons=plan.reasons,
             report_lines=lines,
         )
 
     required = required_artifacts_for_stages(topology, candidates, families)
-    baseline = None
+    # Verify artifact availability independently for each platform. A single
+    # ``baseline_selector`` (used by tests) applies to all platforms; otherwise
+    # a per-platform selector is built so each platform is checked against a
+    # baseline that actually produced that platform's artifacts.
     baseline_error: Optional[str] = None
-    try:
-        if baseline_selector is None:
-            baseline_selector = _default_baseline_selector(platform=platform)
-        baseline = baseline_selector(required)
-    except Exception as exc:
-        baseline_error = str(exc)
+    per_platform_available: dict[str, tuple[str, ...]] = {}
+    # The reported baseline run id/url comes from the first platform's baseline
+    # (they share commit/recency gates); per-platform detail lives in
+    # platform_available.
+    reported_baseline_run_id: Optional[str] = None
+    reported_baseline_url: Optional[str] = None
 
-    available_filenames = _matched_filenames(baseline)
+    for plat in resolved_platforms:
+        baseline = None
+        try:
+            if baseline_selector is not None:
+                selector = baseline_selector
+            elif baseline_selector_factory is not None:
+                selector = baseline_selector_factory(plat)
+            else:
+                selector = _default_baseline_selector(platform=plat)
+            baseline = selector(required)
+        except Exception as exc:
+            baseline_error = str(exc)
+
+        if reported_baseline_run_id is None and baseline is not None:
+            reported_baseline_run_id = baseline.run_id
+            reported_baseline_url = baseline.html_url
+
+        available_filenames = _matched_filenames(baseline)
+        avail_here: list[str] = []
+        if baseline is not None:
+            for stage_name in candidates:
+                if _stage_artifacts_available(
+                    topology, stage_name, families, available_filenames
+                ):
+                    avail_here.append(stage_name)
+        per_platform_available[plat] = tuple(avail_here)
+
+    # A stage is available only when present on EVERY platform being built.
     available: list[str] = []
     unavailable: list[str] = []
-    if baseline is not None:
-        for stage_name in candidates:
-            if _stage_artifacts_available(
-                topology, stage_name, families, available_filenames
-            ):
-                available.append(stage_name)
-            else:
-                unavailable.append(stage_name)
-    else:
-        unavailable = list(candidates)
+
+    for stage_name in candidates:
+        if all(
+            stage_name in per_platform_available.get(plat, ())
+            for plat in resolved_platforms
+        ):
+            available.append(stage_name)
+        else:
+            unavailable.append(stage_name)
 
     available_t = tuple(available)
     unavailable_t = tuple(unavailable)
     applied = available_t if mode is StageReuseMode.ENFORCE else ()
-    baseline_run_id = baseline.run_id if baseline is not None else None
-    baseline_url = baseline.html_url if baseline is not None else None
 
     lines = _format_report(
         mode=mode,
         candidates=candidates,
         rebuild=rebuild,
         full_rebuild_required=False,
-        reasons=tuple(impact.reasons),
-        baseline_run_id=baseline_run_id,
+        reasons=plan.reasons,
+        baseline_run_id=reported_baseline_run_id,
         available=available_t,
         unavailable=unavailable_t,
         baseline_error=baseline_error,
@@ -228,18 +383,38 @@ def compute_auto_stage_reuse(
         candidate_stages=candidates,
         rebuild_stages=rebuild,
         full_rebuild_required=False,
-        baseline_run_id=baseline_run_id,
-        baseline_html_url=baseline_url,
+        baseline_run_id=reported_baseline_run_id,
+        baseline_html_url=reported_baseline_url,
         available_stages=available_t,
         unavailable_stages=unavailable_t,
         applied_reuse_stages=applied,
-        reasons=tuple(impact.reasons),
+        reasons=plan.reasons,
         report_lines=lines,
+        platform_available=per_platform_available,
     )
 
 
+def _resolve_platforms(
+    platforms: Sequence[str] | None, platform: str | None
+) -> tuple[str, ...]:
+    """Normalize the platform inputs to a de-duplicated, ordered tuple."""
+    if platforms:
+        resolved = tuple(dict.fromkeys(platforms))
+    elif platform:
+        resolved = (platform,)
+    else:
+        resolved = ("linux",)
+    return resolved
+
+
 def _default_baseline_selector(*, platform: str | None) -> BaselineSelector:
-    """Build a selector bound to baseline_runs.select_baseline_run."""
+    """Build a selector bound to baseline_runs.select_baseline_run.
+    ``select_baseline_run`` already requires each candidate run to have
+    healthy build jobs (``required_successful_job_name_substrings=("Build",)``)
+    AND to contain all requested artifacts. A run with no artifacts (e.g. a
+    docs-only change) therefore fails the availability gate and is never
+    selected, so no extra "passing build" check is needed here.
+    """
     from baseline_runs import select_baseline_run
 
     github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
@@ -276,26 +451,34 @@ def _default_baseline_selector(*, platform: str | None) -> BaselineSelector:
                 effective_commit_sha = None
                 ordered_commit_shas = None
         except Exception as exc:
-            print(
-                f"{LOG_PREFIX} could not fetch branch history "
-                f"({exc}); skipping commit-compatibility rule."
+            logger.warning(
+                "%s could not fetch branch history (%s); "
+                "skipping commit-compatibility rule.",
+                LOG_PREFIX,
+                exc,
             )
             effective_commit_sha = None
             ordered_commit_shas = None
 
-    def _select(required):
-        return select_baseline_run(
-            required_artifacts=required,
-            github_repository=github_repository,
-            workflow_name=workflow_name,
-            branch=branch,
-            platform=platform or "linux",
-            current_commit_sha=effective_commit_sha,
-            ordered_commit_shas=ordered_commit_shas,
-            max_age_hours=max_age_hours,
-        )
+    # A functools.partial binds the resolved configuration to
+    # select_baseline_run; the only free argument is required_artifacts, which
+    # matches the BaselineSelector signature.
+    return functools.partial(
+        _invoke_select_baseline_run,
+        select_baseline_run=select_baseline_run,
+        github_repository=github_repository,
+        workflow_name=workflow_name,
+        branch=branch,
+        platform=platform or "linux",
+        current_commit_sha=effective_commit_sha,
+        ordered_commit_shas=ordered_commit_shas,
+        max_age_hours=max_age_hours,
+    )
 
-    return _select
+
+def _invoke_select_baseline_run(required, *, select_baseline_run, **kwargs):
+    """Adapter so a partial can present the BaselineSelector(required) shape."""
+    return select_baseline_run(required_artifacts=required, **kwargs)
 
 
 def _empty_result(mode, *, full_rebuild_required=False, reasons=(), report_lines=()):
@@ -325,8 +508,13 @@ def _format_report(
     available,
     unavailable,
     baseline_error=None,
+    platforms: Sequence[str] = (),
+    platform_available: dict[str, tuple[str, ...]] | None = None,
 ):
+    platform_available = platform_available or {}
     lines: list[str] = [f"{LOG_PREFIX} mode={mode.value}"]
+    if platforms:
+        lines.append(f"{LOG_PREFIX} platforms verified: {', '.join(platforms)}")
     if full_rebuild_required:
         lines.append(
             f"{LOG_PREFIX} conservative full rebuild: no stages eligible for reuse."
@@ -352,11 +540,24 @@ def _format_report(
     verb = "WILL be skipped" if mode is StageReuseMode.ENFORCE else "WOULD be skipped"
     for stage in available:
         lines.append(
-            f"{LOG_PREFIX} stage '{stage}' unaffected AND available in baseline -> {verb}"
+            f"{LOG_PREFIX} stage '{stage}' unaffected AND available in "
+            f"baseline on all platforms -> {verb}"
         )
     for stage in unavailable:
+        # Call out WHICH platforms are missing the artifacts so the mismatch
+        # (e.g. present on linux, absent on windows) is visible in the log.
+        if len(platforms) > 1:
+            missing = [
+                plat
+                for plat in platforms
+                if stage not in platform_available.get(plat, ())
+            ]
+            where = f" (missing on: {', '.join(missing)})" if missing else ""
+        else:
+            where = ""
         lines.append(
-            f"{LOG_PREFIX} stage '{stage}' unaffected but artifacts NOT available -> rebuild"
+            f"{LOG_PREFIX} stage '{stage}' unaffected but artifacts "
+            f"NOT available -> rebuild{where}"
         )
     if rebuild:
         lines.append(f"{LOG_PREFIX} stages rebuilding (impacted): {', '.join(rebuild)}")
@@ -389,6 +590,10 @@ def render_step_summary(result: AutoStageReuse) -> str:
     out.append(f"- unaffected candidates: {candidates}")
     out.append(f"- available in baseline: {available}")
     out.append(f"- applied: {applied}")
+    if result.platform_available:
+        out.append("- available per platform:")
+        for plat, stages in result.platform_available.items():
+            out.append(f"  - {plat}: {_format_stage_list(stages)}")
     if result.reasons:
         out.append("- reasons:")
         for reason in result.reasons:
@@ -398,6 +603,12 @@ def render_step_summary(result: AutoStageReuse) -> str:
         out.append(
             "> Dry-run only: no build steps were skipped. Artifacts were "
             "verified against the baseline run above. Set "
-            "`STAGE_REUSE_MODE=skip-stage` after review to enable skipping."
+            "`STAGE_REUSE_MODE=reuse-stage` after review to enable skipping."
         )
     return "\n".join(out)
+
+
+def log_report(result: AutoStageReuse) -> None:
+    """Emit the analysis report lines to the module logger."""
+    for line in result.report_lines:
+        logger.info(line)
