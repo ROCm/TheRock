@@ -188,7 +188,7 @@ COMPONENT_OVERRIDES = {
     # `rocprofv3` / `rocprof-sys-*` wrappers resolve, plus the example shared
     # libraries on LD_LIBRARY_PATH so instrumented binaries can run.
     # ROCPROFSYS_INSTALL_DIR points the generated test scripts at the install
-    # tree; ROCPROFSYS_MAX_THREADS caps thread oversubscription on CI hosts.
+    # tree.
     "rocprofiler-systems": {
         "test_dir": ["share", "rocprofiler-systems", "tests"],
         "additional_env_paths": {
@@ -197,7 +197,6 @@ COMPONENT_OVERRIDES = {
         },
         "env": {
             "ROCPROFSYS_INSTALL_DIR": "{rocm_path}",
-            "ROCPROFSYS_MAX_THREADS": "64",
         },
         # rocprofiler-systems tests instrument processes and attach to a shared
         # profiling backend; running them concurrently causes flaky failures.
