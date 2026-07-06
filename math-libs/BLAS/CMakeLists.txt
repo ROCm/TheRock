@@ -7,6 +7,19 @@
 # here without worrying about build deps.
 therock_cmake_subproject_dist_dir(_blas_hack_hip_dir hip-clr)
 cmake_path(APPEND _blas_hack_hip_dir lib/llvm OUTPUT_VARIABLE _toolchain_dir)
+set(_blas_hip_clang_root_cmake_args)
+if(NOT WIN32)
+  list(APPEND _blas_hip_clang_root_cmake_args
+    "-DHIP_CLANG_ROOT=${_toolchain_dir}"
+  )
+endif()
+set(_blas_openmp_toolchain_cmake_args)
+if(NOT WIN32)
+  list(APPEND _blas_openmp_toolchain_cmake_args
+    "-DOpenMP_DIR=${_toolchain_dir}/lib/cmake/openmp"
+    ${_blas_hip_clang_root_cmake_args}
+  )
+endif()
 
 # Most libraries need to depend on the profiler, but is conditionally only used
 # on Posix.
@@ -60,6 +73,7 @@ if(_enable_rocRoller)
       -DHIP_PLATFORM=amd
       -DROCROLLER_ENABLE_YAML_CPP=ON
       -DROCROLLER_ENABLE_CLIENT=OFF
+    -DROCROLLER_ENABLE_GEMM_CLIENT_TESTS=OFF
       -DROCROLLER_BUILD_TESTING=${THEROCK_BUILD_TESTING}
       -DROCROLLER_BUILD_SHARED_LIBS=ON
     CMAKE_INCLUDES
@@ -189,6 +203,7 @@ set(rocBLAS_extra_cmake_args)
 if(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_extra_cmake_args -DROCBLAS_CLIENTS_REFERENCE_ILP64=ON)
 endif()
+list(APPEND rocBLAS_extra_cmake_args ${_blas_openmp_toolchain_cmake_args})
 
 # Disable rocBLAS samples on Windows due to use of deprecated
 # <experimental/filesystem> in client_utility.cpp with MSVC.
@@ -265,6 +280,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
+      ${_blas_hip_clang_root_cmake_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -305,6 +321,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
+      ${_blas_openmp_toolchain_cmake_args}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -351,6 +368,7 @@ if(THEROCK_ENABLE_SPARSE)
         -DHIPSPARSELT_ENABLE_SAMPLES=OFF
         -DHIPSPARSELT_ENABLE_FETCH=OFF
         -DHIPSPARSELT_ENABLE_THEROCK=ON
+        ${_blas_hip_clang_root_cmake_args}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
@@ -500,6 +518,7 @@ therock_cmake_subproject_declare(hipBLAS
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_SAMPLES=OFF
     -DLINK_BLIS=OFF
+    ${_blas_openmp_toolchain_cmake_args}
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
