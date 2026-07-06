@@ -154,6 +154,40 @@ if(THEROCK_ENABLE_COMPILER)
 
 
   ##############################################################################
+  # googletest (for Comgr tests)
+  # Comgr's gtest suite needs a googletest provider. TheRock's
+  # third-party/googletest is declared after compiler/, so amd-comgr cannot
+  # depend on it; declare a compiler-local instance here (after amd-llvm, so it
+  # builds with the amd-llvm toolchain that comgr's test binaries also use).
+  ##############################################################################
+
+  set(_comgr_gtest_deps)
+  if(THEROCK_BUILD_COMGR_TESTS)
+    therock_subproject_fetch(amd-comgr-googletest-sources
+      CMAKE_PROJECT
+      SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-googletest/source"
+      # Original URL: https://github.com/google/googletest/releases/download/v1.17.0/googletest-1.17.0.tar.gz
+      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/googletest-1.17.0.tar.gz
+      URL_HASH SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c
+    )
+    therock_cmake_subproject_declare(amd-comgr-googletest
+      USE_DIST_AMDGPU_TARGETS
+      BACKGROUND_BUILD
+      EXCLUDE_FROM_ALL
+      NO_MERGE_COMPILE_COMMANDS
+      OUTPUT_ON_FAILURE
+      EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-googletest/source"
+      BINARY_DIR "amd-comgr-googletest"
+      CMAKE_ARGS
+        -Dgtest_force_shared_crt=ON
+    )
+    therock_cmake_subproject_provide_package(amd-comgr-googletest GTest lib/cmake/GTest)
+    therock_cmake_subproject_activate(amd-comgr-googletest)
+    set(_comgr_gtest_deps amd-comgr-googletest)
+  endif()
+
+
+  ##############################################################################
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
   # runtime. LLVM/Clang/LLD are statically linked and hidden behind comgr's
@@ -188,6 +222,7 @@ if(THEROCK_ENABLE_COMPILER)
       ${_comgr_hotswap_cmake_args}
     BUILD_DEPS
       rocm-cmake
+      ${_comgr_gtest_deps}
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
@@ -213,6 +248,10 @@ if(THEROCK_ENABLE_COMPILER)
         "${CMAKE_CTEST_COMMAND}"
         --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
         --output-on-failure
+      COMMAND
+        "${CMAKE_COMMAND}"
+        --build "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
+        --target test-unit
     )
   endif()
 
