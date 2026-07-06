@@ -166,6 +166,7 @@ jobs:
           WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
