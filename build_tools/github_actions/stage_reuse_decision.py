@@ -377,6 +377,8 @@ def compute_auto_stage_reuse(
         available=available_t,
         unavailable=unavailable_t,
         baseline_error=baseline_error,
+        platforms=resolved_platforms,
+        platform_available=per_platform_available,
     )
     return AutoStageReuse(
         mode=mode,
