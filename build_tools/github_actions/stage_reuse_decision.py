@@ -92,7 +92,9 @@ def _matched_filenames(baseline) -> set:
     return set(baseline.artifact_availability.matched_filenames)
 
 
-def _stage_artifacts_available(topology, stage_name, target_families, available_filenames):
+def _stage_artifacts_available(
+    topology, stage_name, target_families, available_filenames
+):
     """True when every artifact this stage produces has an archive present."""
     from artifact_manager import ARTIFACT_COMPONENTS
     from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
@@ -157,17 +159,26 @@ def compute_auto_stage_reuse(
 
     if impact.full_rebuild_required or not candidates:
         lines = _format_report(
-            mode=mode, candidates=candidates, rebuild=rebuild,
+            mode=mode,
+            candidates=candidates,
+            rebuild=rebuild,
             full_rebuild_required=impact.full_rebuild_required,
-            reasons=tuple(impact.reasons), baseline_run_id=None,
-            available=(), unavailable=candidates,
+            reasons=tuple(impact.reasons),
+            baseline_run_id=None,
+            available=(),
+            unavailable=candidates,
         )
         return AutoStageReuse(
-            mode=mode, candidate_stages=candidates, rebuild_stages=rebuild,
+            mode=mode,
+            candidate_stages=candidates,
+            rebuild_stages=rebuild,
             full_rebuild_required=impact.full_rebuild_required,
-            baseline_run_id=None, baseline_html_url=None,
-            available_stages=(), unavailable_stages=candidates,
-            applied_reuse_stages=(), reasons=tuple(impact.reasons),
+            baseline_run_id=None,
+            baseline_html_url=None,
+            available_stages=(),
+            unavailable_stages=candidates,
+            applied_reuse_stages=(),
+            reasons=tuple(impact.reasons),
             report_lines=lines,
         )
 
@@ -186,7 +197,9 @@ def compute_auto_stage_reuse(
     unavailable: list[str] = []
     if baseline is not None:
         for stage_name in candidates:
-            if _stage_artifacts_available(topology, stage_name, families, available_filenames):
+            if _stage_artifacts_available(
+                topology, stage_name, families, available_filenames
+            ):
                 available.append(stage_name)
             else:
                 unavailable.append(stage_name)
@@ -200,17 +213,28 @@ def compute_auto_stage_reuse(
     baseline_url = baseline.html_url if baseline is not None else None
 
     lines = _format_report(
-        mode=mode, candidates=candidates, rebuild=rebuild,
-        full_rebuild_required=False, reasons=tuple(impact.reasons),
-        baseline_run_id=baseline_run_id, available=available_t,
-        unavailable=unavailable_t, baseline_error=baseline_error,
+        mode=mode,
+        candidates=candidates,
+        rebuild=rebuild,
+        full_rebuild_required=False,
+        reasons=tuple(impact.reasons),
+        baseline_run_id=baseline_run_id,
+        available=available_t,
+        unavailable=unavailable_t,
+        baseline_error=baseline_error,
     )
     return AutoStageReuse(
-        mode=mode, candidate_stages=candidates, rebuild_stages=rebuild,
-        full_rebuild_required=False, baseline_run_id=baseline_run_id,
-        baseline_html_url=baseline_url, available_stages=available_t,
-        unavailable_stages=unavailable_t, applied_reuse_stages=applied,
-        reasons=tuple(impact.reasons), report_lines=lines,
+        mode=mode,
+        candidate_stages=candidates,
+        rebuild_stages=rebuild,
+        full_rebuild_required=False,
+        baseline_run_id=baseline_run_id,
+        baseline_html_url=baseline_url,
+        available_stages=available_t,
+        unavailable_stages=unavailable_t,
+        applied_reuse_stages=applied,
+        reasons=tuple(impact.reasons),
+        report_lines=lines,
     )
 
 
@@ -251,7 +275,7 @@ def _default_baseline_selector(*, platform: str | None) -> BaselineSelector:
             if not ordered_commit_shas:
                 effective_commit_sha = None
                 ordered_commit_shas = None
-        except Exception as exc:  
+        except Exception as exc:
             print(
                 f"{LOG_PREFIX} could not fetch branch history "
                 f"({exc}); skipping commit-compatibility rule."
@@ -276,19 +300,37 @@ def _default_baseline_selector(*, platform: str | None) -> BaselineSelector:
 
 def _empty_result(mode, *, full_rebuild_required=False, reasons=(), report_lines=()):
     return AutoStageReuse(
-        mode=mode, candidate_stages=(), rebuild_stages=(),
+        mode=mode,
+        candidate_stages=(),
+        rebuild_stages=(),
         full_rebuild_required=full_rebuild_required,
-        baseline_run_id=None, baseline_html_url=None,
-        available_stages=(), unavailable_stages=(),
-        applied_reuse_stages=(), reasons=reasons, report_lines=report_lines,
+        baseline_run_id=None,
+        baseline_html_url=None,
+        available_stages=(),
+        unavailable_stages=(),
+        applied_reuse_stages=(),
+        reasons=reasons,
+        report_lines=report_lines,
     )
 
 
-def _format_report(*, mode, candidates, rebuild, full_rebuild_required,
-                   reasons, baseline_run_id, available, unavailable, baseline_error=None):
+def _format_report(
+    *,
+    mode,
+    candidates,
+    rebuild,
+    full_rebuild_required,
+    reasons,
+    baseline_run_id,
+    available,
+    unavailable,
+    baseline_error=None,
+):
     lines: list[str] = [f"{LOG_PREFIX} mode={mode.value}"]
     if full_rebuild_required:
-        lines.append(f"{LOG_PREFIX} conservative full rebuild: no stages eligible for reuse.")
+        lines.append(
+            f"{LOG_PREFIX} conservative full rebuild: no stages eligible for reuse."
+        )
         for reason in reasons:
             lines.append(f"{LOG_PREFIX}   reason: {reason}")
         return tuple(lines)
@@ -296,25 +338,35 @@ def _format_report(*, mode, candidates, rebuild, full_rebuild_required,
         lines.append(f"{LOG_PREFIX} no unaffected stages; all stages rebuild.")
         return tuple(lines)
     if baseline_error:
-        lines.append(f"{LOG_PREFIX} baseline lookup failed ({baseline_error}); "
-                     f"cannot verify artifacts, rebuilding all candidates.")
+        lines.append(
+            f"{LOG_PREFIX} baseline lookup failed ({baseline_error}); "
+            f"cannot verify artifacts, rebuilding all candidates."
+        )
     elif baseline_run_id:
         lines.append(f"{LOG_PREFIX} baseline run for artifact check: {baseline_run_id}")
     else:
-        lines.append(f"{LOG_PREFIX} no baseline run contains artifacts for all "
-                     f"candidate stages; rebuilding all candidates.")
-    verb = ("WILL be skipped" if mode is StageReuseMode.ENFORCE
-            else "WOULD be skipped")
+        lines.append(
+            f"{LOG_PREFIX} no baseline run contains artifacts for all "
+            f"candidate stages; rebuilding all candidates."
+        )
+    verb = "WILL be skipped" if mode is StageReuseMode.ENFORCE else "WOULD be skipped"
     for stage in available:
-        lines.append(f"{LOG_PREFIX} stage '{stage}' unaffected AND available in baseline -> {verb}")
+        lines.append(
+            f"{LOG_PREFIX} stage '{stage}' unaffected AND available in baseline -> {verb}"
+        )
     for stage in unavailable:
-        lines.append(f"{LOG_PREFIX} stage '{stage}' unaffected but artifacts NOT available -> rebuild")
+        lines.append(
+            f"{LOG_PREFIX} stage '{stage}' unaffected but artifacts NOT available -> rebuild"
+        )
     if rebuild:
         lines.append(f"{LOG_PREFIX} stages rebuilding (impacted): {', '.join(rebuild)}")
     if mode is StageReuseMode.DRY_RUN and available:
-        lines.append(f"{LOG_PREFIX} dry-run: prebuilt_stages NOT modified; all stages "
-                     f"still build.")
+        lines.append(
+            f"{LOG_PREFIX} dry-run: prebuilt_stages NOT modified; all stages "
+            f"still build."
+        )
     return tuple(lines)
+
 
 def _format_stage_list(stages: tuple[str, ...]) -> str:
     """Render a tuple of stage names as backticked, comma-separated markdown."""
@@ -322,9 +374,9 @@ def _format_stage_list(stages: tuple[str, ...]) -> str:
         return "_none_"
     return ", ".join(f"`{stage}`" for stage in stages)
 
+
 def render_step_summary(result: AutoStageReuse) -> str:
-    """Render a GitHub step-summary markdown block for the analysis.
-    """
+    """Render a GitHub step-summary markdown block for the analysis."""
     baseline = f"`{result.baseline_run_id}`" if result.baseline_run_id else "_none_"
     candidates = _format_stage_list(result.candidate_stages)
     available = _format_stage_list(result.available_stages)

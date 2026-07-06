@@ -1,8 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Tests for stage_reuse_decision: impact + baseline-availability gates.
-"""
+"""Tests for stage_reuse_decision: impact + baseline-availability gates."""
 
 from pathlib import Path
 import sys
@@ -248,6 +247,8 @@ class GuardrailTest(unittest.TestCase):
         self.assertIn("baseline run checked: `123`", summary)
         self.assertIn("available in baseline", summary)
         self.assertIn("no build steps were skipped", summary)
+
+
 class DefaultBaselineSelectorTest(unittest.TestCase):
     """_default_baseline_selector must fetch real branch history and never pass
     an empty ordered_commit_shas window while current_commit_sha is set."""
@@ -266,9 +267,7 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
         import github_actions_api
 
         orig_select = baseline_runs.select_baseline_run
-        orig_hist = getattr(
-            github_actions_api, "gha_query_recent_branch_commits", None
-        )
+        orig_hist = getattr(github_actions_api, "gha_query_recent_branch_commits", None)
         captured = {}
 
         def _capturing_select(**kwargs):
@@ -347,7 +346,6 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
         self.assertEqual(calls["n"], 0)
         self.assertIsNone(captured["current_commit_sha"])
         self.assertIsNone(captured["ordered_commit_shas"])
-
 
 
 if __name__ == "__main__":

@@ -702,6 +702,7 @@ def decide_jobs(
         compute_auto_stage_reuse,
         render_step_summary,
     )
+
     target_families = _stage_reuse_target_families(ci_inputs)
     auto = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
@@ -765,12 +766,17 @@ def decide_jobs(
 # Step 4: Select Targets
 # ---------------------------------------------------------------------------
 
+
 def _stage_reuse_target_families(ci_inputs: "CIInputs") -> list[str]:
-    families = list(dict.fromkeys(
-        [*ci_inputs.linux_amdgpu_families, *ci_inputs.windows_amdgpu_families]))
+    families = list(
+        dict.fromkeys(
+            [*ci_inputs.linux_amdgpu_families, *ci_inputs.windows_amdgpu_families]
+        )
+    )
     if "generic" not in families:
         families.append("generic")
     return families
+
 
 def _validate_family_names(
     names: list[str],
