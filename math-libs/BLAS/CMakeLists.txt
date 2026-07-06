@@ -53,9 +53,13 @@ therock_cmake_subproject_declare(stinkytofu
     -DSTINKYTOFU_BUILD_TESTS=${THEROCK_BUILD_TESTING}
     -DSTINKYTOFU_BUILD_PYTHON=OFF
     -DBUILD_SHARED_LIBS=ON
+  COMPILER_TOOLCHAIN
+    amd-hip
   BUILD_DEPS
     rocm-cmake
     therock-googletest
+  RUNTIME_DEPS
+    amd-comgr
 )
 therock_cmake_subproject_glob_c_sources(stinkytofu
   SUBDIRS
