@@ -713,7 +713,6 @@ def decide_jobs(
         compute_auto_stage_reuse,
         render_step_summary,
         log_report,
-        render_step_summary,
         stage_reuse_target_families,
     )
 
