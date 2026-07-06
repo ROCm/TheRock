@@ -4,6 +4,7 @@
   "source_iso_sha256": "",
   "source_iso_path": "./cache/Rocky-8.10-x86_64-minimal.iso",
   "output_iso_path": "./output/Rocky-8.10-x86_64-autoinstall.iso",
+  "output_installed_image_path": "./output/Rocky-8.10-x86_64-autoinstall.qcow2",
   "kickstart_template": "./templates/rocky8.ks.tmpl",
   "kickstart_output": "./output/kickstart/rocky8.ks",
   "lang": "en_US.UTF-8",

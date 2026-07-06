@@ -70,6 +70,10 @@ def _run_capture(command: list[str]) -> str:
     return f"{result.stdout}\n{result.stderr}"
 
 
+def _run_capture_optional(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, capture_output=True, text=True, check=False)
+
+
 def _load_config(config_path: Path) -> dict[str, object]:
     if not config_path.is_file():
         raise BuildConfigError(f"Config file not found: {config_path}")
@@ -394,6 +398,221 @@ def _build_iso_with_builder(
     _run(command)
 
 
+def _resolve_installed_disk_path(cfg: dict[str, object], output_iso_path: Path) -> Path:
+    value = str(cfg.get("output_installed_image_path", "")).strip()
+    if value:
+        return Path(value)
+    return output_iso_path.with_suffix(".qcow2")
+
+
+def _launch_qemu_install(
+    output_iso_path: Path,
+    installed_disk_path: Path,
+    ssh_private_key_path: Path,
+    user_name: str,
+    keep_running: bool,
+) -> None:
+    _require_command("qemu-system-x86_64")
+    _require_command("qemu-img")
+
+    if not output_iso_path.is_file():
+        raise BuildRuntimeError(f"ISO not found for QEMU launch: {output_iso_path}")
+
+    ram_mb = os.environ.get("RAM_MB", "4096")
+    cpus = os.environ.get("CPUS", "2")
+    disk_size = os.environ.get("DISK_SIZE", "60G")
+    ssh_fwd_port = os.environ.get("SSH_FWD_PORT", "2222")
+    vm_name = os.environ.get("VM_NAME", "rocky810-test")
+    headless = os.environ.get("HEADLESS", "0")
+    accel_mode = os.environ.get("ACCEL_MODE", "kvm:tcg")
+    disk_path = installed_disk_path
+
+    disk_path.parent.mkdir(parents=True, exist_ok=True)
+    if disk_path.is_file():
+        print(f"Removing existing installed image to rebuild: {disk_path}")
+        disk_path.unlink()
+
+    print(f"Creating VM disk: {disk_path} ({disk_size})")
+    _run(["qemu-img", "create", "-f", "qcow2", str(disk_path), disk_size])
+
+    print()
+    print(f"Launching VM '{vm_name}'")
+    print(f"ISO:  {output_iso_path}")
+    print(f"Disk: {disk_path}")
+    print(f"SSH:  host 127.0.0.1:{ssh_fwd_port} -> guest :22")
+    print()
+    print("No GPU PCI passthrough is used. VM display is virtual only.")
+    print()
+    print("When install completes, connect with:")
+    print(f"ssh -i {ssh_private_key_path} \\")
+    print("  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \\")
+    print(f"  -p {ssh_fwd_port} {user_name}@127.0.0.1")
+
+    command = [
+        "qemu-system-x86_64",
+        "-name",
+        vm_name,
+        "-machine",
+        f"accel={accel_mode}",
+        "-m",
+        ram_mb,
+        "-smp",
+        cpus,
+        "-drive",
+        f"file={disk_path},if=virtio,format=qcow2",
+        "-cdrom",
+        str(output_iso_path),
+        "-boot",
+        "once=d,menu=on",
+        "-netdev",
+        f"user,id=n1,hostfwd=tcp::{ssh_fwd_port}-:22",
+        "-device",
+        "virtio-net-pci,netdev=n1",
+    ]
+    if headless == "1":
+        command.extend(["-display", "none", "-serial", "mon:stdio"])
+    else:
+        command.extend(["-device", "virtio-vga", "-display", "gtk,gl=off"])
+
+    if keep_running:
+        _run(command)
+        return
+
+    timeout_seconds = int(os.environ.get("CUSTOMIZATION_TIMEOUT_SEC", "5400"))
+    poll_interval_seconds = int(os.environ.get("CUSTOMIZATION_POLL_INTERVAL_SEC", "10"))
+
+    print()
+    print("Auto mode: waiting for guest customization completion...")
+    print(
+        "The VM will be automatically shut down after validation. "
+        "Use --run to keep it running."
+    )
+
+    process = subprocess.Popen(command)
+    try:
+        if process.poll() is not None:
+            raise BuildRuntimeError("QEMU exited immediately after launch.")
+
+        if not _wait_for_customization_ready(
+            process=process,
+            ssh_private_key_path=ssh_private_key_path,
+            user_name=user_name,
+            ssh_fwd_port=ssh_fwd_port,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+        ):
+            raise BuildRuntimeError(
+                "Timed out waiting for guest customization completion. "
+                "Use --run to keep the VM running for manual investigation."
+            )
+
+        print("Customization checks passed. Shutting down guest VM...")
+        _request_guest_shutdown(ssh_private_key_path, user_name, ssh_fwd_port)
+        _wait_for_qemu_exit(process, timeout_seconds=180)
+        print("Guest VM stopped.")
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=30)
+
+
+def _ssh_base_command(
+    ssh_private_key_path: Path,
+    user_name: str,
+    ssh_fwd_port: str,
+) -> list[str]:
+    return [
+        "ssh",
+        "-i",
+        str(ssh_private_key_path),
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "ConnectTimeout=5",
+        "-p",
+        ssh_fwd_port,
+        f"{user_name}@127.0.0.1",
+    ]
+
+
+def _wait_for_customization_ready(
+    process: subprocess.Popen[bytes],
+    ssh_private_key_path: Path,
+    user_name: str,
+    ssh_fwd_port: str,
+    timeout_seconds: int,
+    poll_interval_seconds: int,
+) -> bool:
+    start = time.time()
+    checks = [
+        "id",
+        "sudo -n true",
+        "systemctl is-active sshd",
+    ]
+    while time.time() - start < timeout_seconds:
+        if process.poll() is not None:
+            raise BuildRuntimeError(
+                f"QEMU exited before customization completed (exit code {process.returncode})."
+            )
+        if _guest_checks_pass(
+            ssh_private_key_path=ssh_private_key_path,
+            user_name=user_name,
+            ssh_fwd_port=ssh_fwd_port,
+            checks=checks,
+        ):
+            return True
+        time.sleep(poll_interval_seconds)
+    return False
+
+
+def _guest_checks_pass(
+    ssh_private_key_path: Path,
+    user_name: str,
+    ssh_fwd_port: str,
+    checks: list[str],
+) -> bool:
+    base = _ssh_base_command(ssh_private_key_path, user_name, ssh_fwd_port)
+    for check in checks:
+        result = _run_capture_optional(base + [check])
+        if result.returncode != 0:
+            return False
+    return True
+
+
+def _request_guest_shutdown(
+    ssh_private_key_path: Path,
+    user_name: str,
+    ssh_fwd_port: str,
+) -> None:
+    base = _ssh_base_command(ssh_private_key_path, user_name, ssh_fwd_port)
+    result = _run_capture_optional(base + ["sudo -n /sbin/shutdown -h now"])
+    stderr_lower = result.stderr.lower()
+    # During shutdown, SSH can terminate before command completion is reported.
+    if result.returncode != 0 and "closed by remote host" not in stderr_lower:
+        raise BuildRuntimeError(
+            "Customization finished but guest shutdown command failed.\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def _wait_for_qemu_exit(process: subprocess.Popen[bytes], timeout_seconds: int) -> None:
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        raise BuildRuntimeError(
+            "Timed out waiting for QEMU to exit after guest shutdown request."
+        ) from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build Rocky Linux 8.10 unattended ISO.")
     parser.add_argument(
@@ -401,6 +620,16 @@ def main() -> int:
         nargs="?",
         default="./build-config.json",
         help="Path to JSON config file (default: ./build-config.json)",
+    )
+    parser.add_argument(
+        "--bare-image",
+        action="store_true",
+        help="Only build ISO image and skip launching QEMU install VM.",
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Keep QEMU VM running (disable automatic customization/shutdown mode).",
     )
     args = parser.parse_args()
 
@@ -541,6 +770,21 @@ def main() -> int:
         print(f"Output ISO : {output_iso_path}")
         print(f"SSH private key for {user_name}: {ssh_private_key_path}")
         print(f"SSH public key for {user_name} : {ssh_public_key_path}")
+        installed_disk_path = _resolve_installed_disk_path(cfg, output_iso_path)
+        print(f"Installed disk image target: {installed_disk_path}")
+
+        if args.bare_image:
+            print("Skipping VM launch (--bare-image provided).")
+            return 0
+
+        _launch_qemu_install(
+            output_iso_path=output_iso_path,
+            installed_disk_path=installed_disk_path,
+            ssh_private_key_path=ssh_private_key_path,
+            user_name=user_name,
+            keep_running=args.run,
+        )
+        print(f"Installed disk image: {installed_disk_path}")
         return 0
     except (BuildConfigError, BuildRuntimeError, subprocess.CalledProcessError) as exc:
         print(str(exc), file=sys.stderr)

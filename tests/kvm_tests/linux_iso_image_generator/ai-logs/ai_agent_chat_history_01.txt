@@ -320,3 +320,69 @@ ASSISTANT:
   - `net-tools`
 - File updated:
   - `templates/rocky8.ks.tmpl`
+
+---
+
+Session update: 2026-07-06 (builder default VM lifecycle + validation)
+
+USER: Continue previous session in `/home/lamikr/rockylinux_8_10_iso`.
+ASSISTANT:
+- Restored context from existing session log and confirmed clean `master`.
+
+USER: Make builder run QEMU customization by default and add `--bare-image`.
+ASSISTANT:
+- Updated `build_rockylinux_8_10_iso.py` to:
+  - run ISO build + QEMU launch in Python by default
+  - support `--bare-image` to build ISO only
+  - avoid shelling out to `testing/qemu_iso_launch.sh`
+- Updated README for new behavior.
+
+USER: Default should not keep VM running; keep-running only with `--run`.
+ASSISTANT:
+- Added `--run` flag.
+- Default mode now:
+  - waits for guest readiness checks over SSH
+  - auto-shuts down guest after checks pass
+- Added shutdown robustness for SSH disconnect during poweroff.
+
+USER: Also produce finalized installed qcow2 as an artifact.
+ASSISTANT:
+- Added installed image artifact handling in builder:
+  - default path: `./output/Rocky-8.10-x86_64-autoinstall.qcow2`
+  - configurable via `output_installed_image_path` in `build-config.json`
+- Builder now recreates and outputs finalized qcow2 by default.
+- Updated README and config accordingly.
+
+USER: Run end-to-end default-path test.
+ASSISTANT:
+- First run hit host GUI limitation (`gtk initialization failed`).
+- Headless validation run completed full flow successfully:
+  - ISO build
+  - automated install
+  - SSH readiness checks
+  - auto-shutdown
+  - finalized qcow2 produced
+- Verified artifacts:
+  - `output/Rocky-8.10-x86_64-autoinstall.iso`
+  - `output/Rocky-8.10-x86_64-autoinstall.qcow2`
+
+USER: Verify finalized qcow2 login.
+ASSISTANT:
+- Booted qcow2 directly (no ISO attached), confirmed:
+  - SSH key login works for `therock`
+  - `sudo -n true` works
+  - `sshd` is active
+- Performed clean guest shutdown.
+
+USER: Verify password login for `therock`.
+ASSISTANT:
+- Password-only SSH attempt failed (`Permission denied ... password`).
+- Confirmed account is locked (`passwd -S therock` -> `LK`).
+- Noted daemon-level `passwordauthentication` still reports `yes` globally,
+  while `therock` password auth remains blocked due to locked account.
+
+USER: Commit changes and refine commit message formatting/signoff.
+ASSISTANT:
+- Created and adjusted commit message per requested format.
+- Final commit on `master` before this log update:
+  - `29e193d` with requested message style and sign-off footer.
