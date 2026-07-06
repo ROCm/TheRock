@@ -1807,10 +1807,26 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
     # Propagate HIP_CLANG_LAUNCHER so hipcc routes its internal clang invocations
-    # through sccache. Scoped to amd-hip subprojects only — other stages (profiler,
-    # runtime-tests) use custom compiler wrappers that are incompatible with sccache
-    # interception and must not receive this env var.
-    if(DEFINED ENV{HIP_CLANG_LAUNCHER})
+    # through sccache. Scoped to amd-hip subprojects only — other stages use
+    # custom compiler wrappers incompatible with sccache interception.
+    # Certain subprojects must not receive HIP_CLANG_LAUNCHER:
+    #   rocprofiler-systems-examples: uses rocprof-sys-launch-compiler which
+    #     wraps the compiler and breaks when sccache is inserted.
+    #   hip-tests: generates multi-arch bitcode bundles by calling hipcc with
+    #     multiple --offload-arch in one command; sccache rejects this as
+    #     "cannot specify -o when generating multiple output files".
+    # We must actively --unset rather than just omit: HIP_CLANG_LAUNCHER is
+    # written to $GITHUB_ENV by setup_sccache_rocm.py and is therefore inherited
+    # by every subsequent step's shell environment. cmake -E env --unset= is
+    # the only way to strip it before the subproject build command runs.
+    get_target_property(_logical_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+    if(NOT _logical_name)
+      set(_logical_name "${target_name}")
+    endif()
+    set(_hip_launcher_blocklist "rocprofiler-systems-examples" "hip-tests")
+    if(_logical_name IN_LIST _hip_launcher_blocklist)
+      list(APPEND _build_env_pairs "--unset=HIP_CLANG_LAUNCHER")
+    elseif(DEFINED ENV{HIP_CLANG_LAUNCHER})
       list(APPEND _build_env_pairs "HIP_CLANG_LAUNCHER=$ENV{HIP_CLANG_LAUNCHER}")
     endif()
     if(THEROCK_VERBOSE)

@@ -383,6 +383,11 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       CMAKE_ARGS
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_DISABLE_EXAMPLES="lulesh\\;openmp-target\\;causal"
+        # rocprofiler-systems uses a custom rocprof-sys-launch-compiler wrapper that
+        # is incompatible with sccache interception — unset the launchers so the
+        # wrapper drives compilation directly without sccache in the way.
+        -DCMAKE_C_COMPILER_LAUNCHER=
+        -DCMAKE_CXX_COMPILER_LAUNCHER=
       COMPILER_TOOLCHAIN
         amd-hip
       INSTALL_RPATH_DIRS
