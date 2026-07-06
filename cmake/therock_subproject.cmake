@@ -1692,13 +1692,8 @@ function(_therock_cmake_subproject_setup_toolchain
 
   # Customize debug info generation.
   if(THEROCK_GENERATE_DEBUG_INFO)
-    if(THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal")
-      set(_therock_debug_g_level "-g1")
-    else()
-      set(_therock_debug_g_level "-g2")
-    endif()
-    if(MSVC AND NOT compiler_toolchain)
-      # No-toolchain MSVC bootstrap (cl.exe / clang-cl). /Z7 comes from
+    if(MSVC AND NOT compiler_toolchain )
+      # Non-toolchain MSVC bootstrap (cl.exe / clang-cl). /Z7 comes from
       # CMAKE_MSVC_DEBUG_INFORMATION_FORMAT; link emits the PDB, and 'minimal'
       # also emits a stripped public PDB.
       string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /DEBUG:FULL\")\n")
@@ -1707,17 +1702,23 @@ function(_therock_cmake_subproject_setup_toolchain
         string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /PDBSTRIPPED:stripped\")\n")
         string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /PDBSTRIPPED:stripped\")\n")
       endif()
-    elseif((NOT compiler_toolchain AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
-           OR compiler_toolchain)
+    elseif((compiler_toolchain OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")))
+      if(THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal")
+        set(_therock_debug_g_level "-g1")
+      elseif(THEROCK_DEBUG_INFO_LEVEL STREQUAL "full")
+        set(_therock_debug_g_level "-g2")
+      elseif(THEROCK_DEBUG_INFO_LEVEL STREQUAL "extra")
+        set(_therock_debug_g_level "-g3")
+      endif()
       # GNU-style: the amd-llvm/amd-hip toolchain (clang/clang++ GNU driver) on
       # any OS, plus a non-toolchain GCC/clang or mingw bootstrap. Clear CMake's
       # built-in -g from RelWithDebInfo so the detail level is governed only by
       # THEROCK_DEBUG_INFO_LEVEL, then inject into Debug, RelWithDebInfo, Release.
-      string(APPEND _toolchain_contents "string(REGEX REPLACE \"(^| )-g( |$)\" \" \" CMAKE_CXX_FLAGS_RELWITHDEBINFO \"\${CMAKE_CXX_FLAGS_RELWITHDEBINFO}\")\n")
-      string(APPEND _toolchain_contents "string(REGEX REPLACE \"(^| )-g( |$)\" \" \" CMAKE_C_FLAGS_RELWITHDEBINFO \"\${CMAKE_C_FLAGS_RELWITHDEBINFO}\")\n")
-      foreach(_cfg DEBUG RELWITHDEBINFO RELEASE)
-        string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_${_cfg} \" ${_therock_debug_g_level} -gz\")\n")
-        string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_${_cfg} \" ${_therock_debug_g_level} -gz\")\n")
+      foreach(_lang C CXX)
+        foreach(_cfg DEBUG RELWITHDEBINFO RELEASE MINSIZEREL)
+          string(APPEND _toolchain_contents "string(REGEX REPLACE\"(^| )-g[0-3]?( |$)\" \" \" CMAKE_${_lang}_FLAGS_${_cfg} \"\${CMAKE_${_lang}_FLAGS_${_cfg}}\")\n")
+          string(APPEND _toolchain_contents "string(APPEND CMAKE_${_lang}_FLAGS_${_cfg} \" ${_therock_debug_g_level} -gz\")\n")
+        endforeach()
       endforeach()
     else()
       message(WARNING "Cannot setup THEROCK_GENERATE_DEBUG_INFO mode for unknown compiler")
