@@ -130,6 +130,11 @@ jobs:
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
+      - name: Setup sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: |
+          python build_tools/setup_sccache_rocm.py --gha
+
       - name: Runner health status
         run: |
           ./build_tools/health_status.py

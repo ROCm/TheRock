@@ -43,6 +43,7 @@ Prerequisites:
 """
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -113,6 +114,11 @@ def main():
         action="store_true",
         help="Omit HIP_CLANG_LAUNCHER (host C/C++ caching only)",
     )
+    parser.add_argument(
+        "--gha",
+        action="store_true",
+        help="Write env vars to $GITHUB_ENV for use in subsequent GitHub Actions steps",
+    )
     args = parser.parse_args()
 
     if args.sccache_path:
@@ -139,9 +145,18 @@ def main():
         raise RuntimeError(f"sccache verification failed: {e}") from e
 
     env = sccache_build_env(sccache_path, hip_launcher=not args.no_hip_launcher)
-    print("Configure a ROCm build with:")
-    for key, value in env.items():
-        print(f"  export {key}={value}")
+    if args.gha:
+        github_env = Path(os.environ["GITHUB_ENV"])
+        with github_env.open("a") as f:
+            for key, value in env.items():
+                f.write(f"{key}={value}\n")
+        print("Wrote to $GITHUB_ENV:")
+        for key, value in env.items():
+            print(f"  {key}={value}")
+    else:
+        print("Configure a ROCm build with:")
+        for key, value in env.items():
+            print(f"  export {key}={value}")
 
 
 if __name__ == "__main__":
