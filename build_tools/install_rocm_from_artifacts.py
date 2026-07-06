@@ -677,9 +677,7 @@ def retrieve_artifacts_by_latest_release(args):
     if args.dry_run:
         log(f"[DRY RUN] Would download: {asset_name} (version {version})")
         if args.hpc:
-            hpc_asset_name = _release_asset_name(
-                args.artifact_group, version, hpc=True
-            )
+            hpc_asset_name = _release_asset_name(args.artifact_group, version, hpc=True)
             log(f"[DRY RUN] Would download: {hpc_asset_name} (version {version})")
         return
 
