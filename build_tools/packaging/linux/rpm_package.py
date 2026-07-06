@@ -179,7 +179,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "conflicts": conflicts,
         "rpmrecommends": rpmrecommends,
         "rpmsuggests": rpmsuggests,
-        "disable_rpm_strip": is_rpm_stripping_disabled(pkg_info),
+        "disable_rpm_strip": True,
         "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,

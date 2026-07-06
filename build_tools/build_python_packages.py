@@ -263,6 +263,7 @@ def _run_kpack_split(
             "nlohmann-json",
             "rocshmem",
             "rocjitsu",
+            "mirage",
         ],
         exclude_components=["test"],
         tarball_compression=args.devel_tarball_compression,
@@ -352,6 +353,7 @@ def _run_legacy(
                 "nlohmann-json",
                 # rocjitsu emulation suite.
                 "rocjitsu",
+                "mirage",
             ],
             tarball_compression=args.devel_tarball_compression,
         )
@@ -378,6 +380,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-ocl",
         "core-hipinfo",
         "core-runtime",
+        "hipfile",
         "hipify",
         "host-blas",
         "host-suite-sparse",
@@ -392,6 +395,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "sysdeps-gmp",
         "sysdeps-mpfr",
         "sysdeps-ncurses",
+        "sysdeps-util-linux",
         "wsl-rocdxg",
     ] and an.component in [
         "lib",
