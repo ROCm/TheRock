@@ -48,11 +48,7 @@ install_requires = []
 
 def _add_platform_site_package(package_name: str) -> bool:
     site_packages_rel = (
-        Path("platform")
-        / platform_package_name
-        / "lib"
-        / "python3"
-        / "site-packages"
+        Path("platform") / platform_package_name / "lib" / "python3" / "site-packages"
     )
     site_packages = THIS_DIR / site_packages_rel
     package_path = site_packages / package_name
