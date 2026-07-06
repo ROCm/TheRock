@@ -32,7 +32,8 @@ invoking a console script will result in a `FileNotFoundError`.
 
 ## Packaging Notes
 
-- No `install_requires` are declared.
+- `pyelftools` is declared when the wheel contains the `rocprof_trace_decoder`
+  Python API.
 - Dependencies are managed by the `rocm` meta package.
 - Versioning is centrally managed via `rocm_sdk._dist_info`.
 
