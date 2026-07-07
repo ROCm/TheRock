@@ -147,10 +147,19 @@ rocrand:
         # Shard 1: the current 14 base binaries (basic + 13 kernels).
         - ctest_regex: "^test_rocrand_(basic|kernel_(lfsr113|mrg|mtgp32|philox4x32_10|scrambled_sobol32|scrambled_sobol64|sobol32|sobol64|threefry2x32_20|threefry2x64_20|threefry4x32_20|threefry4x64_20|xorwow))$"
           min_gtests: 50
-        # Shard 2: TODO placeholder - small, green. Populate with expanded
-        # coverage (e.g. non-kernel base binaries) in a later change.
-        - ctest_regex: "^test_rocrand_basic$"
-          min_gtests: 3
+        # Shard 2: mimic the hardware `quick` run (the _quick_suite and
+        # _ffm-quick_suite variants of every rocRAND binary) for a like-for-like
+        # sim-vs-hardware speed comparison. No exclusions: these suite variants
+        # are bounded by the per-test timeout cap (~300-600s), so nothing hangs
+        # to the wall (the ~107-min unbounded hang in run 28503430843 was a
+        # _standard_suite, which this regex does NOT match). Expect ~20 min of
+        # red timeouts from the philox/xorwow kernel-poisson suites plus a slow
+        # (capped) host, total ~130-170 min. min_gtests starts at 1 (loose
+        # measurement floor); tune to just under the observed gtests_ran once we
+        # have a run. Suite variants carry their own CMake-baked GTEST_FILTER, so
+        # the component skip: list does not apply to them.
+        - ctest_regex: "_(quick|ffm-quick)_suite$"
+          min_gtests: 1
     # Mirror of QUICK_TESTS in test_rocrand.py. Promoted in PR-2 once `basic`
     # is stably green for a few runs. ctest_regex left unset (defaults to ".*")
     # so all 52 rocRAND binaries run; the per-binary filter then selects only
