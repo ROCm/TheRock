@@ -113,7 +113,7 @@ submodules = ["libhipcxx"]
 
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
-submodules = []
+submodules = ["jax-0.9.1", "jax-0.10.0", "jax-0.10.2"]
 
 [source_sets.comm-libs]
 description = "Communication library submodules"

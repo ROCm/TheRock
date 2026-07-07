@@ -38,3 +38,15 @@
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
 	branch = amd-staging-rocgdb-16
+[submodule "jax-0.9.1"]
+    path = ml-frameworks/jax-0.9.1
+    url = https://github.com/ROCm/rocm-jax.git
+    branch = rocm-jaxlib-v0.9.1
+[submodule "jax-0.10.0"]
+    path = ml-frameworks/jax-0.10.0
+    url = https://github.com/ROCm/jax.git
+    branch = rocm-jaxlib-v0.10.0
+[submodule "jax-0.10.2"]
+    path = ml-frameworks/jax-0.10.2
+    url = https://github.com/ROCm/jax.git
+    branch = rocm-jaxlib-v0.10.2
