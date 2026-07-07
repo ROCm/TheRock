@@ -2,63 +2,77 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Test suite for the promote_packages package promotion script.
+"""Manual / on-demand test suite for the promote_packages promotion script.
 
-This test suite validates the functionality of promote_packages.py, which
-promotes release candidate (RC) packages to final releases by removing RC suffixes
-from version strings (e.g., 7.9.0rc1 → 7.9.0).
+This exercises promote_packages.py end-to-end against **live multi-arch**
+release-candidate (RC) artifacts published to
+https://rocm.prereleases.amd.com/. Promotion strips the RC suffix from version
+strings (e.g. 7.14.0rc1 -> 7.14.0) and, for multi-arch indices, prunes the
+per-gfx device wheels down to a requested set of architectures.
 
-The test suite downloads RC packages from https://rocm.prereleases.amd.com/ and runs
-comprehensive validation tests to ensure that:
-  1. Complete promotion of all ROCm SDK and PyTorch packages works correctly
-  2. Partial promotions (only ROCm or only PyTorch) fail as expected
-  3. Promoted packages have correct filenames without RC suffixes
-  4. All promoted wheels have consistent version strings
-  5. Promoted packages can be successfully installed in a virtual environment
+It is intentionally a standalone, on-demand script (run by a human before a
+release), NOT a pytest/CI target: it pulls large artifacts over the network
+from the prerelease index and builds virtualenvs, which is too heavy and too
+coupled to live infrastructure for per-PR CI. Keep it runnable by hand.
 
-NOTES:
-  - Tests run in isolated temporary directories (including venv) to avoid polluting the workspace
-  - Original RC packages are downloaded fresh or loaded from cache for each test run
-   (set with --cache-dir, directory is created if it doesn't exist)
-  - Tests use real package files to ensure end-to-end validation
-  - Platform is auto-detected based on the system but can be overridden with the --platform argument.
+WHAT IS VALIDATED
+  1. Full promotion of the arch-agnostic aggregator packages
+     (rocm, rocm_sdk_core, rocm_sdk_devel, rocm_sdk_libraries, torch,
+     torchvision, torchaudio, triton) succeeds and installs.
+  2. Multi-arch promotion with an explicit keep-list keeps only the requested
+     per-gfx device wheels (amd_torch_device_gfx*, amd_torchvision_device_gfx*,
+     rocm_sdk_device_gfx*) and deletes the rest, while still stripping the RC
+     suffix everywhere.
+  3. Partial promotions (only ROCm, or only torch) do NOT produce a coherent,
+     installable, single-version set (expected to FAIL).
+  4. Promoted filenames drop the RC suffix and every wheel reports the final
+     version.
 
-TEST SCENARIOS:
-  - checkPromoteEverything: Tests promotion of all packages. This test should SUCCEED.
+The expected promoted filenames are DERIVED from whatever was actually fetched
+(by replacing the RC version string with the final version), so the test does
+not carry brittle hardcoded per-arch package lists that rot every release.
 
-  - checkPromoteOnlyRocm: Tests promotion of only ROCm SDK packages while leaving
-    PyTorch packages as RC. This test should FAIL.
+PREREQUISITES
+  pip install -r ./build_tools/packaging/requirements.txt
 
-  - checkPromoteOnlyTorch: Tests promotion of only PyTorch-related packages while
-    leaving ROCm SDK packages as RC. This test should FAIL.
-
-PACKAGE TYPES TESTED:
-  - ROCm SDK packages: rocm, rocm_sdk_core, rocm_sdk_devel, rocm_sdk_libraries_*
-  - PyTorch packages: torch, torchaudio, torchvision, triton
-  - Distribution tarballs: therock-dist-{platform}-gfx{arch}-{version}.tar.gz
-
-PREREQUISITES:
-  - pip install -r ./build_tools/packaging/requirements.txt
-
-USAGE:
-  # Test on current platform (auto-detected):
+USAGE
+  # Full run against the latest RC auto-discovered from the multi-arch index:
   python ./build_tools/packaging/tests/promote_packages_test.py
 
-  # Use cached packages to speed up repeated test runs:
-  python ./build_tools/packaging/tests/promote_packages_test.py --cache-dir=/tmp/package_cache
+  # Pin a version and cache downloads between runs:
+  python ./build_tools/packaging/tests/promote_packages_test.py \
+      --version 7.14.0rc1 --cache-dir /tmp/promote_cache
+
+  # Choose which gfx arch(es) to keep for the multi-arch keep-list scenario:
+  python ./build_tools/packaging/tests/promote_packages_test.py \
+      --keep-arch gfx942 --extra-arch gfx1201
+
+OPEN QUESTIONS (tracked in ROCm/TheRock#6266 follow-up; resolve before merge)
+  - Version baseline: auto-discover latest RC (current default) vs. pin a known
+    RC per release branch? Auto-discover keeps the test current but makes runs
+    non-deterministic across days.
+  - Should the run assert on a fixed arch set, or accept whatever the index
+    currently publishes for the chosen gfx targets?
+  - therock-dist-* multi-arch tarball: include it in the promotion set once the
+    tarball-multi-arch/ listing exposes a stable, enumerable name (its directory
+    listing is JS-rendered today).
 """
 
 import argparse
-import shutil
-import sys
 import os
-from pathlib import Path
+import platform as platform_module
+import re
+import shutil
+import subprocess
+import sys
 import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
 from packaging.version import Version
 from pkginfo import Wheel
-import subprocess
-import urllib
-import platform as platform_module
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import promote_packages
@@ -66,46 +80,199 @@ import promote_packages
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 import setup_venv
 
+PRERELEASE_BASE = "https://rocm.prereleases.amd.com"
+WHL_INDEX = f"{PRERELEASE_BASE}/whl-multi-arch"
 
-def checkPromotedFileNames(dir_path: Path, platform: str) -> tuple[bool, str]:
-    if platform == "linux":
-        expected_promoted_pkgs = [
-            "rocm-7.9.0.tar.gz",
-            "rocm_sdk_core-7.9.0-py3-none-linux_x86_64.whl",
-            "rocm_sdk_devel-7.9.0-py3-none-linux_x86_64.whl",
-            "rocm_sdk_libraries_gfx94x_dcgpu-7.9.0-py3-none-linux_x86_64.whl",
-            "triton-3.3.1+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
-            "torch-2.7.1+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
-            "torchaudio-2.7.1a0+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
-            "torchvision-0.22.1+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
-            "therock-dist-linux-gfx1151-7.9.0.tar.gz",
+# Arch-agnostic packages: always promoted, never pruned by the keep-list. Their
+# per-package index page links back to files hosted at the WHL_INDEX root.
+AGGREGATOR_PKG_DIRS = [
+    "rocm",
+    "rocm-sdk-core",
+    "rocm-sdk-devel",
+    "rocm-sdk-libraries",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "triton",
+]
+
+# Per-gfx device wheels: subject to keep-list pruning during multi-arch
+# promotion. Directory name is f"{prefix}-{arch}", e.g. amd-torch-device-gfx942.
+DEVICE_PKG_PREFIXES = [
+    "amd-torch-device",
+    "amd-torchvision-device",
+    "rocm-sdk-device",
+]
+
+PLATFORM_TAGS = {"linux": "linux_x86_64", "windows": "win_amd64"}
+
+# Matches the cpXX-cpXX ABI tag pair present in every Python-tag-specific wheel
+# (torch-family aggregators AND per-gfx device wheels). SDK wheels are py3-none
+# and do not match, so they are never filtered by python tag.
+_CP_TAG_RE = re.compile(r"-(cp\d+)-cp\d+-")
+
+
+def _http_get(url: str) -> str:
+    with urllib.request.urlopen(url, timeout=60) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def list_index_files(pkg_dir: str) -> list[str]:
+    """Return the real (decoded) filenames listed under a package index dir.
+
+    The prerelease index links to files as `../<file>` (hosted at the index
+    root) and URL-encodes `+` as `%2B`; both are normalized here.
+    """
+    url = f"{WHL_INDEX}/{pkg_dir}/"
+    try:
+        html = _http_get(url)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return []
+        raise
+    names = set()
+    for href in re.findall(r'href="([^"]+)"', html):
+        name = urllib.parse.unquote(href).rsplit("/", 1)[-1]
+        if name.endswith(".whl") or name.endswith(".tar.gz"):
+            names.add(name)
+    return sorted(names)
+
+
+def discover_latest_rc() -> Version:
+    """Find the newest `X.Y.ZrcN` published for the `rocm` sdist."""
+    candidates = []
+    for name in list_index_files("rocm"):
+        m = re.search(r"rocm-(\d+\.\d+\.\d+rc\d+)\.tar\.gz", name)
+        if m:
+            candidates.append(Version(m.group(1)))
+    if not candidates:
+        raise RuntimeError(
+            f"Could not discover any rocm RC version under {WHL_INDEX}/rocm/"
+        )
+    return max(candidates)
+
+
+def _cp_tags(pkg_dir: str, version: str, platform_tag: str) -> set[str]:
+    tags = set()
+    for name in list_index_files(pkg_dir):
+        if version in name and platform_tag in name:
+            m = _CP_TAG_RE.search(name)
+            if m:
+                tags.add(m.group(1))
+    return tags
+
+
+def detect_py_tag(version: str, platform_tag: str, arches: list[str]) -> str:
+    """Pick the highest cpXX tag present across torch AND the device dirs.
+
+    The newest tag published for the arch-agnostic `torch` wheel (e.g. cp314)
+    is not always built for every per-gfx device wheel, so intersect the
+    availability to guarantee a coherent, installable set.
+    """
+    dirs = ["torch"]
+    for arch in arches:
+        dirs += [f"amd-torch-device-{arch}", f"amd-torchvision-device-{arch}"]
+    tag_sets = [_cp_tags(d, version, platform_tag) for d in dirs]
+    tag_sets = [s for s in tag_sets if s]
+    if not tag_sets:
+        raise RuntimeError(f"No torch wheel found for {version} / {platform_tag}")
+    common = set.intersection(*tag_sets) if len(tag_sets) > 1 else tag_sets[0]
+    tags = common or tag_sets[0]
+    # cp313 > cp312 > ... by trailing integer.
+    return max(tags, key=lambda t: int(t[2:]))
+
+
+def _upstream_version(name: str) -> Version:
+    """Extract the upstream version field from a wheel/sdist filename.
+
+    torch-2.11.0+rocm7.14.0rc1-...  -> 2.11.0
+    rocm_sdk_core-7.14.0rc1-...     -> 7.14.0rc1
+    rocm-7.14.0rc1.tar.gz           -> 7.14.0rc1
+    """
+    field = name.split("-", 2)[1] if "-" in name else name
+    field = field.split("+", 1)[0]
+    if field.endswith(".tar.gz"):
+        field = field[: -len(".tar.gz")]
+    return Version(field)
+
+
+def _keep_max_upstream(names: list[str]) -> list[str]:
+    """A single package dir can publish several upstream versions for one RC
+    (e.g. torch 2.10.0 and 2.11.0 both `+rocm7.14.0rc1`). Keep only the newest
+    so the promoted set stays single-version and installable."""
+    if len(names) <= 1:
+        return names
+    try:
+        newest = max(_upstream_version(n) for n in names)
+    except Exception:
+        return names
+    return [n for n in names if _upstream_version(n) == newest]
+
+
+def _matches(name: str, version: str, platform_tag: str, py_tag: str) -> bool:
+    if version not in name:
+        return False
+    # rocm-<ver>.tar.gz sdist has no platform tag.
+    if name.endswith(".tar.gz"):
+        return True
+    if platform_tag not in name:
+        return False
+    # Python-tag-specific wheels (torch-family + device wheels) must match the
+    # single chosen cpXX tag; py3-none SDK wheels have no cp tag and pass.
+    if _CP_TAG_RE.search(name):
+        return f"-{py_tag}-" in name
+    return True
+
+
+def select_packages(
+    version: str, platform_tag: str, py_tag: str, arches: list[str]
+) -> tuple[list[tuple[str, str]], set[str]]:
+    """Return (download list, device-wheel filenames) for the given arches.
+
+    download list is [(base_url, filename), ...]; every file is hosted at the
+    WHL_INDEX root, so base_url is the same for all of them.
+    """
+    base = f"{WHL_INDEX}/"
+    downloads: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def add(pkg_dir: str) -> list[str]:
+        matched = [
+            name
+            for name in list_index_files(pkg_dir)
+            if name not in seen and _matches(name, version, platform_tag, py_tag)
         ]
-    else:
-        expected_promoted_pkgs = [
-            "rocm-7.9.0.tar.gz",
-            "rocm_sdk_core-7.9.0-py3-none-win_amd64.whl",
-            "rocm_sdk_devel-7.9.0-py3-none-win_amd64.whl",
-            "rocm_sdk_libraries_gfx1151-7.9.0-py3-none-win_amd64.whl",
-            "torch-2.9.0+rocm7.9.0-cp312-cp312-win_amd64.whl",
-            "torchaudio-2.9.0+rocm7.9.0-cp312-cp312-win_amd64.whl",
-            "torchvision-0.24.0+rocm7.9.0-cp312-cp312-win_amd64.whl",
-            "therock-dist-windows-gfx1151-7.9.0.tar.gz",
-        ]
+        picked = _keep_max_upstream(matched)
+        for name in picked:
+            seen.add(name)
+            downloads.append((base, name))
+        return picked
 
-    # get files and strip path from them
-    files = dir_path.glob("*")
-    files = [file.name for file in files]
+    for pkg_dir in AGGREGATOR_PKG_DIRS:
+        add(pkg_dir)
 
-    if len(files) != len(expected_promoted_pkgs):
+    device_files: set[str] = set()
+    for prefix in DEVICE_PKG_PREFIXES:
+        for arch in arches:
+            for name in add(f"{prefix}-{arch}"):
+                device_files.add(name)
+
+    return downloads, device_files
+
+
+def promoted_name(rc_name: str, version: str, final_version: str) -> str:
+    return rc_name.replace(version, final_version)
+
+
+def checkPromotedFileNames(dir_path: Path, expected: set[str]) -> tuple[bool, str]:
+    actual = {p.name for p in dir_path.glob("*") if p.name != ".venv"}
+    if actual != expected:
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
         return (
             False,
-            f"Files found and expected promoted packages are not the same amount ({len(files)} vs {len(expected_promoted_pkgs)})",
+            f"Promoted file set mismatch.\n  missing: {missing}\n  unexpected: {unexpected}",
         )
-
-    for file in files:
-        if not file in expected_promoted_pkgs:
-            return False, f"{file} not matching any of the expected package names"
-
     return True, ""
 
 
@@ -116,25 +283,24 @@ def checkAllWheelsSameVersion(
         wheel = Wheel(file)
         version = Version(wheel.version)
 
-        if (
-            str(version) == str(expected_version) and version.local == None
-        ):  # rocm packages
-            continue
-        elif str(version.local) == "rocm" + str(expected_version):  # torch packages
+        local_tag = "rocm" + str(expected_version)
+        if str(version) == str(expected_version) and version.local is None:
+            continue  # arch-agnostic / device SDK wheels
+        # torch-family wheels carry the rocm tag as a local version segment,
+        # sometimes prefixed with a git hash (e.g. `git43422b04.rocm7.14.0`).
+        elif version.local is not None and version.local.endswith(local_tag):
             continue
         else:
             return (
                 False,
-                f"{file} has version {version}, but expected version is {expected_version}",
+                f"{file.name} has version {version}, but expected version is {expected_version}",
             )
 
     return True, ""
 
 
 def checkInstallation(dir_path: Path) -> tuple[bool, str]:
-    """
-    Note: dir_path must be a TemporaryDirectory, otherwise you must clean up the .venv created here yourself.
-    """
+    """Note: dir_path must be a TemporaryDirectory, otherwise clean up .venv yourself."""
     try:
         setup_venv.create_venv(dir_path / ".venv")
         python_exe = setup_venv.find_venv_python(dir_path / ".venv")
@@ -144,14 +310,14 @@ def checkInstallation(dir_path: Path) -> tuple[bool, str]:
                 "Problem when installing temporary venv: Python executable not found",
             )
 
-        # only install rocm wheels/sdist and pytorch wheels, not therock-dist tarball or .venv
+        # Install wheels/sdists, not the therock-dist tarball or the venv itself.
         packages = [
             p
             for p in dir_path.glob("*")
             if p.name != ".venv" and "therock-dist" not in p.name
         ]
 
-        proc = subprocess.run(
+        subprocess.run(
             [python_exe, "-m", "pip", "install"] + packages,
             capture_output=True,
             encoding="utf-8",
@@ -162,310 +328,279 @@ def checkInstallation(dir_path: Path) -> tuple[bool, str]:
     return True, ""
 
 
+def _stage_inputs(src: Path, dst: Path, names: set[str]) -> None:
+    for file in src.glob("*"):
+        if file.is_file() and file.name in names:
+            shutil.copy2(file, dst)
+
+
+def _run_checks(
+    tmp_dir: Path, checks: list[tuple[str, tuple[bool, str]]], expect_success: bool
+) -> bool:
+    """Run named checks. Returns whether the overall expectation held."""
+    for func_name, res in checks:
+        if expect_success and not res[0]:
+            print(f"\n[ERROR] {func_name} failed:\n{res[1]}")
+            return False
+        if not expect_success and res[0]:
+            print(
+                f"\n[ERROR] {func_name} succeeded but the promotion should NOT have been coherent."
+            )
+            proc = subprocess.run(
+                ["ls", tmp_dir], capture_output=True, encoding="utf-8"
+            )
+            print(proc.stdout)
+            return False
+    return True
+
+
+def _banner(msg: str) -> None:
+    line = "=" * 81
+    print(f"\n{line}\n{msg}\n{line}")
+
+
 def checkPromoteEverything(
-    dir_path: Path, expected_version: Version, platform: str
-) -> tuple[bool, str]:
-    print("")
-    print(
-        "================================================================================="
-    )
-    print("TEST: Testing promotion of all packages")
-    print(
-        "================================================================================="
-    )
-    success = False
-    with tempfile.TemporaryDirectory(
-        prefix="PromoteRcToFinalTest-PromoteEverything-"
-    ) as tmp:
+    dir_path: Path,
+    expected_version: Version,
+    input_files: set[str],
+    expected_files: set[str],
+) -> bool:
+    _banner("TEST: promotion of all aggregator packages (should SUCCEED)")
+    with tempfile.TemporaryDirectory(prefix="PromoteTest-Everything-") as tmp:
         tmp_dir = Path(tmp)
-        # make a copy in a separate dir to not pollute it
-        for file in dir_path.glob("*"):
-            shutil.copy2(file, tmp_dir)
-
+        _stage_inputs(dir_path, tmp_dir, input_files)
         promote_packages.main(tmp_dir, delete=True)
-        success = True
-
-        for func_name, res in [
-            ("checkPromotedFileNames", checkPromotedFileNames(tmp_dir, platform)),
-            (
-                "checkAllWheelsSameVersion",
-                checkAllWheelsSameVersion(tmp_dir, expected_version),
-            ),
-            ("checkInstallation", checkInstallation(tmp_dir)),
-        ]:
-            if not res[0]:
-                print("")
-                print(
-                    f"[ERROR] Failure to promote the packages (failure captured by {func_name}):"
-                )
-                print(res[1])
-                success = False
-                break
-    print("")
-    print(
-        "================================================================================="
+        ok = _run_checks(
+            tmp_dir,
+            [
+                (
+                    "checkPromotedFileNames",
+                    checkPromotedFileNames(tmp_dir, expected_files),
+                ),
+                (
+                    "checkAllWheelsSameVersion",
+                    checkAllWheelsSameVersion(tmp_dir, expected_version),
+                ),
+                ("checkInstallation", checkInstallation(tmp_dir)),
+            ],
+            expect_success=True,
+        )
+    _banner(
+        "TEST DONE: promote everything. Result: " + ("SUCCESS" if ok else "FAILURE")
     )
-    print(
-        "TEST DONE: Testing promotion of all packages. Result:"
-        + (" SUCCESS" if success else " FAILURE")
-    )
-    print(
-        "================================================================================="
-    )
-    return success
+    return ok
 
 
-def checkPromoteOnlyRocm(
-    dir_path: Path, expected_version: Version, platform: str
-) -> bool:  # should fail
-    print("")
-    print(
-        "================================================================================="
-    )
-    print("TEST: Testing promotion of only rocm packages")
-    print(
-        "================================================================================="
-    )
-    success = False
-    with tempfile.TemporaryDirectory(
-        prefix="PromoteRcToFinalTest-PromoteOnlyRocm-"
-    ) as tmp:
+def checkPromoteMultiArch(
+    dir_path: Path,
+    expected_version: Version,
+    keep_arch: str,
+    input_files: set[str],
+    dropped_promoted_names: set[str],
+    expected_files: set[str],
+) -> bool:
+    _banner(f"TEST: multi-arch promotion keeping only {keep_arch} (should SUCCEED)")
+    with tempfile.TemporaryDirectory(prefix="PromoteTest-MultiArch-") as tmp:
         tmp_dir = Path(tmp)
-        # make a copy in a separate dir to not pollute it
-        for file in dir_path.glob("*"):
-            shutil.copy2(file, tmp_dir)
+        _stage_inputs(dir_path, tmp_dir, input_files)
+        promote_packages.main(tmp_dir, delete=True, multi_arch_targets=[keep_arch])
 
-        promote_packages.main(tmp_dir, match_files="rocm*", delete=True)
-
-        success = True
-
-        for func_name, res in [
-            ("checkPromotedFileNames", checkPromotedFileNames(tmp_dir, platform)),
+        checks = [
+            ("checkPromotedFileNames", checkPromotedFileNames(tmp_dir, expected_files)),
             (
                 "checkAllWheelsSameVersion",
                 checkAllWheelsSameVersion(tmp_dir, expected_version),
             ),
             ("checkInstallation", checkInstallation(tmp_dir)),
-        ]:
-            if res[0]:
-                success = False
-                print("")
+        ]
+        ok = _run_checks(tmp_dir, checks, expect_success=True)
+
+        # Explicitly confirm the non-kept arch device wheels were pruned.
+        if ok:
+            leftover = dropped_promoted_names & {p.name for p in tmp_dir.glob("*")}
+            if leftover:
                 print(
-                    f"[ERROR] checkPromoteOnlyRocm: Promotion of packages successful, eventhough it shouldnt be"
+                    f"\n[ERROR] non-kept-arch device wheels survived: {sorted(leftover)}"
                 )
-                print("Function that succeeded (and should NOT have): " + func_name)
-                proc = subprocess.run(
-                    ["ls", tmp_dir], capture_output=True, encoding="utf-8"
-                )
-                print(proc.stdout)
-                break
-    print("")
-    print(
-        "================================================================================="
+                ok = False
+    _banner(
+        "TEST DONE: multi-arch promotion. Result: " + ("SUCCESS" if ok else "FAILURE")
     )
-    print(
-        "TEST DONE: Testing promotion of only rocm packages. Result:"
-        + (" SUCCESS" if success else " FAILURE")
-    )
-    print(
-        "================================================================================="
-    )
-    return success
+    return ok
 
 
-def checkPromoteOnlyTorch(
-    dir_path: Path, expected_version: Version, platform: str
-) -> bool:  # should fail
-    print("")
-    print(
-        "================================================================================="
-    )
-    print("TEST: Testing promotion of only PyTorch packages")
-    print(
-        "================================================================================="
-    )
-    success = False
-    with tempfile.TemporaryDirectory(
-        prefix="PromoteRcToFinalTest-PromoteOnlyTorch-"
-    ) as tmp:
+def checkPartialPromotion(
+    dir_path: Path,
+    expected_version: Version,
+    input_files: set[str],
+    expected_files: set[str],
+    match_files: str,
+    label: str,
+) -> bool:
+    _banner(f"TEST: promotion of only {label} packages (should FAIL)")
+    with tempfile.TemporaryDirectory(prefix=f"PromoteTest-Only-{label}-") as tmp:
         tmp_dir = Path(tmp)
-        # make a copy in a separate dir to not pollute it
-        for file in dir_path.glob("*"):
-            shutil.copy2(file, tmp_dir)
-
-        promote_packages.main(tmp_dir, match_files="*torch*", delete=True)
-
-        success = True
-
-        for func_name, res in [
-            ("checkPromotedFileNames", checkPromotedFileNames(tmp_dir, platform)),
-            (
-                "checkAllWheelsSameVersion",
-                checkAllWheelsSameVersion(tmp_dir, expected_version),
-            ),
-            ("checkInstallation", checkInstallation(tmp_dir)),
-        ]:
-            if res[0]:
-                success = False
-                print("")
-                print(
-                    f"[ERROR] checkPromoteOnlyTorch: Promotion of packages successful, eventhough it shouldnt be"
-                )
-                print("Function that succeeded (and should NOT have): " + func_name)
-                proc = subprocess.run(
-                    ["ls", tmp_dir], capture_output=True, encoding="utf-8"
-                )
-                print(proc.stdout)
-                break
-    print("")
-    print(
-        "================================================================================="
+        _stage_inputs(dir_path, tmp_dir, input_files)
+        promote_packages.main(tmp_dir, match_files=match_files, delete=True)
+        ok = _run_checks(
+            tmp_dir,
+            [
+                (
+                    "checkPromotedFileNames",
+                    checkPromotedFileNames(tmp_dir, expected_files),
+                ),
+                (
+                    "checkAllWheelsSameVersion",
+                    checkAllWheelsSameVersion(tmp_dir, expected_version),
+                ),
+                ("checkInstallation", checkInstallation(tmp_dir)),
+            ],
+            expect_success=False,
+        )
+    _banner(
+        f"TEST DONE: promote only {label}. Result: " + ("SUCCESS" if ok else "FAILURE")
     )
-    print(
-        "TEST DONE: Testing promotion of only PyTorch packages. Result:"
-        + (" SUCCESS" if success else " FAILURE")
-    )
-    print(
-        "================================================================================="
-    )
-    return success
+    return ok
 
 
-def fetchPackage(URL: str, package_name: str, tmp_dir: Path, cache_dir: Path) -> None:
-    # Check first if the package is cached
-    if cache_dir is not None:
-        if (cache_dir / package_name).exists():
-            print(f"  Found in cache: {package_name}")
-            shutil.copy2(cache_dir / package_name, tmp_dir / package_name)
-            return
-    # Otherwise download the package
+def fetchPackage(
+    base_url: str, package_name: str, tmp_dir: Path, cache_dir: Path | None
+) -> None:
+    if cache_dir is not None and (cache_dir / package_name).exists():
+        print(f"  Found in cache: {package_name}")
+        shutil.copy2(cache_dir / package_name, tmp_dir / package_name)
+        return
     print(f"  Downloading {package_name}")
-    # Use safe encoding, otherwise CURL gets unhappy with the "+" in the URL
-    url_safe_encoding = URL + urllib.parse.quote(package_name)
-    print(url_safe_encoding)
+    # Safe-encode: the "+" in torch local versions confuses curl otherwise.
+    url = base_url + urllib.parse.quote(package_name)
     subprocess.run(
-        ["curl", "--output", tmp_dir / package_name, url_safe_encoding],
-        check=True,
+        ["curl", "-fSL", "--output", tmp_dir / package_name, url], check=True
     )
-    # Let's cache the package
     if cache_dir is not None:
-        print(f"  Caching {package_name}")
         shutil.copy2(tmp_dir / package_name, cache_dir / package_name)
-
-
-def getLinuxPackagesLinks() -> tuple[list[tuple[str, str]], Version, Version]:
-    # download some version
-    URL = "https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu/"
-    version = Version("7.9.0rc1")
-    expected_version = Version("7.9.0")
-    packages = [
-        "rocm-7.9.0rc1.tar.gz",
-        "rocm_sdk_core-7.9.0rc1-py3-none-linux_x86_64.whl",
-        "rocm_sdk_devel-7.9.0rc1-py3-none-linux_x86_64.whl",
-        "rocm_sdk_libraries_gfx94x_dcgpu-7.9.0rc1-py3-none-linux_x86_64.whl",
-        "triton-3.3.1+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
-        "torch-2.7.1+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
-        "torchaudio-2.7.1a0+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
-        "torchvision-0.22.1+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
-    ]
-
-    url_and_packages = [(URL, package) for package in packages]
-    url_and_packages.append(
-        (
-            "https://rocm.prereleases.amd.com/tarball/",
-            "therock-dist-linux-gfx1151-7.9.0rc1.tar.gz",
-        )
-    )
-
-    return url_and_packages, version, expected_version
-
-
-def getWindowsPackagesLinks() -> tuple[list[tuple[str, str]], Version, Version]:
-    # download some version
-    URL = "https://rocm.prereleases.amd.com/whl/gfx1151/"
-    version = Version("7.9.0rc1")
-    expected_version = Version("7.9.0")
-    packages = [
-        "rocm-7.9.0rc1.tar.gz",
-        "rocm_sdk_core-7.9.0rc1-py3-none-win_amd64.whl",
-        "rocm_sdk_devel-7.9.0rc1-py3-none-win_amd64.whl",
-        "rocm_sdk_libraries_gfx1151-7.9.0rc1-py3-none-win_amd64.whl",
-        "torch-2.9.0+rocm7.9.0rc1-cp312-cp312-win_amd64.whl",
-        "torchaudio-2.9.0+rocm7.9.0rc1-cp312-cp312-win_amd64.whl",
-        "torchvision-0.24.0+rocm7.9.0rc1-cp312-cp312-win_amd64.whl",
-    ]
-
-    url_and_packages = [(URL, package) for package in packages]
-    url_and_packages.append(
-        (
-            "https://rocm.prereleases.amd.com/tarball/",
-            "therock-dist-windows-gfx1151-7.9.0rc1.tar.gz",
-        )
-    )
-
-    return url_and_packages, version, expected_version
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="""Tests promotion of packages from release candidate to final release (e.g. 7.10.0rc1 --> 7.10.0).
-"""
+        description="On-demand test of RC->final multi-arch package promotion."
     )
     parser.add_argument(
         "--platform",
-        help="OS platform: either 'linux' (default) or 'win'",
+        choices=sorted(PLATFORM_TAGS),
         default="linux" if platform_module.system() != "Windows" else "windows",
+        help="Target platform tag to fetch (default: auto-detected).",
+    )
+    parser.add_argument(
+        "--version",
+        default=None,
+        help="RC version to test (e.g. 7.14.0rc1). Default: auto-discover latest.",
+    )
+    parser.add_argument(
+        "--keep-arch",
+        default="gfx942",
+        help="gfx arch to KEEP in the multi-arch keep-list scenario.",
+    )
+    parser.add_argument(
+        "--extra-arch",
+        default="gfx1201",
+        help="Additional gfx arch to fetch but expect to be pruned.",
     )
     parser.add_argument(
         "--cache-dir",
-        help="Path to the directory that contains the cache of the packages",
         type=Path,
         default=None,
+        help="Directory to cache downloaded packages between runs.",
     )
     p = parser.parse_args(sys.argv[1:])
+
     platform = p.platform
+    platform_tag = PLATFORM_TAGS[platform]
     cache_dir = p.cache_dir
-
     if cache_dir is not None:
-        if not cache_dir.exists():
-            print(f"  Creating cache directory: {cache_dir}")
-            cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # make tmpdir
-    with tempfile.TemporaryDirectory(prefix=f"PromoteRcToFinalTest-{platform}-") as tmp:
-        tmp_dir = Path(tmp)
-        if platform == "linux":
-            url_and_packages, version, expected_version = getLinuxPackagesLinks()
-        elif platform == "windows":  # win
-            url_and_packages, version, expected_version = getWindowsPackagesLinks()
-        else:
-            raise ValueError(f"Unknown platform: {platform}")
+    rc_version = Version(p.version) if p.version else discover_latest_rc()
+    rc_str = str(rc_version)
+    fin_str = rc_str.split("rc")[0]
+    final_version = Version(fin_str)
 
+    keep_arch = p.keep_arch
+    extra_arch = p.extra_arch
+    arches = [keep_arch, extra_arch]
+    py_tag = detect_py_tag(rc_str, platform_tag, arches)
+
+    print(
+        f"Testing promotion {rc_version} -> {final_version} on {platform} "
+        f"({platform_tag}, {py_tag}); arches fetched: {arches}, kept: {keep_arch}"
+    )
+
+    downloads, device_files = select_packages(rc_str, platform_tag, py_tag, arches)
+    # A device wheel belongs to keep_arch iff its filename carries the exact
+    # `device_<arch>-` token (trailing `-` avoids gfx1201 matching gfx1200).
+    kept_device_files = {n for n in device_files if f"device_{keep_arch}-" in n}
+    dropped_device_files = device_files - kept_device_files
+    if not dropped_device_files:
         print(
-            f"Testing promotion of {version} to {expected_version} on platform {platform}"
+            f"[WARN] no device wheels found for --extra-arch {extra_arch}; "
+            "the multi-arch prune assertion will be a no-op."
         )
-        print(f"Fetching packages", end="")
-        print(f"  Using cache directory: {cache_dir}")
-        for URL, package in url_and_packages:
-            fetchPackage(URL, package, tmp_dir, cache_dir)
+
+    with tempfile.TemporaryDirectory(prefix=f"PromoteTest-{platform}-") as tmp:
+        tmp_dir = Path(tmp)
+        print(f"Fetching {len(downloads)} packages (cache: {cache_dir}) ...")
+        for base_url, name in downloads:
+            fetchPackage(base_url, name, tmp_dir, cache_dir)
         print(" ...done")
 
-        res_everything = checkPromoteEverything(tmp_dir, expected_version, platform)
-        res_rocm = checkPromoteOnlyRocm(tmp_dir, expected_version, platform)
-        res_torch = checkPromoteOnlyTorch(tmp_dir, expected_version, platform)
+        all_rc_files = {n for _, n in downloads}
+        aggregator_files = all_rc_files - device_files
+        multi_arch_input = aggregator_files | device_files
+        expected_aggregators = {
+            promoted_name(n, rc_str, fin_str) for n in aggregator_files
+        }
+        # Multi-arch keep-list run: aggregators + kept-arch device wheels survive.
+        expected_multi_arch = {
+            promoted_name(n, rc_str, fin_str)
+            for n in (multi_arch_input - dropped_device_files)
+        }
+        dropped_promoted_names = {
+            promoted_name(n, rc_str, fin_str) for n in dropped_device_files
+        }
 
-        print("")
-        print("")
-        print(
-            "================================================================================="
+        res_everything = checkPromoteEverything(
+            tmp_dir, final_version, aggregator_files, expected_aggregators
         )
-        print("SUMMARY")
-        print(
-            "================================================================================="
+        res_multi = checkPromoteMultiArch(
+            tmp_dir,
+            final_version,
+            keep_arch,
+            multi_arch_input,
+            dropped_promoted_names,
+            expected_multi_arch,
         )
-        print("checkPromoteEverything: " + ("SUCCESS" if res_everything else "FAILURE"))
-        print("checkPromoteOnlyRocm: " + ("SUCCESS" if res_rocm else "FAILURE"))
-        print("checkPromoteOnlyTorch: " + ("SUCCESS" if res_torch else "FAILURE"))
-        print(
-            "================================================================================="
+        res_only_rocm = checkPartialPromotion(
+            tmp_dir,
+            final_version,
+            aggregator_files,
+            expected_aggregators,
+            "rocm*",
+            "rocm",
         )
+        res_only_torch = checkPartialPromotion(
+            tmp_dir,
+            final_version,
+            aggregator_files,
+            expected_aggregators,
+            "*torch*",
+            "torch",
+        )
+
+        _banner("SUMMARY")
+        print(f"checkPromoteEverything:  {'SUCCESS' if res_everything else 'FAILURE'}")
+        print(f"checkPromoteMultiArch:   {'SUCCESS' if res_multi else 'FAILURE'}")
+        print(f"checkPromoteOnlyRocm:    {'SUCCESS' if res_only_rocm else 'FAILURE'}")
+        print(f"checkPromoteOnlyTorch:   {'SUCCESS' if res_only_torch else 'FAILURE'}")
+        print("=" * 81)
+
+        if not all([res_everything, res_multi, res_only_rocm, res_only_torch]):
+            sys.exit(1)
