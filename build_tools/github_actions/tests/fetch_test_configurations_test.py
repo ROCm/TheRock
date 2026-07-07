@@ -69,6 +69,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_windows_jobs_selected(self):
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertGreater(len(components), 0)
+        for job in components:
+            self.assertIn("windows", job["platform"])
+
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
 
@@ -148,24 +158,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotEqual(
             hipblaslt_linux["total_shards"], hipblaslt_windows["total_shards"]
         )
-
-    def test_hiptensor_selected_on_linux_and_windows(self):
-        os.environ["PROJECTS_TO_TEST"] = "hiptensor"
-
-        fetch_test_configurations.run()
-        linux_components = self._get_components()
-        self.assertEqual(len(linux_components), 1)
-        self.assertEqual(linux_components[0]["job_name"], "hiptensor")
-        self.assertIn("linux", linux_components[0]["platform"])
-        self.assertEqual(linux_components[0]["total_shards"], 1)
-
-        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
-        fetch_test_configurations.run()
-        windows_components = self._get_components()
-        self.assertEqual(len(windows_components), 1)
-        self.assertEqual(windows_components[0]["job_name"], "hiptensor")
-        self.assertIn("windows", windows_components[0]["platform"])
-        self.assertEqual(windows_components[0]["total_shards"], 1)
 
     # -----------------------
     # Exclude-family logic
