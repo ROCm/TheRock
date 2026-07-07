@@ -137,12 +137,14 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 # are cached rather than returned to the device (Linux reclaims them because its
 # pool release threshold defaults to 0), so reserved VRAM grows monotonically
 # across the suite and eventually exhausts the card (ROCm/rocm-libraries#8592).
-# Enable the opt-in per-test pool trim implemented in the rocSPARSE/hipSPARSE
-# gtest listeners for the sparse components. Trimming is a near-noop where the
-# pool already reclaims, so it is safe to leave on everywhere.
+# CONTROL RUN (Arm A): per-test pool trim DISABLED to isolate its effect. The
+# trim listeners are still compiled into the (identical) binaries; with TRIM=0
+# the pool is never shrunk, so reserved VRAM should grow across the suite and
+# reproduce the gfx110X OOM (ROCm/rocm-libraries#8592) if the trim is the fix.
+# Flip both back to "1" for the trim arm (Arm B).
 if test_component_job_name in ("rocsparse", "hipsparse"):
-    environ_vars["ROCSPARSE_TEST_TRIM_POOL"] = "1"
-    environ_vars["HIPSPARSE_TEST_TRIM_POOL"] = "1"
+    environ_vars["ROCSPARSE_TEST_TRIM_POOL"] = "0"
+    environ_vars["HIPSPARSE_TEST_TRIM_POOL"] = "0"
 
 # Component-specific ENV VARs/PATHs applied on top of defaults.
 #
