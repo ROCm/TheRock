@@ -113,7 +113,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             pkg_info, "RPMRecommends", config
         )
         rpmsuggests = process_secondary_dependencies(pkg_info, "RPMSuggests", config)
-        requires = process_main_dependencies(pkg_info, "RPMRequires", config)
+        requires = process_versioned_dependencies(pkg_info, "RPMRequires", config)
 
         dir_list = filter_components_fromartifactory(
             pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
@@ -149,7 +149,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         obsoletes = process_name_field(pkg_info, "Obsoletes")
         conflicts = process_name_field(pkg_info, "Conflicts")
         # Non-versioned package requires versioned package itself
-        requires = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        requires = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
