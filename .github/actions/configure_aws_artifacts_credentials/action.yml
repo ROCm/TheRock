@@ -12,8 +12,8 @@ description: >-
 
 inputs:
   release_type:
-    description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
-    default: ""
+    description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+    default: ci
 
 runs:
   using: "composite"
@@ -28,7 +28,7 @@ runs:
 
     - name: Configure AWS Credentials
       if: ${{ always() && steps.iam.outputs.iam_role != '' }}
-      uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v6.1.3
+      uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
       with:
         aws-region: ${{ steps.iam.outputs.aws_region }}
         role-to-assume: ${{ steps.iam.outputs.iam_role }}

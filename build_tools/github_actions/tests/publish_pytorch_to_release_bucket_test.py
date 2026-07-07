@@ -26,7 +26,8 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         self._tmp.cleanup()
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
-    def test_dev_uploads_to_v4_whl_in_dev_python(self, mock_upload):
+    @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
+    def test_dev_uploads_to_v4_whl_in_dev_python(self, mock_set_output, mock_upload):
         mock_upload.return_value = 3
         main(
             [
@@ -45,6 +46,9 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         self.assertEqual(dest.bucket, "therock-dev-python")
         self.assertEqual(dest.relative_path, "v4/whl")
         self.assertEqual(call_args.kwargs.get("include"), ["*.whl"])
+        mock_set_output.assert_called_once_with(
+            {"package_index_url": "https://rocm.devreleases.amd.com/whl-multi-arch/"}
+        )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
     def test_nightly_selects_nightly_bucket(self, mock_upload):

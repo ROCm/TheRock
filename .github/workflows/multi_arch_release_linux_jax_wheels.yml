@@ -1,101 +1,129 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Multi-arch release entry point for Linux JAX wheels.
+#
+# This workflow owns the release matrix and delegates each matrix cell to the
+# reusable single-build workflow.
+
 name: Multi-Arch Release Linux JAX Wheels
 
 on:
   workflow_call:
     inputs:
-      amdgpu_families:
-        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+      test_amdgpu_family:
+        description: "GPU family to use for JAX tests; empty means skip tests."
         type: string
-        required: true
+        default: ""
       release_type:
+        description: 'Release type: "dev", "nightly", or "prerelease".'
         type: string
         required: true
       rocm_version:
+        description: "ROCm package version to build against."
         type: string
         required: true
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
       tar_url:
+        description: "URL to the TheRock tarball used for the build."
         type: string
         required: true
       repository:
+        description: "Repository to checkout. Defaults to github.repository."
         type: string
         default: ""
       ref:
+        description: "Branch, tag, or SHA to checkout."
+        type: string
+        default: ""
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
   workflow_dispatch:
     inputs:
-      amdgpu_families:
-        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
+      test_amdgpu_family:
+        description: "Representative GPU family to use for JAX tests."
         type: string
         default: "gfx94X-dcgpu"
       release_type:
-        description: 'Release type. All developer-triggered jobs should use "dev"!'
+        description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
         options:
           - dev
         default: dev
       rocm_version:
+        description: "ROCm package version to build against."
         type: string
         required: true
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
       tar_url:
+        description: "URL to the TheRock tarball used for the build."
         type: string
         required: true
       repository:
+        description: "Repository to checkout. Defaults to github.repository."
         type: string
         default: ""
       ref:
+        description: "Branch, tag, or SHA to checkout."
+        type: string
+        default: ""
+      python_version:
+        description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
 
+run-name: Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
+
 permissions:
   contents: read
-  id-token: write
-  packages: read
-
-run-name: Multi-Arch Release Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 jobs:
-  build_jax_wheels:
-    name: Build Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+  setup_matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      jax_matrix: ${{ steps.matrix.outputs.jax_matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
+      - name: Generate JAX matrix
+        id: matrix
+        run: |
+          python ./build_tools/github_actions/configure_jax_release_matrix.py \
+            --python-versions="${{ inputs.python_version }}"
+
+  build_jax_wheels:
+    needs: setup_matrix
+    name: Build | py ${{ matrix.python_version }} | jax ${{ matrix.jax_ref }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12"]
-        jax_ref: ["rocm-jaxlib-v0.9.1"]
+        include: ${{ fromJSON(needs.setup_matrix.outputs.jax_matrix) }}
 
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
-
-    steps:
-      - name: Checkout TheRock
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
-
-      - name: Checkout rocm-jax
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          path: rocm-jax
-          repository: ROCm/rocm-jax
-          ref: ${{ matrix.jax_ref }}
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-        with:
-          python-version: ${{ matrix.python_version }}
-
-      - name: Build JAX wheels
-        env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
-        working-directory: rocm-jax
-        run: |
-
-          python3 build/ci_build \
-            --compiler=clang \
-            --python-versions="${{ matrix.python_version }}" \
-            --rocm-version="${ROCM_VERSION}" \
-            --therock-path="${{ inputs.tar_url }}" \
-            dist_wheels
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/multi_arch_build_linux_jax_wheels.yml
+    with:
+      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      python_version: ${{ matrix.python_version }}
+      jax_ref: ${{ matrix.jax_ref }}
+      jax_repository: ${{ matrix.jax_repository }}
+      build_mode: ${{ matrix.build_mode }}
+      gfx_arch: ${{ matrix.gfx_arch }}
+      rocm_version: ${{ inputs.rocm_version }}
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
+      tar_url: ${{ inputs.tar_url }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}

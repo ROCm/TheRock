@@ -159,6 +159,59 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 ]
             )
 
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_asan_skips_python_packages(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--build-variant",
+                "asan",
+                "--skip-native-packages",
+                "--dry-run",
+            ]
+        )
+
+        # Only tarballs should be copied (python packages skipped for ASAN)
+        self.assertEqual(mock_copy.call_count, 1)
+        tarball_source, tarball_dest = mock_copy.call_args_list[0].args
+        self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
+        # ASAN tarballs go to separate folder
+        self.assertEqual(tarball_dest.relative_path, "v4/tarball-asan")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_asan_native_packages_use_separate_path(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--build-variant",
+                "asan",
+                "--dry-run",
+            ]
+        )
+
+        # Calls: tarballs, deb, rpm (no python for ASAN)
+        self.assertEqual(mock_copy.call_count, 3)
+        # deb packages go to packages-asan path
+        deb_source, deb_dest = mock_copy.call_args_list[1].args
+        self.assertEqual(deb_source.relative_path, "123-linux/packages/deb")
+        self.assertRegex(deb_dest.relative_path, r"^v4/packages-asan/deb/\d{8}-123$")
+        # rpm packages go to packages-asan path
+        rpm_source, rpm_dest = mock_copy.call_args_list[2].args
+        self.assertEqual(rpm_source.relative_path, "123-linux/packages/rpm")
+        self.assertRegex(rpm_dest.relative_path, r"^v4/packages-asan/rpm/\d{8}-123$")
+
 
 if __name__ == "__main__":
     unittest.main()
