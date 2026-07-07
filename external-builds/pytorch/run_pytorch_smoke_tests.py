@@ -27,6 +27,7 @@ from pathlib import Path
 
 from pytorch_utils import (
     get_unique_supported_devices,
+    reconcile_agent_visibility_env,
     set_gpu_execution_policy,
 )
 
@@ -91,6 +92,7 @@ def main() -> int:
 
         # CRITICAL: Query unique devices for iteration.
         # HIP_VISIBLE_DEVICES will be set inside set_gpu_execution_policy.
+        reconcile_agent_visibility_env()
         unique_devices = get_unique_supported_devices(args.amdgpu_family)
 
         print(f"Will run smoke tests on {len(unique_devices)} unique device(s)")

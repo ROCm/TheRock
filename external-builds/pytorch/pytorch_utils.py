@@ -12,6 +12,16 @@ from importlib.metadata import version as get_package_version
 from packaging.version import Version
 
 
+def reconcile_agent_visibility_env() -> None:
+    """Drop GPU_DEVICE_ORDINAL when HIP_VISIBLE_DEVICES is set.
+
+    Avoids a fatal HIP agent-visibility conflict when a runner sets both;
+    HIP_VISIBLE_DEVICES supersedes.
+    """
+    if os.environ.get("HIP_VISIBLE_DEVICES"):
+        os.environ.pop("GPU_DEVICE_ORDINAL", None)
+
+
 def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
     """Get both supported and visible GPUs in a single subprocess call.
 

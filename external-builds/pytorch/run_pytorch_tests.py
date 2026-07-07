@@ -84,6 +84,7 @@ from pytorch_utils import (
     check_pytorch_source_version,
     configure_gpu_visibility,
     detect_pytorch_version,
+    reconcile_agent_visibility_env,
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -258,6 +259,7 @@ def main() -> int:
         # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
         # changing HIP_VISIBLE_DEVICES has no effect.
+        reconcile_agent_visibility_env()
         selected_archs = configure_gpu_visibility(
             args.amdgpu_family, args.device_query, args.gpu_policy
         )
