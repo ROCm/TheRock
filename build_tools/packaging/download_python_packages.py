@@ -159,7 +159,6 @@ PACKAGES_TO_PROMOTE_MULTI_ARCH = {
     "apex",
     "jax_rocm7_pjrt",
     "jax_rocm7_plugin",
-    "jaxlib",
     "rocm",
     "rocm_profiler",
     "rocm_sdk_core",
