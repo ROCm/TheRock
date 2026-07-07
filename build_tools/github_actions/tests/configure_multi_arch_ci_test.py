@@ -491,6 +491,35 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_stage_reuse_build_platforms_prefers_targets(self):
+        """Resolved target selection takes precedence over workflow inputs."""
+        inputs = self._inputs(
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+
+        self.assertEqual(
+            cm._stage_reuse_build_platforms(inputs, targets),
+            ["linux"],
+        )
+
+    def test_stage_reuse_build_platforms_falls_back_to_inputs(self):
+        """Workflow inputs are used before target selection is available."""
+        inputs = self._inputs(
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+
+        self.assertEqual(
+            cm._stage_reuse_build_platforms(inputs, None),
+            ["linux", "windows"],
+        )
+
     def test_no_prebuilt_stages_by_default(self):
         """Without explicit prebuilt_stages, no stage decisions are set."""
         result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())

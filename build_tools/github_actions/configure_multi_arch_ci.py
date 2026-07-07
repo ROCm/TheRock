@@ -796,19 +796,24 @@ def _stage_reuse_build_platforms(
     is known we use it directly; otherwise we fall back to the requested family
     inputs, defaulting to Linux only.
     """
-    if targets is not None:
-        platforms = []
-        if targets.linux_families:
-            platforms.append("linux")
-        if targets.windows_families:
-            platforms.append("windows")
-        return platforms
+    platforms: list[str] = []
 
-    platforms = []
-    if ci_inputs.linux_amdgpu_families:
+    linux_families = (
+        targets.linux_families
+        if targets is not None
+        else ci_inputs.linux_amdgpu_families
+    )
+    windows_families = (
+        targets.windows_families
+        if targets is not None
+        else ci_inputs.windows_amdgpu_families
+    )
+
+    if linux_families:
         platforms.append("linux")
-    if ci_inputs.windows_amdgpu_families:
+    if windows_families:
         platforms.append("windows")
+
     return platforms
 
 
