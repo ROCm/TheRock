@@ -66,6 +66,16 @@ When you create a pull request, you should target the *main* branch.
 - Submit your PR and work with the reviewer or maintainer to get your PR approved
   - If you don't know who to add to a PR as a maintainer, please review the git history to see recently approved PRs in the same file or folder.
 
+> [!TIP]
+> If you use an AI coding assistant, this repo ships PR-quality "skills"
+> that help you author, review, and pre-merge gate a PR so it lands traceable, tested, and safe to
+> merge. They are advisory and never post to GitHub or Jira without your approval. See
+> [`skills/`](/skills/) for the full index:
+>
+> - [`skills/rocm-pr-quality/`](/skills/rocm-pr-quality/) — the ROCm-wide base (start here).
+> - [`skills/therock-pr-quality/`](/skills/therock-pr-quality/) — TheRock overlay for changes touching
+>   the superbuild, submodules/patches, artifact descriptors, or reusable CI workflows.
+
 > [!IMPORTANT]
 > By creating a PR, you agree to allow your contribution to be licensed under the
 > terms of the [LICENSE](LICENSE) file.
@@ -134,3 +144,6 @@ We have project-wide style guides with recommendations to follow at
 - [CMake Style Guide](/docs/development/style_guides/cmake_style_guide.md)
 - [GitHub Actions Style Guide](/docs/development/style_guides/github_actions_style_guide.md)
 - [Python Style Guide](/docs/development/style_guides/python_style_guide.md)
+
+The PR-quality skills under [`skills/`](/skills/) defer to these same guides, so a finding from a
+review cites the specific guide section rather than inventing new rules.

@@ -627,6 +627,12 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.hiptensor]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
+disable_platforms = ["windows"]
+
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
@@ -802,6 +808,13 @@ disable_platforms = ["windows"]
 # --- ROCm Emulation Tools ---
 
 [artifacts.rocjitsu]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "EMULATION"
+disable_platforms = ["windows"]
+
+[artifacts.mirage]
 artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []
