@@ -1342,7 +1342,9 @@ class MaterializeReadOnlySourceTest(TmpDirTestCase):
         # Use a .txt source so get_file_type() returns "text" and the ELF
         # rpath path (patchelf) is skipped — we only exercise the copy+chmod.
         src = self.write_file("readonly.txt", "payload")
-        os.chmod(src, 0o444)
+        # Owner read-only (no write bit); this is the exact condition the fix
+        # handles. 0o400 rather than 0o444 keeps the temp file non-world-readable.
+        os.chmod(src, 0o400)
 
         dest_path = self.temp_dir / "dest" / "readonly.txt"
         pkg._populate_file(
