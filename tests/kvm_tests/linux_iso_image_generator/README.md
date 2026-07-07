@@ -19,7 +19,7 @@ Configured defaults include:
 - `sshd` enabled
 - ping (ICMP echo) allowed
 - generated passwordless SSH keypair for `therock`
-- key-only SSH login policy for `therock` (password auth disabled)
+- key-only SSH login policy for all users (password auth disabled)
 
 ## Prerequisites (on the build host)
 
@@ -44,7 +44,8 @@ Edit `build-rockylinux-8_10-config.json`:
   - leave `ssh_authorized_public_key` empty to auto-generate keypair
   - generated keys default to `./output/ssh/therock_ed25519` and `.pub`
   - set `ssh_authorized_public_key` if you want to inject an existing public key
-  - keep `disable_user_password_auth: true` to enforce key-only login for `therock`
+  - password-based SSH login is disabled globally in generated images
+  - keep `disable_user_password_auth: true` to also lock local password auth for `therock`
 
 ## Build
 
@@ -99,6 +100,21 @@ Example login after install:
 ```bash
 ssh -i ./output/ssh/therock_ed25519 therock@<installed-host-ip>
 ```
+
+Verify password-based SSH auth is disabled on the guest:
+
+```bash
+ssh -i ./output/ssh/therock_ed25519 therock@<installed-host-ip> \
+  "sudo sshd -T | rg 'passwordauthentication|kbdinteractiveauthentication|challengeresponseauthentication|pubkeyauthentication|permitemptypasswords'"
+```
+
+Expected effective values include:
+
+- `passwordauthentication no`
+- `kbdinteractiveauthentication no`
+- `challengeresponseauthentication no`
+- `pubkeyauthentication yes`
+- `permitemptypasswords no`
 
 ## Launch with QEMU/KVM (No GPU passthrough)
 

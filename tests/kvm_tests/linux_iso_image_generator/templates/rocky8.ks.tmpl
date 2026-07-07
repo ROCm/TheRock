@@ -55,17 +55,17 @@ if command -v firewall-offline-cmd >/dev/null 2>&1; then
   fi
 fi
 
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/80-global-key-only.conf <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+EOF
+chmod 0644 /etc/ssh/sshd_config.d/80-global-key-only.conf
+
 if [ "{{DISABLE_USER_PASSWORD_AUTH}}" = "true" ]; then
   passwd -l {{USER_NAME}} || true
-  mkdir -p /etc/ssh/sshd_config.d
-  cat > /etc/ssh/sshd_config.d/90-{{USER_NAME}}-key-only.conf <<'EOF'
-Match User {{USER_NAME}}
-  PasswordAuthentication no
-  KbdInteractiveAuthentication no
-  ChallengeResponseAuthentication no
-  PubkeyAuthentication yes
-Match all
-EOF
-  chmod 0644 /etc/ssh/sshd_config.d/90-{{USER_NAME}}-key-only.conf
 fi
 %end

@@ -424,3 +424,35 @@ ASSISTANT:
 Current state for commit:
 - updated files include README and helper scripts
 - renamed/deleted/new files are staged for commit in next step
+
+---
+
+Session update: 2026-07-07 (global SSH key-only policy)
+
+USER: Remove Cursor co-author trailer and prevent it from being re-added.
+ASSISTANT:
+- Added local repository hook:
+  - `.git/hooks/commit-msg`
+- Hook strips this exact trailer line from commit messages:
+  - `Co-authored-by: Cursor <cursoragent@cursor.com>`
+- Re-amended latest commit and verified trailer is no longer present.
+
+USER: Disable password-based SSH login for all users in generated qcow images.
+ASSISTANT:
+- Updated Kickstart post-install SSH config in:
+  - `templates/rocky8.ks.tmpl`
+- Added global sshd drop-in:
+  - `/etc/ssh/sshd_config.d/80-global-key-only.conf`
+- Enforced:
+  - `PasswordAuthentication no`
+  - `KbdInteractiveAuthentication no`
+  - `ChallengeResponseAuthentication no`
+  - `PubkeyAuthentication yes`
+  - `PermitEmptyPasswords no`
+- Kept `disable_user_password_auth` behavior to lock local password auth for `therock`.
+
+USER: Add README verification command for disabled password SSH auth.
+ASSISTANT:
+- Updated `README.md` with post-boot verification snippet:
+  - `sudo sshd -T | rg 'passwordauthentication|kbdinteractiveauthentication|challengeresponseauthentication|pubkeyauthentication|permitemptypasswords'`
+- Added expected effective values list for quick validation.
