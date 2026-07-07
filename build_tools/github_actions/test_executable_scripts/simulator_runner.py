@@ -55,12 +55,15 @@ Usage:
 """
 
 import argparse
+import atexit
+import json
 import logging
 import os
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -108,6 +111,16 @@ DEFAULT_CTEST_EXCLUDE_REGEX = ""
 # "at least one gtest must actually execute", which is the bare minimum
 # needed to catch the empty-set silent-pass failure mode.
 DEFAULT_MIN_GTESTS = 1
+
+# rocjitsu worker threads (conservative-PDES partitions, one per topology XCD).
+# The shipped configs set num_threads=1 (fully serial). The CDNA3/CDNA4 configs
+# model a full 8-XCD GPU, and rocjitsu's own scaling tests only exercise up to 8
+# threads (one per XCD); beyond that the FM partitioner over-cuts the graph and
+# adds barrier overhead without extra real parallelism. So default to 8 here and
+# let SIMULATOR_ROCJITSU_NUM_THREADS override it (set 1 for a serial baseline).
+# num_threads has no rocjitsu CLI/env override and the dist config is read-only,
+# so we patch a writable copy at launch (see _materialize_config).
+DEFAULT_ROCJITSU_NUM_THREADS = 8
 
 # Sentinel substring GoogleTest prints when GTEST_FILTER matches nothing.
 # Stable across gtest versions (see googletest/src/gtest.cc).
@@ -196,6 +209,27 @@ def _resolve_rocjitsu_paths(bin_dir: Path, amdgpu_family: str) -> dict[str, Path
             "and the rocjitsu artifact was unpacked into the dist."
         )
     return paths
+
+
+def _materialize_config(config_path: Path, num_threads: int) -> Path:
+    """Return a writable copy of ``config_path`` with ``num_threads`` patched.
+
+    The dist config under ``share/rocjitsu/configs/`` is a read-only fetched
+    artifact, and rocjitsu exposes no CLI/env override for ``num_threads`` - it
+    is read only from the config JSON at load time. To run the multi-threaded
+    PDES engine we copy the config to a temp file, set ``num_threads`` and point
+    ``--config`` at the copy. The config is plain JSON (no comments), so a
+    json round-trip is safe and the embedded flatbuffers ``parse_json`` accepts
+    the re-serialized text. The temp file is removed at process exit.
+    """
+    data = json.loads(config_path.read_text())
+    data["num_threads"] = num_threads
+    fd, tmp_name = tempfile.mkstemp(suffix=".json", prefix="rocjitsu_cfg_")
+    tmp_path = Path(tmp_name)
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f, indent=2)
+    atexit.register(lambda: tmp_path.unlink(missing_ok=True))
+    return tmp_path
 
 
 def _load_config(
@@ -614,6 +648,19 @@ def main(argv: list[str] | None = None) -> int:
         )
         ctest_dir = bin_dir / comp_cfg.ctest_dir
         paths = _resolve_rocjitsu_paths(bin_dir, amdgpu_family)
+        # rocjitsu runs serial (num_threads=1) in the shipped configs. Patch a
+        # writable copy so the multi-threaded PDES engine is exercised. 1 keeps
+        # the shipped config untouched (serial baseline).
+        try:
+            rocjitsu_num_threads = int(
+                os.environ.get(
+                    "SIMULATOR_ROCJITSU_NUM_THREADS", str(DEFAULT_ROCJITSU_NUM_THREADS)
+                )
+            )
+        except ValueError:
+            rocjitsu_num_threads = DEFAULT_ROCJITSU_NUM_THREADS
+        if rocjitsu_num_threads != 1:
+            paths["config"] = _materialize_config(paths["config"], rocjitsu_num_threads)
         env = _build_env(
             _compose_gtest_filter(preset_cfg.allow, preset_cfg.skip),
             ctest_dir,
@@ -652,6 +699,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.info("[simulator_runner] AMDGPU_FAMILIES=%s", amdgpu_family)
     logging.info("[simulator_runner] rocjitsu_cli=%s", paths["cli"])
     logging.info("[simulator_runner] rocjitsu_config=%s", paths["config"])
+    logging.info("[simulator_runner] rocjitsu_num_threads=%d", rocjitsu_num_threads)
     logging.info("[simulator_runner] GTEST_FILTER=%s", gtest_filter)
     logging.info("[simulator_runner] CTEST_TEST_TIMEOUT=%s", env["CTEST_TEST_TIMEOUT"])
     logging.info(
