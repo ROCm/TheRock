@@ -123,7 +123,7 @@ if(THEROCK_ENABLE_HIPDNN)
       miopenprovider
       hipblasltprovider
       hipkernelprovider
-      hipdnn-integration-tests
+      hipdnn_integration_tests
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
