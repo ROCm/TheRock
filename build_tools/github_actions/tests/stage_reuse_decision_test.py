@@ -415,6 +415,18 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertEqual(result.applied_reuse_stages, ("compiler-runtime",))
         self.assertIn("linux", result.platform_available)
 
+    def test_no_platforms_selected_disables_auto_reuse(self):
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.ENFORCE,
+            platforms=[],
+            topology=FakeTopology(),
+            baseline_selector=_selector(_baseline("123", ["base_lib_generic.tar.zst"])),
+        )
+        self.assertTrue(result.full_rebuild_required)
+        self.assertEqual(result.applied_reuse_stages, ())
+        self.assertIn("no build platforms selected", "\n".join(result.report_lines))
+
 
 class PlanStageReuseTest(unittest.TestCase):
     """The pure planning step is independent of baseline/reporting."""

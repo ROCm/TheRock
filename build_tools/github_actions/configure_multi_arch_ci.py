@@ -802,14 +802,14 @@ def _stage_reuse_build_platforms(
             platforms.append("linux")
         if targets.windows_families:
             platforms.append("windows")
-        return platforms or ["linux"]
+        return platforms
 
     platforms = []
     if ci_inputs.linux_amdgpu_families:
         platforms.append("linux")
     if ci_inputs.windows_amdgpu_families:
         platforms.append("windows")
-    return platforms or ["linux"]
+    return platforms
 
 
 def _validate_family_names(

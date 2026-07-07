@@ -50,7 +50,6 @@ are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
                                    ancestry (default ``50``).
 """
 
-
 from __future__ import annotations
 
 import enum
@@ -257,6 +256,16 @@ def compute_auto_stage_reuse(
     on Windows. ``platform`` remains accepted as a single-platform shorthand
     for backwards compatibility.
     """
+    if platforms is not None and len(platforms) == 0 and platform is None:
+        return _empty_result(
+            mode,
+            full_rebuild_required=True,
+            reasons=("no build platforms selected",),
+            report_lines=(
+                f"{LOG_PREFIX} no build platforms selected; automatic stage reuse disabled.",
+            ),
+        )
+
     # Resolve the platform set. ``platforms`` wins; fall back to the legacy
     # single ``platform`` arg; default to linux only when neither is given.
     resolved_platforms = _resolve_platforms(platforms, platform)
