@@ -32,7 +32,7 @@ It is orthogonal to the ``prebuilt_stages`` workflow input, which is the
 explicit, manual list of stages to reuse and is always honored regardless of
 mode.
 
-Environment contract
+Environment Variables
 --------------------
 ``_default_baseline_selector`` reads the following environment variables. These
 are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
