@@ -781,6 +781,20 @@ function(therock_cmake_subproject_activate target_name)
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
 
+  # Disable the CMake package registry within sub-projects. Correct super-project
+  # resolution goes through the dependency provider and trampoline configs on
+  # CMAKE_PREFIX_PATH, never the registry. Leaving the registry enabled lets an
+  # undeclared find_package() latch onto a stray build tree recorded by a sibling
+  # sub-project's export(PACKAGE) (see the system-fallback path in
+  # therock_subproject_dep_provider.cmake). Gated on the same switch as the safe
+  # dependency provider so that disabling it restores full stock find_package()
+  # behavior.
+  string(APPEND _init_contents "if(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER)\n")
+  string(APPEND _init_contents "  set(CMAKE_FIND_USE_PACKAGE_REGISTRY OFF)\n")
+  string(APPEND _init_contents "  set(CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY OFF)\n")
+  string(APPEND _init_contents "  set(CMAKE_EXPORT_NO_PACKAGE_REGISTRY ON)\n")
+  string(APPEND _init_contents "endif()\n")
+
   # Include dirs.
   foreach(_private_include_dir ${_private_include_dirs})
     if(THEROCK_VERBOSE)
