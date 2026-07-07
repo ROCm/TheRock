@@ -54,11 +54,13 @@ def _get_script_path(script_name: str) -> str:
 # --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
+# --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
 # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
 _BASE_CONTAINER_OPTIONS = [
     "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
+    "--ulimit nofile=1048576:1048576",
     "--security-opt seccomp=unconfined",
 ]
 
@@ -68,6 +70,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --device /dev/dri - Direct Rendering Infrastructure devices
 # --group-add 993,992,110 - Additional GPU-related groups
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+# -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
 _GPU_CONTAINER_OPTIONS = [
     "--group-add video",
     "--device /dev/kfd",
@@ -76,6 +79,8 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 992",
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+    "-e ROCR_VISIBLE_DEVICES",
+    "-e KUBE_CPU_REQUEST",
 ]
 
 
@@ -156,6 +161,19 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
+    # and do not require a GPU runner.
+    "hipfile": {
+        "job_name": "hipfile",
+        "fetch_artifact_args": "--hipfile --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipfile.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
@@ -232,7 +250,7 @@ test_matrix = {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 180,
-        "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
@@ -293,19 +311,19 @@ test_matrix = {
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
-        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.dwarf2",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
         "linux_cpu_runner": True,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.rocm",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
         "timeout_minutes": 10,
-        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
+        "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -327,12 +345,10 @@ test_matrix = {
     "hipsparse": {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
-        # Investigation (#5960): keep the test_runner.py diagnostic path (VRAM
-        # logging + per-test pool-trim, reset-free) rather than the main-branch
-        # legacy-script mitigation, matching rocsparse below. The single
-        # hipsparse-test_standard_suite ctest entry is split across shards by
-        # GTEST_TOTAL_SHARDS (gtest-level sharding), so 3 shards each run ~1/3 of
-        # the cases.
+        # The single hipsparse-test_standard_suite ctest entry is split across
+        # shards by GTEST_TOTAL_SHARDS (gtest-level sharding), so 3 shards each run
+        # ~1/3 of the cases. Per-test mempool trim (HIPSPARSE_TEST_TRIM_POOL, set in
+        # test_runner.py) bounds reserved VRAM on gfx110X (ROCm/rocm-libraries#8592).
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -344,14 +360,12 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        # Investigation (#5960): intentionally keep the test_runner.py diagnostic
-        # path (VRAM logging + per-test pool-trim, reset-free) here rather than the
-        # main-branch legacy-script mitigation, so we can measure the full suite.
-        # rocsparse registers a single monolithic ctest entry
-        # (rocsparse-test_standard_suite), but that entry is still split across
-        # shards by GTEST_TOTAL_SHARDS (gtest-level sharding, same as rocsolver),
-        # so 3 shards each run ~1/3 of the cases. Keep a generous step timeout
-        # while we validate the sharded path.
+        # rocsparse registers one monolithic ctest entry
+        # (rocsparse-test_standard_suite); it is split across shards by
+        # GTEST_TOTAL_SHARDS (gtest-level sharding), so 3 shards each run ~1/3 of
+        # the cases. Per-test stream-ordered mempool trim (ROCSPARSE_TEST_TRIM_POOL,
+        # set in test_runner.py) bounds reserved VRAM on gfx110X to avoid the
+        # cumulative-pool OOM (ROCm/rocm-libraries#8592).
         "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -416,7 +430,7 @@ test_matrix = {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards_dict": {
@@ -428,7 +442,7 @@ test_matrix = {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_hipfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 2,
@@ -547,7 +561,7 @@ test_matrix = {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -559,7 +573,7 @@ test_matrix = {
         "job_name": "hipblasltprovider",
         "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -590,6 +604,18 @@ test_matrix = {
             "windows": 2,
         },
     },
+    # rocALUTION tests
+    "rocalution": {
+        "job_name": "rocalution",
+        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # profiler tests
     "rocprofiler-compute": {
         "job_name": "rocprofiler-compute",
@@ -601,7 +627,7 @@ test_matrix = {
         ],
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
-        "total_shards_dict": {"linux": 2},
+        "total_shards_dict": {"linux": 1},
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
@@ -686,6 +712,17 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+        },
+    },
+    # hipTensor tests
+    "hiptensor": {
+        "job_name": "hiptensor",
+        "fetch_artifact_args": "--hiptensor --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
 }
