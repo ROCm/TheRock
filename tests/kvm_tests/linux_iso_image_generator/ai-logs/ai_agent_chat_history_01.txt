@@ -456,3 +456,21 @@ ASSISTANT:
 - Updated `README.md` with post-boot verification snippet:
   - `sudo sshd -T | rg 'passwordauthentication|kbdinteractiveauthentication|challengeresponseauthentication|pubkeyauthentication|permitemptypasswords'`
 - Added expected effective values list for quick validation.
+
+---
+
+Session update: 2026-07-07 (full qcow generation + ssh validation)
+
+USER: Run full testing that qcow generation works and verify login with `therock` SSH keys.
+ASSISTANT:
+- Ran full end-to-end build/install test in headless mode:
+  - `HEADLESS=1 python3 ./build_kvm_vm_image.py --run ./build-rockylinux-8_10-config.json`
+- Confirmed build completed successfully and generated artifacts:
+  - `output/Rocky-8.10-x86_64-autoinstall.iso`
+  - `output/Rocky-8.10-x86_64-autoinstall.qcow2`
+- Verified SSH key login into running VM:
+  - `SSH_OK`
+  - `id` shows user `therock`
+  - `sudo -n true` passed (`SUDO_OK`)
+- Requested and observed clean guest shutdown after validation.
+- Confirmed repository remained clean after runtime testing.
