@@ -1,0 +1,63 @@
+From a35bd4f80f0ef2645bc1c2afe2204e758c358797 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Tue, 7 Jul 2026 16:23:02 -0400
+Subject: [PATCH] Guard Event::awaitCompletion against dead worker thread
+
+On Windows, ExitProcess terminates worker threads before running
+DLL_PROCESS_DETACH. torch's atexit handler then calls
+__hipUnregisterFatBinary -> Device::SyncAllStreams -> HostQueue::finish()
+-> Event::awaitCompletion(), which spins forever in the ActiveWait
+Os::yield() loop (or blocks on the condition variable) because the
+worker thread that would set the event to CL_COMPLETE is already gone.
+This causes PyTorch processes to hang at exit until an external timeout
+(ROCm/TheRock#999, pytorch/pytorch#160759).
+
+PR #3790 added a guard only in HostQueue::finish(); a later teardown
+ordering change re-exposed an unguarded path into awaitCompletion(). Fix
+it at the root by adding an Os::isThreadAlive() check to both wait loops
+in Event::awaitCompletion(), matching the existing pattern in
+HostQueue::terminate(). The handle() != nullptr check skips the test in
+direct-dispatch mode where there is no worker thread.
+---
+ projects/clr/rocclr/platform/command.cpp | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/projects/clr/rocclr/platform/command.cpp b/projects/clr/rocclr/platform/command.cpp
+index cc1d148..eb9b336 100644
+--- a/projects/clr/rocclr/platform/command.cpp
++++ b/projects/clr/rocclr/platform/command.cpp
+@@ -256,14 +256,30 @@ bool Event::awaitCompletion() {
+             this, status());
+     auto* queue = command().queue();
+     if ((queue != nullptr) && queue->vdev()->ActiveWait()) {
++      // Active wait: yield in a tight loop. Bail out if the queue's worker
++      // thread is no longer alive, otherwise this spins forever during
++      // process teardown -- on Windows ExitProcess terminates worker threads
++      // before DLL_PROCESS_DETACH, so __hipUnregisterFatBinary ->
++      // SyncAllStreams -> finish() reaches here with no thread left to signal
++      // completion (ROCm/TheRock#999). Only meaningful when a real worker
++      // thread exists (handle != nullptr); direct dispatch has none.
+       while (status() > CL_COMPLETE) {
++        if (queue->thread().handle() != nullptr && !amd::Os::isThreadAlive(queue->thread())) {
++          break;
++        }
+         amd::Os::yield();
+       }
+     } else {
+       ScopedLock lock(lock_);
+ 
+-      // Wait until the status becomes CL_COMPLETE or negative.
++      // Wait until the status becomes CL_COMPLETE or negative. Bail out if the
++      // worker thread is dead -- nobody would signal the condition variable
++      // and we would block forever during teardown (see comment above).
+       while (status() > CL_COMPLETE) {
++        if (queue != nullptr && queue->thread().handle() != nullptr &&
++            !amd::Os::isThreadAlive(queue->thread())) {
++          break;
++        }
+         lock_.wait();
+       }
+     }
+-- 
+2.54.0.windows.1
+
