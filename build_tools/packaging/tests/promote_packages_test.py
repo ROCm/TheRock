@@ -23,9 +23,13 @@ WHAT IS VALIDATED
      per-gfx device wheels (amd_torch_device_gfx*, amd_torchvision_device_gfx*,
      rocm_sdk_device_gfx*) and deletes the rest, while still stripping the RC
      suffix everywhere.
-  3. Partial promotions (only ROCm, or only torch) do NOT produce a coherent,
+  3. JAX wheels (jax_rocm7_plugin, jax_rocm7_pjrt) promote correctly: the RC
+     suffix is stripped from the `+rocm<ver>` local segment and the wheels stay
+     structurally installable (installed --no-deps, since jax/jaxlib live on
+     PyPI). Note jaxlib itself is NOT published multi-arch (see ROCm/TheRock#6158).
+  4. Partial promotions (only ROCm, or only torch) do NOT produce a coherent,
      installable, single-version set (expected to FAIL).
-  4. Promoted filenames drop the RC suffix and every wheel reports the final
+  5. Promoted filenames drop the RC suffix and every wheel reports the final
      version.
 
 The expected promoted filenames are DERIVED from whatever was actually fetched
@@ -103,6 +107,16 @@ DEVICE_PKG_PREFIXES = [
     "amd-torchvision-device",
     "rocm-sdk-device",
 ]
+
+# JAX wheels are arch-agnostic and Linux-only. They carry a `manylinux_*` tag
+# (not `linux_x86_64`) and are promoted via the local-version path (the RC
+# suffix is stripped from the `+rocm<ver>` segment). jax_rocm7_pjrt is
+# py3-none; jax_rocm7_plugin is cpXX-specific.
+JAX_PKG_DIRS = [
+    "jax-rocm7-plugin",
+    "jax-rocm7-pjrt",
+]
+_MANYLINUX_X86 = re.compile(r"manylinux_[\d_]+x86_64")
 
 PLATFORM_TAGS = {"linux": "linux_x86_64", "windows": "win_amd64"}
 
@@ -260,6 +274,34 @@ def select_packages(
     return downloads, device_files
 
 
+def select_jax_packages(
+    version: str, py_tag: str
+) -> tuple[list[tuple[str, str]], set[str]]:
+    """Return (download list, jax filenames) for the Linux JAX wheels.
+
+    JAX uses `manylinux_*` tags rather than `linux_x86_64`, and the index can
+    carry two upstream versions per RC on different manylinux baselines (e.g.
+    0.10.0 on manylinux_2_27 and 0.9.1 on manylinux_2_28); keep only the newest
+    upstream so the promoted set is single-version. jax_rocm7_plugin is cpXX
+    specific and must match the chosen py_tag; jax_rocm7_pjrt is py3-none.
+    """
+    base = f"{WHL_INDEX}/"
+    downloads: list[tuple[str, str]] = []
+    jax_files: set[str] = set()
+    for pkg_dir in JAX_PKG_DIRS:
+        matched = [
+            name
+            for name in list_index_files(pkg_dir)
+            if version in name
+            and _MANYLINUX_X86.search(name)
+            and (not _CP_TAG_RE.search(name) or f"-{py_tag}-" in name)
+        ]
+        for name in _keep_max_upstream(matched):
+            downloads.append((base, name))
+            jax_files.add(name)
+    return downloads, jax_files
+
+
 def promoted_name(rc_name: str, version: str, final_version: str) -> str:
     return rc_name.replace(version, final_version)
 
@@ -299,8 +341,14 @@ def checkAllWheelsSameVersion(
     return True, ""
 
 
-def checkInstallation(dir_path: Path) -> tuple[bool, str]:
-    """Note: dir_path must be a TemporaryDirectory, otherwise clean up .venv yourself."""
+def checkInstallation(dir_path: Path, no_deps: bool = False) -> tuple[bool, str]:
+    """Note: dir_path must be a TemporaryDirectory, otherwise clean up .venv yourself.
+
+    no_deps installs the wheels without resolving dependencies -- used for the
+    JAX wheels, whose runtime deps (jax, jaxlib) live on PyPI and are not part
+    of the promoted set; we only need to confirm the promoted wheels are
+    structurally installable.
+    """
     try:
         setup_venv.create_venv(dir_path / ".venv")
         python_exe = setup_venv.find_venv_python(dir_path / ".venv")
@@ -317,8 +365,11 @@ def checkInstallation(dir_path: Path) -> tuple[bool, str]:
             if p.name != ".venv" and "therock-dist" not in p.name
         ]
 
+        cmd = [python_exe, "-m", "pip", "install"]
+        if no_deps:
+            cmd.append("--no-deps")
         subprocess.run(
-            [python_exe, "-m", "pip", "install"] + packages,
+            cmd + packages,
             capture_output=True,
             encoding="utf-8",
             check=True,
@@ -429,6 +480,42 @@ def checkPromoteMultiArch(
     return ok
 
 
+def checkPromoteJax(
+    dir_path: Path,
+    expected_version: Version,
+    input_files: set[str],
+    expected_files: set[str],
+) -> bool:
+    _banner("TEST: promotion of JAX wheels (should SUCCEED)")
+    if not input_files:
+        print("[SKIP] no JAX wheels found for this version; skipping.")
+        _banner("TEST DONE: promote JAX. Result: SKIPPED")
+        return True
+    with tempfile.TemporaryDirectory(prefix="PromoteTest-Jax-") as tmp:
+        tmp_dir = Path(tmp)
+        _stage_inputs(dir_path, tmp_dir, input_files)
+        promote_packages.main(tmp_dir, delete=True)
+        ok = _run_checks(
+            tmp_dir,
+            [
+                (
+                    "checkPromotedFileNames",
+                    checkPromotedFileNames(tmp_dir, expected_files),
+                ),
+                (
+                    "checkAllWheelsSameVersion",
+                    checkAllWheelsSameVersion(tmp_dir, expected_version),
+                ),
+                # JAX runtime deps (jax, jaxlib) are on PyPI, not in the promoted
+                # set -- install --no-deps to validate the wheels structurally.
+                ("checkInstallation", checkInstallation(tmp_dir, no_deps=True)),
+            ],
+            expect_success=True,
+        )
+    _banner("TEST DONE: promote JAX. Result: " + ("SUCCESS" if ok else "FAILURE"))
+    return ok
+
+
 def checkPartialPromotion(
     dir_path: Path,
     expected_version: Version,
@@ -535,6 +622,11 @@ if __name__ == "__main__":
     )
 
     downloads, device_files = select_packages(rc_str, platform_tag, py_tag, arches)
+    # JAX is Linux-only (manylinux wheels); skip on Windows.
+    jax_downloads: list[tuple[str, str]] = []
+    jax_files: set[str] = set()
+    if platform == "linux":
+        jax_downloads, jax_files = select_jax_packages(rc_str, py_tag)
     # A device wheel belongs to keep_arch iff its filename carries the exact
     # `device_<arch>-` token (trailing `-` avoids gfx1201 matching gfx1200).
     kept_device_files = {n for n in device_files if f"device_{keep_arch}-" in n}
@@ -547,8 +639,9 @@ if __name__ == "__main__":
 
     with tempfile.TemporaryDirectory(prefix=f"PromoteTest-{platform}-") as tmp:
         tmp_dir = Path(tmp)
-        print(f"Fetching {len(downloads)} packages (cache: {cache_dir}) ...")
-        for base_url, name in downloads:
+        all_downloads = downloads + jax_downloads
+        print(f"Fetching {len(all_downloads)} packages (cache: {cache_dir}) ...")
+        for base_url, name in all_downloads:
             fetchPackage(base_url, name, tmp_dir, cache_dir)
         print(" ...done")
 
@@ -566,6 +659,7 @@ if __name__ == "__main__":
         dropped_promoted_names = {
             promoted_name(n, rc_str, fin_str) for n in dropped_device_files
         }
+        expected_jax = {promoted_name(n, rc_str, fin_str) for n in jax_files}
 
         res_everything = checkPromoteEverything(
             tmp_dir, final_version, aggregator_files, expected_aggregators
@@ -594,13 +688,15 @@ if __name__ == "__main__":
             "*torch*",
             "torch",
         )
+        res_jax = checkPromoteJax(tmp_dir, final_version, jax_files, expected_jax)
 
         _banner("SUMMARY")
         print(f"checkPromoteEverything:  {'SUCCESS' if res_everything else 'FAILURE'}")
         print(f"checkPromoteMultiArch:   {'SUCCESS' if res_multi else 'FAILURE'}")
+        print(f"checkPromoteJax:         {'SUCCESS' if res_jax else 'FAILURE'}")
         print(f"checkPromoteOnlyRocm:    {'SUCCESS' if res_only_rocm else 'FAILURE'}")
         print(f"checkPromoteOnlyTorch:   {'SUCCESS' if res_only_torch else 'FAILURE'}")
         print("=" * 81)
 
-        if not all([res_everything, res_multi, res_only_rocm, res_only_torch]):
+        if not all([res_everything, res_multi, res_jax, res_only_rocm, res_only_torch]):
             sys.exit(1)
