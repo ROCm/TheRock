@@ -316,14 +316,14 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
             pkg_info, "DEBRecommends", config
         )
         debsuggests = process_secondary_dependencies(pkg_info, "DEBSuggests", config)
-        depends = process_main_dependencies(pkg_info, "DEBDepends", config)
+        depends = process_versioned_dependencies(pkg_info, "DEBDepends", config)
     else:
         # Get -> Transform -> Join
         provides = process_name_field(pkg_info, "Provides", debian_replace_devel_name)
         replaces = process_name_field(pkg_info, "Replaces", debian_replace_devel_name)
         conflicts = process_name_field(pkg_info, "Conflicts", debian_replace_devel_name)
         # Non-versioned package depends on versioned package itself
-        depends = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        depends = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
