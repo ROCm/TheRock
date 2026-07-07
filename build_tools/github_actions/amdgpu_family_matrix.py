@@ -61,7 +61,7 @@ def load_external_config() -> dict | None:
 def is_asan():
     """Determines if this is an ASAN build using BUILD_VARIANT env var."""
     BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
-    return BUILD_VARIANT == "asan"
+    return BUILD_VARIANT in ("asan", "host-asan")
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
