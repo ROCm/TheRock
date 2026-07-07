@@ -72,6 +72,10 @@ def format_summary(
     lines.append("")
     _append_build_pytorch(lines, outputs)
 
+    lines.append("### build-jax")
+    lines.append("")
+    _append_build_jax(lines, outputs)
+
     return "\n".join(lines)
 
 
@@ -226,6 +230,31 @@ def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
 
     if rows == 0:
         lines.append("| — | — | — | — |")
+    lines.append("")
+
+
+def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
+    lines.append("| Platform | Python | JAX ref | Repository | Mode | GFX arch |")
+    lines.append("|----------|--------|---------|------------|------|----------|")
+
+    rows = 0
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
+        for row in config.jax_build_matrix:
+            gfx_arch = row["gfx_arch"] or "—"
+            lines.append(
+                f"| {platform} | `{row['python_version']}` | "
+                f"`{row['jax_ref']}` | `{row['jax_repository']}` | "
+                f"`{row['build_mode']}` | {gfx_arch} |"
+            )
+            rows += 1
+
+    if rows == 0:
+        lines.append("| — | — | — | — | — | — |")
     lines.append("")
 
 
