@@ -946,8 +946,8 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan" or build_variant == "host-asan":
-            # Only run ASAN tests on scheduled or workflow_dispatch runs
+        if build_variant == "asan":
+            # Only run full ASAN tests on scheduled or workflow_dispatch runs
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
@@ -961,6 +961,25 @@ def _expand_build_config_for_platform(
                 test_runs_on = ""
                 print(
                     f"  {family_name}: no ASAN sandbox runner available, "
+                    f"disabling tests"
+                )
+        elif build_variant == "host-asan":
+            # Run host-asan tests only on push (postsubmit)
+            if not ci_inputs.is_push:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(
+                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                )
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no host-asan sandbox runner available, "
                     f"disabling tests"
                 )
 
