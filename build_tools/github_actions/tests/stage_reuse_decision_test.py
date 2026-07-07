@@ -369,7 +369,7 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         # compiler-runtime unaffected. Linux baseline HAS base; Windows does NOT.
         per_platform = {
             "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
-            "windows": _baseline("W1", ["blas_lib_generic.tar.zst"]),
+            "windows": _baseline("L1", ["blas_lib_generic.tar.zst"]),
         }
         result = compute_auto_stage_reuse(
             changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
@@ -391,7 +391,7 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
     def test_stage_reused_when_present_on_both_platforms(self):
         per_platform = {
             "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
-            "windows": _baseline("W1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("L1", ["base_lib_generic.tar.zst"]),
         }
         result = compute_auto_stage_reuse(
             changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
@@ -426,6 +426,29 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertTrue(result.full_rebuild_required)
         self.assertEqual(result.applied_reuse_stages, ())
         self.assertIn("no build platforms selected", "\n".join(result.report_lines))
+
+    def test_different_platform_baselines_disable_reuse(self):
+        """Automatic reuse is disabled when platforms resolve to different baseline runs."""
+        per_platform = {
+            "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
+            "windows": _baseline("W1", ["base_lib_generic.tar.zst"]),
+        }
+
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.ENFORCE,
+            platforms=["linux", "windows"],
+            target_families=["generic"],
+            topology=FakeTopology(),
+            baseline_selector_factory=self._selector_factory(per_platform),
+        )
+
+        self.assertTrue(result.full_rebuild_required)
+        self.assertEqual(result.applied_reuse_stages, ())
+        self.assertIn(
+            "automatic reuse resolved different baseline runs per platform",
+            result.reasons,
+        )
 
 
 class PlanStageReuseTest(unittest.TestCase):

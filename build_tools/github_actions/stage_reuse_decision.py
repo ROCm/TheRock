@@ -332,6 +332,11 @@ def compute_auto_stage_reuse(
     reported_baseline_run_id: Optional[str] = None
     reported_baseline_url: Optional[str] = None
 
+    platform_baseline_run_ids: dict[str, Optional[str]] = {}
+    platform_baseline_urls: dict[str, Optional[str]] = {}
+    per_platform_available: dict[str, tuple[str, ...]] = {}
+    baseline_error: Optional[str] = None
+
     for plat in resolved_platforms:
         baseline = None
         try:
@@ -345,9 +350,8 @@ def compute_auto_stage_reuse(
         except Exception as exc:
             baseline_error = str(exc)
 
-        if reported_baseline_run_id is None and baseline is not None:
-            reported_baseline_run_id = baseline.run_id
-            reported_baseline_url = baseline.html_url
+        platform_baseline_run_ids[plat] = baseline.run_id if baseline is not None else None
+        platform_baseline_urls[plat] = baseline.html_url if baseline is not None else None
 
         available_filenames = _matched_filenames(baseline)
         avail_here: list[str] = []
@@ -358,6 +362,21 @@ def compute_auto_stage_reuse(
                 ):
                     avail_here.append(stage_name)
         per_platform_available[plat] = tuple(avail_here)
+
+    selected_run_ids = {run_id for run_id in platform_baseline_run_ids.values() if run_id is not None}
+
+    if len(selected_run_ids) > 1:
+        return _empty_result(
+            mode,
+            full_rebuild_required=True,
+            reasons=("automatic reuse resolved different baseline runs per platform",),
+            report_lines=(
+                f"{LOG_PREFIX} multiple baseline runs selected across platforms; disabling automatic reuse.",
+            ),
+        )
+
+    reported_baseline_run_id = next(iter(selected_run_ids), None)
+    reported_baseline_url = next((url for url in platform_baseline_urls.values() if url), None)
 
     # A stage is available only when present on EVERY platform being built.
     available: list[str] = []
