@@ -87,6 +87,7 @@ QUICK_TESTS = [
 # unchanged.
 in_simulator = bool(os.getenv("SIMULATOR_CTEST_DIR"))
 include_regex = os.getenv("SIMULATOR_CTEST_INCLUDE_REGEX")
+exclude_regex = os.getenv("SIMULATOR_CTEST_EXCLUDE_REGEX")
 no_retry = os.getenv("SIMULATOR_NO_RETRY") == "1"
 test_timeout = os.getenv("CTEST_TEST_TIMEOUT")
 
@@ -100,6 +101,12 @@ cmd = [
 # simulator does not walk the entire 200+ binary suite.
 if include_regex:
     cmd += ["-R", include_regex]
+# Drop specific binaries from the include set (ctest -E). Needed for suite
+# variants whose CMake-baked GTEST_FILTER overrides the runner's filter, so they
+# cannot be reached via the gtest skip list (e.g. the cpp_basic suite with a
+# 7200s timeout, or the philox/xorwow poisson hangs).
+if exclude_regex:
+    cmd += ["-E", exclude_regex]
 # Retrying is pointless under the deterministic simulator and only hides bugs.
 if not no_retry:
     cmd += ["--repeat", "until-pass:3"]

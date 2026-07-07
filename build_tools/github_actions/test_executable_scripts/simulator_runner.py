@@ -97,6 +97,13 @@ DEFAULT_CTEST_TEST_TIMEOUT_SECONDS = 600
 # presets where we genuinely want every binary to run.
 DEFAULT_CTEST_REGEX = ".*"
 
+# Default ctest -E (exclude) regex. Empty means "exclude nothing". A preset (or
+# shard) may set `ctest_exclude_regex` to drop specific binaries from the -R set
+# - needed for suite variants that carry their own CMake-baked GTEST_FILTER, so
+# the component skip: list cannot reach them (e.g. drop the cpp_basic suite whose
+# ffm variant has a 7200s ctest timeout, or the philox/xorwow poisson hangs).
+DEFAULT_CTEST_EXCLUDE_REGEX = ""
+
 # Default min_gtests floor when a preset does not declare one. >=1 means
 # "at least one gtest must actually execute", which is the bare minimum
 # needed to catch the empty-set silent-pass failure mode.
@@ -133,6 +140,7 @@ class PresetConfig:
     allow: list[str]
     skip: list[str]
     ctest_regex: str
+    ctest_exclude_regex: str
     min_gtests: int
 
 
@@ -241,10 +249,14 @@ def _load_config(
     if isinstance(raw_preset, list):
         allow = list(raw_preset)
         ctest_regex = DEFAULT_CTEST_REGEX
+        ctest_exclude_regex = DEFAULT_CTEST_EXCLUDE_REGEX
         min_gtests = DEFAULT_MIN_GTESTS
     elif isinstance(raw_preset, dict):
         allow = list(raw_preset.get("allow") or [])
         ctest_regex = raw_preset.get("ctest_regex") or DEFAULT_CTEST_REGEX
+        ctest_exclude_regex = (
+            raw_preset.get("ctest_exclude_regex") or DEFAULT_CTEST_EXCLUDE_REGEX
+        )
         min_gtests = int(raw_preset.get("min_gtests") or DEFAULT_MIN_GTESTS)
     else:
         raise TypeError(
@@ -283,12 +295,19 @@ def _load_config(
             if shard_cfg.get("allow"):
                 allow = list(shard_cfg["allow"])
             ctest_regex = shard_cfg.get("ctest_regex") or ctest_regex
+            ctest_exclude_regex = (
+                shard_cfg.get("ctest_exclude_regex") or ctest_exclude_regex
+            )
             min_gtests = int(shard_cfg.get("min_gtests") or min_gtests)
 
     return (
         ComponentConfig(ctest_dir=ctest_dir, skip=skip),
         PresetConfig(
-            allow=allow, skip=skip, ctest_regex=ctest_regex, min_gtests=min_gtests
+            allow=allow,
+            skip=skip,
+            ctest_regex=ctest_regex,
+            ctest_exclude_regex=ctest_exclude_regex,
+            min_gtests=min_gtests,
         ),
     )
 
@@ -310,6 +329,7 @@ def _build_env(
     gtest_filter: str,
     ctest_dir: Path,
     ctest_regex: str,
+    ctest_exclude_regex: str = "",
 ) -> dict[str, str]:
     # The rocjitsu CLI owns LD_PRELOAD and the config-discovery file; we only
     # set the test-harness knobs here. See main() for the CLI wrapper command.
@@ -329,6 +349,11 @@ def _build_env(
     # vars are unset, so the real-GPU lane is unaffected.
     env["SIMULATOR_CTEST_DIR"] = str(ctest_dir)
     env["SIMULATOR_CTEST_INCLUDE_REGEX"] = ctest_regex
+    # ctest -E exclude regex (drops binaries from the include set). Only set when
+    # non-empty so the common "no exclusions" case leaves the driver's behavior
+    # untouched.
+    if ctest_exclude_regex:
+        env["SIMULATOR_CTEST_EXCLUDE_REGEX"] = ctest_exclude_regex
     # Guard 4: under the deterministic simulator, retrying a failing case
     # cannot turn it green - it only hides real bugs. Tell the driver to drop
     # --repeat. Drivers that don't honor this still work; the guard above is
@@ -593,6 +618,7 @@ def main(argv: list[str] | None = None) -> int:
             _compose_gtest_filter(preset_cfg.allow, preset_cfg.skip),
             ctest_dir,
             preset_cfg.ctest_regex,
+            preset_cfg.ctest_exclude_regex,
         )
     except (FileNotFoundError, KeyError, TypeError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -634,6 +660,10 @@ def main(argv: list[str] | None = None) -> int:
     logging.info(
         "[simulator_runner] SIMULATOR_CTEST_INCLUDE_REGEX=%s",
         env["SIMULATOR_CTEST_INCLUDE_REGEX"],
+    )
+    logging.info(
+        "[simulator_runner] SIMULATOR_CTEST_EXCLUDE_REGEX=%s",
+        env.get("SIMULATOR_CTEST_EXCLUDE_REGEX", ""),
     )
     logging.info("[simulator_runner] SIMULATOR_NO_RETRY=%s", env["SIMULATOR_NO_RETRY"])
     logging.info(

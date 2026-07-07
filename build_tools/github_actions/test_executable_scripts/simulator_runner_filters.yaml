@@ -159,6 +159,23 @@ rocrand:
         # have a run. Suite variants carry their own CMake-baked GTEST_FILTER, so
         # the component skip: list does not apply to them.
         - ctest_regex: "_(quick|ffm-quick)_suite$"
+          # Drop suite binaries that can't be reached via the gtest skip list
+          # (their CMake-baked GTEST_FILTER overrides ours). Observed in run
+          # 28621740886 / shard-2 (Rocjitsu_010_lnx_gfx94x_06):
+          #   cpp_basic          - cpp_basic_ffm-quick_suite has a 7200s ctest
+          #                        timeout and ate 2/3 of the 180-min budget.
+          #   host, cpp_wrapper  - 300s ctest timeouts.
+          #   generate (bare),
+          #   generate_normal,
+          #   generate_poisson,
+          #   generate_uniform   - SegFault under the simulator (generate_log_normal
+          #                        is kept: it passes ~268s).
+          #   hipgraphs          - HIP graphs not modeled by the interposer (SegFault).
+          #   kernel_philox4x32_10,
+          #   kernel_xorwow      - poisson high-lambda hangs (300s timeouts). The
+          #                        host philox_prng/xorwow_prng suites are kept.
+          #   mt19937_octo       - large state exceeds the PDES budget.
+          ctest_exclude_regex: "(cpp_basic|cpp_wrapper|_host_|hipgraphs|mt19937_octo|kernel_philox4x32_10|kernel_xorwow|generate_quick_suite|generate_ffm-quick_suite|generate_normal|generate_poisson|generate_uniform)"
           min_gtests: 1
     # Mirror of QUICK_TESTS in test_rocrand.py. Promoted in PR-2 once `basic`
     # is stably green for a few runs. ctest_regex left unset (defaults to ".*")
