@@ -82,7 +82,7 @@ jobs:
 
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2 pyzstd
+          pip install pyelftools boto3 jinja2 pyzstd toml
 
       - name: Install System requirements
         run: |
@@ -105,6 +105,11 @@ jobs:
             --amdgpu-families="${{ env.DIST_AMDGPU_FAMILIES }}" \
             --expand-family-to-targets \
             --output-dir="${{ env.OUTPUT_DIR }}"
+
+      - name: Artifacts Check Test
+        id: check-artifacts
+        run: |
+          python ./build_tools/tests/artifacts_pkg_checker_csv.py
 
       - name: Build Packages
         id: build-packages
