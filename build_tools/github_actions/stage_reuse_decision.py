@@ -350,8 +350,12 @@ def compute_auto_stage_reuse(
         except Exception as exc:
             baseline_error = str(exc)
 
-        platform_baseline_run_ids[plat] = baseline.run_id if baseline is not None else None
-        platform_baseline_urls[plat] = baseline.html_url if baseline is not None else None
+        platform_baseline_run_ids[plat] = (
+            baseline.run_id if baseline is not None else None
+        )
+        platform_baseline_urls[plat] = (
+            baseline.html_url if baseline is not None else None
+        )
 
         available_filenames = _matched_filenames(baseline)
         avail_here: list[str] = []
@@ -363,7 +367,9 @@ def compute_auto_stage_reuse(
                     avail_here.append(stage_name)
         per_platform_available[plat] = tuple(avail_here)
 
-    selected_run_ids = {run_id for run_id in platform_baseline_run_ids.values() if run_id is not None}
+    selected_run_ids = {
+        run_id for run_id in platform_baseline_run_ids.values() if run_id is not None
+    }
 
     if len(selected_run_ids) > 1:
         return _empty_result(
@@ -376,7 +382,9 @@ def compute_auto_stage_reuse(
         )
 
     reported_baseline_run_id = next(iter(selected_run_ids), None)
-    reported_baseline_url = next((url for url in platform_baseline_urls.values() if url), None)
+    reported_baseline_url = next(
+        (url for url in platform_baseline_urls.values() if url), None
+    )
 
     # A stage is available only when present on EVERY platform being built.
     available: list[str] = []

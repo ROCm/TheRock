@@ -1485,6 +1485,8 @@ class TestConfigurePipeline(unittest.TestCase):
         linux_payload = outputs.builds.linux.to_dict()
         self.assertEqual(linux_payload["baseline_run_id"], "123")
         self.assertEqual(linux_payload["prebuilt_stages"], "compiler-runtime")
+
+
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
 # ---------------------------------------------------------------------------
