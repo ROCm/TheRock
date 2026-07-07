@@ -4,7 +4,7 @@ set -euo pipefail
 # qemu_iso_launch_pci_passthrough.sh
 # Launch Rocky Linux autoinstall ISO with QEMU/KVM using PCI passthrough.
 #
-# PCI IDs are read from build-config.json key:
+# PCI IDs are read from build-rockylinux-8_10-config.json key:
 #   "pci_passthrough_device_ids": ["0000:01:00.0", "0000:01:00.1"]
 #
 # Usage:
@@ -25,7 +25,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-CONFIG_PATH="${1:-${REPO_ROOT}/build-config.json}"
+CONFIG_PATH="${1:-${REPO_ROOT}/build-rockylinux-8_10-config.json}"
 ISO_PATH_OVERRIDE="${2:-}"
 DISK_PATH="${3:-${REPO_ROOT}/output/rocky810-test-pci.qcow2}"
 
@@ -96,7 +96,7 @@ PY
 
 if [[ -z "${CFG_PCI_IDS}" ]]; then
   echo "No PCI IDs configured." >&2
-  echo "Set build-config.json key: pci_passthrough_device_ids" >&2
+  echo "Set build-rockylinux-8_10-config.json key: pci_passthrough_device_ids" >&2
   echo "Example: \"pci_passthrough_device_ids\": [\"0000:01:00.0\", \"0000:01:00.1\"]" >&2
   exit 1
 fi
@@ -108,7 +108,7 @@ SSH_KEY_PATH="$(to_abs_path "${CFG_SSH_PRIVATE_KEY}")"
 
 if [[ ! -f "${ISO_PATH}" ]]; then
   echo "ISO not found: ${ISO_PATH}" >&2
-  echo "Build it first with: python3 ./build_rockylinux_8_10_iso.py ./build-config.json" >&2
+  echo "Build it first with: python3 ./build_kvm_vm_image.py ./build-rockylinux-8_10-config.json" >&2
   exit 1
 fi
 

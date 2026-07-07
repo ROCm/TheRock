@@ -68,7 +68,7 @@ fi
 
 if [[ ! -f "${ISO_PATH}" ]]; then
   echo "ISO not found: ${ISO_PATH}" >&2
-  echo "Build it first with: python3 ./build_rockylinux_8_10_iso.py ./build-config.json" >&2
+  echo "Build it first with: python3 ./build_kvm_vm_image.py ./build-rockylinux-8_10-config.json" >&2
   exit 1
 fi
 

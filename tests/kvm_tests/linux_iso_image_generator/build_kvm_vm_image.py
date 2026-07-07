@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Rocky Linux 8.10 unattended ISO from build-config.json."""
+"""Build a Rocky Linux 8.10 unattended ISO from build-rockylinux-8_10-config.json."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def _validate_config(cfg: dict[str, object]) -> None:
             empty.append(key)
 
     if missing or empty:
-        parts: list[str] = ["Invalid build-config.json:"]
+        parts: list[str] = ["Invalid build-rockylinux-8_10-config.json:"]
         if missing:
             parts.append("Missing required keys:")
             parts.extend(f"  - {entry}" for entry in missing)
@@ -618,8 +618,8 @@ def main() -> int:
     parser.add_argument(
         "config_path",
         nargs="?",
-        default="./build-config.json",
-        help="Path to JSON config file (default: ./build-config.json)",
+        default="./build-rockylinux-8_10-config.json",
+        help="Path to JSON config file (default: ./build-rockylinux-8_10-config.json)",
     )
     parser.add_argument(
         "--bare-image",

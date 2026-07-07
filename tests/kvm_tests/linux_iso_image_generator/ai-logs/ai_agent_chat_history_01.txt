@@ -386,3 +386,41 @@ ASSISTANT:
 - Created and adjusted commit message per requested format.
 - Final commit on `master` before this log update:
   - `29e193d` with requested message style and sign-off footer.
+
+---
+
+Session update: 2026-07-07 (script/config renames + qcow launcher)
+
+USER: Continue previous session context and apply multiple file/script renames.
+ASSISTANT:
+- Renamed builder script in two steps, final name:
+  - `build_kvm_vm_image.py`
+- Renamed config file:
+  - `build-config.json` -> `build-rockylinux-8_10-config.json`
+- Updated references in docs and helper scripts to use new names.
+- Kept historical references only in log file content where appropriate.
+
+USER: Add Python qcow launcher with same behavior as `testing/qemu_iso_launch.sh`.
+ASSISTANT:
+- Added new launcher:
+  - `launch_kvm_vm_image.py`
+- Default behavior:
+  - boots `./output/Rocky-8.10-x86_64-autoinstall.qcow2`
+  - forwards SSH host port to guest `:22`
+  - supports same env knobs (`RAM_MB`, `CPUS`, `SSH_FWD_PORT`, `VM_NAME`, `HEADLESS`, `ACCEL_MODE`)
+- Added README usage section for launching finalized qcow2 image.
+
+USER: Add PCI passthrough option and refine argument naming.
+ASSISTANT:
+- Added passthrough switch to qcow launcher with final option:
+  - `--pci-p`
+- Implemented passthrough checks aligned with existing shell helper behavior:
+  - read `pci_passthrough_device_ids` from config
+  - verify `/dev/vfio/vfio`
+  - verify PCI device presence and `vfio-pci` binding
+  - launch QEMU with `vfio-pci` devices and passthrough flags
+- Removed deprecated passthrough aliases per request.
+
+Current state for commit:
+- updated files include README and helper scripts
+- renamed/deleted/new files are staged for commit in next step

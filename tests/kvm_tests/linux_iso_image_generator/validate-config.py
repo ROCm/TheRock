@@ -55,13 +55,13 @@ def validate_config(cfg: dict[str, object]) -> tuple[list[str], list[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Validate build-config.json required keys for Rocky ISO automation."
+        description="Validate build-rockylinux-8_10-config.json required keys for Rocky ISO automation."
     )
     parser.add_argument(
         "config_path",
         nargs="?",
-        default="./build-config.json",
-        help="Path to JSON config file (default: ./build-config.json)",
+        default="./build-rockylinux-8_10-config.json",
+        help="Path to JSON config file (default: ./build-rockylinux-8_10-config.json)",
     )
     args = parser.parse_args()
 
@@ -84,7 +84,7 @@ def main() -> int:
 
     missing, empty = validate_config(cfg)
     if missing or empty:
-        print("Invalid build-config.json:", file=sys.stderr)
+        print("Invalid build-rockylinux-8_10-config.json:", file=sys.stderr)
         if missing:
             print("Missing required keys:", file=sys.stderr)
             for entry in missing:

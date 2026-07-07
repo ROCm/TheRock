@@ -2,9 +2,9 @@
 
 This workspace creates a repeatable Rocky Linux 8.10 installer ISO using:
 
-- a JSON config file (`build-config.json`)
+- a JSON config file (`build-rockylinux-8_10-config.json`)
 - a Kickstart template (`templates/rocky8.ks.tmpl`)
-- a non-interactive build script (`build_rockylinux_8_10_iso.py`)
+- a non-interactive build script (`build_kvm_vm_image.py`)
 
 ## What this produces
 
@@ -35,7 +35,7 @@ On Rocky/RHEL build hosts, install equivalent packages that provide either `mkis
 
 ## Configure
 
-Edit `build-config.json`:
+Edit `build-rockylinux-8_10-config.json`:
 
 - all keys are required; the build script does not apply defaults
 - optionally set `source_iso_sha256` for checksum verification
@@ -51,7 +51,7 @@ Edit `build-config.json`:
 From this directory:
 
 ```bash
-python3 ./build_rockylinux_8_10_iso.py ./build-config.json
+python3 ./build_kvm_vm_image.py ./build-rockylinux-8_10-config.json
 ```
 
 By default, the builder now does both steps:
@@ -66,13 +66,13 @@ This prevents leaving QEMU running unintentionally and leaves a finalized instal
 If you want only the ISO build (no VM run), use:
 
 ```bash
-python3 ./build_rockylinux_8_10_iso.py --bare-image ./build-config.json
+python3 ./build_kvm_vm_image.py --bare-image ./build-rockylinux-8_10-config.json
 ```
 
 If you want QEMU to keep running (disable auto-shutdown mode), use:
 
 ```bash
-python3 ./build_rockylinux_8_10_iso.py --run ./build-config.json
+python3 ./build_kvm_vm_image.py --run ./build-rockylinux-8_10-config.json
 ```
 
 Output ISO path (default):
@@ -83,7 +83,7 @@ Installed qcow2 image path (default):
 
 `./output/Rocky-8.10-x86_64-autoinstall.qcow2`
 
-Optional config override in `build-config.json`:
+Optional config override in `build-rockylinux-8_10-config.json`:
 
 ```json
 "output_installed_image_path": "./output/my-rocky-final.qcow2"
@@ -113,7 +113,7 @@ It forwards host `127.0.0.1:2222` to guest `:22` by default.
 The helper script defaults to a `60G` disk to satisfy current partitioning requirements.
 If you override disk size manually, keep it at least about `40G` (recommended `60G`).
 
-The same QEMU launch behavior is now integrated into `build_rockylinux_8_10_iso.py`.
+The same QEMU launch behavior is now integrated into `build_kvm_vm_image.py`.
 Use `--run` to keep the VM running, or `--bare-image` to skip VM launch.
 
 After installer completes and the VM boots into the installed OS, connect with:
@@ -139,9 +139,41 @@ for i in $(seq 1 120); do
 done
 ```
 
+## Launch finalized qcow2 image
+
+Use the Python helper to boot the installed image directly:
+
+```bash
+python3 ./launch_kvm_vm_image.py
+```
+
+Optional positional argument:
+
+```bash
+python3 ./launch_kvm_vm_image.py ./output/Rocky-8.10-x86_64-autoinstall.qcow2
+```
+
+Use PCI passthrough mode (same vfio checks/behavior as `testing/qemu_iso_launch_pci_passthrough.sh`):
+
+```bash
+python3 ./launch_kvm_vm_image.py --pci-p
+```
+
+In passthrough mode, device IDs are read from `build-rockylinux-8_10-config.json` key
+`pci_passthrough_device_ids`, and each device must already be bound to `vfio-pci`.
+
+Environment knobs are the same as `testing/qemu_iso_launch.sh`:
+
+- `RAM_MB` (default `4096`)
+- `CPUS` (default `2`)
+- `SSH_FWD_PORT` (default `2222`)
+- `VM_NAME` (default `rocky810-qcow`)
+- `HEADLESS` (`1` for no GUI)
+- `ACCEL_MODE` (default `kvm:tcg`)
+
 ## Launch with QEMU/KVM (PCI passthrough)
 
-1) Set PCI IDs in `build-config.json`:
+1) Set PCI IDs in `build-rockylinux-8_10-config.json`:
 
 ```json
 "pci_passthrough_device_ids": ["0000:01:00.0", "0000:01:00.1"]
@@ -155,7 +187,7 @@ done
 ./testing/qemu_iso_launch_pci_passthrough.sh
 ```
 
-This script reads PCI IDs from `build-config.json` and fails early if IDs are missing,
+This script reads PCI IDs from `build-rockylinux-8_10-config.json` and fails early if IDs are missing,
 not present on host, or not bound to `vfio-pci`.
 It also defaults to a `60G` disk to satisfy current partitioning requirements.
 
