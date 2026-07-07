@@ -736,10 +736,14 @@ def decide_jobs(
     # Only reuse-stage mode returns non-empty applied_reuse_stages.
     for stage in auto.applied_reuse_stages:
         stage_decisions.setdefault(stage, JobAction.PREBUILT)
+    baseline_run_id = ci_inputs.baseline_run_id
+    if auto.applied_reuse_stages and auto.baseline_run_id:
+        baseline_run_id = auto.baseline_run_id
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
-        baseline_run_id=ci_inputs.baseline_run_id,
+        baseline_run_id=baseline_run_id,
     )
 
     # Test ROCm.
