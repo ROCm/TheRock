@@ -1241,12 +1241,10 @@ class SetupSlesRepositoryTest(unittest.TestCase):
 class SetupDnfRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest._setup_dnf_repository()."""
 
-    @patch("native_linux_package_install_test._run_streaming", return_value=0)
-    @patch("native_linux_package_install_test.Path.write_text")
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_after_writing_repo_file_and_makecache(
-        self, mock_run, mock_write_text, mock_streaming
-    ):
+    @patch("native_linux_package_install_test.Path.write_text")
+    def test_returns_true_after_writing_repo_file(self, mock_write_text, mock_run):
+        # Test that _setup_dnf_repository writes repo file and returns True (dnf clean may be mocked).
         mock_run.return_value = MagicMock(returncode=0)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1256,8 +1254,6 @@ class SetupDnfRepositoryTest(unittest.TestCase):
         self.assertTrue(t._setup_dnf_repository())
         written = mock_write_text.call_args[0][0]
         self.assertIn("baseurl=https://repo.example.com", written)
-        makecache_cmd = mock_streaming.call_args[0][0]
-        self.assertIn("makecache", makecache_cmd)
 
 
 class SetupRpmRepositoryTest(unittest.TestCase):
@@ -1369,19 +1365,6 @@ class InstallRpmPackagesTest(unittest.TestCase):
         self.assertTrue(t.install_rpm_packages())
         call_args = mock_streaming.call_args[0][0]
         self.assertEqual(call_args[0], "dnf")
-        self.assertIn("--nobest", call_args)
-
-    @patch("native_linux_package_install_test._run_streaming")
-    def test_rhel10_dnf_install_without_nobest(self, mock_streaming):
-        mock_streaming.return_value = 0
-        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-            repo_url="https://example.com",
-            os_profile="rhel10",
-            gfx_arch="gfx94x",
-        )
-        self.assertTrue(t.install_rpm_packages())
-        call_args = mock_streaming.call_args[0][0]
-        self.assertNotIn("--nobest", call_args)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_true_when_zypper_install_succeeds(self, mock_streaming):

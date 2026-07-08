@@ -184,7 +184,6 @@ APT_UPDATE_TIMEOUT_SEC = 120
 ZYPP_CLEAN_TIMEOUT_SEC = 60
 ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
-DNF_MAKECACHE_TIMEOUT_SEC = 120
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
 RDHC_TIMEOUT_SEC = 30
@@ -293,11 +292,6 @@ def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
         raise
 
 
-def _is_rhel8_profile(os_profile: str) -> bool:
-    """True only for the ``rhel8`` OS profile (not other EL8/RHEL-like names)."""
-    return os_profile.lower() == "rhel8"
-
-
 class NativeLinuxPackageInstallTest:
     """Runner for the native Linux package install test (repo setup, install, verification)."""
 
@@ -358,10 +352,6 @@ class NativeLinuxPackageInstallTest:
         True if SLES, False otherwise
         """
         return self.os_profile.lower().startswith("sles")
-
-    def _is_rhel8(self) -> bool:
-        """Check if the OS profile is ``rhel8``."""
-        return _is_rhel8_profile(self.os_profile)
 
     def __init__(
         self,
@@ -717,25 +707,8 @@ gpgcheck=0
         except subprocess.TimeoutExpired:
             print("[WARN] dnf clean timed out (may not be critical)")
 
-        # Refresh metadata (required on EL8 before first ``dnf install`` from a new .repo)
-        print(f"\nRefreshing repository metadata (dnf makecache --repo={repo_name})...")
-        try:
-            makecache_cmd = ["dnf", "makecache", f"--repo={repo_name}"]
-            return_code = _run_streaming(makecache_cmd, DNF_MAKECACHE_TIMEOUT_SEC)
-            if return_code == 0:
-                print("\n[PASS] DNF repository metadata refreshed")
-                return True
-            print(
-                f"\n[FAIL] dnf makecache failed for repo '{repo_name}' "
-                f"(exit code: {return_code})"
-            )
-            return False
-        except subprocess.TimeoutExpired:
-            print("\n[FAIL] dnf makecache timed out")
-            return False
-        except OSError as e:
-            print(f"\n[FAIL] Error refreshing DNF repository metadata: {e}")
-            return False
+        print("\n[PASS] DNF repository setup complete")
+        return True
 
     def setup_rpm_repository(self) -> bool:
         """Setup RPM repository on the system.
@@ -832,11 +805,7 @@ gpgcheck=0
                 ] + self.package_names
             print("[INFO] Using zypper for SLES package installation")
         else:
-            dnf_args = ["dnf", "install", "-y"]
-            if self._is_rhel8():
-                # rhel8 only: EL8 repos occasionally need --nobest for ROCm deps.
-                dnf_args.append("--nobest")
-            cmd = dnf_args + self.package_names
+            cmd = ["dnf", "install", "-y"] + self.package_names
         print(f"\nRunning: {' '.join(cmd)}")
         print("=" * 80)
         print("Installation progress (streaming output):\n")
