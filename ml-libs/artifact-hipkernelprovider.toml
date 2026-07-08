@@ -1,6 +1,14 @@
 # hipkernelprovider
 [components.dbg."ml-libs/hipkernelprovider/stage"]
 [components.lib."ml-libs/hipkernelprovider/stage"]
+# The lib component captures everything under the stage except the excludes
+# below (include-all semantics). This ships the rocke engine plugin plus the
+# provider-owned rocKE AOT artifacts installed under
+#   lib/<plugin-engines>/hip_kernel_provider/rocke/<arch>/
+# produced by rocm-libraries (Plan 2): per arch
+#   rocke_client_<arch>.kpack          (packed HSACO)
+#   rocke_client_<arch>.json           (hipdnn.rocke.bundle/v1 manifest)
+#   <family>/aot_list.json             (selection catalog)
 exclude = [
   "lib/*.a",
 ]
