@@ -128,6 +128,9 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      hip-tests
+      rocrtst
   )
   therock_cmake_subproject_glob_c_sources(ROCR-Runtime
     SUBDIRS
@@ -291,6 +294,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      hip-tests
+      rocrtst
   )
   therock_cmake_subproject_glob_c_sources(hip-clr SUBDIRS .)
   therock_cmake_subproject_provide_package(hip-clr hip lib/cmake/hip)
