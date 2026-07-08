@@ -78,6 +78,48 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
             link.symlink_to(target.name)
 
 
+def validate_kpack_split_target_completeness(
+    *,
+    kpack_split: bool,
+    artifact_dir: Path,
+    artifacts: ArtifactCatalog,
+    linux_targets: list[str] | None,
+    windows_targets: list[str] | None,
+    platform_name: str = sys.platform,
+) -> None:
+    """Validate that kpack-split artifacts cover this platform's targets."""
+    if not kpack_split:
+        return
+
+    if platform_name.startswith("linux"):
+        expected_targets = linux_targets
+    elif platform_name == "win32":
+        expected_targets = windows_targets
+    else:
+        return
+
+    if expected_targets is None:
+        return
+
+    expected_target_set = set(expected_targets)
+    discovered_target_set = artifacts.all_target_families
+    missing_targets = sorted(expected_target_set - discovered_target_set)
+    if not missing_targets:
+        return
+
+    expected = ", ".join(sorted(expected_target_set)) or "(none)"
+    discovered = ", ".join(sorted(discovered_target_set)) or "(none)"
+    missing = ", ".join(missing_targets)
+    raise RuntimeError(
+        "KPACK_SPLIT_ARTIFACTS target completeness check failed: "
+        f"missing fetched artifact targets: {missing}. "
+        f"Expected targets: {expected}. "
+        f"Discovered artifact targets in {artifact_dir}: {discovered}. "
+        "The fetched/extracted artifact catalog is incomplete; refusing to "
+        "build a partial device wheel set."
+    )
+
+
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
@@ -105,11 +147,20 @@ def run(args: argparse.Namespace):
             family_map = amdgpu_family_map()
         windows_targets = expand_families(args.windows_amdgpu_families, family_map)
 
+    artifacts = ArtifactCatalog(args.artifact_dir)
+    validate_kpack_split_target_completeness(
+        kpack_split=kpack_split,
+        artifact_dir=args.artifact_dir,
+        artifacts=artifacts,
+        linux_targets=linux_targets,
+        windows_targets=windows_targets,
+    )
+
     params = Parameters(
         dest_dir=args.dest_dir,
         version=args.version,
         version_suffix=args.version_suffix,
-        artifacts=ArtifactCatalog(args.artifact_dir),
+        artifacts=artifacts,
         kpack_split=kpack_split,
         linux_target_families=linux_targets,
         windows_target_families=windows_targets,
