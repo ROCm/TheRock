@@ -59,6 +59,10 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         type: string
         default: ""
+      projects:
+        description: "Space-separated list of specific projects to build (e.g., 'rocblas miopen'). For external repo builds to enable only touched projects."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -82,6 +86,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      projects: ${{ inputs.projects }}
     permissions:
       contents: read
       id-token: write
@@ -105,6 +110,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      projects: ${{ inputs.projects }}
     permissions:
       contents: read
       id-token: write
@@ -138,6 +144,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      projects: ${{ inputs.projects }}
     permissions:
       contents: read
       id-token: write
@@ -161,6 +168,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      projects: ${{ inputs.projects }}
     permissions:
       contents: read
       id-token: write
