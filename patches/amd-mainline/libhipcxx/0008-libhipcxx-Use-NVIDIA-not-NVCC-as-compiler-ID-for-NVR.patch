@@ -1,0 +1,30 @@
+From 55c12d3a8dda7c020803f4dc67423888317191ac Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Tue, 30 Jun 2026 14:46:32 -0500
+Subject: [PATCH 08/11] [libhipcxx] Use NVIDIA (not NVCC) as compiler ID for
+ NVRTC path
+
+Consistent with the offline NVIDIA path and the existing "NVIDIA" branch
+in the linker flags section.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index de1c7e7ca..0f234894a 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -65,7 +65,7 @@ endif()
+ if (LIBCUDACXX_TEST_WITH_NVRTC)
+   # TODO: Use project properties to get path to binary.
+   # Should also set up dependency on the project when NVRTC is enabled
+-  set(CMAKE_CUDA_COMPILER_ID "NVCC")
++  set(CMAKE_CUDA_COMPILER_ID "NVIDIA")
+   set(LIBCUDACXX_CUDA_COMPILER "${CMAKE_BINARY_DIR}/libcudacxx/test/utils/nvidia/nvrtc/nvrtcc")
+   set(LIBCUDACXX_CUDA_COMPILER_ARG1 "")
+   set(LIBCUDACXX_CUDA_TEST_WITH_NVRTC "True")
+-- 
+2.53.0
+

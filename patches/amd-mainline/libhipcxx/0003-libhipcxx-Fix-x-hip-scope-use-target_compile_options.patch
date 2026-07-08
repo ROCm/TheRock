@@ -1,0 +1,34 @@
+From e7c63ea4f6b825f3872a5ccfd09c832583825ebc Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Wed, 13 May 2026 15:27:28 -0500
+Subject: [PATCH 03/11] [libhipcxx] Fix -x hip scope: use
+ target_compile_options not CMAKE_CXX_FLAGS
+
+CMAKE_CXX_FLAGS=-x hip gets passed to the linker step too, causing
+amdclang++ to try to parse ELF object files as HIP source:
+  error: expected unqualified-id (reading ELF magic bytes)
+
+Move -x hip to target_compile_options on the version_check target so
+it only applies during compilation, not linking. Remove it from the
+global cmake_opts passed to the sub-project configure step.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ cmake/test/test_export/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/cmake/test/test_export/CMakeLists.txt b/cmake/test/test_export/CMakeLists.txt
+index e80a06e2d..36f1da401 100644
+--- a/cmake/test/test_export/CMakeLists.txt
++++ b/cmake/test/test_export/CMakeLists.txt
+@@ -23,6 +23,7 @@ find_package(hip REQUIRED)
+ find_package(libhipcxx REQUIRED)
+ 
+ add_executable(version_check version_check.cxx)
++target_compile_options(version_check PRIVATE -x hip)
+ target_link_libraries(version_check PRIVATE libhipcxx::libhipcxx hip::host)
+ enable_testing()
+ add_test(NAME version_check COMMAND "$<TARGET_FILE:version_check>")
+-- 
+2.53.0
+
