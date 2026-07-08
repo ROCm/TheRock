@@ -717,10 +717,20 @@ def decide_jobs(
     )
 
     build_platforms = _stage_reuse_build_platforms(ci_inputs, targets)
-    target_families = stage_reuse_target_families(
-        ci_inputs.linux_amdgpu_families,
-        ci_inputs.windows_amdgpu_families,
-    )
+    # Derive the families to verify from the resolved target selection when we
+    # have it, so normal CI still checks the real gfx
+    # families rather than collapsing to just "generic". Fall back to the raw
+    # inputs only for the workflow_dispatch path where targets are not threaded.
+    if targets is not None:
+        target_families = stage_reuse_target_families(
+            targets.linux_families,
+            targets.windows_families,
+        )
+    else:
+        target_families = stage_reuse_target_families(
+            ci_inputs.linux_amdgpu_families,
+            ci_inputs.windows_amdgpu_families,
+        )
     auto = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
         mode=StageReuseMode.from_environ(),
@@ -798,7 +808,8 @@ def _stage_reuse_build_platforms(
     and Windows build configs, so a stage may only be reused when its artifacts
     are available for every platform actually being built. When target selection
     is known we use it directly; otherwise we fall back to the requested family
-    inputs, defaulting to Linux only.
+    inputs. Returns an empty list when no platform has any families, which
+    disables automatic reuse.
     """
     platforms: list[str] = []
 
@@ -1332,13 +1343,17 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         return CIOutputs.skipped()
     print("Result: CI will run")
 
-    print("\n=== Deciding job configuration ===")
-    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context)
-    jobs.log()
-
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
+
+    print("\n=== Deciding job configuration ===")
+    # Target selection runs first so automatic stage reuse scopes its
+    # platform/family verification to what is actually being built. On normal
+    # PR/push/schedule runs the raw workflow inputs are empty; the resolved
+    # `targets` are what determine the real platforms and families.
+    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context, targets=targets)
+    jobs.log()
 
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(
