@@ -6,6 +6,10 @@ pytest-xdist>=3.5.0
 expecttest>=0.3.0
 hypothesis
 ninja
+# NumPy pinned per Python version to match what upstream PyTorch's test CI
+# validates against; the unpinned tests break under newer NumPy (see
+# pytorch/pytorch#189267).
+# Source: pytorch/pytorch .ci/docker/requirements-ci.txt @ 6a13e44
 numpy==1.23.2; python_version == "3.10"
 numpy==1.26.2; python_version == "3.11" or python_version == "3.12"
 numpy==2.1.2; python_version >= "3.13" and python_version < "3.14"
