@@ -1094,6 +1094,9 @@ def _apply_external_family_overrides(all_families: dict) -> dict:
         import json
 
         external_overrides = json.loads(external_overrides_json)
+        # Handle null/None (when external_repo JSON doesn't have family_overrides key)
+        if not external_overrides:
+            return all_families
         for family_name, family_config in external_overrides.items():
             if family_name in all_families:
                 # Merge overrides into existing family config
