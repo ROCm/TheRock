@@ -61,6 +61,7 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
@@ -73,6 +74,8 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+
+_NULL_GIT_SHA = "0" * 40
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -129,7 +132,7 @@ class CIInputs:
     run_id: str  # GITHUB_RUN_ID value
     event_name: str  # GITHUB_EVENT_NAME value (e.g. "push", "pull_request", "schedule", "workflow_dispatch")
     commit_ref: str  # GITHUB_REF_NAME value
-    base_ref: str  # Git ref for the workflow run (PR base or HEAD^1, used for diffing)
+    base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
     build_pytorch: bool = True
@@ -191,7 +194,7 @@ class CIInputs:
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
-        base_ref = "HEAD^1"
+        base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
@@ -202,7 +205,17 @@ class CIInputs:
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
         elif event_name == "push":
-            base_ref = event.get("before", "HEAD^1")
+            before_ref = event.get("before")
+            # GitHub uses the null SHA when a push creates a new ref. That
+            # is not a real object, and this workflow only fetches HEAD and
+            # its parent for path filtering.
+            if before_ref and before_ref != _NULL_GIT_SHA:
+                base_ref = before_ref
+            elif before_ref == _NULL_GIT_SHA:
+                # Branch creation pushes do not have a prior branch tip to
+                # diff against. HEAD^1 would only diff the final pushed commit
+                # against its parent, missing earlier commits in the push.
+                base_ref = None
 
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
@@ -249,6 +262,11 @@ class GitContext:
     construct GitContext directly without touching git.
     """
 
+    # Resolved commit range used for changed_files.
+    diff_head_commit: str | None = None
+    diff_base_ref: str | None = None
+    diff_base_commit: str | None = None
+
     # List of relative file paths modified relative to a base ref
     changed_files: list[str] | None = None
 
@@ -258,11 +276,18 @@ class GitContext:
     @staticmethod
     def from_repo(base_ref: str) -> "GitContext":
         """Compute from the actual repo. Only called from main()."""
+        print(f"Computing GitContext using base ref {base_ref!r}")
+        diff_head_commit = get_git_commit_hash("HEAD")
+        diff_base_commit = get_git_commit_hash(base_ref)
+        print(f"Diff commit range: {diff_base_commit} -> {diff_head_commit}")
         changed_files = get_git_modified_paths(base_ref)
         submodule_paths = list(get_git_submodule_paths() or [])
         return GitContext(
             changed_files=changed_files,
             submodule_paths=submodule_paths,
+            diff_base_ref=base_ref,
+            diff_base_commit=diff_base_commit,
+            diff_head_commit=diff_head_commit,
         )
 
     @staticmethod
@@ -277,7 +302,7 @@ class GitContext:
     def log(self) -> None:
         """Log git context for CI diagnostics."""
         if self.changed_files is None:
-            print("GitContext: no changed files (schedule/workflow_dispatch)")
+            print("GitContext: no changed files computed")
             return
         print(f"GitContext: {len(self.changed_files)} changed file(s)")
         for path in self.changed_files[:20]:
@@ -563,8 +588,19 @@ _VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
 
 
 def _has_test_labels(ci_inputs: CIInputs) -> bool:
-    """Check whether any test labels were specified (workflow_dispatch or PR)."""
-    if ci_inputs.linux_test_labels or ci_inputs.windows_test_labels:
+    """Check whether any test labels were specified (workflow_dispatch or PR).
+
+    Note: test_filter: labels are not test labels - they control test_type,
+    not which tests to run.
+    """
+    # Filter out test_filter: labels - those control test_type, not test selection
+    linux_tests = [
+        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
+    ]
+    windows_tests = [
+        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
+    ]
+    if linux_tests or windows_tests:
         return True
     return any(label.startswith("test:") for label in ci_inputs.pr_labels)
 
@@ -587,10 +623,16 @@ def _determine_test_type(
 
     # Check in priority order - highest priority returns early.
 
-    # Priority 1: test_filter: PR label is an explicit manual override.
+    # Priority 1: test_filter: label is an explicit manual override.
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
-    for label in ci_inputs.pr_labels:
+    # Check both PR labels and workflow_dispatch test labels.
+    all_labels = (
+        ci_inputs.pr_labels
+        + ci_inputs.linux_test_labels
+        + ci_inputs.windows_test_labels
+    )
+    for label in all_labels:
         if not label.startswith("test_filter:"):
             continue
         filter_type = label.split(":")[1]
@@ -904,8 +946,8 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan" or build_variant == "host-asan":
-            # Only run ASAN tests on scheduled or workflow_dispatch runs
+        if build_variant == "asan":
+            # Only run full ASAN tests on scheduled or workflow_dispatch runs
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
@@ -919,6 +961,25 @@ def _expand_build_config_for_platform(
                 test_runs_on = ""
                 print(
                     f"  {family_name}: no ASAN sandbox runner available, "
+                    f"disabling tests"
+                )
+        elif build_variant == "host-asan":
+            # Run host-asan tests only on push (postsubmit)
+            if not ci_inputs.is_push:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(
+                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                )
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no host-asan sandbox runner available, "
                     f"disabling tests"
                 )
 
@@ -1033,6 +1094,9 @@ def _apply_external_family_overrides(all_families: dict) -> dict:
         import json
 
         external_overrides = json.loads(external_overrides_json)
+        # Handle null/None (when external_repo JSON doesn't have family_overrides key)
+        if not external_overrides:
+            return all_families
         for family_name, family_config in external_overrides.items():
             if family_name in all_families:
                 # Merge overrides into existing family config
@@ -1235,10 +1299,19 @@ def main():
     if skip_path_filters:
         # External repo: skip path filtering, run everything
         git_context = GitContext.empty()
-    elif ci_inputs.is_pull_request or ci_inputs.is_push:
+    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
+        print("=== Git Diff ===")
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
+        print()
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
+        # Some push events, such as branch creation, do not have a reliable
+        # base ref for changed-file filtering. Run without path filters.
+        print("=== Git Diff ===")
+        print("No diff base is available; running without changed-file filtering")
+        print()
+        git_context = GitContext.empty()
     else:
         # 'workflow_dispatch' and 'schedule' events don't have as natural
         # a "prior commit" to compare against.

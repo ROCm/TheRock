@@ -32,6 +32,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPKERNELPROVIDER_ENABLE_ROCKE
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"
+  CMAKE_VARS
+    HIPKERNELPROVIDER_ENABLE_ROCKE=ON
+  SUB_PROJECTS
+    hipkernelprovider
+)
+
+therock_declare_flag(
   NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
   DESCRIPTION "Stamp library git revisions into generated version metadata"
