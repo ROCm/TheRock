@@ -496,6 +496,10 @@ add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)
 add_subdirectory(debug-tools)
+# media-libs (rocdecode/rocjpeg) must be added before profiler: rocprofiler-sdk
+# performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
+# feature detection.
+add_subdirectory(media-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -507,7 +511,6 @@ add_subdirectory(comm-libs)
 add_subdirectory(storage-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

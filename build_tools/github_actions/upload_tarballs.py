@@ -46,6 +46,37 @@ from github_actions_api import gha_set_output
 logger = logging.getLogger(__name__)
 
 
+def _tarball_url(output_root: WorkflowOutputRoot, name: str) -> str:
+    return output_root.tarball(quote(name, safe="")).https_url
+
+
+def _is_test_tarball(name: str) -> bool:
+    return "-tests-" in name
+
+
+def _select_multiarch_tarball_url(
+    *,
+    tarball_files: list[Path],
+    output_root: WorkflowOutputRoot,
+    platform: str,
+) -> str | None:
+    """Gets the default "multiarch" tarball URL from a list of tarball files.
+
+    Note: this should look simpler once we drop the "multiarch" part of the
+    file name, at which point the file will just be therock-dist-{platform}.
+    """
+
+    # Skip over "test" tarballs, only look at "base" tarballs.
+    non_test_tarball_files = [f for f in tarball_files if not _is_test_tarball(f.name)]
+
+    for f in non_test_tarball_files:
+        name = f.name
+        if name.startswith(f"therock-dist-{platform}-multiarch-"):
+            return _tarball_url(output_root, name)
+
+    return None
+
+
 def run(
     input_tarballs_dir: Path,
     run_id: str,
@@ -88,32 +119,18 @@ def run(
 
     logger.info("Uploaded %d files", count)
 
-    shared_tarball_url: str | None = None
+    multiarch_tarball_url = _select_multiarch_tarball_url(
+        tarball_files=tarball_files,
+        output_root=output_root,
+        platform=platform,
+    )
 
-    for f in tarball_files:
-        name = f.name
-        encoded_name = quote(name, safe="")
-
-        if name.startswith(f"therock-dist-{platform}-multiarch-"):
-            shared_tarball_url = output_root.tarball(encoded_name).https_url
-            break
-
-        prefix = f"therock-dist-{platform}-"
-        suffix = ".tar.gz"
-
-        if name.startswith(prefix) and name.endswith(suffix):
-            stem = name[len(prefix) : -len(suffix)]
-
-            if "-" not in stem:
-                shared_tarball_url = output_root.tarball(encoded_name).https_url
-                break
-
-    if not shared_tarball_url:
+    if not multiarch_tarball_url:
         raise ValueError(
-            "No shared tarball URL was produced; check tarball naming and upload logic"
+            "No multiarch tarball URL was produced; check tarball naming and upload logic"
         )
 
-    gha_set_output({"tarball_urls": json.dumps({"multiarch": shared_tarball_url})})
+    gha_set_output({"tarball_urls": json.dumps({"multiarch": multiarch_tarball_url})})
 
     return 0
 

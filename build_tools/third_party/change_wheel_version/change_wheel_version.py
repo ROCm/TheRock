@@ -119,10 +119,8 @@ def change_wheel_version(
                 new_version, local=packaging.version._parse_local_version(local_version)
             )
 
-    if version == old_version:
-        if allow_same_version:
-            return wheel
-        raise ValueError(f"Version {version} is the same as the old version")
+    if new_version == old_version and not allow_same_version:
+        raise ValueError(f"Version {new_version} is the same as the old version")
 
     with tempfile.TemporaryDirectory() as _tmpdir:
         tmpdir = Path(_tmpdir)
@@ -137,29 +135,33 @@ def change_wheel_version(
         assert (dest_dir / old_slug).exists()
         assert (dest_dir / old_slug / f"{old_slug}.dist-info").exists()
 
-        # copy everything over
-        print(f"  Move directory from {old_slug} to {new_slug}...", end="")
-        shutil.move(dest_dir / old_slug, dest_dir / new_slug)
-        print(" done")
+        # AMD-changed: rename the top-level dir to the new slug so the rest of this function
+        # (and the callback) can work in a single naming scheme; skipped when the
+        # version is unchanged (slugs are identical)
+        if old_slug != new_slug:
+            print(f"  Move directory from {old_slug} to {new_slug}...", end="")
+            shutil.move(dest_dir / old_slug, dest_dir / new_slug)
+            print(" done")
 
         # AMD-added
         print("  Changing wheel-specific files that contain the version")
         if callback_func != None:
             callback_func(dest_dir / new_slug, old_version, new_version)
 
-        # rename dist-info
-        shutil.move(
-            dest_dir / new_slug / f"{old_slug}.dist-info",
-            dest_dir / new_slug / f"{new_slug}.dist-info",
-        )
-        print(f"    Rename directory from {old_slug}.dist-info to {new_slug}.dist-info")
-        # rename data
-        if (dest_dir / new_slug / f"{old_slug}.data").exists():
+        # AMD-changed: only rename dist-info if the version changes
+        if old_slug != new_slug:
             shutil.move(
-                dest_dir / new_slug / f"{old_slug}.data",
-                dest_dir / new_slug / f"{new_slug}.data",
+                dest_dir / new_slug / f"{old_slug}.dist-info",
+                dest_dir / new_slug / f"{new_slug}.dist-info",
             )
-            print(f"    Rename directory from {old_slug}.data to {new_slug}.data")
+            print(f"    Rename directory from {old_slug}.dist-info to {new_slug}.dist-info")
+            # rename data
+            if (dest_dir / new_slug / f"{old_slug}.data").exists():
+                shutil.move(
+                    dest_dir / new_slug / f"{old_slug}.data",
+                    dest_dir / new_slug / f"{new_slug}.data",
+                )
+                print(f"    Rename directory from {old_slug}.data to {new_slug}.data")
 
         metadata_path = dest_dir / new_slug / f"{new_slug}.dist-info" / "METADATA"
         wheel_path = dest_dir / new_slug / f"{new_slug}.dist-info" / "WHEEL"
