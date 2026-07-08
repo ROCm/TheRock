@@ -56,10 +56,15 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    if not args.requirements_ci.exists():
+    if not args.requirements_ci.is_file():
         parser.error(f"requirements-ci.txt not found: {args.requirements_ci}")
 
-    print("\n".join(extract_pins(args.requirements_ci, args.packages or ["numpy"])))
+    try:
+        pins = extract_pins(args.requirements_ci, args.packages or ["numpy"])
+    except ValueError as e:
+        parser.error(str(e))
+
+    print("\n".join(pins))
     return 0
 
 
