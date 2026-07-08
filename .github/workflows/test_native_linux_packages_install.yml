@@ -198,13 +198,8 @@ jobs:
 
       - name: Setup Python and install runtime
         run: |
-          PY_EXTRA=()
-          if [ "${{ inputs.os_profile }}" = "rhel8" ]; then
-            PY_EXTRA=(--python-version 3.12)
-          fi
           bash build_tools/packaging/linux/setup_python_cmd.sh \
             --os-profile "${{ inputs.os_profile }}" \
-            "${PY_EXTRA[@]}" \
             --install-runtime \
             --output-format github
 
