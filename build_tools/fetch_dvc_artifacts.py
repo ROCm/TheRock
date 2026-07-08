@@ -239,7 +239,7 @@ def _parse_dvc_remotes(path: Path) -> _RemoteConfig:
             continue
         url = cp[section].get("url")
         if not url:
-            raise FetchError(f'{path}: [remote "{name}"] missing \'url\'')
+            raise FetchError(f"{path}: [remote \"{name}\"] missing 'url'")
         parsed = urlparse(url)
         if parsed.scheme != "s3":
             raise FetchError(f"{path}: only s3:// remotes are supported, got {url!r}")

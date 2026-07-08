@@ -223,7 +223,9 @@ class TestS3Key(unittest.TestCase):
     """Tests for the S3 key builder (dvc 3.x layout: prefix/files/md5/...)."""
 
     def test_with_prefix(self):
-        r = fda._Remote(name="storage", bucket="b", prefix="rocm-libraries", anonymous=True)
+        r = fda._Remote(
+            name="storage", bucket="b", prefix="rocm-libraries", anonymous=True
+        )
         self.assertEqual(
             fda._s3_key(r, "35b9082b72e661dc5e37f14de1d9d4ed"),
             "rocm-libraries/files/md5/35/b9082b72e661dc5e37f14de1d9d4ed",
@@ -707,8 +709,9 @@ class TestParseDvcRemotes(unittest.TestCase):
             cfg = fda._parse_dvc_remotes(self._write(Path(t), self._CONFIG))
             self.assertEqual(cfg.default, "storage")
             self.assertEqual(set(cfg.remotes), {"storage", "golden-data"})
-            self.assertEqual(cfg.remotes["golden-data"].prefix,
-                             "rocm-libraries/hipdnn/golden-data")
+            self.assertEqual(
+                cfg.remotes["golden-data"].prefix, "rocm-libraries/hipdnn/golden-data"
+            )
             # Per-remote anonymous flags are independent.
             self.assertTrue(cfg.remotes["storage"].anonymous)
             self.assertFalse(cfg.remotes["golden-data"].anonymous)
@@ -775,8 +778,10 @@ class TestPullPerOutputRemoteRouting(unittest.TestCase):
             # served only under the golden-data prefix proves it was routed
             # there and NOT looked up under the storage prefix (the #9183 bug).
             payloads = {
-                ("bkt", f"rocm-libraries/files/md5/{md5_def[:2]}/{md5_def[2:]}"):
-                    data_def,
+                (
+                    "bkt",
+                    f"rocm-libraries/files/md5/{md5_def[:2]}/{md5_def[2:]}",
+                ): data_def,
                 (
                     "bkt",
                     "rocm-libraries/hipdnn/golden-data/files/md5/"
