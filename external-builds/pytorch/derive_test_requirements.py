@@ -13,7 +13,7 @@ test instead of a hand-copied pin that silently drifts. Environment markers
 Usage:
     python derive_test_requirements.py
     python derive_test_requirements.py --package numpy --package scipy
-    python derive_test_requirements.py | python -m pip install -r /dev/stdin
+    python derive_test_requirements.py | python -m pip install -r -
 """
 
 import argparse
