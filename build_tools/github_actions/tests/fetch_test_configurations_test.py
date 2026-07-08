@@ -87,6 +87,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertEqual(names, {"rocblas", "hipblas"})
 
+    def test_removed_hipdnn_python_bindings_label_is_not_selected(self):
+        os.environ["TEST_LABELS"] = json.dumps(["hipdnn_python_bindings"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(components, [])
+
     # -----------------------
     # TEST_LABELS handling
     # -----------------------
