@@ -16,4 +16,6 @@ include = [
   "bin/hip_kernel_provider/*.py",
   "bin/hip_kernel_provider/golden/**",
   "bin/hip_kernel_provider/rocke/**",
+  # rocKE pytest suite
+  "bin/hip_kernel_provider/tests/**",
 ]
