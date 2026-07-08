@@ -70,18 +70,21 @@ class ROCmLibrariesTest(unittest.TestCase):
                 if (
                     "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
                 ) and platform.system() == "Windows":
-                    # hipdnn plugins have dependencies on other libraries (e.g. miopen).
-                    # In a real-world scenario, hipdnn_backend loads these plugins, and
-                    # the dependencies are found because they reside in the same directory
-                    # (or are otherwise resolvable).
-                    # To simulate this loading behavior in the test:
-                    # - On Linux, RPATH ($ORIGIN/../../) handles dependency resolution.
-                    # - On Windows, we must manually add the library directory (calculated
-                    #   relative to the plugin) via add_dll_directory, as there is no RPATH equivalent.
-                    # We assume the plugin is at .../{lib|bin}/hipdnn_plugins/engines/plugin.so
-                    # and the dependencies are at .../{lib|bin}.
+                    # hipdnn plugins depend on other libraries: the provider's
+                    # parent lib (e.g. miopen) and, for the rocke engine, the kpack
+                    # runtime. hipdnn_backend loads the plugin and these deps resolve
+                    # because they are co-located or on the search path. On Linux
+                    # RPATH handles this; on Windows (no RPATH) we add the needed
+                    # library directories via add_dll_directory. The plugin lives at
+                    # .../{lib|bin}/hipdnn_plugins/engines/plugin.dll: its sibling
+                    # deps are at .../{lib|bin} (parents[2]), and kpack ships in the
+                    # core wheel (located via find_libraries).
                     lib_dir = str(so_path.parents[2]).replace("\\", "\\\\")
                     extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
+                    kpack_paths = rocm_sdk.find_libraries("kpack")
+                    if kpack_paths:
+                        kpack_dir = str(kpack_paths[0].parent).replace("\\", "\\\\")
+                        extra_setup += f"os.add_dll_directory('{kpack_dir}') if hasattr(os, 'add_dll_directory') else None; "
 
                 # For Windows compatibility, we first preload libraries (DLLs)
                 # that are not co-located. Specifically this is for
