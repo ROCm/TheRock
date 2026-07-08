@@ -1,0 +1,107 @@
+From 1dfbe81224bac34d284c03b2f7b89fbdc0850929 Mon Sep 17 00:00:00 2001
+From: Nikita Gusev <Nikita.Gusev2@amd.com>
+Date: Wed, 8 Jul 2026 20:40:35 +0200
+Subject: [PATCH] fix (ROCM-27029): net_ib_cast BY_INDEX AllToAll hang from
+ cross-cache-line CTS-fifo (#8193)
+
+## Motivation
+
+Fix net_ib_cast BY_INDEX AllToAll hang from cross-cache-line CTS-fifo
+reads
+
+## Technical Details
+
+For BY_INDEX matching the sender gates on a fresh CTS-fifo readiness
+word (idx == fifoHead+1) and then reads the receiver request-slot index
+(rxReqIndex) to echo in the RDMA-Write-with-IMM that routes the
+receiver's completion. Both values come from a fifo slot the receiver
+recycles every NET_IB_MAX_REQUESTS posts via a single RDMA WRITE of the
+whole element.
+
+With a 64-bit idx the element placed rxReqIndex (byte 64) in a different
+64-byte cache line than idx (byte 56). The NIC's RDMA write is observed
+by the polling sender atomically only within one cache line, so on a
+recycled slot the sender could observe a fresh idx paired with the
+previous occupant's rxReqIndex, misroute the completion to the wrong
+recv request and deadlock large AllToAll transfers. Disabling PCI
+relaxed ordering does not help: the polling sender reads target memory
+directly and never waits for the write completion, so it is
+cross-cache-line visibility, not write ordering, that tears the read.
+
+Shrink idx from 64 to 32 bits so idx (@56) and rxReqIndex (@60) fall in
+the same 64-byte cache line and become visible together. The gate and
+the receiver publish truncate the generation consistently, and it stays
+unique across the 256-deep ring (wrap period 2^32 >> ring depth).
+
+## JIRA ID
+
+Fixes ROCM-27029
+
+## Test Plan
+
+```
+$OMPI/bin/mpirun --np 16 -H "$HOSTS"   --bind-to numa   --mca pml ob1 --mca osc ^ucx --mca btl tcp,self --mca btl_tcp_if_include ens50f0   -x LD_LIBRARY_PATH=$RCCL:$OMPI/lib:/opt/rocm/lib   -x PATH=$OMPI/bin:/opt/rocm/bin:/usr/bin:/bin   -x NCCL_SOCKET_IFNAME=ens50f0   -x NCCL_NET=IB-CAST   -x NCCL_IB_QPS_PER_CONNECTION=1   -x RCCL_IB_QPS_PER_P2P=1   -x RCCL_IB_QP_SCHED_ENABLE=0   -x NCCL_IB_PCI_RELAXED_ORDERING=1   -x RCCL_CTS_OFFLOAD_ENABLED=0   -x NCCL_NET_OPTIONAL_RECV_COMPLETION=1   -x NCCL_GDR_FLUSH_DISABLE=1   -x NCCL_DEBUG=WARN $TESTS/alltoall_perf -b 1K -e 16G -f 2 -g 1 -n 20 -c 1 -w 2
+```
+
+## Test Result
+
+alltoall_perf for 16 ranks two nodes - pass
+
+## Submission Checklist
+
+- [x] Look over the contributing guidelines at
+https://github.com/ROCm/ROCm/blob/develop/CONTRIBUTING.md#pull-requests.
+---
+ projects/rccl/src/transport/net_ib_cast/common_cast.h | 5 +++--
+ projects/rccl/src/transport/net_ib_cast/p2p.cc        | 4 ++--
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/projects/rccl/src/transport/net_ib_cast/common_cast.h b/projects/rccl/src/transport/net_ib_cast/common_cast.h
+index 37bd967af6..1f94bd9372 100644
+--- a/projects/rccl/src/transport/net_ib_cast/common_cast.h
++++ b/projects/rccl/src/transport/net_ib_cast/common_cast.h
+@@ -356,9 +356,9 @@ struct alignas(64) ncclIbSendFifo {
+   uint32_t rkeys[NCCL_IB_MAX_DEVS_PER_NIC];
+   uint32_t nreqs;
+   uint32_t tag;
+-  uint64_t idx;
++  uint32_t idx;
+   uint16_t rxReqIndex;
+-  char padding[14];
++  char padding[2];
+ };
+ 
+ #define MAX_INLINE_DATA_SIZE 24
+@@ -599,6 +599,7 @@ struct ncclIbSendComm {
+ static_assert((sizeof(struct ncclIbNetCommBase) % 32) == 0, "ncclIbNetCommBase size must be 32-byte multiple to ensure ctsFifo is at proper offset");
+ static_assert((offsetof(struct ncclIbSendComm, ctsFifo) % 32) == 0, "ncclIbSendComm ctsFifo must be 32-byte aligned");
+ static_assert((sizeof(struct ncclIbSendFifo) % 32) == 0, "ncclIbSendFifo element size must be 32-byte multiples");
++static_assert( sizeof(struct ncclIbSendFifo) <=64, "struct ncclIbSendFifo should fit one cache line");
+ static_assert((sizeof(struct ncclIbSendFifoCtsInline) % 32) == 0, "ncclIbSendFifoCtsInline element size must be 32-byte multiples");
+ static_assert((offsetof(struct ncclIbSendComm, sges) % 32) == 0, "sges must be 32-byte aligned");
+ static_assert((offsetof(struct ncclIbSendComm, wrs) % 32) == 0, "wrs must be 32-byte aligned");
+diff --git a/projects/rccl/src/transport/net_ib_cast/p2p.cc b/projects/rccl/src/transport/net_ib_cast/p2p.cc
+index 61904abae3..9745969167 100644
+--- a/projects/rccl/src/transport/net_ib_cast/p2p.cc
++++ b/projects/rccl/src/transport/net_ib_cast/p2p.cc
+@@ -371,7 +371,7 @@ ncclResult_t IbCastIsend(void* sendComm, void* data, size_t size, int tag, void*
+   struct ncclIbRequest** reqs = comm->sendReqs[slot];
+   if (!comm->useCtsOffload) {
+     slots = comm->ctsFifo[slot];
+-    uint64_t idx = comm->base.fifoHead+1;
++    uint32_t idx = (uint32_t)(comm->base.fifoHead+1);
+     if (slots[0].idx != idx) { *request = NULL; return ncclSuccess; }
+     nreqs = slots[0].nreqs;
+     // Wait until all data has arrived
+@@ -655,7 +655,7 @@ ncclResult_t IbCastIrecv(void* recvComm, int n, void** data, size_t* sizes, int*
+       localElem[i].nreqs = n;
+       localElem[i].size = sizes[i]; // Sanity/Debugging
+       localElem[i].tag = tags[i];
+-      localElem[i].idx = comm->base.fifoHead+1;
++      localElem[i].idx = (uint32_t)(comm->base.fifoHead+1);
+       localElem[i].rxReqIndex = rxReqIndex;
+     }
+   }
+-- 
+2.43.0
+
