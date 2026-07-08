@@ -385,7 +385,9 @@ def _split_runpath(runpath: str) -> list[str]:
     return [entry for entry in runpath.split(":") if entry]
 
 
-def _merge_relative_runpaths(existing_runpath: str, addl_runpaths: list[str]) -> str:
+def _strip_absolute_and_append_runpaths(
+    existing_runpath: str, addl_runpaths: list[str]
+) -> str:
     merged: list[str] = []
     for entry in _split_runpath(existing_runpath):
         if os.path.isabs(entry):
@@ -421,7 +423,7 @@ def _patchelf_output(*args: str | Path) -> str:
     ).strip()
 
 
-def _get_rocm_sdk_runpath_dirs(wheel_root: Path) -> list[Path]:
+def _get_rocm_dependency_wheel_runpath_dirs(wheel_root: Path) -> list[Path]:
     import importlib
 
     from rocm_sdk import _dist_info
@@ -443,19 +445,19 @@ def _get_rocm_sdk_runpath_dirs(wheel_root: Path) -> list[Path]:
     return runpath_dirs
 
 
-def repair_pytorch_wheel_runpaths(wheel_path: Path) -> None:
-    """Patch torch shared objects to resolve ROCm wheel libraries by RUNPATH."""
+def configure_pytorch_wheel_rocm_runpaths(wheel_path: Path) -> None:
+    """Configure torch shared object RUNPATHs for ROCm wheel library resolution."""
     if is_windows:
         return
     if not shutil.which("patchelf"):
-        raise RuntimeError("patchelf is required to repair PyTorch wheel RUNPATHs")
+        raise RuntimeError("patchelf is required to configure PyTorch wheel RUNPATHs")
 
     with tempfile.TemporaryDirectory(prefix="therock-pytorch-wheel-") as temp_dir_str:
         temp_dir = Path(temp_dir_str)
         unpack_dir = temp_dir / "unpacked"
-        repaired_dir = temp_dir / "repaired"
+        output_dir = temp_dir / "output"
         unpack_dir.mkdir()
-        repaired_dir.mkdir()
+        output_dir.mkdir()
 
         run_command(
             [sys.executable, "-m", "wheel", "unpack", "--dest", unpack_dir, wheel_path],
@@ -471,8 +473,8 @@ def repair_pytorch_wheel_runpaths(wheel_path: Path) -> None:
         if not torch_dir.is_dir():
             raise RuntimeError(f"Unpacked torch wheel has no torch package: {wheel_root}")
 
-        rocm_runpath_dirs = _get_rocm_sdk_runpath_dirs(wheel_root)
-        patched_paths: list[Path] = []
+        rocm_runpath_dirs = _get_rocm_dependency_wheel_runpath_dirs(wheel_root)
+        updated_paths: list[Path] = []
         for so_path in sorted(torch_dir.rglob("*.so*")):
             if so_path.is_symlink() or not so_path.is_file():
                 continue
@@ -491,21 +493,21 @@ def repair_pytorch_wheel_runpaths(wheel_path: Path) -> None:
                 _origin_relative_runpath(so_path, target_dir)
                 for target_dir in rocm_runpath_dirs
             ]
-            repaired_runpath = _merge_relative_runpaths(
+            updated_runpath = _strip_absolute_and_append_runpaths(
                 existing_runpath, addl_runpaths
             )
-            if repaired_runpath == existing_runpath:
+            if updated_runpath == existing_runpath:
                 continue
-            print(f"+++ Repairing ROCm RUNPATH: {so_path.relative_to(wheel_root)}")
+            print(f"+++ Configuring ROCm RUNPATH: {so_path.relative_to(wheel_root)}")
             print(f"    old: {existing_runpath}")
-            print(f"    new: {repaired_runpath}")
+            print(f"    new: {updated_runpath}")
             subprocess.check_call(
-                ["patchelf", "--set-rpath", repaired_runpath, so_path]
+                ["patchelf", "--set-rpath", updated_runpath, so_path]
             )
-            patched_paths.append(so_path)
+            updated_paths.append(so_path)
 
-        if not patched_paths:
-            print("WARNING: Did not find any ROCm-linked torch shared objects to repair")
+        if not updated_paths:
+            print("WARNING: Did not find any ROCm-linked torch shared objects to update")
 
         run_command(
             [
@@ -514,13 +516,13 @@ def repair_pytorch_wheel_runpaths(wheel_path: Path) -> None:
                 "wheel",
                 "pack",
                 "--dest-dir",
-                repaired_dir,
+                output_dir,
                 wheel_root,
             ],
             cwd=temp_dir,
         )
-        repaired_wheel = find_built_wheel(repaired_dir, "torch")
-        shutil.copy2(repaired_wheel, wheel_path)
+        output_wheel = find_built_wheel(output_dir, "torch")
+        shutil.copy2(output_wheel, wheel_path)
 
 
 def remove_dir_if_exists(dir: Path):
@@ -1325,7 +1327,7 @@ def do_build_pytorch(
     run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
-    repair_pytorch_wheel_runpaths(built_wheel)
+    configure_pytorch_wheel_rocm_runpaths(built_wheel)
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built torch:")
