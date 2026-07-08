@@ -489,7 +489,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-
     # hipDNN integration tests (unit tests for the integration test harness)
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",
