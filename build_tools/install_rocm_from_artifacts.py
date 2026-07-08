@@ -123,6 +123,7 @@ import argparse
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
@@ -153,9 +154,9 @@ def is_non_default_tarball(name: str) -> bool:
     """True for tarballs that are not part of the default ROCm distribution.
 
     Excludes both test tarballs (``-tests-``) and the opt-in HPC SDK expansion
-    tarballs (``-hpc-``, containing hipTensor/rocALUTION). These share the
-    ``therock-dist-{platform}-{group}-`` prefix with the default release tarball
-    and must be skipped when discovering default releases/families.
+    tarballs (``-hpc-``). These share the ``therock-dist-{platform}-{group}-``
+    prefix with the default release tarball and must be skipped when discovering
+    default releases/families.
     """
     return "-tests-" in name or "-hpc-" in name
 
@@ -318,6 +319,23 @@ def _release_asset_name(
     return f"therock-dist-{PLATFORM}-{artifact_group}-{variant}{release_version}.tar.gz"
 
 
+def _download_and_extract_asset(release_bucket, asset_name, output_dir):
+    """Download a single release tarball from S3 and extract it into output_dir."""
+    destination = output_dir / asset_name
+    try:
+        with open(destination, "wb") as f:
+            s3_client.download_fileobj(release_bucket, asset_name, f)
+    except Exception:
+        # download_fileobj creates the destination file before the request
+        # completes; remove the partial/empty file so a failed download does
+        # not leave a stray artifact behind.
+        destination.unlink(missing_ok=True)
+        raise
+
+    # After downloading the asset, untar-ing the file
+    _untar_files(output_dir, destination)
+
+
 def _retrieve_s3_release_assets(
     release_bucket, artifact_group, release_version, output_dir, hpc=False
 ):
@@ -326,21 +344,38 @@ def _retrieve_s3_release_assets(
 
     When ``hpc`` is True, also downloads and extracts the opt-in HPC SDK
     expansion tarball on top of the default tree (extraction merges into the
-    same install prefix).
+    same install prefix). The HPC tarball is treated as optional: if it does
+    not exist for this release/family (e.g. an older release predating the HPC
+    SDK), a clear message is logged and the default install is left intact
+    rather than failing with a raw S3 error.
     """
-    asset_names = [_release_asset_name(artifact_group, release_version)]
-    if hpc:
-        asset_names.append(
-            _release_asset_name(artifact_group, release_version, hpc=True)
-        )
+    # The default tarball is required; let any download error propagate.
+    _download_and_extract_asset(
+        release_bucket,
+        _release_asset_name(artifact_group, release_version),
+        output_dir,
+    )
 
-    for asset_name in asset_names:
-        destination = output_dir / asset_name
-        with open(destination, "wb") as f:
-            s3_client.download_fileobj(release_bucket, asset_name, f)
+    if not hpc:
+        return
 
-        # After downloading the asset, untar-ing the file
-        _untar_files(output_dir, destination)
+    # The HPC expansion tarball is opt-in and may not exist for every
+    # release/family. Handle a missing object gracefully so the (already
+    # completed) default install is not left looking broken.
+    hpc_asset_name = _release_asset_name(artifact_group, release_version, hpc=True)
+    try:
+        _download_and_extract_asset(release_bucket, hpc_asset_name, output_dir)
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in ("404", "NoSuchKey"):
+            log(
+                f"WARNING: HPC SDK tarball '{hpc_asset_name}' not found in "
+                f"bucket '{release_bucket}'. The HPC SDK may not be available "
+                f"for this release/family. The default ROCm install completed "
+                f"successfully."
+            )
+            return
+        raise
 
 
 def retrieve_artifacts_by_run_id(args):
@@ -758,9 +793,8 @@ def main(argv):
         "--hpc",
         default=False,
         action=argparse.BooleanOptionalAction,
-        help="Also install the opt-in HPC SDK expansion tarball (hipTensor, "
-        "rocALUTION) on top of the default release tarball. Only applies to "
-        "--release and --latest-release installs.",
+        help="Also install the opt-in HPC SDK expansion tarball on top of the default "
+        "release tarball. Only applies to --release and --latest-release installs.",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")

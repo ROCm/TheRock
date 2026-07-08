@@ -269,6 +269,80 @@ class TestHpcReleaseInstall(unittest.TestCase):
         self.assertEqual(len(would_download), 2)
         self.assertTrue(any("-hpc-" in m for m in would_download))
 
+    def test_retrieve_release_assets_missing_hpc_tarball_is_graceful(self) -> None:
+        """A missing HPC tarball must not fail the (already done) default install."""
+        from botocore.exceptions import ClientError
+
+        default_name = f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+        hpc_name = f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-hpc-7.13.0.tar.gz"
+
+        downloaded: list[str] = []
+
+        def fake_download(bucket, key, fileobj):
+            downloaded.append(key)
+            if key == hpc_name:
+                raise ClientError(
+                    {"Error": {"Code": "404", "Message": "Not Found"}},
+                    "GetObject",
+                )
+
+        s3_client = mock.Mock()
+        s3_client.download_fileobj.side_effect = fake_download
+
+        logs: list[str] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with mock.patch.object(mod, "s3_client", s3_client), mock.patch.object(
+                mod, "_untar_files"
+            ), mock.patch.object(mod, "log", lambda m: logs.append(m)):
+                # Should not raise even though the HPC object is missing.
+                mod._retrieve_s3_release_assets(
+                    "therock-nightly-tarball",
+                    "gfx94X-dcgpu",
+                    "7.13.0",
+                    Path(tmpdir),
+                    hpc=True,
+                )
+            # The default tarball was fully downloaded; the empty HPC partial
+            # file was cleaned up.
+            self.assertFalse((Path(tmpdir) / hpc_name).exists())
+
+        # Both downloads were attempted, default first then HPC.
+        self.assertEqual(downloaded, [default_name, hpc_name])
+        # A clear warning was emitted for the missing HPC tarball.
+        self.assertTrue(
+            any("not found" in m and "HPC" in m for m in logs),
+            f"expected a missing-HPC warning, got: {logs}",
+        )
+
+    def test_retrieve_release_assets_hpc_non_404_error_propagates(self) -> None:
+        """Non-missing S3 errors on the HPC tarball must not be swallowed."""
+        from botocore.exceptions import ClientError
+
+        hpc_name = f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-hpc-7.13.0.tar.gz"
+
+        def fake_download(bucket, key, fileobj):
+            if key == hpc_name:
+                raise ClientError(
+                    {"Error": {"Code": "AccessDenied", "Message": "Denied"}},
+                    "GetObject",
+                )
+
+        s3_client = mock.Mock()
+        s3_client.download_fileobj.side_effect = fake_download
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with mock.patch.object(mod, "s3_client", s3_client), mock.patch.object(
+                mod, "_untar_files"
+            ):
+                with self.assertRaises(ClientError):
+                    mod._retrieve_s3_release_assets(
+                        "therock-nightly-tarball",
+                        "gfx94X-dcgpu",
+                        "7.13.0",
+                        Path(tmpdir),
+                        hpc=True,
+                    )
+
 
 def _make_run_id_args(**overrides) -> argparse.Namespace:
     """Return a minimal args namespace suitable for retrieve_artifacts_by_run_id."""
