@@ -116,11 +116,13 @@ DEFAULT_MIN_GTESTS = 1
 # The shipped configs set num_threads=1 (fully serial). The CDNA3/CDNA4 configs
 # model a full 8-XCD GPU, and rocjitsu's own scaling tests only exercise up to 8
 # threads (one per XCD); beyond that the FM partitioner over-cuts the graph and
-# adds barrier overhead without extra real parallelism. So default to 8 here and
-# let SIMULATOR_ROCJITSU_NUM_THREADS override it (set 1 for a serial baseline).
-# num_threads has no rocjitsu CLI/env override and the dist config is read-only,
-# so we patch a writable copy at launch (see _materialize_config).
-DEFAULT_ROCJITSU_NUM_THREADS = 8
+# adds barrier overhead without extra real parallelism. Currently set to 2 for a
+# scaling-sweep experiment (N=8 measured ~1.12-1.26x; sweeping lower N to see
+# where efficiency peaks). SIMULATOR_ROCJITSU_NUM_THREADS overrides it (1 = the
+# serial baseline). num_threads has no rocjitsu CLI/env override and the dist
+# config is read-only, so we patch a writable copy at launch
+# (see _materialize_config).
+DEFAULT_ROCJITSU_NUM_THREADS = 2
 
 # Sentinel substring GoogleTest prints when GTEST_FILTER matches nothing.
 # Stable across gtest versions (see googletest/src/gtest.cc).
@@ -700,6 +702,21 @@ def main(argv: list[str] | None = None) -> int:
     logging.info("[simulator_runner] rocjitsu_cli=%s", paths["cli"])
     logging.info("[simulator_runner] rocjitsu_config=%s", paths["config"])
     logging.info("[simulator_runner] rocjitsu_num_threads=%d", rocjitsu_num_threads)
+    # Read num_threads back from the exact config file handed to rocjitsu (the
+    # materialized temp copy for N>1, or the shipped config for N=1). This is the
+    # on-disk proof of the value rocjitsu actually loads, independent of our
+    # intent above - rocjitsu itself logs no thread/partition count.
+    try:
+        effective_num_threads = json.loads(Path(paths["config"]).read_text()).get(
+            "num_threads"
+        )
+    except (OSError, ValueError) as e:
+        effective_num_threads = f"unreadable ({e})"
+    logging.info(
+        "[simulator_runner] rocjitsu_config_num_threads=%s (read back from %s)",
+        effective_num_threads,
+        paths["config"],
+    )
     logging.info("[simulator_runner] GTEST_FILTER=%s", gtest_filter)
     logging.info("[simulator_runner] CTEST_TEST_TIMEOUT=%s", env["CTEST_TEST_TIMEOUT"])
     logging.info(
