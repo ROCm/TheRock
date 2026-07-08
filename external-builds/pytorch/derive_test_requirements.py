@@ -22,7 +22,9 @@ import sys
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
-DEFAULT_REQUIREMENTS_CI = THIS_DIR / "pytorch" / ".ci" / "docker" / "requirements-ci.txt"
+DEFAULT_REQUIREMENTS_CI = (
+    THIS_DIR / "pytorch" / ".ci" / "docker" / "requirements-ci.txt"
+)
 
 
 def extract_pins(requirements_ci: Path, packages: list[str]) -> list[str]:
