@@ -167,6 +167,7 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 - [workflow_outputs.md](workflow_outputs.md) - CI output directory structure
 - [github_actions_debugging.md](github_actions_debugging.md) - Debugging GitHub Actions
 - [ci_behavior_manipulation.md](ci_behavior_manipulation.md) - Controlling CI behavior with labels and inputs
+- [stage_reuse.md](stage_reuse.md) - Reusing unaffected build stages from a baseline run
 - [manifest_diff.md](manifest_diff.md) - Manifest diff report (submodule SHA changes between two commits)
 
 ## Getting Help
