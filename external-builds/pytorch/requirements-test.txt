@@ -6,5 +6,7 @@ pytest-xdist>=3.5.0
 expecttest>=0.3.0
 hypothesis
 ninja
-numpy
+# numpy is intentionally omitted here: it is derived per torch-ref from the
+# vendored PyTorch checkout at test time (see derive_test_requirements.py),
+# mirroring upstream's .ci/docker/requirements-ci.txt without manual drift.
 psutil

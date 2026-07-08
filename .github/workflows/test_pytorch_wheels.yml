@@ -214,6 +214,10 @@ jobs:
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          # numpy is pinned to what upstream validates for the checked-out torch
+          # ref, derived from its .ci/docker/requirements-ci.txt (avoids drift).
+          python external-builds/pytorch/derive_test_requirements.py \
+            | python -m pip install -r /dev/stdin
           pip freeze
 
       - name: Run rocm-sdk sanity tests
