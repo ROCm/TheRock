@@ -509,6 +509,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_CMAKE_SOURCE_DIR "${_cmake_source_dir}"
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
+    THEROCK_CMAKE_PROJECT_MAKE_RULES_OVERRIDE_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_make_rules_override.cmake"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
     THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
     # Non-transitive build deps.
@@ -616,6 +617,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_cmake_includes "${target_name}" THEROCK_CMAKE_INCLUDES)
   get_target_property(_cmake_project_init_file "${target_name}" THEROCK_CMAKE_PROJECT_INIT_FILE)
   get_target_property(_cmake_project_toolchain_file "${target_name}" THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE)
+  get_target_property(_cmake_project_make_rules_override_file "${target_name}" THEROCK_CMAKE_PROJECT_MAKE_RULES_OVERRIDE_FILE)
   get_target_property(_cmake_source_dir "${target_name}" THEROCK_CMAKE_SOURCE_DIR)
   get_target_property(_exclude_from_all "${target_name}" THEROCK_EXCLUDE_FROM_ALL)
   get_target_property(_external_source_dir "${target_name}" THEROCK_EXTERNAL_SOURCE_DIR)
@@ -718,8 +720,10 @@ function(therock_cmake_subproject_activate target_name)
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
-    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
+    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}"
+    "${_cmake_project_make_rules_override_file}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
+  list(APPEND _fprint_files "${_cmake_project_make_rules_override_file}")
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
@@ -973,6 +977,7 @@ function(therock_cmake_subproject_activate target_name)
         "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
+        "-DCMAKE_USER_MAKE_RULES_OVERRIDE=${_cmake_project_make_rules_override_file}"
         "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
@@ -990,6 +995,7 @@ function(therock_cmake_subproject_activate target_name)
       DEPENDS
         "${_cmake_source_dir}/CMakeLists.txt"
         "${_cmake_project_toolchain_file}"
+        "${_cmake_project_make_rules_override_file}"
         "${_cmake_project_init_file}"
         "${_global_post_include}"
         ${_extra_depends}
@@ -1617,10 +1623,20 @@ endfunction()
 #   * amd-hip: Extends the amd-llvm toolchain to also depend on HIP, making
 #     it ready to use to compile HIP code.
 function(_therock_cmake_subproject_setup_toolchain
-    target_name compiler_toolchain toolchain_file)
+    target_name compiler_toolchain toolchain_file make_rules_override_file)
   string(APPEND CMAKE_MESSAGE_INDENT "  ")
   set(_build_env_pairs "${_build_env_pairs}")
   set(_toolchain_contents)
+
+  # Contents of the make-rules override file (its path, make_rules_override_file,
+  # is passed in like toolchain_file). CMake<LANG>Information includes this file
+  # after the platform has populated the CMAKE_<LANG>_FLAGS_<CONFIG>_INIT
+  # variables but before the per-config cache variables are created (and CMake
+  # propagates its path to try_compile). It is a general, extensible hook for
+  # adjusting the composed platform defaults; the THEROCK_GENERATE_DEBUG_INFO
+  # block below appends to it, but it may be left empty (an empty include is a
+  # no-op).
+  set(_make_rules_override)
 
   get_target_property(_disable_amdgpu_targets "${target_name}" THEROCK_DISABLE_AMDGPU_TARGETS)
   set(_filtered_gpu_targets)
@@ -1711,15 +1727,36 @@ function(_therock_cmake_subproject_setup_toolchain
         set(_therock_debug_g_level "-g3")
       endif()
       # GNU-style: the amd-llvm/amd-hip toolchain (clang/clang++ GNU driver) on
-      # any OS, plus a non-toolchain GCC/clang or mingw bootstrap. Clear CMake's
-      # built-in -g from RelWithDebInfo so the detail level is governed only by
-      # THEROCK_DEBUG_INFO_LEVEL, then inject into Debug, RelWithDebInfo, Release.
-      foreach(_lang C CXX)
-        foreach(_cfg DEBUG RELWITHDEBINFO RELEASE MINSIZEREL)
-          string(APPEND _toolchain_contents "string(REGEX REPLACE\"(^| )-g[0-3]?( |$)\" \" \" CMAKE_${_lang}_FLAGS_${_cfg} \"\${CMAKE_${_lang}_FLAGS_${_cfg}}\")\n")
-          string(APPEND _toolchain_contents "string(APPEND CMAKE_${_lang}_FLAGS_${_cfg} \" ${_therock_debug_g_level} -gz\")\n")
-        endforeach()
-      endforeach()
+      # any OS, plus a non-toolchain GCC/clang or mingw bootstrap.
+      #
+      # To make THEROCK_DEBUG_INFO_LEVEL authoritative we must (a) remove
+      # CMake's built-in -g and (b) append our own flags so they win, while
+      # leaving every other platform default in place. This cannot be done from
+      # the toolchain file directly:
+      #   * Assigning CMAKE_<LANG>_FLAGS_<CONFIG> defines a normal variable that
+      #     shadows the value CMake initializes from
+      #     CMAKE_<LANG>_FLAGS_<CONFIG>_INIT, discarding the platform defaults.
+      #     On Windows those defaults carry the MSVC runtime-library selection
+      #     (e.g. -D_MT -D_DLL --dependent-lib=msvcrt[d]); losing it produces
+      #     objects with no CRT default-lib directive, which breaks the compiler
+      #     ABI check with "undefined symbol: mainCRTStartup".
+      #   * Appending to CMAKE_<LANG>_FLAGS_<CONFIG>_INIT from the toolchain runs
+      #     before the platform populates them, so the platform's -g is appended
+      #     after ours and wins (our level is ignored).
+      # Emit this in the make-rules override (see the _make_rules_override
+      # declaration): it runs after the platform has populated the *_INIT
+      # variables but before the per-config cache variables are created, so we
+      # can strip the default -g and append our flags last, preserving the
+      # runtime-library and other platform defaults.
+      string(APPEND _make_rules_override "foreach(_therock_lang C CXX)\n")
+      string(APPEND _make_rules_override "  if(DEFINED CMAKE_\${_therock_lang}_FLAGS_DEBUG_INIT AND NOT _THEROCK_DEBUG_INFO_APPLIED_\${_therock_lang})\n")
+      string(APPEND _make_rules_override "    set(_THEROCK_DEBUG_INFO_APPLIED_\${_therock_lang} TRUE)\n")
+      string(APPEND _make_rules_override "    foreach(_therock_cfg DEBUG RELWITHDEBINFO RELEASE MINSIZEREL)\n")
+      string(APPEND _make_rules_override "      string(REGEX REPLACE \"(^| )-g[0-3]?( |$)\" \" \" CMAKE_\${_therock_lang}_FLAGS_\${_therock_cfg}_INIT \"\${CMAKE_\${_therock_lang}_FLAGS_\${_therock_cfg}_INIT}\")\n")
+      string(APPEND _make_rules_override "      string(APPEND CMAKE_\${_therock_lang}_FLAGS_\${_therock_cfg}_INIT \" ${_therock_debug_g_level} -gz\")\n")
+      string(APPEND _make_rules_override "    endforeach()\n")
+      string(APPEND _make_rules_override "  endif()\n")
+      string(APPEND _make_rules_override "endforeach()\n")
     else()
       message(WARNING "Cannot setup THEROCK_GENERATE_DEBUG_INFO mode for unknown compiler")
     endif()
@@ -1822,6 +1859,7 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
+  file(CONFIGURE OUTPUT "${make_rules_override_file}" CONTENT "${_make_rules_override}" @ONLY ESCAPE_QUOTES)
   file(CONFIGURE OUTPUT "${toolchain_file}" CONTENT "${_toolchain_contents}" @ONLY ESCAPE_QUOTES)
 endfunction()
 
