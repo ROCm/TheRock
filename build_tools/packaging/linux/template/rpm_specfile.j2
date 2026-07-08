@@ -9,6 +9,8 @@
 %global _buildshell /bin/bash
 %global _debugsource_template %{nil}
 %global debug_package %{nil}          # disables -debuginfo
+# Use zstd level 1 for fast compression (19x faster than default gzip-9)
+%define _binary_payload w1.zstdio
 # Move build-id to debuginfo package
 %global _build_id_links alldebug
 %define __brp_mangle_shebangs %{nil}
