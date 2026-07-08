@@ -33,15 +33,8 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # TODO: move this skip logic into the pytest conftest so the wrapper stays thin.
 UNIT_TEST_SKIP_FAMILIES = {"gfx1250"}
 
-FFM_QUICK_EXCLUDE = [
-    "mxf8_gfx1250.yaml",
-    "mxf4_gfx1250.yaml",
-    "sk_sgemm_quick.yaml",
-    "sk_hgemm_quick.yaml",
-    "sk_mxf4gemm_tdm_pap.yaml",
-    "sk_mxf8gemm_tdm_pap.yaml",
-    "b6f4ss_gfx1250.yaml",
-]
+# Per-test timeout (seconds); slow tests are killed, rest continue.
+FFM_PER_TEST_TIMEOUT = int(os.getenv("FFM_PER_TEST_TIMEOUT", "300"))
 
 # TENSILE_NUM_PYTEST_WORKERS: number of pytest-xdist processes running tests in parallel.
 NUM_PYTEST_WORKERS = os.getenv("TENSILE_NUM_PYTEST_WORKERS", "16")
@@ -165,15 +158,13 @@ if common_tests.is_dir() and "gfx1250" in amdgpu_family:
         "pytest",
         "-v",
         "--durations=0",
+        f"--timeout={FFM_PER_TEST_TIMEOUT}",
         "-n",
         NUM_PYTEST_WORKERS,
         str(common_tests),
         "-m",
         "gfx1250",
     ]
-    if test_profile != "nightly" and FFM_QUICK_EXCLUDE:
-        exclude = " and ".join(f"not {t}" for t in FFM_QUICK_EXCLUDE)
-        common_cmd += ["-k", exclude]
     if client_path.is_file():
         common_cmd += [f"--prebuilt-client={client_path}"]
         common_cmd += ["--global-parameters=LibraryFormat='msgpack'"]
