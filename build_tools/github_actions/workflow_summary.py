@@ -47,7 +47,7 @@ import sys
 from dataclasses import dataclass
 
 from github_actions_api import GitHubAPIError, gha_send_request, str2bool
-from build_tools.github_actions.workflow_timing import (
+from workflow_timing import (
     collect_timing_records,
     format_timing_summary,
 )
