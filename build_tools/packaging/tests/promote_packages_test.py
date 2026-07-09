@@ -73,10 +73,12 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from pathlib import Path
 
 from packaging.version import Version
@@ -102,7 +104,9 @@ AGGREGATOR_PKG_DIRS = [
     "torch",
     "torchvision",
     "torchaudio",
-    "triton",
+    # triton is intentionally NOT selected by max-upstream here: the multi-arch
+    # index can publish several triton builds for one RC and torch pins one
+    # exact build. It is resolved from torch's own metadata (resolve_pinned_triton).
 ]
 
 # Per-gfx device wheels: subject to keep-list pruning during multi-arch
@@ -310,6 +314,46 @@ def select_jax_packages(
     return downloads, jax_files
 
 
+def _torch_triton_pin(wheel_path: Path) -> str | None:
+    """The exact triton version torch pins (`Requires-Dist: triton==<ver>`).
+
+    The multi-arch index can publish several triton builds for one RC (e.g.
+    3.6.0, 3.7.0+gitXXXX, 3.7.1+gitYYYY); only the one torch pins is a coherent
+    match, so read it from torch's own metadata rather than assuming newest.
+    """
+    with zipfile.ZipFile(wheel_path) as z:
+        meta = next(n for n in z.namelist() if n.endswith(".dist-info/METADATA"))
+        text = z.read(meta).decode("utf-8", errors="replace")
+    m = re.search(r"^Requires-Dist:\s*triton==([^\s;]+)", text, re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def resolve_pinned_triton(
+    tmp_dir: Path, platform_tag: str, py_tag: str
+) -> tuple[str, str] | None:
+    """Return (base_url, filename) for the triton the downloaded torch pins, or
+    None if torch pins no triton. Raises if the pinned triton is not on the
+    index for this platform/py_tag."""
+    torch_wheels = sorted(tmp_dir.glob("torch-*.whl"))
+    if not torch_wheels:
+        raise RuntimeError("no torch wheel present to resolve the triton pin")
+    torch_wheel = max(torch_wheels, key=lambda p: _upstream_version(p.name))
+    pin = _torch_triton_pin(torch_wheel)
+    if not pin:
+        return None
+    for name in list_index_files("triton"):
+        if (
+            pin in name
+            and platform_tag in name
+            and (not _CP_TAG_RE.search(name) or f"-{py_tag}-" in name)
+        ):
+            return f"{WHL_INDEX}/", name
+    raise RuntimeError(
+        f"{torch_wheel.name} pins triton=={pin} but no matching wheel is "
+        f"published on the index for {platform_tag}/{py_tag}"
+    )
+
+
 def promoted_name(rc_name: str, version: str, final_version: str) -> str:
     return rc_name.replace(version, final_version)
 
@@ -359,7 +403,7 @@ def checkInstallation(dir_path: Path, no_deps: bool = False) -> tuple[bool, str]
     """
     try:
         setup_venv.create_venv(dir_path / ".venv")
-        python_exe = setup_venv.find_venv_python(dir_path / ".venv")
+        python_exe = setup_venv.find_venv_python_exe(dir_path / ".venv")
         if python_exe is None:
             return (
                 False,
@@ -705,6 +749,13 @@ if __name__ == "__main__":
         print(f"Fetching {len(all_downloads)} packages (cache: {cache_dir}) ...")
         for base_url, name in all_downloads:
             fetchPackage(base_url, name, tmp_dir, cache_dir)
+        # triton is picked by torch's pin, not max-upstream, so it is resolved
+        # from the just-downloaded torch wheel and fetched here.
+        triton_entry = resolve_pinned_triton(tmp_dir, platform_tag, py_tag)
+        if triton_entry is not None:
+            print(f"  torch pins triton -> {triton_entry[1]}")
+            fetchPackage(triton_entry[0], triton_entry[1], tmp_dir, cache_dir)
+            downloads = downloads + [triton_entry]
         print(" ...done")
 
         all_rc_files = {n for _, n in downloads}

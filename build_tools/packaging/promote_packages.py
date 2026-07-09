@@ -540,6 +540,7 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
     # carry at most one body line.
     new_lines: list[str] = []
     section_name = ""
+    base_section = ""
     skip_section = False
     default_device_idx: int | None = None
     keep_body_lines: dict[str, str] = {}
@@ -552,8 +553,14 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
             section_match = section_re.match(stripped)
             if section_match:
                 section_name = section_match.group(1)
-                if section_name.startswith("device-") and section_name != "device-all":
-                    arch_token = section_name[len("device-") :]
+                # A section can carry an environment marker, e.g.
+                # `[device-gfx942:sys_platform == "linux"]` for a linux-only arch
+                # (its plain `[device-gfx942]` section is empty and the real dep
+                # lives under the marked one). Strip the marker so the arch is
+                # recognized for both the skip decision and the body-line pass.
+                base_section = section_name.split(":", 1)[0].strip()
+                if base_section.startswith("device-") and base_section != "device-all":
+                    arch_token = base_section[len("device-") :]
                     skip_section = (
                         re.fullmatch(_GFX_ARCH, arch_token) is not None
                         and arch_token not in keep_set
@@ -576,8 +583,8 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
             arch = dep_match.group(1)
 
             # Remember each kept arch's [device-gfx<N>] body for pass 2.
-            if section_name.startswith("device-") and section_name != "device-all":
-                section_arch = section_name[len("device-") :]
+            if base_section.startswith("device-") and base_section != "device-all":
+                section_arch = base_section[len("device-") :]
                 if section_arch in keep_set:
                     if section_arch in keep_body_lines:
                         raise ValueError(
@@ -588,7 +595,7 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
 
             # `[device]` body is the default-arch dep — always kept.
             # Save its index for pass 2 IFF its arch is dropped.
-            if section_name == "device":
+            if base_section == "device":
                 if arch not in keep_set:
                     if default_device_idx is not None:
                         raise ValueError(
