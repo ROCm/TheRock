@@ -102,7 +102,7 @@ if(THEROCK_GENERATE_DEBUG_INFO AND THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAM
       CODE "set(THEROCK_OBJCOPY \"${CMAKE_OBJCOPY}\")"
       CODE "set(THEROCK_READELF \"${CMAKE_READELF}\")"
       CODE "set(THEROCK_STAGE_INSTALL_ROOT \"${THEROCK_STAGE_INSTALL_ROOT}\")"
-      COMPONENT THEROCK_DEBUG_BUILD_ID
+      COMPONENT THEROCK_DEBUG_SYMBOLS
     )
     foreach(target
             ${THEROCK_EXECUTABLE_TARGETS}
@@ -112,15 +112,39 @@ if(THEROCK_GENERATE_DEBUG_INFO AND THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAM
       set(_target_path "$<TARGET_FILE:${target}>")
       install(
         CODE "list(APPEND THEROCK_DEBUG_BUILD_ID_PATHS \"${_target_path}\")"
-        COMPONENT THEROCK_DEBUG_BUILD_ID
+        COMPONENT THEROCK_DEBUG_SYMBOLS
       )
       # Must be built with build-id enabled in order to do debug symbol sep.
       target_link_options("${target}" PRIVATE "-Wl,--build-id")
     endforeach()
     install(
         SCRIPT "${THEROCK_SOURCE_DIR}/cmake/therock_install_linux_build_id_files.cmake"
-        COMPONENT THEROCK_DEBUG_BUILD_ID
+        COMPONENT THEROCK_DEBUG_SYMBOLS
     )
+  endblock()
+elseif(THEROCK_GENERATE_DEBUG_INFO AND WIN32)
+  block(SCOPE_FOR VARIABLES)
+    foreach(target
+            ${THEROCK_EXECUTABLE_TARGETS}
+            ${THEROCK_SHARED_LIBRARY_TARGETS}
+            ${THEROCK_MODULE_TARGETS})
+      if(THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal")
+        add_custom_command(TARGET "${target}" PRE_LINK
+          COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_PDB_FILE_DIR:${target}>/stripped")
+        set(_therock_pdb_file "$<TARGET_PDB_FILE_DIR:${target}>/stripped/$<TARGET_PDB_FILE_NAME:${target}>")
+        target_link_options("${target}" PRIVATE "LINKER:/PDBSTRIPPED:${_therock_pdb_file}")
+        set(_therock_pdb_dest "bin/stripped")
+      else()
+        set(_therock_pdb_file "$<TARGET_PDB_FILE:${target}>")
+        set(_therock_pdb_dest "bin")
+      endif()
+      install(
+        FILES "${_therock_pdb_file}"
+        DESTINATION "${_therock_pdb_dest}"
+        OPTIONAL
+        COMPONENT THEROCK_DEBUG_SYMBOLS
+      )
+    endforeach()
   endblock()
 endif()
 

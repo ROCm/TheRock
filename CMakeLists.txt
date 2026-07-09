@@ -221,13 +221,31 @@ cmake_dependent_option(
 # Debug Options
 ################################################################################
 
-option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
-option(THEROCK_GENERATE_DEBUG_INFO "Enable host-side debug symbol generation" OFF)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  set(_debug_info_default ON)
+else()
+  set(_debug_info_default OFF)
+endif()
+option(THEROCK_GENERATE_DEBUG_INFO "Enable host-side debug symbol generation" ${_debug_info_default})
+
 set(THEROCK_DEBUG_INFO_LEVEL "full" CACHE STRING "Debug information level to generate: 'minimal' or 'full' or 'extra'")
 set_property(CACHE THEROCK_DEBUG_INFO_LEVEL PROPERTY STRINGS "minimal" "full" "extra")
-if(NOT THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal" AND NOT THEROCK_DEBUG_INFO_LEVEL STREQUAL "full" AND NOT THEROCK_DEBUG_INFO_LEVEL STREQUAL "extra")
+if(NOT THEROCK_DEBUG_INFO_LEVEL MATCHES "^(minimal|full|extra)$")
   message(FATAL_ERROR "THEROCK_DEBUG_INFO_LEVEL must be 'minimal' or 'full' or 'extra' (got '${THEROCK_DEBUG_INFO_LEVEL}')")
 endif()
+
+if(WIN32 AND NOT THEROCK_DEBUG_INFO_LEVEL MATCHES "^(minimal|full)$")
+  message(NOTICE "THEROCK_DEBUG_INFO_LEVEL='${THEROCK_DEBUG_INFO_LEVEL}' is not supported on Windows; only 'minimal' or 'full' apply (treated as 'full').")
+endif()
+
+if(WIN32)
+  if(DEFINED THEROCK_SPLIT_DEBUG_INFO AND NOT THEROCK_SPLIT_DEBUG_INFO)
+    message(WARNING "THEROCK_SPLIT_DEBUG_INFO=OFF is not supported on Windows, as Windows does not support embedded debug information. Overriding THEROCK_SPLIT_DEBUG_INFO to ON.")
+  endif()
+  set(THEROCK_SPLIT_DEBUG_INFO ON CACHE BOOL "Enable splitting debug info into dbg artifacts (and stripping primary packages)" FORCE)
+endif()
+option(THEROCK_SPLIT_DEBUG_INFO "Enable splitting debug info into dbg artifacts (and stripping primary packages)" OFF)
+
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)

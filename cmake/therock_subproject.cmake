@@ -458,7 +458,7 @@ function(therock_cmake_subproject_declare target_name)
   # RPATH Executable and Library dir.
   if(NOT ARG_INSTALL_RPATH_EXECUTABLE_DIR)
     if(ARG_INSTALL_DESTINATION)
-      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR ARG_INSTALL_DESTINATION)
+      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "${ARG_INSTALL_DESTINATION}")
       cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
     else()
       set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
@@ -466,8 +466,8 @@ function(therock_cmake_subproject_declare target_name)
   endif()
   if(NOT ARG_INSTALL_RPATH_LIBRARY_DIR)
     if(ARG_INSTALL_DESTINATION)
-      set(ARG_INSTALL_RPATH_LIBRARY_DIR ARG_INSTALL_DESTINATION)
-      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "lib")
+      set(ARG_INSTALL_RPATH_LIBRARY_DIR "${ARG_INSTALL_DESTINATION}")
+      cmake_path(APPEND ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
     else()
       set(ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
     endif()
@@ -832,6 +832,13 @@ function(therock_cmake_subproject_activate target_name)
   # deterministic output.
   if(WIN32)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
+    if(THEROCK_GENERATE_DEBUG_INFO)
+      string(APPEND _init_contents "add_link_options(\"LINKER:/DEBUG:FULL\")\n")
+      # /DEBUG imply omission of some link time optimizations. Re-enable them to get consistent binary behavior as Release
+      # See https://learn.microsoft.com/en-us/cpp/build/reference/debug-generate-debug-info
+      string(APPEND _init_contents "add_link_options(\"$<$<CONFIG:Release,MinSizeRel>:LINKER:/OPT:REF>\")\n")
+      string(APPEND _init_contents "add_link_options(\"$<$<CONFIG:Release,MinSizeRel>:LINKER:/OPT:ICF>\")\n")
+    endif()
   endif()
 
   if(_dep_provider_file)
@@ -876,6 +883,11 @@ function(therock_cmake_subproject_activate target_name)
   set(_prebuilt_file "${_stage_dir}.prebuilt")
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
+
+  # Enforce CMP0141 to ensure CMAKE_MSVC_DEBUG_INFORMATION_FORMAT generates correct compilation flags. (/Z7 for MSVC, -g -gcodeview for GNU)
+  if(WIN32 AND THEROCK_GENERATE_DEBUG_INFO)
+    list(APPEND _cmake_args "-DCMAKE_POLICY_DEFAULT_CMP0141=NEW")
+  endif()
 
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
@@ -1051,7 +1063,8 @@ function(therock_cmake_subproject_activate target_name)
 
     # stage install target.
     set(_install_strip_option)
-    if(THEROCK_GENERATE_DEBUG_INFO AND THEROCK_SPLIT_DEBUG_INFO)
+    # Windows cannot store debug symbols embedded in the binary, all symbols are split.
+    if(THEROCK_GENERATE_DEBUG_INFO AND THEROCK_SPLIT_DEBUG_INFO AND NOT WIN32)
       set(_install_strip_option "--strip")
     endif()
     # Set up install command(s) for optional components. If INSTALL_COMPONENTS is specified, run cmake
@@ -1707,18 +1720,12 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
 
   # Customize debug info generation.
-  if(THEROCK_GENERATE_DEBUG_INFO)
-    if(MSVC AND NOT compiler_toolchain )
-      # Non-toolchain MSVC bootstrap (cl.exe / clang-cl). /Z7 comes from
-      # CMAKE_MSVC_DEBUG_INFORMATION_FORMAT; link emits the PDB, and 'minimal'
-      # also emits a stripped public PDB.
-      string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /DEBUG:FULL\")\n")
-      string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /DEBUG:FULL\")\n")
-      if(THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal")
-        string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /PDBSTRIPPED:stripped\")\n")
-        string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /PDBSTRIPPED:stripped\")\n")
-      endif()
-    elseif((compiler_toolchain OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")))
+  # Windows is handled outside this toolchain file:
+  # * Compilation: CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded emits /Z7 for MSVC-like driver and -g -Xclang -gcodeview for GNU-like driver.
+  # * Linking: /DEBUG:FULL (and /PDBSTRIPPED for 'minimal') is added in _init.cmake and the global post-subproject hook.
+  # Only non-Windows (DWARF) needs per-config -g<level> injection here.
+  if(THEROCK_GENERATE_DEBUG_INFO AND NOT WIN32)
+    if(compiler_toolchain OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
       if(THEROCK_DEBUG_INFO_LEVEL STREQUAL "minimal")
         set(_therock_debug_g_level "-g1")
       elseif(THEROCK_DEBUG_INFO_LEVEL STREQUAL "full")
@@ -1726,28 +1733,13 @@ function(_therock_cmake_subproject_setup_toolchain
       elseif(THEROCK_DEBUG_INFO_LEVEL STREQUAL "extra")
         set(_therock_debug_g_level "-g3")
       endif()
-      # GNU-style: the amd-llvm/amd-hip toolchain (clang/clang++ GNU driver) on
-      # any OS, plus a non-toolchain GCC/clang or mingw bootstrap.
-      #
-      # To make THEROCK_DEBUG_INFO_LEVEL authoritative we must (a) remove
-      # CMake's built-in -g and (b) append our own flags so they win, while
-      # leaving every other platform default in place. This cannot be done from
-      # the toolchain file directly:
-      #   * Assigning CMAKE_<LANG>_FLAGS_<CONFIG> defines a normal variable that
-      #     shadows the value CMake initializes from
-      #     CMAKE_<LANG>_FLAGS_<CONFIG>_INIT, discarding the platform defaults.
-      #     On Windows those defaults carry the MSVC runtime-library selection
-      #     (e.g. -D_MT -D_DLL --dependent-lib=msvcrt[d]); losing it produces
-      #     objects with no CRT default-lib directive, which breaks the compiler
-      #     ABI check with "undefined symbol: mainCRTStartup".
-      #   * Appending to CMAKE_<LANG>_FLAGS_<CONFIG>_INIT from the toolchain runs
-      #     before the platform populates them, so the platform's -g is appended
-      #     after ours and wins (our level is ignored).
-      # Emit this in the make-rules override (see the _make_rules_override
-      # declaration): it runs after the platform has populated the *_INIT
-      # variables but before the per-config cache variables are created, so we
-      # can strip the default -g and append our flags last, preserving the
-      # runtime-library and other platform defaults.
+      # Strip CMake's built-in -g and append ours last. We can only do this in
+      # CMAKE_USER_MAKE_RULES_OVERRIDE because assigning CMAKE_<LANG>_FLAGS_<CONFIG>
+      # directly shadows the value CMake composes from CMAKE_<LANG>_FLAGS_<CONFIG>_INIT (discarding platform
+      # defaults), and appending to the _INIT vars from the toolchain runs before
+      # the platform populates them (so the platform's -g lands after ours and
+      # takes precedence). The override runs after the platform has composed the _INIT vars
+      # but before the cache vars are created.
       string(APPEND _make_rules_override "foreach(_therock_lang C CXX)\n")
       string(APPEND _make_rules_override "  if(DEFINED CMAKE_\${_therock_lang}_FLAGS_DEBUG_INIT AND NOT _THEROCK_DEBUG_INFO_APPLIED_\${_therock_lang})\n")
       string(APPEND _make_rules_override "    set(_THEROCK_DEBUG_INFO_APPLIED_\${_therock_lang} TRUE)\n")
