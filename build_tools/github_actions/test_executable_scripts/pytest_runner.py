@@ -12,17 +12,13 @@ for components whose tests are Python/pytest rather than gtest/ctest.
 Categories are defined in a test_categories.yaml shipped next to the installed
 tests. Each category selects a set of test directories (``test_paths``) and an
 optional pytest marker expression (``pytest_markers`` / ``exclude_markers``).
-GPU-architecture exclusions are applied via ``skip-gfxXXXX`` markers, and tests
-are sharded across CI runners using the same modulo scheme as GTest's
-GTEST_SHARD_INDEX.
+GPU-architecture exclusions are applied via ``skip-gfxXXXX`` markers.
 
 Environment variables used:
 TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
 TEST_TYPE: Test category to run (quick, standard, comprehensive, full). Defaults
     to "quick"; invalid values fall back to "quick".
 AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
-SHARD_INDEX: Current shard number (1-indexed, like GTest). Defaults to 1.
-TOTAL_SHARDS: Total number of shards for test distribution. Defaults to 1.
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
 """
@@ -118,8 +114,7 @@ def build_marker_expression(category_config, gpu_arch):
     return marker_expr
 
 
-def collect_pytest_tests(test_paths, marker_expr, cwd, env):
-    """Collect pytest node IDs across all of a category's test paths."""
+def run_pytest(test_paths, marker_expr, timeout, num_workers, cwd, env):
     existing = [p for p in test_paths if (cwd / p).exists()]
     missing = [p for p in test_paths if not (cwd / p).exists()]
     for p in missing:
@@ -128,51 +123,9 @@ def collect_pytest_tests(test_paths, marker_expr, cwd, env):
         logging.error("None of the configured test paths exist; nothing to run.")
         sys.exit(1)
 
-    cmd = ["pytest", "--collect-only", "-q", *existing]
+    cmd = ["pytest", *existing, "-v", "--color=yes"]
     if marker_expr:
         cmd.extend(["-m", marker_expr])
-
-    logging.info(
-        f"Collecting tests from {existing} with markers: {marker_expr or 'none'}"
-    )
-    result = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True)
-    if result.returncode not in (0, 5):  # 5 == no tests collected
-        logging.error("Failed to collect tests")
-        logging.error(f"Command: {' '.join(cmd)}")
-        logging.error(f"Exit code: {result.returncode}")
-        if result.stdout:
-            logging.error(f"STDOUT:\n{result.stdout}")
-        if result.stderr:
-            logging.error(f"STDERR:\n{result.stderr}")
-        sys.exit(1)
-
-    test_ids = []
-    for line in result.stdout.splitlines():
-        if "::" in line and not line.startswith((" ", "<", "=", "-", "!")):
-            test_ids.append(line.strip())
-    logging.info(f"Collected {len(test_ids)} tests")
-    return test_ids
-
-
-def shard_tests(test_ids, shard_index, total_shards):
-    """Distribute tests across shards using GTest-style modulo arithmetic."""
-    if total_shards <= 1:
-        logging.info("Single shard - running all tests")
-        return test_ids
-    shard_idx_zero = shard_index - 1
-    sharded = [t for i, t in enumerate(test_ids) if i % total_shards == shard_idx_zero]
-    logging.info(
-        f"Shard {shard_index}/{total_shards}: {len(sharded)}/{len(test_ids)} tests assigned"
-    )
-    return sharded
-
-
-def run_pytest(test_ids, timeout, num_workers, cwd, env):
-    if not test_ids:
-        logging.warning("No tests to run in this shard")
-        return 0
-
-    cmd = ["pytest", *test_ids, "-v", "--color=yes"]
 
     # pytest-timeout / pytest-xdist are optional; only pass their flags when the
     # plugin is importable so this runner works in minimal environments too.
@@ -187,7 +140,7 @@ def run_pytest(test_ids, timeout, num_workers, cwd, env):
         logging.warning("pytest-xdist not installed; running serially")
 
     logging.info(
-        f"Running pytest with {len(test_ids)} tests "
+        f"Running pytest on {existing} with markers: {marker_expr or 'none'} "
         f"(timeout={timeout}s, workers={num_workers}) in {cwd}"
     )
     return subprocess.run(cmd, cwd=str(cwd), env=env, check=False).returncode
@@ -234,8 +187,6 @@ if __name__ == "__main__":
     TEST_COMPONENT_NAME = get_env_value("TEST_COMPONENT")
     TEST_TYPE = get_env_value("TEST_TYPE", "quick")
     AMDGPU_FAMILIES = get_env_value("AMDGPU_FAMILIES")
-    SHARD_INDEX = int(get_env_value("SHARD_INDEX", 1))
-    TOTAL_SHARDS = int(get_env_value("TOTAL_SHARDS", 1))
     THEROCK_BIN_DIR = get_env_value("THEROCK_BIN_DIR")
 
     if not TEST_COMPONENT_NAME:
@@ -257,7 +208,6 @@ if __name__ == "__main__":
 
     logging.info(f"Component: {TEST_COMPONENT_NAME} ({component_path})")
     logging.info(f"Test category: {TEST_TYPE}")
-    logging.info(f"Shard: {SHARD_INDEX}/{TOTAL_SHARDS}")
 
     config = load_test_categories_yaml(component_path / "test_categories.yaml")
     category_config = config.get("test_categories", {}).get(TEST_TYPE)
@@ -283,7 +233,6 @@ if __name__ == "__main__":
         env[key] = value
         logging.info(f"Set environment variable: {key}={value}")
 
-    all_test_ids = collect_pytest_tests(test_paths, marker_expr, component_path, env)
-    sharded_test_ids = shard_tests(all_test_ids, SHARD_INDEX, TOTAL_SHARDS)
-
-    sys.exit(run_pytest(sharded_test_ids, timeout, num_workers, component_path, env))
+    sys.exit(
+        run_pytest(test_paths, marker_expr, timeout, num_workers, component_path, env)
+    )

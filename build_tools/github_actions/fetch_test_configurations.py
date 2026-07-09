@@ -221,12 +221,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": {
-                "quick": 1,
-                "standard": 2,
-                "comprehensive": 4,
-                "full": 4,
-            }
+            "linux": 1,
         },
     },
     "hipblas": {
@@ -871,27 +866,13 @@ def run():
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
             # Note: Benchmarks always have total_shards=1 (no sharding)
-            # Support both simple and test-type-specific sharding configurations:
-            #   Simple:             total_shards_dict[platform] = int
-            #   Test-type-specific: total_shards_dict[platform][test_type] = int
-            # The latter lets pytest-based components (e.g. tensilelite) scale shard
-            # counts per category instead of a single number across all categories.
-            shards_config = job_config_data.get("total_shards_dict", {}).get(
-                platform, 1
-            )
-            if isinstance(shards_config, dict):
-                total_shards = shards_config.get(test_type, 1)
-            else:
-                total_shards = shards_config
-
+            total_shards = job_config_data.get("total_shards_dict", {}).get(platform, 1)
             job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
             job_config_data["total_shards"] = total_shards
 
             # If the test type is quick tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            # Skip this override when the component already declares per-category
-            # shard counts (it has set quick explicitly above).
-            if test_type == "quick" and not isinstance(shards_config, dict):
+            if test_type == "quick":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
