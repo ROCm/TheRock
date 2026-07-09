@@ -103,9 +103,11 @@ def collect_timing_records(
             job_name = str(job.get("name") or job.get("id") or "unknown-job")
             started_at = job.get("started_at")
             completed_at = job.get("completed_at")
-            runner_label = str(
-                job.get("runner_name") or job.get("labels", ["unknown"])[0]
+            labels = job.get("labels") or []
+            runner_label = job.get("runner_name") or (
+                labels[0] if labels else "unknown"
             )
+            runner_label = str(runner_label)
 
             started_dt = _parse_iso8601(started_at)
             completed_dt = _parse_iso8601(completed_at)

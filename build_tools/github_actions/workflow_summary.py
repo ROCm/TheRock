@@ -247,15 +247,18 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     jobs = parse_needs_json(args.needs_json)
+    failed, ok = evaluate_results(jobs)
     timing_records = []
     if args.github_repository and args.github_run_id and os.environ.get("GITHUB_TOKEN"):
-        timing_records = collect_timing_records(
-            repository=args.github_repository,
-            run_id=args.github_run_id,
-            run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
-            token=os.environ["GITHUB_TOKEN"],
-        )
-    failed, ok = evaluate_results(jobs)
+        try:
+            timing_records = collect_timing_records(
+                repository=args.github_repository,
+                run_id=args.github_run_id,
+                run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
+                token=os.environ["GITHUB_TOKEN"],
+            )
+        except Exception as exc:
+            print(f"\n(Could not collect workflow timing: {exc})")
 
     print(f"Checking status for {len(jobs)} job(s):")
     for job in jobs:
