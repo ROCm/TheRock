@@ -46,9 +46,9 @@ class S3BucketConfig:
 
 
 s3_bucket_configs = [
-    # CI (self-hosted runners include credentials for therock-ci-artifacts-external)
+    # CI (external repos use OIDC with therock-ci-external; fork PRs use runner base credentials)
     S3BucketConfig("therock-ci-artifacts", iam_role="therock-ci"),
-    S3BucketConfig("therock-ci-artifacts-external", iam_role=None),
+    S3BucketConfig("therock-ci-artifacts-external", iam_role="therock-ci-external"),
     # Release type "dev"
     S3BucketConfig("therock-dev-artifacts", iam_role="therock-dev"),
     S3BucketConfig("therock-dev-packages", iam_role="therock-dev"),
@@ -216,4 +216,18 @@ def get_artifacts_bucket_config_for_workflow_run(
         is_pr_from_fork=is_pr_from_fork,
     )
     _log(f"  bucket: {config.name}")
+
+    # For fork PRs, skip OIDC and use runner base credentials instead.
+    # Fork PRs cannot assume IAM roles via OIDC because they don't have
+    # the required trust relationship. Return a config without an IAM role
+    # so the configure-aws-credentials step is skipped.
+    if is_pr_from_fork and config.iam_role is not None:
+        _log("  Fork PR detected, skipping OIDC (using runner base credentials)")
+        config = S3BucketConfig(
+            name=config.name,
+            region=config.region,
+            iam_account=config.iam_account,
+            iam_role=None,
+        )
+
     return config

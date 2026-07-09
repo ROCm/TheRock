@@ -136,26 +136,67 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
 
 
 def find_available_artifacts(
-    artifact_names: Set[str],
-    target_families: List[str],
-    available: Set[str],
-) -> List[str]:
+    artifact_names: set[str],
+    target_families: list[str],
+    available: set[str],
+    excluded_components: set[str] | None = None,
+) -> list[str]:
     """Find which artifacts exist in the available set.
 
     Iterates artifact_names × target_families × components × extensions,
     returning filenames that are present in `available`. Prefers .tar.zst
     over .tar.xz when both exist.
     """
+    excluded_components = excluded_components or set()
     matched = []
     for artifact_name in sorted(artifact_names):
         for tf in target_families:
             for comp in ARTIFACT_COMPONENTS:
+                if comp in excluded_components:
+                    continue
                 for ext in ARTIFACT_EXTENSIONS:
                     filename = f"{artifact_name}_{comp}_{tf}{ext}"
                     if filename in available:
                         matched.append(filename)
                         break  # Found this artifact, don't check other extensions
     return matched
+
+
+def parse_excluded_components(raw_components: str) -> set[str]:
+    """Parse and validate component names passed to --exclude-components."""
+    components = {
+        comp.strip()
+        for comp in raw_components.replace(";", ",").split(",")
+        if comp.strip()
+    }
+    invalid_components = components - set(ARTIFACT_COMPONENTS)
+    if invalid_components:
+        raise ValueError(
+            "Invalid artifact component(s): "
+            f"{', '.join(sorted(invalid_components))}. "
+            f"Valid components are: {', '.join(ARTIFACT_COMPONENTS)}"
+        )
+    return components
+
+
+def parse_excluded_artifacts(
+    raw_artifacts: str,
+    valid_artifacts: set[str],
+) -> set[str]:
+    """Parse and validate artifact names passed to --exclude-artifacts."""
+    artifacts = {
+        artifact.strip()
+        for artifact in raw_artifacts.replace(";", ",").split(",")
+        if artifact.strip()
+    }
+    invalid_artifacts = artifacts - valid_artifacts
+    if invalid_artifacts:
+        raise ValueError(
+            "Invalid artifact name(s): "
+            f"{', '.join(sorted(invalid_artifacts))}. "
+            f"Valid artifacts are: {', '.join(sorted(valid_artifacts))}"
+        )
+    return artifacts
 
 
 # =============================================================================
@@ -334,6 +375,16 @@ def do_fetch(args: argparse.Namespace):
         )
 
     target_families = parse_target_families(args)
+    excluded_artifacts = parse_excluded_artifacts(
+        args.exclude_artifacts,
+        set(topology.artifacts.keys()),
+    )
+    if excluded_artifacts:
+        log(f"Excluding artifacts: {', '.join(sorted(excluded_artifacts))}")
+        inbound -= excluded_artifacts
+        if not inbound:
+            log("No artifacts remain after exclusions")
+            return
 
     # Create backend
     backend = create_backend_from_env(
@@ -355,7 +406,16 @@ def do_fetch(args: argparse.Namespace):
     )
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    matched_filenames = find_available_artifacts(inbound, target_families, available)
+    excluded_components = parse_excluded_components(args.exclude_components)
+    if excluded_components:
+        log(f"Excluding artifact components: {', '.join(sorted(excluded_components))}")
+
+    matched_filenames = find_available_artifacts(
+        inbound,
+        target_families,
+        available,
+        excluded_components=excluded_components,
+    )
 
     download_requests = [
         DownloadRequest(
@@ -1082,6 +1142,19 @@ def main(argv: Optional[List[str]] = None):
         type=int,
         default=None,
         help="Number of concurrent extractions (default: auto)",
+    )
+    fetch_parser.add_argument(
+        "--exclude-components",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact components to exclude "
+        f"when fetching. Valid components: {', '.join(ARTIFACT_COMPONENTS)}",
+    )
+    fetch_parser.add_argument(
+        "--exclude-artifacts",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact names to exclude when fetching",
     )
     fetch_parser.set_defaults(func=do_fetch)
 

@@ -124,6 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
+option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -158,10 +159,6 @@ cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
 therock_enable_external_source("rocgdb" "${THEROCK_SOURCE_DIR}/debug-tools/rocgdb/source" OFF)
 therock_enable_external_source("amd-dbgapi" "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocdbgapi" OFF)
 therock_enable_external_source("rocr-debug-agent" "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent" OFF)
-
-# Allow to specify alternative source locations instead of using
-# repositories tracked in TheRock's `.gitmodules`.
-therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel" OFF)
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
@@ -499,6 +496,10 @@ add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)
 add_subdirectory(debug-tools)
+# media-libs (rocdecode/rocjpeg) must be added before profiler: rocprofiler-sdk
+# performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
+# feature detection.
+add_subdirectory(media-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -510,7 +511,6 @@ add_subdirectory(comm-libs)
 add_subdirectory(storage-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)
