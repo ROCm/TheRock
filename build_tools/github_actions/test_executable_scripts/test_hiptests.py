@@ -177,8 +177,6 @@ def execute_tests(env):
         f"{timeout}",
         "--repeat",
         "until-pass:3",
-        "--parallel",
-        "4",
     ]
 
     # If quick tests are enabled, run only the smoke test subset
