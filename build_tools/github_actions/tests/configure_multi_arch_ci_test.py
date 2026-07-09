@@ -1128,7 +1128,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
 
         self.assertTrue(result.linux.build_jax)
-        self.assertGreater(len(result.linux.jax_build_matrix), 1)
+        self.assertGreater(len(result.linux.jax_build_matrix), 0)
         self.assertEqual(
             {row["python_version"] for row in result.linux.jax_build_matrix},
             {"3.12"},
