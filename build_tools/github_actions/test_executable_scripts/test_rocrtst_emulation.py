@@ -62,6 +62,14 @@ TEST_TO_IGNORE = {
     },
 }
 
+# Tests that never pass under rocjitsu emulation, regardless of family: the
+# emulator does not implement cross-process IPC memory handles or deallocation
+# notifier callbacks. These are always excluded from the emulated run.
+EMULATION_UNSUPPORTED_TESTS = [
+    "rocrtstFunc.IPC",
+    "rocrtstFunc.Deallocation_Notifier_Test",
+]
+
 # Reduced set run by default (non-"full"). Emulation is slow, so keep the default
 # CI footprint small; set EMULATION_TEST_TYPE=full to run the entire suite.
 QUICK_TESTS = [
@@ -75,9 +83,7 @@ QUICK_TESTS = [
     "rocrtstFunc.Reference_Count",
     "rocrtstFunc.Signal_Create_Concurrently",
     "rocrtstFunc.Signal_Destroy_Concurrently",
-    "rocrtstFunc.IPC",
     "rocrtstFunc.AgentProp_UUID",
-    "rocrtstFunc.Deallocation_Notifier_Test",
     "rocrtstFunc.Memory_Atomic_Add_Test",
     "rocrtstFunc.Memory_Atomic_Xchg_Test",
 ]
@@ -98,10 +104,12 @@ def main():
         )
         return
 
-    exclude_filter = "-"
+    # Always exclude the emulator-unsupported tests, plus any family-specific
+    # ignores, from both the quick and full runs.
+    ignored_tests = list(EMULATION_UNSUPPORTED_TESTS)
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
-        ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
-        exclude_filter += ":".join(ignored_tests)
+        ignored_tests += TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    exclude_filter = "-" + ":".join(ignored_tests)
 
     # Which subset to run. Configurable via EMULATION_TEST_TYPE and defaulting
     # to the reduced (non-full) set so emulation runs stay fast by default.
