@@ -39,30 +39,34 @@ not carry brittle hardcoded per-arch package lists that rot every release.
 PREREQUISITES
   pip install -r ./build_tools/packaging/requirements.txt
 
-USAGE
-  # Full run against the latest RC auto-discovered from the multi-arch index:
-  python ./build_tools/packaging/tests/promote_packages_test.py
+The RC version is pinned explicitly (--version is required) so a run is
+deterministic for the release branch under test rather than tracking whatever
+is newest in the index that day.
 
-  # Pin a version and cache downloads between runs:
+USAGE
+  # Pin the RC for the release branch under test:
+  python ./build_tools/packaging/tests/promote_packages_test.py --version 7.14.0rc1
+
+  # Cache downloads between runs:
   python ./build_tools/packaging/tests/promote_packages_test.py \
       --version 7.14.0rc1 --cache-dir /tmp/promote_cache
 
   # Choose which gfx arch(es) to keep for the multi-arch keep-list scenario:
   python ./build_tools/packaging/tests/promote_packages_test.py \
-      --keep-arch gfx942 --extra-arch gfx1201
+      --version 7.14.0rc1 --keep-arch gfx942 --extra-arch gfx1201
+
+The therock-dist multi-arch tarball is covered too: its name follows the
+fixed `therock-dist-linux-multiarch-<version>.tar.gz` convention, so it is
+constructed directly (no dependency on the JS-rendered tarball-multi-arch/
+directory listing).
 
 OPEN QUESTIONS (tracked in ROCm/TheRock#6266 follow-up; resolve before merge)
-  - Version baseline: auto-discover latest RC (current default) vs. pin a known
-    RC per release branch? Auto-discover keeps the test current but makes runs
-    non-deterministic across days.
   - Should the run assert on a fixed arch set, or accept whatever the index
-    currently publishes for the chosen gfx targets?
-  - therock-dist-* multi-arch tarball: include it in the promotion set once the
-    tarball-multi-arch/ listing exposes a stable, enumerable name (its directory
-    listing is JS-rendered today).
+    currently publishes for the chosen gfx targets? (Currently dynamic.)
 """
 
 import argparse
+import io
 import os
 import platform as platform_module
 import re
@@ -86,6 +90,7 @@ import setup_venv
 
 PRERELEASE_BASE = "https://rocm.prereleases.amd.com"
 WHL_INDEX = f"{PRERELEASE_BASE}/whl-multi-arch"
+TARBALL_INDEX = f"{PRERELEASE_BASE}/tarball-multi-arch"
 
 # Arch-agnostic packages: always promoted, never pruned by the keep-list. Their
 # per-package index page links back to files hosted at the WHL_INDEX root.
@@ -131,6 +136,23 @@ def _http_get(url: str) -> str:
         return resp.read().decode("utf-8", errors="replace")
 
 
+def _url_exists(url: str) -> bool:
+    """Cheap existence probe: open the connection and read a single byte, then
+    close, so we never pull the whole (multi-GB) tarball just to confirm it is
+    published."""
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            resp.read(1)
+            return resp.status == 200
+    except urllib.error.HTTPError as e:
+        # The prerelease CDN denies bucket listing, so a missing object comes
+        # back as 403 (CloudFront masking non-existence), not 404. Treat both
+        # as "not published" rather than a hard error.
+        if e.code in (403, 404):
+            return False
+        raise
+
+
 def list_index_files(pkg_dir: str) -> list[str]:
     """Return the real (decoded) filenames listed under a package index dir.
 
@@ -150,20 +172,6 @@ def list_index_files(pkg_dir: str) -> list[str]:
         if name.endswith(".whl") or name.endswith(".tar.gz"):
             names.add(name)
     return sorted(names)
-
-
-def discover_latest_rc() -> Version:
-    """Find the newest `X.Y.ZrcN` published for the `rocm` sdist."""
-    candidates = []
-    for name in list_index_files("rocm"):
-        m = re.search(r"rocm-(\d+\.\d+\.\d+rc\d+)\.tar\.gz", name)
-        if m:
-            candidates.append(Version(m.group(1)))
-    if not candidates:
-        raise RuntimeError(
-            f"Could not discover any rocm RC version under {WHL_INDEX}/rocm/"
-        )
-    return max(candidates)
 
 
 def _cp_tags(pkg_dir: str, version: str, platform_tag: str) -> set[str]:
@@ -516,6 +524,57 @@ def checkPromoteJax(
     return ok
 
 
+def _write_placeholder_targz(path: Path) -> None:
+    """A minimal valid .tar.gz stand-in. promote_targz_tarball renames the
+    therock-dist tarball by filename and never opens it, so the contents are
+    irrelevant -- this avoids pulling the real multi-GB artifact."""
+    with tarfile.open(path, "w:gz") as tar:
+        data = b"placeholder\n"
+        info = tarfile.TarInfo(name="README")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+
+
+def checkPromoteTarball(version: str, final_version: Version) -> bool:
+    """The therock-dist multi-arch tarball is promoted by a filename-based
+    rc->final rename (promote_targz_tarball), not by repacking. Its name follows
+    the fixed `therock-dist-linux-multiarch-<version>.tar.gz` convention, so we
+    construct it directly rather than scraping the JS-rendered tarball listing.
+
+    We (1) confirm the RC tarball is really published under tarball-multi-arch/
+    via a cheap single-byte probe, then (2) stage a local stand-in with that exact
+    name and assert promotion renames it to the final version, dropping the rc
+    suffix. A real multi-GB download is unnecessary because promotion of these
+    tarballs never inspects their contents.
+    """
+    _banner("TEST: promotion of the therock-dist multi-arch tarball (should SUCCEED)")
+    rc_name = f"therock-dist-linux-multiarch-{version}.tar.gz"
+    fin_name = f"therock-dist-linux-multiarch-{final_version}.tar.gz"
+    url = f"{TARBALL_INDEX}/{rc_name}"
+    if not _url_exists(url):
+        print(f"[SKIP] {rc_name} not published at {url}; skipping.")
+        _banner("TEST DONE: promote tarball. Result: SKIPPED")
+        return True
+    print(f"  confirmed published: {url}")
+
+    ok = True
+    with tempfile.TemporaryDirectory(prefix="PromoteTest-Tarball-") as tmp:
+        tmp_dir = Path(tmp)
+        _write_placeholder_targz(tmp_dir / rc_name)
+        promote_packages.main(tmp_dir, delete=True)
+        produced = {p.name for p in tmp_dir.glob("*")}
+        if fin_name not in produced:
+            print(
+                f"\n[ERROR] expected {fin_name} after promotion; got {sorted(produced)}"
+            )
+            ok = False
+        elif rc_name in produced:
+            print(f"\n[ERROR] rc tarball {rc_name} survived promotion")
+            ok = False
+    _banner("TEST DONE: promote tarball. Result: " + ("SUCCESS" if ok else "FAILURE"))
+    return ok
+
+
 def checkPartialPromotion(
     dir_path: Path,
     expected_version: Version,
@@ -579,8 +638,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--version",
-        default=None,
-        help="RC version to test (e.g. 7.14.0rc1). Default: auto-discover latest.",
+        required=True,
+        help=(
+            "RC version to test (e.g. 7.14.0rc1). Pin the RC for the release "
+            "branch under test so runs are deterministic across days."
+        ),
     )
     parser.add_argument(
         "--keep-arch",
@@ -606,7 +668,7 @@ if __name__ == "__main__":
     if cache_dir is not None:
         cache_dir.mkdir(parents=True, exist_ok=True)
 
-    rc_version = Version(p.version) if p.version else discover_latest_rc()
+    rc_version = Version(p.version)
     rc_str = str(rc_version)
     fin_str = rc_str.split("rc")[0]
     final_version = Version(fin_str)
@@ -690,13 +752,20 @@ if __name__ == "__main__":
         )
         res_jax = checkPromoteJax(tmp_dir, final_version, jax_files, expected_jax)
 
-        _banner("SUMMARY")
-        print(f"checkPromoteEverything:  {'SUCCESS' if res_everything else 'FAILURE'}")
-        print(f"checkPromoteMultiArch:   {'SUCCESS' if res_multi else 'FAILURE'}")
-        print(f"checkPromoteJax:         {'SUCCESS' if res_jax else 'FAILURE'}")
-        print(f"checkPromoteOnlyRocm:    {'SUCCESS' if res_only_rocm else 'FAILURE'}")
-        print(f"checkPromoteOnlyTorch:   {'SUCCESS' if res_only_torch else 'FAILURE'}")
-        print("=" * 81)
+    # The tarball scenario stages its own stand-in and does not use the fetched
+    # wheel set, so it runs outside the download tempdir.
+    res_tarball = checkPromoteTarball(rc_str, final_version)
 
-        if not all([res_everything, res_multi, res_jax, res_only_rocm, res_only_torch]):
-            sys.exit(1)
+    _banner("SUMMARY")
+    print(f"checkPromoteEverything:  {'SUCCESS' if res_everything else 'FAILURE'}")
+    print(f"checkPromoteMultiArch:   {'SUCCESS' if res_multi else 'FAILURE'}")
+    print(f"checkPromoteJax:         {'SUCCESS' if res_jax else 'FAILURE'}")
+    print(f"checkPromoteTarball:     {'SUCCESS' if res_tarball else 'FAILURE'}")
+    print(f"checkPromoteOnlyRocm:    {'SUCCESS' if res_only_rocm else 'FAILURE'}")
+    print(f"checkPromoteOnlyTorch:   {'SUCCESS' if res_only_torch else 'FAILURE'}")
+    print("=" * 81)
+
+    if not all(
+        [res_everything, res_multi, res_jax, res_tarball, res_only_rocm, res_only_torch]
+    ):
+        sys.exit(1)
