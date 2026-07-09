@@ -1324,3 +1324,39 @@ class BuildTopology:
     def get_all_stage_names(self) -> Set[str]:
         """Get all build stage names."""
         return set(self.build_stages.keys())
+
+    def filter_projects_for_stage(
+        self,
+        project_names: List[str],
+        stage_name: str,
+        build_dir: Optional[Path] = None,
+    ) -> List[str]:
+        """Filter projects to only those produced by a specific stage.
+
+        This enables stage-specific project routing: when building multiple
+        projects across different stages, each stage only gets the projects
+        it actually produces.
+
+        Args:
+            project_names: List of project/subproject names to filter
+            stage_name: Stage to filter for
+            build_dir: Optional build directory with artifact_subprojects.json
+
+        Returns:
+            Filtered list of project names that belong to this stage
+        """
+        if stage_name not in self.build_stages:
+            return []
+
+        # Get artifacts produced by this stage (not inbound deps)
+        produced_artifacts = self.get_produced_artifacts(stage_name)
+
+        # Resolve each project and check if its artifact is produced by this stage
+        alias_map = self.get_alias_to_artifact_map(build_dir)
+        filtered: List[str] = []
+        for project in project_names:
+            artifact_name = alias_map.get(project.lower())
+            if artifact_name and artifact_name in produced_artifacts:
+                filtered.append(project)
+
+        return filtered

@@ -188,8 +188,27 @@ def generate_cmake_args(
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
     # Get features to enable
-    # --projects narrows down features; --stage alone enables all stage features
-    if project_names:
+    # When both --stage and --projects are specified, filter projects to only
+    # those produced by this stage. This enables stage-specific routing where
+    # each stage only builds the projects it's responsible for.
+    if stage_name and project_names:
+        # Filter to projects produced by this stage
+        filtered_projects = topology.filter_projects_for_stage(
+            project_names, stage_name, build_dir
+        )
+        if filtered_projects:
+            features = get_project_features(
+                topology,
+                filtered_projects,
+                platform_name=platform_name,
+                build_dir=build_dir,
+            )
+        else:
+            # No projects for this stage - enable stage defaults
+            features = get_stage_features(
+                topology, stage_name, platform_name=platform_name
+            )
+    elif project_names:
         features = get_project_features(
             topology, project_names, platform_name=platform_name, build_dir=build_dir
         )
