@@ -246,6 +246,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "multi_arch_build_native_linux_packages.yml",
     "multi_arch_build_portable_linux_artifacts.yml",
     "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
+    "multi_arch_build_linux_jax_wheels_ci.yml",
     "multi_arch_build_portable_linux.yml",
     "multi_arch_build_windows_artifacts.yml",
     "multi_arch_build_windows_pytorch_wheels_ci.yml",
