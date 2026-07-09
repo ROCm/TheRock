@@ -7,9 +7,9 @@
   },
   "configurePresets": [
     {
-      "name": "linux-release-package",
-      "displayName": "Linux release packages",
-      "description": "Ninja generator, default compiler, RelWithDebInfo for most subprojects",
+      "name": "linux-release",
+      "displayName": "Linux release builds preset",
+      "description": "Ninja generator, default compiler, Release with split debug info",
       "generator": "Ninja",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -102,7 +102,7 @@
     {
       "name": "windows-base",
       "displayName": "Windows base preset",
-      "description": "Ninja generator, MSVC (cl.exe), x64 architecture",
+      "description": "Ninja generator, MSVC (cl.exe), x64 architecture, Release with debug info",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "architecture": {
