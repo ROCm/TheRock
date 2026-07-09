@@ -11,4 +11,11 @@ include = [
   # Test config TOMLs (e.g. HIP_KERNEL_ENGINE.toml) consumed by the cross-provider
   # integration suite (hipdnn_integration_tests --test-config).
   "bin/hip_kernel_provider/*.toml",
+  # rocKE IR parity gate: Python test scripts, harness, golden data, and the
+  # rocke Python package they import.
+  "bin/hip_kernel_provider/*.py",
+  "bin/hip_kernel_provider/golden/**",
+  "bin/hip_kernel_provider/rocke/**",
+  # rocKE pytest suite
+  "bin/hip_kernel_provider/tests/**",
 ]
