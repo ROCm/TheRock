@@ -359,13 +359,15 @@ def get_rocm_init_contents(args: argparse.Namespace):
         WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
     )
     library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
-    return textwrap.dedent(f"""
+    return textwrap.dedent(
+        f"""
         def initialize():
             import rocm_sdk
             rocm_sdk.initialize_process(
                 preload_shortnames=[{library_preloads_formatted}],
                 check_version='{sdk_version}')
-        """)
+        """
+    )
 
 
 ROCM_NEEDED_LIBRARY_PREFIXES = (
