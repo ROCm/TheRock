@@ -33,7 +33,7 @@ therock_declare_flag(
 
 therock_declare_flag(
   NAME HIPKERNELPROVIDER_ENABLE_ROCKE
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON  # DRY-RUN: exercise rocKE AOT+kpack+split; revert before merge
   DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"
   CMAKE_VARS
     HIPKERNELPROVIDER_ENABLE_ROCKE=ON
