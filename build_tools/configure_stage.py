@@ -55,6 +55,23 @@ def log(msg: str):
     print(msg, file=sys.stderr, flush=True)
 
 
+def normalize_project_name(name: str) -> str:
+    """Normalize a project name, handling paths like 'projects/hip' -> 'hip'.
+
+    The changed_projects input from external repos may include paths like:
+    - 'projects/hip' -> 'hip'
+    - 'projects/rocblas' -> 'rocblas'
+    - 'hip' -> 'hip' (already normalized)
+    """
+    # Strip 'projects/' prefix if present
+    if name.startswith("projects/"):
+        name = name[len("projects/") :]
+    # Strip any trailing path components (e.g., 'hip/src/foo.cpp' -> 'hip')
+    if "/" in name:
+        name = name.split("/")[0]
+    return name
+
+
 def get_topology() -> BuildTopology:
     """Load the BUILD_TOPOLOGY.toml from the repository root."""
     script_dir = Path(__file__).parent
@@ -325,6 +342,10 @@ def main(argv: List[str] = None):
     if args.stage and args.stage not in topology.build_stages:
         available = ", ".join(s.name for s in topology.get_build_stages())
         parser.error(f"Unknown stage '{args.stage}'. Available stages: {available}")
+
+    # Normalize project names (handle paths like "projects/hip" -> "hip")
+    if args.projects:
+        args.projects = [normalize_project_name(p) for p in args.projects]
 
     # Validate projects if provided (fast-fail on unknown projects)
     if args.projects:

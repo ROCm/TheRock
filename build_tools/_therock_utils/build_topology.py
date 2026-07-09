@@ -1115,6 +1115,14 @@ class BuildTopology:
         with manifest_path.open() as f:
             return json.load(f)
 
+    def _load_json_manifest(self, filename: str) -> Optional[Dict]:
+        """Load a JSON manifest file from repo root."""
+        manifest_path = self.toml_path.parent / filename
+        if not manifest_path.exists():
+            return None
+        with manifest_path.open() as f:
+            return json.load(f)
+
     def get_alias_to_artifact_map(
         self, build_dir: Optional[Path] = None
     ) -> Dict[str, str]:
@@ -1140,6 +1148,13 @@ class BuildTopology:
 
             for db_name in artifact.split_databases:
                 alias_map[db_name.lower()] = artifact.name
+
+        # Include rocm-systems project mappings (e.g., "hip" -> "core-hip")
+        # This maps rocm-systems directory names to TheRock artifact names
+        rocm_systems_manifest = self._load_json_manifest("rocm_systems_projects.json")
+        if rocm_systems_manifest:
+            for project_name, artifact_name in rocm_systems_manifest.items():
+                alias_map[project_name.lower()] = artifact_name
 
         return alias_map
 
