@@ -220,8 +220,10 @@ jobs:
       #   0. For workflow_dispatch, honor the explicit test_runs_on input if provided
       #   1. Benchmark components use the dedicated benchmark runner
       #   2. Multi-GPU components use the multi-GPU runner
-      #   3. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
-      #   4. Per-component runner (set by fetch_test_configurations.py)
+      #   3. Emulation components run on the emulation node resolved from their
+      #      emulator backend (fetch_test_configurations.py sets emulation_runner)
+      #   4. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
+      #   5. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
@@ -232,6 +234,8 @@ jobs:
             inputs.benchmark_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
             matrix.components.multi_gpu_runner) ||
+          (matrix.components.emulation_runner != '' &&
+            matrix.components.emulation_runner) ||
           (matrix.components.linux_cpu_runner == true &&
             'azure-linux-scale-rocm') ||
           matrix.components.test_runner
