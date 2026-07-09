@@ -1380,8 +1380,14 @@ class TestFormatSummary(unittest.TestCase):
         self.assertIn("## Build outputs", result)
         self.assertIn("Linux |", result)
         self.assertIn("Windows |", result)
-        self.assertIn("Manifest diff |", result)
-        self.assertIn("12345-linux/logs/manifest-diff/index.html", result)
+        manifest_diff_url = (
+            "https://therock-ci-artifacts.s3.amazonaws.com"
+            "/12345-linux/logs/manifest-diff/index.html"
+        )
+        self.assertIn(
+            f"Manifest diff *(if produced)* | {manifest_diff_url} | — | —",
+            result,
+        )
 
 
 # ---------------------------------------------------------------------------
