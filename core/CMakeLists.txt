@@ -302,6 +302,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     RUNTIME_DEPS
       amd-llvm
       amd-comgr
+      hipcc     # For hipconfig
       rocm-core
       rocm-kpack
       ${HIP_CLR_RUNTIME_DEPS}
