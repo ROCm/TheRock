@@ -78,6 +78,19 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
             link.symlink_to(target.name)
 
 
+def _platform_targets(
+    *,
+    linux_targets: list[str] | None,
+    windows_targets: list[str] | None,
+    platform_name: str,
+) -> list[str] | None:
+    if platform_name.startswith("linux"):
+        return linux_targets
+    if platform_name == "win32":
+        return windows_targets
+    return None
+
+
 def validate_kpack_split_target_completeness(
     *,
     kpack_split: bool,
@@ -91,13 +104,11 @@ def validate_kpack_split_target_completeness(
     if not kpack_split:
         return
 
-    if platform_name.startswith("linux"):
-        expected_targets = linux_targets
-    elif platform_name == "win32":
-        expected_targets = windows_targets
-    else:
-        return
-
+    expected_targets = _platform_targets(
+        linux_targets=linux_targets,
+        windows_targets=windows_targets,
+        platform_name=platform_name,
+    )
     if expected_targets is None:
         return
 
@@ -117,6 +128,57 @@ def validate_kpack_split_target_completeness(
         f"Discovered artifact targets in {artifact_dir}: {discovered}. "
         "The fetched/extracted artifact catalog is incomplete; refusing to "
         "build a partial device wheel set."
+    )
+
+
+def _has_devel_artifacts(artifacts: ArtifactCatalog) -> bool:
+    return any(an.component == "dev" for an in artifacts.artifact_names)
+
+
+def validate_required_dist_packages(
+    *,
+    dest_dir: Path,
+    version: str,
+    artifacts: ArtifactCatalog,
+    kpack_split: bool,
+    linux_targets: list[str] | None,
+    windows_targets: list[str] | None,
+    platform_name: str = sys.platform,
+) -> None:
+    """Validate required kpack-split files in the final dist directory."""
+    if not kpack_split:
+        return
+
+    required_patterns = [
+        f"rocm-{version}.tar.gz",
+        f"rocm_sdk_core-{version}-*.whl",
+        f"rocm_sdk_libraries-{version}-*.whl",
+    ]
+
+    expected_targets = _platform_targets(
+        linux_targets=linux_targets,
+        windows_targets=windows_targets,
+        platform_name=platform_name,
+    )
+    for target in expected_targets or []:
+        required_patterns.append(f"rocm_sdk_device_{target}-{version}-*.whl")
+
+    if _has_devel_artifacts(artifacts):
+        required_patterns.append(f"rocm_sdk_devel-{version}-*.whl")
+
+    dist_dir = dest_dir / "dist"
+    missing_patterns = [
+        pattern for pattern in required_patterns if not list(dist_dir.glob(pattern))
+    ]
+    if not missing_patterns:
+        return
+
+    present_files = sorted(p.name for p in dist_dir.glob("*") if p.is_file())
+    raise RuntimeError(
+        "Required kpack-split Python packages are missing from "
+        f"{dist_dir}: {', '.join(missing_patterns)}. "
+        f"Present files: {', '.join(present_files) or '(none)'}. "
+        "Refusing to publish an incomplete Python package set."
     )
 
 
@@ -245,6 +307,16 @@ def run(args: argparse.Namespace):
         _run_kpack_split(args, params, core)
     else:
         _run_legacy(args, params, core)
+
+    if args.build_packages:
+        validate_required_dist_packages(
+            dest_dir=args.dest_dir,
+            version=args.version,
+            artifacts=artifacts,
+            kpack_split=kpack_split,
+            linux_targets=linux_targets,
+            windows_targets=windows_targets,
+        )
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
