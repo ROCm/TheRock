@@ -69,6 +69,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_windows_jobs_selected(self):
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertGreater(len(components), 0)
+        for job in components:
+            self.assertIn("windows", job["platform"])
+
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
 
