@@ -80,6 +80,7 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
     "-e ROCR_VISIBLE_DEVICES",
+    "-e KUBE_CPU_REQUEST",
 ]
 
 
@@ -355,16 +356,16 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        # rocsparse runs as a single shard for now, so the full suite executes in
-        # one process and needs a generous timeout. This will be reduced soon once
-        # rocsparse moves to multi-shard gtest sharding (pending the tolerance fix
-        # in ROCm/rocm-libraries#8713).
-        "timeout_minutes": 240,
+        # rocsparse now uses 3-way gtest sharding, enabled once the tolerance fix
+        # in ROCm/rocm-libraries#8713 landed in TheRock. The full suite is ~240 min
+        # single-shard; split across 3 shards that is ~80 min per shard, and 90 min
+        # leaves headroom.
+        "timeout_minutes": 90,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "hipsparselt": {
@@ -629,7 +630,7 @@ test_matrix = {
         "additional_requirements_files": [
             "share/rocprofiler-systems/tests/requirements.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -723,9 +724,10 @@ test_matrix = {
         "fetch_artifact_args": "--hiptensor --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
     },
 }

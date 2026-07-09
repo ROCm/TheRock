@@ -47,6 +47,10 @@ on:
         description: "Build PyTorch wheels."
         type: boolean
         default: true
+      build_jax:
+        description: "Build JAX wheels."
+        type: boolean
+        default: false
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -147,6 +151,7 @@ jobs:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
+          BUILD_JAX: ${{ inputs.build_jax }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
