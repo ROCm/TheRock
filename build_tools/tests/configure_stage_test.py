@@ -138,5 +138,109 @@ class ManifestValidationTest(unittest.TestCase):
         )
 
 
+class StageProjectFilterTest(unittest.TestCase):
+    """Tests for stage-specific project filtering."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_filter_hip_for_compiler_runtime(self):
+        """Test that hip is included when filtering for compiler-runtime."""
+        filtered = self.topology.filter_projects_for_stage(
+            ["hip", "rccl", "rocblas"], "compiler-runtime"
+        )
+        self.assertIn("hip", filtered)
+        self.assertNotIn("rccl", filtered)
+        self.assertNotIn("rocblas", filtered)
+
+    def test_filter_rccl_for_comm_libs(self):
+        """Test that rccl is included when filtering for comm-libs."""
+        filtered = self.topology.filter_projects_for_stage(
+            ["hip", "rccl", "rocblas"], "comm-libs"
+        )
+        self.assertNotIn("hip", filtered)
+        self.assertIn("rccl", filtered)
+        self.assertNotIn("rocblas", filtered)
+
+    def test_filter_rocblas_for_math_libs(self):
+        """Test that rocblas is included when filtering for math-libs."""
+        filtered = self.topology.filter_projects_for_stage(
+            ["hip", "rccl", "rocblas"], "math-libs"
+        )
+        self.assertNotIn("hip", filtered)
+        self.assertNotIn("rccl", filtered)
+        self.assertIn("rocblas", filtered)
+
+    def test_filter_empty_for_unrelated_stage(self):
+        """Test that filtering returns empty for unrelated stage."""
+        filtered = self.topology.filter_projects_for_stage(
+            ["hip", "rccl"], "media-libs"
+        )
+        self.assertEqual(filtered, [])
+
+    def test_filter_unknown_stage_returns_empty(self):
+        """Test that filtering for unknown stage returns empty."""
+        filtered = self.topology.filter_projects_for_stage(["hip"], "nonexistent-stage")
+        self.assertEqual(filtered, [])
+
+
+class StageAndProjectsCombinedTest(unittest.TestCase):
+    """Tests for combined --stage and --projects behavior."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_stage_with_matching_project(self):
+        """Test that --stage compiler-runtime --projects hip enables only HIP."""
+        from build_tools.configure_stage import generate_cmake_args
+
+        args = generate_cmake_args(
+            stage_name="compiler-runtime",
+            amdgpu_families="",
+            dist_amdgpu_families="",
+            topology=self.topology,
+            project_names=["hip"],
+        )
+        args_str = " ".join(args)
+        self.assertIn("THEROCK_ENABLE_HIP_RUNTIME=ON", args_str)
+        # Should NOT enable unrelated features
+        self.assertNotIn("THEROCK_ENABLE_RCCL=ON", args_str)
+        self.assertNotIn("THEROCK_ENABLE_BLAS=ON", args_str)
+
+    def test_stage_with_non_matching_project(self):
+        """Test that --stage math-libs --projects hip falls back to stage defaults."""
+        from build_tools.configure_stage import generate_cmake_args
+
+        args = generate_cmake_args(
+            stage_name="math-libs",
+            amdgpu_families="",
+            dist_amdgpu_families="",
+            topology=self.topology,
+            project_names=["hip"],  # hip is NOT in math-libs
+        )
+        args_str = " ".join(args)
+        # Should fall back to math-libs stage features (BLAS, FFT, etc.)
+        self.assertIn("THEROCK_ENABLE_BLAS=ON", args_str)
+        self.assertIn("THEROCK_ENABLE_FFT=ON", args_str)
+        # HIP_RUNTIME is included as an inbound dependency for math-libs
+        # (this is expected - stages need their dependencies enabled)
+
+    def test_stage_with_mixed_projects(self):
+        """Test --stage comm-libs --projects hip rccl enables only rccl."""
+        from build_tools.configure_stage import generate_cmake_args
+
+        args = generate_cmake_args(
+            stage_name="comm-libs",
+            amdgpu_families="",
+            dist_amdgpu_families="",
+            topology=self.topology,
+            project_names=["hip", "rccl"],  # Only rccl is in comm-libs
+        )
+        args_str = " ".join(args)
+        self.assertIn("THEROCK_ENABLE_RCCL=ON", args_str)
+        # hip should be filtered out since it's not in comm-libs
+        self.assertNotIn("THEROCK_ENABLE_HIP_RUNTIME=ON", args_str)
+
+
 if __name__ == "__main__":
     unittest.main()
