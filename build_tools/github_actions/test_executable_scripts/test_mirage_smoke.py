@@ -1,20 +1,22 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Basic smoke test for the mirage emulator CLI.
+"""Smoke test for the rocjitsu GPU emulator via the mirage CLI.
 
-This is intentionally the most minimal emulation check: it verifies the
-``mirage`` binary is functional on the runner using the ``noop`` backend, which
-runs commands directly with no GPU emulation (so it needs neither a GPU nor the
-rocjitsu runtime). It is the natural fast check to run whenever the emulator
-tooling (``emulation/mirage`` or ``emulation/rocjitsu``) changes.
+Runs ``rocminfo`` on top of the rocjitsu emulator (through mirage) and checks
+that the emulated GPU is visible. The runner has no physical GPU (no /dev/kfd),
+so a GPU agent in rocminfo's output can only be the one rocjitsu emulates. This
+is the fast check to run whenever the emulator tooling (``emulation/mirage`` or
+``emulation/rocjitsu``) changes.
 
 Environment variables:
-  THEROCK_BIN_DIR: Directory containing the ``mirage`` binary.
+  THEROCK_BIN_DIR: Directory containing the ``mirage`` and ``rocminfo`` binaries.
+  AMDGPU_FAMILIES: GPU family under test; selects the matching rocjitsu profile.
 """
 
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -22,53 +24,65 @@ from pathlib import Path
 
 # Allow importing the shared emulation helpers regardless of cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from emulation_utils import find_mirage_binary
+from emulation_utils import (
+    build_mirage_run_command,
+    find_mirage_binary,
+    select_mirage_profile,
+)
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 logging.basicConfig(level=logging.INFO)
 
-SMOKE_MARKER = "MIRAGE_SMOKE_OK"
-
-
-def _run(cmd, **kwargs):
-    logging.info("++ %s", shlex.join(cmd))
-    return subprocess.run(cmd, check=True, **kwargs)
-
 
 def main():
+    if not THEROCK_BIN_DIR:
+        raise EnvironmentError("THEROCK_BIN_DIR is not set")
+
+    # rocjitsu only emulates specific agents. If this family has no matching
+    # profile, skip rather than run against a mismatched agent.
+    profile = select_mirage_profile(AMDGPU_FAMILIES)
+    if profile is None:
+        logging.warning(
+            "Skipping mirage smoke test: no rocjitsu profile is available for "
+            "AMDGPU family '%s'.",
+            AMDGPU_FAMILIES,
+        )
+        return
+
     mirage = find_mirage_binary(THEROCK_BIN_DIR)
 
-    # 1. mirage is invokable and reports a version.
-    _run([mirage, "--version"])
+    # Sanity: the mirage binary is invokable.
+    logging.info("++ %s", shlex.join([mirage, "--version"]))
+    subprocess.run([mirage, "--version"], check=True)
 
-    # 2. mirage can enumerate its emulator backends.
-    _run([mirage, "emulators"])
+    # Run rocminfo on top of the rocjitsu emulator and confirm the simulated GPU
+    # is visible.
+    cwd_dir = Path(THEROCK_BIN_DIR)
+    cmd = build_mirage_run_command(["./rocminfo"], profile=profile, mirage_bin=mirage)
 
-    # 3. Exercise the full run path with the noop backend: create a transient
-    #    session, run a command, and clean up. noop executes the command
-    #    directly, so this works on any CPU node with no GPU or rocjitsu runtime.
-    result = _run(
-        [
-            mirage,
-            "run",
-            "--emulator",
-            "noop",
-            "--",
-            sys.executable,
-            "-c",
-            f"print('{SMOKE_MARKER}')",
-        ],
-        capture_output=True,
-        text=True,
+    # rocjitsu locates the ROCm runtime via ROCM_HOME (one level above bin/).
+    run_env = os.environ.copy()
+    run_env.setdefault("ROCM_HOME", str(cwd_dir.resolve().parent))
+
+    logging.info("++ [%s]$ %s", cwd_dir, shlex.join(cmd))
+    result = subprocess.run(
+        cmd, cwd=cwd_dir, env=run_env, capture_output=True, text=True
     )
-    combined_output = (result.stdout or "") + (result.stderr or "")
-    if SMOKE_MARKER not in combined_output:
+    output = (result.stdout or "") + (result.stderr or "")
+    logging.info("rocminfo under rocjitsu (profile '%s'):\n%s", profile, output)
+
+    if result.returncode != 0:
         raise RuntimeError(
-            f"mirage noop run did not forward the child output; expected "
-            f"'{SMOKE_MARKER}' in:\n{combined_output}"
+            f"rocminfo failed under rocjitsu emulation (exit {result.returncode})."
         )
-    logging.info("mirage smoke test passed.")
+    if not re.search(r"Device Type:\s*GPU", output):
+        raise RuntimeError(
+            "rocjitsu emulation did not expose a GPU agent to rocminfo; the "
+            "simulated GPU is not visible."
+        )
+    logging.info("mirage + rocjitsu smoke test passed: simulated GPU is visible.")
 
 
 if __name__ == "__main__":

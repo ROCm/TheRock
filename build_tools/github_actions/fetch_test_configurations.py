@@ -115,13 +115,6 @@ _EMULATOR_RUNNERS = {
         "gpu": True,
         "fetch_args": ["--mirage", "--rocjitsu"],
     },
-    # noop: runs the command directly with no emulation; used for basic mirage
-    # smoke tests and needs only the mirage CLI (no backend runtime, no GPU).
-    "noop": {
-        "runner": "rocjitsu-cpu",
-        "gpu": False,
-        "fetch_args": ["--mirage"],
-    },
 }
 
 
@@ -796,20 +789,19 @@ test_matrix = {
             "linux": 1,
         },
     },
-    # Basic mirage smoke test.
+    # Basic mirage + rocjitsu smoke test.
     #
-    # The most minimal emulation-tooling check: verify the mirage CLI runs on
-    # the emulation node using the "noop" backend (runs the command directly, no
-    # GPU / no rocjitsu runtime required). Declaring "emulator": "noop" routes it
-    # to the rocjitsu-cpu node and autofills the --mirage artifact, so no
-    # component-specific artifacts are needed.
+    # Runs rocminfo on top of the rocjitsu emulator and checks the simulated GPU
+    # is visible. Declaring "emulator": "rocjitsu" routes it to the rocjitsu-cpu
+    # node and autofills the --mirage --rocjitsu artifacts (rocminfo ships with
+    # the base artifacts), so no component-specific artifacts are needed.
     "mirage-smoke": {
         "job_name": "mirage-smoke",
         "fetch_artifact_args": "",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_mirage_smoke.py')}",
         "platform": ["linux"],
-        "emulator": "noop",
+        "emulator": "rocjitsu",
         "total_shards_dict": {
             "linux": 1,
         },
