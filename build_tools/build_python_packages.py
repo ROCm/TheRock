@@ -454,6 +454,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "miopen",
             "miopenprovider",
             "hipblasltprovider",
+            "hipkernelprovider",
             "rand",
             "rccl",
         ]

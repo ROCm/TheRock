@@ -1,6 +1,14 @@
 # hipkernelprovider
 [components.dbg."ml-libs/hipkernelprovider/stage"]
 [components.lib."ml-libs/hipkernelprovider/stage"]
+# rocKE ships per-arch AOT bundles (kpack + JSON sidecar + kernel-selection
+# heuristics) under the engine plugin dir. The default lib component only
+# captures shared libraries (*.so/*.dll), so include the per-arch tree
+# explicitly; it then splits per-arch via BUILD_TOPOLOGY
+# split_databases = ["hipkernelprovider"].
+include = [
+  "**/hip_kernel_provider/rocke/**",
+]
 exclude = [
   "lib/*.a",
 ]
