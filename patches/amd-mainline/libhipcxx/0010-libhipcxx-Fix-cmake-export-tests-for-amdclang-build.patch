@@ -28,8 +28,8 @@ index 8c8070c2e..a869ec581 100644
    -D "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
 +  -D "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}"
  )
- 
+
  # Temporary installation prefix for tests against installed project:
--- 
+--
 2.53.0
 
