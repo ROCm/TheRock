@@ -1,8 +1,8 @@
 From f72b4bcda9b4d1c4b25e840388cbbf18a9487d30 Mon Sep 17 00:00:00 2001
 From: chiranjeevipattigidi <chiranjeevi.pattigidi@amd.com>
 Date: Thu, 9 Jul 2026 10:41:49 +0000
-Subject: [PATCH] [Tensile/TensileLite] Compile one arch at a time for sccache
- compatibility
+Subject: [PATCH 1/2] [Tensile/TensileLite] Compile one arch at a time for
+ sccache compatibility
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

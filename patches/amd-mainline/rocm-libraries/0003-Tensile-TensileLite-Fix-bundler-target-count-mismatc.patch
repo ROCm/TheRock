@@ -1,0 +1,99 @@
+From 402b9508a75084f253399bb9cbfe4e101e64d5da Mon Sep 17 00:00:00 2001
+From: chiranjeevipattigidi <chiranjeevi.pattigidi@amd.com>
+Date: Thu, 9 Jul 2026 17:27:42 +0000
+Subject: [PATCH 2/2] [Tensile/TensileLite] Fix bundler target count mismatch
+ in per-arch compilation
+
+Each per-arch .o contains both a host triple and a HIP (amdgcn) triple.
+The previous bundle step collected all triples from every object, giving
+2N targets for N inputs; clang-offload-bundler requires exactly one
+target per input in bundle mode and aborted with "number of input files
+and targets should match".
+
+Fix: extract only the amdgcn-containing HIP triple per object in both
+shared/tensile SourceCommands.py and tensilelite Toolchain/Component.py.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ .../Tensile/Toolchain/Component.py            | 17 +++++++++----
+ .../Tensile/BuildCommands/SourceCommands.py   | 25 +++++++++----------
+ 2 files changed, 24 insertions(+), 18 deletions(-)
+
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+index f5128e63435..b64860f2392 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+@@ -333,19 +333,26 @@ class Bundler(Component):
+         at a time for sccache compatibility — the resulting per-arch objects must
+         be re-bundled into a fat object that the rest of the pipeline expects.
+ 
++        clang-offload-bundler requires exactly one target per input file in
++        bundle mode. Each per-arch .o contains one HIP triple
++        (hipv4-amdgcn-amd-amdhsa--gfxXXX); we extract that triple and pass it
++        as the target for that input.
++
+         Args:
+             per_arch_objs: List of per-arch .o file paths to bundle.
+             fatObjPath: Output path for the bundled fat object.
+         Raises:
+             RuntimeError: If bundling fails.
+         """
+-        # Derive target triples from each per-arch object via -list.
+-        all_targets = []
++        # Extract exactly one HIP target triple per object (the amdgcn one).
++        # Each per-arch .o has one host triple and one HIP triple; we want the HIP one.
++        hip_targets = []
+         for objPath in per_arch_objs:
+-            triples = [t for t in self.targets(objPath) if t.strip()]
+-            all_targets.extend(triples)
++            triples = [t.strip() for t in self.targets(objPath) if t.strip()]
++            hip_triple = next((t for t in triples if "amdgcn" in t), triples[0] if triples else "")
++            hip_targets.append(hip_triple)
+ 
+-        targets_str = ",".join(all_targets)
++        targets_str = ",".join(hip_targets)
+         inputs = [f"--input={p}" for p in per_arch_objs]
+         args = [
+             self._component_path,
+diff --git a/shared/tensile/Tensile/BuildCommands/SourceCommands.py b/shared/tensile/Tensile/BuildCommands/SourceCommands.py
+index e104cd5bab8..bcee77b885b 100644
+--- a/shared/tensile/Tensile/BuildCommands/SourceCommands.py
++++ b/shared/tensile/Tensile/BuildCommands/SourceCommands.py
+@@ -198,22 +198,21 @@ def _compileSourceObjectFile(
+         _compileSingleArchObjectFile(
+             arch, cxxCompiler, cxxSrcPath, perArchObjPath, outputPath, compilerVer, launcher, hipFlags
+         )
+-        # clang-offload-bundler uses full target triples; derive from the fat
+-        # object listing after first arch compilation.
+         perArchObjs.append((arch, perArchObjPath))
+ 
+-    # Resolve arch names to full target triples by compiling the first arch and
+-    # listing its triples, then map the remaining arches by gfx suffix.
+-    firstObjPath = perArchObjs[0][1]
+-    triples = [t for t in _listTargetTriples(bundler, firstObjPath) if re.search("gfx.*$", t)]
+-
+-    def _matchTriple(arch: str) -> str:
+-        for t in triples:
+-            if re.search(f"{arch}$", t) or re.search(f"{arch}:", t):
+-                return t
+-        return f"hipv4-amdgcn-amd-amdhsa--{arch}"
++    # Derive the HIP target triple from each per-arch object individually.
++    # Each single-arch .o has exactly one amdgcn triple; extract it and use
++    # it as the target for that input in the bundle call. clang-offload-bundler
++    # requires exactly one target per input file in bundle mode.
++    perArchWithTriples = []
++    for arch, path in perArchObjs:
++        all_triples = _listTargetTriples(bundler, path)
++        hip_triple = next(
++            (t for t in all_triples if re.search("gfx", t)),
++            f"hipv4-amdgcn-amd-amdhsa--{arch}"
++        )
++        perArchWithTriples.append((hip_triple, path))
+ 
+-    perArchWithTriples = [(_matchTriple(arch), path) for arch, path in perArchObjs]
+     _bundleObjectFiles(bundler, perArchWithTriples, objDestPath)
+ 
+     for _, path in perArchObjs:
+-- 
+2.53.0
+
