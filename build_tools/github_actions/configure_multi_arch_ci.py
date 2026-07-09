@@ -60,6 +60,10 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_build_runner,
 )
+from stage_impact import (
+    StageImpactResult,
+    analyze_stage_impact,
+)
 from configure_ci_path_filters import (
     get_git_commit_hash,
     get_git_modified_paths,
@@ -73,6 +77,10 @@ from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
+)
+from impact_analysis import (
+    ImpactAnalysisPlan,
+    compute_test_matrix_filter,
 )
 
 _NULL_GIT_SHA = "0" * 40
@@ -519,6 +527,8 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    stage_impact_result: StageImpactResult | None = None
+    impact_analysis_plan: ImpactAnalysisPlan | None = None
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -1347,6 +1357,13 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     targets = select_targets(ci_inputs)
     targets.log()
 
+    print("\n=== Analyzing stage impact ===")
+    topology = get_topology()
+    stage_impact_result = analyze_stage_impact(
+        changed_inputs=git_context.changed_files or [],
+        topology=topology,
+    )
+
     print("\n=== Deciding job configuration ===")
     # Target selection runs first so automatic stage reuse scopes its
     # platform/family verification to what is actually being built. On normal
@@ -1364,12 +1381,20 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
+    impact_analysis_plan = compute_test_matrix_filter(
+        changed_paths=git_context.changed_files,
+        stage_impact_result=stage_impact_result,
+        topology=topology,
+        dry_run=True,
+    )
+
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        impact_analysis_plan=impact_analysis_plan,
     )
 
 

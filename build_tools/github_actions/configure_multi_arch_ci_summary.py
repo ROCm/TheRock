@@ -7,6 +7,7 @@ from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
 )
+from impact_analysis import format_impact_analysis_summary
 from pathlib import Path
 import sys
 
@@ -67,6 +68,10 @@ def format_summary(
     lines.append("### test-rocm")
     lines.append("")
     _append_test_rocm(lines, outputs)
+
+    if outputs.impact_analysis_plan is not None:
+        lines.append("")
+        lines.append(format_impact_analysis_summary(outputs.impact_analysis_plan))
 
     lines.append("### build-pytorch")
     lines.append("")
