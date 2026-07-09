@@ -359,15 +359,13 @@ def get_rocm_init_contents(args: argparse.Namespace):
         WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
     )
     library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
-    return textwrap.dedent(
-        f"""
+    return textwrap.dedent(f"""
         def initialize():
             import rocm_sdk
             rocm_sdk.initialize_process(
                 preload_shortnames=[{library_preloads_formatted}],
                 check_version='{sdk_version}')
-        """
-    )
+        """)
 
 
 ROCM_NEEDED_LIBRARY_PREFIXES = (
@@ -471,7 +469,9 @@ def configure_pytorch_wheel_rocm_runpaths(wheel_path: Path) -> None:
         wheel_root = wheel_roots[0]
         torch_dir = wheel_root / "torch"
         if not torch_dir.is_dir():
-            raise RuntimeError(f"Unpacked torch wheel has no torch package: {wheel_root}")
+            raise RuntimeError(
+                f"Unpacked torch wheel has no torch package: {wheel_root}"
+            )
 
         rocm_runpath_dirs = _get_rocm_dependency_wheel_runpath_dirs(wheel_root)
         updated_paths: list[Path] = []
@@ -484,7 +484,10 @@ def configure_pytorch_wheel_rocm_runpaths(wheel_path: Path) -> None:
                 ).splitlines()
             except subprocess.CalledProcessError:
                 continue
-            existing_runpath = _patchelf_output("--print-rpath", so_path)
+            try:
+                existing_runpath = _patchelf_output("--print-rpath", so_path)
+            except subprocess.CalledProcessError:
+                existing_runpath = ""
             if not _is_rocm_linked(needed_libraries) and not _runpath_references_rocm(
                 existing_runpath
             ):
@@ -501,13 +504,16 @@ def configure_pytorch_wheel_rocm_runpaths(wheel_path: Path) -> None:
             print(f"+++ Configuring ROCm RUNPATH: {so_path.relative_to(wheel_root)}")
             print(f"    old: {existing_runpath}")
             print(f"    new: {updated_runpath}")
-            subprocess.check_call(
-                ["patchelf", "--set-rpath", updated_runpath, so_path]
+            run_command(
+                ["patchelf", "--set-rpath", updated_runpath, so_path],
+                cwd=temp_dir,
             )
             updated_paths.append(so_path)
 
         if not updated_paths:
-            print("WARNING: Did not find any ROCm-linked torch shared objects to update")
+            print(
+                "WARNING: Did not find any ROCm-linked torch shared objects to update"
+            )
 
         run_command(
             [
