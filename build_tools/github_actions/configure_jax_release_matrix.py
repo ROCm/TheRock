@@ -37,7 +37,7 @@ JAX_REFS = [
 ]
 
 CI_JAX_REFS = {"rocm-jaxlib-v0.10.0", "rocm-jaxlib-v0.10.2"}
-CI_PYTHON_VERSIONS = PYTHON_VERSIONS
+CI_PYTHON_VERSIONS = ["3.12"]
 
 
 def _split_values(raw: str) -> list[str]:

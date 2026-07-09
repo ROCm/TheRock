@@ -119,7 +119,7 @@ permissions:
 
 jobs:
   build_jax_wheels:
-    name: Build JAX | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
+    name: Build JAX | multi-arch-release | jax ${{ inputs.jax_ref }} | py ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
       package_find_links_url: ${{ steps.upload_jax_wheels.outputs.package_find_links_url }}
