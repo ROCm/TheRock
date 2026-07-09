@@ -182,6 +182,7 @@ amdgpu_family_info_matrix dictionary fields:
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
+- submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -292,6 +293,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
+            # Only run tests on submodule bumps (builds always run)
+            "submodule_bump_tests_only": True,
         }
     },
 }
