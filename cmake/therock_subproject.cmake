@@ -712,11 +712,16 @@ function(therock_cmake_subproject_activate target_name)
   # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
 
+  # Compose CMAKE_PROJECT_TOP_LEVEL_INCLUDES for the subproject: its generated
+  # init file first, then any files listed in THEROCK_SUBPROJECT_CMAKE_INCLUDES.
+  set(_subproject_top_level_includes "${_cmake_project_init_file}" ${THEROCK_SUBPROJECT_CMAKE_INCLUDES})
+
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
-    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
+    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}"
+    "${_subproject_top_level_includes}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
 
   # Customize any other super-project CMake variables that are captured by
@@ -957,19 +962,6 @@ function(therock_cmake_subproject_activate target_name)
       "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
     )
 
-    # Forward the superproject's CMAKE_PROJECT_TOP_LEVEL_INCLUDES (if any) to the
-    # subproject, alongside its generated init file, so a top-level
-    # -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=... reaches every subproject configure.
-    set(_subproject_top_level_includes "${_cmake_project_init_file}")
-    if(CMAKE_PROJECT_TOP_LEVEL_INCLUDES)
-      list(APPEND _subproject_top_level_includes ${CMAKE_PROJECT_TOP_LEVEL_INCLUDES})
-    endif()
-    # Escape the ';' list separator so the multi-file value reaches cmake as a
-    # single argument. Unescaped, the ';' is emitted verbatim into the generator's
-    # '/bin/sh -c' rule as a shell command separator, which then tries to execute
-    # the trailing include file as a program.
-    string(REPLACE ";" "\\;" _subproject_top_level_includes "${_subproject_top_level_includes}")
-
     # Configure command.
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
@@ -984,7 +976,6 @@ function(therock_cmake_subproject_activate target_name)
         "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
-        "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_subproject_top_level_includes}"
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
       # the build graph sane.
@@ -1628,7 +1619,7 @@ endfunction()
 #   * amd-hip: Extends the amd-llvm toolchain to also depend on HIP, making
 #     it ready to use to compile HIP code.
 function(_therock_cmake_subproject_setup_toolchain
-    target_name compiler_toolchain toolchain_file)
+    target_name compiler_toolchain toolchain_file top_level_includes)
   string(APPEND CMAKE_MESSAGE_INDENT "  ")
   set(_build_env_pairs "${_build_env_pairs}")
   set(_toolchain_contents)
@@ -1668,6 +1659,10 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
 
   # General settings applicable to all toolchains.
+  # Register the subproject's generated init file plus any THEROCK_SUBPROJECT_CMAKE_INCLUDES
+  # files. The toolchain is read during system determination, before project() consults
+  # CMAKE_PROJECT_TOP_LEVEL_INCLUDES.
+  string(APPEND _toolchain_contents "set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES \"@top_level_includes@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n")
   string(APPEND _toolchain_contents "set(CMAKE_INSTALL_LIBDIR @CMAKE_INSTALL_LIBDIR@)\n")
   string(APPEND _toolchain_contents "set(CMAKE_PLATFORM_NO_VERSIONED_SONAME @CMAKE_PLATFORM_NO_VERSIONED_SONAME@)\n")
