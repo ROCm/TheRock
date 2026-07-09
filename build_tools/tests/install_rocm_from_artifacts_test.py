@@ -157,6 +157,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         prim=False,
         rand=False,
         rccl=False,
+        rocshmem=False,
         mpi=False,
         rocdecode=False,
         rocjpeg=False,
