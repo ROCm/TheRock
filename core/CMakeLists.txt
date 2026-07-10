@@ -273,6 +273,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
       "-DCLR_BUILD_HIP=ON"
       "-DROCM_KPACK_ENABLED=ON"
+      "-DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}"
       # Legacy: Disable various auto-detection logic that breaks out of jail
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
