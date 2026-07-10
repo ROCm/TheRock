@@ -46,10 +46,6 @@ def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
             - visible_gpus: List of AMDGPU archs physically visible
         Exits on failure.
     """
-    # Runs before the first torch subprocess, so any conflicting
-    # GPU_DEVICE_ORDINAL is removed before HIP initializes.
-    reconcile_agent_visibility_env()
-
     query_script = """
 import sys
 try:
