@@ -99,6 +99,11 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
+      # DIAGNOSTIC (#5901 math-libs non-cacheable investigation): capture the
+      # exact commands sccache refuses so we can see whether "multiple input
+      # files" comes from Tensile or another component. Remove after diagnosis.
+      SCCACHE_LOG: debug
+      SCCACHE_ERROR_LOG: ${{ github.workspace }}/sccache-debug.log
 
     steps:
       - name: Checkout Repository
@@ -225,6 +230,20 @@ jobs:
           fi
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      # DIAGNOSTIC (#5901): surface the exact non-cacheable compile commands.
+      # Remove after diagnosis.
+      - name: Dump sccache non-cacheable commands
+        if: ${{ !cancelled() && inputs.cache_type == 'sccache' }}
+        run: |
+          LOG="${{ github.workspace }}/sccache-debug.log"
+          echo "=== sccache-debug.log size ==="; ls -lh "$LOG" 2>/dev/null || { echo "no debug log"; exit 0; }
+          echo "=== non-cacheable reason lines (unique, top 40) ==="
+          grep -aiE 'CannotCache|not cacheable|multiple input files|UnknownFlag' "$LOG" \
+            | sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2}T[^ ]+//; s#/tmp/[A-Za-z0-9._-]+#/tmp/X#g' \
+            | sort | uniq -c | sort -rn | head -40
+          echo "=== first 15 full non-cacheable command lines (verbatim) ==="
+          grep -aiE 'CannotCache|not cacheable|multiple input files' "$LOG" | head -15
 
       - name: Test Packaging
         run: |
