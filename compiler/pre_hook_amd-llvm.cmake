@@ -39,6 +39,9 @@ else()
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
+    # DEBUG: Print THEROCK_SANITIZER value unconditionally to verify it
+    message(STATUS "DEBUG pre_hook_amd-llvm (unconditional): THEROCK_SANITIZER=${THEROCK_SANITIZER}")
+
     # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
     # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
     # "Unknown debugging section .debug_str_offsets" even in version 0.16
