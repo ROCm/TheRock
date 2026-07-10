@@ -291,16 +291,46 @@ jobs:
         run: |
           set +e
 
+          # Prefer a clean guest shutdown so the qcow2 filesystem is flushed
+          # before the host-side QEMU process exits.
+          if [ -f "${HOME}/.ssh/therock_vm_key" ]; then
+            ssh \
+              -i "${HOME}/.ssh/therock_vm_key" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o BatchMode=yes \
+              -o ConnectTimeout=5 \
+              -p "${VM_SSH_PORT}" \
+              "${VM_SSH_USER}@127.0.0.1" \
+              "sudo shutdown now"
+          fi
+
           if [ -f "${VM_PID_FILE}" ]; then
             vm_pid="$(sudo cat "${VM_PID_FILE}")"
-            sudo kill "${vm_pid}"
-            sleep 10
+
+            # If guest shutdown works, QEMU should exit on its own. Keep the
+            # pidfile fallback for failures that happen before SSH is reachable.
+            for _ in {1..30}; do
+              if ! sudo kill -0 "${vm_pid}" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+
+            if sudo kill -0 "${vm_pid}" 2>/dev/null; then
+              sudo kill "${vm_pid}"
+              sleep 10
+            fi
+
             if sudo kill -0 "${vm_pid}" 2>/dev/null; then
               sudo kill -9 "${vm_pid}"
             fi
+
             sudo rm -f "${VM_PID_FILE}"
           fi
 
+          # QEMU runs with sudo, so the serial log may be root-owned. Make it
+          # readable before actions/upload-artifact tries to package it.
           if [ -f "${VM_SERIAL_LOG}" ]; then
             sudo chmod a+r "${VM_SERIAL_LOG}"
           fi
