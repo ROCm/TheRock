@@ -37,6 +37,10 @@ on:
         description: "Build PyTorch wheels (defaults to true for workflow_call)"
         type: boolean
         default: true
+      build_jax:
+        description: "Build JAX wheels"
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
@@ -253,6 +257,7 @@ jobs:
   trigger_release_jax_wheels:
     needs: [build_artifacts, build_tarballs, build_python_packages]
     name: Trigger Release JAX Wheels
+    if: ${{ inputs.build_jax != false }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
