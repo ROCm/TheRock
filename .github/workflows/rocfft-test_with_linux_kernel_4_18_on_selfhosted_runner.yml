@@ -1,16 +1,16 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Test ROCm QCOW VM
+name: rocFFT-test launch with Linux kernel 4.18 on self-hosted runner
 
 on:
   workflow_dispatch:
     inputs:
-      runner_ip:
-        description: "Self-hosted runner IP address. The runner must also have this value as a label."
+      runner_hostname:
+        description: "Self-hosted runner hostname. The runner must also have this value as a label."
         required: true
         type: string
-        default: "192.168.30.40"
+        default: "hostname"
       qcow_image_path:
         description: "Absolute path to the Rocky Linux QCOW image on the self-hosted runner."
         required: true
@@ -54,18 +54,18 @@ on:
 permissions:
   contents: read
 
-run-name: Test ROCm QCOW VM (${{ inputs.runner_ip }})
+run-name: rocFFT-test launch with Linux kernel 4.18 on ${{ inputs.runner_hostname }}
 
 concurrency:
-  group: rocm-qcow-vm-${{ inputs.runner_ip }}
+  group: rocm-qcow-vm-${{ inputs.runner_hostname }}
   cancel-in-progress: false
 
 jobs:
   test_rocm_qcow_vm:
-    name: Test ROCm packages in QCOW VM
+    name: rocFFT-test launch with Linux kernel 4.18
     # Register each runner with labels:
-    # self-hosted, linux, x64, kvm, vfio, and its IP address (for example, 192.168.30.40).
-    runs-on: [self-hosted, linux, x64, kvm, vfio, "${{ inputs.runner_ip }}"]
+    # self-hosted, linux, x64, kvm, vfio, and its hostname (for example, myservername).
+    runs-on: [self-hosted, linux, x64, kvm, vfio, "${{ inputs.runner_hostname }}"]
     timeout-minutes: 120
     defaults:
       run:
@@ -157,7 +157,7 @@ jobs:
 
           chmod 600 "${HOME}/.ssh/therock_vm_key"
 
-      - name: Launch QCOW VM with PCI passthrough
+      - name: Launch Linux kernel 4.18 QCOW VM with PCI passthrough
         run: |
           set -euo pipefail
 
@@ -242,7 +242,7 @@ jobs:
           ./rocfft-test
           EOF
 
-      - name: Stop QCOW VM
+      - name: Stop Linux kernel 4.18 QCOW VM
         if: always()
         run: |
           set +e
