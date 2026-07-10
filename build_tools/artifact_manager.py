@@ -825,7 +825,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    source_run_id: str,
+    platform: str,
+    local_staging_dir: Optional[Path] = None,
+    github_repository: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -845,7 +848,10 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        lookup_workflow_run=True,
+        github_repository=github_repository,
     )
     return S3Backend(output_root=output_root)
 
@@ -885,6 +891,7 @@ def do_copy(args: argparse.Namespace):
         source_run_id=args.source_run_id,
         platform=args.platform,
         local_staging_dir=args.local_staging_dir,
+        github_repository=args.run_github_repo or None,
     )
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
