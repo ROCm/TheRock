@@ -88,6 +88,13 @@ class TestGetRepoConfig(unittest.TestCase):
         self.assertEqual(config["submodule_path"], "rocm-systems")
         self.assertEqual(config["skip_submodules"], ["rocm-systems"])
 
+    def test_rocgdb_config(self):
+        """Test rocgdb configuration"""
+        config = get_repo_config("rocgdb")
+        self.assertEqual(config["cmake_source_var"], "THEROCK_ROCGDB_SOURCE_DIR")
+        self.assertEqual(config["submodule_path"], "debug-tools/rocgdb/source")
+        self.assertEqual(config["skip_submodules"], ["rocgdb"])
+
     def test_unknown_repo_raises_error(self):
         """Test that unknown repository raises ValueError"""
         with self.assertRaises(ValueError) as context:
@@ -182,6 +189,94 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         # Verify config_json is included with correct checkout_path (relative with external- prefix)
         self.assertIn("config_json=", output)
         self.assertIn('"checkout_path": "external-rocm-libraries"', output)
+
+    def test_external_repo_json_mixed_case_name(self):
+        """Test that mixed-case repo names (e.g. ROCm/ROCgdb) are lowercased."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/ROCgdb", "ref": "abc123"}',
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn("config_json=", output)
+        self.assertIn('"checkout_path": "external-rocgdb"', output)
+        self.assertIn("THEROCK_ROCGDB_SOURCE_DIR", output)
+
+    def test_extra_cmake_options_forwarded(self):
+        """Test that extra_cmake_options from external_repo JSON is forwarded to config_json."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/ROCgdb", "ref": "abc123", "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"}',
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn(
+            '"extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"', output
+        )
+
+    def test_extra_cmake_options_empty_by_default(self):
+        """Test that extra_cmake_options defaults to empty string when not provided."""
+        rc = detect_external_repo_config_main(
+            [
+                "--repository",
+                "rocm-libraries",
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn('"extra_cmake_options": ""', output)
+
+    def test_extra_cmake_options_multiple_flags(self):
+        """Test that multiple space-separated cmake flags are forwarded intact."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
+                ' "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON -DSOME_OTHER_FLAG=value"}',
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn(
+            '"extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON -DSOME_OTHER_FLAG=value"',
+            output,
+        )
+
+    def test_extra_cmake_options_embedded_quotes(self):
+        """Test that embedded quotes survive the JSON parse/serialize round-trip."""
+        # JSON input: extra_cmake_options value contains escaped double quotes.
+        # json.loads produces the Python string:  -DFOO="bar"
+        # json.dumps then re-escapes it back to:  "-DFOO=\"bar\""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
+                ' "extra_cmake_options": "-DFOO=\\"bar\\""}',
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        # After round-trip the quotes are re-escaped in the serialized JSON
+        self.assertIn('"extra_cmake_options": "-DFOO=\\"bar\\""', output)
 
 
 class TestGetExternalRepoPath(unittest.TestCase):
