@@ -1767,10 +1767,14 @@ function(_therock_cmake_subproject_setup_toolchain
     # to C:\{GUID}\ and clang resolves its binary path through the mount when
     # computing the resource dir. This embeds the GUID in include paths, which
     # defeats ccache. Passing -resource-dir with the unresolved path avoids this.
+    # Use the joined form (-resource-dir=<dir>) rather than the space-separated
+    # form: sccache's clang parser does not consume a space-separated
+    # -resource-dir value and miscounts it as a second input file, marking every
+    # such compile "non-cacheable: multiple input files" (ROCm/TheRock#5901).
     string(APPEND _toolchain_contents "file(GLOB _therock_clang_resource_dirs \"@_amd_llvm_dist_dir@/lib/llvm/lib/clang/*\")\n")
     string(APPEND _toolchain_contents "list(GET _therock_clang_resource_dirs 0 _therock_clang_resource_dir)\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -resource-dir=\${_therock_clang_resource_dir}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir=\${_therock_clang_resource_dir}\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
     therock_sanitizer_configure(
