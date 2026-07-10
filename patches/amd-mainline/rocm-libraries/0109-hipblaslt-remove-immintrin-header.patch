@@ -1,0 +1,31 @@
+From 7099d88ba94c098910648cc2d671ea255d821c62 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Fri, 10 Jul 2026 20:49:34 +0000
+Subject: [PATCH] [hipblaslt] remove unused include immintrin.h
+
+---
+ projects/hipblaslt/clients/common/include/hipblaslt_math.hpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp b/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp
+index eae1c5cded9..e0ff52617d5 100644
+--- a/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp
++++ b/projects/hipblaslt/clients/common/include/hipblaslt_math.hpp
+@@ -30,7 +30,6 @@
+ #include <hip/hip_runtime.h>
+ #include <hipblaslt/hipblaslt.h>
+ #include <hipblaslt/hipblaslt_xfloat32.h>
+-#include <immintrin.h>
+ #include <type_traits>
+ 
+ /* ============================================================================================ */
+@@ -196,4 +195,4 @@ inline __host__ __device__ bool hipblaslt_isnan(std::complex<T> arg,
+                                                 std::enable_if_t<std::is_integral<T>::value, int> = 0)
+ {
+     return false;
+-}
+\ No newline at end of file
++}
+-- 
+2.52.0
+
