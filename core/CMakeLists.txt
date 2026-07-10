@@ -143,6 +143,37 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     LIB_NAMES libhsa-runtime64.so
   )
 
+  set(_core_runtime_hotswap_subproject_deps)
+  if(THEROCK_ENABLE_HOTSWAP AND NOT WIN32)
+    ############################################################################
+    # HSA HotSwap tool
+    ############################################################################
+
+    therock_cmake_subproject_declare(hsa-hotswap
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hotswap"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hsa-hotswap"
+      BACKGROUND_BUILD
+      DISABLE_AMDGPU_TARGETS
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      RUNTIME_DEPS
+        ROCR-Runtime
+        amd-comgr
+      INTERFACE_LINK_DIRS
+        "lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+    )
+    therock_cmake_subproject_glob_c_sources(hsa-hotswap SUBDIRS .)
+    therock_cmake_subproject_activate(hsa-hotswap)
+    list(APPEND _core_runtime_hotswap_subproject_deps hsa-hotswap)
+
+    therock_test_validate_shared_lib(
+      PATH hsa-hotswap/dist/lib
+      LIB_NAMES libhsa-hotswap.so
+    )
+  endif()
+
   ##############################################################################
   # rocminfo
   ##############################################################################
@@ -165,6 +196,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   set(_core_runtime_subproject_deps
     ROCR-Runtime
     rocminfo
+    ${_core_runtime_hotswap_subproject_deps}
   )
   set(_core_runtime_artifact_components
     dbg
