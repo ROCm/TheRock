@@ -1,7 +1,7 @@
 From 1b8c96c416e44f956cc97d0f221879328925fede Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Tue, 30 Jun 2026 12:35:27 -0500
-Subject: [PATCH 05/11] [libhipcxx] Fix AMD path: keep CMAKE_CUDA_COMPILER_ID
+Subject: [PATCH 05/15] [libhipcxx] Fix AMD path: keep CMAKE_CUDA_COMPILER_ID
  as HIPCC
 
 Setting it to "Clang" routes into the Clang/CUDA branch of the test
@@ -30,5 +30,5 @@ index 0606ddd3a..a61c34185 100644
      set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
      set(LIBCUDACXX_CUDA_TEST_WITH_NVRTC "False")
 -- 
-2.53.0
+2.34.1
 

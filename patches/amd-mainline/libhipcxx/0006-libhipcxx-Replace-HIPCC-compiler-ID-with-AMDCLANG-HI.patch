@@ -1,7 +1,7 @@
 From a9c79833a992b83471a8d2921c6cf4c0e6c56c2c Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Tue, 30 Jun 2026 13:27:16 -0500
-Subject: [PATCH 06/11] [libhipcxx] Replace HIPCC compiler ID with
+Subject: [PATCH 06/15] [libhipcxx] Replace HIPCC compiler ID with
  AMDCLANG/HIPRTC
 
 CMAKE_CUDA_COMPILER_ID "HIPCC" was a misnomer in two places:
@@ -50,5 +50,5 @@ index a61c34185..df830af9a 100644
    string(APPEND LIBCUDACXX_TEST_COMPILER_FLAGS
  #    "${LIBCUDACXX_TEST_COMPILER_FLAGS} \
 -- 
-2.53.0
+2.34.1
 

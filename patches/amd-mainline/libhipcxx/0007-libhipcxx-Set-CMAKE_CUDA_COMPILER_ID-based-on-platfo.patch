@@ -1,7 +1,7 @@
 From 2a461bca53dcf0b82d2c39aa5de94eac7b92aaa1 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Tue, 30 Jun 2026 14:45:19 -0500
-Subject: [PATCH 07/11] [libhipcxx] Set CMAKE_CUDA_COMPILER_ID based on
+Subject: [PATCH 07/15] [libhipcxx] Set CMAKE_CUDA_COMPILER_ID based on
  platform, not runtime
 
 NVRTC/HIPRTC indicate which runtime to link against, not which compiler
@@ -51,5 +51,5 @@ index df830af9a..de1c7e7ca 100644
    string(APPEND LIBCUDACXX_TEST_COMPILER_FLAGS
  #    "${LIBCUDACXX_TEST_COMPILER_FLAGS} \
 -- 
-2.53.0
+2.34.1
 

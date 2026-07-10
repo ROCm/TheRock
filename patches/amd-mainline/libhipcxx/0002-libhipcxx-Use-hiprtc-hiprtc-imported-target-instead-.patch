@@ -1,7 +1,7 @@
 From 214e1d6cb9220f16c6b5674b7d308d2c9c6760e8 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 13 May 2026 11:48:43 -0500
-Subject: [PATCH 02/11] [libhipcxx] Use hiprtc::hiprtc imported target instead
+Subject: [PATCH 02/15] [libhipcxx] Use hiprtc::hiprtc imported target instead
  of bare -lhiprtc
 
 With amdclang++ used directly (not hipcc), the bare `hiprtc` link
@@ -36,5 +36,5 @@ index 4d85ee064..346ec4050 100644
 +target_link_libraries(libcudacxx.nvrtcc hiprtc::hiprtc hip::host)
  target_compile_features(libcudacxx.nvrtcc PRIVATE cxx_std_17)
 -- 
-2.53.0
+2.34.1
 

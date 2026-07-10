@@ -1,7 +1,7 @@
 From 55c12d3a8dda7c020803f4dc67423888317191ac Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Tue, 30 Jun 2026 14:46:32 -0500
-Subject: [PATCH 08/11] [libhipcxx] Use NVIDIA (not NVCC) as compiler ID for
+Subject: [PATCH 08/15] [libhipcxx] Use NVIDIA (not NVCC) as compiler ID for
  NVRTC path
 
 Consistent with the offline NVIDIA path and the existing "NVIDIA" branch
@@ -26,5 +26,5 @@ index de1c7e7ca..0f234894a 100644
    set(LIBCUDACXX_CUDA_COMPILER_ARG1 "")
    set(LIBCUDACXX_CUDA_TEST_WITH_NVRTC "True")
 -- 
-2.53.0
+2.34.1
 

@@ -1,7 +1,7 @@
 From e7c63ea4f6b825f3872a5ccfd09c832583825ebc Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 13 May 2026 15:27:28 -0500
-Subject: [PATCH 03/11] [libhipcxx] Fix -x hip scope: use
+Subject: [PATCH 03/15] [libhipcxx] Fix -x hip scope: use
  target_compile_options not CMAKE_CXX_FLAGS
 
 CMAKE_CXX_FLAGS=-x hip gets passed to the linker step too, causing
@@ -30,5 +30,5 @@ index e80a06e2d..36f1da401 100644
  enable_testing()
  add_test(NAME version_check COMMAND "$<TARGET_FILE:version_check>")
 -- 
-2.53.0
+2.34.1
 

@@ -99,11 +99,15 @@ else:
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
     f"-DCMAKE_CXX_COMPILER={AMDCLANGPP}",
     "-GNinja",
     "..",
 ]
+
+# Only pass HIP architectures if a GPU was detected. Passing "None" results
+# in --offload-arch=None which is rejected by the compiler.
+if gpu_arch is not None:
+    cmd.append(f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}")
 
 # Add rc compiler for windows
 if is_windows:

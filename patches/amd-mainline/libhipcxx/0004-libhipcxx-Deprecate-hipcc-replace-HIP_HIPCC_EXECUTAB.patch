@@ -1,7 +1,7 @@
 From 95241b06931f0fa13ee67392d498675795dd4248 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 24 Jun 2026 11:43:52 -0500
-Subject: [PATCH 04/11] [libhipcxx] Deprecate hipcc: replace
+Subject: [PATCH 04/15] [libhipcxx] Deprecate hipcc: replace
  HIP_HIPCC_EXECUTABLE with amdclang++/nvcc
 
 Replace the hardcoded HIP_HIPCC_EXECUTABLE reference in the upstream
@@ -70,5 +70,5 @@ index 402052079..795cba22d 100755
  GLOBAL_CMAKE_OPTIONS=()
  DISABLE_CUB_BENCHMARKS= # Enable to force-disable building CUB benchmarks.
 -- 
-2.53.0
+2.34.1
 
