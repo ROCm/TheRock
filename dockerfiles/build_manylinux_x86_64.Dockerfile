@@ -89,6 +89,7 @@ RUN yum install -y epel-release && \
     && yum install -y \
       texinfo \
       flex \
+      libcurl-devel \
     && yum clean all && \
     rm -rf /var/cache/yum
 
