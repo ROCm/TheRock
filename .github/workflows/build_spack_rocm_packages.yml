@@ -17,72 +17,33 @@ on:
 
 permissions:
   contents: read
-  packages: write
+
 jobs:
   build:
-    name: Build Spack Image
-    runs-on: ubuntu-22.04
-    timeout-minutes: 210
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: rocm/spack_ubuntu24_04
+    name: Build Spack ROCm Container
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 1440
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Determine Docker Tag
-        id: tag
-        run: |
-          ref="${{ github.ref_name }}"
-          if [[ "$ref" == stage/docker/* ]]; then
-           suffix="${ref#stage/docker/}"
-            echo "TAG_SUFFIX=stage-${suffix}" >> "$GITHUB_OUTPUT"
-          elif [[ "$ref" == "main" ]]; then
-            echo "TAG_SUFFIX=latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "TAG_SUFFIX=${ref}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Extract Metadata for Docker
-        id: meta
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=schedule
-            type=ref,event=branch,enable={{is_default_branch}}
-            type=ref,event=tag
-            type=ref,event=pr
-            type=raw,value=${{ steps.tag.outputs.TAG_SUFFIX }}
-
-      - name: Build and Push Docker Image
+      - name: Build Docker Image
         id: build
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: dockerfiles/
           file: dockerfiles/spack_ubuntu24_04.Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          tags: spack-rocm:latest
 
       - name: Report Summary
         if: always()
         run: |
           {
             echo "## Docker image build"
-            echo "Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`"
             if [[ "${{ steps.build.outcome }}" == "success" ]]; then
-              echo ""
-              echo "Docker image built and pushed successfully."
+              echo "Docker image built successfully with ROCm packages installed via Spack."
             else
-              echo ""
-              echo "Build or push did not succeed. Check the **Build and Push Docker Image** step logs."
+              echo "Build did not succeed. Check the **Build Docker Image** step logs."
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
