@@ -51,9 +51,9 @@ The `github-oss-redis` preset points ccache's `remote_storage` at an
 in-cluster Redis (Valkey) service in the prod build cluster
 (`therock-runners-prod`):
 
-| Preset             | Server                                                       | Used by                          |
-| ------------------ | ------------------------------------------------------------ | -------------------------------- |
-| `github-oss-redis` | `redis-ccache-svc.redis-ccache-ns.svc.cluster.local:6379`    | Opt-in `cache_type=ccache-redis` |
+| Preset             | Server                                                    | Used by                          |
+| ------------------ | --------------------------------------------------------- | -------------------------------- |
+| `github-oss-redis` | `redis-ccache-svc.redis-ccache-ns.svc.cluster.local:6379` | Opt-in `cache_type=ccache-redis` |
 
 Like bazel-remote, it is a `ClusterIP` service with **no authentication**,
 relying on cluster network isolation. The endpoint can be overridden with the
