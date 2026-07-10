@@ -19,7 +19,12 @@ def reconcile_agent_visibility_env() -> None:
     conflicts with a GPU_DEVICE_ORDINAL injected by the CI runner's isolation
     env-file (HIP aborts fatally on the mismatch).
     """
-    os.environ.pop("GPU_DEVICE_ORDINAL", None)
+    gpu_device_ordinal = os.environ.pop("GPU_DEVICE_ORDINAL", None)
+    if gpu_device_ordinal is not None:
+        print(
+            f"Warning: dropped conflicting GPU_DEVICE_ORDINAL={gpu_device_ordinal} "
+            "(HIP_VISIBLE_DEVICES supersedes it)"
+        )
 
 
 def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
