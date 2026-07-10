@@ -25,11 +25,12 @@ include = [
   # whose root CTestTestfile.cmake subdirs into tests/functional and tests/unit.
   "bin/rocshmem/**",
   # Test binaries. Both the functional and unit test executables install to
-  # share/rocshmem/ (CMAKE_INSTALL_DATADIR), not bin/. The install-tree
+  # bin/ (CMAKE_INSTALL_BINDIR) so their RPATH ($ORIGIN/../lib) resolves the
+  # ROCm runtime libs (e.g. libhiprtc.so.7). The install-tree
   # CTestTestfile.cmake invokes them via the relative path
-  # ../../../../share/rocshmem/rocshmem_*_tests from bin/rocshmem/tests/*/.
-  "share/rocshmem/rocshmem_functional_tests",
-  "share/rocshmem/rocshmem_unit_tests",
+  # ../../../rocshmem_*_tests from bin/rocshmem/tests/*/.
+  "bin/rocshmem_functional_tests",
+  "bin/rocshmem_unit_tests",
   # CTest wrapper scripts referenced (by relative path) from the install-tree
   # CTestTestfile.cmake, plus the retry helper.
   "share/rocshmem/test_wrapper.sh",
