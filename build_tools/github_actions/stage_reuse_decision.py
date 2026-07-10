@@ -580,7 +580,9 @@ def _format_report(
 
     for plat in platforms or ("linux", "windows"):
         plat_available = platform_available.get(plat, ())
-        plat_unavailable = tuple(stage for stage in candidates if stage not in plat_available)
+        plat_unavailable = tuple(
+            stage for stage in candidates if stage not in plat_available
+        )
 
         lines.append(f"{LOG_PREFIX} platform={plat}")
         for stage in plat_available:
@@ -622,10 +624,18 @@ def render_step_summary(result: AutoStageReuse) -> str:
         candidates = _format_stage_list(result.candidate_stages)
         available = _format_stage_list(platform_stages)
         unavailable = _format_stage_list(
-            tuple(stage for stage in result.candidate_stages if stage not in platform_stages)
+            tuple(
+                stage
+                for stage in result.candidate_stages
+                if stage not in platform_stages
+            )
         )
         applied = _format_stage_list(
-            tuple(stage for stage in result.applied_reuse_stages if stage in platform_stages)
+            tuple(
+                stage
+                for stage in result.applied_reuse_stages
+                if stage in platform_stages
+            )
         )
 
         lines.append(f"### Stage reuse analysis ({plat})")

@@ -390,7 +390,8 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertIn(
             "stage 'compiler-runtime' unaffected but artifacts NOT available -> rebuild",
             joined,
-)
+        )
+
     def test_stage_reused_when_present_on_both_platforms(self):
         per_platform = {
             "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),

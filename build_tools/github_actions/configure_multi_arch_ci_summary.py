@@ -70,7 +70,10 @@ def format_summary(
     _append_test_rocm(lines, outputs)
 
     if outputs.impact_analysis_plan is not None:
-        for platform, platform_lines in outputs.impact_analysis_plan.per_platform_report.items():
+        for (
+            platform,
+            platform_lines,
+        ) in outputs.impact_analysis_plan.per_platform_report.items():
             lines.append(f"### Test impact analysis ({platform})")
             lines.append("")
             lines.extend(platform_lines)
