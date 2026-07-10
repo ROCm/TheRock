@@ -50,6 +50,11 @@ on:
         required: false
         type: string
         default: "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
+      rocfft_test_args:
+        description: "Arguments passed to rocfft-test. Defaults to a small kpack splitter smoke-test subset."
+        required: false
+        type: string
+        default: "--gtest_filter=bitwise*"
 
 permissions:
   contents: read
@@ -80,6 +85,7 @@ jobs:
       VM_SSH_USER: therock
       ROCM_REPO_BASEURL: ${{ inputs.rocm_repo_baseurl }}
       ROCM_GPG_KEY: ${{ inputs.rocm_gpg_key }}
+      ROCFFT_TEST_ARGS: ${{ inputs.rocfft_test_args }}
       VM_PID_FILE: /tmp/therock-qcow-${{ github.run_id }}.pid
       VM_SERIAL_LOG: /tmp/therock-qcow-${{ github.run_id }}.serial.log
 
@@ -247,7 +253,7 @@ jobs:
             -o UserKnownHostsFile=/dev/null \
             -p "${VM_SSH_PORT}" \
             "${VM_SSH_USER}@127.0.0.1" \
-            "ROCM_REPO_BASEURL='${ROCM_REPO_BASEURL}' ROCM_GPG_KEY='${ROCM_GPG_KEY}' bash -s" <<'EOF'
+            "ROCM_REPO_BASEURL='${ROCM_REPO_BASEURL}' ROCM_GPG_KEY='${ROCM_GPG_KEY}' ROCFFT_TEST_ARGS='${ROCFFT_TEST_ARGS}' bash -s" <<'EOF'
           set -euxo pipefail
 
           sudo tee /etc/yum.repos.d/rocm.repo >/dev/null <<REPO
@@ -274,7 +280,10 @@ jobs:
           fi
 
           cd /opt/rocm/bin/
-          ./rocfft-test
+          # Run only a small default subset to validate that the kpack splitter
+          # executables launch correctly without running thousands of tests.
+          read -r -a rocfft_args <<< "${ROCFFT_TEST_ARGS}"
+          ./rocfft-test "${rocfft_args[@]}"
           EOF
 
       - name: Stop Linux kernel 4.18 QCOW VM
