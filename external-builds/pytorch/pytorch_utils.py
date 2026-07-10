@@ -13,13 +13,13 @@ from packaging.version import Version
 
 
 def reconcile_agent_visibility_env() -> None:
-    """Drop GPU_DEVICE_ORDINAL when HIP_VISIBLE_DEVICES is set.
+    """Drop GPU_DEVICE_ORDINAL to avoid a fatal HIP agent-visibility conflict.
 
-    Avoids a fatal HIP agent-visibility conflict when a runner sets both;
-    HIP_VISIBLE_DEVICES supersedes.
+    The runner scripts always set HIP_VISIBLE_DEVICES, which supersedes and
+    conflicts with a GPU_DEVICE_ORDINAL injected by the CI runner's isolation
+    env-file (HIP aborts fatally on the mismatch).
     """
-    if os.environ.get("HIP_VISIBLE_DEVICES"):
-        os.environ.pop("GPU_DEVICE_ORDINAL", None)
+    os.environ.pop("GPU_DEVICE_ORDINAL", None)
 
 
 def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
@@ -41,6 +41,10 @@ def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
             - visible_gpus: List of AMDGPU archs physically visible
         Exits on failure.
     """
+    # Runs before the first torch subprocess, so any conflicting
+    # GPU_DEVICE_ORDINAL is removed before HIP initializes.
+    reconcile_agent_visibility_env()
+
     query_script = """
 import sys
 try:
