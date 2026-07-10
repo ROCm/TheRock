@@ -22,8 +22,8 @@ def reconcile_agent_visibility_env() -> None:
     gpu_device_ordinal = os.environ.pop("GPU_DEVICE_ORDINAL", None)
     if gpu_device_ordinal is not None:
         print(
-            f"Warning: dropped conflicting GPU_DEVICE_ORDINAL={gpu_device_ordinal} "
-            "(HIP_VISIBLE_DEVICES supersedes it)"
+            f"[WARNING] Unset GPU_DEVICE_ORDINAL={gpu_device_ordinal} "
+            "(HIP_VISIBLE_DEVICES takes precedence)"
         )
 
 
