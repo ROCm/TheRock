@@ -149,8 +149,8 @@ jobs:
         run: |
           # Ubuntu 24.04 defaults to nftables, but dockerd's bridge networking
           # needs the legacy iptables backend under the WSL2 kernel.
-          update-alternatives --set iptables /usr/sbin/iptables-legacy
-          update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+          # update-alternatives --set iptables /usr/sbin/iptables-legacy
+          # update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
           # WSL2 has no init system here, so launch the daemon detached and wait
           # for the socket before any docker run.
           nohup dockerd >/tmp/dockerd.log 2>&1 &
