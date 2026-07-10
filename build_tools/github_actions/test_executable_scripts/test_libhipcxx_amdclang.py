@@ -86,18 +86,21 @@ is_linux = platform.system() == "Linux"
 compiler_ext = ".exe" if is_windows else ""
 
 HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
+
+# On Windows amdclang++ lives in lib/llvm/bin/, not bin/.
 if is_windows:
-    environ_vars["HIPCXX"] = str(
-        OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin" / "amdclang++.exe"
-    )
+    AMDCLANGPP = OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin" / "amdclang++.exe"
+    environ_vars["HIPCXX"] = str(AMDCLANGPP)
     print("HIPCXX:", environ_vars["HIPCXX"], str(OUTPUT_ARTIFACTS_PATH))
+else:
+    AMDCLANGPP = THEROCK_BIN_PATH / "amdclang++"
 
 # Configure with CMake
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
     f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/amdclang++",
+    f"-DCMAKE_CXX_COMPILER={AMDCLANGPP}",
     "-GNinja",
     "..",
 ]
@@ -105,8 +108,6 @@ cmd = [
 # Add rc compiler for windows
 if is_windows:
     cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
-
-cmd.extend(["-GNinja", ".."])
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
