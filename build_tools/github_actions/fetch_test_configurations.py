@@ -133,6 +133,24 @@ _rocgdb_common = {
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
+
+# Runner assignment for test components
+# =====================================
+# Most components have their runner selected at runtime by the per-component loop
+# below, which draws from the AMDGPU-family runner pool configured in
+# amdgpu_family_matrix.py / therock-ci-config.
+#
+# A component may instead pre-pin its runner by setting "test_runner" directly in
+# its test_matrix entry. The loop will detect this and leave the value untouched.
+# Use this when a component must run on a specific machine class regardless of the
+# GPU family being tested. For example, rocgdb-corefile requires runners that have
+# GPU core-dump support enabled, identified by the label
+# "linux-gfx90a-gpu-rocm-profiler", which is registered separately in the runner pool.
+#
+# Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
+# (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
+# expression. "multi_gpu_runner" routes to multi-GPU machines.
+
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
@@ -318,6 +336,21 @@ test_matrix = {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
+    },
+    # Corefile tests require specific hardware support (GPU core dump capable runners).
+    # test_runner is pre-pinned so the family-based runner selection loop skips it.
+    "rocgdb-corefile": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile",
+        "test_script": (
+            "python ./build/tests/rocgdb/test_rocgdb.py --tests"
+            " gdb.rocm/corefile.exp"
+            " gdb.rocm/core-no-read-special-files.exp"
+            " gdb.rocm/gcore-after-attach.exp"
+            " gdb.rocm/load-core-remote-system.exp"
+            " gdb.rocm/runtime-core.exp"
+        ),
+        "test_runner": "linux-gfx90a-gpu-rocm-profiler",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -903,7 +936,9 @@ def run():
                 )
             elif test_runs_on_multi_gpu_default:
                 component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
-        else:
+        elif "test_runner" not in component:
+            # Regular components use standard runner labels.
+            # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
             # For ASAN builds, use the sandbox runner if available
             if is_asan_build and test_runs_on_sandbox:
                 component["test_runner"] = test_runs_on_sandbox
