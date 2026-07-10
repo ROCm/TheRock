@@ -39,8 +39,16 @@ else()
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
-    # DEBUG: Print THEROCK_SANITIZER value unconditionally to verify it
-    message(STATUS "DEBUG pre_hook_amd-llvm (unconditional): THEROCK_SANITIZER=${THEROCK_SANITIZER}")
+    # DEBUG: Print all relevant variables unconditionally
+    message(STATUS "========== DEBUG pre_hook_amd-llvm START ==========")
+    message(STATUS "DEBUG: THEROCK_SANITIZER='${THEROCK_SANITIZER}'")
+    message(STATUS "DEBUG: THEROCK_SANITIZER_PARENT='${THEROCK_SANITIZER_PARENT}'")
+    message(STATUS "DEBUG: CMAKE_C_FLAGS='${CMAKE_C_FLAGS}'")
+    message(STATUS "DEBUG: CMAKE_CXX_FLAGS='${CMAKE_CXX_FLAGS}'")
+    message(STATUS "DEBUG: CMAKE_C_FLAGS_INIT='${CMAKE_C_FLAGS_INIT}'")
+    message(STATUS "DEBUG: CMAKE_CXX_FLAGS_INIT='${CMAKE_CXX_FLAGS_INIT}'")
+    message(STATUS "DEBUG: RUNTIMES_CMAKE_ARGS (before)='${RUNTIMES_CMAKE_ARGS}'")
+    message(STATUS "========== DEBUG pre_hook_amd-llvm END ==========")
 
     # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
     # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
@@ -48,11 +56,11 @@ else()
     # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
     # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
     if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
-        message(STATUS "DEBUG pre_hook_amd-llvm: THEROCK_SANITIZER=${THEROCK_SANITIZER}")
-        message(STATUS "DEBUG pre_hook_amd-llvm: CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
-        message(STATUS "DEBUG pre_hook_amd-llvm: CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
+        message(STATUS "DEBUG: Condition TRUE - appending DWARF4 flags")
         string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
-        message(STATUS "DEBUG pre_hook_amd-llvm: RUNTIMES_CMAKE_ARGS=${RUNTIMES_CMAKE_ARGS}")
+        message(STATUS "DEBUG: RUNTIMES_CMAKE_ARGS (after)='${RUNTIMES_CMAKE_ARGS}'")
+    else()
+        message(STATUS "DEBUG: Condition FALSE - NOT appending DWARF4 flags")
     endif()
 
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
