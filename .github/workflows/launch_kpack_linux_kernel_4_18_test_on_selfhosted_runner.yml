@@ -292,12 +292,17 @@ jobs:
           set +e
 
           if [ -f "${VM_PID_FILE}" ]; then
-            vm_pid="$(cat "${VM_PID_FILE}")"
+            vm_pid="$(sudo cat "${VM_PID_FILE}")"
             sudo kill "${vm_pid}"
             sleep 10
             if sudo kill -0 "${vm_pid}" 2>/dev/null; then
               sudo kill -9 "${vm_pid}"
             fi
+            sudo rm -f "${VM_PID_FILE}"
+          fi
+
+          if [ -f "${VM_SERIAL_LOG}" ]; then
+            sudo chmod a+r "${VM_SERIAL_LOG}"
           fi
 
       - name: Upload VM serial log
