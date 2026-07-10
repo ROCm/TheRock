@@ -23,7 +23,7 @@ cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/hip_kernel_provider",
-    "--output-on-failure",
+    "-V",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
