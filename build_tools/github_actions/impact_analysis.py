@@ -66,7 +66,6 @@ _ARTIFACT_COMPONENT_RULES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] =
     ),
     (
         ("rocprofiler-sdk", "rocprofiler-compute", "rocprofiler-systems", "aqlprofile"),
-        ("rocprofiler-sdk", "rocprofiler-compute", "rocprofiler-systems", "aqlprofile"),
     ),
     (("rocdecode", "rocjpeg"), ("rocdecode", "rocjpeg")),
     (("rccl", "rocshmem"), ("rccl",)),
