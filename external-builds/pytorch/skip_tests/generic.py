@@ -21,8 +21,8 @@ skip_tests = {
             # persists in the ROCm SDK environment.
             "test_mempool_empty_cache_inactive",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
-            "test_memory_snapshot",
-            "test_memory_plots",
+            # "test_memory_snapshot",
+            # "test_memory_plots",
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
