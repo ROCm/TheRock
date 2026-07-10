@@ -35,6 +35,15 @@ ______________________________________________________________________
 1. **Advisory first.** This skill raises the floor; it does not approve and it does not
    block a merge by itself. Hard enforcement (a required CI status check, a merge queue) is a
    separate, DevOps-owned lane. Do not assume it exists.
+1. **Conform to the machine gate; it outranks this skill.** The repo's contributing guide is the
+   source of truth for PR policy, but when a machine gate enforces it — a policy bot, a required
+   status check that parses the branch/title/description, a merge queue — that gate is the hoop a
+   PR must actually clear, so make the PR conform to it before anything else. Both the guide and
+   the gate outrank this skill; it defers to them and never works around the gate. A machine gate
+   honors none of this skill's waivers or self-evident exemptions, so where they disagree the gate
+   wins. When you advise the author to do something solely to satisfy the gate that is **not** in
+   the contributing guide, say so explicitly so they know the requirement came from the gate, not
+   the guide.
 1. **Follow the repo's own standards.** When a component repo ships its own
    testing/contributing/standards docs (e.g. `CONTRIBUTING.md`, a `docs/testing*.md`, a per-repo
    best-practices file), read and apply them rather than inventing guidance. The skill checks that
@@ -89,6 +98,10 @@ two-sentence reason (and any required approver); the reviewer accepts (`APPROVED
 recorded) or rejects a weak one (`CHANGES REQUESTED`). A bare "N/A" is not a waiver — "why" is mandatory even
 when the rule is waived. Higher-risk waivers need a named approver. Waiver codes are in
 `reference.md`.
+
+Waivers govern the human review floor only. They do **not** override a machine-enforced policy
+gate (see "Conform to the machine gate" in the operating principles): conform to that gate
+regardless of any waiver this skill would otherwise allow.
 
 ### Test substance — the mutation question (and the "why")
 
@@ -146,6 +159,10 @@ not render empty `N/A` fields in the body.
 
 **Workflow:**
 
+1. Detect any machine-enforced PR policy on this repo (a policy bot, required status checks) and
+   conform the branch name, title, description, and test layout to it first, since it is the gate
+   the PR must clear and it outranks this skill's defaults and waivers. Flag any gate requirement
+   not found in the contributing guide so the author knows where it came from.
 1. Inspect the diff: `gh pr view`, `gh pr diff`, `git diff --stat`, targeted file reads.
 1. Classify the change (one or more classes; stricter when unsure).
 1. Scan branch name, commit messages, and diff for tracker keys, issue numbers, and referenced

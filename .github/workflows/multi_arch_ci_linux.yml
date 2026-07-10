@@ -14,6 +14,7 @@ on:
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, build_pytorch,
           build_native_linux, test_python_packages_matrix,
+          pytorch_build_matrix,
           prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
@@ -67,7 +68,7 @@ jobs:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checking out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -142,7 +143,9 @@ jobs:
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
       test_type: ${{ inputs.test_type }}
-      test_labels: ${{ inputs.test_labels }}
+      # Per-family test_labels override global test_labels when specified
+      # Convert array to JSON string for workflow input compatibility
+      test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       changed_projects: ${{ inputs.changed_projects }}
       release_type: ${{ inputs.release_type }}
@@ -289,20 +292,26 @@ jobs:
   # inputs.kpack_split.
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
-    name: Build PyTorch (fat + split) | ${{ matrix.pytorch_git_ref }}
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
+    name: Build PyTorch (fat + split)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        fromJSON(inputs.build_config).build_pytorch == true &&
+        toJSON(fromJSON(inputs.build_config).pytorch_build_matrix) != '[]'
+      }}
     strategy:
       fail-fast: false
       matrix:
-        pytorch_git_ref: ["release/2.10", "release/2.11", "release/2.12"]
+        include: ${{ fromJSON(inputs.build_config).pytorch_build_matrix }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
-      python_version: "3.12"
+      python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
-      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      amdgpu_families: ${{ matrix.amdgpu_families }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
