@@ -1,13 +1,19 @@
 # hipkernelprovider
 [components.dbg."ml-libs/hipkernelprovider/stage"]
 [components.lib."ml-libs/hipkernelprovider/stage"]
-# rocKE ships per-arch AOT bundles (kpack + JSON sidecar + kernel-selection
-# heuristics) under the engine plugin dir. The default lib component only
-# captures shared libraries (*.so/*.dll), so include the per-arch tree
-# explicitly; it then splits per-arch via BUILD_TOPOLOGY
-# split_databases = ["hipkernelprovider"].
+# The default lib component captures the shared-library plugins (*.so/*.dll).
+# rocKE's per-arch AOT bundles (kpack + JSON sidecar + heuristics) are not shared
+# libraries, so include the generic per-arch container explicitly. It splits
+# per-arch via BUILD_TOPOLOGY split_databases = ["hipkernelprovider"] (handler
+# anchors on the arch_content dir), and it is deliberately NOT under
+# engines/hip_kernel_provider/, whose name would collide with the
+# hip_kernel_provider plugin file and shadow it from hipDNN's plugin loader.
+# Future engines (aiter, asm) drop under arch_content/<engine>/ with no changes.
+# NOTE: the rocKE Python SDK (bin/hip_kernel_provider/rocke/**) is dev/test
+# content captured by the [test] component below; it is intentionally NOT shipped
+# in the runtime lib artifact.
 include = [
-  "**/hip_kernel_provider/rocke/**",
+  "**/engines/arch_content/**",
 ]
 exclude = [
   "lib/*.a",
