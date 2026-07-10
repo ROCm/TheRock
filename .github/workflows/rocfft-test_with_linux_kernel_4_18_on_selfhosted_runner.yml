@@ -232,6 +232,9 @@ jobs:
           fi
 
           sudo dnf clean all
+          # Remove any preinstalled ROCm test packages so the install below
+          # uses the versions from the currently configured repositories.
+          sudo dnf remove -y amdrocm-core-sdk amdrocm-fft-test || true
           sudo dnf install -y amdrocm-core-sdk amdrocm-fft-test
 
           if [ -x /opt/rocm/bin/rocminfo ]; then
