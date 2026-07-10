@@ -470,6 +470,7 @@ def main(argv=None):
         projects = ""
         family_overrides = {}
         extra_cmake_options = ""
+        skip_packaging = False
         if args.external_repo_json:
             try:
                 external_repo = json.loads(args.external_repo_json)
@@ -480,6 +481,7 @@ def main(argv=None):
                 family_overrides = external_repo.get("family_overrides", {})
 
                 extra_cmake_options = external_repo.get("extra_cmake_options", "")
+                skip_packaging = bool(external_repo.get("skip_packaging", False))
             except json.JSONDecodeError as e:
                 print(
                     f"Warning: failed to parse external_repo_json: {e}",
@@ -502,6 +504,7 @@ def main(argv=None):
             "build_stages": ",".join(build_stages),
             "projects": projects,
             "family_overrides": family_overrides,
+            "skip_packaging": skip_packaging,
         }
         config["config_json"] = json.dumps(config_json)
         print(

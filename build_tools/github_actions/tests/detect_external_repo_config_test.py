@@ -527,6 +527,39 @@ class TestDeriveBuildStages(unittest.TestCase):
 
         self.assertIn('"build_stages": ""', output)
 
+    def test_skip_packaging_forwarded_true(self):
+        """skip_packaging=true in external_repo JSON is forwarded to config_json."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
+                ' "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON",'
+                ' "skip_packaging": true}',
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn('"skip_packaging": true', output)
+
+    def test_skip_packaging_defaults_false(self):
+        """skip_packaging defaults to false when not set in external_repo JSON."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
+                ' "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"}',
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn('"skip_packaging": false', output)
+
 
 if __name__ == "__main__":
     unittest.main()
