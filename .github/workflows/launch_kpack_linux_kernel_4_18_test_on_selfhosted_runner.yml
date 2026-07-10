@@ -111,27 +111,51 @@ jobs:
         run: |
           set -euo pipefail
 
-          test -e /dev/kvm
-          test -e /dev/vfio/vfio
-          test -f "${QCOW_IMAGE_PATH}"
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::/dev/kvm is missing on this self-hosted runner."
+            echo "Verify that KVM is enabled and available to the GitHub runner host."
+            exit 1
+          fi
+
+          if [ ! -e /dev/vfio/vfio ]; then
+            echo "::error::/dev/vfio/vfio is missing on this self-hosted runner."
+            echo "Verify that VFIO is configured on the GitHub runner host."
+            exit 1
+          fi
+
+          if [ ! -f "${QCOW_IMAGE_PATH}" ]; then
+            echo "::error::QCOW image was not found: ${QCOW_IMAGE_PATH}"
+            echo "Copy the Rocky Linux QCOW image to this path on the self-hosted runner,"
+            echo "or set the qcow_image_path workflow input to the correct image path."
+            exit 1
+          fi
 
           qemu-system-x86_64 --version
           lspci
 
           for pci_device in ${PCI_DEVICES}; do
             device_path="/sys/bus/pci/devices/${pci_device}"
-            test -e "${device_path}"
-            test -e "${device_path}/iommu_group"
+            if [ ! -e "${device_path}" ]; then
+              echo "::error::PCI device ${pci_device} does not exist on this self-hosted runner."
+              echo "Run the passthrough PCI query workflow and copy its pci_devices output."
+              exit 1
+            fi
+
+            if [ ! -e "${device_path}/iommu_group" ]; then
+              echo "::error::PCI device ${pci_device} has no IOMMU group."
+              echo "Verify that IOMMU is enabled on the self-hosted runner host."
+              exit 1
+            fi
 
             driver_path="${device_path}/driver"
             if [ ! -e "${driver_path}" ]; then
-              echo "PCI device ${pci_device} is not bound to a driver."
+              echo "::error::PCI device ${pci_device} is not bound to a driver."
               exit 1
             fi
 
             driver_name="$(basename "$(readlink "${driver_path}")")"
             if [ "${driver_name}" != "vfio-pci" ]; then
-              echo "PCI device ${pci_device} is bound to ${driver_name}, expected vfio-pci."
+              echo "::error::PCI device ${pci_device} is bound to ${driver_name}, expected vfio-pci."
               exit 1
             fi
           done
@@ -145,11 +169,19 @@ jobs:
           install -m 700 -d "${HOME}/.ssh"
 
           if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
-            test -f "${VM_SSH_PRIVATE_KEY_PATH}"
+            if [ ! -f "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
+              echo "::error::VM SSH private key was not found: ${VM_SSH_PRIVATE_KEY_PATH}"
+              echo "Copy the therock SSH private key to this path on the self-hosted runner,"
+              echo "set vm_ssh_private_key_path to the correct key path, or clear it to use"
+              echo "the THEROCK_VM_SSH_KEY GitHub secret."
+              exit 1
+            fi
             cp "${VM_SSH_PRIVATE_KEY_PATH}" "${HOME}/.ssh/therock_vm_key"
           else
             if [ -z "${THEROCK_VM_SSH_KEY}" ]; then
-              echo "Set vm_ssh_private_key_path or the THEROCK_VM_SSH_KEY secret."
+              echo "::error::No VM SSH private key was provided."
+              echo "Set vm_ssh_private_key_path to a key file on the self-hosted runner,"
+              echo "or configure the THEROCK_VM_SSH_KEY GitHub secret."
               exit 1
             fi
             printf '%s\n' "${THEROCK_VM_SSH_KEY}" > "${HOME}/.ssh/therock_vm_key"
