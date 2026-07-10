@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: rocFFT-test launch with Linux kernel 4.18 on self-hosted runner
+name: Launch kpack linux 4.18 kernel test on self-hosted runner
 
 on:
   workflow_dispatch:
@@ -36,10 +36,10 @@ on:
         type: string
         default: "2222"
       vm_ssh_private_key_path:
-        description: "Optional private SSH key path on the self-hosted runner. If empty, THEROCK_VM_SSH_KEY is used."
+        description: "Optional private SSH key path on the self-hosted runner. If empty, github secret THEROCK_VM_SSH_KEY is used."
         required: false
         type: string
-        default: ""
+        default: "/opt/github-runner/ssh/therock_ed25519"
       rocm_repo_baseurl:
         description: "ROCm RPM repository base URL to install from inside the VM."
         required: false
@@ -54,7 +54,7 @@ on:
 permissions:
   contents: read
 
-run-name: rocFFT-test launch with Linux kernel 4.18 on ${{ inputs.runner_hostname }}
+run-name: Launch kpack linux 4.18 kernel test on ${{ inputs.runner_hostname }}
 
 concurrency:
   group: rocm-qcow-vm-${{ inputs.runner_hostname }}
@@ -62,7 +62,7 @@ concurrency:
 
 jobs:
   test_rocm_qcow_vm:
-    name: rocFFT-test launch with Linux kernel 4.18
+    name: Launch kpack linux 4.18 kernel test
     # Register each runner with labels:
     # self-hosted, linux, x64, kvm, vfio, and its hostname (for example, myservername).
     runs-on: [self-hosted, linux, x64, kvm, vfio, "${{ inputs.runner_hostname }}"]
