@@ -15,7 +15,7 @@ on:
         description: "Absolute path to the Rocky Linux QCOW image on the self-hosted runner."
         required: true
         type: string
-        default: "/var/lib/libvirt/images/rockylinux-8.10-therock.qcow2"
+        default: "/opt/github-runner/images/rockylinux-8.10-therock.qcow2"
       pci_devices:
         description: "Space-separated PCI BDFs to pass through to the VM, for example: 0000:03:00.0 0000:03:00.1"
         required: true
