@@ -1385,6 +1385,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         changed_paths=git_context.changed_files,
         stage_impact_result=stage_impact_result,
         topology=topology,
+        platforms=("linux", "windows"),
         dry_run=True,
     )
 

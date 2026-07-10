@@ -102,6 +102,7 @@ class ImpactAnalysisPlan:
     full_rebuild_required: bool
     reasons: tuple[str, ...]
     report_lines: tuple[str, ...] = field(default_factory=tuple)
+    per_platform_report: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def _normalize_name(name: str) -> str:
@@ -299,6 +300,7 @@ def compute_test_matrix_filter(
     changed_paths: Sequence[str] | None,
     stage_impact_result,
     topology,
+    platforms: Sequence[str],
     dry_run: bool = True,
 ) -> ImpactAnalysisPlan:
     """
@@ -397,6 +399,18 @@ def compute_test_matrix_filter(
             "[TEST-IMPACT] dry-run only: no tests were removed from the matrix."
         )
 
+    per_platform_report = {}
+
+    for platform in platforms:
+        per_platform_report[platform] = (
+            f"- full rebuild required: `{full_rebuild_required}`",
+            f"- changed paths: {', '.join(changed_paths_t) if changed_paths_t else '_none_'}",
+            f"- affected source sets: {', '.join(affected_source_sets) if affected_source_sets else '_none_'}",
+            f"- affected test components: {', '.join(affected_components) if affected_components else '_none_'}",
+            f"- selected test components: {', '.join(selected_test_components)}",
+            f"- skipped test components: {', '.join(skipped_test_components) if skipped_test_components else '_none_'}",
+        )
+
     return ImpactAnalysisPlan(
         changed_paths=changed_paths_t,
         affected_source_sets=affected_source_sets,
@@ -406,6 +420,7 @@ def compute_test_matrix_filter(
         full_rebuild_required=full_rebuild_required,
         reasons=reasons,
         report_lines=tuple(report_lines),
+        per_platform_report=per_platform_report,
     )
 
 

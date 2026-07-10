@@ -73,7 +73,7 @@ class WorkflowTimingTest(unittest.TestCase):
                 )
             ]
         )
-        self.assertIn("Queue-time / execution-time", summary)
+        self.assertIn("CI Job Timing Summary", summary)
         self.assertIn("build_multi_arch_stages", summary)
         self.assertIn("ubuntu-24.04", summary)
         self.assertIn("rebuilt", summary)

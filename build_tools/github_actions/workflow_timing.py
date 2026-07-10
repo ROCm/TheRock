@@ -158,8 +158,8 @@ def format_timing_summary(records: Sequence[TimingRecord]) -> str:
             return "_n/a_"
         return f"{value:.1f}s"
 
-    lines = ["### Queue-time / execution-time", ""]
-    lines.append("| job | runner | decision | queue | run | started | completed |")
+    lines = ["### CI Job Timing Summary", ""]
+    lines.append("| Job | Runner Label | Status | Queue (s) | Run (s) | Started At | Completed At |")
     lines.append("| --- | --- | --- | ---: | ---: | --- | --- |")
     for record in records:
         lines.append(

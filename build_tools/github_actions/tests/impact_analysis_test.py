@@ -125,6 +125,7 @@ class TestComputeTestMatrixFilter(unittest.TestCase):
             changed_paths=["rocm-libraries/projects/rocBLAS/x.cpp"],
             stage_impact_result=impact,
             topology=FakeTopology(),
+            platforms=("linux", "windows"),
             dry_run=True,
         )
 
@@ -145,6 +146,7 @@ class TestComputeTestMatrixFilter(unittest.TestCase):
             changed_paths=["build_tools/foo.py"],
             stage_impact_result=impact,
             topology=FakeTopology(),
+            platforms=("linux", "windows"),
             dry_run=True,
         )
 
@@ -163,6 +165,7 @@ class TestComputeTestMatrixFilter(unittest.TestCase):
             changed_paths=["rocm-libraries/projects/rocJPEG/y.cpp"],
             stage_impact_result=impact,
             topology=FakeTopology(),
+            platforms=("linux", "windows"),
             dry_run=False,
         )
 

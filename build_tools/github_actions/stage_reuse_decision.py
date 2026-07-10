@@ -575,28 +575,25 @@ def _format_report(
             f"{LOG_PREFIX} no baseline run contains artifacts for all "
             f"candidate stages; rebuilding all candidates."
         )
+
     verb = "WILL be skipped" if mode is StageReuseMode.ENFORCE else "WOULD be skipped"
-    for stage in available:
-        lines.append(
-            f"{LOG_PREFIX} stage '{stage}' unaffected AND available in "
-            f"baseline on all platforms -> {verb}"
-        )
-    for stage in unavailable:
-        # Call out WHICH platforms are missing the artifacts so the mismatch
-        # (e.g. present on linux, absent on windows) is visible in the log.
-        if len(platforms) > 1:
-            missing = [
-                plat
-                for plat in platforms
-                if stage not in platform_available.get(plat, ())
-            ]
-            where = f" (missing on: {', '.join(missing)})" if missing else ""
-        else:
-            where = ""
-        lines.append(
-            f"{LOG_PREFIX} stage '{stage}' unaffected but artifacts "
-            f"NOT available -> rebuild{where}"
-        )
+
+    for plat in platforms or ("linux", "windows"):
+        plat_available = platform_available.get(plat, ())
+        plat_unavailable = tuple(stage for stage in candidates if stage not in plat_available)
+
+        lines.append(f"{LOG_PREFIX} platform={plat}")
+        for stage in plat_available:
+            lines.append(
+                f"{LOG_PREFIX}   stage '{stage}' unaffected AND available in "
+                f"baseline -> {verb}"
+            )
+        for stage in plat_unavailable:
+            lines.append(
+                f"{LOG_PREFIX}   stage '{stage}' unaffected but artifacts "
+                f"NOT available -> rebuild"
+            )
+
     if rebuild:
         lines.append(f"{LOG_PREFIX} stages rebuilding (impacted): {', '.join(rebuild)}")
     if mode is StageReuseMode.DRY_RUN and available:
@@ -616,34 +613,44 @@ def _format_stage_list(stages: tuple[str, ...]) -> str:
 
 def render_step_summary(result: AutoStageReuse) -> str:
     """Render a GitHub step-summary markdown block for the analysis."""
-    baseline = f"`{result.baseline_run_id}`" if result.baseline_run_id else "_none_"
-    candidates = _format_stage_list(result.candidate_stages)
-    available = _format_stage_list(result.available_stages)
-    applied = _format_stage_list(result.applied_reuse_stages)
+    platforms = tuple(result.platform_available) or ("linux", "windows")
 
-    out = ["### Stage reuse analysis", ""]
-    out.append(f"- mode: `{result.mode.value}`")
-    out.append(f"- full rebuild required: `{result.full_rebuild_required}`")
-    out.append(f"- baseline run checked: {baseline}")
-    out.append(f"- unaffected candidates: {candidates}")
-    out.append(f"- available in baseline: {available}")
-    out.append(f"- applied: {applied}")
-    if result.platform_available:
-        out.append("- available per platform:")
-        for plat, stages in result.platform_available.items():
-            out.append(f"  - {plat}: {_format_stage_list(stages)}")
-    if result.reasons:
-        out.append("- reasons:")
-        for reason in result.reasons:
-            out.append(f"  - {reason}")
-    if result.mode is StageReuseMode.DRY_RUN and result.available_stages:
-        out.append("")
-        out.append(
-            "> Dry-run only: no build steps were skipped. Artifacts were "
-            "verified against the baseline run above. Set "
-            "`STAGE_REUSE_MODE=reuse-stage` after review to enable skipping."
+    lines: list[str] = []
+    for plat in platforms:
+        platform_stages = result.platform_available.get(plat, ())
+        baseline = f"`{result.baseline_run_id}`" if result.baseline_run_id else "_none_"
+        candidates = _format_stage_list(result.candidate_stages)
+        available = _format_stage_list(platform_stages)
+        unavailable = _format_stage_list(
+            tuple(stage for stage in result.candidate_stages if stage not in platform_stages)
         )
-    return "\n".join(out)
+        applied = _format_stage_list(
+            tuple(stage for stage in result.applied_reuse_stages if stage in platform_stages)
+        )
+
+        lines.append(f"### Stage reuse analysis ({plat})")
+        lines.append("")
+        lines.append(f"- mode: `{result.mode.value}`")
+        lines.append(f"- full rebuild required: `{result.full_rebuild_required}`")
+        lines.append(f"- baseline run checked: {baseline}")
+        lines.append(f"- unaffected candidates: {candidates}")
+        lines.append(f"- available in baseline: {available}")
+        lines.append(f"- not available on this platform: {unavailable}")
+        lines.append(f"- applied: {applied}")
+        if result.reasons:
+            lines.append("- reasons:")
+            for reason in result.reasons:
+                lines.append(f"  - {reason}")
+        if result.mode is StageReuseMode.DRY_RUN and result.available_stages:
+            lines.append("")
+            lines.append(
+                "> Dry-run only: no build steps were skipped. Artifacts were "
+                "verified against the baseline run above. Set "
+                "`STAGE_REUSE_MODE=reuse-stage` after review to enable skipping."
+            )
+        lines.append("")
+
+    return "\n".join(lines).rstrip()
 
 
 def log_report(result: AutoStageReuse) -> None:
