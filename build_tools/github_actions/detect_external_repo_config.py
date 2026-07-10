@@ -35,9 +35,17 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
+
+# build_tools/ must be on sys.path so _therock_utils is importable.
+# When run as `python build_tools/github_actions/detect_external_repo_config.py`
+# from the repo root, only build_tools/github_actions/ is implicitly on the path.
+_BUILD_TOOLS_DIR = Path(__file__).parent.parent
+if str(_BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions_api import gha_set_output
+from _therock_utils.build_topology import get_topology
 
 
 # Repository configuration map
@@ -68,6 +76,25 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
 def _log_warning(message: str) -> None:
     """Helper to log warning messages to stderr."""
     print(f"WARNING: {message}", file=sys.stderr)
+
+
+def _derive_build_stages(skip_submodules: List[str]) -> List[str]:
+    """Derive the required build stages for the given submodules from BUILD_TOPOLOGY.toml.
+
+    For each skipped submodule (which is being replaced by an external checkout),
+    look up the full set of stages required to build it (owning stage plus all
+    stages that produce artifacts it depends on transitively). The result is used
+    to skip irrelevant stages entirely in multi_arch_build_portable_linux.yml.
+
+    Returns a sorted, deduplicated list of stage names, or [] if none are found
+    (meaning no restriction — all stages run).
+    """
+    try:
+        topology = get_topology()
+    except FileNotFoundError:
+        return []
+    stages = topology.get_stages_for_projects(skip_submodules)
+    return sorted(stages)
 
 
 def get_repo_config(repo_name: str) -> Dict[str, Any]:
@@ -443,7 +470,6 @@ def main(argv=None):
         projects = ""
         family_overrides = {}
         extra_cmake_options = ""
-
         if args.external_repo_json:
             try:
                 external_repo = json.loads(args.external_repo_json)
@@ -460,6 +486,12 @@ def main(argv=None):
                     file=sys.stderr,
                 )
 
+        # Derive build stages from BUILD_TOPOLOGY.toml: each skipped submodule
+        # is looked up to find which build stage(s) own it, used to skip
+        # irrelevant stages in the CI workflow.
+        build_stages = _derive_build_stages(config.get("skip_submodules", []))
+        print(f"Derived build_stages: {build_stages}", file=sys.stderr)
+
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
@@ -467,6 +499,7 @@ def main(argv=None):
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
             "extra_cmake_options": extra_cmake_options,
+            "build_stages": ",".join(build_stages),
             "projects": projects,
             "family_overrides": family_overrides,
         }
