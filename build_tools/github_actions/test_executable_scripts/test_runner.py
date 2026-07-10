@@ -193,7 +193,13 @@ COMPONENT_OVERRIDES = {
         "test_dir": ["share", "rocprofiler-systems", "tests"],
         "additional_env_paths": {
             "PATH": [["bin"]],
-            "LD_LIBRARY_PATH": [["share", "rocprofiler-systems", "examples", "lib"]],
+            "LD_LIBRARY_PATH": [
+                [
+                    "lib",
+                    "rocprofiler-systems",
+                ],  # Prioritize the bundled Dyninst runtime
+                ["share", "rocprofiler-systems", "examples", "lib"],
+            ],
         },
         "env": {
             "ROCPROFSYS_INSTALL_DIR": "{rocm_path}",
