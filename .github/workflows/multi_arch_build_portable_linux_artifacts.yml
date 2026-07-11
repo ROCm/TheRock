@@ -104,6 +104,10 @@ jobs:
       # files" comes from Tensile or another component. Remove after diagnosis.
       SCCACHE_LOG: debug
       SCCACHE_ERROR_LOG: /tmp/sccache-debug.log
+      # VALIDATION (#748): record every per-TU -cuid the launcher injects so we
+      # can confirm each translation unit gets a distinct id (no __hip_cuid_
+      # collisions). Remove after validation.
+      THEROCK_CUID_LOG: /tmp/cuid-injections.log
 
     steps:
       - name: Checkout Repository
@@ -185,7 +189,12 @@ jobs:
         run: |
           COMPILER_LAUNCHER_ARGS=""
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
-            COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
+            # Route CMake-driven compiles through the per-TU -cuid launcher ahead
+            # of sccache so RDC objects don't collide on __hip_cuid_ under caching
+            # (ROCm/TheRock#748). The wrapper finds sccache via THEROCK_SCCACHE
+            # (written to $GITHUB_ENV by setup_sccache_rocm.py --gha).
+            CUID_LAUNCHER="${PWD}/build_tools/cuid_launcher.py"
+            COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=${CUID_LAUNCHER} -DCMAKE_CXX_COMPILER_LAUNCHER=${CUID_LAUNCHER}"
           elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
             COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           fi
@@ -251,6 +260,19 @@ jobs:
             | sort | uniq -c | sort -rn | head -40
           echo "=== first 15 full non-cacheable command lines (verbatim) ==="
           grep -aiE 'CannotCache|not cacheable|multiple input files' "$LOG" | head -15
+
+      # VALIDATION (#748): confirm the launcher gave every HIP TU a distinct
+      # -cuid (injection count == unique-cuid count => no collisions).
+      - name: Dump injected -cuid values
+        if: ${{ !cancelled() && inputs.cache_type == 'sccache' }}
+        run: |
+          LOG="/tmp/cuid-injections.log"
+          if [ ! -f "$LOG" ]; then echo "no -cuid injections logged"; exit 0; fi
+          echo "=== total -cuid injections ==="; wc -l < "$LOG"
+          echo "=== unique cuid ids (== total => no collisions) ==="; cut -f1 "$LOG" | sort -u | wc -l
+          echo "=== duplicated cuid ids (should be empty) ==="
+          cut -f1 "$LOG" | sort | uniq -d | head
+          echo "=== sample injections (first 15) ==="; head -15 "$LOG"
 
       - name: Test Packaging
         run: |
