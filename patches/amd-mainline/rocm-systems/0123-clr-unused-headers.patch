@@ -1,0 +1,38 @@
+From 5d3353266cd6a58b62fcaf07ece2ea3b288f915b Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Sat, 11 Jul 2026 01:43:23 +0000
+Subject: [PATCH] [clr] Remove unused includes
+
+---
+ .../tests/ocltst/module/perf/OCLPerfKernelThroughput.h    | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h b/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h
+index b23ada56fb..d612c5ea90 100644
+--- a/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h
++++ b/projects/clr/opencl/tests/ocltst/module/perf/OCLPerfKernelThroughput.h
+@@ -17,21 +17,13 @@
+ #ifndef _OCL_KernelThroughput_H_
+ #define _OCL_KernelThroughput_H_
+ 
+-#ifdef WIN32
+-#include "xmmintrin.h"
+-#endif
+-
+ #include "OCLTestImp.h"
+ // #include <sstream>
+-// #define WIN32_LEAN_AND_MEAN //Restricts windows.h to include only the core
+-// API. #include "windows.h" #undef Yield #include <process.h> #include
+-//<xmmintrin.h> #include <emmintrin.h> #include <pmmintrin.h>
+ 
+ #define LARGE_INT long long
+ #define UNSIGNED_LARGE_INT unsigned long long
+ #define MAX_LOOP_ITER 10
+ typedef cl_float4 float4;
+-typedef void (*CPUKernel)(__m128*, __m128*, unsigned int);
+ 
+ class OCLPerfKernelThroughput : public OCLTestImp {
+  public:
+-- 
+2.52.0
+
