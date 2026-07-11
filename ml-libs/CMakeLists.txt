@@ -317,7 +317,6 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       -DHIPKERNELPROVIDER_ENABLE_TESTS=${THEROCK_BUILD_TESTING}
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
-      -DROCKE_KPACK_PYTHON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -328,11 +327,9 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       therock-flatbuffers
       therock-nlohmann-json
       amd-comgr
-      rocm-kpack
     RUNTIME_DEPS
       hip-clr
       hipdnn_integration_tests
-      rocm-kpack
     TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipkernelprovider
