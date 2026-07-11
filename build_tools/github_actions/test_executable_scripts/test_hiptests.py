@@ -87,6 +87,11 @@ TEST_TO_IGNORE = {
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
         ]
     },
+    "gfx125X-dcgpu": {
+        "linux": [
+            "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
+        ]
+    },
 }
 
 
@@ -152,8 +157,14 @@ def setup_env(env):
     else:
         copy_dlls_exe_path()
 
+    # Set env vars for gfx125X-dcgpu
+    if AMDGPU_FAMILIES == "gfx125X-dcgpu":
+        env["HSA_ENABLE_SDMA"] = "1"
+
 
 def execute_tests(env):
+    # Allow for more time in ASAN mode to run the tests.
+    timeout = 1500 if is_asan() else 600
     cmd = [
         "ctest",
         "--tests-information",
@@ -161,6 +172,8 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--timeout",
+        f"{timeout}",
     ]
 
     # If quick tests are enabled, run only the smoke test subset
