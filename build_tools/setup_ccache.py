@@ -25,6 +25,7 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 """
 
 import argparse
+import os
 from pathlib import Path
 import platform
 import sys
@@ -39,6 +40,16 @@ POSIX_COMPILER_CHECK_SCRIPT = (
 )
 CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+
+# Redis (Valkey) remote cache: an in-cluster, ClusterIP-only service in the
+# prod build cluster (therock-runners-prod). No authentication, matching the
+# bazel-remote posture (relies on cluster network isolation). The endpoint is
+# overridable via CCACHE_REDIS_ENDPOINT so it is not hardcoded per environment.
+CACHE_SRV_REDIS_ENDPOINT = os.environ.get(
+    "CCACHE_REDIS_ENDPOINT",
+    "redis-ccache-svc.redis-ccache-ns.svc.cluster.local:6379",
+)
+CACHE_SRV_REDIS = f"redis://{CACHE_SRV_REDIS_ENDPOINT}|connect-timeout=50"
 
 # Bump this version when making hash-affecting config changes (sloppiness,
 # compiler_check, etc.) to logically isolate new cache entries from stale
@@ -65,6 +76,14 @@ CONFIG_PRESETS_MAP = {
     },
     "github-oss-release": {
         "remote_storage": CACHE_SRV_REL,
+        "max_size": "10G",
+        "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
+    },
+    # In-cluster Redis (Valkey) remote cache. Opt-in via the CI cache_type
+    # input; the default remains sccache. max_size below applies to the local
+    # cache tier that fronts the remote Redis store.
+    "github-oss-redis": {
+        "remote_storage": CACHE_SRV_REDIS,
         "max_size": "10G",
         "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
     },

@@ -50,6 +50,15 @@ on:
         type: boolean
         default: true
         description: "Build PyTorch wheels"
+      cache_type:
+        type: choice
+        default: "sccache"
+        description: "Compiler cache for Linux builds. Default sccache; ccache-redis opts into the in-cluster Redis backend."
+        options:
+          - sccache
+          - ccache
+          - ccache-redis
+          - none
   pull_request:
     types:
       - labeled
@@ -103,6 +112,8 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      # Opt-in only via manual dispatch; PR/push default to sccache.
+      cache_type: ${{ inputs.cache_type || 'sccache' }}
     permissions:
       contents: read
       id-token: write

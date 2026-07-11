@@ -157,7 +157,9 @@ def main():
                 if key == "HIP_CLANG_LAUNCHER":
                     f.write(f"{key}={value}\n")
         if "HIP_CLANG_LAUNCHER" in env:
-            print(f"Wrote HIP_CLANG_LAUNCHER={env['HIP_CLANG_LAUNCHER']} to $GITHUB_ENV")
+            print(
+                f"Wrote HIP_CLANG_LAUNCHER={env['HIP_CLANG_LAUNCHER']} to $GITHUB_ENV"
+            )
     else:
         print("Configure a ROCm build with:")
         for key, value in env.items():

@@ -70,7 +70,7 @@ on:
         type: string
         default: ""
       cache_type:
-        description: "Compiler cache type (sccache, ccache, or none)"
+        description: "Compiler cache type (sccache, ccache, ccache-redis, or none)"
         type: string
         default: "sccache"
 
@@ -130,8 +130,17 @@ jobs:
 
       - name: Setup ccache
         run: |
+          # ccache-redis opts into the in-cluster Redis remote (github-oss-redis
+          # preset); all other cache types keep the release-type mapping
+          # (bazel-remote presets). --config-preset and --release-type are
+          # mutually exclusive, so pass exactly one.
+          if [ "${{ inputs.cache_type }}" = "ccache-redis" ]; then
+            CCACHE_PRESET_ARGS="--config-preset github-oss-redis"
+          else
+            CCACHE_PRESET_ARGS="--release-type ${{ inputs.release_type }}"
+          fi
           ./build_tools/setup_ccache.py \
-            --release-type "${{ inputs.release_type }}" \
+            ${CCACHE_PRESET_ARGS} \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
@@ -186,7 +195,7 @@ jobs:
           COMPILER_LAUNCHER_ARGS=""
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
             COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
-          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+          elif [ "${{ inputs.cache_type }}" = "ccache" ] || [ "${{ inputs.cache_type }}" = "ccache-redis" ]; then
             COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           fi
           # Disable unity/jumbo builds so sccache can cache individual compilations.
@@ -231,7 +240,7 @@ jobs:
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
             echo "Sccache Stats:"
             sccache --show-stats || true
-          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+          elif [ "${{ inputs.cache_type }}" = "ccache" ] || [ "${{ inputs.cache_type }}" = "ccache-redis" ]; then
             echo "CCache Stats:"
             ccache -s -v
           fi

@@ -15,8 +15,11 @@ cache with similar goals. We are evaluating both ccache and sccache for
 use across ROCm and downstream frameworks like PyTorch (see
 `build_tools/setup_sccache_rocm.py`). The goal is to standardize on a
 cache setup that works well across our full ecosystem of projects using
-shared infrastructure (e.g., cache servers). This page focuses on ccache,
-which is the current default for TheRock CI.
+shared infrastructure (e.g., cache servers). This page focuses on ccache.
+
+Note: multi-arch CI currently defaults to **sccache** (S3-backed); ccache is
+used for local/developer builds, as the bazel-remote-backed fallback, and as
+the opt-in in-cluster Redis backend described below.
 
 ### Key files
 
@@ -41,6 +44,31 @@ remote cache, accessed via ccache's `remote_storage` option with
 
 Both servers are on the Kubernetes cluster, accessible without
 authentication from any pod in the cluster.
+
+### In-cluster Redis backend (opt-in)
+
+The `github-oss-redis` preset points ccache's `remote_storage` at an
+in-cluster Redis (Valkey) service in the prod build cluster
+(`therock-runners-prod`):
+
+| Preset             | Server                                                    | Used by                          |
+| ------------------ | --------------------------------------------------------- | -------------------------------- |
+| `github-oss-redis` | `redis-ccache-svc.redis-ccache-ns.svc.cluster.local:6379` | Opt-in `cache_type=ccache-redis` |
+
+Like bazel-remote, it is a `ClusterIP` service with **no authentication**,
+relying on cluster network isolation. The endpoint can be overridden with the
+`CCACHE_REDIS_ENDPOINT` environment variable. It is deployed from
+`ROCm/TheRock-Infra` (`helm/redis-ccache`, `deploy-redis-ccache-prod.yaml`).
+
+Select it from a manual `Multi-Arch CI` run via the `cache_type` input
+(`ccache-redis`); PR/push builds keep the default (`sccache`). Since the
+service is in-cluster only, builds must run on the AWS in-cluster pool
+(`aws-linux-scale-rocm-prod`). Windows/sanitizer builds on Azure cannot reach
+it until they move into the same AWS cluster.
+
+Caveat: ccache's built-in Redis backend has no TLS and is **deprecated for
+removal in ccache 4.14/4.15**. This backend works with the pinned 4.11.2 but
+has a shelf-life; revisit if/when ccache is upgraded.
 
 ### Namespace version
 

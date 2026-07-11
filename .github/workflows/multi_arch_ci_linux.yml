@@ -48,6 +48,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, ccache-redis, or none)"
+        type: string
+        default: "sccache"
 
 permissions:
   contents: read
@@ -112,6 +116,7 @@ jobs:
       external_repo_config: ${{ inputs.external_repo_config }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
