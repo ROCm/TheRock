@@ -180,7 +180,12 @@ jobs:
         run: |
           COMPILER_LAUNCHER_ARGS=""
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
-            COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
+            # Route CMake-driven compiles through the per-TU -cuid launcher ahead
+            # of sccache so RDC objects don't collide on __hip_cuid_ under caching
+            # (ROCm/TheRock#748). The wrapper finds sccache via THEROCK_SCCACHE
+            # (written to $GITHUB_ENV by setup_sccache_rocm.py --gha).
+            CUID_LAUNCHER="${PWD}/build_tools/cuid_launcher.py"
+            COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=${CUID_LAUNCHER} -DCMAKE_CXX_COMPILER_LAUNCHER=${CUID_LAUNCHER}"
           elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
             COMPILER_LAUNCHER_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
           fi
