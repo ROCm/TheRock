@@ -118,7 +118,12 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
+    # DRY-RUN: skip wsl-rocdxg. It builds on a Windows host and the assigned
+    # runner is misprovisioned (no Visual Studio/MSVC/Windows SDK), failing a
+    # precheck unrelated to rocKE/comgr. rocdxg is optional in packaging
+    # (_dist_info.py) and nothing downstream needs it, so skipping is safe and
+    # lets the Linux wheel/bundling stages run. Revert before merge.
+    if: ${{ false }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
