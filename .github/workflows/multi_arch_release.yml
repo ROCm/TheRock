@@ -173,7 +173,6 @@ jobs:
       ref: ${{ needs.setup.outputs.ref }}
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
-      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows

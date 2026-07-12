@@ -59,10 +59,6 @@ on:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
         type: string
         default: ""
-      cache_type:
-        description: "Compiler cache type (sccache, ccache, or none)"
-        type: string
-        default: "sccache"
 
 permissions:
   contents: read
@@ -86,7 +82,6 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
-      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
@@ -110,7 +105,6 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
-      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
@@ -144,7 +138,6 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
-      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
@@ -168,7 +161,6 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
-      cache_type: ${{ inputs.cache_type }}
     permissions:
       contents: read
       id-token: write
