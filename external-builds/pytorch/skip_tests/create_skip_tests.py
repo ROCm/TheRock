@@ -253,6 +253,7 @@ def get_tests(
     tests = create_list(
         amdgpu_family=amdgpu_family, pytorch_version=pytorch_version, platform=platform
     )
+    print(f"Tests to be {'skipped' if create_skip_list else 'included'}:\n>>>{'\n>>>'.join(tests)}")
 
     # Format as pytest -k expression
     if create_skip_list:
