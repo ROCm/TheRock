@@ -1674,8 +1674,25 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@CMAKE_C_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@CMAKE_CXX_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@CMAKE_LINKER@\")\n")
-  string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
-  string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
+  # Some subprojects drive the compiler through their own wrapper and break when
+  # a compiler launcher is inserted in front of it:
+  #   rocprofiler-systems-examples: uses rocprof-sys-launch-compiler, which loses
+  #     the HIP flags (e.g. --hip-path) when wrapped -> "hip/hip_runtime.h not found".
+  #   hip-tests: emits multi-arch bundles with multiple outputs per invocation.
+  # Drop the launcher for those (they build without caching). This mirrors the
+  # HIP_CLANG_LAUNCHER blocklist below.
+  get_target_property(_logical_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+  if(NOT _logical_name)
+    set(_logical_name "${target_name}")
+  endif()
+  set(_compiler_launcher_blocklist "rocprofiler-systems-examples" "hip-tests")
+  if(_logical_name IN_LIST _compiler_launcher_blocklist)
+    string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"\")\n")
+  else()
+    string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
+  endif()
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
   if(MSVC AND compiler_toolchain)
     # The system compiler and the toolchain compiler are incompatible, so we
