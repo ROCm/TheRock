@@ -136,6 +136,16 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # fail fast (no heap-corruption marker), so a module exclude is cleaner than a
     # large -k block.
     "distributed/test_symmetric_memory",
+    # Run 29103767031 default shards 4/10 & 8/10 (and inductor 2/4 & 3/4 via the
+    # INDUCTOR_UNIT_TESTS allowlist): inductor/test_aot_inductor.py dies at import
+    # (`ImportError: cannot import name 'CDNA5OrLater' from
+    # torch.testing._internal.common_cuda`). The test source references the CDNA5
+    # (gfx950/MI350) arch gate, but the ROCm 7.15.0a20260710 wheel's common_cuda.py
+    # only defines up to CDNA2OrLater — a test/wheel version skew. Because the crash
+    # is at collection time, no per-test -k skip can catch it; the whole module must
+    # be excluded until the wheel's common_cuda.py catches up. Also removed from
+    # INDUCTOR_UNIT_TESTS below (the inductor --include allowlist ignores this list).
+    "inductor/test_aot_inductor",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
@@ -157,10 +167,13 @@ INDUCTOR_GENERIC_TESTS = [
 INDUCTOR_UNIT_TESTS = [
     "inductor/test_torchinductor",
     "inductor/test_torchinductor_opinfo",
-    # inductor/test_aot_inductor was previously dropped here as a "hang"; it was
-    # actually the rocprofiler-sdk shutdown crash + --reruns amplification, fixed
-    # by HSA_TOOLS_DISABLE_REGISTER=1 (setup_env). Restored.
-    "inductor/test_aot_inductor",
+    # inductor/test_aot_inductor was restored here after the rocprofiler-sdk shutdown
+    # crash was fixed (HSA_TOOLS_DISABLE_REGISTER=1), but on run 29103767031 it began
+    # failing at IMPORT with `ImportError: cannot import name 'CDNA5OrLater'` — a
+    # test/wheel version skew (see EXCLUDED_TEST_MODULES above). The inductor
+    # --include allowlist does NOT consult EXCLUDED_TEST_MODULES, so it must be
+    # dropped here explicitly. Restore once the wheel's common_cuda.py defines
+    # CDNA5OrLater.
 ]
 
 

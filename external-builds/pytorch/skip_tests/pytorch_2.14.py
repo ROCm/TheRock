@@ -26,10 +26,6 @@ skip_tests = {
             # pool race condition under concurrent conv2d threads, independent of whether
             # expandable segments are enabled. Expression covers both files.
             "(TestCuda and test_cudnn_multiple_threads_same_device)",
-            # Run 28379269101 default shard 9/10, job 84077240401:
-            # TestBlockStateAbsorption::test_no_triton_on_import spawns a subprocess
-            # (import torch; torch.rand(2, device='cuda')) that dies with SIGABRT.
-            "(TestBlockStateAbsorption and test_no_triton_on_import)",
         ],
         "cuda_expandable_segments": [
             # test_cuda_expandable_segments un-excluded from EXCLUDED_TEST_MODULES
@@ -160,20 +156,75 @@ skip_tests = {
             # TestGpuWrapper::test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code
             # expects at::vec:: in generated cpp wrapper; ROCm codegen omits CPU vec ISA.
             "(TestGpuWrapper and test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code)",
-            # Run 28379269101 default shard 2/10, job 84077240381:
-            # CudaReproTests::test_triton_interpret (TRITON_INTERPRET=1 + torch.compile)
-            # spawns a child that dies with SIGABRT (subprocess.CalledProcessError).
-            "(CudaReproTests and test_triton_interpret)",
             # Run 28379269101 default shard 8/10, job 84077240436:
             # TestExternKernelCaller::test_extern_kernel_benchmark_valid_timing
             # InductorError: AssertionError - incorrect result from extern-kernel choice.
             "(TestExternKernelCaller and test_extern_kernel_benchmark_valid_timing)",
+            # Run 29103767031 default shards 1,2,3,5,6,9,10 + inductor 1/4:
+            # Inductor codegen emits nan for floor-division of non-finite floats
+            # (torch.div rounding_mode="floor"); differs from eager across all dtypes
+            # (float16/float32/float64/bfloat16), on GPUTests and DynamicShapes CPU/GPU
+            # variants and the compile-subprocess path. One substring covers all 16.
+            "test_div_floor_float_nonfinite",
+            # Run 29103767031 default shard 7/10:
+            # TestDecomposeShardDimAllToAll — torch._inductor.config.
+            # decompose_shard_dim_alltoall does not exist in the rocm7.15.0a20260710
+            # wheel (test source ahead of the wheel's inductor config); whole class
+            # fails. TODO: revisit once the wheel gains the config flag.
+            "TestDecomposeShardDimAllToAll",
+            # Run 29103767031 default shard 6/10:
+            # FlexAttention on ROCm — test_narrow_kv_block_size hits a LoweringException
+            # (Q/KV block sizes must be divisible), test_sparse_block_not_dividing_seqlen
+            # has a large numerical mismatch (80.9% of elements).
+            "(TestFlexAttentionCUDA and test_narrow_kv_block_size_uses_clamped_default_config_cuda)",
+            "(TestFlexAttentionCUDA and test_sparse_block_not_dividing_seqlen_cuda)",
+            # Run 29103767031 default shard 1/10:
+            # GPUTests::test_modified_bessel_i_inf_matches_eager — inductor codegen
+            # returns nan vs eager for modified_bessel_i at inf.
+            "(GPUTests and test_modified_bessel_i_inf_matches_eager)",
+            # Run 29103767031 default shard 7/10:
+            # FuncTorchHigherOrderOpTestsWithCompiledAutograd::test_hessian — the
+            # compiled-autograd generated FX graph differs (formatting/whitespace of
+            # emitted code) from the expected string on ROCm.
+            "(FuncTorchHigherOrderOpTestsWithCompiledAutograd and test_hessian)",
         ],
-        "extension_backend": [
-            # Run 27361388921 default shard 4/10, job 80849478614:
-            # ExtensionBackendTests::test_open_device_registration expects CPU-style
-            # inductor_cpp_wrapper source but ROCm generates privateuse1 AOTI glue.
-            "(ExtensionBackendTests and test_open_device_registration)",
+        "dynamo": [
+            # Run 29103767031 default shards 1,9:
+            # Dynamo reraises Python's TypeError for a bad `raise ... from` / non-
+            # exception raise, but the expected message text drifted in newer CPython
+            # ("exceptions must derive from BaseException" vs "...must derive from
+            # BaseException, not int"; "exception cause must be None or derive from…").
+            # Test/interpreter version skew, not a ROCm bug. Substrings cover both the
+            # ExceptionTests (test_exceptions) and NestedGraphBreaksExceptionTests
+            # (test_nested_graph_breaks_wrapped) copies.
+            "test_raise_from_non_exception_type_error",
+            "test_raise_non_exception_type_error",
+            # Run 29103767031 default shard 7/10:
+            # LoggingTests::test_logs_out — a log record that the test expects at INFO
+            # (I…) is emitted at WARNING (W…); dynamo logging level drift.
+            "(LoggingTests and test_logs_out)",
+            # Run 29103767031 default shard 10/10:
+            # dynamo.test_generator — PEP-479 / generator throw/send semantics diverge
+            # (several "Unexpected success" xpasses + Unsupported observed-exception
+            # cases). Test/interpreter version skew. Terms are kept as tight as pytest
+            # -k substring matching allows so passing sibling tests are not masked
+            # (e.g. exact pep479 / throw-finally names). NB: `test_cleanup_throw` is a
+            # substring of the passing `test_cleanup_throw_subgen_return_value`, which
+            # -k cannot separate — that one extra mask is unavoidable.
+            "(GeneratorTests and test_cleanup_throw)",
+            "(GeneratorTests and test_pep479_stopiteration_error)",
+            "(GeneratorTests and test_pep479_tutorial_stopiteration)",
+            "(TestGeneratorSend and yield_from_return_value)",
+            "(TestGeneratorSend and test_send_through_yield_from)",
+            "(TestGeneratorThrow and test_throw_try_except_finally)",
+            "(TestGeneratorThrow and test_throw_with_finally)",
+            "(TestGeneratorThrow and test_throw_yield_finally)",
+        ],
+        "testing": [
+            # Run 29103767031 default shard 1/10:
+            # TestTestingCUDA::test_callable_msg_cuda — assertion-helper callable-message
+            # count is 0 vs expected 1 on ROCm.
+            "(TestTestingCUDA and test_callable_msg_cuda)",
         ],
         "jit_fuser_te": [
             # Run 27246343570 default shard 3/10, job 80461205622:
@@ -204,12 +255,6 @@ skip_tests = {
             # Run 27390088455 default shard 1/10, job 80945585178: FAILED CONSISTENTLY.
             "test_debug_set_in_ci",
         ],
-        "cpp_extensions": [
-            # Run 27228539427 default shard 4/10:
-            # libtorch AGN 2.10 version-compatibility tests fail before
-            # compile because g++ is absent.
-            "(FunctionVersionCompatibilityTest and requires_2_10)",
-        ],
         "utils": [
             # Run 27228539427 default shard 9/10:
             # TestStandaloneCPPJIT::test_load_standalone sees versioned
@@ -222,14 +267,14 @@ skip_tests = {
             # Composable Kernel (CK) grouped GEMM backend is available; it is not enabled
             # in the TheRock wheel build. Genuine ROCm build-configuration gap.
             "(TestMatmulCudaCUDA and test_grouped_gemm_rocm_ck_flag_cuda)",
-        ],
-        "reductions": [
-            # Run 28446166928 default shard 8/10:
-            # ROCm's quantile kernel has a lower element limit than CUDA's reference.
-            # RuntimeError: "quantile() input tensor is too large" at Sorting.cpp:289.
-            "(TestReductionsCUDA and test_quantile_large_input_cuda_float32)",
-            "(TestReductionsCUDA and test_quantile_large_input_cuda_float64)",
-            "(TestReductionsCUDA and test_quantile_size_limit_cuda)",
+            # Run 29103767031 default shard 7/10:
+            # TestMatmulCudaCUDA::test_grouped_gemm_compiled_op — all 32 layout/
+            # autotune variants fail: max_autotune=False variants hit a stride
+            # mismatch (expected stride 21==24 …) and max_autotune=True variants hit
+            # NoValidChoicesError ("No choices exist for backend") from
+            # torch.ops.aten._grouped_mm — same missing-CK-grouped-GEMM-backend family
+            # as test_grouped_gemm_rocm_ck_flag above. One substring covers all 32.
+            "(TestMatmulCudaCUDA and test_grouped_gemm_compiled_op)",
         ],
         "multiprocessing": [
             # Run 27228539427 default shard 1/10:
@@ -242,8 +287,6 @@ skip_tests = {
             "test_fs_sharing",
         ],
         "distributed": [
-            # torch.linalg.eig has no non-MAGMA backend; MAGMA not linked in this build
-            "test_linalg_ops",
             # Run 28528513481 distributed shard 2/3:
             # TestFileSystem::test_fsspec_without_fileno_support fails consistently.
             # Root cause TBD; confirmed genuine on rocm7.14.0rc0 debug run.
@@ -261,6 +304,24 @@ skip_tests = {
             # post-optimizer event. Direct Rock/nightly and local TheRock wrapper
             # runs pass at world size 8, so this appears nondeterministic.
             "(TestFullyShard1DTrainingCore and test_post_optim_event)",
+            # Run 29103767031 distributed shards 1/3 & 2/3:
+            # TestManualOverlapBucketing::test_manual_bucketing_reordering_pass_all_reduce_*
+            # — the aten comm/compute reordering pass child process exits with error
+            # code 10 (worker crash) on ROCm. Covers the single-bucket and
+            # separate-buckets variants (the `_no_bucket` sibling passes, so match the
+            # trailing `_bucket`/`_buckets` forms explicitly, not the shared prefix).
+            "(TestManualOverlapBucketing and test_manual_bucketing_reordering_pass_all_reduce_single_bucket)",
+            "(TestManualOverlapBucketing and test_manual_bucketing_reordering_pass_all_reduce_separate_buckets)",
+            # Run 29103767031 distributed shard 2/3:
+            # TestOverlapPreservingBucketing::test_manual_bucket_splits_dependent_all_reduce
+            # — AttributeError: 'ManualOverlapPreservingBucketer' has no attribute
+            # '_split_independent_collectives' (test source ahead of the wheel's
+            # bucketer API). Version skew.
+            "(TestOverlapPreservingBucketing and test_manual_bucket_splits_dependent_all_reduce)",
+            # Run 29103767031 distributed shard 3/3:
+            # TestFullyShardOverlap::test_fully_shard_training_overlap — FSDP
+            # compute/comm overlap worker exits with error code 10 on ROCm.
+            "(TestFullyShardOverlap and test_fully_shard_training_overlap)",
         ],
     },
 }
