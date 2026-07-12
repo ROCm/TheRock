@@ -1,9 +1,8 @@
 # GPG Signing Server Dependencies
 
-# Optional: OIDC support for GitHub Actions
-# If not installed, server falls back to JWT-only mode
-# Install with: pip install -r requirements.txt
-PyJWT[crypto]>=2.8.0
+# Phase 1: Required for fetching GPG keys from AWS Secrets Manager at startup
+boto3>=1.26.0
 
-# Note: Server core functionality works with Python stdlib only (no dependencies)
-# This file is ONLY needed if you want OIDC support
+# Phase 2: Required for GitHub OIDC token validation (RS256)
+# If not installed, server falls back to pre-shared token / JWT auth only
+PyJWT[crypto]>=2.8.0

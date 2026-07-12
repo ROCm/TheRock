@@ -2,17 +2,20 @@
 """
 Authentication and authorization module for GPG signing server.
 
-This module provides dual authentication support:
-1. JWT (HMAC-SHA256) - Shared secret tokens stored in GitHub Secrets
-2. OIDC (RS256) - GitHub-issued tokens (keyless, short-lived)
+Supports multiple auth mechanisms — active ones depend on server config:
 
-Token formats:
-- JWT: HMAC-SHA256 signed tokens with role-based access
-- OIDC: RS256 signed tokens from GitHub Actions OIDC provider
+Phase 1 (AUTH_ENABLED=false):
+  No application-layer auth. Access controlled by VPC Security Groups.
+  Rate limiting keyed by source IP address.
 
-Authorization: Role-based key access control with workflow restriction
-Rate limiting: Per-client request throttling
-Audit logging: JSON-based request logging
+Phase 2 (AUTH_ENABLED=true):
+  1. Pre-shared app token (HMAC constant-time compare) — primary
+  2. GitHub OIDC (RS256, keyless) — for GitHub Actions integration
+  3. JWT (HMAC-SHA256) — fallback for existing integrations
+
+Authorization: Role-based key access control
+Rate limiting:  Per-client sliding window (keyed by token client_id or source IP)
+Audit logging:  JSON lines to stdout (CloudWatch) and optional file
 """
 
 import json
@@ -394,6 +397,59 @@ def load_secrets(secrets_file):
         return {}
 
 
+def load_tokens_config(tokens_file):
+    """
+    Load pre-shared caller tokens from JSON file (Phase 2).
+
+    Format:
+        {
+            "therock-release": {
+                "token": "base64-encoded-token",
+                "client_id": "therock-release",
+                "role": "release"
+            }
+        }
+
+    In Phase 2 the server fetches this from Secrets Manager at startup;
+    this file-based loader is used for local testing and fallback.
+    """
+    if not tokens_file or not os.path.exists(tokens_file):
+        return {}
+    try:
+        with open(tokens_file, 'r') as f:
+            return json.load(f)
+    except (IOError, json.JSONDecodeError):
+        return {}
+
+
+def validate_app_token(token, tokens_map):
+    """
+    Validate a pre-shared application token (Phase 2).
+
+    Uses constant-time comparison to prevent timing attacks.
+
+    Args:
+        token:      Bearer token string from Authorization header
+        tokens_map: Dict loaded by load_tokens_config()
+
+    Returns:
+        Payload dict {'client_id': ..., 'role': ...} if valid, None otherwise
+    """
+    if not token or not tokens_map:
+        return None
+
+    for _name, entry in tokens_map.items():
+        stored = entry.get('token', '')
+        if not stored:
+            continue
+        if hmac.compare_digest(token, stored):
+            return {
+                'client_id': entry.get('client_id', _name),
+                'role': entry.get('role', 'default'),
+            }
+    return None
+
+
 def load_authorization_config(authz_file):
     """
     Load authorization configuration from JSON file.
@@ -482,9 +538,12 @@ def check_rate_limit(client_id, role, rate_limits, authz_config):
         Modifies rate_limits dict in place (stores timestamps)
     """
     # Get rate limit for this role
+    # Phase 1: client_id is source IP; role may be 'default'
     roles = authz_config.get('roles', {})
     if role not in roles:
-        return True  # No limit if role not found
+        role = 'default'
+    if role not in roles:
+        return True  # No limit configured for this role
 
     max_requests = roles[role].get('max_requests_per_hour', 0)
     if max_requests <= 0:
@@ -511,68 +570,80 @@ def check_rate_limit(client_id, role, rate_limits, authz_config):
     return True
 
 
-def audit_log(action, client_id, role, key_id, digest_algo, client_ip, success, audit_file, oidc_context=None):
+def audit_log(action, client_id, role, key_id, digest_algo, client_ip,
+              success, audit_file, oidc_context=None,
+              auth_type='none', latency_ms=None):
     """
-    Write audit log entry.
+    Write structured audit log entry to stdout and optionally to a file.
 
-    Logs are written as JSON lines (one JSON object per line) for easy parsing.
+    Stdout output is captured by the CloudWatch agent via the systemd journal.
+    File output is an optional secondary destination for local debugging.
 
     Args:
-        action: Action type (e.g., 'SIGNED', 'DENIED', 'AUTH_FAILED', 'RATE_LIMITED')
-        client_id: Client identifier (or 'oidc' for OIDC tokens)
-        role: Role name
-        key_id: Signing key ID
-        digest_algo: Digest algorithm used
-        client_ip: Client IP address
-        success: True if action succeeded
-        audit_file: Path to audit log file
-        oidc_context: Optional dict with OIDC token fields (repository, ref, workflow, actor, etc.)
+        action:      'SIGNED', 'DENIED', 'AUTH_FAILED', 'RATE_LIMITED'
+        client_id:   Token client_id or source IP (Phase 1)
+        role:        Role name or 'none'
+        key_id:      Signing key ID
+        digest_algo: Digest algorithm
+        client_ip:   Source IP address
+        success:     True if signing succeeded
+        audit_file:  Optional path to audit log file ('' to skip file write)
+        oidc_context: Optional dict with OIDC token fields
+        auth_type:   'none', 'token', 'jwt', or 'oidc'
+        latency_ms:  Request latency in milliseconds
 
     Note:
-        Does not raise exceptions - logs failures to stderr instead
+        Never raises — logs errors to stderr instead.
     """
+    import sys
+
+    entry = {
+        'timestamp':   datetime.utcnow().isoformat() + 'Z',
+        'action':      action,
+        'client_id':   client_id,
+        'role':        role,
+        'key_id':      key_id,
+        'digest_algo': digest_algo,
+        'source_ip':   client_ip,
+        'auth_type':   auth_type,
+        'success':     success,
+    }
+
+    if latency_ms is not None:
+        entry['latency_ms'] = latency_ms
+
+    # Include OIDC workflow context when available
+    if oidc_context:
+        entry['repository']       = oidc_context.get('repository')
+        entry['ref']              = oidc_context.get('ref')
+        entry['workflow']         = oidc_context.get('workflow')
+        entry['actor']            = oidc_context.get('actor')
+        entry['run_id']           = oidc_context.get('run_id')
+        entry['run_number']       = oidc_context.get('run_number')
+        entry['event_name']       = oidc_context.get('event_name')
+        entry['job_workflow_ref'] = oidc_context.get('job_workflow_ref')
+
+    line = json.dumps(entry) + '\n'
+
+    # Always write to stdout — CloudWatch agent picks this up via systemd journal
+    try:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+    # Optionally also write to file (local debugging)
     if not audit_file:
         return
 
-    # Create log entry
-    entry = {
-        'timestamp': datetime.utcnow().isoformat() + 'Z',
-        'action': action,
-        'client_id': client_id,
-        'role': role,
-        'key_id': key_id,
-        'digest_algo': digest_algo,
-        'client_ip': client_ip,
-        'success': success
-    }
-
-    # Add OIDC-specific context if available
-    if oidc_context:
-        entry['auth_type'] = 'oidc'
-        entry['repository'] = oidc_context.get('repository')
-        entry['ref'] = oidc_context.get('ref')
-        entry['workflow'] = oidc_context.get('workflow')
-        entry['actor'] = oidc_context.get('actor')
-        entry['run_id'] = oidc_context.get('run_id')
-        entry['run_number'] = oidc_context.get('run_number')
-        entry['event_name'] = oidc_context.get('event_name')
-        entry['job_workflow_ref'] = oidc_context.get('job_workflow_ref')
-    else:
-        entry['auth_type'] = 'jwt'
-
     try:
-        # Create directory if needed
         log_dir = os.path.dirname(audit_file)
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, mode=0o755)
-
-        # Append to log file
         with open(audit_file, 'a') as f:
-            f.write(json.dumps(entry) + '\n')
+            f.write(line)
     except (IOError, OSError) as e:
-        # Don't fail the request if logging fails
-        import sys
-        sys.stderr.write(f"Audit log error: {str(e)}\n")
+        sys.stderr.write(f"Audit log file error: {str(e)}\n")
 
 
 # Internal helper functions
