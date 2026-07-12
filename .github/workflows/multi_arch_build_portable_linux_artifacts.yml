@@ -96,7 +96,9 @@ jobs:
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       SCCACHE_BUCKET: "therock-sccache-${{ inputs.release_type }}"
       SCCACHE_REGION: us-east-1
-      SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v1/"
+      # v2: the per-TU -cuid launcher changes every HIP cache key, so this is a
+      # fresh cache generation (old v1 HIP entries would never match anyway).
+      SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v2/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
 
