@@ -677,10 +677,13 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
-# The rocKE engine ships per-arch kpack archives (ISA-specific GPU kernels) under
-# .../hip_kernel_provider/rocke/<arch>/, so this artifact is not arch-neutral and
-# must be split per-arch. The rocm-systems "hipkernelprovider" kpack handler
-# routes each arch's .kpack + .json bundle to that arch's artifact.
+# The rocKE engine ships ISA-specific per-arch content -- loose per-kernel .co +
+# .sidecar.json files -- under engines/arch_content/rocke/<arch>/, so this
+# artifact is not arch-neutral and must be split per-arch. The rocm-systems
+# "hipkernelprovider" split handler anchors on the engines/arch_content dir and
+# routes each arch's files to that arch's artifact. arch_content is a generic
+# container (not engines/hip_kernel_provider/, whose name would collide with the
+# hip_kernel_provider plugin file); future engines drop under arch_content/<engine>/.
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 split_databases = ["hipkernelprovider"]
