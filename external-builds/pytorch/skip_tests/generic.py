@@ -8,6 +8,36 @@ skip_tests = {
             "test_autocast_torch_fp16",
         }
     },
+    "gfx1103": {
+        "nn": [
+            # gfx1103 (Radeon 780M) is not supported by Composable Kernel, so
+            # MIOpen deliberately excludes it from the CK grouped-conv solvers
+            # (ROCm/rocm-libraries#6805 dropped gfx1103 from _CK_SUPPORTED_ARCHS,
+            # so libMIOpenCKGroupedConv_gfx1103.so is never built). With CK out,
+            # gfx1103 has no working grouped/depthwise conv solver:
+            #   MIOpen(HIP): Warning [OpenRuntimeLibraryForDevice] CK grouped conv
+            #     library not found for device gfx1103: libMIOpenCKGroupedConv_gfx1103.so
+            #   [EvaluateInvokers] Invalid elapsed time detected ... elapsed <= 0
+            #   No suitable algorithm was found to execute the required convolution
+            # Tracked in ROCm/TheRock#6252.
+            "test_Conv1d_circular_stride2_pad2_cuda",
+            "test_Conv1d_dilated_cuda",
+            "test_Conv1d_groups",
+            "test_Conv1d_pad1size1",
+            "test_Conv1d_pad_same_dilated",
+            "test_Conv1d_pad_same_dilated_cuda",
+            "test_Conv1d_reflect_stride2_pad2_cuda",
+            "test_Conv1d_zeros_stride2_pad2_cuda",
+            "test_Conv2d_depthwise_cuda",
+            "test_Conv2d_depthwise_strided_cuda",
+            "test_Conv2d_strided_cuda",
+            "test_ConvTranspose1d_groups_cuda",
+            # Same root cause, but this one hangs the GPU rather than failing:
+            #   HW Exception by GPU node-1 ... reason: GPU Hang
+            #   Fatal Python error: Aborted (exit code 134)
+            "test_RNN_dropout",
+        ],
+    },
     "common": {
         "autograd": [
             # Stream comparison mismatch on ROCm (non-default stream vs default stream)
