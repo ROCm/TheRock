@@ -1,22 +1,38 @@
 {
+  "$comment": "Authorization configuration for GPG signing server.",
+  "$comment2": "Phase 1: roles keyed by source IP are not used — 'default' role applies to all requests.",
+  "$comment3": "Phase 2: add token-named roles here to map pre-shared tokens to key allowlists.",
+
   "roles": {
-    "test-valid": {
-      "allowed_keys": ["44D107C408145F7F"],
-      "allowed_digest_algos": ["SHA256"],
-      "max_requests_per_hour": 10,
-      "description": "Valid test role"
+    "default": {
+      "description": "Phase 1 catch-all role — applied to all requests when AUTH_ENABLED=false. Rate limit keyed by source IP.",
+      "allowed_keys": [],
+      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "max_requests_per_hour": 10000
     },
-    "test-restricted": {
-      "allowed_keys": ["FAKE-KEY-NOT-AVAILABLE"],
-      "allowed_digest_algos": ["SHA256"],
-      "max_requests_per_hour": 10,
-      "description": "Restricted role for testing denial"
+    "operator": {
+      "description": "Authorized operator performing manual signing via sign-file CLI.",
+      "allowed_keys": [],
+      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "max_requests_per_hour": 100
     },
-    "test-no-rate-limit": {
-      "allowed_keys": ["44D107C408145F7F"],
-      "allowed_digest_algos": ["SHA256"],
-      "max_requests_per_hour": 0,
-      "description": "No rate limit"
+    "therock-dev": {
+      "description": "Phase 2: TheRock dev/PR builds. Token: signing/tokens/therock-dev in Secrets Manager.",
+      "allowed_keys": [],
+      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "max_requests_per_hour": 10000
+    },
+    "therock-nightly": {
+      "description": "Phase 2: TheRock nightly builds. Token: signing/tokens/therock-nightly in Secrets Manager.",
+      "allowed_keys": [],
+      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "max_requests_per_hour": 5000
+    },
+    "therock-release": {
+      "description": "Phase 2: TheRock release builds. Token: signing/tokens/therock-release in Secrets Manager.",
+      "allowed_keys": [],
+      "allowed_digest_algos": ["SHA256", "SHA512"],
+      "max_requests_per_hour": 1000
     }
   }
 }

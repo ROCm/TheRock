@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""
+sign-file — Operator CLI for one-off GPG signing via the remote signing server.
+
+Usage:
+    sign-file --server https://<host> --key-id <key> --file <path> [options]
+
+Examples:
+    # Detached ASCII signature (e.g. repomd.xml.asc)
+    sign-file --server https://10.0.2.45 --key-id therock-release@amd.com \\
+              --file repomd.xml --armor
+
+    # Clearsigned output (e.g. DEB InRelease)
+    sign-file --server https://10.0.2.45 --key-id therock-release@amd.com \\
+              --file Release --clearsign --output InRelease
+
+    # With Phase 2 app token
+    sign-file --server https://10.0.2.45 --key-id therock-release@amd.com \\
+              --file repomd.xml --armor --token "$SIGNING_TOKEN"
+
+Requirements:
+    Python standard library only — no external packages needed.
+"""
+
+import sys
+import os
+import json
+import argparse
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from base64 import b64encode, b64decode
+import ssl
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Sign a file using the remote GPG signing server.')
+
+    parser.add_argument('--server', required=True,
+        help='Signing server URL (e.g. https://10.0.2.45)')
+    parser.add_argument('--key-id', required=True, dest='key_id',
+        help='GPG key identifier (email or hex key ID)')
+    parser.add_argument('--file', required=True,
+        help='Path to the file to sign')
+    parser.add_argument('--output', default='',
+        help='Output path for signature. Defaults to <file>.asc or <file>.sig')
+    parser.add_argument('--armor', action='store_true',
+        help='Return ASCII-armored signature (required for .asc files)')
+    parser.add_argument('--clearsign', action='store_true',
+        help='Produce clearsigned output (data + signature combined). '
+             'Required for DEB InRelease files.')
+    parser.add_argument('--digest-algo', default='SHA256', dest='digest_algo',
+        help='Digest algorithm: SHA256 or SHA512 (default: SHA256)')
+    parser.add_argument('--token', default='',
+        help='Pre-shared auth token (Phase 2). Also read from SIGNING_TOKEN env var.')
+    parser.add_argument('--no-verify-ssl', action='store_true', dest='no_verify_ssl',
+        help='Disable TLS certificate verification (for self-signed certs in Phase 1)')
+    parser.add_argument('--timeout', type=int, default=60,
+        help='Request timeout in seconds (default: 60)')
+
+    return parser.parse_args()
+
+
+def build_ssl_context(verify):
+    """Build SSL context for the request."""
+    ctx = ssl.create_default_context()
+    if not verify:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def sign_file(args):
+    # --- Read input file ---
+    if not os.path.exists(args.file):
+        print(f"Error: File not found: {args.file}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(args.file, 'rb') as f:
+        data = f.read()
+
+    if not data:
+        print(f"Error: File is empty: {args.file}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Signing: {args.file} ({len(data)} bytes)")
+
+    # --- Build request ---
+    payload = {
+        'data':        b64encode(data).decode('ascii'),
+        'key_id':      args.key_id,
+        'digest_algo': args.digest_algo.upper(),
+        'armor':       args.armor or args.clearsign,
+        'clearsign':   args.clearsign,
+    }
+
+    server_url = args.server.rstrip('/') + '/sign'
+    body = json.dumps(payload).encode('utf-8')
+
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent':   'sign-file/1.0',
+    }
+
+    # Phase 2: include token if provided
+    token = args.token or os.environ.get('SIGNING_TOKEN', '')
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+
+    req = Request(server_url, data=body, headers=headers, method='POST')
+    ssl_ctx = build_ssl_context(not args.no_verify_ssl)
+
+    # --- Send request ---
+    print(f"Sending to: {server_url}")
+    try:
+        with urlopen(req, timeout=args.timeout, context=ssl_ctx) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+    except HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode('utf-8'))
+            detail = err_body.get('error', str(e))
+        except Exception:
+            detail = str(e)
+
+        messages = {
+            401: f"Unauthorized — token missing or invalid: {detail}",
+            403: f"Forbidden — key '{args.key_id}' not permitted for this caller: {detail}",
+            429: f"Rate limit exceeded — try again later: {detail}",
+            503: f"Server busy — try again in a moment: {detail}",
+            413: f"Request too large: {detail}",
+        }
+        print(f"Error {e.code}: {messages.get(e.code, detail)}", file=sys.stderr)
+        sys.exit(1)
+    except URLError as e:
+        print(f"Network error: {e.reason}", file=sys.stderr)
+        print(f"Is the server reachable at {server_url}?", file=sys.stderr)
+        print(f"Are you connected to VPN?", file=sys.stderr)
+        sys.exit(1)
+
+    # --- Decode and write signature ---
+    if 'signature' not in result:
+        print("Error: Server response missing 'signature' field", file=sys.stderr)
+        sys.exit(1)
+
+    signature = b64decode(result['signature'])
+
+    # Determine output path
+    if args.output:
+        out_path = args.output
+    elif args.clearsign:
+        # Clearsign replaces the original file concept (e.g. Release → InRelease)
+        out_path = os.path.splitext(args.file)[0] + '.clearsigned'
+    elif args.armor:
+        out_path = args.file + '.asc'
+    else:
+        out_path = args.file + '.sig'
+
+    with open(out_path, 'wb') as f:
+        f.write(signature)
+
+    print(f"Signature written to: {out_path} ({len(signature)} bytes)")
+    print(f"Key used: {result.get('key_id', args.key_id)}")
+    print(f"Algorithm: {result.get('digest_algo', args.digest_algo)}")
+
+
+def main():
+    args = parse_args()
+    sign_file(args)
+
+
+if __name__ == '__main__':
+    main()
