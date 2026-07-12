@@ -43,6 +43,7 @@ Prerequisites:
 """
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -99,6 +100,11 @@ def sccache_build_env(sccache_path: Path, hip_launcher: bool = True) -> dict[str
     return env
 
 
+def cuid_launcher_path() -> Path:
+    """Absolute path to the per-TU ``-cuid`` injecting launcher (sibling script)."""
+    return Path(__file__).parent.resolve() / "cuid_launcher.py"
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Locate sccache and print the env to configure a ROCm HIP build."
@@ -112,6 +118,26 @@ def main():
         "--no-hip-launcher",
         action="store_true",
         help="Omit HIP_CLANG_LAUNCHER (host C/C++ caching only)",
+    )
+    parser.add_argument(
+        "--gha",
+        action="store_true",
+        help=(
+            "Write HIP_CLANG_LAUNCHER (+ THEROCK_SCCACHE) to $GITHUB_ENV for use in "
+            "subsequent steps. CMAKE_C/CXX_COMPILER_LAUNCHER are intentionally excluded "
+            "— setting them globally breaks stages that use custom compiler wrappers "
+            "(e.g. profiler-apps). Those launchers are passed via cmake -D args in the "
+            "Configure step instead."
+        ),
+    )
+    parser.add_argument(
+        "--no-cuid-launcher",
+        action="store_true",
+        help=(
+            "Point HIP_CLANG_LAUNCHER straight at sccache instead of the cuid_launcher.py "
+            "wrapper. The wrapper injects a per-TU -cuid so RDC objects don't collide on "
+            "__hip_cuid_ under caching (ROCm/TheRock#748); use this to opt out."
+        ),
     )
     args = parser.parse_args()
 
@@ -139,9 +165,29 @@ def main():
         raise RuntimeError(f"sccache verification failed: {e}") from e
 
     env = sccache_build_env(sccache_path, hip_launcher=not args.no_hip_launcher)
-    print("Configure a ROCm build with:")
-    for key, value in env.items():
-        print(f"  export {key}={value}")
+    if args.gha:
+        # Only HIP_CLANG_LAUNCHER (+ THEROCK_SCCACHE) is written to $GITHUB_ENV;
+        # see the --gha help for why the CMAKE launchers are excluded here.
+        gha_vars: dict[str, str] = {}
+        if "HIP_CLANG_LAUNCHER" in env:
+            if args.no_cuid_launcher:
+                gha_vars["HIP_CLANG_LAUNCHER"] = str(sccache_path)
+            else:
+                # Route hipcc's device compiles through the cuid launcher, which
+                # injects a per-TU -cuid ahead of sccache (ROCm/TheRock#748). The
+                # wrapper locates the real sccache via THEROCK_SCCACHE.
+                gha_vars["THEROCK_SCCACHE"] = str(sccache_path)
+                gha_vars["HIP_CLANG_LAUNCHER"] = str(cuid_launcher_path())
+        github_env = Path(os.environ["GITHUB_ENV"])
+        with github_env.open("a") as f:
+            for key, value in gha_vars.items():
+                f.write(f"{key}={value}\n")
+        for key, value in gha_vars.items():
+            print(f"Wrote {key}={value} to $GITHUB_ENV")
+    else:
+        print("Configure a ROCm build with:")
+        for key, value in env.items():
+            print(f"  export {key}={value}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,316 @@
+From f72b4bcda9b4d1c4b25e840388cbbf18a9487d30 Mon Sep 17 00:00:00 2001
+From: chiranjeevipattigidi <chiranjeevi.pattigidi@amd.com>
+Date: Thu, 9 Jul 2026 10:41:49 +0000
+Subject: [PATCH 1/2] [Tensile/TensileLite] Compile one arch at a time for
+ sccache compatibility
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Tensile and TensileLite previously compiled GPU kernels by invoking clang
+with all --offload-arch flags in one command, producing a fat bundled object.
+sccache refuses these calls with "Non-cacheable: multiple input files" because
+it cannot compute a per-arch cache key for a multi-target output, causing
+~5,000 cache misses per math-libs build.
+
+This change compiles one architecture at a time (each call is a single
+source → single object, which sccache can cache independently), then
+re-bundles the per-arch objects into the fat object using
+clang-offload-bundler. The pipeline output is identical — the same fat
+object with the same per-arch .hsaco contents — but each per-arch compile
+is now independently cached by sccache.
+
+Changes:
+- shared/tensile/Tensile/BuildCommands/SourceCommands.py:
+  - Add _compileSingleArchObjectFile() for per-arch compilation
+  - Add _bundleObjectFiles() to re-bundle per-arch objects into fat object
+  - Update _compileSourceObjectFile() to use per-arch path when bundler
+    is available; falls back to original single-call path if not
+
+- projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py:
+  - Compiler.__call__: compile per-arch when target_list > 1; stores
+    per-arch paths on instance for Source.py to bundle
+  - Bundler.bundle(): new method to bundle per-arch objects into fat object
+
+- projects/hipblaslt/tensilelite/Tensile/Toolchain/Source.py:
+  - After compiler(), detect pending per-arch objects and call bundler.bundle()
+    before proceeding to the unbundle step
+---
+ .../Tensile/Toolchain/Component.py            |  62 +++++++--
+ .../tensilelite/Tensile/Toolchain/Source.py   |  15 +++
+ .../Tensile/BuildCommands/SourceCommands.py   | 118 ++++++++++++++++--
+ 3 files changed, 175 insertions(+), 20 deletions(-)
+
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+index fd5a986f444..f5128e63435 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Component.py
+@@ -237,19 +237,37 @@ class Compiler(Component):
+     def __call__(self, include_path: str, target_list: List[str], srcPath: str, destPath: str):
+         """Compiles a source file into an object file.
+ 
++        When multiple architectures are requested, compiles one arch at a time
++        so each invocation is a single source → single output call (sccache-cacheable),
++        then bundles the per-arch objects into a fat object at destPath.
++        With a single arch, falls back to a direct single-call compile.
++
+         Args:
+             include_path: Path appened to "-I" to directory with required include files.
+             target_list: List of offload architectures of the form gfxXYZ e.g. gfx942.
+-            sercPath: The path to the source file.
+-            destPath: Path to the object file output during compilation.
++            srcPath: The path to the source file.
++            destPath: Path to the fat object file output.
+         Raises:
+             RuntimeError: If the compilation command fails.
+         """
+-        archFlags = [f"--offload-arch={gfx}" for gfx in target_list]
+-        args = [
+-            *(self.default_args), "-I", include_path, *archFlags, srcPath, "-c", "-o", destPath
+-        ]
+-        return _invoke(args, f"Compiling HIP source kernels into objects (.cpp -> .o)")
++        if len(target_list) <= 1:
++            archFlags = [f"--offload-arch={gfx}" for gfx in target_list]
++            args = [*(self.default_args), "-I", include_path, *archFlags, srcPath, "-c", "-o", destPath]
++            return _invoke(args, f"Compiling HIP source kernels into objects (.cpp -> .o)")
++
++        # Compile one arch at a time (sccache-cacheable).
++        destBase = str(destPath).removesuffix(".o")
++        per_arch_objs: List[str] = []
++        for gfx in target_list:
++            perArchDest = f"{destBase}.{gfx}.o"
++            args = [*(self.default_args), "-I", include_path, f"--offload-arch={gfx}", srcPath, "-c", "-o", perArchDest]
++            _invoke(args, f"Compiling HIP source kernels for {gfx} (.cpp -> .o)")
++            per_arch_objs.append(perArchDest)
++
++        # Store per-arch paths on instance so Source.py can bundle them.
++        # Source.py calls compiler() then bundler() — this bridges the two.
++        self._pending_per_arch_objs = per_arch_objs
++        self._pending_fat_dest = destPath
+ 
+ 
+ class Bundler(Component):
+@@ -308,6 +326,36 @@ class Bundler(Component):
+ 
+         return _invoke(args, "Bundling/compressing code object file (.co -> .co)")
+ 
++    def bundle(self, per_arch_objs: List[str], fatObjPath: str):
++        """Bundles per-arch object files into a single fat HIP object.
++
++        This is the inverse of __call__ (unbundle). Used when compiling one arch
++        at a time for sccache compatibility — the resulting per-arch objects must
++        be re-bundled into a fat object that the rest of the pipeline expects.
++
++        Args:
++            per_arch_objs: List of per-arch .o file paths to bundle.
++            fatObjPath: Output path for the bundled fat object.
++        Raises:
++            RuntimeError: If bundling fails.
++        """
++        # Derive target triples from each per-arch object via -list.
++        all_targets = []
++        for objPath in per_arch_objs:
++            triples = [t for t in self.targets(objPath) if t.strip()]
++            all_targets.extend(triples)
++
++        targets_str = ",".join(all_targets)
++        inputs = [f"--input={p}" for p in per_arch_objs]
++        args = [
++            self._component_path,
++            "--type=o",
++            f"--targets={targets_str}",
++            *inputs,
++            f"--output={fatObjPath}",
++        ]
++        return _invoke(args, f"Bundling per-arch objects into fat object")
++
+     def __call__(self, target: str, srcPath: str, destPath: str):
+         """Unbundles source code object files using the Clang Offload Bundler.
+         Args:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Source.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Source.py
+index 75ba13f8292..079daecbc9d 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Source.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Source.py
+@@ -22,6 +22,7 @@
+ #
+ ################################################################################
+ 
++import os
+ import re
+ import shutil
+ 
+@@ -149,6 +150,20 @@ def buildSourceCodeObjectFiles(
+     with timing_context("python_kernel_build_src_co.compile"):
+         compiler(str(includeDir), cmdlineArchs, str(kernelPath), objPath)
+ 
++    # If the compiler compiled per-arch (for sccache compatibility), bundle the
++    # per-arch objects into the fat object that the unbundle step expects.
++    with timing_context("python_kernel_build_src_co.bundle"):
++        per_arch_objs = getattr(compiler, "_pending_per_arch_objs", None)
++        if per_arch_objs is not None:
++            bundler.bundle(per_arch_objs, objPath)
++            for p in per_arch_objs:
++                try:
++                    os.remove(p)
++                except OSError:
++                    pass
++            compiler._pending_per_arch_objs = None
++            compiler._pending_fat_dest = None
++
+     with timing_context("python_kernel_build_src_co.unbundle"):
+         for target in bundler.targets(objPath):
+           match = re.search("gfx.*$", target)
+diff --git a/shared/tensile/Tensile/BuildCommands/SourceCommands.py b/shared/tensile/Tensile/BuildCommands/SourceCommands.py
+index a206ec251de..e104cd5bab8 100644
+--- a/shared/tensile/Tensile/BuildCommands/SourceCommands.py
++++ b/shared/tensile/Tensile/BuildCommands/SourceCommands.py
+@@ -69,6 +69,60 @@ def _computeSourceCodeObjectPath(
+     return coPath
+ 
+ 
++def _compileSingleArchObjectFile(
++    arch: str,
++    cxxCompiler: str,
++    cxxSrcPath: str,
++    objDestPath: str,
++    outputPath: str,
++    compilerVer: IsaVersion,
++    launcher: List[str],
++    hipFlags: List[str],
++):
++    """Compiles a HIP source file for a single architecture.
++
++    Compiling one arch at a time (rather than all arches in one bundled call)
++    allows sccache to cache each invocation independently. The per-arch objects
++    are later re-bundled into a fat object by _compileSourceObjectFile.
++    """
++    args = launcher + [cxxCompiler] + hipFlags + [f"--offload-arch={arch}"] + [str(cxxSrcPath), "-c", "-o", objDestPath]
++    tPrint(2, f"Compile single-arch object file command: {args}")
++    try:
++        out = subprocess.check_output(args, stderr=subprocess.STDOUT)
++        tPrint(2, f"Output: {out}" if out else "")
++    except subprocess.CalledProcessError as err:
++        raise RuntimeError(
++            f"Error compiling source object file for {arch}: {err.output}\nFailed command: {' '.join(args)}"
++        )
++
++
++def _bundleObjectFiles(bundler: str, perArchObjs: List[tuple], fatObjPath: str):
++    """Bundles per-arch object files into a single fat HIP object.
++
++    Args:
++        bundler: Path to clang-offload-bundler.
++        perArchObjs: List of (triple, objPath) tuples for each arch.
++        fatObjPath: Output path for the bundled fat object.
++    """
++    targets = ",".join(triple for triple, _ in perArchObjs)
++    inputs = [f"--input={path}" for _, path in perArchObjs]
++    args = [
++        bundler,
++        "--type=o",
++        f"--targets={targets}",
++        *inputs,
++        f"--output={fatObjPath}",
++    ]
++    tPrint(2, f"Bundle object files command: {args}")
++    try:
++        out = subprocess.check_output(args, stderr=subprocess.STDOUT)
++        tPrint(2, f"Output: {out}" if out else "")
++    except subprocess.CalledProcessError as err:
++        raise RuntimeError(
++            f"Error bundling object files: {err.output}\nFailed command: {' '.join(args)}"
++        )
++
++
+ def _compileSourceObjectFile(
+     cmdlineArchs: List[str],
+     cxxCompiler: str,
+@@ -79,6 +133,10 @@ def _compileSourceObjectFile(
+ ):
+     """Compiles a HIP source file (.cpp) into an object file (.o).
+ 
++    Compiles one architecture at a time so that each invocation is a single
++    source → single output call, making it cacheable by sccache. The resulting
++    per-arch objects are bundled into a fat object using clang-offload-bundler.
++
+     Args:
+         cmdlineArchs: List of architectures for offloading.
+         cxxCompiler: The C++ compiler to use.
+@@ -90,8 +148,6 @@ def _compileSourceObjectFile(
+     Raises:
+         subprocess.CalledProcessError: If the compilation command fails.
+     """
+-    archFlags = ["--offload-arch=" + arch for arch in cmdlineArchs]
+-
+     hipFlags = ["-D__HIP_HCC_COMPAT_MODE__=1"]
+     # TODO(@tensile-infra): hipcc is deprecated and should be removed for ROCm 6.5
+     hipFlags += (
+@@ -117,18 +173,54 @@ def _compileSourceObjectFile(
+             "-Wno-deprecated-declarations",
+         ]
+ 
+-    args = (
+-        launcher + [cxxCompiler] + hipFlags + archFlags + [str(cxxSrcPath), "-c", "-o", objDestPath]
+-    )
+-
+-    tPrint(2, f"Compile source object file command: {args}")
+-    try:
+-        out = subprocess.check_output(args, stderr=subprocess.STDOUT)
+-        tPrint(2, f"Output: {out}" if out else "")
+-    except subprocess.CalledProcessError as err:
+-        raise RuntimeError(
+-            f"Error compiling source object file: {err.output}\nFailed command: {' '.join(args)}"
++    bundler = globalParameters.get("ClangOffloadBundlerPath", "")
++
++    # If only one arch or no bundler available, fall back to the original
++    # single bundled call (not sccache-cacheable, but always correct).
++    if len(cmdlineArchs) <= 1 or not bundler:
++        archFlags = ["--offload-arch=" + arch for arch in cmdlineArchs]
++        args = launcher + [cxxCompiler] + hipFlags + archFlags + [str(cxxSrcPath), "-c", "-o", objDestPath]
++        tPrint(2, f"Compile source object file command: {args}")
++        try:
++            out = subprocess.check_output(args, stderr=subprocess.STDOUT)
++            tPrint(2, f"Output: {out}" if out else "")
++        except subprocess.CalledProcessError as err:
++            raise RuntimeError(
++                f"Error compiling source object file: {err.output}\nFailed command: {' '.join(args)}"
++            )
++        return
++
++    # Compile one arch at a time so each call is sccache-cacheable, then bundle.
++    objDestBase = str(objDestPath).removesuffix(".o")
++    perArchObjs = []
++    for arch in cmdlineArchs:
++        perArchObjPath = f"{objDestBase}.{arch}.o"
++        _compileSingleArchObjectFile(
++            arch, cxxCompiler, cxxSrcPath, perArchObjPath, outputPath, compilerVer, launcher, hipFlags
+         )
++        # clang-offload-bundler uses full target triples; derive from the fat
++        # object listing after first arch compilation.
++        perArchObjs.append((arch, perArchObjPath))
++
++    # Resolve arch names to full target triples by compiling the first arch and
++    # listing its triples, then map the remaining arches by gfx suffix.
++    firstObjPath = perArchObjs[0][1]
++    triples = [t for t in _listTargetTriples(bundler, firstObjPath) if re.search("gfx.*$", t)]
++
++    def _matchTriple(arch: str) -> str:
++        for t in triples:
++            if re.search(f"{arch}$", t) or re.search(f"{arch}:", t):
++                return t
++        return f"hipv4-amdgcn-amd-amdhsa--{arch}"
++
++    perArchWithTriples = [(_matchTriple(arch), path) for arch, path in perArchObjs]
++    _bundleObjectFiles(bundler, perArchWithTriples, objDestPath)
++
++    for _, path in perArchObjs:
++        try:
++            os.remove(path)
++        except OSError:
++            pass
+ 
+ 
+ def _listTargetTriples(bundler: str, objFile: str):
+-- 
+2.53.0
+

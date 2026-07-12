@@ -1,0 +1,40 @@
+From 6f6cb390e12e6b68b55e5b99914676b0a3e75ee2 Mon Sep 17 00:00:00 2001
+From: chiranjeevipattigidi <chiranjeevi.pattigidi@amd.com>
+Date: Wed, 8 Jul 2026 13:09:28 +0000
+Subject: [PATCH] [rocWMMA] Remove dead -Xclang
+ -fallow-half-arguments-and-returns flag
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The flag -fallow-half-arguments-and-returns does not exist in clang
+(upstream LLVM or AMD fork) and is silently ignored at compile time.
+rocWMMA uses _Float16 and __half — neither requires this flag. rocBLAS
+already removed it for the same reason.
+
+--driver-mode=g++ is also removed: rocWMMA invokes clang++ directly and
+does not need g++ driver emulation.
+
+Both flags caused sccache to classify every rocWMMA compilation as
+non-cacheable ("Can't handle UnknownFlag arguments with -Xclang"),
+producing ~1,041 unnecessary cache misses per build.
+---
+ projects/rocwmma/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/rocwmma/CMakeLists.txt b/projects/rocwmma/CMakeLists.txt
+index e907af7b2cb..105d9ef4e6b 100644
+--- a/projects/rocwmma/CMakeLists.txt
++++ b/projects/rocwmma/CMakeLists.txt
+@@ -59,7 +59,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
+ #Set Clang C++ flags.
+ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O2") # clang++ crashes without -O2
+ set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -O2 -DNDEBUG") # clang++ failed to build the project with the default -Os
+-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --driver-mode=g++ -Xclang -fallow-half-arguments-and-returns -D__HIP_HCC_COMPAT_MODE__=1 -Wno-format-nonliteral -parallel-jobs=4 -fclang-abi-compat=17")
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__HIP_HCC_COMPAT_MODE__=1 -Wno-format-nonliteral -parallel-jobs=4 -fclang-abi-compat=17")
+ 
+ # Top level configs
+ if( CMAKE_PROJECT_NAME STREQUAL "rocwmma" )
+-- 
+2.53.0
+
