@@ -66,9 +66,13 @@ if [[ "$OS_ID" == "amzn" || "$OS_ID" == "rhel" || "$OS_ID" == "centos" ]]; then
     yum install -y gnupg2 python3 python3-pip openssl
 elif [[ "$OS_ID" == "ubuntu" || "$OS_ID" == "debian" ]]; then
     apt-get update -q
-    apt-get install -y gnupg2 python3 python3-pip openssl
+    # python3-venv is required for venv creation on Debian/Ubuntu (PEP 668)
+    # The version-specific package (e.g. python3.14-venv) must match the
+    # installed Python version — use $(python3 -V) to detect it dynamically
+    PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    apt-get install -y gnupg2 python3 python3-pip "python${PYTHON_VER}-venv" openssl
 else
-    echo "WARNING: Unknown OS '${OS_ID}'. Install gnupg2 python3 python3-pip manually."
+    echo "WARNING: Unknown OS '${OS_ID}'. Install gnupg2 python3 python3-pip python3-venv manually."
 fi
 
 gpg --version | head -1
