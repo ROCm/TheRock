@@ -46,6 +46,14 @@ on:
         type: string
         default: ""
         description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
+      aws_windows_cpu_build_label:
+        type: choice
+        options:
+          - aws-windows-scale-rocm-customer-dev-g624xl
+          - aws-windows-scale-rocm-customer-dev-g616xl
+          - aws-windows-scale-rocm-customer-dev-m8a24xl
+          - aws-windows-scale-rocm-customer-dev-m8azn24xl
+          - azure-windows-scale-rocm
       build_pytorch:
         type: boolean
         default: true
@@ -55,6 +63,9 @@ on:
       - labeled
       - opened
       - synchronize
+
+run-name: >-
+  Multi-Arch CI${{ inputs.aws_windows_cpu_build_label && format(' [{0}]', inputs.aws_windows_cpu_build_label) || '' }}
 
 permissions:
   contents: read
@@ -123,6 +134,7 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      aws_windows_cpu_build_label: ${{ inputs.aws_windows_cpu_build_label || '' }}
     permissions:
       contents: read
       id-token: write

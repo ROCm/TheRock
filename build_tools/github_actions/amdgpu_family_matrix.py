@@ -99,7 +99,7 @@ BUILD_RUNNER_LABELS = {
     },
     "windows": {
         "default": [
-            {"label": "azure-windows-scale-rocm", "weight": 1.0},
+            {"label": "aws-windows-scale-rocm-customer-dev-g624xl", "weight": 1.0},
         ],
     },
 }

@@ -82,6 +82,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_runs_on: ${{ inputs.build_runs_on }}
     permissions:
       contents: read
       id-token: write
@@ -105,6 +106,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_runs_on: ${{ inputs.build_runs_on }}
     permissions:
       contents: read
       id-token: write
@@ -138,6 +140,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_runs_on: ${{ inputs.build_runs_on }}
     permissions:
       contents: read
       id-token: write
@@ -161,6 +164,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      build_runs_on: ${{ inputs.build_runs_on }}
     permissions:
       contents: read
       id-token: write

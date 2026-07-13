@@ -34,6 +34,10 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      aws_windows_cpu_build_label:
+        description: "Override Windows CPU build runner label."
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -52,7 +56,7 @@ jobs:
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
-    runs-on: azure-windows-scale-rocm
+    runs-on: ${{ inputs.aws_windows_cpu_build_label || 'azure-windows-scale-rocm' }}
     defaults:
       run:
         shell: bash
@@ -104,7 +108,7 @@ jobs:
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      build_runs_on: ${{ inputs.aws_windows_cpu_build_label || fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
