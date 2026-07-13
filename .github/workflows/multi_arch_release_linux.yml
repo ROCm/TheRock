@@ -257,7 +257,7 @@ jobs:
   trigger_release_jax_wheels:
     needs: [build_artifacts, build_tarballs, build_python_packages]
     name: Trigger Release JAX Wheels
-    if: ${{ inputs.build_jax != false }}
+    if: ${{ inputs.build_jax != false && fromJSON(inputs.build_config).build_jax == true }}
     runs-on: ubuntu-24.04
     permissions:
       actions: write
