@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       runner_hostname:
-        description: "Self-hosted runner hostname. The runner must also have this value as a label."
+        description: "Self-hosted runner hostname. The runner must also have this value as a runner label parameters so that correct solf-hosted runner can be launched."
         required: true
         type: string
-        default: "hostname"
+        default: "kpack_old_kernel_test"
 
 permissions:
   contents: read

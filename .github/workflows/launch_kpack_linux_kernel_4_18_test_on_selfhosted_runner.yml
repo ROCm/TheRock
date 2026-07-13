@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       runner_hostname:
-        description: "Self-hosted runner hostname. The runner must also have this value as a label."
+        description: "Self-hosted runner hostname. The runner must also have this value as a runner label parameters so that correct solf-hosted runner can be launched."
         required: true
         type: string
-        default: "hostname"
+        default: "kpack_old_kernel_test"
       qcow_image_path:
         description: "Absolute path to the Rocky Linux QCOW image on the self-hosted runner."
         required: true
@@ -36,7 +36,7 @@ on:
         type: string
         default: "2222"
       vm_ssh_private_key_path:
-        description: "Optional private SSH key path on the self-hosted runner. If empty, github secret THEROCK_VM_SSH_KEY is used."
+        description: "Path to SSH private key on the self-hosted runner to connect the VM with therock user. If empty, github secret THEROCK_ACTION_RUNNER_KVM_SSH_KEY is used."
         required: false
         type: string
         default: "/opt/github-runner/ssh/therock_ed25519"
@@ -168,7 +168,7 @@ jobs:
 
       - name: Configure VM SSH key
         env:
-          THEROCK_VM_SSH_KEY: ${{ secrets.THEROCK_VM_SSH_KEY }}
+          THEROCK_ACTION_RUNNER_KVM_SSH_KEY: ${{ secrets.THEROCK_ACTION_RUNNER_KVM_SSH_KEY }}
         run: |
           set -euo pipefail
 
@@ -179,18 +179,18 @@ jobs:
               echo "::error::VM SSH private key was not found: ${VM_SSH_PRIVATE_KEY_PATH}"
               echo "Copy the therock SSH private key to this path on the self-hosted runner,"
               echo "set vm_ssh_private_key_path to the correct key path, or clear it to use"
-              echo "the THEROCK_VM_SSH_KEY GitHub secret."
+              echo "the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
               exit 1
             fi
             cp "${VM_SSH_PRIVATE_KEY_PATH}" "${HOME}/.ssh/therock_vm_key"
           else
-            if [ -z "${THEROCK_VM_SSH_KEY}" ]; then
+            if [ -z "${THEROCK_ACTION_RUNNER_KVM_SSH_KEY}" ]; then
               echo "::error::No VM SSH private key was provided."
               echo "Set vm_ssh_private_key_path to a key file on the self-hosted runner,"
-              echo "or configure the THEROCK_VM_SSH_KEY GitHub secret."
+              echo "or configure the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
               exit 1
             fi
-            printf '%s\n' "${THEROCK_VM_SSH_KEY}" > "${HOME}/.ssh/therock_vm_key"
+            printf '%s\n' "${THEROCK_ACTION_RUNNER_KVM_SSH_KEY}" > "${HOME}/.ssh/therock_vm_key"
           fi
 
           chmod 600 "${HOME}/.ssh/therock_vm_key"
