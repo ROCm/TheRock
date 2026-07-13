@@ -126,12 +126,21 @@ jobs:
       - name: torchaudio GPU smoke test
         timeout-minutes: 10
         run: |
-          python .github/scripts/torchaudio_gpu_smoke_test.py; rc=$?
-          # torch/ROCm on Windows can leave a lingering child python process that
-          # blocks GitHub Actions step finalization even after the main process
-          # exits; clean it up so the step can end on its real result.
+          # torch/ROCm on Windows can hang at process teardown after the GPU work
+          # finishes. Run the smoke test in the background, poll its output for a
+          # pass/fail marker, then force-kill python so the step ends on the real
+          # result instead of the teardown hang.
+          set +e
+          python -u .github/scripts/torchaudio_gpu_smoke_test.py > smoke.log 2>&1 &
+          for i in $(seq 1 150); do
+            grep -q "All torchaudio GPU smoke checks passed" smoke.log && break
+            grep -q "SMOKE TEST FAILED" smoke.log && break
+            sleep 2
+          done
           taskkill //F //IM python.exe //T >/dev/null 2>&1 || true
-          exit $rc
+          echo "----- smoke.log -----"
+          cat smoke.log
+          grep -q "All torchaudio GPU smoke checks passed" smoke.log
 
       - name: Checkout torchaudio test sources
         run: |
