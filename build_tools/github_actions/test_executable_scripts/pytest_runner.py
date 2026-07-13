@@ -25,6 +25,8 @@ TEST_TYPE: Test category to run; must be a category defined in
 AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
+JUNIT_XML_DIR: Optional. When set, pytest writes a JUnit XML report to
+    {JUNIT_XML_DIR}/{TEST_COMPONENT}.xml.
 """
 
 import logging
@@ -116,7 +118,9 @@ def build_marker_expression(category_config, gpu_arch):
     return marker_expr
 
 
-def run_pytest(test_paths, marker_expr, extra_args, timeout, num_workers, cwd, env):
+def run_pytest(
+    test_paths, marker_expr, extra_args, junit_xml, timeout, num_workers, cwd, env
+):
     existing = [p for p in test_paths if (cwd / p).exists()]
     missing = [p for p in test_paths if not (cwd / p).exists()]
     for p in missing:
@@ -128,6 +132,8 @@ def run_pytest(test_paths, marker_expr, extra_args, timeout, num_workers, cwd, e
     cmd = ["pytest", *existing, "-v", "--color=yes"]
     if marker_expr:
         cmd.extend(["-m", marker_expr])
+    if junit_xml:
+        cmd.append(f"--junit-xml={junit_xml}")
     if extra_args:
         cmd.extend(extra_args)
 
@@ -168,10 +174,13 @@ def build_environment(rocm_path):
     )
     env["ROCM_PATH"] = str(rocm_path)
 
+    # _rocisa links libamdhip64.so (in lib/), tensilelite-client links libomp.so
+    # (in lib/llvm/lib/) — both are needed or the client segfaults at load.
     lib_path = rocm_path / "lib"
+    llvm_lib_path = rocm_path / "lib" / "llvm" / "lib"
     existing_ld = env.get("LD_LIBRARY_PATH", "")
-    env["LD_LIBRARY_PATH"] = (
-        f"{lib_path}{os.pathsep}{existing_ld}" if existing_ld else str(lib_path)
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(
+        filter(None, [str(lib_path), str(llvm_lib_path), existing_ld])
     )
 
     existing_path = env.get("PATH", "")
@@ -236,7 +245,16 @@ if __name__ == "__main__":
 
     exec_settings = config.get("execution_settings", {})
     timeout = exec_settings.get("category_timeouts", {}).get(TEST_TYPE)
-    num_workers = exec_settings.get("parallel_workers", 1)
+    # parallel_workers may be overridden per category (e.g. GPU GEMM tests want
+    # more xdist workers than the default), falling back to the global setting.
+    num_workers = category_config.get(
+        "parallel_workers", exec_settings.get("parallel_workers", 1)
+    )
+
+    junit_dir = get_env_value("JUNIT_XML_DIR")
+    junit_xml = (
+        str(Path(junit_dir) / f"{TEST_COMPONENT_NAME}.xml") if junit_dir else None
+    )
 
     env = build_environment(rocm_path)
     for key, value in (exec_settings.get("environment", {}) or {}).items():
@@ -249,6 +267,7 @@ if __name__ == "__main__":
             test_paths,
             marker_expr,
             pytest_args,
+            junit_xml,
             timeout,
             num_workers,
             component_path,
