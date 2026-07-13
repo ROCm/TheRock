@@ -43,6 +43,10 @@ on:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
         default: ""
+      baseline_github_repo:
+        description: "GitHub repo (owner/name) that owns the baseline run. Defaults to the current repository."
+        type: string
+        default: ""
       build_pytorch:
         description: "Build PyTorch wheels."
         type: boolean
@@ -159,12 +163,16 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BASELINE_GITHUB_REPO: ${{ inputs.baseline_github_repo }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
+          # Pass the caller's external_repo JSON so configure_multi_arch_ci.py can
+          # read fields like skip_packaging without depending on the detect step.
+          EXTERNAL_REPO_JSON: ${{ inputs.external_repo }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

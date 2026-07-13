@@ -847,6 +847,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="",
             build_pytorch=True,
             build_jax=False,
+            build_python_packages=True,
             build_native_linux=True,
         )
         d = config.to_dict()
@@ -878,6 +879,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="release",
             build_pytorch=True,
             build_jax=False,
+            build_python_packages=True,
             build_native_linux=True,
         )
         # Present config → valid JSON
@@ -1362,6 +1364,7 @@ class TestFormatSummary(unittest.TestCase):
             build_variant_suffix="",
             build_variant_cmake_preset="",
             build_native_linux=True,
+            build_python_packages=True,
             build_pytorch=False,
             build_jax=False,
         )
@@ -1455,6 +1458,69 @@ class TestConfigurePipeline(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
 # ---------------------------------------------------------------------------
+
+
+class TestExternalRepoPackagingFlags(unittest.TestCase):
+    """External repos can opt out of packaging jobs via skip_packaging in external_repo_config."""
+
+    _SKIP_CONFIG = json.dumps({"skip_packaging": True})
+    _NO_SKIP_CONFIG = json.dumps({"skip_packaging": False})
+
+    def _inputs(self, **kwargs):
+        defaults = dict(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def test_packaging_disabled_when_skip_packaging_true(self):
+        """skip_packaging=true in EXTERNAL_REPO_JSON disables all packaging flags."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        with patch.dict(os.environ, {"EXTERNAL_REPO_JSON": self._SKIP_CONFIG}):
+            result = cm.expand_build_configs(
+                targets=targets,
+                ci_inputs=self._inputs(),
+                jobs=_jobs(),
+                git_context=cm.GitContext(),
+            )
+        self.assertIsNotNone(result.linux)
+        self.assertFalse(result.linux.build_native_linux)
+        self.assertFalse(result.linux.build_python_packages)
+        self.assertFalse(result.linux.build_pytorch)
+
+    def test_packaging_enabled_when_skip_packaging_false(self):
+        """skip_packaging=false (or absent) leaves packaging flags enabled."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        with patch.dict(os.environ, {"EXTERNAL_REPO_JSON": self._NO_SKIP_CONFIG}):
+            result = cm.expand_build_configs(
+                targets=targets,
+                ci_inputs=self._inputs(),
+                jobs=_jobs(),
+                git_context=cm.GitContext(),
+            )
+        self.assertIsNotNone(result.linux)
+        self.assertTrue(result.linux.build_native_linux)
+        self.assertTrue(result.linux.build_python_packages)
+        self.assertTrue(result.linux.build_pytorch)
+
+    def test_packaging_enabled_without_external_repo_config(self):
+        """No EXTERNAL_REPO_JSON env var: packaging defaults to enabled."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        with patch.dict(os.environ, {"EXTERNAL_REPO_JSON": ""}):
+            result = cm.expand_build_configs(
+                targets=targets,
+                ci_inputs=self._inputs(),
+                jobs=_jobs(),
+                git_context=cm.GitContext(),
+            )
+        self.assertIsNotNone(result.linux)
+        self.assertTrue(result.linux.build_native_linux)
+        self.assertTrue(result.linux.build_python_packages)
+        self.assertTrue(result.linux.build_pytorch)
 
 
 class TestBuildConfigWorkflowContract(unittest.TestCase):

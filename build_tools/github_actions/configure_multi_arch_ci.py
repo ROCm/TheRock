@@ -151,6 +151,7 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+    baseline_github_repo: str = ""
 
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
@@ -250,6 +251,7 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            baseline_github_repo=os.environ.get("BASELINE_GITHUB_REPO", ""),
         )
 
 
@@ -396,6 +398,7 @@ class BuildRocmDecision(JobGroupDecision):
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
     baseline_run_id: str = ""
+    baseline_github_repo: str = ""
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -477,6 +480,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -487,6 +491,7 @@ class BuildConfig:
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    baseline_github_repo: str = ""
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -702,6 +707,7 @@ def decide_jobs(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=ci_inputs.baseline_run_id,
+        baseline_github_repo=ci_inputs.baseline_github_repo,
     )
 
     # Test ROCm.
@@ -889,6 +895,9 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     jobs: JobDecisions,
     git_context: GitContext,
+    prebuilt_stages: list[str] | None = None,
+    baseline_run_id: str = "",
+    baseline_github_repo: str = "",
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -1047,6 +1056,19 @@ def _expand_build_config_for_platform(
     dist_amdgpu_families = ";".join(family_names)
     suffix = variant_config.get("build_variant_suffix", "")
 
+    # Read skip_packaging from the caller's external_repo JSON if present.
+    # External repos (e.g. rocgdb) opt in by setting "skip_packaging": true
+    # in their external_repo JSON; by default packaging runs normally.
+    skip_packaging = False
+    external_repo_json_str = os.environ.get("EXTERNAL_REPO_JSON", "")
+    if external_repo_json_str:
+        try:
+            skip_packaging = bool(
+                json.loads(external_repo_json_str).get("skip_packaging", False)
+            )
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
 
@@ -1084,15 +1106,17 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
-        build_pytorch=build_pytorch,
+        build_native_linux=(suffix != "asan") and not skip_packaging,
+        build_python_packages=not skip_packaging,
+        build_pytorch=build_pytorch and not skip_packaging,
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
-        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
-        baseline_run_id=jobs.build_rocm.baseline_run_id,
+        prebuilt_stages=prebuilt_stages or [],
+        baseline_run_id=baseline_run_id,
+        baseline_github_repo=baseline_github_repo,
     )
 
 
@@ -1183,6 +1207,9 @@ def expand_build_configs(
             variant_config=variant_config,
             ci_inputs=ci_inputs,
             jobs=jobs,
+            prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+            baseline_run_id=jobs.build_rocm.baseline_run_id,
+            baseline_github_repo=jobs.build_rocm.baseline_github_repo,
             git_context=git_context,
         )
         if platform == "linux":
