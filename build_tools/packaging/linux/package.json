@@ -1525,6 +1525,7 @@
         ]
       }
     ],
+    "Disable_DWZ": "True",
     "Gfxarch": "True"
   },
   {

@@ -52,7 +52,7 @@ jobs:
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
-    runs-on: azure-windows-scale-rocm
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on || 'azure-windows-scale-rocm' }}
     defaults:
       run:
         shell: bash
