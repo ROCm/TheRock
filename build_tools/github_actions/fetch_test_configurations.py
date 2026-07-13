@@ -174,8 +174,9 @@ test_matrix = {
             "linux": 1,
         },
     },
-    # rocjitsu runs entirely under CPU-side emulation and does not require a GPU
-    # runner for this artifact-layout smoke test.
+    # rocjitsu is a CPU-side emulator/instrumentation tool. This component is a
+    # packaging smoke test for the installed rocjitsu artifact contract, so it
+    # runs on a Linux CPU runner and intentionally avoids GPU container devices.
     "rocjitsu": {
         "job_name": "rocjitsu",
         "fetch_artifact_args": "--rocjitsu",

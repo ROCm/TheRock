@@ -4,9 +4,10 @@
 
 """Smoke test for the installed rocjitsu artifact payload.
 
-This test intentionally stays CPU-only. It verifies that `--rocjitsu` artifacts
-provide the installed CLI, runtime libraries, and config/schema files needed by
-downstream workflows before those workflows attempt heavier emulation runs.
+This test intentionally stays CPU-only. The TheRock component workflow unpacks
+artifacts into an installed ROCm tree and sets THEROCK_BIN_DIR to that tree's
+`bin` directory; this script verifies the `--rocjitsu` artifact contract at that
+installed-tree boundary.
 """
 
 import logging
@@ -49,6 +50,8 @@ logging.info("=== Verifying rocjitsu artifact install layout ===")
 logging.info(f"ROCM_PATH={ROCM_PATH}")
 logging.info(f"THEROCK_BIN_DIR={THEROCK_BIN_DIR}")
 
+# The CLI, interposer/runtime libraries, and config/schema payload are the
+# minimum installed files needed to launch rocjitsu from TheRock artifacts.
 require_file(rocjitsu_bin, executable=True)
 for path in required_files:
     require_file(path)
@@ -65,6 +68,9 @@ if not schemas:
 logging.info(f"rocjitsu configs: {configs}")
 logging.info(f"rocjitsu schemas: {schemas}")
 
+# The component runs on a CPU runner without ROCm installed in the image. Build
+# the runtime search path from the unpacked artifact tree before invoking the
+# installed CLI.
 env = os.environ.copy()
 env["LD_LIBRARY_PATH"] = os.pathsep.join(
     filter(
@@ -81,6 +87,9 @@ env["PATH"] = os.pathsep.join(
     filter(None, [str(THEROCK_BIN_DIR), env.get("PATH", "")])
 )
 
+# `--version` is enough for this component: it proves the installed executable
+# can start and resolve its shared-library dependencies without requiring a GPU
+# or running an architecture-specific emulation workload.
 cmd = [str(rocjitsu_bin), "--version"]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, env=env, check=True)
