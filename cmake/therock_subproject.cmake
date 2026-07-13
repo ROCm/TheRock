@@ -854,8 +854,8 @@ function(therock_cmake_subproject_activate target_name)
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
   string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
   foreach(_addl_cmake_include ${_cmake_includes})
-    if(NOT IS_ABSOLUTE)
-      find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
+    if(NOT IS_ABSOLUTE "${_addl_cmake_include}")
+      find_path(_addl_cmake_include_path "${_addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
       cmake_path(ABSOLUTE_PATH _addl_cmake_include BASE_DIRECTORY "${_addl_cmake_include_path}")
     endif()
     string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
@@ -884,11 +884,6 @@ function(therock_cmake_subproject_activate target_name)
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
-  # Enforce CMP0141 to ensure CMAKE_MSVC_DEBUG_INFORMATION_FORMAT generates correct compilation flags. (/Z7 for MSVC, -g -gcodeview for GNU)
-  if(WIN32 AND THEROCK_GENERATE_DEBUG_INFO)
-    list(APPEND _cmake_args "-DCMAKE_POLICY_DEFAULT_CMP0141=NEW")
-  endif()
-
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
@@ -896,6 +891,11 @@ function(therock_cmake_subproject_activate target_name)
     set(_cmake_build_type "${CMAKE_BUILD_TYPE}")
   else()
     message(STATUS "  PROJECT SPECIFIC CMAKE_BUILD_TYPE=${_cmake_build_type}")
+  endif()
+
+  # Enforce CMP0141 to ensure CMAKE_MSVC_DEBUG_INFORMATION_FORMAT generates correct compilation flags. (/Z7 for MSVC, -g -gcodeview for GNU)
+  if(WIN32 AND THEROCK_GENERATE_DEBUG_INFO)
+    list(APPEND _cmake_args "-DCMAKE_POLICY_DEFAULT_CMP0141=NEW")
   endif()
 
   set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")

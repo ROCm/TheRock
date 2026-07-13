@@ -66,7 +66,11 @@ ComponentDefaults(
 # later components (dbg, dev, doc, test) from claiming files in that stage dir.
 # Always use explicit includes on run, or omit it for stage dirs where dev/test
 # content is expected.
-ComponentDefaults("run", extends=["lib"])
+# Debug files are excluded so they always fall through to the 'dbg' component:
+# on Windows PDBs are installed next to their binaries in bin/, which a typical
+# 'bin/**' run include would otherwise claim before 'dbg' (later in the chain)
+# ever sees them.
+ComponentDefaults("run", excludes=["**/*.pdb"], extends=["lib"])
 
 # Debug components collect all platform-specific debug file patterns.
 ComponentDefaults(
@@ -176,6 +180,23 @@ class ArtifactDescriptor:
                 self.components[default_name] = ComponentDescriptor(
                     default_name, {}, artifact_name=artifact_name
                 )
+
+        # Ensure the 'dbg' component scans every basedir referenced by any other
+        # component. Debug files (Windows PDBs, Linux .build-id/*.debug) are
+        # excluded from the earlier components, so this guarantees they are
+        # collected into 'dbg' even for stage dirs whose descriptor only declared
+        # e.g. a 'run' component. Uses default_patterns so each added basedir
+        # matches the standard **/*.pdb and .build-id/**/*.debug patterns.
+        dbg_component = self.components.get("dbg")
+        if dbg_component is not None:
+            all_basedirs = set()
+            for component in self.components.values():
+                all_basedirs.update(component.basedirs.keys())
+            for basedir in all_basedirs:
+                if basedir not in dbg_component.basedirs:
+                    dbg_component.basedirs[basedir] = ComponentBasedirDescriptor(
+                        dbg_component, basedir, {}, artifact_name=artifact_name
+                    )
 
     @staticmethod
     def load_toml_file(p: Path, *, artifact_name: str) -> "ArtifactDescriptor":
