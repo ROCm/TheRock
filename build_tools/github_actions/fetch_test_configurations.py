@@ -174,6 +174,19 @@ test_matrix = {
             "linux": 1,
         },
     },
+    # rocjitsu runs entirely under CPU-side emulation and does not require a GPU
+    # runner for this artifact-layout smoke test.
+    "rocjitsu": {
+        "job_name": "rocjitsu",
+        "fetch_artifact_args": "--rocjitsu",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocjitsu.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",

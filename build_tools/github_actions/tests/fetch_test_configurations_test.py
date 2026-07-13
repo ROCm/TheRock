@@ -89,6 +89,22 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "hipblas")
 
+    def test_rocjitsu_component_is_linux_cpu_only(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocjitsu"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        rocjitsu = components[0]
+        self.assertEqual(rocjitsu["job_name"], "rocjitsu")
+        self.assertEqual(rocjitsu["fetch_artifact_args"], "--rocjitsu")
+        self.assertTrue(rocjitsu["linux_cpu_runner"])
+        self.assertIn("test_rocjitsu.py", rocjitsu["test_script"])
+        self.assertNotIn("--device /dev/kfd", rocjitsu["container_options"])
+        self.assertNotIn("--device /dev/dri", rocjitsu["container_options"])
+        self.assertIn("--ipc host", rocjitsu["container_options"])
+
     def test_test_labels_filter(self):
         os.environ["TEST_LABELS"] = json.dumps(["rocblas", "hipblas"])
 
