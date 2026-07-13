@@ -47,13 +47,16 @@ A remote HTTP signing service running in an AWS private subnet, accepting signed
 
 ### 2.1 What Gets Signed
 
-| Artifact | Signature Format | Produced By |
-|----------|-----------------|-------------|
-| RPM packages (`.rpm`) | Embedded GPG signature (via `rpmsign`) | `gpgshim` intercepting `rpmsign` |
-| RPM repo metadata (`repomd.xml`) | Detached ASCII signature (`repomd.xml.asc`) | `upload_package_repo.py` → direct API call |
-| DEB repo metadata (`Release`) | Clearsigned `InRelease` + detached `Release.gpg` | `upload_package_repo.py` → direct API call |
+| Artifact | Signature Format | Produced By | Phase |
+|----------|-----------------|-------------|-------|
+| RPM packages (`.rpm`) | Embedded GPG signature (via `rpmsign`) | `gpgshim` intercepting `rpmsign` on build runner | 1 |
+| RPM repo metadata (`repomd.xml`) | Detached ASCII signature (`repomd.xml.asc`) | `upload_package_repo.py` → `POST /sign` direct | 1 |
+| DEB repo metadata (`Release`) | Clearsigned `InRelease` + detached `Release.gpg` | `upload_package_repo.py` → `POST /sign` direct | 1 |
+| RPM packages, ad-hoc (no gpgshim) | Embedded GPG signature (server-side `rpmsign`) | `POST /sign-rpm` — full RPM uploaded and returned signed | 2 |
 
 DEB package files themselves are not signed — the repository metadata signature is sufficient for `apt`.
+
+**Why two RPM signing paths?** `gpgshim` (Phase 1) is efficient — it sends only ~4 KB regardless of RPM size — but requires `rpmsign` and `gpgshim` installed on the caller's machine. `POST /sign-rpm` (Phase 2) requires only an HTTP client, making it accessible to operators and external callers who cannot install `gpgshim`, at the cost of transferring the full RPM over the network.
 
 ### 2.2 Callers
 

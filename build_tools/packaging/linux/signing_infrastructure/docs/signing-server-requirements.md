@@ -247,7 +247,7 @@ The following steps are performed offline by an authorized operator — not by t
 
 ## 3. Phase 2 Requirements
 
-Phase 2 adds redundancy (primary + secondary with ALB failover) and application-layer authentication for audit traceability. Phase 1 infrastructure remains in place; Phase 2 extends it.
+Phase 2 adds redundancy (primary + secondary with ALB failover), application-layer authentication for audit traceability, and server-side RPM signing for callers who cannot use `gpgshim`. Phase 1 infrastructure remains in place; Phase 2 extends it.
 
 ### 3.1 Infrastructure — High Availability
 
@@ -318,6 +318,51 @@ Phase 2 adds redundancy (primary + secondary with ALB failover) and application-
 |----|-------------|
 | P2-CLI-1 | `sign-file` shall accept a `--token` argument (or read from `SIGNING_TOKEN` environment variable) and include it as an `Authorization` header |
 | P2-CLI-2 | `sign-file` shall print a clear error on `401` indicating the token is missing or invalid |
+
+### 3.5 Server-Side RPM Signing (POST /sign-rpm)
+
+**Context:** Phase 1 RPM package signing requires `gpgshim` to be installed on the calling machine, because `rpmsign` must run client-side to embed the signature into the RPM binary format. For ad-hoc or operator use cases where installing `gpgshim` is not practical, the signing server shall provide a new endpoint that accepts a full RPM file, runs `rpmsign` server-side, and returns the complete signed RPM.
+
+**Trade-offs vs Phase 1 approach:**
+
+| | Phase 1 (gpgshim) | Phase 2 (POST /sign-rpm) |
+|--|------------------|--------------------------|
+| **Network transfer** | ~4 KB (header only) | Full RPM (can be 1 GB+) |
+| **Client requirement** | `gpgshim` + `rpmsign` installed | HTTP client only (curl, Python) |
+| **Use case** | Automated CI builds | Ad-hoc operator, external callers |
+| **Server requirement** | `gpg` only | `gpg` + `rpmsign` installed on server |
+
+| ID | Requirement |
+|----|-------------|
+| P2-RPM-1 | The signing server shall expose a new endpoint `POST /sign-rpm` that accepts a complete RPM file as a binary upload and returns the signed RPM as a binary download |
+| P2-RPM-2 | The request shall use `multipart/form-data` or `application/octet-stream` content type; `key_id` and `digest_algo` passed as query parameters or a JSON envelope |
+| P2-RPM-3 | The server shall invoke `rpmsign --addsign` on the uploaded RPM using a local `gpgshim` or direct GPG configuration against the tmpfs keyring |
+| P2-RPM-4 | The maximum request size limit for `POST /sign-rpm` shall be configurable separately from `POST /sign` — default 512 MB to accommodate large RPM packages |
+| P2-RPM-5 | The uploaded RPM shall be written to a temporary file on tmpfs (not EBS), signed in place, streamed back to the caller, and immediately deleted — the RPM shall not persist on the server |
+| P2-RPM-6 | `POST /sign-rpm` shall be subject to the same auth (Phase 2 app token) and rate limiting as `POST /sign` |
+| P2-RPM-7 | `rpmsign` shall be installed on the signing server as an additional dependency for Phase 2 |
+| P2-RPM-8 | The `sign-file` CLI shall be extended with a `--rpm` flag that uses `POST /sign-rpm` instead of `POST /sign` when signing RPM files directly |
+
+**Example usage (Phase 2):**
+
+```bash
+# Operator signing an RPM without gpgshim installed
+python3 sign-file \
+  --server https://signing.internal.amd.com \
+  --key-id therock-release@amd.com \
+  --file mypackage.rpm \
+  --rpm \
+  --token "$SIGNING_TOKEN"
+# Output: mypackage.rpm (overwritten in place with embedded signature)
+
+# Or raw curl
+curl -k -X POST https://signing.internal.amd.com/sign-rpm \
+  -H "Authorization: Bearer $SIGNING_TOKEN" \
+  -H "Content-Type: application/octet-stream" \
+  -F "key_id=therock-release@amd.com" \
+  --data-binary @mypackage.rpm \
+  -o mypackage-signed.rpm
+```
 
 ---
 
