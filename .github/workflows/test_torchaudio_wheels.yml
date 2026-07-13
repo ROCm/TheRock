@@ -75,6 +75,9 @@ jobs:
       TORCHAUDIO_VERSION: ${{ inputs.torchaudio_version || '2.11.0.1+devrocm7.14.0.dev0.331251018497de4049c7d8447c7b2d1dcdfd012e' }}
       AUDIO_REPO: ${{ inputs.audio_repo || 'ethanwee1/audio' }}
       AUDIO_REF: ${{ inputs.audio_ref || 'ew/rocm-24803-hipify-gpu-ext' }}
+      # Single-GPU runner: allow torchaudio's multi-GPU-only tests to skip
+      # instead of hard-failing.
+      TORCHAUDIO_TEST_ALLOW_SKIP_IF_NO_MULTIGPU_CUDA: "1"
       # Torch/torchaudio wheels are pinned to the ROCm SDK they were built
       # against; if that SDK version has been pruned from the index, resolve it
       # from the original build artifacts via --find-links.
