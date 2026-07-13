@@ -45,8 +45,13 @@ on:
         required: false
         type: string
         default: "https://rocm.prereleases.amd.com/packages-multi-arch/rhel8/x86_64/"
+      rocm_gpgcheck:
+        description: "Enable GPG checking for ROCm RPM installation."
+        required: false
+        type: boolean
+        default: true
       rocm_gpg_key:
-        description: "ROCm repository GPG key URL."
+        description: "ROCm repository GPG key URL. Required when rocm_gpgcheck is enabled."
         required: false
         type: string
         default: "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
@@ -85,6 +90,7 @@ jobs:
       VM_SSH_USER: therock
       ROCM_REPO_BASEURL: ${{ inputs.rocm_repo_baseurl }}
       ROCM_GPG_KEY: ${{ inputs.rocm_gpg_key }}
+      ROCM_GPGCHECK: ${{ inputs.rocm_gpgcheck }}
       ROCFFT_TEST_ARGS: ${{ inputs.rocfft_test_args }}
       VM_PID_FILE: /tmp/therock-qcow-${{ github.run_id }}.pid
       VM_SERIAL_LOG: /tmp/therock-qcow-${{ github.run_id }}.serial.log
@@ -243,9 +249,14 @@ jobs:
           echo "VM did not become reachable over SSH."
           exit 1
 
-      - name: Install ROCm prerelease packages and run rocFFT test
+      - name: Install ROCm packages and run rocFFT test
         run: |
           set -euo pipefail
+
+          rocm_gpg_key_for_guest=""
+          if [ "${ROCM_GPGCHECK}" = "true" ]; then
+            rocm_gpg_key_for_guest="${ROCM_GPG_KEY}"
+          fi
 
           ssh \
             -i "${HOME}/.ssh/therock_vm_key" \
@@ -253,17 +264,36 @@ jobs:
             -o UserKnownHostsFile=/dev/null \
             -p "${VM_SSH_PORT}" \
             "${VM_SSH_USER}@127.0.0.1" \
-            "ROCM_REPO_BASEURL='${ROCM_REPO_BASEURL}' ROCM_GPG_KEY='${ROCM_GPG_KEY}' ROCFFT_TEST_ARGS='${ROCFFT_TEST_ARGS}' bash -s" <<'EOF'
+            "ROCM_REPO_BASEURL='${ROCM_REPO_BASEURL}' ROCM_GPG_KEY='${rocm_gpg_key_for_guest}' ROCM_GPGCHECK='${ROCM_GPGCHECK}' ROCFFT_TEST_ARGS='${ROCFFT_TEST_ARGS}' bash -s" <<'EOF'
           set -euxo pipefail
 
-          sudo tee /etc/yum.repos.d/rocm.repo >/dev/null <<REPO
+          if [ "${ROCM_GPGCHECK}" = "true" ]; then
+            if [ -z "${ROCM_GPG_KEY}" ]; then
+              echo "::error::rocm_gpgcheck is enabled but rocm_gpg_key is empty."
+              echo "Set rocm_gpg_key or uncheck rocm_gpgcheck."
+              exit 1
+            fi
+
+            sudo tee /etc/yum.repos.d/rocm.repo >/dev/null <<REPO
           [rocm]
-          name=ROCm Prerelease Repository
+          name=ROCm Repository
           baseurl=${ROCM_REPO_BASEURL}
           enabled=1
           gpgcheck=1
           gpgkey=${ROCM_GPG_KEY}
           REPO
+          else
+            sudo tee /etc/yum.repos.d/rocm.repo >/dev/null <<REPO
+          [rocm]
+          name=ROCm Repository
+          baseurl=${ROCM_REPO_BASEURL}
+          enabled=1
+          gpgcheck=0
+          REPO
+          fi
+
+          echo "Generated /etc/yum.repos.d/rocm.repo:"
+          sudo cat /etc/yum.repos.d/rocm.repo
 
           if command -v lspci >/dev/null; then
             lspci -nn
@@ -273,6 +303,7 @@ jobs:
           # Remove any preinstalled ROCm test packages so the install below
           # uses the versions from the currently configured repositories.
           sudo dnf remove -y amdrocm-core-sdk amdrocm-fft-test || true
+          echo "DNF install command: sudo dnf install -y amdrocm-core-sdk amdrocm-fft-test"
           sudo dnf install -y amdrocm-core-sdk amdrocm-fft-test
 
           if [ -x /opt/rocm/bin/rocminfo ]; then
