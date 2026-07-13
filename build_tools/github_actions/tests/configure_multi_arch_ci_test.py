@@ -462,6 +462,20 @@ class TestDecideJobs(unittest.TestCase):
                 self._inputs(pr_labels=["test_filter:bogus"]), git_context=git
             )
 
+    def test_workflow_dispatch_test_filter_label_overrides(self):
+        """test_filter in workflow_dispatch test_labels overrides test_type."""
+        # workflow_dispatch with test_filter:comprehensive should use comprehensive,
+        # not fall through to "full" because of _has_test_labels
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                linux_test_labels=["test_filter:comprehensive"],
+            ),
+            git_context=cm.GitContext(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+        self.assertIn("test_filter", result.test_rocm.test_type_reason)
+
     def test_explicit_prebuilt_stages(self):
         """workflow_dispatch prebuilt_stages input → stage_decisions on BuildRocmDecision."""
         result = cm.decide_jobs(
@@ -1339,6 +1353,44 @@ class TestFormatSummary(unittest.TestCase):
         outputs = cm.CIOutputs(is_ci_enabled=False)
         cm.write_outputs(self._inputs(), outputs)
 
+    def test_build_outputs_includes_manifest_diff_link(self):
+        linux = cm.BuildConfig(
+            per_family_info=[],
+            dist_amdgpu_families="gfx94X-dcgpu",
+            artifact_group="gfx94X-dcgpu",
+            build_variant_label="release",
+            build_variant_suffix="",
+            build_variant_cmake_preset="",
+            build_native_linux=True,
+            build_pytorch=False,
+            build_jax=False,
+        )
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            builds=cm.BuildConfigs(linux=linux),
+            jobs=jobs,
+        )
+        result = format_summary(self._inputs(), outputs)
+        self.assertIn("## Build outputs", result)
+        self.assertIn("Linux |", result)
+        self.assertIn("Windows |", result)
+        manifest_diff_url = (
+            "https://therock-ci-artifacts.s3.amazonaws.com"
+            "/12345-linux/logs/manifest-diff/index.html"
+        )
+        self.assertIn(
+            f"Manifest diff *(if produced)* | {manifest_diff_url} | — | —",
+            result,
+        )
+
 
 # ---------------------------------------------------------------------------
 # End-to-end: configure() pipeline
@@ -1523,6 +1575,88 @@ class TestFamilyTestFilters(unittest.TestCase):
         self.assertIsNotNone(gfx90a_info)
         # workflow_dispatch should have test-runs-on set (not empty)
         self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+
+    def test_submodule_bump_tests_only_disables_tests_without_submodule_changes(self):
+        """gfx950 tests should be disabled on push without submodule changes."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref=None,  # Skip path filtering
+            build_variant="release",
+        )
+        # No submodule changes - CI-relevant file but not a submodule
+        git_context = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+            submodule_paths=["rocm-systems", "rocm-libraries"],
+        )
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx950 in the linux build config
+        gfx950_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx950-dcgpu":
+                    gfx950_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx950_info)
+        # Tests should be disabled (empty runner)
+        self.assertEqual(gfx950_info["test-runs-on"], "")
+
+    def test_submodule_bump_tests_only_enables_tests_with_submodule_changes(self):
+        """gfx950 tests should be enabled on push with submodule changes."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        # Submodule change detected
+        git_context = cm.GitContext(
+            changed_files=["rocm-libraries"],
+            submodule_paths=["rocm-systems", "rocm-libraries"],
+        )
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx950 in the linux build config
+        gfx950_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx950-dcgpu":
+                    gfx950_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx950_info)
+        # Tests should be enabled
+        self.assertNotEqual(gfx950_info["test-runs-on"], "")
+
+    def test_submodule_bump_tests_only_enables_tests_on_workflow_dispatch(self):
+        """gfx950 tests should be enabled on workflow_dispatch regardless of submodule changes."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref=None,  # Skip path filtering
+            build_variant="release",
+            linux_amdgpu_families=["gfx950"],
+        )
+        # No submodule changes
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx950 in the linux build config
+        gfx950_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx950-dcgpu":
+                    gfx950_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx950_info)
+        # Tests should be enabled on workflow_dispatch
+        self.assertNotEqual(gfx950_info["test-runs-on"], "")
 
 
 # ---------------------------------------------------------------------------

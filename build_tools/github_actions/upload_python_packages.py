@@ -83,6 +83,18 @@ def _make_output_root(
     return WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
+def detect_family_subdirs(dist_dir: Path) -> list[str]:
+    """Return GPU-family subdirectory names in dist_dir.
+
+    Ignores dot-directories (e.g. ".kpack_staging") which are build staging
+    artifacts, not GPU families. Their presence must not flip a multi-arch
+    upload into the legacy per-family layout/summary.
+    """
+    return sorted(
+        d.name for d in dist_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
+    )
+
+
 def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = False):
     """Generates an index.html file listing packages for pip --find-links.
 
@@ -96,7 +108,7 @@ def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = Fals
         return
 
     if multiarch:
-        has_subdirs = any(d.is_dir() for d in dist_dir.iterdir())
+        has_subdirs = bool(detect_family_subdirs(dist_dir))
         if has_subdirs:
             log("[INFO] Multi-arch legacy mode: generating per-family indexes")
             generate_multiarch_indexes(dist_dir)
@@ -260,7 +272,9 @@ def run(args: argparse.Namespace):
     if not args.output_dir:
         if args.multiarch:
             # Detect flat (kpack-split) vs legacy per-family layout from dist/.
-            family_subdirs = sorted(d.name for d in dist_dir.iterdir() if d.is_dir())
+            # Dot-directories (e.g. .kpack_staging) are staging artifacts, not
+            # GPU families, and must not trigger the per-family layout.
+            family_subdirs = detect_family_subdirs(dist_dir)
             if family_subdirs:
                 # Legacy per-family: return base URL; downstream appends /{family}/index.html
                 index_url = packages_loc.https_url

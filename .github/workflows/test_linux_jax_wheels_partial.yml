@@ -128,7 +128,7 @@ permissions:
 
 jobs:
   test_jax_wheels:
-    name: Test JAX Wheels | Python ${{ inputs.python_version }}
+    name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
 
@@ -261,6 +261,13 @@ jobs:
           # Set XLA allocator. JAX 0.10.2 uses the default allocator; all
           # other releases keep the platform allocator.
           XLA_PYTHON_CLIENT_ALLOCATOR: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && 'default' || 'platform' }}
+
+          # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid a pytest
+          # slowdown/hang; other releases keep the runtime defaults.
+          # TODO:(magaonka-amd) remove these as soon as fixes from corresponding system teams lands.
+          ROCPROFILER_QUEUE_INTERPOSITION: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
+          DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
+          HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' }}
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
