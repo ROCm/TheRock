@@ -147,6 +147,7 @@ jobs:
       # Convert array to JSON string for workflow input compatibility
       test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+      expect_failure: ${{ matrix.family_info.expect_failure == true }}
       changed_projects: ${{ inputs.changed_projects }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}

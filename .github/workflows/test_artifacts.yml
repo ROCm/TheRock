@@ -58,6 +58,10 @@ on:
           - release
           - asan
         default: release
+      expect_failure:
+        description: "If true, mark tests as expected to fail (xfail)."
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       artifact_group:
@@ -105,6 +109,10 @@ on:
         description: "Build variant (e.g., release, asan)."
         type: string
         default: "release"
+      expect_failure:
+        description: "If true, mark tests as expected to fail (xfail)."
+        type: boolean
+        default: false
   push:
     branches:
       - ADHOCBUILD
@@ -165,6 +173,7 @@ jobs:
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
           WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
+          EXPECT_FAILURE: ${{ inputs.expect_failure }}
           CI_CONFIG_PATH: ci-config
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \

@@ -738,6 +738,9 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
+    # expect_failure marks all tests for this family as expected to fail (xfail).
+    # Set in therock-ci-config per family/platform, propagated through workflows.
+    expect_failure = str2bool(os.getenv("EXPECT_FAILURE", "false"))
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -919,6 +922,11 @@ def run():
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
+
+        # Propagate expect_failure to all components if set at the family level.
+        # This marks tests as expected to fail (xfail) in test_component.yml.
+        if expect_failure and "expect_failure" not in component:
+            component["expect_failure"] = True
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [_build_container_options(c, platform) for c in all_components]

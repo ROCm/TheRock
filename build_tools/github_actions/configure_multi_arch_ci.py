@@ -1038,6 +1038,10 @@ def _expand_build_config_for_platform(
             family_info["test_labels_for_family"] = platform_info[
                 "test_labels_for_family"
             ]
+        # expect_failure marks tests as expected to fail (xfail), allowing CI to
+        # continue while tracking known failures. Set in therock-ci-config.
+        if platform_info.get("expect_failure", False):
+            family_info["expect_failure"] = True
         per_family_info.append(family_info)
 
     if not per_family_info:
