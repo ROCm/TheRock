@@ -105,6 +105,47 @@ def cuid_launcher_path() -> Path:
     return Path(__file__).parent.resolve() / "cuid_launcher.py"
 
 
+def resolve_sccache(explicit_path: Path | None, gha: bool) -> Path | None:
+    """Locate and validate a usable sccache binary.
+
+    A missing or non-functional sccache is a config problem that would otherwise
+    silently degrade the build to "no cache". Under ``--gha`` we surface it as a
+    GitHub Actions ``::warning::`` (visible in the run summary) and return None so
+    the build proceeds uncached; locally it is a hard error so the developer
+    notices immediately. Flip the ``::warning::`` to ``::error::`` + a non-zero
+    exit if a broken cache config should fail CI instead.
+    """
+
+    def _unusable(message: str) -> None:
+        if gha:
+            print(
+                f"::warning::sccache unusable: {message}. "
+                "Building WITHOUT compiler cache."
+            )
+            return None
+        raise RuntimeError(message)
+
+    if explicit_path is not None:
+        if not explicit_path.exists():
+            return _unusable(f"specified path not found: {explicit_path}")
+        sccache_path = explicit_path
+    else:
+        sccache_path = find_sccache()
+        if not sccache_path:
+            return _unusable(
+                "not found (install: https://github.com/mozilla/sccache#installation; "
+                "for CI it ships in the manylinux build image)"
+            )
+
+    try:
+        subprocess.run(
+            [str(sccache_path), "--version"], capture_output=True, text=True, check=True
+        )
+    except (subprocess.CalledProcessError, OSError) as e:
+        return _unusable(f"{sccache_path} failed `--version`: {e}")
+    return sccache_path
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Locate sccache and print the env to configure a ROCm HIP build."
@@ -141,28 +182,11 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.sccache_path:
-        sccache_path = args.sccache_path
-        if not sccache_path.exists():
-            raise RuntimeError(f"Specified sccache not found: {sccache_path}")
-    else:
-        sccache_path = find_sccache()
-        if not sccache_path:
-            raise RuntimeError(
-                "sccache not found.\n"
-                "Install: https://github.com/mozilla/sccache#installation\n"
-                "For CI, sccache is pre-installed in the manylinux build image:\n"
-                "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
-            )
-
+    sccache_path = resolve_sccache(args.sccache_path, args.gha)
+    if sccache_path is None:
+        # --gha already emitted a ::warning::; proceed without configuring a cache.
+        return
     print(f"Using sccache: {sccache_path}")
-    try:
-        result = subprocess.run(
-            [str(sccache_path), "--version"], capture_output=True, text=True, check=True
-        )
-        print(f"sccache version: {result.stdout.strip()}")
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"sccache verification failed: {e}") from e
 
     env = sccache_build_env(sccache_path, hip_launcher=not args.no_hip_launcher)
     if args.gha:
