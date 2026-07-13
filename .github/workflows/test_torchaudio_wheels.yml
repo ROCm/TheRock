@@ -12,6 +12,11 @@
 name: Test torchaudio Wheels
 
 on:
+  # A push trigger on the development branch lets this run before the workflow
+  # exists on the default branch (workflow_dispatch requires the default branch).
+  push:
+    branches:
+      - ethanwee/torchaudio-gpu-tests
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -46,20 +51,26 @@ on:
         type: string
         default: "release/2.11.0.1"
 
-run-name: Test torchaudio (${{ inputs.amdgpu_family }}, ${{ inputs.torchaudio_version }}, ${{ inputs.test_runs_on }})
+run-name: Test torchaudio (${{ inputs.amdgpu_family || 'gfx110X-all' }}, ${{ inputs.torchaudio_version || 'default' }})
 
 permissions:
   contents: read
 
 jobs:
   test_torchaudio:
-    name: Test torchaudio | ${{ inputs.amdgpu_family }}
-    runs-on: ${{ inputs.test_runs_on }}
+    name: Test torchaudio | ${{ inputs.amdgpu_family || 'gfx110X-all' }}
+    runs-on: ${{ inputs.test_runs_on || 'windows-gfx110X-gpu-rocm' }}
     defaults:
       run:
         shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
+      GPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx110X-all' }}
+      PKG_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.devreleases.amd.com/whl-multi-arch/' }}
+      TORCH_VERSION: ${{ inputs.torch_version || '2.12.0+devrocm7.14.0.dev0.331251018497de4049c7d8447c7b2d1dcdfd012e' }}
+      TORCHAUDIO_VERSION: ${{ inputs.torchaudio_version || '2.11.0.1+devrocm7.14.0.dev0.331251018497de4049c7d8447c7b2d1dcdfd012e' }}
+      AUDIO_REPO: ${{ inputs.audio_repo || 'ethanwee1/audio' }}
+      AUDIO_REF: ${{ inputs.audio_ref || 'ew/rocm-24803-hipify-gpu-ext' }}
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -67,21 +78,21 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: ${{ inputs.python_version }}
+          python-version: ${{ inputs.python_version || '3.12' }}
 
       - name: Expand GPU family to device extras
         id: expand
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --amdgpu-families "${GPU_FAMILY}" \
             --output-mode=device-extras
 
       - name: Set up virtual environment (torch + torchaudio)
         timeout-minutes: 20
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" "torchaudio==${{ inputs.torchaudio_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${TORCH_VERSION}" "torchaudio==${TORCHAUDIO_VERSION}" \
+            --index-url=${PKG_INDEX_URL} \
             --activate-in-future-github-actions-steps
 
       - name: Install test requirements
@@ -100,8 +111,8 @@ jobs:
 
       - name: Checkout torchaudio test sources
         run: |
-          git clone --depth 1 --branch "${{ inputs.audio_ref }}" \
-            "https://github.com/${{ inputs.audio_repo }}.git" audio_src
+          git clone --depth 1 --branch "${AUDIO_REF}" \
+            "https://github.com/${AUDIO_REPO}.git" audio_src
 
       - name: torchaudio GPU unit tests
         timeout-minutes: 30
