@@ -72,7 +72,7 @@ GitHub Actions Workflow
   │
   │  For each RPM:
   │  4. Calls: rpmsign --addsign \
-  │              --define "_gpg_path ~/.local/bin/gpgshim" \
+  │              --define "%__gpg ~/.local/bin/gpgshim" \
   │              package.rpm
   │
   ▼

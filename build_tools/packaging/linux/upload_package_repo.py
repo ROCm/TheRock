@@ -163,8 +163,9 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages,
             )
 
         # Step 3.5: Sign repomd.xml if signing server is configured
+        # Phase 1: token is optional — Security Groups control access
         merged_repodata = merged_arch_dir / "repodata"
-        if merged_repodata.exists() and gpg_signing_server and gpg_server_token:
+        if merged_repodata.exists() and gpg_signing_server:
             sign_rpm_repomd_files(merged_arch_dir, gpg_signing_server, gpg_server_token)
 
         # Step 4: Upload merged repodata to S3
@@ -440,7 +441,8 @@ def regenerate_deb_metadata_from_s3(
         generate_release_file_with_checksums(release_file, job_type, dists_dir)
 
         # Step 4.5: Sign Release file if signing server is configured
-        if gpg_signing_server and gpg_server_token:
+        # Phase 1: token is optional — Security Groups control access
+        if gpg_signing_server:
             sign_deb_release_file(release_file, gpg_signing_server, gpg_server_token)
 
         # Step 5: Upload merged files to S3
@@ -632,7 +634,7 @@ def sign_metadata_file(
         metadata_file: Path to metadata file (Release, repomd.xml, etc.)
         output_file: Path to write signature
         server_url: Signing server URL (e.g., https://signing.example.com/sign)
-        token: Authentication token (OIDC or JWT)
+        token: Authentication token (optional; Phase 2 pre-shared token)
         clearsign: Create clearsigned output (for InRelease files)
         timeout: Request timeout in seconds
 
@@ -665,9 +667,11 @@ def sign_metadata_file(
 
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {token}',
         'User-Agent': 'upload_package_repo/1.0'
     }
+    # Phase 2: include token if provided; Phase 1 uses no app-layer token
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
 
     print(f"🔐 Sending signing request to: {server_url}")
     print(f"   Clearsign: {clearsign}")
@@ -728,7 +732,7 @@ def sign_deb_release_file(release_file: Path, server_url: str, token: str):
     Args:
         release_file: Path to Release file
         server_url: Signing server URL
-        token: Authentication token (OIDC or JWT)
+        token: Authentication token (optional; Phase 2 pre-shared token)
     """
     print(f"\n{'='*60}")
     print(f"Signing DEB Release file")
@@ -763,7 +767,7 @@ def sign_rpm_repomd_files(rpm_dir: Path, server_url: str, token: str):
     Args:
         rpm_dir: RPM repository root directory
         server_url: Signing server URL
-        token: Authentication token (OIDC or JWT)
+        token: Authentication token (optional; Phase 2 pre-shared token)
     """
     print(f"\n{'='*60}")
     print(f"Signing RPM repomd.xml files")
@@ -815,7 +819,7 @@ def main():
         "--gpg-server-token",
         type=str,
         default="",
-        help="Authentication token for signing server (OIDC or JWT)"
+        help="Authentication token for signing server (optional; Phase 2 only)"
     )
 
     args = parser.parse_args()
