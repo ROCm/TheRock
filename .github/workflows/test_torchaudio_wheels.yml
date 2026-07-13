@@ -87,16 +87,17 @@ jobs:
             --amdgpu-families "${GPU_FAMILY}" \
             --output-mode=device-extras
 
-      - name: Set up virtual environment (torch + torchaudio)
+      - name: Set up virtual environment (torch)
         timeout-minutes: 20
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${TORCH_VERSION}" "torchaudio==${TORCHAUDIO_VERSION}" \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${TORCH_VERSION}" \
             --index-url=${PKG_INDEX_URL} \
             --activate-in-future-github-actions-steps
 
-      - name: Install test requirements
+      - name: Install torchaudio + test requirements
         run: |
+          python -m pip install --pre "torchaudio==${TORCHAUDIO_VERSION}" --index-url "${PKG_INDEX_URL}"
           python -m pip install numpy expecttest parameterized pytest
           pip freeze
 
