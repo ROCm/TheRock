@@ -10,6 +10,7 @@ tensor inputs (no audio-file dependencies) so it runs on a bare GPU runner.
 
 Exits non-zero on any failure.
 """
+import os
 import sys
 
 import torch
@@ -79,5 +80,11 @@ check("cuda_ctc_decoder import", cuda_ctc_decoder_import)
 
 if failures:
     print(f"\nSMOKE TEST FAILED: {failures}", file=sys.stderr)
-    sys.exit(1)
-print("\nAll torchaudio GPU smoke checks passed.")
+else:
+    print("\nAll torchaudio GPU smoke checks passed.")
+
+# torch/ROCm can hang at interpreter shutdown on Windows; flush and hard-exit
+# so a clean run doesn't stall the CI step.
+sys.stdout.flush()
+sys.stderr.flush()
+os._exit(1 if failures else 0)
