@@ -1,0 +1,115 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Standalone torchaudio GPU test job.
+#
+# TheRock's test_pytorch_wheels only installs and tests `torch`. This workflow
+# installs the built torch + torchaudio wheels from a package index and
+# exercises torchaudio's ROCm GPU extensions (rnnt loss, forced_align, and the
+# CUDA CTC decoder) on a GPU runner -- the code paths enabled by ROCm/audio's
+# HIPIFY port (ROCm/audio#17) and pinned via ROCm/pytorch#3382.
+
+name: Test torchaudio Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test (e.g. gfx110X-all)
+        type: string
+        default: "gfx110X-all"
+      test_runs_on:
+        description: Runner label with a GPU supported by amdgpu_family
+        type: string
+        default: "windows-gfx110X-gpu-rocm"
+      python_version:
+        type: string
+        default: "3.12"
+      package_index_url:
+        description: Base Python package index URL (dev/nightly), without the GPU family subdir
+        type: string
+        required: true
+      torch_version:
+        description: torch package version to install
+        type: string
+        required: true
+      torchaudio_version:
+        description: torchaudio package version to install
+        type: string
+        required: true
+      audio_repo:
+        description: torchaudio repo to checkout test sources from
+        type: string
+        default: "ROCm/audio"
+      audio_ref:
+        description: torchaudio ref to checkout test sources from
+        type: string
+        default: "release/2.11.0.1"
+
+run-name: Test torchaudio (${{ inputs.amdgpu_family }}, ${{ inputs.torchaudio_version }}, ${{ inputs.test_runs_on }})
+
+permissions:
+  contents: read
+
+jobs:
+  test_torchaudio:
+    name: Test torchaudio | ${{ inputs.amdgpu_family }}
+    runs-on: ${{ inputs.test_runs_on }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Expand GPU family to device extras
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --output-mode=device-extras
+
+      - name: Set up virtual environment (torch + torchaudio)
+        timeout-minutes: 20
+        run: |
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" "torchaudio==${{ inputs.torchaudio_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Install test requirements
+        run: |
+          python -m pip install numpy expecttest parameterized pytest
+          pip freeze
+
+      - name: rocm-sdk sanity
+        timeout-minutes: 5
+        run: rocm-sdk test || true
+
+      - name: torchaudio GPU smoke test
+        timeout-minutes: 10
+        run: |
+          python .github/scripts/torchaudio_gpu_smoke_test.py
+
+      - name: Checkout torchaudio test sources
+        run: |
+          git clone --depth 1 --branch "${{ inputs.audio_ref }}" \
+            "https://github.com/${{ inputs.audio_repo }}.git" audio_src
+
+      - name: torchaudio GPU unit tests
+        timeout-minutes: 30
+        run: |
+          cd audio_src
+          python -m pytest -v \
+            test/torchaudio_unittest/models/rnnt/rnnt_gpu_test.py \
+            test/torchaudio_unittest/models/decoder/cuda_ctc_decoder_test.py \
+            test/torchaudio_unittest/functional/functional_cuda_test.py \
+            -k "cuda or CUDA or gpu or GPU or rnnt or forced_align" \
+            --continue-on-collection-errors --import-mode=importlib
