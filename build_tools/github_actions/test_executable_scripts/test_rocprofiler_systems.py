@@ -31,7 +31,7 @@ if THEROCK_CLANG_PATH.exists():
         ) from exc
 
 if host_triple:
-  THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
+    THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
 
 # These tests are always excluded until the relevant issue is fixed (AIPROFSYST-441)
 EXCLUDED_TESTS = [
