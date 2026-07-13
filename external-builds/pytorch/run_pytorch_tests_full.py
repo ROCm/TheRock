@@ -128,24 +128,24 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # all complete cleanly with the env var.
     #
     # Remaining genuine module-level excludes (NOT fixed by the env var):
-    # rocSHMEM device bitcode (librocshmem_device_gfx942.bc) is not packaged on the
-    # runner, so the whole module errors at import/collection.
-    "distributed/test_shmem_triton",
-    # _SymmetricMemory.empty_strided_p2p fails with hipErrorOutOfMemory: symmetric
-    # memory needs fabric-addressable P2P VRAM (XGMI) not available here; ~all tests
-    # fail fast (no heap-corruption marker), so a module exclude is cleaner than a
-    # large -k block.
-    "distributed/test_symmetric_memory",
-    # Run 29103767031 default shards 4/10 & 8/10 (and inductor 2/4 & 3/4 via the
-    # INDUCTOR_UNIT_TESTS allowlist): inductor/test_aot_inductor.py dies at import
-    # (`ImportError: cannot import name 'CDNA5OrLater' from
-    # torch.testing._internal.common_cuda`). The test source references the CDNA5
-    # (gfx950/MI350) arch gate, but the ROCm 7.15.0a20260710 wheel's common_cuda.py
-    # only defines up to CDNA2OrLater — a test/wheel version skew. Because the crash
-    # is at collection time, no per-test -k skip can catch it; the whole module must
-    # be excluded until the wheel's common_cuda.py catches up. Also removed from
-    # INDUCTOR_UNIT_TESTS below (the inductor --include allowlist ignores this list).
-    "inductor/test_aot_inductor",
+    # (distributed/test_shmem_triton was un-excluded on rocm7.15.0a20260712/b2b98e00:
+    # the module now self-skips cleanly with "SHMEM backend (NVSHMEM/rocSHMEM) not
+    # available, skipping tests" — no import crash, no failure — so no exclude or -k
+    # skip is needed. rocSHMEM device bitcode librocshmem_device_gfx942.bc IS now
+    # packaged, but the runtime backend is still not wired, hence the graceful skip.)
+    #
+    # (distributed/test_symmetric_memory was un-excluded on b2b98e00: on the 1-GPU CI
+    # runner every multi-GPU SymmMem test self-skips via @skip_if_lt_x_gpu(4) / "cuda
+    # p2p access is not available" — verified faithfully at ROCR_VISIBLE_DEVICES=0:
+    # 2 passed, 117 skipped, 0 failed. The single failure seen locally
+    # (SymmMemCollectiveTest::test_two_shot_all_reduce) only fires with >=4 visible
+    # GPUs, which never happens on the 1-GPU lane, so no -k skip is needed.)
+    #
+    # (inductor/test_aot_inductor was un-excluded on b2b98e00: the CDNA5OrLater
+    # ImportError collection crash is RESOLVED — the module now collects and runs
+    # 363 passed / 181 skipped / 3 xfailed with a single genuine failure, moved to a
+    # per-test -k skip in skip_tests/pytorch_2.14.py. Also restored to
+    # INDUCTOR_UNIT_TESTS below.)
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
@@ -167,13 +167,10 @@ INDUCTOR_GENERIC_TESTS = [
 INDUCTOR_UNIT_TESTS = [
     "inductor/test_torchinductor",
     "inductor/test_torchinductor_opinfo",
-    # inductor/test_aot_inductor was restored here after the rocprofiler-sdk shutdown
-    # crash was fixed (HSA_TOOLS_DISABLE_REGISTER=1), but on run 29103767031 it began
-    # failing at IMPORT with `ImportError: cannot import name 'CDNA5OrLater'` — a
-    # test/wheel version skew (see EXCLUDED_TEST_MODULES above). The inductor
-    # --include allowlist does NOT consult EXCLUDED_TEST_MODULES, so it must be
-    # dropped here explicitly. Restore once the wheel's common_cuda.py defines
-    # CDNA5OrLater.
+    # Restored on b2b98e00: the wheel's common_cuda.py now defines CDNA5OrLater, so the
+    # earlier ImportError collection crash is gone. The single residual failure
+    # (test_runtime_check_overbound_no_input_leak_cuda) is handled by a per-test -k skip.
+    "inductor/test_aot_inductor",
 ]
 
 

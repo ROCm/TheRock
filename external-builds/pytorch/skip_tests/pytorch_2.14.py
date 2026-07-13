@@ -41,14 +41,11 @@ skip_tests = {
             "(TestCuda and test_out_of_memory)",
         ],
         "nn": [
-            # TestNNDeviceTypeCUDA - AssertionError: Scalars are not close!
-            # Expected 3.875156879425049 but got 3.876049757003784.
-            # Absolute difference: 0.0008928775787353516 (up to 1e-05 allowed)
-            # Relative difference: 0.0002304106921389532 (up to 1.3e-06 allowed)
-            "test_CTCLoss_cudnn_cuda",
             # Run 27473608564 default shard 9/10, job 81208818474:
             # TestNNDeviceTypeCUDA::test_linear_cross_entropy_loss_default_bias_False_cuda_float32
-            # input-grad ULP worst case 952 > 854 on ROCm June 12 wheel.
+            # input-grad ULP worst case 952 > 854. Re-verified GENUINE on wheel
+            # rocm7.15.0a20260712 (b2b98e00): fails consistently (ULP 952>854),
+            # confirmed in debug run 29215386233 shard 4.
             "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
             # Run 28411211813 default shard 3/10: TestNNDeviceTypeCUDA::
             # test_module_to_empty_cuda_float32 FAILED CONSISTENTLY (regex match on the
@@ -58,20 +55,6 @@ skip_tests = {
             # the full shard. Kept because it fails in the real sharded CI run.
             # TODO: find the polluting test / narrow.
             "(TestNNDeviceTypeCUDA and test_module_to_empty_cuda_float32)",
-            # Run 28446166928 default shard 5/10:
-            # TestConvolutionNN::test_ConvTranspose2d_output_size_downsample_upsample
-            # hits the 900s pytest-timeout in F.conv2d() inside ConvTranspose2d forward.
-            # CPU-path hang; reproduced consistently across all retries (~30min total).
-            "(TestConvolutionNN and test_ConvTranspose2d_output_size_downsample_upsample)",
-        ],
-        "legacy_vmap": [
-            # Run 28545046175 default shard 6/10: TestVmapAPILegacy::
-            # test_fallback_masked_fill exceeds the 900s pytest-timeout on every
-            # attempt (1652s total across reruns in RC0 run 28546068730 as well).
-            # The vmap fallback path invokes the eager masked_fill op element-wise;
-            # hangs consistently on gfx942 across both rocm7.15.0a20260629 and
-            # rocm7.14.0rc0 wheels. True hang (not the rocprofiler crash pattern).
-            "(TestVmapAPILegacy and test_fallback_masked_fill)",
         ],
         "optim": [
             # Run 28411211813 default shard 4/10: TestOptimRenewedCUDA::
@@ -89,13 +72,6 @@ skip_tests = {
             # fails CONSISTENTLY ("supported dtypes for sparse.sampled_addmm on cuda are
             # incorrect") on ROCm. TODO: root-cause the dtype-support divergence.
             "(TestCommonCUDA and test_dtypes_sparse_sampled_addmm_cuda)",
-        ],
-        "binary_ufuncs": [
-            # Run 28379269101 default shard 6/10, job 84077240385:
-            # TestBinaryUfuncs::test_laguerre_legendre_polynomial_nan_propagation
-            # AssertionError: tensor(False) is not true - NaN not propagated for
-            # special_laguerre_polynomial_l / special_legendre_polynomial_p on ROCm.
-            "(TestBinaryUfuncs and test_laguerre_legendre_polynomial_nan_propagation)",
         ],
         "export": [
             # Run 27246343570 default shard 10/10, job 80461205617:
@@ -125,14 +101,6 @@ skip_tests = {
             # upstream-disabled per pytorch/pytorch#186872 — no skip needed here.)
             "(TestLinalgCUDA and test_cholesky_solve_batched_many_batches)",
         ],
-        "modules": [
-            # Run 27228539427 inductor shard 1/4:
-            # CTCLoss CPU/GPU parity scalar mismatch under --inductor.
-            "test_cpu_gpu_parity_nn_CTCLoss_cuda_float32",
-            # Run 27228539427 inductor shard 3/4:
-            # CTCLoss forward returns a huge scalar under --inductor.
-            "test_forward_nn_CTCLoss_cuda_float32",
-        ],
         "inductor": [
             # Run 27228539427 default shard 4/10:
             # log10 inductor_numerics float16 XPASSes on ROCm, tripping xfail metadata.
@@ -155,99 +123,28 @@ skip_tests = {
             # Run 27473608564 default shard 1/10, job 81208818457:
             # TestGpuWrapper::test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code
             # expects at::vec:: in generated cpp wrapper; ROCm codegen omits CPU vec ISA.
+            # Re-verified GENUINE on b2b98e00 (debug run 29215386233 shard 8): assertIn
+            # "at::vec::" still fails (ROCm host codegen emits scalar loop, no vectorization).
             "(TestGpuWrapper and test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code)",
-            # Run 28379269101 default shard 8/10, job 84077240436:
-            # TestExternKernelCaller::test_extern_kernel_benchmark_valid_timing
-            # InductorError: AssertionError - incorrect result from extern-kernel choice.
-            "(TestExternKernelCaller and test_extern_kernel_benchmark_valid_timing)",
-            # Run 29103767031 default shards 1,2,3,5,6,9,10 + inductor 1/4:
-            # Inductor codegen emits nan for floor-division of non-finite floats
-            # (torch.div rounding_mode="floor"); differs from eager across all dtypes
-            # (float16/float32/float64/bfloat16), on GPUTests and DynamicShapes CPU/GPU
-            # variants and the compile-subprocess path. One substring covers all 16.
-            "test_div_floor_float_nonfinite",
-            # Run 29103767031 default shard 7/10:
-            # TestDecomposeShardDimAllToAll — torch._inductor.config.
-            # decompose_shard_dim_alltoall does not exist in the rocm7.15.0a20260710
-            # wheel (test source ahead of the wheel's inductor config); whole class
-            # fails. TODO: revisit once the wheel gains the config flag.
-            "TestDecomposeShardDimAllToAll",
-            # Run 29103767031 default shard 6/10:
-            # FlexAttention on ROCm — test_narrow_kv_block_size hits a LoweringException
-            # (Q/KV block sizes must be divisible), test_sparse_block_not_dividing_seqlen
-            # has a large numerical mismatch (80.9% of elements).
-            "(TestFlexAttentionCUDA and test_narrow_kv_block_size_uses_clamped_default_config_cuda)",
-            "(TestFlexAttentionCUDA and test_sparse_block_not_dividing_seqlen_cuda)",
-            # Run 29103767031 default shard 1/10:
-            # GPUTests::test_modified_bessel_i_inf_matches_eager — inductor codegen
-            # returns nan vs eager for modified_bessel_i at inf.
-            "(GPUTests and test_modified_bessel_i_inf_matches_eager)",
-            # Run 29103767031 default shard 7/10:
-            # FuncTorchHigherOrderOpTestsWithCompiledAutograd::test_hessian — the
-            # compiled-autograd generated FX graph differs (formatting/whitespace of
-            # emitted code) from the expected string on ROCm.
-            "(FuncTorchHigherOrderOpTestsWithCompiledAutograd and test_hessian)",
+            # inductor/test_aot_inductor un-excluded from EXCLUDED_TEST_MODULES on
+            # b2b98e00 (CDNA5OrLater ImportError resolved). Full run = 363 passed /
+            # 181 skipped / 3 xfailed; the ONE genuine residual failure is
+            # AOTInductorTestABICompatibleGpu::test_runtime_check_overbound_no_input_leak_cuda
+            # (AssertionError: Scalars are not equal! Expected 1615437312 but got
+            # 1682546176 — a runtime-overbound input-leak check mismatch on ROCm).
+            "(AOTInductorTestABICompatibleGpu and test_runtime_check_overbound_no_input_leak_cuda)",
         ],
         "dynamo": [
-            # Run 29103767031 default shards 1,9:
-            # Dynamo reraises Python's TypeError for a bad `raise ... from` / non-
-            # exception raise, but the expected message text drifted in newer CPython
-            # ("exceptions must derive from BaseException" vs "...must derive from
-            # BaseException, not int"; "exception cause must be None or derive from…").
-            # Test/interpreter version skew, not a ROCm bug. Substrings cover both the
-            # ExceptionTests (test_exceptions) and NestedGraphBreaksExceptionTests
-            # (test_nested_graph_breaks_wrapped) copies.
-            "test_raise_from_non_exception_type_error",
-            "test_raise_non_exception_type_error",
-            # Run 29103767031 default shard 7/10:
-            # LoggingTests::test_logs_out — a log record that the test expects at INFO
-            # (I…) is emitted at WARNING (W…); dynamo logging level drift.
+            # LoggingTests::test_logs_out — ROCm runtime emits a spurious
+            # `W... agent.cpp:151] Attempt to enable hip visibility for agent-N` warning
+            # into the captured log stream, which the test's assertExpectedInline string
+            # match does not expect (a W-line appears between the expected I-lines).
+            # ROCm-specific log pollution, re-confirmed GENUINE on b2b98e00 (debug run
+            # 29215386233 shard 4). (The prior "raise ..." + generator throw/send skew
+            # entries here were test/interpreter version skew from running `nightly`
+            # sources ahead of the wheel; on wheel-pinned sources they pass or no longer
+            # exist, so they were removed 2026-07-13.)
             "(LoggingTests and test_logs_out)",
-            # Run 29103767031 default shard 10/10:
-            # dynamo.test_generator — PEP-479 / generator throw/send semantics diverge
-            # (several "Unexpected success" xpasses + Unsupported observed-exception
-            # cases). Test/interpreter version skew. Terms are kept as tight as pytest
-            # -k substring matching allows so passing sibling tests are not masked
-            # (e.g. exact pep479 / throw-finally names). NB: `test_cleanup_throw` is a
-            # substring of the passing `test_cleanup_throw_subgen_return_value`, which
-            # -k cannot separate — that one extra mask is unavoidable.
-            "(GeneratorTests and test_cleanup_throw)",
-            "(GeneratorTests and test_pep479_stopiteration_error)",
-            "(GeneratorTests and test_pep479_tutorial_stopiteration)",
-            "(TestGeneratorSend and yield_from_return_value)",
-            "(TestGeneratorSend and test_send_through_yield_from)",
-            "(TestGeneratorThrow and test_throw_try_except_finally)",
-            "(TestGeneratorThrow and test_throw_with_finally)",
-            "(TestGeneratorThrow and test_throw_yield_finally)",
-        ],
-        "testing": [
-            # Run 29103767031 default shard 1/10:
-            # TestTestingCUDA::test_callable_msg_cuda — assertion-helper callable-message
-            # count is 0 vs expected 1 on ROCm.
-            "(TestTestingCUDA and test_callable_msg_cuda)",
-        ],
-        "jit_fuser_te": [
-            # Run 27246343570 default shard 3/10, job 80461205622:
-            # TE fuser static/dynamic op tests fail consistently on ROCm,
-            # mostly with bfloat16 CUDA runtime failures; one dynamic norm
-            # rerun also ended in a GPU hang and Fatal Python error: Aborted.
-            "(TestTEFuserStatic and test_binary_div_ops)",
-            "(TestTEFuserStatic and test_binary_ops)",
-            "(TestTEFuserStatic and test_binary_tensor_scalar_ops)",
-            "(TestTEFuserStatic and test_ternary_norm_ops)",
-            "(TestTEFuserStatic and test_ternary_ops)",
-            "(TestTEFuserStatic and test_unary_ops)",
-            "(TestTEFuserStatic and test_where_ops)",
-            "(TestTEFuserDynamic and test_binary_div_ops)",
-            "(TestTEFuserDynamic and test_binary_ops)",
-            "(TestTEFuserDynamic and test_binary_tensor_scalar_ops)",
-            "(TestTEFuserDynamic and test_ternary_norm_ops)",
-            # Run 27390088455 default shard 5/10, job 80945585188:
-            # Remaining TestTEFuserDynamic bfloat16 CUDA failures (static variants
-            # already skipped above): lerp (ternary), lgamma (unary), where.
-            "(TestTEFuserDynamic and test_ternary_ops)",
-            "(TestTEFuserDynamic and test_unary_ops)",
-            "(TestTEFuserDynamic and test_where_ops)",
         ],
         "serialization": [
             # Mirrored from pytorch_2.12.py — TestSerialization/TestOldSerialization
@@ -260,21 +157,6 @@ skip_tests = {
             # TestStandaloneCPPJIT::test_load_standalone sees versioned
             # extension paths (`_v1`/`_v2`) while the test expects the base path.
             "(TestStandaloneCPPJIT and test_load_standalone)",
-        ],
-        "matmul_cuda": [
-            # Run 28446166928 default shard 6/10:
-            # TestMatmulCudaCUDA::test_grouped_gemm_rocm_ck_flag_cuda asserts that the
-            # Composable Kernel (CK) grouped GEMM backend is available; it is not enabled
-            # in the TheRock wheel build. Genuine ROCm build-configuration gap.
-            "(TestMatmulCudaCUDA and test_grouped_gemm_rocm_ck_flag_cuda)",
-            # Run 29103767031 default shard 7/10:
-            # TestMatmulCudaCUDA::test_grouped_gemm_compiled_op — all 32 layout/
-            # autotune variants fail: max_autotune=False variants hit a stride
-            # mismatch (expected stride 21==24 …) and max_autotune=True variants hit
-            # NoValidChoicesError ("No choices exist for backend") from
-            # torch.ops.aten._grouped_mm — same missing-CK-grouped-GEMM-backend family
-            # as test_grouped_gemm_rocm_ck_flag above. One substring covers all 32.
-            "(TestMatmulCudaCUDA and test_grouped_gemm_compiled_op)",
         ],
         "multiprocessing": [
             # Run 27228539427 default shard 1/10:
