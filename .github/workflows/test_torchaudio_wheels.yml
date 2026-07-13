@@ -119,10 +119,6 @@ jobs:
           python -m pip install numpy scipy soundfile librosa expecttest parameterized pytest
           pip freeze
 
-      - name: rocm-sdk sanity
-        timeout-minutes: 5
-        run: rocm-sdk test || true
-
       - name: torchaudio GPU smoke test
         timeout-minutes: 10
         run: |
@@ -151,9 +147,21 @@ jobs:
         timeout-minutes: 30
         run: |
           cd audio_src
-          python -m pytest -v \
+          set +e
+          python -u -m pytest -v \
             test/torchaudio_unittest/models/rnnt/rnnt_gpu_test.py \
             test/torchaudio_unittest/models/decoder/cuda_ctc_decoder_test.py \
             test/torchaudio_unittest/functional/functional_cuda_test.py \
             -k "cuda or CUDA or gpu or GPU or rnnt or forced_align" \
-            --continue-on-collection-errors --import-mode=importlib
+            --continue-on-collection-errors --import-mode=importlib > pytest.log 2>&1 &
+          for i in $(seq 1 600); do
+            grep -qE "==+ .*(passed|failed|error|no tests ran).* ==" pytest.log && break
+            sleep 2
+          done
+          taskkill //F //IM python.exe //T >/dev/null 2>&1 || true
+          echo "----- pytest summary -----"
+          tail -n 80 pytest.log
+          if grep -qE "==+ .*(failed|error)" pytest.log; then
+            echo "Unit tests reported failures/errors"; exit 1
+          fi
+          grep -qE "==+ .*passed" pytest.log
