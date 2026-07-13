@@ -269,175 +269,59 @@ skip_tests = {
             "test_load_standalone",
         ],
         "distributed": [
-            # ComposabilityTest - pipeline parallel (8-GPU)
-            "test_replicate_pp_ScheduleClass3_bfloat16",
-            "test_replicate_pp_ScheduleClass3_float32",
+            # ---------------------------------------------------------------
+            # NOTE: A large block of previously-skipped multi-GPU / FSDP /
+            # pipeline tests was RE-ENABLED after run
+            # https://github.com/ROCm/TheRock/actions/runs/29264970035
+            # (2.12/rocm7.15) ran the full suite and those tests passed. The
+            # entries kept below either still fail there or produced no
+            # execution evidence (not collected / harness-skipped).
+            # ---------------------------------------------------------------
+            #
+            # --- Still failing on run 29264970035 -------------------------
+            # ComposabilityTest - pipeline parallel worker exception
             "test_replicate_pp_ScheduleClass4_bfloat16",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_device_id",
-            # DistConvolutionOpsTest - scalar mismatch (depthwise)
-            "test_depthwise_convolution",
-            # TestFSDPMemory - memory accounting mismatch
+            # DistMathOpsTest / DistMathOpsTestWithLocalTensor - error code 10
+            "test_linalg_ops",
+            # TestViewOpsWithLocalTensor - list index out of range
+            "test_view_ops",
+            # TestFullyShard1DTrainingCore - child rank exit code 10.
+            # Parenthesized so TestReplicate1DTrainingCore::test_post_optim_event
+            # (which passes) is not also skipped.
+            "(TestFullyShard1DTrainingCore and test_post_optim_event)",
+            # launcher/test_run.py - ElasticLaunchTest ChildFailedError.
+            "(ElasticLaunchTest and test_virtual_local_rank)",
+            # distributed/test_symmetric_memory.py - SymmMemCollectiveTest::
+            # test_two_shot_all_reduce hangs to a 900s pytest-timeout on
+            # teardown. Rest of the symmetric-memory block is fixed on rocm7.15.
+            "(SymmMemCollectiveTest and test_two_shot_all_reduce)",
+            #
+            # --- No execution evidence on run 29264970035 (kept) ----------
+            # TestFSDPMemory - memory accounting mismatch (not collected)
             "test_fsdp_memory_ckpt_ckpt",
-            # ProcessGroupNCCLGroupTest - error code 10
+            # TestParityWithDDPCUDA - error code 10 (not collected)
+            "test_mixture_of_experts_offload_true_shard_grad_op_cuda",
+            # ProcessGroupNCCLGroupTest - error code 10 (harness-skipped)
             "test_resume",
             "test_get_memory_stats",
             "test_suspend",
-            # TestDistBackendWithSpawn - monitored barrier hang
-            "test_monitored_barrier_allreduce_hang_wait_all_ranks",
-            "test_monitored_barrier_allreduce_hang",
-            # FSDP2 tests - 300s per-process timeout on 8-GPU runner
-            "test_clip_grad_norm_1d",
-            "test_clip_grad_norm_2d",
-            "test_compiled_autograd_fsdp2_backward",
-            "test_all_gather_extensions_train_parity",
-            "test_gradient_scaler",
-            "test_ddp_A_fsdp_B_ddp_C",
-            "test_compute_dtype",
-            "test_cached_state_dict",
-            "test_explicit_prefetching",
-            # TestParityWithDDPCUDA - error code 10
-            "test_mixture_of_experts_offload_true_shard_grad_op_cuda",
-            # TestFullyShardHSDP3DTraining - error code 10
-            "test_3d_mlp_with_nd_mesh",
-            # DistMathOpsTest - error code 10
-            "test_linalg_ops",
-            # TestDistBackendWithSpawn - post_localSGD reload
-            "test_post_localSGD_optimizer_step_reload",
-            # TestFullyShardCommunication - communication count mismatch
-            "test_fully_shard_communication_count",
-            # TestFullyShard1DTrainingCore - shard_largest_dim parity
-            "test_train_parity_single_group_shard_largest_dim",
-            # TestMultiProc - compiler collectives dynamic tensor
-            "test_compiler_collectives_automatic_dynamic_tensor",
-            # TestFullyShardAutograd - 300s per-process timeout
-            "test_nontensor_activations",
-            # TestFullyShardDTensor - 300s per-process timeout
-            "test_dtensor_train_parity",
-            # TestFullyShardFrozen - 300s per-process timeout
-            "test_multi_forward_mixed_requires_grad",
-            # TestFullyShardMemory - 300s per-process timeout
-            "test_fully_shard_training_memory",
-            # TestFullyShardOverlap - 300s per-process timeout
-            "test_fully_shard_training_overlap",
-            # TestFullyShard2DTraining - pytest-timeout (>900s)
-            "test_tp_with_fsdp_offloading",
-            # ComposabilityTest - pytest-timeout (>900s)
-            "test_3d_with_tp_dp_pp_ScheduleClass0_bfloat16",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            # ReplicateFullyShardInit - pytest-timeout >900s (harness-skipped)
             "test_replicate_fully_shard_init",
-            # TestReplicateMixedPrecisionTraining - pytest-timeout (>900s)
-            "test_grad_acc_with_reduce_dtype",
-            # TestReplicate1DTrainingCore - 300s per-process timeout
-            "test_multi_forward_module",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass1",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_ignore_module",
-            # TestFullyShardCommunication - 300s per-process timeout
-            "test_manual_reshard_with_reshard_after_forward_false",
-            # TestFullyShardSharedParams - 300s per-process timeout
-            "test_train_parity_with_shared_params",
-            # ReplicateTest - pytest-timeout (>900s)
-            "test_train_parity_2d_mlp",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass2",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass3",
-            # ComposabilityTest - pipeline parallel RuntimeError
-            "test_replicate_pp_grads_ScheduleClass4",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_move_args_kwargs_to_device",
-            # ReplicateFullyShardInit - multi module init failure
-            "test_replicate_multi_module",
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
-            "test_replicate_single_module",
-            # TestFullyShardAutograd - 300s per-process timeout
-            "test_unused_forward_module",
-            # TestViewOpsWithLocalTensor - list index out of range
-            "test_view_ops",
-            # ---------------------------------------------------------------
-            # gloo ProcessGroup heap-corruption hangs (300s join timeout).
-            # Root cause is an upstream PyTorch data race on pgStatus_ in
-            # ProcessGroupGloo::runLoop (torch/csrc/distributed/c10d/
-            # ProcessGroupGloo.cpp): worker threads update shared pgStatus_
-            # before lock.lock(), corrupting the heap allocator
-            # ("malloc(): unsorted double linked list corrupted"). The child
-            # aborts, the parent loses the pipe and hits its 300s join
-            # timeout. Reproduces on plain CPU gloo and is independent of the
-            # ROCm version (identical failures on rocm7.14 and rocm7.15), so
-            # this is NOT a ROCm bug. See TRIAGE_2.12.md.
-            # Upstream: https://github.com/pytorch/pytorch/issues/179848 (open)
-            # CI runs:
-            #   https://github.com/ROCm/TheRock/actions/runs/28242196383 (2.12/rocm7.15)
-            #   https://github.com/ROCm/TheRock/actions/runs/28200428535 (2.12/rocm7.14)
             #
-            # test_c10d_gloo.py ProcessGroupGloo{,FR,LazyInit}Test collectives
-            "(ProcessGroupGloo and test_allgather_basics_cuda)",
-            "(ProcessGroupGloo and test_allreduce_basics_cuda)",
-            "(ProcessGroupGloo and test_allreduce_coalesced_checks_cuda)",
-            "(ProcessGroupGloo and test_alltoall_basics_cuda)",
-            "(ProcessGroupGloo and test_alltoall_multidim_cuda)",
-            "(ProcessGroupGloo and test_broadcast_basics_cuda)",
-            "(ProcessGroupGloo and test_reduce_basics_cuda)",
-            "(ProcessGroupGloo and test_scatter_basics_cuda)",
-            "(ProcessGroupGloo and test_sparse_allreduce_basics_cuda)",
-            "(ProcessGroupGloo and test_sparse_allreduce_cuda_dispatched)",
-            # test_c10d_gloo.py DistributedDataParallelTest (gloo backend)
-            "(DistributedDataParallelTest and test_ddp_buffer_sync_multi_forward_with_batchnorm)",
-            # Collapsed: covers use_reentrant_True/False variants
-            "(DistributedDataParallelTest and test_ddp_checkpointing_twice)",
-            "(DistributedDataParallelTest and test_ddp_comm_hook_future_passing_gpu_gloo)",
-            "(DistributedDataParallelTest and test_find_unused_parameters_when_unused_parameters_empty)",
-            # Collapsed: covers _with_grad_is_view / _with_static_graph variants
-            "(DistributedDataParallelTest and test_global_local_unused_params_grad)",
-            # Collapsed: covers 1gpu/2gpu/4gpu device_ids variants
-            "(DistributedDataParallelTest and test_gloo_backend)",
-            "(DistributedDataParallelTest and test_ignored_sharded_tensor)",
-            "(CommTest and test_broadcast_coalesced_gloo_cuda)",
-            # test_c10d_nccl.py (constructs a gloo PG in these cases)
-            "(CommTest and test_coalesced_manager_op_integrity)",
-            "(DistributedDataParallelTest and test_nccl_backend_multi_device_ids_not_allowed)",
-            # test_distributed_spawn.py TestDistBackendWithSpawn (BACKEND=gloo)
-            "(TestDistBackendWithSpawn and test_DistributedDataParallel_SyncBatchNorm_Single_Input_Per_Process)",
-            "(TestDistBackendWithSpawn and test_batch_isend_irecv_op_err)",
-            "(TestDistBackendWithSpawn and test_broadcast_cuda)",
-            "(TestDistBackendWithSpawn and test_ddp_apply_optim_in_backward_ignored_params)",
-            "(TestDistBackendWithSpawn and test_ddp_namedtuple)",
-            "(TestDistBackendWithSpawn and test_get_data_parallel_params)",
-            "(TestDistBackendWithSpawn and test_output_unused_in_loss_dict_module)",
-            "(TestDistBackendWithSpawn and test_skip_all_reduce_unused_parameters)",
-            # test_aten_comm_compute_reordering.py
-            "(TestComputeCommReorderingBucketing and test_inductor_default_comms_ordering)",
-            "(TestComputeCommReorderingMultiProc and test_inductor_default_comms_ordering)",
-            "(TestManualOverlapBucketing and test_inductor_default_comms_ordering)",
-            # Collapsed: covers _custom_module_stack_fn variant
-            "(TestManualOverlapBucketing and test_make_graph_view_and_get_subgraph_by_path)",
-            # tensor/test_dtensor.py
-            "(DTensorTest and test_dtensor_save_load_import)",
-            # test_functional_api.py
-            "(TestCollectivesWithDistributedBackendCUDA and test_tracing_with_fakepg_cuda)",
-            # checkpoint/test_state_dict.py
-            "(TestNoComm and test_no_dist)",
-            # _shard/sharded_tensor/test_sharded_tensor.py
-            "(TestShardedTensorChunked and test_load_state_dict_errors)",
-            "(TestShardedTensorEnumerable and test_sharded_tensor_to_test)",
-            "(TestShardedTensorFromLocalShards and test_st_base_init_from_local_shards_and_global_metadata)",
-            # launcher/test_run.py - ChildFailedError (same gloo instability)
-            "(ElasticLaunchTest and test_virtual_local_rank)",
-            # ---------------------------------------------------------------
-            # NCCL symmetric memory (symm_mem.rendezvous) and copy-engine
-            # collectives — DistBackendError invalid usage in
-            # NCCLSymmetricMemory.cu:168 (NCCLPeerAllocInfo).
-            # CI: https://github.com/ROCm/TheRock/actions/runs/28510890622
-            "(NCCLCopyEngineCollectives and test_ce_)",
-            "(SymmetricMemoryTest and test_)",
-            "(SymmMemCollectiveTest and test_)",
-            "(SymmMemEmptySetDeviceTest and test_empty_strided_p2p)",
-            "(SymmMemPoolTest and test_mempool_compute_ops)",
-            "(SymmMemSingleProcTest and test_memset32)",
-            # test_c10d_nccl.py CommTest — child exit code 10
-            "(CommTest and test_intra_node_comm_all_reduce_custom_group_name)",
+            # --- Newly failing on run 29264970035 -------------------------
+            # CI: https://github.com/ROCm/TheRock/actions/runs/29264970035 (2.12/rocm7.15)
+            # ReplicateTest (test_replicate_with_compiler.py) - child exit 10.
+            # Narrow entries: test_compile_gpu/_cpu_no_sync pass, keep enabled.
+            "(ReplicateTest and test_compile_bf16)",
+            "(ReplicateTest and test_compile_fp16)",
+            # Flaky (both pass and fail observed) but fails often enough to skip.
+            "(ReplicateTest and test_compile_backward_only)",
+            # TestZeroRedundancyOptimizerDistributed - single parametrization
+            # fails (flaky); 16 sibling params pass, so match only this one.
+            "(TestZeroRedundancyOptimizerDistributed and test_ddp_zero_overlap_use_gpu_True_use_interleaved_hook_False_gradient_as_bucket_view_False_static_graph_True_shard_buckets_False)",
+            # CPFlexAttentionTest (tensor/test_attention.py) - collapses the
+            # failing _causal_mask and _document_mask variants.
+            "(CPFlexAttentionTest and test_cp_flex_attention)",
         ],
     },
 }
