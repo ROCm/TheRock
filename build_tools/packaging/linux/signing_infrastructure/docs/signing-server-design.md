@@ -660,7 +660,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ```bash
 rpmsign --addsign \
-  --define "_gpg_path $HOME/.local/bin/gpgshim" \
+  --define "%__gpg $HOME/.local/bin/gpgshim" \
   --define "_gpg_name therock-release@amd.com" \
   rocm-6.4.0-1.x86_64.rpm
 ```

@@ -238,7 +238,7 @@ The following steps are performed offline by an authorized operator — not by t
 |----|-------------|
 | P1-CI-1 | Signing shall be activated only when the workflow `release_type` input is non-empty (`dev`, `nightly`, `prerelease`) |
 | P1-CI-2 | If `GPG_SIGNING_SERVER` secret is not set, the build shall complete without signing — no error |
-| P1-CI-3 | The workflow shall install `gpgshim` to `~/.local/bin/gpgshim` and invoke `rpmsign` with `--define "_gpg_path ~/.local/bin/gpgshim"` |
+| P1-CI-3 | The workflow shall install `gpgshim` to `~/.local/bin/gpgshim` and invoke `rpmsign` with `--define "%__gpg ~/.local/bin/gpgshim"` |
 | P1-CI-4 | RPM packages shall be signed before repository metadata (`repomd.xml`) is generated, so signed package checksums are captured in the metadata |
 | P1-CI-5 | `upload_package_repo.py` shall call `POST /sign` directly for repo metadata (`repomd.xml`, `Release`) — no `gpgshim` involved for this step |
 | P1-CI-6 | `GPG_SIGNING_SERVER` (the server private IP and port) shall be stored as a GitHub Actions repository secret — not hardcoded in workflow YAML |
