@@ -51,15 +51,24 @@ if not HIPFILE_TEST_DIR.is_dir():
 def get_asan_lib_path():
     arch = platform.machine()
     clang_path = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
-    cmd = [clang_path, f"--print-file-name=libclang_rt.asan-{arch}.so"]
+    asan_lib = f"libclang_rt.asan-{arch}.so"
+    cmd = [clang_path, f"-print-file-name={asan_lib}"]
     logging.info(f"++ Exec [{clang_path}]$ {shlex.join(cmd)}")
     result = subprocess.run(cmd, check=True, text=True, capture_output=True)
-    return result.stdout.strip()
+    resolved = result.stdout.strip()
+    if not resolved or resolved == asan_lib or not Path(resolved).is_file():
+        raise FileNotFoundError(
+            f"Could not locate ASan runtime '{asan_lib}' via {clang_path} "
+            f"(got: '{resolved}')"
+        )
+    return str(Path(resolved).resolve())
 
 
 env = os.environ.copy()
 if is_asan():
-    env["LD_PRELOAD"] = get_asan_lib_path()
+    asan_lib = get_asan_lib_path()
+    existing_preload = env.get("LD_PRELOAD", "")
+    env["LD_PRELOAD"] = f"{existing_preload}:{asan_lib}" if existing_preload else asan_lib
 
 cmd = [
     "ctest",
