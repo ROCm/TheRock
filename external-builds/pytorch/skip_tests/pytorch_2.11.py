@@ -44,15 +44,36 @@ skip_tests = {
             # https://github.com/ROCm/TheRock/actions/runs/28266889171
             # https://github.com/ROCm/TheRock/actions/runs/28447160155
             # https://github.com/ROCm/TheRock/actions/runs/29012657842 (2.11.0+rocm7.15.0a20260709)
-            # ReplicateFullyShardInit - pytest-timeout (>900s)
+            # Dispositions/evidence: FIXES_FOR_triage_skips_2.11_0626.md
+            # ReplicateFullyShardInit - pytest-timeout (>900s). Order-dependent
+            # MultiProcContinuousTest hang; self-heals on rerun in a fresh
+            # process. Dispatcher blocks on an untimed completion_queue.get()
+            # after a worker dies (preceded by threaded-PG 'ThreadLocalWorld has
+            # no attribute comms'). Proof: proofs/f1_replicate_device_id_multiproc_hang_stack.txt
             "test_replicate_device_id",
-            # TestMultiProc - process join timeout (~300s)
+            # TestMultiProc - process join timeout (~300s). Order-dependent;
+            # self-heals on rerun in a fresh process (same isolation family).
             "test_get_pg_attr",
-            # TestFullyShard1DTrainingCore - child exit code 10 (Scalars not close)
+            # TestFullyShard1DTrainingCore - Scalars not close by ~1.72e-5 (allowed
+            # 1e-5) at world_size=8. Benign fp reduction-order drift; NOT
+            # reproducible locally (14/14 pass). Sibling class caps world_size to 2
+            # citing the same drift.
             "test_post_optim_event",
-            # SymmMemCollectiveTest - pytest-timeout (>900s)
+            # SymmMemCollectiveTest - pytest-timeout (>900s). NOTE: the test body
+            # PASSES; the hang is the *class* teardown (destroy_process_group ->
+            # RCCL commReclaim/socketConnectCheck deadlock), NOT specific to
+            # two-shot - test_one_shot_all_reduce alone hangs identically. Skipping
+            # only two_shot is insufficient: whichever SymmMemCollectiveTest case
+            # runs last will hit the same teardown deadlock. ROCm ticket:
+            # proofs/ROCM_TICKET_rccl_symm_mem_teardown_deadlock.md
             "test_two_shot_all_reduce",
-            # TestParityWithDDPCUDA - child exit code 10 (Scalars not close)
+            # TestParityWithDDPCUDA - Scalars not close by ~0.136 (6% rel) on the
+            # CPU-offload (offload_true) + NO_SHARD path. Run-order bisect done
+            # (FIXES_FOR_triage_skips_2.11_0626.md): global-state pollution
+            # DISPROVEN - the exact CI shard order does not reproduce it (target
+            # passed ~10+ times: alone, in-class predecessors, all TestHooksCUDA,
+            # and the exact CI prefix). Reclassified as a rare intermittent flake,
+            # likely a CPU-offload copy-stream sync race; self-heals on rerun.
             "test_delayed_optim_step_offload_true_no_shard_cuda",
             "test_delayed_reduce_scatter_offload_true_no_shard_cuda",
         ],
