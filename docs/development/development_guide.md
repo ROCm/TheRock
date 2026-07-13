@@ -192,6 +192,37 @@ For example, this will build the "hipBLASLt" subproject in `RelWithDebInfo` and 
 > See the [Tips for using VSCode](#tips-for-using-vscode) section below for an
 > example of how to debug programs built in this way.
 
+- `{project}_GENERATE_DEBUG_INFO`
+- `{project}_DEBUG_INFO_LEVEL`
+- `{project}_SPLIT_DEBUG_INFO`
+
+These override the corresponding global debug-info flags (`THEROCK_GENERATE_DEBUG_INFO`,
+`THEROCK_DEBUG_INFO_LEVEL`, `THEROCK_SPLIT_DEBUG_INFO`) for a single sub-project.
+
+`THEROCK_GENERATE_DEBUG_INFO` is tri-state: leave it empty (the default) to derive
+the value automatically from the effective build type (`ON` for `Debug`/`RelWithDebInfo`,
+otherwise `OFF`), or set it to `ON`/`OFF` to force it. The per-project value is
+resolved with this precedence:
+
+1. `{project}_GENERATE_DEBUG_INFO` if set.
+1. Otherwise the global `THEROCK_GENERATE_DEBUG_INFO` if explicitly set to `ON`/`OFF`.
+1. Otherwise the build-type default of the project's effective build type
+   (`{project}_BUILD_TYPE` if set, else `CMAKE_BUILD_TYPE`).
+
+For example, this builds everything with full debug info except `amd-llvm` (no
+symbols) and `hip-runtime` (enabled, but only minimal line tables):
+
+```bash
+  -DTHEROCK_GENERATE_DEBUG_INFO=ON \
+  -DTHEROCK_DEBUG_INFO_LEVEL=full \
+  -Damd-llvm_GENERATE_DEBUG_INFO=OFF \
+  -Dhip-runtime_DEBUG_INFO_LEVEL=minimal \
+```
+
+`THEROCK_DEBUG_INFO_LEVEL` accepts `minimal`, `full` or `extra` (Windows supports
+only `minimal`/`full`; other values are treated as `full`). `THEROCK_SPLIT_DEBUG_INFO`
+is always forced `ON` on Windows.
+
 - `{project}_CMAKE_ARGS`
 
 This variable will append to a subproject's default CMAKE arguments. It is a semicolon separated list.

@@ -28,6 +28,7 @@ include(therock_compiler_config)
 include(therock_external_source)
 include(therock_features)
 include(therock_sanitizers)
+include(therock_debug_info)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
@@ -221,12 +222,25 @@ cmake_dependent_option(
 # Debug Options
 ################################################################################
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-  set(_debug_info_default ON)
-else()
-  set(_debug_info_default OFF)
+# THEROCK_GENERATE_DEBUG_INFO is a tri-state cache variable:
+#   * ""    : auto - derive from the effective build type (ON for Debug or
+#            RelWithDebInfo, otherwise OFF). This is also applied per-subproject
+#            based on <subproject>_BUILD_TYPE when set.
+#   * ON    : host-side debug symbol generation on.
+#   * OFF   : host-side debug symbol generation off.
+# An explicit ON/OFF propagates to all subprojects as their default. Individual
+# subprojects can override with <subproject>_GENERATE_DEBUG_INFO=ON|OFF.
+set(THEROCK_GENERATE_DEBUG_INFO "" CACHE STRING
+  "Enable host-side debug symbol generation (empty=auto from build type, ON, or OFF)")
+set_property(CACHE THEROCK_GENERATE_DEBUG_INFO PROPERTY STRINGS "" "ON" "OFF")
+
+if(NOT THEROCK_GENERATE_DEBUG_INFO STREQUAL "")
+  _therock_normalize_bool(_therock_generate_debug_info_norm
+    "${THEROCK_GENERATE_DEBUG_INFO}" "THEROCK_GENERATE_DEBUG_INFO")
+  set(THEROCK_GENERATE_DEBUG_INFO "${_therock_generate_debug_info_norm}" CACHE STRING
+    "Enable host-side debug symbol generation (empty=auto from build type, ON, or OFF)" FORCE)
+  unset(_therock_generate_debug_info_norm)
 endif()
-option(THEROCK_GENERATE_DEBUG_INFO "Enable host-side debug symbol generation" ${_debug_info_default})
 
 set(THEROCK_DEBUG_INFO_LEVEL "full" CACHE STRING "Debug information level to generate: 'minimal' or 'full' or 'extra'")
 set_property(CACHE THEROCK_DEBUG_INFO_LEVEL PROPERTY STRINGS "minimal" "full" "extra")
@@ -245,6 +259,30 @@ if(WIN32)
   set(THEROCK_SPLIT_DEBUG_INFO ON CACHE BOOL "Enable splitting debug info into dbg artifacts (and stripping primary packages)" FORCE)
 endif()
 option(THEROCK_SPLIT_DEBUG_INFO "Enable splitting debug info into dbg artifacts (and stripping primary packages)" OFF)
+
+# Resolve global THEROCK_ debug symbol options. Individual subprojects's actual
+# values are overridden in therock_subprojects.cmake
+_therock_resolve_debug_info_settings(""
+  _therock_global_generate_debug_info
+  _therock_global_debug_info_level
+  _therock_global_split_debug_info)
+if(WIN32 AND _therock_global_generate_debug_info)
+  # On win32 prefer embedded debug databases (/Z7) project wide. This improves
+  # compatibility with ccache and sccache:
+  # https://github.com/ccache/ccache/issues/1040
+  if(NOT DEFINED CMAKE_MSVC_DEBUG_INFORMATION_FORMAT)
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+  endif()
+
+  if((CMAKE_C_COMPILER_LAUNCHER MATCHES "ccache|sccache"
+        OR CMAKE_CXX_COMPILER_LAUNCHER MATCHES "ccache|sccache")
+      AND NOT CMAKE_MSVC_DEBUG_INFORMATION_FORMAT STREQUAL "Embedded")
+    message(WARNING
+        "ccache/sccache require embedded debug info (/Z7) to function, but "
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT is '${CMAKE_MSVC_DEBUG_INFORMATION_FORMAT}'. "
+        "Unset CMAKE_MSVC_DEBUG_INFORMATION_FORMAT to let THEROCK_GENERATE_DEBUG_INFO manage it.")
+  endif()
+endif()
 
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)

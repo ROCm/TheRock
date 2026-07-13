@@ -716,6 +716,23 @@ function(therock_cmake_subproject_activate target_name)
   # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
 
+  # Resolve per-subproject debug-info settings and override the corresponding global
+  # THEROCK_ variables.
+  _therock_resolve_debug_info_settings("${target_name}"
+    THEROCK_GENERATE_DEBUG_INFO THEROCK_DEBUG_INFO_LEVEL THEROCK_SPLIT_DEBUG_INFO)
+
+  # Per-subproject Windows MSVC debug format. This overrides the global preset value
+  # in CMakeLists.txt
+  if(WIN32)
+    if(THEROCK_GENERATE_DEBUG_INFO)
+      if(NOT CMAKE_MSVC_DEBUG_INFORMATION_FORMAT)
+        set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+      endif()
+    else()
+      set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "")
+    endif()
+  endif()
+
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)
