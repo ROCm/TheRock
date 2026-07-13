@@ -364,6 +364,103 @@ curl -k -X POST https://signing.internal.amd.com/sign-rpm \
   -o mypackage-signed.rpm
 ```
 
+### 3.6 Simplified API — Tier and Artifact Based Request
+
+**Context:** The current Phase 1 API exposes internal GPG parameters (`key_id`, `armor`, `clearsign`, `digest_algo`) that callers should not need to know. Phase 2 shall introduce a simplified request model where callers specify only their **signing tier** (dev/nightly/release) and **artifact type** (rpm/repodata/deb-release/deb-inrelease). The server resolves all GPG parameters internally from a configuration mapping.
+
+This keeps the API stable across key rotations — when a GPG key changes, only the server config is updated, not every caller.
+
+#### New Request Format
+
+```json
+POST /sign
+{
+  "data":     "<base64-encoded file content>",
+  "tier":     "release",
+  "artifact": "repodata"
+}
+```
+
+The old fields (`key_id`, `armor`, `clearsign`, `digest_algo`) remain supported as a fallback for backward compatibility and direct testing.
+
+#### Tier × Artifact Resolution
+
+The server shall resolve `tier` + `artifact` to GPG parameters using the `key_aliases` and `artifact_profiles` sections of `authorization.json`:
+
+| `tier` | `artifact` | GPG `key_id` | `armor` | `clearsign` | `digest_algo` |
+|--------|-----------|-------------|---------|-------------|---------------|
+| `dev` / `nightly` / `release` | `rpm` | mapped email | false | false | SHA256 |
+| `dev` / `nightly` / `release` | `repodata` | mapped email | true | false | SHA256 |
+| `dev` / `nightly` / `release` | `deb-release` | mapped email | true | false | SHA256 |
+| `dev` / `nightly` / `release` | `deb-inrelease` | mapped email | true | true | SHA256 |
+
+#### Configuration Schema Addition
+
+```json
+{
+  "key_aliases": {
+    "dev":     "therock-dev@amd.com",
+    "nightly": "therock-nightly@amd.com",
+    "release": "therock-release@amd.com"
+  },
+
+  "artifact_profiles": {
+    "rpm": {
+      "armor": false, "clearsign": false, "digest_algo": "SHA256",
+      "description": "RPM package — signature embedded by rpmsign"
+    },
+    "repodata": {
+      "armor": true, "clearsign": false, "digest_algo": "SHA256",
+      "description": "RPM repomd.xml — detached ASCII signature (.asc)"
+    },
+    "deb-release": {
+      "armor": true, "clearsign": false, "digest_algo": "SHA256",
+      "description": "DEB Release file — detached signature (Release.gpg)"
+    },
+    "deb-inrelease": {
+      "armor": true, "clearsign": true, "digest_algo": "SHA256",
+      "description": "DEB Release file — clearsigned (InRelease)"
+    }
+  }
+}
+```
+
+#### Requirements
+
+| ID | Requirement |
+|----|-------------|
+| P2-API-1 | The `POST /sign` endpoint shall accept `tier` and `artifact` fields as an alternative to `key_id`, `armor`, `clearsign`, and `digest_algo` |
+| P2-API-2 | If `tier` and `artifact` are present, the server shall resolve GPG parameters from `key_aliases` and `artifact_profiles` in `authorization.json` |
+| P2-API-3 | If `tier` is not in `key_aliases`, the server shall reject the request with `400 Bad Request` |
+| P2-API-4 | If `artifact` is not in `artifact_profiles`, the server shall reject the request with `400 Bad Request` |
+| P2-API-5 | The old fields (`key_id`, `armor`, `clearsign`, `digest_algo`) shall remain fully functional — if present, they take precedence over `tier`/`artifact` resolution |
+| P2-API-6 | `gpgshim` shall support `GPG_TIER` environment variable as an alternative to `GPG_KEY_ID`; artifact is always `rpm` for gpgshim |
+| P2-API-7 | `sign-file` CLI shall accept `--tier` and `--artifact` as alternatives to `--key-id`, `--armor`, `--clearsign`, `--digest-algo` |
+| P2-API-8 | The authorization config shall use tier names in `allowed_keys` lists rather than email addresses, so role-to-key mapping is human-readable |
+
+#### New Caller Experience (Phase 2)
+
+```bash
+# gpgshim — set tier, artifact is implicit (always rpm)
+export GPG_TIER=release
+
+# sign-file — human-readable flags
+sign-file --server https://signing.internal.amd.com \
+  --tier release --artifact repodata --file repomd.xml
+
+sign-file --server https://signing.internal.amd.com \
+  --tier release --artifact deb-inrelease --file Release --output InRelease
+
+sign-file --server https://signing.internal.amd.com \
+  --tier release --artifact deb-release --file Release --output Release.gpg
+
+# curl — minimal JSON
+curl -k -X POST https://signing.internal.amd.com/sign \
+  -H "Authorization: Bearer $SIGNING_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"data": "'$(base64 -w0 repomd.xml)'", "tier": "release", "artifact": "repodata"}'
+```
+
 ---
 
 ## 4. Dependency Summary
