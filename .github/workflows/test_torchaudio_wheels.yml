@@ -116,7 +116,7 @@ jobs:
             "torchaudio==${TORCHAUDIO_VERSION}" \
             --index-url "${PKG_INDEX_URL}" \
             --find-links "${ROCM_FIND_LINKS}"
-          python -m pip install numpy expecttest parameterized pytest
+          python -m pip install numpy scipy soundfile librosa expecttest parameterized pytest
           pip freeze
 
       - name: rocm-sdk sanity
