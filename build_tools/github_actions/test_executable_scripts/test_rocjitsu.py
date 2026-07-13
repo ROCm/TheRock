@@ -33,7 +33,9 @@ def require_file(path: Path, *, executable: bool = False) -> None:
 
 def require_dir(path: Path) -> None:
     if not path.is_dir():
-        raise FileNotFoundError(f"Required rocjitsu artifact directory not found: {path}")
+        raise FileNotFoundError(
+            f"Required rocjitsu artifact directory not found: {path}"
+        )
 
 
 rocjitsu_bin = THEROCK_BIN_DIR / "rocjitsu"
@@ -83,9 +85,7 @@ env["LD_LIBRARY_PATH"] = os.pathsep.join(
         ],
     )
 )
-env["PATH"] = os.pathsep.join(
-    filter(None, [str(THEROCK_BIN_DIR), env.get("PATH", "")])
-)
+env["PATH"] = os.pathsep.join(filter(None, [str(THEROCK_BIN_DIR), env.get("PATH", "")]))
 
 # `--version` is enough for this component: it proves the installed executable
 # can start and resolve its shared-library dependencies without requiring a GPU
