@@ -12,12 +12,16 @@ for components whose tests are Python/pytest rather than gtest/ctest.
 Categories are defined in a test_categories.yaml shipped next to the installed
 tests. Each category selects a set of test directories (``test_paths``) and an
 optional pytest marker expression (``pytest_markers`` / ``exclude_markers``).
-GPU-architecture exclusions are applied via ``skip-gfxXXXX`` markers.
+GPU-architecture exclusions are applied via ``skip-gfxXXXX`` markers. A category
+may also supply ``pytest_args``: a list of extra pytest CLI options appended
+verbatim to the invocation (e.g. ``-k``, or component-specific conftest options).
+``{ROCM_PATH}`` tokens in those values are substituted with the install prefix.
 
 Environment variables used:
 TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
-TEST_TYPE: Test category to run (quick, standard, comprehensive, full). Defaults
-    to "quick"; invalid values fall back to "quick".
+TEST_TYPE: Test category to run; must be a category defined in
+    test_categories.yaml (e.g. quick, standard, comprehensive, full). Defaults to
+    "quick" when unset.
 AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
@@ -34,8 +38,6 @@ from pathlib import Path
 import yaml
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
-
-VALID_TEST_CATEGORIES = {"quick", "standard", "comprehensive", "full"}
 
 # Map job name -> install location, relative to the ROCm prefix (THEROCK_BIN_DIR
 # parent). Components live under share/ rather than bin/ because they are Python
@@ -114,7 +116,7 @@ def build_marker_expression(category_config, gpu_arch):
     return marker_expr
 
 
-def run_pytest(test_paths, marker_expr, timeout, num_workers, cwd, env):
+def run_pytest(test_paths, marker_expr, extra_args, timeout, num_workers, cwd, env):
     existing = [p for p in test_paths if (cwd / p).exists()]
     missing = [p for p in test_paths if not (cwd / p).exists()]
     for p in missing:
@@ -126,6 +128,8 @@ def run_pytest(test_paths, marker_expr, timeout, num_workers, cwd, env):
     cmd = ["pytest", *existing, "-v", "--color=yes"]
     if marker_expr:
         cmd.extend(["-m", marker_expr])
+    if extra_args:
+        cmd.extend(extra_args)
 
     # pytest-timeout / pytest-xdist are optional; only pass their flags when the
     # plugin is importable so this runner works in minimal environments too.
@@ -140,7 +144,8 @@ def run_pytest(test_paths, marker_expr, timeout, num_workers, cwd, env):
         logging.warning("pytest-xdist not installed; running serially")
 
     logging.info(
-        f"Running pytest on {existing} with markers: {marker_expr or 'none'} "
+        f"Running pytest on {existing} with markers: {marker_expr or 'none'}, "
+        f"extra args: {extra_args or 'none'} "
         f"(timeout={timeout}s, workers={num_workers}) in {cwd}"
     )
     return subprocess.run(cmd, cwd=str(cwd), env=env, check=False).returncode
@@ -196,10 +201,6 @@ if __name__ == "__main__":
         logging.error("THEROCK_BIN_DIR environment variable is required but not set.")
         sys.exit(1)
 
-    if TEST_TYPE not in VALID_TEST_CATEGORIES:
-        logging.warning(f"Invalid TEST_TYPE '{TEST_TYPE}', falling back to 'quick'")
-        TEST_TYPE = "quick"
-
     rocm_path = Path(THEROCK_BIN_DIR).resolve().parent
     component_path = resolve_component_path(TEST_COMPONENT_NAME, rocm_path)
     if not component_path.is_dir():
@@ -210,9 +211,13 @@ if __name__ == "__main__":
     logging.info(f"Test category: {TEST_TYPE}")
 
     config = load_test_categories_yaml(component_path / "test_categories.yaml")
-    category_config = config.get("test_categories", {}).get(TEST_TYPE)
+    all_categories = config.get("test_categories", {})
+    category_config = all_categories.get(TEST_TYPE)
     if not category_config:
-        logging.error(f"No configuration found for test category '{TEST_TYPE}'")
+        logging.error(
+            f"No configuration found for test category '{TEST_TYPE}'. "
+            f"Available categories: {sorted(all_categories)}"
+        )
         sys.exit(1)
 
     test_paths = category_config.get("test_paths", [])
@@ -222,6 +227,12 @@ if __name__ == "__main__":
 
     gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
     marker_expr = build_marker_expression(category_config, gpu_arch)
+
+    # Extra pytest CLI options for this category, with {ROCM_PATH} substitution.
+    pytest_args = [
+        str(arg).replace("{ROCM_PATH}", str(rocm_path))
+        for arg in (category_config.get("pytest_args", []) or [])
+    ]
 
     exec_settings = config.get("execution_settings", {})
     timeout = exec_settings.get("category_timeouts", {}).get(TEST_TYPE)
@@ -234,5 +245,13 @@ if __name__ == "__main__":
         logging.info(f"Set environment variable: {key}={value}")
 
     sys.exit(
-        run_pytest(test_paths, marker_expr, timeout, num_workers, component_path, env)
+        run_pytest(
+            test_paths,
+            marker_expr,
+            pytest_args,
+            timeout,
+            num_workers,
+            component_path,
+            env,
+        )
     )
