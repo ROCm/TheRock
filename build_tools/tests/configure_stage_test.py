@@ -308,5 +308,99 @@ class StageSkipTest(unittest.TestCase):
         self.assertIn("comm-libs", required)
 
 
+class FeatureOrientedResolutionTest(unittest.TestCase):
+    """Tests for feature-oriented project resolution.
+
+    Some subprojects are packaged in one artifact but gated by a different
+    CMake feature flag. These tests verify correct feature resolution.
+    """
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_hipsparse_resolves_to_sparse_feature(self):
+        """hipSPARSE is in blas artifact but gated by THEROCK_ENABLE_SPARSE."""
+        features = self.topology.resolve_projects_to_features(["hipSPARSE"])
+        self.assertIn("SPARSE", features)
+        self.assertNotIn("BLAS", features)
+
+    def test_hipsolver_resolves_to_solver_feature(self):
+        """hipSOLVER is in blas artifact but gated by THEROCK_ENABLE_SOLVER."""
+        features = self.topology.resolve_projects_to_features(["hipSOLVER"])
+        self.assertIn("SOLVER", features)
+        self.assertNotIn("BLAS", features)
+
+    def test_rocsolver_resolves_to_solver_feature(self):
+        """rocSOLVER is gated by THEROCK_ENABLE_SOLVER."""
+        features = self.topology.resolve_projects_to_features(["rocSOLVER"])
+        self.assertIn("SOLVER", features)
+        self.assertNotIn("BLAS", features)
+
+    def test_rocsparse_resolves_to_sparse_feature(self):
+        """rocSPARSE is gated by THEROCK_ENABLE_SPARSE."""
+        features = self.topology.resolve_projects_to_features(["rocSPARSE"])
+        self.assertIn("SPARSE", features)
+
+    def test_hipsparselt_resolves_to_sparse_feature(self):
+        """hipSPARSELt is gated by THEROCK_ENABLE_SPARSE."""
+        features = self.topology.resolve_projects_to_features(["hipSPARSELt"])
+        self.assertIn("SPARSE", features)
+
+    def test_rocblas_still_resolves_to_blas_feature(self):
+        """rocBLAS should still resolve to BLAS (no override needed)."""
+        features = self.topology.resolve_projects_to_features(["rocBLAS"])
+        self.assertIn("BLAS", features)
+
+    def test_mixed_sparse_and_blas_projects(self):
+        """Multiple projects from different features resolve correctly."""
+        features = self.topology.resolve_projects_to_features(
+            ["rocBLAS", "hipSPARSE", "hipSOLVER"]
+        )
+        self.assertIn("BLAS", features)
+        self.assertIn("SPARSE", features)
+        self.assertIn("SOLVER", features)
+
+
+class RocmSystemsProjectMappingTest(unittest.TestCase):
+    """Tests for rocm-systems project name mappings."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_rocprofiler_compute_resolves_correctly(self):
+        """rocprofiler-compute should resolve to its own artifact, not rocprofiler-systems."""
+        # rocprofiler-compute is a canonical artifact name, should not be overridden
+        alias_map = self.topology.get_alias_to_artifact_map()
+        self.assertEqual(alias_map.get("rocprofiler-compute"), "rocprofiler-compute")
+
+
+class ManifestVerificationTest(unittest.TestCase):
+    """Tests for manifest synchronization."""
+
+    def test_subproject_features_json_is_valid(self):
+        """Verify subproject_features.json has valid feature names."""
+        import json
+
+        repo_root = Path(__file__).parent.parent.parent
+        manifest_path = repo_root / "subproject_features.json"
+        if not manifest_path.exists():
+            self.skipTest("subproject_features.json not found")
+
+        with manifest_path.open() as f:
+            features = json.load(f)
+
+        topology = get_topology()
+        valid_features = {
+            topology.get_artifact_feature_name(a) for a in topology.artifacts.values()
+        }
+
+        for subproject, feature in features.items():
+            self.assertIn(
+                feature,
+                valid_features,
+                f"Invalid feature '{feature}' for subproject '{subproject}'",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

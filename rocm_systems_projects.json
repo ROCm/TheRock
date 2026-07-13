@@ -14,7 +14,6 @@
   "rocm-smi-lib": "base",
   "rocminfo": "core-runtime",
   "rocprofiler": "rocprofiler-sdk",
-  "rocprofiler-compute": "rocprofiler-systems",
   "rocprofiler-register": "base",
   "rocprofiler-sdk": "rocprofiler-sdk",
   "rocprofiler-systems": "rocprofiler-systems",

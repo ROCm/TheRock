@@ -1123,6 +1123,27 @@ class BuildTopology:
         with manifest_path.open() as f:
             return json.load(f)
 
+    def get_subproject_to_feature_map(
+        self, build_dir: Optional[Path] = None
+    ) -> Dict[str, str]:
+        """Map subproject names directly to feature names.
+
+        This is feature-oriented: it maps each subproject to the CMake feature
+        flag that gates its compilation, not just its packaging artifact.
+
+        For example, hipSPARSE is packaged in the 'blas' artifact but is gated
+        by THEROCK_ENABLE_SPARSE, so it maps to 'SPARSE' not 'BLAS'.
+        """
+        feature_map: Dict[str, str] = {}
+
+        # Load subproject_features.json which maps subproject -> feature directly
+        subproject_features = self._load_json_manifest("subproject_features.json")
+        if subproject_features:
+            for subproject, feature in subproject_features.items():
+                feature_map[subproject.lower()] = feature
+
+        return feature_map
+
     def get_alias_to_artifact_map(
         self, build_dir: Optional[Path] = None
     ) -> Dict[str, str]:
@@ -1151,10 +1172,14 @@ class BuildTopology:
 
         # Include rocm-systems project mappings (e.g., "hip" -> "core-hip")
         # This maps rocm-systems directory names to TheRock artifact names
+        # Skip entries that would override canonical artifact mappings
         rocm_systems_manifest = self._load_json_manifest("rocm_systems_projects.json")
         if rocm_systems_manifest:
             for project_name, artifact_name in rocm_systems_manifest.items():
-                alias_map[project_name.lower()] = artifact_name
+                project_lower = project_name.lower()
+                # Don't override if the project name is already a canonical artifact name
+                if project_lower not in alias_map:
+                    alias_map[project_lower] = artifact_name
 
         return alias_map
 
@@ -1170,16 +1195,36 @@ class BuildTopology:
         platform_name: str = "",
         build_dir: Optional[Path] = None,
     ) -> Set[str]:
-        """Resolve project names to CMake feature names."""
+        """Resolve project names to CMake feature names.
+
+        This uses a feature-oriented approach: subprojects map directly to the
+        CMake feature flag that gates their compilation, which may differ from
+        their packaging artifact.
+
+        Resolution order:
+        1. Check subproject_features.json for direct subproject -> feature mapping
+        2. Fall back to artifact mapping (artifact's feature_name)
+        """
         features: Set[str] = set()
+        feature_map = self.get_subproject_to_feature_map(build_dir)
         alias_map = self.get_alias_to_artifact_map(build_dir)
+
         for project in project_names:
-            artifact_name = alias_map.get(project.lower())
+            project_lower = project.lower()
+
+            # First check direct subproject -> feature mapping
+            if project_lower in feature_map:
+                features.add(feature_map[project_lower])
+                continue
+
+            # Fall back to artifact mapping
+            artifact_name = alias_map.get(project_lower)
             if artifact_name and artifact_name in self.artifacts:
                 artifact = self.artifacts[artifact_name]
                 if platform_name and platform_name in artifact.disable_platforms:
                     continue
                 features.add(self.get_artifact_feature_name(artifact))
+
         return features
 
     def get_stage_for_artifact(self, artifact_name: str) -> Optional[str]:
