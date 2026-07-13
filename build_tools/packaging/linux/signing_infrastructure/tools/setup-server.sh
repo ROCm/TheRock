@@ -74,11 +74,22 @@ fi
 gpg --version | head -1
 python3 --version
 
-# --- 2. Install Python packages ---
+# --- 2. Install Python packages into a virtual environment ---
 echo ""
 echo "[2/5] Installing Python packages..."
-pip3 install --quiet boto3>=1.26.0 "PyJWT[crypto]>=2.8.0"
+
+VENV_DIR="/opt/signing-server-venv"
+
+# Create venv (Python 3.12+ on Debian/Ubuntu prohibits system-wide pip installs)
+python3 -m venv "${VENV_DIR}"
+"${VENV_DIR}/bin/pip" install --quiet --upgrade pip
+"${VENV_DIR}/bin/pip" install --quiet "boto3>=1.26.0" "PyJWT[crypto]>=2.8.0"
+
+echo "  Virtual environment: ${VENV_DIR}"
 echo "  boto3 and PyJWT installed"
+
+# Use venv Python for the server process
+PYTHON_BIN="${VENV_DIR}/bin/python3"
 
 # --- 3. Create tmpfs keyring mount ---
 echo ""
@@ -147,8 +158,8 @@ fi
 echo ""
 echo "[5/5] Installing systemd service..."
 
-# Build ExecStart command
-EXEC_START="python3 ${INSTALL_DIR}/signing-server.py"
+# Build ExecStart command — use venv Python, not system Python
+EXEC_START="${PYTHON_BIN} ${INSTALL_DIR}/signing-server.py"
 EXEC_START="${EXEC_START} --host 0.0.0.0"
 EXEC_START="${EXEC_START} --port ${SERVER_PORT}"
 EXEC_START="${EXEC_START} --keyring ${KEYRING_DIR}"
