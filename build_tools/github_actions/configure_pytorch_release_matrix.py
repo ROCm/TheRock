@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate PyTorch release build matrix for workflows."""
+"""Generate PyTorch build matrices for CI and release workflows."""
 
 import argparse
 import json
@@ -15,35 +15,162 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
 
-PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
+RELEASE_TYPES = ["ci", "dev", "nightly", "prerelease"]
 
-PYTORCH_REFS_LINUX = [
-    "release/2.9",
-    "release/2.10",
-    "release/2.11",
-    "release/2.12",
-    "nightly",
-]
+# TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
+#       only included in release runs
 
-PYTORCH_REFS_WINDOWS = [
-    "release/2.9",
-    "release/2.10",
-    "release/2.11",
-    "release/2.12",
-    "nightly",
-]
+RELEASE_PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
+CI_PYTHON_VERSIONS = {
+    "linux": ["3.12"],
+    "windows": ["3.12"],
+}
+
+# TODO: separate out "nightly" pytorch refs from "prerelease" pytorch refs?
+# That would let us:
+#   1. choose to not build the "nightly" pytorch branch for prerelease builds,
+#      saving some CI resources and possibly simplifying package promotion
+#      scripts.
+#   2. filter out some AMDGPU families from prereleases if we only want them
+#      built for nightly but not published to stable.
+RELEASE_PYTORCH_REFS = {
+    "linux": [
+        "release/2.9",
+        "release/2.10",
+        "release/2.11",
+        "release/2.12",
+        "nightly",
+    ],
+    "windows": [
+        "release/2.9",
+        "release/2.10",
+        "release/2.11",
+        "release/2.12",
+        "nightly",
+    ],
+}
+
+CI_PYTORCH_REFS = {
+    "linux": ["release/2.10", "release/2.11", "release/2.12"],
+    "windows": ["release/2.10"],
+}
+
+# Unknown explicit refs are left unfiltered so bring-up branches can opt into
+# new GPU families before the default PyTorch refs support them.
+UNSUPPORTED_AMDGPU_FAMILIES = {
+    "linux": {
+        # gfx125x not supported for PyTorch 2.9.
+        "release/2.9": {"gfx125X-dcgpu"},
+        # gfx125x not supported for PyTorch 2.10.
+        "release/2.10": {"gfx125X-dcgpu"},
+        # gfx125x supported for PyTorch 2.11 via https://github.com/ROCm/pytorch/pull/3346.
+        "release/2.11": {},
+        # gfx125x not yet upstreamed to pytorch/pytorch. Upstream expected
+        # 2026-06-26, but the ROCm 7.14 release is cut before that date.
+        # See https://github.com/ROCm/TheRock/issues/5833.
+        "release/2.12": {"gfx125X-dcgpu"},
+        # gfx125x not yet upstreamed to pytorch/pytorch.
+        # See https://github.com/ROCm/TheRock/issues/5833.
+        "nightly": {"gfx125X-dcgpu"},
+    },
+    "windows": {},
+}
 
 
-def generate_pytorch_matrix(
-    python_versions: list[str] | None,
-    platform: str = "linux",
-) -> list[dict]:
-    versions = python_versions if python_versions else PYTHON_VERSIONS
-    pytorch_refs = PYTORCH_REFS_WINDOWS if platform == "windows" else PYTORCH_REFS_LINUX
-    matrix = []
+def _split_values(raw: str) -> list[str]:
+    """Split comma, semicolon, or whitespace-separated workflow input values."""
+    return [
+        value.strip()
+        for value in raw.replace(",", " ").replace(";", " ").split()
+        if value.strip()
+    ]
+
+
+def _split_families(raw: str) -> list[str]:
+    return [family.strip() for family in raw.split(";") if family.strip()]
+
+
+def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
+    if release_type == "ci":
+        return list(CI_PYTHON_VERSIONS[platform])
+    return list(RELEASE_PYTHON_VERSIONS)
+
+
+def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
+    if release_type == "ci":
+        return list(CI_PYTORCH_REFS[platform])
+    return list(RELEASE_PYTORCH_REFS[platform])
+
+
+def _filter_families(families_str: str, exclude: set[str]) -> str:
+    """Remove excluded canonical family names from a semicolon-separated list."""
+    if not exclude:
+        return ";".join(_split_families(families_str))
+
+    exclude_lower = {family.lower() for family in exclude}
+    return ";".join(
+        family
+        for family in _split_families(families_str)
+        if family.lower() not in exclude_lower
+    )
+
+
+def generate_pytorch_matrix_for_release_type(
+    *,
+    release_type: str,
+    amdgpu_families: str,
+    platform: str,
+    python_versions: list[str] | None = None,
+    pytorch_git_refs: list[str] | None = None,
+) -> list[dict[str, str]]:
+    if release_type not in RELEASE_TYPES:
+        raise ValueError(f"Unknown release_type: {release_type!r}")
+    if platform not in ["linux", "windows"]:
+        raise ValueError(f"Unknown platform: {platform!r}")
+
+    versions = python_versions or _default_python_versions(
+        release_type=release_type, platform=platform
+    )
+    refs = pytorch_git_refs or _default_pytorch_git_refs(
+        release_type=release_type, platform=platform
+    )
+
+    # Build one matrix row per requested Python version and PyTorch ref. Each
+    # row carries the AMDGPU families that the child build workflow should use
+    # for that ref after filtering out families that are not supported yet.
+    #
+    # Example Linux output for release_type="dev" and
+    # amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu":
+    #
+    # [
+    #   {
+    #     "python_version": "3.10",
+    #     "pytorch_git_ref": "release/2.9",
+    #     "amdgpu_families": "gfx94X-dcgpu"
+    #   },
+    #   ...
+    #   {
+    #     "python_version": "3.14",
+    #     "pytorch_git_ref": "nightly",
+    #     "amdgpu_families": "gfx94X-dcgpu"
+    #   }
+    # ]
+    matrix: list[dict[str, str]] = []
     for py in versions:
-        for ref in pytorch_refs:
-            matrix.append({"python_version": py, "pytorch_git_ref": ref})
+        for ref in refs:
+            exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
+            families = _filter_families(amdgpu_families, exclude)
+            if not families:
+                continue
+            # These row keys are the contract with workflow files which use them
+            # via matrix.<key> expressions. Empty values are allowed when the
+            # workflow handles them explicitly, but undefined keys are not.
+            row: dict[str, str] = {
+                "python_version": py,
+                "pytorch_git_ref": ref,
+                "amdgpu_families": families,
+            }
+            matrix.append(row)
     return matrix
 
 
@@ -55,7 +182,19 @@ def main(argv: list[str] | None = None) -> int:
         "--python-versions",
         type=str,
         default="",
-        help="Comma or semicolon separated list of Python versions (default: all)",
+        help=(
+            "Comma, semicolon, or whitespace separated list of Python versions "
+            "(default depends on --release-type)"
+        ),
+    )
+    parser.add_argument(
+        "--pytorch-git-refs",
+        type=str,
+        default="",
+        help=(
+            "Comma, semicolon, or whitespace separated list of PyTorch refs "
+            "(default depends on --release-type and --platform)"
+        ),
     )
     parser.add_argument(
         "--platform",
@@ -64,16 +203,35 @@ def main(argv: list[str] | None = None) -> int:
         choices=["linux", "windows"],
         help="Platform to generate matrix for (default: current system)",
     )
+    parser.add_argument(
+        "--release-type",
+        type=str,
+        default="dev",
+        choices=RELEASE_TYPES,
+        help="Release type selecting default PyTorch/Python matrix (default: dev)",
+    )
+    parser.add_argument(
+        "--amdgpu-families",
+        type=str,
+        default="",
+        help=(
+            "Semicolon-separated AMD GPU families to build PyTorch for. "
+            "Families that are not supported for a given PyTorch ref will be "
+            "filtered out of this list for that ref's matrix entry."
+        ),
+    )
     args = parser.parse_args(argv)
 
-    python_versions = None
-    if args.python_versions:
-        sep = ";" if ";" in args.python_versions else ","
-        python_versions = [
-            v.strip() for v in args.python_versions.split(sep) if v.strip()
-        ]
+    python_versions = _split_values(args.python_versions) or None
+    pytorch_git_refs = _split_values(args.pytorch_git_refs) or None
 
-    matrix = generate_pytorch_matrix(python_versions, args.platform)
+    matrix = generate_pytorch_matrix_for_release_type(
+        release_type=args.release_type,
+        python_versions=python_versions,
+        pytorch_git_refs=pytorch_git_refs,
+        amdgpu_families=args.amdgpu_families,
+        platform=args.platform,
+    )
     gha_set_output({"pytorch_matrix": json.dumps(matrix)})
     return 0
 

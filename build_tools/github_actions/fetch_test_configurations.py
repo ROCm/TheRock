@@ -54,11 +54,13 @@ def _get_script_path(script_name: str) -> str:
 # --ipc host - Allows shared memory between host and container
 # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
+# --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
 # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
 _BASE_CONTAINER_OPTIONS = [
     "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
+    "--ulimit nofile=1048576:1048576",
     "--security-opt seccomp=unconfined",
 ]
 
@@ -68,6 +70,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --device /dev/dri - Direct Rendering Infrastructure devices
 # --group-add 993,992,110 - Additional GPU-related groups
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+# -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
 _GPU_CONTAINER_OPTIONS = [
     "--group-add video",
     "--device /dev/kfd",
@@ -76,6 +79,8 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 992",
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+    "-e ROCR_VISIBLE_DEVICES",
+    "-e KUBE_CPU_REQUEST",
 ]
 
 
@@ -156,6 +161,19 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
+    # and do not require a GPU runner.
+    "hipfile": {
+        "job_name": "hipfile",
+        "fetch_artifact_args": "--hipfile --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipfile.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
@@ -232,7 +250,7 @@ test_matrix = {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 180,
-        "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 6,
@@ -293,19 +311,19 @@ test_matrix = {
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
-        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.dwarf2",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
         "linux_cpu_runner": True,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": f"python {_get_script_path('test_rocgdb.py')} --tests gdb.rocm",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
         "timeout_minutes": 10,
-        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
+        "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -331,19 +349,23 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        # rocsparse now uses 3-way gtest sharding, enabled once the tolerance fix
+        # in ROCm/rocm-libraries#8713 landed in TheRock. The full suite is ~240 min
+        # single-shard; split across 3 shards that is ~80 min per shard, and 90 min
+        # leaves headroom.
+        "timeout_minutes": 90,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 3,
+            "windows": 3,
         },
     },
     "hipsparselt": {
@@ -402,7 +424,7 @@ test_matrix = {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards_dict": {
@@ -414,7 +436,7 @@ test_matrix = {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_hipfft.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 2,
@@ -533,7 +555,7 @@ test_matrix = {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -545,7 +567,7 @@ test_matrix = {
         "job_name": "hipblasltprovider",
         "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -576,6 +598,18 @@ test_matrix = {
             "windows": 2,
         },
     },
+    # rocALUTION tests
+    "rocalution": {
+        "job_name": "rocalution",
+        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # profiler tests
     "rocprofiler-compute": {
         "job_name": "rocprofiler-compute",
@@ -587,7 +621,7 @@ test_matrix = {
         ],
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
-        "total_shards_dict": {"linux": 2},
+        "total_shards_dict": {"linux": 1},
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
@@ -596,7 +630,7 @@ test_matrix = {
         "additional_requirements_files": [
             "share/rocprofiler-systems/tests/requirements.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -674,6 +708,18 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hipTensor tests
+    "hiptensor": {
+        "job_name": "hiptensor",
+        "fetch_artifact_args": "--hiptensor --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
 }
 
 
@@ -693,6 +739,32 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
+    build_variant = os.getenv("BUILD_VARIANT", "release")
+
+    # Get runner config for per-component runner selection
+    # This enables better load distribution across runner pools
+    test_runs_on_labels = None
+    test_runs_on_default = None
+    test_runs_on_multi_gpu_labels = None
+    test_runs_on_multi_gpu_default = None
+    # For ASAN builds, use the sandbox runner if available
+    test_runs_on_sandbox = None
+    if amdgpu_families:
+        shortened_family = amdgpu_families.split("-")[0].lower()
+        all_families = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        if shortened_family in all_families:
+            platform_info = all_families[shortened_family].get(platform, {})
+            test_runs_on_labels = platform_info.get("test-runs-on-labels")
+            test_runs_on_default = platform_info.get("test-runs-on", "")
+            test_runs_on_multi_gpu_labels = platform_info.get(
+                "test-runs-on-multi-gpu-labels"
+            )
+            test_runs_on_multi_gpu_default = platform_info.get(
+                "test-runs-on-multi-gpu", ""
+            )
+            test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -759,6 +831,7 @@ def run():
                 total_shards = base.get("total_shards_dict", {}).get(platform, 1)
                 if test_type == "quick":
                     total_shards = 1
+
                 shard_arr = list(range(1, total_shards + 1))
 
                 pal_entry = {
@@ -812,34 +885,16 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
-                amdgpu_families_matrix = get_all_families_for_trigger_types(
-                    ["presubmit", "postsubmit", "nightly"]
-                )
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
                 ):
-                    # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
-                    shortened_amdgpu_families_name = amdgpu_families.split("-")[
-                        0
-                    ].lower()
-                    platform_info = amdgpu_families_matrix[
-                        shortened_amdgpu_families_name
-                    ][platform]
-
-                    # Use weighted random selection if test-runs-on-multi-gpu-labels is available
-                    if "test-runs-on-multi-gpu-labels" in platform_info:
-                        multi_gpu_runner = select_weighted_label(
-                            platform_info["test-runs-on-multi-gpu-labels"],
-                            f"{shortened_amdgpu_families_name}-multi-gpu",
-                        )
-                    else:
-                        multi_gpu_runner = platform_info["test-runs-on-multi-gpu"]
-
+                    # Mark this component as needing a multi-GPU runner.
+                    # The actual runner selection is done in the per-component loop below.
+                    job_config_data["multi_gpu_runner"] = True
                     logging.info(
-                        f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
+                        f"Including job {job_name} for multi GPU testing with family {amdgpu_families}"
                     )
-                    job_config_data["multi_gpu_runner"] = multi_gpu_runner
                 else:
                     # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
                     logging.info(
@@ -848,6 +903,34 @@ def run():
                     continue
 
             all_components.append(job_config_data)
+
+    # Per-component runner selection for better load distribution
+    # Each component gets its own independent random draw based on configured weights
+    # For ASAN builds, use the sandbox runner to isolate potentially failing tests
+    is_asan_build = build_variant in ("asan", "host-asan")
+    for component in all_components:
+        job_name = component.get("job_name", "unknown")
+        if "multi_gpu_runner" in component:
+            # Multi-GPU components use multi-GPU runner labels
+            if test_runs_on_multi_gpu_labels:
+                component["multi_gpu_runner"] = select_weighted_label(
+                    test_runs_on_multi_gpu_labels, f"{job_name}-multi-gpu"
+                )
+            elif test_runs_on_multi_gpu_default:
+                component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
+        else:
+            # For ASAN builds, use the sandbox runner if available
+            if is_asan_build and test_runs_on_sandbox:
+                component["test_runner"] = test_runs_on_sandbox
+                logging.info(
+                    f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
+                )
+            elif test_runs_on_labels:
+                component["test_runner"] = select_weighted_label(
+                    test_runs_on_labels, job_name
+                )
+            elif test_runs_on_default:
+                component["test_runner"] = test_runs_on_default
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [_build_container_options(c, platform) for c in all_components]

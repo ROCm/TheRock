@@ -65,6 +65,7 @@
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
+#   disable_platforms_if_flags_not_set = { windows = "FOO" }  # Optional: conditional platform disables
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
@@ -119,6 +120,10 @@ submodules = []
 description = "Communication library submodules"
 submodules = []
 
+[source_sets.storage-libs]
+description = "Storage library submodules"
+submodules = []
+
 [source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
@@ -166,6 +171,11 @@ type = "per-arch"
 [build_stages.comm-libs]
 description = "Communication libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["comm-libs"]
+type = "generic"
+
+[build_stages.storage-libs]
+description = "Storage libraries (generic, single job parallel to math-libs)"
+artifact_groups = ["storage-libs"]
 type = "generic"
 
 [build_stages.debug-tools]
@@ -280,6 +290,12 @@ type = "generic"
 artifact_group_deps = ["hip-runtime"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
 source_sets = ["comm-libs", "rocm-systems"]
+
+[artifact_groups.storage-libs]
+description = "Storage libraries"
+type = "generic"
+artifact_group_deps = ["hip-runtime"]
+source_sets = ["storage-libs", "rocm-systems"]
 
 [artifact_groups.profiler-core]
 description = "Core profiling libraries and annotation support"
@@ -497,7 +513,7 @@ type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
-disable_platforms = ["windows"]
+disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -597,10 +613,25 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
 
+[artifacts.rocalution]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
+
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
+
+[artifacts.composable-kernel]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip"]
+
+[artifacts.hiptensor]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
@@ -613,11 +644,6 @@ type = "target-neutral"
 artifact_deps = []
 
 # --- ML Libraries (per-arch) ---
-
-[artifacts.composable-kernel]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
@@ -686,6 +712,14 @@ disable_platforms = ["windows"]
 artifact_group = "comm-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
+disable_platforms = ["windows"]
+
+# --- Storage Libraries ---
+
+[artifacts.hipfile]
+artifact_group = "storage-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "sysdeps", "sysdeps-util-linux"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
@@ -774,6 +808,13 @@ disable_platforms = ["windows"]
 # --- ROCm Emulation Tools ---
 
 [artifacts.rocjitsu]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "EMULATION"
+disable_platforms = ["windows"]
+
+[artifacts.mirage]
 artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []

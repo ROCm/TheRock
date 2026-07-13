@@ -69,6 +69,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_windows_jobs_selected(self):
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertGreater(len(components), 0)
+        for job in components:
+            self.assertIn("windows", job["platform"])
+
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
 
@@ -259,6 +269,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             return {
                 "gfx94x": {
                     "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-a", "weight": 0.5},
+                            {"label": "linux-gfx942-b", "weight": 0.5},
+                        ],
                         "test-runs-on-multi-gpu": "linux-mi300-mgpu-default",
                         "test-runs-on-multi-gpu-labels": [
                             {"label": "linux-mi300-mgpu-a", "weight": 0.5},
@@ -272,13 +287,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fake_get_all_families
         )
 
-        # Mock select_weighted_label to verify it's called and return a known label
+        # Mock select_weighted_label to verify it's called and return known labels
         original_select_weighted_label = fetch_test_configurations.select_weighted_label
         selected_labels = []
 
         def fake_select_weighted_label(labels_config, context_name):
             selected_labels.append((labels_config, context_name))
-            return "linux-mi300-mgpu-a"
+            # Return different labels based on whether it's multi-gpu
+            if "multi-gpu" in context_name:
+                return "linux-mi300-mgpu-a"
+            return "linux-gfx942-a"
 
         fetch_test_configurations.select_weighted_label = fake_select_weighted_label
 
@@ -288,9 +306,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
             rccl = next(j for j in components if j["job_name"] == "rccl")
             self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called
-            self.assertEqual(len(selected_labels), 1)
-            self.assertEqual(selected_labels[0][1], "gfx94x-multi-gpu")
+            # Verify select_weighted_label was called for rccl multi-gpu
+            multi_gpu_calls = [c for c in selected_labels if "multi-gpu" in c[1]]
+            self.assertEqual(len(multi_gpu_calls), 1)
+            self.assertEqual(multi_gpu_calls[0][1], "rccl-multi-gpu")
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label
@@ -394,6 +413,130 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         out = fetch_test_configurations._build_container_options(job, "linux")
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
+    # -----------------------
+    # ASAN sandbox runner selection
+    # -----------------------
+
+    def test_asan_build_uses_sandbox_runner(self):
+        """ASAN builds should use test-runs-on-sandbox when available."""
+        os.environ["BUILD_VARIANT"] = "asan"
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-a", "weight": 0.5},
+                            {"label": "linux-gfx942-b", "weight": 0.5},
+                        ],
+                        "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        rocblas = next(j for j in components if j["job_name"] == "rocblas")
+        self.assertEqual(rocblas["test_runner"], "linux-mi325-gpu-rocm-cpu-sandbox")
+
+    def test_host_asan_build_uses_sandbox_runner(self):
+        """host-asan builds should also use test-runs-on-sandbox."""
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = "hipblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-sandbox": "linux-sandbox-runner",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hipblas = next(j for j in components if j["job_name"] == "hipblas")
+        self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
+
+    def test_release_build_uses_weighted_runner(self):
+        """Release builds should use weighted runner labels, not sandbox."""
+        os.environ["BUILD_VARIANT"] = "release"
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-weighted", "weight": 1.0},
+                        ],
+                        "test-runs-on-sandbox": "linux-sandbox-runner",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        # Mock select_weighted_label to return a known value
+        original_select_weighted_label = fetch_test_configurations.select_weighted_label
+
+        def fake_select_weighted_label(labels_config, context_name):
+            return "linux-gfx942-weighted"
+
+        fetch_test_configurations.select_weighted_label = fake_select_weighted_label
+
+        try:
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+            rocblas = next(j for j in components if j["job_name"] == "rocblas")
+            self.assertEqual(rocblas["test_runner"], "linux-gfx942-weighted")
+        finally:
+            fetch_test_configurations.select_weighted_label = (
+                original_select_weighted_label
+            )
+
+    def test_asan_build_without_sandbox_uses_default_runner(self):
+        """ASAN builds without sandbox config should fall back to default runner."""
+        os.environ["BUILD_VARIANT"] = "asan"
+        os.environ["PROJECTS_TO_TEST"] = "hipblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        # No test-runs-on-sandbox defined
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hipblas = next(j for j in components if j["job_name"] == "hipblas")
+        self.assertEqual(hipblas["test_runner"], "linux-gfx942-default")
 
 
 if __name__ == "__main__":

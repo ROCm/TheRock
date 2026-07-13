@@ -8,6 +8,7 @@ These tests verify end-to-end behavior of the artifact_manager push/fetch comman
 particularly error handling and exit codes.
 """
 
+import hashlib
 import os
 import shutil
 import sys
@@ -206,11 +207,13 @@ class ArtifactManagerTestBase(unittest.TestCase):
 
         archive_name = f"{name}_{component}_{target_family}.tar.zst"
         archive_path = artifacts_dir / archive_name
-        archive_path.write_bytes(b"fake zstd archive content")
+        archive_content = b"fake zstd archive content"
+        archive_path.write_bytes(archive_content)
 
         # Also create sha256sum
         sha_path = artifacts_dir / f"{archive_name}.sha256sum"
-        sha_path.write_text(f"abc123  {archive_name}\n")
+        sha256 = hashlib.sha256(archive_content).hexdigest()
+        sha_path.write_text(f"{sha256}  {archive_name}\n")
 
         return archive_path
 
@@ -319,7 +322,11 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
         """Test that push exits normally (no exception) when all uploads succeed."""
         import artifact_manager
 
-        self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
+        archive_path = self._create_fake_precompressed_artifact(
+            "test-artifact", "lib", "generic"
+        )
+        sha_path = Path(f"{archive_path}.sha256sum")
+        self.assertTrue(sha_path.exists())
 
         argv = [
             "push",
@@ -352,6 +359,45 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
 
         # Verify sha256sum was also uploaded
         self.assertTrue(
+            backend.artifact_exists("test-artifact_lib_generic.tar.zst.sha256sum")
+        )
+
+    def test_push_succeeds_when_precompressed_artifact_is_missing_sha256sum(self):
+        """Test that pre-compressed artifacts do not require a sha256sum sidecar."""
+        import artifact_manager
+
+        archive_path = self._create_fake_precompressed_artifact(
+            "test-artifact", "lib", "generic"
+        )
+        Path(f"{archive_path}.sha256sum").unlink()
+
+        argv = [
+            "push",
+            "--stage",
+            "upstream-stage",
+            "--build-dir",
+            str(self.build_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+        ]
+
+        artifact_manager.main(argv)
+
+        output_root = WorkflowOutputRoot.for_local(
+            run_id="local", platform=TEST_PLATFORM
+        )
+        backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=output_root,
+        )
+        self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.tar.zst"))
+        self.assertFalse(
             backend.artifact_exists("test-artifact_lib_generic.tar.zst.sha256sum")
         )
 
@@ -545,6 +591,143 @@ class TestFetchStageAll(ArtifactManagerTestBase):
                 fetched_names,
                 f"{name} should be fetched with --stage all",
             )
+
+    def test_fetch_exclude_components_skips_test_artifacts(self) -> None:
+        """Test that --exclude-components filters artifact components."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "test", "generic")
+        self._create_staged_artifact("test-artifact", "test", "gfx942")
+        self._create_staged_artifact("second-artifact", "run", "generic")
+        self._create_staged_artifact("second-artifact", "test", "generic")
+
+        extract_calls: list[artifact_manager.ExtractRequest] = []
+
+        def mock_extract(request: artifact_manager.ExtractRequest) -> Path:
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-targets",
+                "gfx942",
+                "--exclude-components",
+                "test",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertIn("test-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertIn("second-artifact_run_generic.tar.zst", fetched_keys)
+        self.assertFalse(
+            any("_test_" in key for key in fetched_keys),
+            f"Should not fetch test artifacts, got: {fetched_keys}",
+        )
+
+    def test_fetch_exclude_components_rejects_unknown_component(self) -> None:
+        """Test that --exclude-components validates component names."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--exclude-components",
+            "unknown",
+        ]
+
+        with self.assertRaises(ValueError):
+            artifact_manager.main(argv)
+
+    def test_fetch_exclude_artifacts_skips_named_artifacts(self) -> None:
+        """Test that --exclude-artifacts filters whole artifacts."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("second-artifact", "lib", "generic")
+
+        extract_calls: list[artifact_manager.ExtractRequest] = []
+
+        def mock_extract(request: artifact_manager.ExtractRequest) -> Path:
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--exclude-artifacts",
+                "second-artifact",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertIn("test-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertNotIn("second-artifact_lib_generic.tar.zst", fetched_keys)
+
+    def test_fetch_exclude_artifacts_rejects_unknown_artifact(self) -> None:
+        """Test that --exclude-artifacts validates artifact names."""
+        import artifact_manager
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--exclude-artifacts",
+            "unknown-artifact",
+        ]
+
+        with self.assertRaises(ValueError):
+            artifact_manager.main(argv)
 
 
 class TestFetchAmdgpuTargets(ArtifactManagerTestBase):

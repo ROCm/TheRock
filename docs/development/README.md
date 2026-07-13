@@ -22,7 +22,6 @@
 - [Test Filtering](test_filtering.md)
 - [Test Environment Reproduction](test_environment_reproduction.md)
 - [Test Runner Info](test_runner_info.md)
-- [TheRock Test Harness](therock_test_harness.md)
 
 ### Infrastructure
 

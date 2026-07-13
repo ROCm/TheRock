@@ -33,7 +33,7 @@ import argparse
 import platform as platform_module
 import sys
 from pathlib import Path
-from typing import List, Set
+from typing import List, Optional, Set
 
 from _therock_utils.build_topology import BuildTopology
 from github_actions.github_actions_api import gha_set_output
@@ -59,7 +59,10 @@ def get_topology() -> BuildTopology:
 
 
 def get_stage_features(
-    topology: BuildTopology, stage_name: str, platform_name: str = ""
+    topology: BuildTopology,
+    stage_name: str,
+    platform_name: str = "",
+    enabled_flags: Optional[Set[str]] = None,
 ) -> Set[str]:
     """Get the set of feature names that should be enabled for a stage.
 
@@ -67,7 +70,7 @@ def get_stage_features(
     1. Features for artifacts produced by this stage
     2. Features for artifacts that are inbound dependencies (needed but prebuilt)
 
-    Artifacts whose disable_platforms includes platform_name are excluded.
+    Artifacts disabled for platform_name are excluded.
 
     Note: The inbound dependencies will be marked as prebuilt via buildctl.py bootstrap,
     but CMake still needs their features enabled for dependency resolution.
@@ -89,7 +92,11 @@ def get_stage_features(
     for artifact_name in all_artifacts:
         if artifact_name in topology.artifacts:
             artifact = topology.artifacts[artifact_name]
-            if platform_name and platform_name in artifact.disable_platforms:
+            if topology.is_artifact_disabled_on_platform(
+                artifact,
+                platform_name,
+                enabled_flags=enabled_flags,
+            ):
                 continue
             feature_name = topology.get_artifact_feature_name(artifact)
             features.add(feature_name)
