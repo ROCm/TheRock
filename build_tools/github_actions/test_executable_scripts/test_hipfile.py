@@ -68,7 +68,9 @@ env = os.environ.copy()
 if is_asan():
     asan_lib = get_asan_lib_path()
     existing_preload = env.get("LD_PRELOAD", "")
-    env["LD_PRELOAD"] = f"{existing_preload}:{asan_lib}" if existing_preload else asan_lib
+    env["LD_PRELOAD"] = (
+        f"{existing_preload}:{asan_lib}" if existing_preload else asan_lib
+    )
 
 cmd = [
     "ctest",
