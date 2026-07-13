@@ -479,7 +479,9 @@ def checkPromoteTarball(
     tarball is exercised with a cheap same-named stand-in. The expected promoted
     name is derived by applying the same rc->final rename to the discovered name.
     """
-    _banner("TEST: promotion of therock-dist tarballs (per-gfx + multiarch, should SUCCEED)")
+    _banner(
+        "TEST: promotion of therock-dist tarballs (per-gfx + multiarch, should SUCCEED)"
+    )
     if not tarball_names:
         print("[SKIP] no therock-dist tarballs found in the input dir; skipping.")
         _banner("TEST DONE: promote tarball. Result: SKIPPED")
@@ -499,7 +501,9 @@ def checkPromoteTarball(
         for rc_name in sorted(tarball_names):
             fin_name = promoted_name(rc_name, version, final_version)
             if fin_name not in produced:
-                print(f"\n[ERROR] expected {fin_name} after promotion; got {sorted(produced)}")
+                print(
+                    f"\n[ERROR] expected {fin_name} after promotion; got {sorted(produced)}"
+                )
                 ok = False
             elif rc_name in produced:
                 print(f"\n[ERROR] rc tarball {rc_name} survived promotion")
@@ -575,20 +579,30 @@ if __name__ == "__main__":
         f"Testing promotion {inputs.rc_version} -> {inputs.final_version} on "
         f"{inputs.platform} from {inputs.input_dir}"
     )
-    print(f"  arches present: {inputs.present_arches or '(none)'}; kept: {inputs.keep_arch}")
-    print(f"  aggregators: {len(inputs.aggregator_files)}, device: {len(inputs.device_files)}, "
-          f"jax: {len(inputs.jax_files)}, tarballs: {len(inputs.tarball_files)}")
+    print(
+        f"  arches present: {inputs.present_arches or '(none)'}; kept: {inputs.keep_arch}"
+    )
+    print(
+        f"  aggregators: {len(inputs.aggregator_files)}, device: {len(inputs.device_files)}, "
+        f"jax: {len(inputs.jax_files)}, tarballs: {len(inputs.tarball_files)}"
+    )
 
     multi_arch_input = inputs.aggregator_files | inputs.device_files
     expected_aggregators = inputs.promoted(inputs.aggregator_files)
-    expected_multi_arch = inputs.promoted(multi_arch_input - inputs.dropped_device_files)
+    expected_multi_arch = inputs.promoted(
+        multi_arch_input - inputs.dropped_device_files
+    )
     dropped_promoted_names = inputs.promoted(inputs.dropped_device_files)
     expected_jax = inputs.promoted(inputs.jax_files)
 
     src = inputs.src_version_type
 
     res_everything = checkPromoteEverything(
-        inputs.input_dir, inputs.final_version, inputs.aggregator_files, expected_aggregators, src
+        inputs.input_dir,
+        inputs.final_version,
+        inputs.aggregator_files,
+        expected_aggregators,
+        src,
     )
 
     if inputs.keep_arch is not None and inputs.dropped_device_files:
