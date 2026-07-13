@@ -15,6 +15,7 @@ on:
           - all
           - rocm-systems
           - rocm-libraries
+          - rocgdb
   schedule:
     - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
   push:
@@ -23,6 +24,7 @@ on:
     paths:
       - rocm-systems
       - rocm-libraries
+      - debug-tools/rocgdb/source
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
@@ -56,6 +58,15 @@ jobs:
           owner: "ROCm"
           repositories: "rocm-libraries,TheRock"
 
+      - name: Generate GitHub App token rocgdb
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: rocgdb-token
+        with:
+          app-id: ${{ secrets.ROCGDB_APP_ID }}
+          private-key: ${{ secrets.ROCGDB_PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "rocgdb,TheRock"
+
       - name: Install prerequisites
         run: |
           pip install requests
@@ -67,7 +78,8 @@ jobs:
             --event_type "schedule" \
             --submodule "${{ github.event.inputs.submodule || 'all' }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}"
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --rocgdb_token "${{ steps.rocgdb-token.outputs.token }}"
 
       - name: Run push automation
         if: github.event_name == 'push'
@@ -77,4 +89,5 @@ jobs:
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}"
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --rocgdb_token "${{ steps.rocgdb-token.outputs.token }}"

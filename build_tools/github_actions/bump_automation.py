@@ -45,6 +45,13 @@ SUBMODULE_CONFIG = {
         "updater": "ci-env",
         "token_key": "libraries",
     },
+    "debug-tools/rocgdb/source": {
+        "repo": "ROCm/rocgdb",
+        "files": [],
+        "updater": "submodule-only",
+        "token_key": "rocgdb",
+        "branch": "amd-staging-rocgdb-16",
+    },
 }
 
 
@@ -92,9 +99,12 @@ def gh_api(
     return response.json()
 
 
-def latest_commit(repo: str, token: str) -> str:
-    """Return the SHA of the latest commit on the default branch of repo."""
-    data = gh_api(token, f"repos/{repo}/commits")
+def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
+    """Return the SHA of the latest commit on the given branch, or the default branch."""
+    url = f"repos/{repo}/commits"
+    if branch:
+        url += f"?sha={branch}"
+    data = gh_api(token, url)
     return data[0]["sha"]
 
 
@@ -250,10 +260,11 @@ def create_therock_bump(submodule: str, token: str) -> None:
     """Create a bump PR for the given submodule in TheRock."""
     config = SUBMODULE_CONFIG[submodule]
     repo = config["repo"]
+    branch = config.get("branch")
 
     original_cwd = os.getcwd()
     # Get latest SHA from upstream submodule repo
-    latest = latest_commit(repo, token)
+    latest = latest_commit(repo, token, branch)
 
     # Use a temp directory for safe cloning
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -264,7 +275,9 @@ def create_therock_bump(submodule: str, token: str) -> None:
         )
         os.chdir(clone_dir)
 
-        branch_name = f"bump-{submodule}-{latest[:7]}"
+        # The submodule path may contain slashes (e.g. debug-tools/rocgdb/source);
+        # flatten it so the bump branch name is a single ref component.
+        branch_name = f"bump-{submodule.replace('/', '-')}-{latest[:7]}"
         run(["git", "checkout", "-b", branch_name])
 
         # Initialize the submodule if needed
@@ -275,9 +288,11 @@ def create_therock_bump(submodule: str, token: str) -> None:
 
         current_sha = get_submodule_sha("HEAD", submodule)
 
-        # Fetch latest commit in submodule
-        print(f"[INFO] Fetching latest commit for {submodule}")
-        run(["git", "-C", submodule, "fetch", "--depth=1", "origin"])
+        # Fetch the exact target commit in the submodule. A plain depth-1 fetch
+        # only retrieves the default branch tip, which misses commits that live
+        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-16).
+        print(f"[INFO] Fetching {latest[:7]} for {submodule}")
+        run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
         run(["git", "-C", submodule, "checkout", latest])
 
         # Stage the submodule change
@@ -322,6 +337,8 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("rocm-systems", tokens["systems"])
     if submodule in ("all", "rocm-libraries"):
         create_therock_bump("rocm-libraries", tokens["libraries"])
+    if submodule in ("all", "rocgdb"):
+        create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
 
 
 def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
@@ -342,6 +359,13 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
     print(f"[INFO] Detected {changed} change: {old_sha[:7]} -> {after[:7]}")
 
     close_stale_prs(changed, old_sha, token)
+
+    # submodule-only entries (e.g. rocgdb) have no back-ref files to update in
+    # the upstream repo; closing stale bump PRs above is all the push handler
+    # needs to do for them.
+    if config.get("updater") == "submodule-only":
+        print(f"[INFO] {changed} uses submodule-only bumping, skipping ref update")
+        return
 
     # Update workflow YAML
     repo_name = config["repo"]
@@ -387,12 +411,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
     parser.add_argument(
-        "--submodule", default="all", choices=["all", "rocm-systems", "rocm-libraries"]
+        "--submodule",
+        default="all",
+        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb"],
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
+    parser.add_argument("--rocgdb_token", required=True)
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
@@ -401,6 +428,7 @@ def main() -> None:
     tokens = {
         "systems": args.systems_token,
         "libraries": args.libraries_token,
+        "rocgdb": args.rocgdb_token,
     }
 
     if args.event_type == "schedule":
