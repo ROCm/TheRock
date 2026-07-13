@@ -49,7 +49,8 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocgdb",
         "files": [],
         "updater": "submodule-only",
-        "token_key": "rocgdb",
+        # We will reuse the rocm-systems token for now.
+        "token_key": "systems",
         "branch": "amd-staging-rocgdb-16",
     },
 }

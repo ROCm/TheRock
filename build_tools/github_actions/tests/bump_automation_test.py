@@ -293,7 +293,11 @@ class HandlePushTest(unittest.TestCase):
                     with patch(
                         "bump_automation.tempfile.TemporaryDirectory"
                     ) as mock_tmp:
-                        handle_push("before", "after", {"rocgdb": "tok"})
+                        handle_push(
+                            "before",
+                            "after",
+                            {"systems": "tok", "libraries": "tok", "rocgdb": "tok"},
+                        )
 
         mock_close.assert_called_once()
         # submodule-only entries have no upstream ref files, so the handler must
