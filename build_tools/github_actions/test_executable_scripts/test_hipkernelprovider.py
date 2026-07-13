@@ -24,17 +24,13 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/hip_kernel_provider",
     "--output-on-failure",
-    "--parallel",
-    "8",
-    "--timeout",
-    "600",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 
-if test_type == "smoke":
-    # Exclude tests that start with "Full" during smoke tests
+if test_type == "quick":
+    # Exclude tests that start with "Full" during quick tests
     environ_vars["GTEST_FILTER"] = "-Full*"
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

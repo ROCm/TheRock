@@ -1,0 +1,294 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Multi-Arch Linux JAX Wheels
+
+on:
+  workflow_call:
+    inputs:
+      test_amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        required: true
+        type: string
+      package_index_url:
+        description: Base URL for the multi-arch Python package index
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version
+        required: true
+        type: string
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      release_type:
+        description: "Release type"
+        type: string
+        required: true
+      python_version:
+        description: Python version to test
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        required: true
+        type: string
+      jax_version:
+        description: "Built JAX version"
+        required: false
+        type: string
+      jaxlib_version:
+        description: "Built jaxlib version"
+        required: false
+        type: string
+      jax_plugin_version:
+        description: "Built jax_rocm7_plugin version"
+        required: false
+        type: string
+      jax_pjrt_version:
+        description: "Built jax_rocm7_pjrt version"
+        required: false
+        type: string
+      test_runs_on:
+        description: Runner label to execute tests on
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      test_amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        type: string
+        default: "gfx94X-dcgpu"
+      package_index_url:
+        description: Base URL for the multi-arch Python package index
+        type: string
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+      rocm_version:
+        description: ROCm version
+        type: string
+        default: "7.14.0.dev0"
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      release_type:
+        description: 'Release type; developer-triggered jobs should use "dev".'
+        type: choice
+        options:
+          - dev
+        default: dev
+      python_version:
+        description: Python version to test
+        type: string
+        default: "3.13"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        type: string
+        default: "rocm-jaxlib-v0.9.1"
+      jax_version:
+        description: "Built JAX version"
+        type: string
+        default: ""
+      jaxlib_version:
+        description: "Built jaxlib version"
+        type: string
+        default: ""
+      jax_plugin_version:
+        description: "Built jax_rocm7_plugin version"
+        type: string
+        default: ""
+      jax_pjrt_version:
+        description: "Built jax_rocm7_pjrt version"
+        type: string
+        default: ""
+      test_runs_on:
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
+        type: string
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test_jax_wheels:
+    name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
+    runs-on: ${{ inputs.test_runs_on }}
+    timeout-minutes: 120
+
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      options: >-
+        --shm-size=128g
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add render
+        --group-add video
+        --user root
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --dns 8.8.8.8
+        --dns 8.8.4.4
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      VIRTUAL_ENV: ${{ github.workspace }}/.venv
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Checkout rocm-jax
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: rocm-jax
+          repository: ROCm/rocm-jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Checkout JAX
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: jax
+          repository: ROCm/jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ inputs.python_version }}
+          check-latest: true
+
+      - name: System deps, venv configure
+        run: |
+          python3 -m venv "${VIRTUAL_ENV}"
+          echo "PATH=${VIRTUAL_ENV}/bin:${PATH}" >> "$GITHUB_ENV"
+          python3 build_tools/setup_venv.py \
+            "${VIRTUAL_ENV}" \
+            --activate-in-future-github-actions-steps
+
+      - name: Install base JAX test requirements
+        run: |
+          pip install -r external-builds/jax/requirements-jax.txt
+
+      - name: Determine JAX package versions
+        run: |
+          if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
+            echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
+            echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PLUGIN_VERSION=${{ inputs.jax_plugin_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PJRT_VERSION=${{ inputs.jax_pjrt_version }}" >> "$GITHUB_ENV"
+          else
+            pip install packaging
+
+            python build_tools/github_actions/compute_jax_package_version.py \
+              --rocm-version "${{ inputs.rocm_version }}" \
+              --jax-requirements rocm-jax/build/requirements.txt
+          fi
+      - name: Compute ROCm device extras
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.test_amdgpu_family }}" \
+            --output-mode=device-extras
+
+      - name: Install ROCm packages
+        run: |
+          python -m pip install --upgrade pip
+
+          pkg="rocm[libraries]"
+          if [ -n "${{ steps.expand.outputs.device_extras }}" ]; then
+            pkg="${pkg%]},${{ steps.expand.outputs.device_extras }}]"
+          fi
+
+          python -m pip install --pre \
+            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            "${pkg}==${{ inputs.rocm_version }}"
+
+          echo "ROCM_ROOT=$(rocm-sdk path --root)" >> "$GITHUB_ENV"
+
+      - name: Install JAX wheels from package index
+        run: |
+          echo "Installing from:"
+          echo "  ${WHEEL_INDEX_URL}"
+
+          pip install \
+            --index-url "${WHEEL_INDEX_URL}" \
+            "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
+            "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
+
+          if [ -n "${JAXLIB_VERSION}" ]; then
+            pip install \
+              --index-url "${WHEEL_INDEX_URL}" \
+              "jaxlib==${JAXLIB_VERSION}"
+
+            pip install "jax==${JAX_VERSION}"
+          else
+            pip install \
+              "jax==${JAX_VERSION}" \
+              "jaxlib==${JAX_VERSION}"
+          fi
+
+      - name: Run JAX tests
+        timeout-minutes: 60
+        env:
+          # Avoid large upfront GPU memory reservation.
+          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+
+          # Set XLA allocator. JAX 0.10.2 uses the default allocator; all
+          # other releases keep the platform allocator.
+          XLA_PYTHON_CLIENT_ALLOCATOR: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && 'default' || 'platform' }}
+
+          # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid a pytest
+          # slowdown/hang; other releases keep the runtime defaults.
+          # TODO:(magaonka-amd) remove these as soon as fixes from corresponding system teams lands.
+          ROCPROFILER_QUEUE_INTERPOSITION: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
+          DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
+          HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' }}
+
+          # Reduce compilation/autotune memory pressure.
+          XLA_FLAGS: >-
+            --xla_gpu_force_compilation_parallelism=1
+            --xla_gpu_enable_nccl_comm_splitting=false
+            --xla_gpu_enable_command_buffer=
+
+        run: |
+          set -euxo pipefail
+
+          unset ROCM_ROOT
+          unset HIP_DEVICE_LIB_PATH
+          unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
+          unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
+          unset HIP_VISIBLE_DEVICES
+          unset ROCR_VISIBLE_DEVICES
+
+          python -c "import jax; print(jax.local_devices())"
+
+          echo "=== Starting full test suite ==="
+          pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
+          pytest jax/tests/core_test.py -q --log-cli-level=INFO
+          pytest jax/tests/util_test.py -q --log-cli-level=INFO
+          pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO

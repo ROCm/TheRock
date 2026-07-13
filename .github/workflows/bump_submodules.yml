@@ -5,6 +5,16 @@ name: Bump Submodule automation
 
 on:
   workflow_dispatch:
+    inputs:
+      submodule:
+        description: 'Submodule to bump (default: all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - rocm-systems
+          - rocm-libraries
   schedule:
     - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
   push:
@@ -19,17 +29,17 @@ jobs:
 
     steps:
       - name: Checkout ROCm/TheRock
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.11'
 
       - name: Generate GitHub App token rocm-systems
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: systems-token
         with:
           app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
@@ -38,7 +48,7 @@ jobs:
           repositories: "rocm-systems,TheRock"
 
       - name: Generate GitHub App token rocm-libraries
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: librarian-token
         with:
           app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
@@ -55,6 +65,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
+            --submodule "${{ github.event.inputs.submodule || 'all' }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}"
 

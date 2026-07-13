@@ -3,6 +3,54 @@
 
 set(DEBUG_TOOLS_DIR "${THEROCK_SOURCE_DIR}/debug-tools")
 
+# If set, propagate DEBUG_TOOLS_BUILD_TYPE to all debug-tools components.
+if(DEBUG_TOOLS_BUILD_TYPE)
+  message(STATUS "Setting all debug-tools components to CMAKE_BUILD_TYPE=${DEBUG_TOOLS_BUILD_TYPE}")
+  if(NOT amd-dbgapi_BUILD_TYPE)
+    set(amd-dbgapi_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+  if(NOT rocr-debug-agent_BUILD_TYPE)
+    set(rocr-debug-agent_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+  if(NOT rocgdb_BUILD_TYPE)
+    set(rocgdb_BUILD_TYPE "${DEBUG_TOOLS_BUILD_TYPE}")
+  endif()
+endif()
+
+# Allow custom debug flags for debug-tools components.
+# Example: -DDEBUG_TOOLS_C_FLAGS_DEBUG="-O0 -g3"
+#          -DDEBUG_TOOLS_CXX_FLAGS_DEBUG="-O0 -g3"
+if(DEBUG_TOOLS_C_FLAGS_DEBUG OR DEBUG_TOOLS_CXX_FLAGS_DEBUG)
+  set(_debug_tools_cmake_args)
+  if(DEBUG_TOOLS_C_FLAGS_DEBUG)
+    message(STATUS "Setting debug-tools CMAKE_C_FLAGS_DEBUG=${DEBUG_TOOLS_C_FLAGS_DEBUG}")
+    list(APPEND _debug_tools_cmake_args "-DCMAKE_C_FLAGS_DEBUG=${DEBUG_TOOLS_C_FLAGS_DEBUG}")
+  endif()
+  if(DEBUG_TOOLS_CXX_FLAGS_DEBUG)
+    message(STATUS "Setting debug-tools CMAKE_CXX_FLAGS_DEBUG=${DEBUG_TOOLS_CXX_FLAGS_DEBUG}")
+    list(APPEND _debug_tools_cmake_args "-DCMAKE_CXX_FLAGS_DEBUG=${DEBUG_TOOLS_CXX_FLAGS_DEBUG}")
+  endif()
+
+  # Propagate to all components CMAKE_ARGS.
+  if(NOT amd-dbgapi_CMAKE_ARGS)
+    set(amd-dbgapi_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND amd-dbgapi_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+
+  if(NOT rocr-debug-agent_CMAKE_ARGS)
+    set(rocr-debug-agent_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND rocr-debug-agent_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+
+  if(NOT rocgdb_CMAKE_ARGS)
+    set(rocgdb_CMAKE_ARGS "${_debug_tools_cmake_args}")
+  else()
+    list(APPEND rocgdb_CMAKE_ARGS ${_debug_tools_cmake_args})
+  endif()
+endif()
+
 if(THEROCK_ENABLE_AMD_DBGAPI)
   ##############################################################################
   # amd-dbgapi
@@ -12,16 +60,26 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
   # of AMD GPU's.
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_AMD_DBGAPI AND THEROCK_AMD_DBGAPI_SOURCE_DIR)
+    message(WARNING "Configuring amd-dbgapi with modified source directory: ${THEROCK_AMD_DBGAPI_SOURCE_DIR}")
+  endif()
+
+  # Build a static library on Windows until there is ABI stability.
+  set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS)
+  if(WIN32)
+    set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
+  endif()
+
   therock_cmake_subproject_declare(amd-dbgapi
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocdbgapi"
+    EXTERNAL_SOURCE_DIR "${THEROCK_AMD_DBGAPI_SOURCE_DIR}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-dbgapi"
     COMPILER_TOOLCHAIN
       amd-llvm
     CMAKE_ARGS
       -DTHE_ROCK_BUILD=ON
+      ${EXTRA_DEBUG_TOOLS_CMAKE_ARGS}
     BUILD_DEPS
-      ROCR-Runtime
       ${THEROCK_BUNDLED_LIBBACKTRACE}
     RUNTIME_DEPS
       amd-comgr
@@ -31,6 +89,10 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       "lib"
     INTERFACE_PKG_CONFIG_DIRS
       "share/pkgconfig"
+    TEST_SUBPROJECTS
+      rocgdb-cpu
+      rocgdb-gpu
+      rocr-debug-agent-tests
   )
 
   therock_cmake_subproject_glob_c_sources(amd-dbgapi SUBDIRS
@@ -45,10 +107,12 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
   therock_cmake_subproject_activate(amd-dbgapi)
 
   # Check that we built the one library we're supposed to build.
-  therock_test_validate_shared_lib(PATH amd-dbgapi/dist/lib
-    LIB_NAMES
-      librocm-dbgapi.so
-  )
+  if(NOT WIN32)
+    therock_test_validate_shared_lib(PATH amd-dbgapi/dist/lib
+      LIB_NAMES
+        librocm-dbgapi.so
+    )
+  endif()
 
   # The artifacts provided by amd-dbgapi.
   therock_provide_artifact(amd-dbgapi
@@ -73,12 +137,16 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
   # state of wavefronts.
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCR_DEBUG_AGENT AND THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR)
+    message(WARNING "Configuring rocr-debug-agent with modified source directory: ${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}")
+  endif()
+
   # Make sure to pass -DENABLE_TESTS=OFF so we don't build
   # rocr-debug-agent-tests alongside the library. The tests need to be built
   # for each gfx level that is requested by the build.
   therock_cmake_subproject_declare(rocr-debug-agent
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent"
     CMAKE_ARGS
       "-DENABLE_TESTS=OFF"
@@ -92,6 +160,8 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      rocr-debug-agent-tests
   )
 
   therock_cmake_subproject_glob_c_sources(rocr-debug-agent SUBDIRS
@@ -134,10 +204,14 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
   # fat binaries are built containing support for all of those GPU targets.
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCR_DEBUG_AGENT AND THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR)
+    message(WARNING "Configuring rocr-debug-agent-tests with modified source directory: ${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}/test")
+  endif()
+
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rocr-debug-agent-tests
       USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent/test"
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
       INSTALL_RPATH_EXECUTABLE_DIR
         "tests/rocm-debug-agent"
@@ -200,6 +274,26 @@ if(THEROCK_ENABLE_ROCGDB)
     message(WARNING "Configuring ROCgdb with modified source directory: ${THEROCK_ROCGDB_SOURCE_DIR}")
   endif()
 
+  # Default to building ROCm's rocgdb branch (with NOTICES.txt, roccoremerge, etc.).
+  # For upstream master builds, which currently lack AMD-specific files:
+  #   - NOTICES.txt file
+  #   - roccoremerge program
+  #   - roccoremerge man page
+  # set: -DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON
+  # Note: upstream master will eventually include roccoremerge.
+  option(THEROCK_ROCGDB_UPSTREAM_BUILD
+    "Build rocgdb against upstream GDB master (skips AMD-specific files like NOTICES.txt, roccoremerge)"
+    OFF)
+
+  # When ON, download the test_rocgdb.py CI wrapper script from ROCm/ROCgdb
+  # amd-staging if it is not already present in the rocgdb source tree, and
+  # install it into tests/rocgdb. Required by TheRock CI when building a
+  # rocgdb source tree that is not part of the branches exercised by CI.
+  # Off by default to avoid a network fetch at configure time.
+  option(THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
+    "Download test_rocgdb.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
+    OFF)
+
   therock_cmake_subproject_declare(rocgdb
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "rocgdb"
@@ -211,6 +305,8 @@ if(THEROCK_ENABLE_ROCGDB)
       "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables_escaped}"
       "-DTHEROCK_BUNDLE_SYSDEPS=${THEROCK_BUNDLE_SYSDEPS}"
       "-DROCGDB_SOURCE_DIR=${THEROCK_ROCGDB_SOURCE_DIR}"
+      "-DROCGDB_UPSTREAM_BUILD=${THEROCK_ROCGDB_UPSTREAM_BUILD}"
+      "-DROCGDB_DOWNLOAD_CI_SCRIPT=${THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT}"
     COMPILER_TOOLCHAIN
       amd-llvm
     RUNTIME_DEPS
@@ -228,6 +324,9 @@ if(THEROCK_ENABLE_ROCGDB)
       "bin"
     INTERFACE_LINK_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      rocgdb-cpu
+      rocgdb-gpu
   )
 
   # We may want to adjust this to optimize rebuilds.

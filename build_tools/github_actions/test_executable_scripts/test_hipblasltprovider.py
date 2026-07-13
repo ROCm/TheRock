@@ -18,15 +18,11 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/hipblaslt_plugin",
     "--output-on-failure",
-    "--parallel",
-    "8",
-    "--timeout",
-    "600",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
 environ_vars = os.environ.copy()
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 
 if test_type == "quick":
     # Exclude tests that start with "Full" during quick tests
@@ -39,4 +35,5 @@ subprocess.run(
     cwd=THEROCK_DIR,
     check=True,
     env=environ_vars,
+    stderr=subprocess.STDOUT,
 )

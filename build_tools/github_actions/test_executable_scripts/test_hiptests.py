@@ -20,12 +20,13 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1)) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
-# Importing is_asan from github_actions_api.py
+# Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_api import is_asan
+from amdgpu_family_matrix import is_asan
 
 env = os.environ.copy()
 
@@ -66,12 +67,29 @@ TEST_TO_IGNORE = {
             "Unit_hipMemsetASyncMulti",
             "Unit_hipHostAlloc_AllocateMoreThanAvailGPUMemory",
             "Unit_hipStreamValue_Write - TestParams<uint32_t, PtrType::DevicePtrToHost>",
+            # TODO(#4244): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
+        ]
+    },
+    "gfx94X-dcgpu": {
+        "linux": [
+            # TODO(#4244): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
         ]
     },
     "gfx110X-all": {
         "windows": [
             "Unit_hipStreamValue_Wait_Blocking - uint64_t",
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
+        ]
+    },
+    "gfx125X-dcgpu": {
+        "linux": [
+            "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
         ]
     },
 }
@@ -132,10 +150,16 @@ def setup_env(env):
         if is_asan():
             env["LD_PRELOAD"] = get_asan_lib_path()
             env["HSA_XNACK"] = "1"
+            # Increase stack size of clr threads
+            env["CQ_THREAD_STACK_SIZE"] = "8388608"
             # TODO: enable this when we have symbolizer patch in
             # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
     else:
         copy_dlls_exe_path()
+
+    # Set env vars for gfx125X-dcgpu
+    if AMDGPU_FAMILIES == "gfx125X-dcgpu":
+        env["HSA_ENABLE_SDMA"] = "1"
 
 
 def execute_tests(env):
@@ -151,6 +175,14 @@ def execute_tests(env):
         "--timeout",
         f"{timeout}",
     ]
+
+    # Add retry flag only for specific GPU families with known flaky tests
+    if AMDGPU_FAMILIES in ("gfx94X-dcgpu", "gfx125X-dcgpu"):
+        cmd.extend(["--repeat", "until-pass:3"])
+
+    # If quick tests are enabled, run only the smoke test subset
+    if TEST_TYPE == "quick":
+        cmd.extend(["-L", "smoke"])
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
         ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]

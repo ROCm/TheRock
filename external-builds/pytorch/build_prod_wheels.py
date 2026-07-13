@@ -22,8 +22,8 @@ builds, etc):
 
 The following commands check out custom patched versions into this directory,
 which the script will use by default if they exist. Otherwise, checkout your
-own and specify with `--pytorch-dir`, `--pytorch-audio-dir`, `--pytorch-vision-dir`
-during the build step.
+own and specify `--root-checkout-dir` or the more specific `--pytorch-dir`,
+`--pytorch-audio-dir`, and `--pytorch-vision-dir` options during the build step.
 
 ```
 # On Linux, using default paths (nested under this folder):
@@ -68,17 +68,22 @@ build_prod_wheels.py \
     --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
 ```
 
-3. Build torch, torchaudio and torchvision for a single gfx architecture.
+3. Build torch, torchaudio and torchvision for one or more gfx architectures.
 
-Typical usage to build with default architecture from rocm-sdk targets:
+Target architectures are resolved in priority order from `--pytorch-rocm-arch`
+(comma-separated), the `PYTORCH_ROCM_ARCH` environment variable, and finally
+`rocm-sdk targets` from the installed rocm-sdk-core. Passing the flag or env
+var explicitly is preferred; see TODO on get_rocm_sdk_targets.
 
 ```
 # On Linux, using default paths for each repository:
 python build_prod_wheels.py build \
+    --pytorch-rocm-arch gfx942 \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
 python build_prod_wheels.py build ^
+    --pytorch-rocm-arch gfx1201 ^
     --output-dir %HOME%/tmp/pyout ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
@@ -91,18 +96,21 @@ python build_prod_wheels.py build ^
 # Use ccache:
 python build_prod_wheels.py build --use-ccache --output-dir ...
 
-# Use sccache with ROCm compiler wrapping (caches host + HIP device code):
+# Use sccache (caches host + HIP device code via HIP_CLANG_LAUNCHER):
 python build_prod_wheels.py build --use-sccache --output-dir ...
 
-# Use sccache without compiler wrapping (caches host C/C++ only):
+# Use sccache for host C/C++ only (no HIP device code caching):
 python build_prod_wheels.py build --use-sccache --sccache-no-wrap --output-dir ...
 ```
 
 ``--use-ccache`` and ``--use-sccache`` are mutually exclusive.
-``--sccache-no-wrap`` is a modifier for ``--use-sccache`` that skips ROCm compiler
-wrapping — useful for developers who want basic caching without modifying compiler
-binaries. See ``build_tools/setup_sccache_rocm.py`` for details on the wrapping
-mechanism.
+``--use-sccache`` sets the CMake C/C++ compiler launchers and, on Linux, the
+``HIP_CLANG_LAUNCHER`` environment variable so that ``hipcc`` routes its clang
+invocations — including the ``-x hip --offload-arch`` device passes — through
+sccache. The real clang binary is left in place, so compiler-detection probes
+work normally. ``--sccache-no-wrap`` skips ``HIP_CLANG_LAUNCHER`` (host C/C++
+caching only), for toolchains whose hipcc predates HIP_CLANG_LAUNCHER support
+(ROCm < 7.13). See ``build_tools/setup_sccache_rocm.py``.
 
 ## Building Linux portable wheels
 
@@ -227,6 +235,15 @@ def get_rocm_sdk_version() -> str:
     ).strip()
 
 
+# TODO(#4687): Remove this fallback once every caller passes --pytorch-rocm-arch
+# (or PYTORCH_ROCM_ARCH) explicitly. Reading dist_amdgpu_targets from the
+# installed rocm-sdk-core misreports targets in two known cases:
+#   1. Multi-arch kpack-split builds share one superset rocm-sdk-core, so every
+#      per-family job would compile torch for every arch in the superset.
+#   2. Prebuilt-reuse flows where the installed rocm-sdk-core's targets do not
+#      match the build intent (e.g. issue #4687).
+# This fallback is kept for legacy CI and release workflows that have not yet
+# been updated to plumb --pytorch-rocm-arch through from the caller.
 def get_rocm_sdk_targets() -> str:
     # Run `rocm-sdk targets` to get the default architecture
     targets = capture([sys.executable, "-m", "rocm_sdk", "targets"], cwd=Path.cwd())
@@ -385,6 +402,28 @@ def directory_if_exists(dir: Path) -> Path | None:
         return None
 
 
+def apply_root_checkout_dir(args: argparse.Namespace) -> None:
+    """Default per-project source dirs from --root-checkout-dir."""
+    root_checkout_dir: Path | None = args.root_checkout_dir
+    if not root_checkout_dir:
+        return
+
+    if args.pytorch_dir is None:
+        args.pytorch_dir = directory_if_exists(root_checkout_dir / "pytorch")
+    if args.pytorch_audio_dir is None:
+        args.pytorch_audio_dir = directory_if_exists(
+            root_checkout_dir / "pytorch_audio"
+        )
+    if args.pytorch_vision_dir is None:
+        args.pytorch_vision_dir = directory_if_exists(
+            root_checkout_dir / "pytorch_vision"
+        )
+    if args.triton_dir is None:
+        args.triton_dir = directory_if_exists(root_checkout_dir / "triton")
+    if args.apex_dir is None:
+        args.apex_dir = directory_if_exists(root_checkout_dir / "apex")
+
+
 def do_install_rocm(args: argparse.Namespace):
     # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
@@ -461,9 +500,7 @@ def _setup_common_build_env(
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
 
-    # GLOO enabled for only Linux
-    if not is_windows:
-        env["USE_GLOO"] = "ON"
+    env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
@@ -622,20 +659,28 @@ def do_build(args: argparse.Namespace):
     system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
     print(f"  PATH = {system_path}")
 
-    pytorch_rocm_arch = args.pytorch_rocm_arch
-    if pytorch_rocm_arch is None:
+    # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
+    # fallback (legacy; see TODO on get_rocm_sdk_targets()).
+    pytorch_rocm_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
+    if pytorch_rocm_arch:
+        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+    else:
         pytorch_rocm_arch = get_rocm_sdk_targets()
         print(
             f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
         )
-    else:
-        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
 
     if not pytorch_rocm_arch:
         raise ValueError(
-            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
+            "No --pytorch-rocm-arch provided, PYTORCH_ROCM_ARCH not set, and "
+            "rocm-sdk targets returned empty. "
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
+
+    # PyTorch's CMake consumes PYTORCH_ROCM_ARCH as a CMake-style list, so any
+    # comma-separated input needs to be rewritten with semicolons before
+    # CMake runs — otherwise the whole string is treated as one arch.
+    pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
         cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
@@ -650,16 +695,16 @@ def do_build(args: argparse.Namespace):
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+        if is_windows:
+            # ccache does not support MSVC's /Zi flag. Embedded (/Z7) is needed.
+            # See: https://github.com/ccache/ccache/issues/1040
+            env["CMAKE_MSVC_DEBUG_INFORMATION_FORMAT"] = "Embedded"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
     elif args.use_sccache:
         build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
         sys.path.insert(0, str(build_tools_dir))
 
-        from setup_sccache_rocm import (
-            find_sccache,
-            restore_rocm_compilers,
-            setup_rocm_sccache,
-        )
+        from setup_sccache_rocm import find_sccache, sccache_build_env
 
         sccache_path = find_sccache()
         if not sccache_path:
@@ -670,18 +715,18 @@ def do_build(args: argparse.Namespace):
                 "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
             )
 
-        sccache_wrapped = False
-        if args.sccache_no_wrap:
-            print("Setting up sccache (CMAKE launchers only, no compiler wrapping)...")
-        else:
-            print("Setting up sccache with ROCm compiler wrapping...")
-            setup_rocm_sccache(rocm_dir, sccache_path)
-            sccache_wrapped = True
-
     try:
         if args.use_sccache:
-            env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
-            env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+            # sccache_build_env sets the CMake C/C++ launchers and, unless
+            # disabled, HIP_CLANG_LAUNCHER so hipcc routes its clang calls
+            # (incl. the -x hip --offload-arch device passes) through sccache
+            # without replacing the clang binary. See setup_sccache_rocm.py.
+            hip_launcher = not args.sccache_no_wrap
+            env.update(sccache_build_env(sccache_path, hip_launcher=hip_launcher))
+            if hip_launcher and not is_windows:
+                print(f"Setting up sccache via HIP_CLANG_LAUNCHER={sccache_path}")
+            else:
+                print("Setting up sccache (CMAKE launchers only)...")
 
             try:
                 run_command(
@@ -703,12 +748,6 @@ def do_build(args: argparse.Namespace):
         )
     finally:
         if args.use_sccache:
-            if sccache_wrapped:
-                print("Restoring ROCm compilers after sccache build...")
-                try:
-                    restore_rocm_compilers(rocm_dir)
-                except Exception as e:
-                    print(f"Warning: Failed to restore compilers: {e}")
             sccache_stats = capture(
                 [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
             )
@@ -901,6 +940,18 @@ def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(omp_path, target_lib)
 
 
+def copy_libuv_to_torch_lib(pytorch_dir: Path):
+    libuv_root = os.environ.get("libuv_ROOT", "")
+    if not libuv_root:
+        return
+    uv_dll = Path(libuv_root) / "bin" / "uv.dll"
+    if not uv_dll.exists():
+        raise RuntimeError(f"Did not find uv.dll at '{uv_dll}'")
+    target_lib = pytorch_dir / "torch" / "lib"
+    print(f"Copying libuv from '{uv_dll}' to '{target_lib}'")
+    shutil.copy2(uv_dll, target_lib)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -917,13 +968,28 @@ def do_build_pytorch(
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
     is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
-    # aotriton is not supported on certain architectures yet.
-    # gfx900/gfx906/gfx908/gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
-    AOTRITON_UNSUPPORTED_ARCHS = ["gfx900", "gfx906", "gfx908", "gfx101", "gfx103"]
+    # aotriton supports a subset of GPU architectures. When at least one
+    # target arch is supported, we enable flash attention and let aotriton's
+    # build system (gpu_targets.py) filter to just the supported ones. The
+    # runtime (check_gpu in sdp_utils.cpp) gracefully falls back to math/CK
+    # backends on unsupported GPUs. We only disable flash attention when
+    # *no* target arch is supported — otherwise aotriton's configure step
+    # fails on the empty target list (https://github.com/ROCm/aotriton/issues/169).
+    #
+    # These prefixes match what aotriton's gpu_targets.py recognizes.
+    # See also the image list in pytorch/cmake/External/aotriton.cmake.
+    AOTRITON_SUPPORTED_ARCH_PREFIXES = ("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
+    aotriton_unsupported_archs_for_version = []
     if not is_pytorch_2_11_or_later:
-        AOTRITON_UNSUPPORTED_ARCHS += ["gfx1152", "gfx1153"]
+        aotriton_unsupported_archs_for_version = ["gfx1152", "gfx1153"]
+    rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
+    has_aotriton_supported_arch = any(
+        arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES)
+        and arch not in aotriton_unsupported_archs_for_version
+        for arch in rocm_arch_list
+    )
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
@@ -959,15 +1025,15 @@ def do_build_pytorch(
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
         if args.enable_pytorch_flash_attention_linux is None:
-            # Default behavior — determined by if triton is build
-            use_flash_attention = "ON" if triton_requirement else "OFF"
-
-            if any(
-                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-            ):
-                use_flash_attention = "OFF"
+            # Default: enable when triton is available AND at least one
+            # target arch is supported by aotriton. When all targets are
+            # unsupported, aotriton can't produce a valid library.
+            use_flash_attention = (
+                "ON" if triton_requirement and has_aotriton_supported_arch else "OFF"
+            )
             print(
-                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
+                f"Flash Attention default behavior (triton={bool(triton_requirement)},"
+                f" aotriton_arch={has_aotriton_supported_arch}): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
@@ -1015,13 +1081,14 @@ def do_build_pytorch(
     # Windows-specific settings.
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
+        copy_libuv_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = "0"
-
-        if args.enable_pytorch_flash_attention_windows and not any(
-            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-        ):
-            use_flash_attention = "1"
+        use_flash_attention = (
+            "1"
+            if args.enable_pytorch_flash_attention_windows
+            and has_aotriton_supported_arch
+            else "0"
+        )
 
         env.update(
             {
@@ -1038,9 +1105,7 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
-        print(
-            f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
-        )
+        print(f"  Flash attention enabled: {use_flash_attention == '1'}")
 
     if not is_windows:
         # Prepend the ROCm sysdeps dir so that we use bundled libraries.
@@ -1267,7 +1332,7 @@ def main(argv: list[str]):
             ),
         )
 
-    sub_p = p.add_subparsers(required=True)
+    sub_p = p.add_subparsers(dest="command", required=True)
     install_rocm_p = sub_p.add_parser(
         "install-rocm", help="Install rocm-sdk wheels to the current venv"
     )
@@ -1299,48 +1364,67 @@ def main(argv: list[str]):
         "--use-sccache",
         action="store_true",
         default=False,
-        help="Use sccache as the compiler launcher (with ROCm compiler wrapping on Linux)",
+        help="Use sccache as the compiler launcher. Sets the CMake C/C++ "
+        "launchers and (on Linux) HIP_CLANG_LAUNCHER so hipcc routes its clang "
+        "invocations -- including the HIP device passes -- through sccache, "
+        "caching host and device code. Requires hipcc with HIP_CLANG_LAUNCHER "
+        "support (ROCm 7.13+).",
     )
     build_p.add_argument(
         "--sccache-no-wrap",
         action="store_true",
         default=False,
-        help="With --use-sccache: skip compiler wrapping, only set CMAKE launchers "
-        "(caches host C/C++ but not HIP device code)",
+        help="With --use-sccache: set only the CMake C/C++ launchers and skip "
+        "HIP_CLANG_LAUNCHER (caches host C/C++ but not HIP device code). Use "
+        "when hipcc lacks HIP_CLANG_LAUNCHER support.",
+    )
+    build_p.add_argument(
+        "--root-checkout-dir",
+        default=script_dir,
+        type=Path,
+        help=(
+            "Root directory containing PyTorch source checkouts named pytorch, "
+            "pytorch_audio, pytorch_vision, triton, and apex. Explicit "
+            "--pytorch-dir, --pytorch-audio-dir, --pytorch-vision-dir, "
+            "--triton-dir, and --apex-dir arguments override this."
+        ),
     )
     build_p.add_argument(
         "--pytorch-dir",
-        default=directory_if_exists(script_dir / "pytorch"),
+        default=None,
         type=Path,
         help="PyTorch source directory",
     )
     build_p.add_argument(
         "--pytorch-audio-dir",
-        default=directory_if_exists(script_dir / "pytorch_audio"),
+        default=None,
         type=Path,
         help="pytorch_audio source directory",
     )
     build_p.add_argument(
         "--pytorch-vision-dir",
-        default=directory_if_exists(script_dir / "pytorch_vision"),
+        default=None,
         type=Path,
         help="pytorch_vision source directory",
     )
     build_p.add_argument(
         "--triton-dir",
-        default=directory_if_exists(script_dir / "triton"),
+        default=None,
         type=Path,
         help="pinned triton directory",
     )
     build_p.add_argument(
         "--apex-dir",
-        default=directory_if_exists(script_dir / "apex"),
+        default=None,
         type=Path,
         help="apex source directory",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
-        help="gfx arch to build pytorch with (defaults to rocm-sdk targets)",
+        help="Comma-separated gfx arches to build pytorch for (e.g. 'gfx942' or "
+        "'gfx942,gfx1201'). May also be supplied via the PYTORCH_ROCM_ARCH "
+        "environment variable. Falls back to `rocm-sdk targets` when unset "
+        "(legacy; see TODO on get_rocm_sdk_targets).",
     )
     build_p.add_argument(
         "--pytorch-build-number", default="1", help="Build number to append to version"
@@ -1399,6 +1483,8 @@ def main(argv: list[str]):
     build_p.set_defaults(func=do_build)
 
     args = p.parse_args(argv)
+    if args.command == "build":
+        apply_root_checkout_dir(args)
     args.func(args)
 
 

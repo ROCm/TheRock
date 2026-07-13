@@ -7,10 +7,9 @@ well as supporting scripts.
 
 ### `build_manylinux_*.Dockerfile`
 
-| Source .Dockerfile                                                                 | Published package                                                                  |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile)          | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64      |
-| [`build_manylinux_rccl_x86_64.Dockerfile`](build_manylinux_rccl_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_rccl_x86_64 |
+| Source .Dockerfile                                                        | Published package                                                             |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64 |
 
 These Dockerfiles are used to build ROCm, PyTorch, and other packages for
 release across a wide variety of Linux distributions. They are derived from
@@ -124,6 +123,17 @@ The installation method is selected via the `INSTALL_METHOD` build argument:
 - `packages`: Configures the AMD package repository and installs ROCm via
   apt/dnf/tdnf/zypper.
 
+By default each image targets a single GPU family (e.g.,
+`AMDGPU_FAMILY=gfx110X-all`). To build one image that supports all GPU
+families, set `AMDGPU_FAMILY=multi-arch` (works with both `INSTALL_METHOD`
+options):
+
+- With `INSTALL_METHOD=packages`: pulls the all-GPU meta-package from AMD's
+  `packages-multi-arch/` repository.
+- With `INSTALL_METHOD=tarball`: downloads AMD's bundled `multiarch`
+  tarball from the `tarball-multi-arch/` path (contains per-family `.kpack/`
+  files for every supported GPU target).
+
 Supporting scripts:
 
 - [`install_rocm_deps.sh`](install_rocm_deps.sh): Auto-detects the distribution
@@ -144,6 +154,10 @@ Supporting scripts:
   # Example: Install ROCm 7.13.0a20260322 for gfx110x (nightly)
   curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
     sudo bash -s -- 7.13.0a20260322 gfx110x nightlies
+
+  # Example: Install ROCm 7.13.0a20260322 with multi-arch (all GPU families)
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- 7.13.0a20260322 multi-arch nightlies
   ```
 
 - [`install_rocm_tarball.sh`](install_rocm_tarball.sh): Downloads ROCm tarball
@@ -193,11 +207,10 @@ The common
 [`.github/workflows/publish_dockerfile.yml`](/.github/workflows/publish_dockerfile.yml)
 workflow is used by other `publish_*.yml` workflows:
 
-| Workflow file                                                                                                             | Workflow run history                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)           | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)           |
-| [`.github/workflows/publish_build_manylinux_rccl_x86_64.yml`](/.github/workflows/publish_build_manylinux_rccl_x86_64.yml) | [actions/workflows/publish_build_manylinux_rccl_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_rccl_x86_64.yml) |
-| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml)     | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml)     |
+| Workflow file                                                                                                         | Workflow run history                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)       | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)       |
+| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml) | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml) |
 
 Tags for built docker images are set based on the branch name pattern:
 

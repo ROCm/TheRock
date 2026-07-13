@@ -10,20 +10,74 @@ This module provides utilities to:
 - Decide whether CI should run based on the modified paths
 
 Public API:
+    get_git_commit_hash() - Resolve a git ref to a commit hash
     get_git_modified_paths() - Get modified files from git diff compared to worktree
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     is_ci_run_required() - Check if CI run is required based on modified paths
 """
 
 import fnmatch
+from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Iterable, Optional
 
 
+_FULL_GIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+
+
+def _ensure_git_commit_available(ref: str) -> None:
+    """Fetch a full SHA when it is missing from the shallow checkout."""
+    if _FULL_GIT_SHA_RE.fullmatch(ref) is None:
+        return
+
+    is_commit_available_locally = (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=60,
+        ).returncode
+        == 0
+    )
+    if is_commit_available_locally:
+        return
+
+    print(f"Commit {ref} is not available locally. Fetching it...")
+    subprocess.run(
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--depth=1",
+            "origin",
+            ref,
+        ],
+        stdout=subprocess.PIPE,
+        check=True,
+        text=True,
+        timeout=60,
+    )
+
+
 # ============================================================================
 # Public API
 # ============================================================================
+
+
+def get_git_commit_hash(ref: str) -> str:
+    """Resolve a git ref to its full commit hash."""
+    _ensure_git_commit_available(ref)
+    return subprocess.run(
+        ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+        stdout=subprocess.PIPE,
+        check=True,
+        text=True,
+        timeout=60,
+    ).stdout.strip()
 
 
 def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
@@ -38,7 +92,14 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     Returns:
         List of relative file paths that were modified, or None if the operation times out
     """
+    print(f"Computing modified paths with: 'git diff --name-only {base_ref}'")
     try:
+        # Push events can advance a branch by multiple commits. The setup
+        # checkout is intentionally shallow, so event.before may be older than
+        # the fetched history even though it is a valid reachable commit.
+        _ensure_git_commit_available(base_ref)
+
+        # We have the commit, now run the diff.
         return subprocess.run(
             ["git", "diff", "--name-only", base_ref],
             stdout=subprocess.PIPE,
@@ -46,7 +107,7 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
             text=True,
             timeout=60,
         ).stdout.splitlines()
-    except TimeoutError:
+    except subprocess.TimeoutExpired:
         print(
             "Computing modified files timed out. Not using PR diff to determine"
             " jobs to run.",
@@ -144,39 +205,62 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 # ============================================================================
 
 # File path patterns that don't trigger CI runs.
-# Changes to files matching these patterns are considered documentation/configuration
-# that don't affect build or test workflows.
+# Changes matching these patterns shouldn't affect CI build/test workflows.
 _SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "*.gitignore",
     "*.md",
+    "*.mdc",
     "*.pre-commit-config.*",
     ".github/dependabot.yml",
     "*CODEOWNERS",
     "*LICENSE",
+    # Files used by gitleaks, no impact on CI.
+    "gitleaks.toml",
+    "build_tools/scan_tools/*",
     # Changes to dockerfiles do not currently affect CI workflows directly.
     # Docker images are built and published after commits are pushed, then
     # workflows can be updated to use the new image sha256 values.
     "dockerfiles/*",
     # Changes to experimental code do not run standard build/test workflows.
     "experimental/*",
+    # This directory contains a collection of AI skills and other developer
+    # utilities. It includes some Python scripts, none of which affect CI.
+    "skills/*",
 ]
 
-# GitHub workflow file patterns that are considered CI-related.
-# Changes to workflow files matching these patterns will trigger CI runs,
-# as they may affect the CI pipeline itself.
-_GITHUB_WORKFLOWS_CI_PATTERNS = [
-    "setup.yml",
-    "ci*.yml",
-    "multi_arch*.yml",
-    "build*artifact*.yml",
-    "build*ci.yml",
-    "build*python_packages.yml",
-    "test*artifacts.yml",
-    "test_rocm_wheels.yml",
-    "test_sanity_check.yml",
+# GitHub workflow files that are used by CI workflows. Changes to any of
+# these trigger CI runs. This is an explicit list (not glob patterns) so that
+# unrelated workflows are never accidentally included.
+#
+# This list is maintained manually and a unit test verifies that every
+# workflow transitively called by multi_arch_ci.yml is listed here.
+#
+# TODO: Compute this set dynamically by scanning workflow files for
+# ``uses: ./.github/workflows/...`` references instead of maintaining it
+# by hand.
+_GITHUB_WORKFLOWS_CI_FILENAMES = {
+    "build_portable_linux_python_packages.yml",
+    "build_windows_python_packages.yml",
+    "manifest-diff.yml",
+    "multi_arch_build_native_linux_packages.yml",
+    "multi_arch_build_portable_linux_artifacts.yml",
+    "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
+    "multi_arch_build_portable_linux.yml",
+    "multi_arch_build_windows_artifacts.yml",
+    "multi_arch_build_windows_pytorch_wheels_ci.yml",
+    "multi_arch_build_windows.yml",
+    "multi_arch_build_wsl_rocdxg_artifacts.yml",
+    "multi_arch_ci_linux.yml",
+    "multi_arch_ci_windows.yml",
+    "multi_arch_ci.yml",
+    "setup_multi_arch.yml",
+    "test_artifacts_structure.yml",
+    "test_artifacts.yml",
     "test_component.yml",
-]
+    "test_native_linux_packages_install.yml",
+    "test_rocm_wheels.yml",
+}
 
 
 # ============================================================================
@@ -201,10 +285,7 @@ def _check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 
 def _is_path_workflow_file_related_to_ci(path: str) -> bool:
     """Checks if a single path is a CI-related workflow file."""
-    return any(
-        fnmatch.fnmatch(path, ".github/workflows/" + pattern)
-        for pattern in _GITHUB_WORKFLOWS_CI_PATTERNS
-    )
+    return Path(path).name in _GITHUB_WORKFLOWS_CI_FILENAMES
 
 
 def _check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:

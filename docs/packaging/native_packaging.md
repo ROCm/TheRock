@@ -89,7 +89,67 @@ Optional Fields
 - Provides: Indicates that a package provides the functionality of another package.
 - Replaces: Indicates that a package replaces another package.
 
+## S3 Configuration and Package Repository URLs
+
+The following table shows the S3 bucket configuration and public repository URLs for each release type. This configuration is used by `build_tools/packaging/linux/get_s3_config.py` and `build_tools/packaging/linux/upload_package_repo.py`.
+
+### GFX Specific Packages
+
+| Release Type                       | S3 Bucket                       | S3 Prefix                                                                                                         | DEB Install URL                                                                                                      | RPM Install URL                                                                                                              |
+| ---------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **dev**                            | `therock-dev-packages`          | `{pkg_type}/{yyyymmdd}-{artifact_id}`<br>Example: `deb/20260406-12345678`                                         | `https://rocm.devreleases.amd.com/deb/{yyyymmdd}-{artifact_id}`                                                      | `https://rocm.devreleases.amd.com/rpm/{yyyymmdd}-{artifact_id}/x86_64/`                                                      |
+| **nightly**                        | `therock-nightly-packages`      | `{pkg_type}/{yyyymmdd}-{artifact_id}`<br>Example: `deb/20260406-12345678`                                         | `https://rocm.nightlies.amd.com/deb/{yyyymmdd}-{artifact_id}`                                                        | `https://rocm.nightlies.amd.com/rpm/{yyyymmdd}-{artifact_id}/x86_64/`                                                        |
+| **prerelease**                     | `therock-prerelease-packages`   | `v3/packages/{pkg_type}`<br>Example: `v3/packages/deb`                                                            | `https://rocm.prereleases.amd.com/packages/ubuntu2404`                                                               | `https://rocm.prereleases.amd.com/packages/rhel10/x86_64/`                                                                   |
+| **release**                        | `therock-release-packages`      | `v3/packages/{pkg_type}`<br>Example: `v3/packages/deb`                                                            | `https://repo.amd.com/rocm/packages/ubuntu2404`                                                                      | `https://repo.amd.com/rocm/packages/rhel10/x86_64/`                                                                          |
+| **ci** (ROCm/TheRock)<br>*DEFAULT* | `therock-ci-artifacts`          | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb`                          | `https://therock-ci-artifacts.s3.us-east-2.amazonaws.com/{artifact_id}-{platform}/packages/deb`                      | `https://therock-ci-artifacts.s3.us-east-2.amazonaws.com/{artifact_id}-{platform}/packages/rpm/x86_64/`                      |
+| **ci** (Fork/External)             | `therock-ci-artifacts-external` | `{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `someone-fork/12345678-linux/packages/deb` | `https://therock-ci-artifacts-external.s3.us-east-2.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/deb` | `https://therock-ci-artifacts-external.s3.us-east-2.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/rpm/x86_64/` |
+
+### Multi-Arch Packages
+
+For dev/nightly/prerelease/release builds, multi-arch packages are uploaded to a separate artifacts bucket.
+For CI builds (default, fork, external), the same bucket and prefix as GFX arch packages are used.
+
+| Release Type                       | Multi-Arch S3 Bucket            | Multi-Arch S3 Prefix                                                                                              |
+| ---------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **dev**                            | `therock-dev-artifacts`         | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb`                          |
+| **nightly**                        | `therock-nightly-artifacts`     | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb`                          |
+| **prerelease**                     | `therock-prerelease-artifacts`  | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb`                          |
+| **release**                        | `therock-release-artifacts`     | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb`                          |
+| **ci** (ROCm/TheRock)<br>*DEFAULT* | `therock-ci-artifacts`          | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb`                          |
+| **ci** (Fork/External)             | `therock-ci-artifacts-external` | `{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `someone-fork/12345678-linux/packages/deb` |
+
+**Notes:**
+
+- RPM repositories always append `/x86_64/` subdirectory for yum/dnf compatibility
+- CI install URLs include the `us-east-2` region: `*.s3.us-east-2.amazonaws.com`
+- `get_s3_config.py` returns both `s3_bucket`/`s3_prefix` (native packages) and `multi_arch_s3_bucket`/`multi_arch_s3_prefix` (multi-arch artifacts)
+- Variables:
+  - `{pkg_type}`: Package type (`deb` or `rpm`)
+  - `{yyyymmdd}`: Date in YYYYMMDD format
+  - `{artifact_id}`: GitHub Actions run ID or custom artifact identifier
+  - `{platform}`: Platform name (`linux` or `windows`)
+  - `{repo_name}`: Repository name with `/` replaced by `-` (e.g., `ROCm-TheRock`, `someone-fork`)
+
 ## Building Packages
+
+The `--target` argument specifies the GFX architecture(s) for which packages should be built.
+If not provided, the script will automatically detect available architectures from the artifact directory.
+
+### Auto-detection (Recommended)
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --pkg-type rpm
+```
+
+The script will scan the artifact directory and automatically detect GFX architectures
+from directory names matching the pattern `{name}_{component}_{target_family}`
+(e.g., `blas_lib_gfx1100`, `miopen_lib_gfx942`).
+
+### Explicit Target Specification
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -99,6 +159,9 @@ Optional Fields
    --rocm-version 7.1.0 \
    --pkg-type rpm
 ```
+
+You can specify one or more targets explicitly if needed. Multiple targets can be provided
+space-separated, comma-separated, or semicolon-separated.
 
 To install locally built packages
 
@@ -127,7 +190,18 @@ pip install -r build_tools/packaging/linux/requirements.txt<br>
 
 ### Usage
 
-RPM package:<br>
+RPM package with auto-detected architectures:<br>
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --version-suffix build_type \
+   --pkg-type rpm
+```
+
+RPM package with explicit target:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -139,7 +213,18 @@ RPM package:<br>
    --pkg-type rpm
 ```
 
-Debian package:<br>
+Debian package with auto-detected architectures:<br>
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --version-suffix build_type \
+   --pkg-type deb
+```
+
+Debian package with explicit target:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -151,7 +236,19 @@ Debian package:<br>
    --pkg-type deb
 ```
 
-Debian RPATH package:<br>
+Debian RPATH package with auto-detected architectures:<br>
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --pkg-type deb \
+   --version-suffix build_type \
+   --rpath-pkg
+```
+
+Debian RPATH package with explicit target:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -161,5 +258,5 @@ Debian RPATH package:<br>
    --rocm-version 7.1.0 \
    --pkg-type deb \
    --version-suffix build_type \
-   --rpath-pkg True
+   --rpath-pkg
 ```

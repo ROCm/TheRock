@@ -4,6 +4,10 @@
 name: Multi-Arch CI ASAN
 
 on:
+  # TODO: Enable postsubmit ASAN once we have capacity
+  # push:
+  #   branches:
+  #     - main
   schedule:
     # Runs at 02:00 AM UTC, which is 7:00 PM PST (UTC-8)
     - cron: '0 02 * * *'
@@ -25,16 +29,25 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+  pull_request:
+    types:
+      - labeled
+      - opened
+      - synchronize
 
 permissions:
   contents: read
 
 concurrency:
-  # A PR number if a pull request and otherwise the commit hash. This cancels
-  # queued and in-progress runs for the same PR (presubmit) or commit
-  # (postsubmit). The workflow name is prepended to avoid conflicts between
-  # different workflows.
-  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+  #
+  # Only allow one run at a time for 'pull_request' events.
+  # Allow multiple runs for 'push' and 'workflow_dispatch'.
+  #
+  # `github.workflow`: each workflow gets its own concurrency group
+  # `github.head_ref`: the branch name (only defined for pull_request events)
+  # `github.run_id`  : fallback, unique for each run
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -42,6 +55,12 @@ jobs:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan"
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
+      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      build_pytorch: false
+      build_jax: false
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -57,6 +76,8 @@ jobs:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
     permissions:
       contents: read
@@ -70,12 +91,10 @@ jobs:
       - linux_build_and_test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python build_tools/github_actions/workflow_summary.py \
-            --workflow-name="${{ github.workflow }}" \
-            --run-id="${{ github.run_id }}" \
-            --run-attempt="${{ github.run_attempt }}"
+            --needs-json '${{ toJSON(needs) }}'

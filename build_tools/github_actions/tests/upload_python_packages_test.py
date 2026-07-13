@@ -140,8 +140,11 @@ class TestMultiArchUploadPath(unittest.TestCase):
 class TestGenerateIndex(unittest.TestCase):
     """Tests for generate_index() flat vs per-family auto-detection."""
 
-    def test_flat_layout_creates_top_level_index(self):
-        """Flat dist/ (no subdirs) creates index.html at top level."""
+    def test_flat_layout_skips_client_side_index(self):
+        """Flat dist/ (no subdirs) skips client index generation — the
+        therock-ci-artifacts bucket serves index.html from its own side,
+        and a client-generated index would race with the server view
+        when multiple jobs append to the same prefix."""
         with tempfile.TemporaryDirectory() as tmp:
             dist_dir = Path(tmp)
             (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
@@ -149,20 +152,7 @@ class TestGenerateIndex(unittest.TestCase):
 
             upload_python_packages.generate_index(dist_dir, multiarch=True)
 
-            index = dist_dir / "index.html"
-            self.assertTrue(index.is_file())
-            content = index.read_text()
-            self.assertIn("rocm_sdk_core-1.0.whl", content)
-            self.assertIn("rocm_sdk_device_gfx942-1.0.whl", content)
-
-    def test_flat_layout_no_subdir_indexes_created(self):
-        """Flat dist/ does not create any subdirectory index files."""
-        with tempfile.TemporaryDirectory() as tmp:
-            dist_dir = Path(tmp)
-            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
-
-            upload_python_packages.generate_index(dist_dir, multiarch=True)
-
+            self.assertFalse((dist_dir / "index.html").exists())
             self.assertFalse(any(d.is_dir() for d in dist_dir.iterdir()))
 
     def test_per_family_layout_creates_family_indexes(self):
@@ -179,6 +169,22 @@ class TestGenerateIndex(unittest.TestCase):
 
             self.assertTrue((dist_dir / "gfx94X-dcgpu" / "index.html").is_file())
             self.assertFalse((dist_dir / "index.html").is_file())
+
+    def test_dot_dir_treated_as_flat(self):
+        """A dot-directory (e.g. .kpack_staging) is a staging artifact, not a
+        GPU family, so it must not flip detection into per-family mode."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+            (dist_dir / ".kpack_staging").mkdir()
+            (dist_dir / ".kpack_staging" / "scratch.whl").write_bytes(b"scratch")
+
+            self.assertEqual(upload_python_packages.detect_family_subdirs(dist_dir), [])
+
+            upload_python_packages.generate_index(dist_dir, multiarch=True)
+
+            # Flat (kpack-split) handling: no per-family index generated.
+            self.assertFalse((dist_dir / ".kpack_staging" / "index.html").exists())
 
     def test_dry_run_creates_nothing(self):
         """dry_run=True creates no files regardless of layout."""

@@ -1,0 +1,11 @@
+# hipDNN Integration Tests
+[components.test."ml-libs/hipdnn_integration_tests/stage"]
+include = [
+  "bin/*hipdnn_*_test*",
+  "bin/hipdnn_integration_tests_ctest/CTestTestfile.cmake",
+  "lib/integration_test_bundles/**",
+]
+[components.run."ml-libs/hipdnn_integration_tests/stage"]
+include = [
+  "bin/hipdnn_integration_tests",
+]

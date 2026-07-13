@@ -83,12 +83,27 @@ ctest --test-dir build
 
 **Faster rebuilds with ccache:**
 
+On Linux:
+
 ```bash
+# Any shell used to build must eval setup_ccache.py to set environment variables.
+eval "$(./build_tools/setup_ccache.py)"
 cmake -B build -GNinja \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1100 .
 ```
+
+On Windows (Command Prompt):
+
+```bat
+for /f "delims=" %i in ('python build_tools/setup_ccache.py') do @%i
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx1100 ^
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .
+```
+
+See [README.md](README.md#ccache-usage-on-windows) for full ccache setup details.
 
 **Debug build for specific component:**
 
@@ -164,6 +179,23 @@ directory for each style guide:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
+## PR Quality Skill
+
+Composable, ROCm-wide PR-quality agent skills live under [skills/](skills/). When authoring,
+reviewing, or pre-merge-gating a pull request, read and apply the base skill, plus the TheRock
+overlay when the change touches the build:
+
+- **Base — [skills/rocm-pr-quality/SKILL.md](skills/rocm-pr-quality/SKILL.md)** (and its
+  `reference.md`): the library-agnostic floor. Always read this first.
+- **TheRock overlay — [skills/therock-pr-quality/SKILL.md](skills/therock-pr-quality/SKILL.md)**:
+  add this for PRs touching the superbuild, submodules/patches, `artifact-*.toml` /
+  `BUILD_TOPOLOGY.toml`, or reusable CI workflows. It extends the base and defers to the canonical
+  `docs/development/style_guides/`.
+
+Component repositories add their own thin overlays on top (e.g. `hipblaslt-pr-quality` in
+`rocm-libraries`). Overlays may tighten but never weaken the base MUST rules. The skills are
+advisory and never post to GitHub/Jira without explicit human approval.
+
 ## Project Structure
 
 ```
@@ -174,6 +206,7 @@ math-libs/      # rocBLAS, rocFFT, etc.
 media-libs/     # rocDecode, rocJPEG
 ml-libs/        # MIOpen, composable_kernel
 comm-libs/      # RCCL, rocSHMEM
+storage-libs/   # hipFile
 profiler/       # rocprofiler, roctracer
 build_tools/    # Python build scripts
 cmake/          # CMake infrastructure

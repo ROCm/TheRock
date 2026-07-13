@@ -11,6 +11,8 @@ This module provides:
 See also https://pypi.org/project/github-action-utils/.
 """
 
+import base64
+import binascii
 from enum import Enum, auto
 import json
 import logging
@@ -20,8 +22,9 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Mapping
+from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import urlopen, Request
 
 
@@ -340,22 +343,31 @@ def gha_set_output(vars: Mapping[str, str | Path]):
     """Sets values in a step's output parameters.
 
     This appends to the file located at the $GITHUB_OUTPUT environment variable.
+    Multi-line values are written using the heredoc form required by GitHub
+    Actions (see "Multiline strings" in the workflow-commands reference).
 
     See
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-output-parameter
+      * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#multiline-strings
       * https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
     """
-    _log(f"Setting github output:\n{json.dumps(vars, indent=2)}")
+    _log(
+        f"Setting github output:\n{json.dumps({k: str(v) for k, v in vars.items()}, indent=2)}"
+    )
 
     step_output_file = os.getenv("GITHUB_OUTPUT")
     if not step_output_file:
         _log("  Warning: GITHUB_OUTPUT env var not set, can't set github outputs")
         return
 
-    with open(step_output_file, "a") as f:
+    with open(step_output_file, "a", encoding="utf-8") as f:
         for k, v in vars.items():
-            print(f"OUTPUT {k}={str(v)}")
-            f.write(f"{k}={str(v)}\n")
+            value = "" if v is None else str(v)
+            if "\n" in value:
+                f.write(f"{k}<<EOF\n{value}\nEOF\n")
+            else:
+                print(f"OUTPUT {k}={value}")
+                f.write(f"{k}={value}\n")
 
 
 def gha_append_step_summary(summary: str):
@@ -377,6 +389,66 @@ def gha_append_step_summary(summary: str):
     with open(step_summary_file, "a") as f:
         # Use double newlines to split sections in markdown.
         f.write(summary + "\n\n")
+
+
+def gha_load_github_event() -> dict[str, Any]:
+    """Loads the JSON event payload pointed to by $GITHUB_EVENT_PATH.
+
+    Raises:
+        KeyError: $GITHUB_EVENT_PATH is not set (not running under GitHub
+            Actions, or the step was given no event payload).
+        FileNotFoundError: $GITHUB_EVENT_PATH is set but the file
+            doesn't exist (CI misconfiguration).
+        ValueError: the file contains invalid JSON, or the top-level
+            payload is not a JSON object.
+        RuntimeError: the file exists but couldn't be read (permissions,
+            disk error, etc.).
+
+    See: https://docs.github.com/en/actions/reference/variables-reference#default-environment-variables
+         https://docs.github.com/en/webhooks/webhook-events-and-payloads
+    """
+    event_path = Path(os.environ["GITHUB_EVENT_PATH"])
+    if not event_path.is_file():
+        raise FileNotFoundError(
+            f"GITHUB_EVENT_PATH is set to '{event_path}' but no such file exists"
+        )
+    try:
+        with open(event_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' contains invalid JSON: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' must contain a JSON object, "
+            f"got {type(data).__name__}"
+        )
+    return data
+
+
+def is_current_run_pr_from_fork() -> bool:
+    """Whether the current workflow run is a pull request from a fork.
+
+    Reads the GitHub event payload to check the ``.fork`` property on the head
+    repo, matching the GitHub Actions expression
+    ``github.event.pull_request.head.repo.fork``.
+
+    Returns False for non-pull_request events or if the event payload is not
+    available (e.g. local development).
+    """
+    if os.environ.get("GITHUB_EVENT_NAME", "") != "pull_request":
+        return False
+    if not os.environ.get("GITHUB_EVENT_PATH"):
+        return False
+    event = gha_load_github_event()
+    return bool(
+        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
+    )
 
 
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
@@ -420,6 +492,9 @@ def gha_query_workflow_run_by_id(github_repository: str, workflow_run_id: str) -
     return gha_send_request(url)
 
 
+# TODO: Consider accepting a git ref (branch/tag) here and resolving it
+# to a SHA via gha_resolve_git_ref, so callers don't need to do that
+# themselves. Same for other functions that take a commit SHA.
 def gha_query_workflow_runs_for_commit(
     github_repository: str,
     workflow_file_name: str,
@@ -437,7 +512,7 @@ def gha_query_workflow_runs_for_commit(
 
     Args:
         github_repository: Repository in "owner/repo" format (e.g., "ROCm/TheRock")
-        workflow_file_name: Workflow filename (e.g., "ci.yml")
+        workflow_file_name: Workflow filename (e.g., "multi_arch_ci.yml")
         git_commit_sha: Full git commit SHA
 
     Returns:
@@ -459,29 +534,39 @@ def gha_query_workflow_runs_for_commit(
     return runs
 
 
-def gha_query_last_successful_workflow_run(
+def gha_query_last_workflow_run(
     github_repository: str = "ROCm/TheRock",
-    workflow_name: str = "ci.yml",
+    workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
+    accepted_statuses: set[str] | None = None,
 ) -> dict | None:
-    """Find the last successful run of a specific workflow on the specified branch.
+    """Find the most recent run of a workflow on ``branch`` whose conclusion
+    is in ``accepted_statuses`` (default ``{"success"}``).
 
-    Args:
-        github_repository: Repository in format "owner/repo"
-        workflow_name: Name of the workflow file (e.g., "ci_nightly.yml")
-        branch: Branch to filter by (defaults to "main")
-
-    Returns:
-        The full workflow run object of the most recent successful run on the specified branch,
-        or None if no successful runs are found.
+    Paginates the most recent runs (newest first), filtering client-side,
+    up to ``MAX_PAGES * PER_PAGE`` runs. Returns ``None`` if no matching
+    run is found within that window.
     """
-    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100&sort=created&direction=desc"
-    response = gha_send_request(url)
-
-    # Return the first (most recent) successful run
-    if response and response.get("workflow_runs"):
-        return response["workflow_runs"][0]
+    if accepted_statuses is None:
+        accepted_statuses = {"success"}
+    MAX_PAGES = 5
+    PER_PAGE = 100
+    page = 1
+    while page <= MAX_PAGES:
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/workflows/{workflow_name}/runs"
+            f"?branch={branch}&per_page={PER_PAGE}&sort=created&direction=desc"
+            f"&page={page}"
+        )
+        response = gha_send_request(url)
+        runs = response.get("workflow_runs", []) if response else []
+        for run in runs:
+            if run.get("conclusion") in accepted_statuses:
+                return run
+        if len(runs) < PER_PAGE:
+            break  # Partial or empty page = no more runs to fetch.
+        page += 1
     return None
 
 
@@ -514,6 +599,88 @@ def gha_query_recent_branch_commits(
     response = gha_send_request(url)
 
     return [commit["sha"] for commit in response]
+
+
+def gha_resolve_git_ref(github_repository: str, ref: str) -> str:
+    """Resolve a git ref (branch, tag, or SHA) to a full commit SHA.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        ref: Git ref to resolve (branch name, tag, or commit SHA).
+
+    Returns:
+        The full 40-character commit SHA.
+
+    Raises:
+        GitHubAPIError: If the ref cannot be resolved.
+
+    See: https://docs.github.com/en/rest/commits/commits#get-a-commit
+    """
+    encoded_ref = quote(ref, safe="")
+    url = f"https://api.github.com/repos/{github_repository}/commits/{encoded_ref}"
+    response = gha_send_request(url)
+    return response["sha"]
+
+
+def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> bytes:
+    """Fetch a file's contents from a GitHub repo at a specific ref.
+
+    Uses the Contents API to retrieve and decode a single file. The file must
+    be small enough for the Contents API to return base64 content; for larger
+    files use the Blobs API instead.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        path: File path within the repo (e.g. "version.txt").
+        ref: Git ref (branch, tag, or commit SHA).
+
+    Returns:
+        The decoded file contents.
+
+    Raises:
+        GitHubAPIError: If the file cannot be fetched (not found, API error, etc.).
+
+    See: https://docs.github.com/en/rest/repos/contents#get-repository-content
+    """
+    encoded_path = quote(path, safe="/")
+    encoded_ref = quote(ref, safe="")
+    url = (
+        f"https://api.github.com/repos/{github_repository}/contents/"
+        f"{encoded_path}?ref={encoded_ref}"
+    )
+    response = gha_send_request(url)
+    if not isinstance(response, dict) or response.get("type") != "file":
+        response_type = (
+            response.get("type") if isinstance(response, dict) else type(response)
+        )
+        raise GitHubAPIError(
+            f"Expected GitHub contents response for a file at {path!r}, "
+            f"got {response_type!r}"
+        )
+    if response.get("encoding") != "base64" or not isinstance(
+        response.get("content"), str
+    ):
+        raise GitHubAPIError(
+            f"Expected base64 GitHub contents response for {path!r}; "
+            "use the Git blobs API for larger files"
+        )
+    try:
+        return base64.b64decode(response["content"])
+    except binascii.Error as e:
+        raise GitHubAPIError(f"Failed to decode GitHub contents for {path!r}") from e
+
+
+def gha_fetch_text_file_contents(
+    github_repository: str, path: str, ref: str, *, encoding: str = "utf-8"
+) -> str:
+    """Fetch and decode a text file from a GitHub repo at a specific ref."""
+    contents = gha_fetch_file_contents(github_repository, path, ref)
+    try:
+        return contents.decode(encoding)
+    except UnicodeDecodeError as e:
+        raise GitHubAPIError(
+            f"Failed to decode GitHub contents for {path!r} as {encoding}"
+        ) from e
 
 
 # TODO: Consider moving str2bool to a general-purpose utils module. It's useful
@@ -603,9 +770,3 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
             logging.info(f"Detected GPU architecture: {gpu_arch}")
             return gpu_arch
     raise RuntimeError("No GPU architecture found in rocminfo output")
-
-
-def is_asan():
-    """Using artifact_group, determines if this is an asan build"""
-    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
-    return "asan" in ARTIFACT_GROUP

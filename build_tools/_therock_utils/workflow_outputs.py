@@ -138,7 +138,7 @@ class WorkflowOutputRoot:
         per-arch stages (e.g., math-libs) get a subdirectory per family.
 
         Args:
-            stage_name: Build stage (e.g., 'foundation', 'math-libs')
+            stage_name: Build stage (e.g., 'compiler-runtime', 'math-libs')
             amdgpu_family: GPU family (e.g., 'gfx1151'). Empty for generic stages.
         """
         if amdgpu_family:
@@ -196,6 +196,39 @@ class WorkflowOutputRoot:
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
         )
 
+    def manifest_root(self) -> StorageLocation:
+        """Location for the workflow-level therock_manifest.json."""
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/manifests/therock_manifest.json",
+        )
+
+    def manifests_index(self) -> StorageLocation:
+        """Location for the workflow-level manifests index."""
+        return StorageLocation(
+            self.bucket,
+            f"{self.prefix}/manifests/index.html",
+        )
+
+    # -- Native packages --------------------------------------------------------
+
+    def native_linux_packages(self, pkg_type: str) -> StorageLocation:
+        """Location for the native Linux package repository directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/packages/{pkg_type}``
+        (e.g. ``12345678901-linux/packages/deb``).
+
+        The contents under this prefix follow standard repository layouts
+        (not loose files): deb repos use APT layout (``pool/main/`` +
+        ``dists/stable/``); rpm repos place packages under ``x86_64/`` with
+        ``repodata/`` alongside. See ``upload_package_repo.py`` for the exact
+        on-disk and S3 layout.
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:
@@ -215,6 +248,10 @@ class WorkflowOutputRoot:
     def tarballs(self) -> StorageLocation:
         """Location for the tarballs directory."""
         return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
+
+    def tarball(self, filename: str) -> StorageLocation:
+        """Location for a specific tarball file."""
+        return StorageLocation(self.bucket, f"{self.prefix}/tarballs/{filename}")
 
     # -- Factories --------------------------------------------------------------
 
@@ -246,7 +283,7 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
-            release_type: Release type override (e.g. "dev", "nightly"). If
+            release_type: Release type override (e.g. "ci", "dev", "nightly"). If
                 None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (

@@ -14,7 +14,6 @@ amdgpu_family_info_matrix_all {
      <target>: {                                # string: cmake target for single gpu architecture
         "linux": {
             "build": {
-              "expect_failure":                 #         boolean:
               "build_variants": []              #         list: build variant names (e.g., ["release", "asan"])
             },                                  # platform <optional>
            "test": {                            #     test options
@@ -32,7 +31,6 @@ amdgpu_family_info_matrix_all {
         }
         "windows": {
             "build": {
-              "expect_failure":                 #         boolean:
               "build_variants": []              #         list: build variant names
             },                                  # platform <optional>
             "test": {                           #     test options
@@ -68,10 +66,11 @@ amdgpu_family_predefined_groups = {
     "amdgpu_nightly": [
         "gfx90X-dcgpu",
         "gfx101X-dgpu",
-        "gfx103X-dgpu",
+        "gfx103X-all",
         "gfx1150",
         "gfx1152",
         "gfx1153",
+        "gfx125X-dcgpu",
     ],
 }
 
@@ -89,7 +88,6 @@ all_build_variants = {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
-            "expect_failure": True,
         },
     },
     "windows": {
@@ -170,7 +168,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx110X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": ["gfx1100", "gfx1101"],
+                    "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -256,7 +254,6 @@ amdgpu_family_info_matrix_all = {
         "gfx1152": {
             "linux": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -271,7 +268,6 @@ amdgpu_family_info_matrix_all = {
             },
             "windows": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -288,7 +284,6 @@ amdgpu_family_info_matrix_all = {
         "gfx1153": {
             "linux": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -307,7 +302,6 @@ amdgpu_family_info_matrix_all = {
             },
             "windows": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -378,16 +372,34 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-                    # fetch-gfx-targets should be ["gfx1200", "gfx1201"] when re-enabled
+                    # TODO(#2962): Re-enable run_tests once sanity checks work with this architecture.
                     "run_tests": False,
                     "runs_on": {
                         "test": "windows-gfx120X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1200", "gfx1201"],
                 },
                 "release": {
                     "push_on_success": True,
+                    "bypass_tests_for_releases": True,
+                },
+            },
+        }
+    },
+    "gfx125X": {
+        "dcgpu": {
+            "linux": {
+                "build": {
+                    "build_variants": ["release"],
+                },
+                "test": {
+                    # No gfx1250 hardware available for testing yet.
+                    "run_tests": False,
+                    "runs_on": {},
+                    "fetch-gfx-targets": [],
+                },
+                "release": {
+                    "push_on_success": False,
                     "bypass_tests_for_releases": True,
                 },
             },

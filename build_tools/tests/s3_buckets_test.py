@@ -26,7 +26,7 @@ from _therock_utils.s3_buckets import (
 class TestGetArtifactsBucketConfig(unittest.TestCase):
     def test_ci_rocm_therock(self):
         config = get_artifacts_bucket_config(
-            release_type="", repository="ROCm/TheRock", is_pr_from_fork=False
+            release_type="ci", repository="ROCm/TheRock", is_pr_from_fork=False
         )
         self.assertEqual(config.name, "therock-ci-artifacts")
         self.assertEqual(
@@ -36,15 +36,19 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
 
     def test_ci_fork_pr(self):
         config = get_artifacts_bucket_config(
-            release_type="", repository="ROCm/TheRock", is_pr_from_fork=True
+            release_type="ci", repository="ROCm/TheRock", is_pr_from_fork=True
         )
         self.assertEqual(config.name, "therock-ci-artifacts-external")
+        # The raw lookup returns the external role for forks; the OIDC skip for
+        # forks happens in get_artifacts_bucket_config_for_workflow_run, not here.
+        self.assertEqual(config.iam_role, "therock-ci-external")
 
     def test_ci_external_repo(self):
         config = get_artifacts_bucket_config(
-            release_type="", repository="ROCm/rocm-libraries", is_pr_from_fork=False
+            release_type="ci", repository="ROCm/rocm-libraries", is_pr_from_fork=False
         )
         self.assertEqual(config.name, "therock-ci-artifacts-external")
+        self.assertEqual(config.iam_role, "therock-ci-external")
 
     def test_release_type_dev(self):
         config = get_artifacts_bucket_config(
@@ -68,14 +72,13 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
             )
         self.assertIn("bogus", str(cm.exception))
 
-    def test_release_type_disallowed_repo_raises(self):
-        with self.assertRaises(ValueError) as cm:
+    def test_empty_release_type_raises(self):
+        with self.assertRaises(ValueError):
             get_artifacts_bucket_config(
-                release_type="dev",
-                repository="ROCm/rocm-libraries",
+                release_type="",
+                repository="ROCm/TheRock",
                 is_pr_from_fork=False,
             )
-        self.assertIn("ROCm/rocm-libraries", str(cm.exception))
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +122,10 @@ class TestGetReleaseBucketConfig(unittest.TestCase):
     def test_empty_release_type_raises(self):
         with self.assertRaises(ValueError):
             get_release_bucket_config(release_type="", bucket_type="tarball")
+
+    def test_ci_release_type_raises(self):
+        with self.assertRaises(ValueError):
+            get_release_bucket_config(release_type="ci", bucket_type="tarball")
 
     def test_invalid_bucket_type_raises(self):
         with self.assertRaises(ValueError) as cm:
@@ -196,6 +203,37 @@ class TestGetArtifactsBucketConfigForWorkflowRun(unittest.TestCase):
             github_repository="ROCm/TheRock", workflow_run=fake_run
         )
         self.assertEqual(config.name, "therock-ci-artifacts-external")
+        # Fork PRs cannot assume an IAM role via OIDC (no trust relationship),
+        # so the wrapper must strip the role and fall back to runner base
+        # credentials. Regression coverage for #5654.
+        self.assertIsNone(config.iam_role)
+        self.assertIsNone(config.write_access_iam_role)
+
+    def test_workflow_run_external_repo_uses_oidc(self):
+        # An external (non-fork) repo such as rocm-libraries keeps the
+        # therock-ci-external role so it can authenticate via OIDC.
+        fake_run = {
+            "id": 12345,
+            "head_repository": {"full_name": "ROCm/rocm-libraries"},
+        }
+        config = get_artifacts_bucket_config_for_workflow_run(
+            github_repository="ROCm/rocm-libraries", workflow_run=fake_run
+        )
+        self.assertEqual(config.name, "therock-ci-artifacts-external")
+        self.assertEqual(config.iam_role, "therock-ci-external")
+
+    def test_workflow_run_same_repo_keeps_internal_role(self):
+        # A same-repo (non-fork) ROCm/TheRock PR is unaffected by the fork skip
+        # and keeps the internal therock-ci role.
+        fake_run = {
+            "id": 12345,
+            "head_repository": {"full_name": "ROCm/TheRock"},
+        }
+        config = get_artifacts_bucket_config_for_workflow_run(
+            github_repository="ROCm/TheRock", workflow_run=fake_run
+        )
+        self.assertEqual(config.name, "therock-ci-artifacts")
+        self.assertEqual(config.iam_role, "therock-ci")
 
     def test_workflow_run_id_triggers_api_call(self):
         self.mock_api.return_value = {

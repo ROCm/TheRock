@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = [
+    "github_actions/tests",
+]
+python_files = ["*_test.py"]
+addopts = "-ra"

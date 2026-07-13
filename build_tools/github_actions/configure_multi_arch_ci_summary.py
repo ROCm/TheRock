@@ -68,6 +68,14 @@ def format_summary(
     lines.append("")
     _append_test_rocm(lines, outputs)
 
+    lines.append("### build-pytorch")
+    lines.append("")
+    _append_build_pytorch(lines, outputs)
+
+    lines.append("### build-jax")
+    lines.append("")
+    _append_build_jax(lines, outputs)
+
     return "\n".join(lines)
 
 
@@ -75,8 +83,6 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
-    elif ci_inputs.is_pull_request and "ci:run-multi-arch" not in ci_inputs.pr_labels:
-        reason = "PR does not have `ci:run-multi-arch` label"
     else:
         reason = "no CI-relevant files changed"
 
@@ -110,8 +116,9 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
                 f"(not in default presubmit set)"
             )
         elif label.startswith("test_filter:"):
+            filter_type = label.split(":")[1]
             highlights.append(
-                f"Label `{label}`: overrode test level (default would be `quick`)"
+                f"Label `{label}`: overrode test level to `{filter_type}`"
             )
         elif label.startswith("test_runner:"):
             kernel = label.split(":")[1]
@@ -179,22 +186,90 @@ def _append_build_rocm(
             lines.append(f"| {platform} | {families} | `{config.artifact_group}` |")
     lines.append("")
 
-    # Link to log and artifact index pages
+    # Link to log, artifact, and manifest index pages
     lines.extend(
         [
             "## Build outputs",
             "",
-            "Platform | 📋 Logs | 📦 Artifacts",
-            "-- | -- | --",
+            "Platform | 📋 Logs | 📦 Artifacts | 📄 Manifests",
+            "-- | -- | -- | --",
         ]
     )
+    linux_output_root = None
     for platform_name in ["linux", "windows"]:
         output_root = WorkflowOutputRoot.from_workflow_run(
             run_id=ci_inputs.run_id, platform=platform_name
         )
+        if platform_name == "linux":
+            linux_output_root = output_root
         log_url = output_root.log_root_index().https_url
         artifact_url = output_root.artifact_index().https_url
-        lines.append(f"{platform_name.capitalize()} | {log_url} | {artifact_url}")
+        manifest_url = output_root.manifests_index().https_url
+        lines.append(
+            f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
+        )
+    manifest_diff_url = linux_output_root.log_file(
+        "manifest-diff", "index.html"
+    ).https_url
+    lines.append(f"Manifest diff *(if produced)* | {manifest_diff_url} | — | —")
+    lines.append("")
+    lines.append(
+        "> The manifest-diff report compares submodules across the CI commit range. "
+        "Expect no changes when this run does not advance any submodule pointers. "
+        "The report is generated after the setup job completes and the link may be "
+        "unavailable until then; it is not produced on ASAN workflows."
+    )
+
+
+def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
+    lines.append("| Platform | Python | PyTorch ref | Families |")
+    lines.append("|----------|--------|-------------|----------|")
+
+    rows = 0
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
+        for row in config.pytorch_build_matrix:
+            families = ", ".join(
+                f"`{family}`" for family in row["amdgpu_families"].split(";")
+            )
+            lines.append(
+                f"| {platform} | `{row['python_version']}` | "
+                f"`{row['pytorch_git_ref']}` | {families} |"
+            )
+            rows += 1
+
+    if rows == 0:
+        lines.append("| — | — | — | — |")
+    lines.append("")
+
+
+def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
+    lines.append("| Platform | Python | JAX ref | Repository | Mode | GFX arch |")
+    lines.append("|----------|--------|---------|------------|------|----------|")
+
+    rows = 0
+    for platform, config in [
+        ("Linux", outputs.builds.linux),
+        ("Windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
+        for row in config.jax_build_matrix:
+            gfx_arch = row["gfx_arch"] or "—"
+            lines.append(
+                f"| {platform} | `{row['python_version']}` | "
+                f"`{row['jax_ref']}` | `{row['jax_repository']}` | "
+                f"`{row['build_mode']}` | {gfx_arch} |"
+            )
+            rows += 1
+
+    if rows == 0:
+        lines.append("| — | — | — | — | — | — |")
+    lines.append("")
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:

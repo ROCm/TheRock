@@ -82,14 +82,7 @@ def main(cl_args: list[str]):
         "checkout", help="Clone PyTorch Vision locally and checkout"
     )
     add_common(checkout_p)
-    checkout_p.add_argument("--depth", type=int, help="Fetch depth")
-    checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
-    checkout_p.add_argument(
-        "--hipify",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Run hipify",
-    )
+    repo_management.add_checkout_options(checkout_p, default_hipify=True)
     checkout_p.set_defaults(func=repo_management.do_checkout)
 
     hipify_p = sub_p.add_parser("hipify", help="Run HIPIFY on the project")
@@ -104,7 +97,7 @@ def main(cl_args: list[str]):
         has_related_commit,
     ) = repo_management.read_pytorch_rocm_pins(
         args.torch_dir,
-        os="centos",  # Read pins for "centos" on Linux and Windows
+        os="ubuntu",  # Read shared Linux pins on Linux and Windows
         project="torchvision",
         default_origin=DEFAULT_ORIGIN,
         default_hashtag=DEFAULT_HASHTAG,

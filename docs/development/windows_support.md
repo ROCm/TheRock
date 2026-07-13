@@ -3,6 +3,10 @@
 TheRock aims to support as many subprojects as possible on "native" Windows
 (as opposed to WSL 1 or WSL 2) using standard build tools like MSVC.
 
+> [!NOTE]
+> For the WSL-specific ROCDXG CI stage, see
+> [WSL ROCDXG CI Stage](wsl_rocdxg.md).
+
 > [!WARNING]
 > While Windows source builds of TheRock (including PyTorch!) are working for
 > some expert developers, this support is relatively new and is not yet mature.
@@ -50,7 +54,7 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo (hip-tests)](https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests)                              | rocm-systems   | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/rocm-systems/tree/develop/projects/clr)                                                    | rocm-systems   | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |                |           |                                               |
-| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ❌        | Unsupported                                   |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ✅        |                                               |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                   |
 | debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
@@ -60,6 +64,8 @@ mainline, in open source, using MSVC, etc.).
 | profiler            | [rocprofiler-systems](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems)                    | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | comm-libs           | [rccl](https://github.com/ROCm/rocm-systems/tree/develop/projects/rccl)                                                  | rocm-systems   | ❌        | Unsupported                                   |
+|                     |                                                                                                                          |                |           |                                               |
+| storage-libs        | [hipFile](https://github.com/ROCm/rocm-systems/tree/develop/projects/hipfile)                                            | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | media-libs          | [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)                                        | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
 | media-libs          | [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg)                                            | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
@@ -82,10 +88,12 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (BLAS)    | [rocSOLVER](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocsolver)                                      | rocm-libraries | ✅        |                                               |
 | math-libs (BLAS)    | [hipSOLVER](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsolver)                                      | rocm-libraries | ✅        |                                               |
 | math-libs (BLAS)    | [hipBLAS](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas)                                          | rocm-libraries | ✅        |                                               |
+| math-libs           | [rocALUTION](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocalution)                                    | rocm-libraries | ✅        |                                               |
 | math-libs           | [rocWMMA](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma)                                          | rocm-libraries | ✅        |                                               |
+| math-libs           | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
+| math-libs           | [hipTensor](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hiptensor)                                      | rocm-libraries | ✅        |                                               |
 | math-libs           | [libhipcxx](https://github.com/ROCm/libhipcxx)                                                                           | standalone     | ✅        |                                               |
 |                     |                                                                                                                          |                |           |                                               |
-| ml-libs             | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen](https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen)                                            | rocm-libraries | ✅        |                                               |
 | ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/miopen-provider)                     | rocm-libraries | ✅        |                                               |
@@ -102,8 +110,16 @@ These instructions mostly mirror the instructions in the root
 Before diving into the full setup, you can run the environment validation script
 to check that all prerequisites are met:
 
-```powershell
-.\build_tools\validate_windows_install.ps1
+```bash
+powershell.exe .\build_tools\validate_windows_install.ps1
+```
+
+To get correct results you may need to set all Visual Studio specific paths and pre-configured Python's environment (see below), in such case you need to run few commands before:
+
+```bash
+vcvarsall.bat x64
+.venv\Scripts\Activate.bat
+powershell.exe .\build_tools\validate_windows_install.ps1
 ```
 
 The script checks RAM, disk space, long path support, symlink capability, MSVC,
@@ -179,8 +195,8 @@ configuration. It is safe to re-run at any time.
 > Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add
 > Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
-> winget install cmake -v 3.31.0
-> winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
+> winget install cmake
+> winget install ninja-build.ninja ccache python strawberryperl
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 
@@ -190,7 +206,10 @@ If you prefer to install tools manually, you will need:
   (Using either "Visual Studio" or "Build Tools for Visual Studio"),
   including these components:
 
-  - MSVC
+  - MSVC **version 19.43+** (Visual Studio 2022 **17.13+**). Older versions
+    will fail at link time because prebuilt libraries reference STL internals
+    introduced in 19.43.
+    See [Issue#5029](https://github.com/ROCm/TheRock/issues/5029).
   - C++ CMake tools for Windows
   - C++ ATL
   - C++ AddressSanitizer (optional)
@@ -199,8 +218,7 @@ If you prefer to install tools manually, you will need:
 
   - With "Use Git and optional Unix tools from the Windows Command Prompt" as certain build scripts use Bash.
 
-- CMake: https://cmake.org/download/, version < 4.0.0
-  (see [Issue#318](https://github.com/ROCm/TheRock/issues/318))
+- CMake: https://cmake.org/download/
 
 - Ninja: https://ninja-build.org/
 
@@ -279,22 +297,9 @@ options you may want to set.
 
 ```bash
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
-
-# If iterating and wishing to cache, add these:
-#  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-#  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-#  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
 ```
 
-> [!TIP]
-> ccache [does not support](https://github.com/ccache/ccache/issues/1040)
-> MSVC's `/Zi` flag which may be set by default when a project (e.g. LLVM) opts
-> in to
-> [policy CMP0141](https://cmake.org/cmake/help/latest/policy/CMP0141.html).
-> Setting
-> [`-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded`](https://cmake.org/cmake/help/latest/variable/CMAKE_MSVC_DEBUG_INFORMATION_FORMAT.html)
-> instructs CMake to compile with `/Z7` or equivalent, which is supported by
-> ccache.
+If iterating and wishes to use ccache, see [CCache usage on Windows](../../README.md#ccache-usage-on-windows)
 
 > [!TIP]
 > Ensure that MSVC is used by looking for lines like these in the logs:
@@ -310,8 +315,7 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 ### CMake build usage
 
 ```bash
-cmake --build build --target therock-dist
-cmake --build build --target therock-archives
+cmake --build build --target therock-artifacts therock-dist
 ```
 
 This will start building using MSVC. Once the amd-llvm subproject is built,
@@ -326,7 +330,7 @@ outputs.
 #### Building ROCm Python wheels
 
 To build Python wheels, you will need an "artifacts" directory, either from a
-source build of `therock-archives` (see above) or by running the
+source build of `therock-artifacts` (see above) or by running the
 [`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
 artifacts from a CI run.
 

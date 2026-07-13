@@ -52,7 +52,7 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from generate_local_index import generate_flat_index, generate_multiarch_indexes
+from generate_local_index import generate_multiarch_indexes
 from github_actions_api import (
     gha_append_step_summary,
     gha_set_output,
@@ -83,6 +83,18 @@ def _make_output_root(
     return WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
+def detect_family_subdirs(dist_dir: Path) -> list[str]:
+    """Return GPU-family subdirectory names in dist_dir.
+
+    Ignores dot-directories (e.g. ".kpack_staging") which are build staging
+    artifacts, not GPU families. Their presence must not flip a multi-arch
+    upload into the legacy per-family layout/summary.
+    """
+    return sorted(
+        d.name for d in dist_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
+    )
+
+
 def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = False):
     """Generates an index.html file listing packages for pip --find-links.
 
@@ -96,13 +108,19 @@ def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = Fals
         return
 
     if multiarch:
-        has_subdirs = any(d.is_dir() for d in dist_dir.iterdir())
+        has_subdirs = bool(detect_family_subdirs(dist_dir))
         if has_subdirs:
             log("[INFO] Multi-arch legacy mode: generating per-family indexes")
             generate_multiarch_indexes(dist_dir)
         else:
-            log("[INFO] kpack-split flat mode: generating single top-level index")
-            generate_flat_index(dist_dir)
+            # kpack-split flat mode: multiple jobs may append to the same
+            # prefix (ROCm wheels + pytorch wheels). therock-ci-artifacts
+            # generates index.html server-side, so a client-side flat index
+            # would just race with (and briefly shadow) the server view.
+            log(
+                "[INFO] kpack-split flat mode: skipping client-side index "
+                "generation (server-side indexing handles it)"
+            )
     else:
         # Single-arch mode: use existing indexer.py for top-level
         log("[INFO] Single-arch mode: using indexer.py")
@@ -213,15 +231,17 @@ def run(args: argparse.Namespace):
     if not packages_dir.is_dir():
         raise FileNotFoundError(f"Packages root directory not found: {packages_dir}")
 
-    dist_dir = packages_dir / "dist"
-    if not dist_dir.is_dir():
-        raise FileNotFoundError(f"Packages dist/ subdirectory not found: {dist_dir}")
+    # Convention: build_python_packages.py writes into <packages_dir>/dist/,
+    # but build_prod_wheels.py (pytorch) writes directly into its output dir.
+    # Use the dist/ subdirectory when it exists, otherwise use the input dir.
+    dist_subdir = packages_dir / "dist"
+    dist_dir = dist_subdir if dist_subdir.is_dir() else packages_dir
 
-    log(f"[INFO] Packages directory: {packages_dir}")
-    log(f"[INFO] Dist subdirectory : {dist_dir}")
-    log(f"[INFO] Artifact group    : {args.artifact_group}")
-    log(f"[INFO] Run ID            : {args.run_id}")
-    log(f"[INFO] Platform          : {PLATFORM}")
+    log(f"[INFO] Packages directory  : {packages_dir}")
+    log(f"[INFO] Dist [sub]directory : {dist_dir}")
+    log(f"[INFO] Artifact group      : {args.artifact_group}")
+    log(f"[INFO] Run ID              : {args.run_id}")
+    log(f"[INFO] Platform            : {PLATFORM}")
     if args.dry_run:
         log(f"[INFO] Mode              : DRY RUN")
     elif args.output_dir:
@@ -252,7 +272,9 @@ def run(args: argparse.Namespace):
     if not args.output_dir:
         if args.multiarch:
             # Detect flat (kpack-split) vs legacy per-family layout from dist/.
-            family_subdirs = sorted(d.name for d in dist_dir.iterdir() if d.is_dir())
+            # Dot-directories (e.g. .kpack_staging) are staging artifacts, not
+            # GPU families, and must not trigger the per-family layout.
+            family_subdirs = detect_family_subdirs(dist_dir)
             if family_subdirs:
                 # Legacy per-family: return base URL; downstream appends /{family}/index.html
                 index_url = packages_loc.https_url

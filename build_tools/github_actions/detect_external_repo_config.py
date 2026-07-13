@@ -25,11 +25,12 @@ Examples:
 Output (GitHub Actions format):
     cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR
     submodule_path=rocm-libraries
-    fetch_exclusion=--no-include-rocm-libraries
+    fetch_sources_args=--skip-submodules rocm-libraries
 """
 
 import argparse
 import importlib.util
+import json
 import os
 import sys
 from functools import lru_cache
@@ -44,17 +45,22 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
     "rocm-libraries": {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "submodule_path": "rocm-libraries",
-        "fetch_exclusion": "--no-include-rocm-libraries",
+        "skip_submodules": ["rocm-libraries"],
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
         "submodule_path": "rocm-systems",
-        "fetch_exclusion": "--no-include-rocm-systems",
+        "skip_submodules": ["rocm-systems"],
+        "dvc_projects": ["external-rocm-systems"],
+    },
+    "rocgdb": {
+        "cmake_source_var": "THEROCK_ROCGDB_SOURCE_DIR",
+        "submodule_path": "debug-tools/rocgdb/source",
+        "skip_submodules": ["rocgdb"],
     },
     # Future repos can be added here:
     # "llvm-project": {...},
     # "hipify": {...},
-    # "rocgdb": {...},
     # "libhipcxx": {...},
 }
 
@@ -326,7 +332,7 @@ def main(argv=None):
             "Output Format (GitHub Actions):\n"
             "  cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR\n"
             "  submodule_path=rocm-libraries\n"
-            "  fetch_exclusion=--no-include-rocm-libraries"
+            "  fetch_sources_args=--skip-submodules rocm-libraries"
         ),
         epilog=(
             "Examples:\n"
@@ -345,13 +351,14 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--repository",
-        help="Repository name (e.g., rocm-libraries, rocm-systems). Required.",
+        "--external-repo-json",
+        type=str,
+        help="JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields.",
     )
     parser.add_argument(
-        "--workspace",
-        type=str,
-        help="GitHub workspace path for formatting CMake options",
+        "--repository",
+        help="Repository name (e.g., rocm-libraries, rocm-systems). "
+        "Alternative to --external-repo-json for direct invocation.",
     )
     parser.add_argument(
         "--list",
@@ -367,9 +374,32 @@ def main(argv=None):
             print(f"  - {repo_name}")
         return 0
 
+    # Parse external repo JSON if provided, extract repository name
+    source_repository = None
+    source_ref = ""
+    if args.external_repo_json:
+        try:
+            external_repo = json.loads(args.external_repo_json)
+            source_repository = external_repo.get("repository", "")
+            source_ref = external_repo.get("ref", "")
+            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries").
+            # Lowercase so REPO_CONFIGS lookup is case-insensitive (e.g. "ROCgdb" -> "rocgdb").
+            if "/" in source_repository:
+                repo_name = source_repository.split("/")[-1].lower()
+            else:
+                repo_name = source_repository.lower()
+            args.repository = repo_name
+            print(
+                f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
+                file=sys.stderr,
+            )
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON in --external-repo-json: {e}", file=sys.stderr)
+            return 1
+
     if not args.repository:
         print(
-            "ERROR: --repository is required",
+            "ERROR: --repository or --external-repo-json is required",
             file=sys.stderr,
         )
         return 1
@@ -381,17 +411,70 @@ def main(argv=None):
         print(f"Detected repository: {args.repository}", file=sys.stderr)
         print(f"Configuration: {config}", file=sys.stderr)
 
-        # Format the full CMake option if workspace path provided
-        if args.workspace:
-            workspace_path = Path(args.workspace)
-            if not workspace_path.is_absolute():
-                _log_warning("Workspace path is not absolute, using as-is")
-            cmake_var = config["cmake_source_var"]
-            config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
+        # checkout_path is relative (for actions/checkout path: parameter)
+        # Use "external-" prefix to avoid collisions with submodule paths
+        checkout_path = f"external-{args.repository}"
+
+        # Generate fetch_sources_args from skip_submodules and dvc_projects
+        fetch_args_parts = []
+        if "skip_submodules" in config and config["skip_submodules"]:
+            skip_args = " ".join(config["skip_submodules"])
+            fetch_args_parts.append(f"--skip-submodules {skip_args}")
+        if "dvc_projects" in config and config["dvc_projects"]:
+            dvc_args = " ".join(config["dvc_projects"])
+            fetch_args_parts.append(f"--dvc-projects {dvc_args}")
+
+        if fetch_args_parts:
+            config["fetch_sources_args"] = " ".join(fetch_args_parts)
             print(
-                f"Generated CMake option: {config['extra_cmake_options']}",
+                f"Generated fetch_sources_args: {config['fetch_sources_args']}",
                 file=sys.stderr,
             )
+
+        # Build config_json with all fields needed by workflows
+        final_source_repo = source_repository or f"ROCm/{args.repository}"
+        source_package = (
+            config["cmake_source_var"]
+            .replace("THEROCK_", "")
+            .replace("_SOURCE_DIR", "")
+        )
+
+        # Extract caller-supplied fields from external_repo JSON if provided
+        projects = ""
+        family_overrides = {}
+        extra_cmake_options = ""
+
+        if args.external_repo_json:
+            try:
+                external_repo = json.loads(args.external_repo_json)
+                projects = external_repo.get("projects", "")
+
+                # family_overrides allows external repos to specify per-family config
+                # (e.g., test runners, test_labels_for_family) for their CI runs only
+                family_overrides = external_repo.get("family_overrides", {})
+
+                extra_cmake_options = external_repo.get("extra_cmake_options", "")
+            except json.JSONDecodeError as e:
+                print(
+                    f"Warning: failed to parse external_repo_json: {e}",
+                    file=sys.stderr,
+                )
+
+        config_json = {
+            "repository": final_source_repo,
+            "ref": source_ref,
+            "checkout_path": checkout_path,
+            "source_package": source_package,
+            "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "extra_cmake_options": extra_cmake_options,
+            "projects": projects,
+            "family_overrides": family_overrides,
+        }
+        config["config_json"] = json.dumps(config_json)
+        print(
+            f"Generated config_json:\n{json.dumps(config_json, indent=2)}",
+            file=sys.stderr,
+        )
 
         output_github_actions_vars(config)
         return 0
