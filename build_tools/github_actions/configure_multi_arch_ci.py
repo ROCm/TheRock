@@ -1451,9 +1451,18 @@ def main():
         print()
         git_context = GitContext.empty()
     else:
-        # 'workflow_dispatch' and 'schedule' events don't have as natural
-        # a "prior commit" to compare against.
-        git_context = GitContext.empty()
+        # Allow test-only override for bump analysis.
+        override = os.environ.get("THEROCK_CHANGED_PATHS", "").strip()
+        if override:
+            changed_files = [p.strip() for p in override.split(",") if p.strip()]
+            git_context = GitContext(
+                changed_files=changed_files,
+                submodule_paths=list(get_git_submodule_paths() or []),
+            )
+        else:
+            # 'workflow_dispatch' and 'schedule' events don't have as natural
+            # a "prior commit" to compare against.
+            git_context = GitContext.empty()
 
     outputs = configure(ci_inputs, git_context)
     write_outputs(ci_inputs=ci_inputs, outputs=outputs)
