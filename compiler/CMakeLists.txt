@@ -133,6 +133,7 @@ if(THEROCK_ENABLE_COMPILER)
       ${_extra_llvm_cmake_args}
     BUILD_DEPS
       rocm-cmake
+      ${THEROCK_BUNDLED_HWLOC}
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_ZLIB}
       ${THEROCK_BUNDLED_ZSTD}
