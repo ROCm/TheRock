@@ -126,7 +126,12 @@ jobs:
       - name: torchaudio GPU smoke test
         timeout-minutes: 10
         run: |
-          python .github/scripts/torchaudio_gpu_smoke_test.py
+          python .github/scripts/torchaudio_gpu_smoke_test.py; rc=$?
+          # torch/ROCm on Windows can leave a lingering child python process that
+          # blocks GitHub Actions step finalization even after the main process
+          # exits; clean it up so the step can end on its real result.
+          taskkill //F //IM python.exe //T >/dev/null 2>&1 || true
+          exit $rc
 
       - name: Checkout torchaudio test sources
         run: |
