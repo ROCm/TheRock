@@ -134,12 +134,14 @@ EXCLUDED_TEST_MODULES: list[str] = [
     # skip is needed. rocSHMEM device bitcode librocshmem_device_gfx942.bc IS now
     # packaged, but the runtime backend is still not wired, hence the graceful skip.)
     #
-    # (distributed/test_symmetric_memory was un-excluded on b2b98e00: on the 1-GPU CI
-    # runner every multi-GPU SymmMem test self-skips via @skip_if_lt_x_gpu(4) / "cuda
-    # p2p access is not available" — verified faithfully at ROCR_VISIBLE_DEVICES=0:
-    # 2 passed, 117 skipped, 0 failed. The single failure seen locally
-    # (SymmMemCollectiveTest::test_two_shot_all_reduce) only fires with >=4 visible
-    # GPUs, which never happens on the 1-GPU lane, so no -k skip is needed.)
+    # (distributed/test_symmetric_memory was un-excluded on b2b98e00: the module
+    # collects and runs; most multi-GPU SymmMem tests self-skip via
+    # @skip_if_lt_x_gpu(N)/multicast gating. NB: the "1gpu" runner NAME is
+    # misleading — the distributed lane actually exposes 8 GPUs ("Testing class ...
+    # on 8 cuda" in run 29223117302), so @skip_if_lt_x_gpu(4) does NOT gate out
+    # SymmMemCollectiveTest::test_two_shot_all_reduce; it runs and hangs in
+    # tearDownClass (>900s timeout). That single test now has a per-test -k skip in
+    # skip_tests/pytorch_2.14.py.)
     #
     # (inductor/test_aot_inductor was un-excluded on b2b98e00: the CDNA5OrLater
     # ImportError collection crash is RESOLVED — the module now collects and runs

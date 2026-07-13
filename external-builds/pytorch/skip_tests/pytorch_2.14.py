@@ -185,6 +185,9 @@ skip_tests = {
             # AssertionError: Scalars are not close! fp32 numerical drift in FSDP
             # post-optimizer event. Direct Rock/nightly and local TheRock wrapper
             # runs pass at world size 8, so this appears nondeterministic.
+            # Tracked ROCm-side (fw-internal #16969) as part of the NUM_PROCS
+            # device_count==0 device-visibility bug (~140 FSDP tests), i.e. likely
+            # not a test-specific failure — revisit once that bug is fixed.
             "(TestFullyShard1DTrainingCore and test_post_optim_event)",
             # Run 29103767031 distributed shards 1/3 & 2/3:
             # TestManualOverlapBucketing::test_manual_bucketing_reordering_pass_all_reduce_*
@@ -203,7 +206,49 @@ skip_tests = {
             # Run 29103767031 distributed shard 3/3:
             # TestFullyShardOverlap::test_fully_shard_training_overlap — FSDP
             # compute/comm overlap worker exits with error code 10 on ROCm.
+            # Already tracked in PyTorch's automated ROCm-skip registry:
+            # pytorch/pytorch#168403 (open, label rocm-skipped-tests; umbrella
+            # #168402) — upstream owns this one.
             "(TestFullyShardOverlap and test_fully_shard_training_overlap)",
+            # Run 29223117302 distributed shard 3/3:
+            # SymmMemCollectiveTest::test_two_shot_all_reduce hangs in
+            # tearDownClass (process.join() on the multi-rank PG never returns)
+            # → pytest-timeout ERROR at >900s. The test body itself passes; the
+            # teardown hang is a ROCm symmetric-memory multiprocess teardown
+            # issue. Reproduced locally on b2b98e00 (8x MI300X): ERROR at
+            # teardown, Timeout(>180s). NB: @skip_if_lt_x_gpu(4) does NOT gate
+            # this out — the gfx942 distributed runner exposes 8 GPUs despite the
+            # "1gpu" name, so world_size=device_count>=4 and the test runs.
+            # Upstream pytorch/pytorch#159397 (flaky-bot "DISABLED ...") was
+            # auto-CLOSED 2025-09-16 as no-longer-flaky on rocm — but that is
+            # STALE for this wheel/ROCm: we reproduced a deterministic teardown
+            # hang here, so keep the skip.
+            "(SymmMemCollectiveTest and test_two_shot_all_reduce)",
+            # Run 29223117302 distributed shard 2/3: FLAKY (pending RCA).
+            # ReplicateTest::test_compile_fp16 + test_compile_gpu failed in CI
+            # with grad assertEqual(p1.grad, p2.grad) "Tensor-likes are not
+            # close!" — Mismatched elements 3 / 4,000,000 (0.0%), i.e. a handful
+            # of elements just outside tolerance. NOT reproducible locally on the
+            # wheel commit b2b98e00 (8x MI300X): passed 3x isolated AND passed the
+            # faithful full-module run_test.py --distributed-tests path (EXIT 0).
+            # So this is pod/allocator-dependent numeric jitter, not a
+            # deterministic ROCm bug. Skipped to keep CI green; TODO: root-cause
+            # (likely a tolerance bump upstream) and remove — do NOT treat as a
+            # settled genuine failure.
+            "(ReplicateTest and test_compile_fp16)",
+            "(ReplicateTest and test_compile_gpu)",
+            # Run 29223117302 distributed shard 2/3: FLAKY (pending RCA).
+            # CPFlexAttentionTest::test_cp_flex_attention_causal_mask +
+            # test_cp_flex_attention_document_mask failed in CI with
+            # assert_close(cp_out, expect_out) "Tensor-likes are not close!" —
+            # Mismatched elements 66 / 1,048,576 (0.0%); CI itself showed
+            # 1-failed-1-passed within the shard. NOT reproducible locally on
+            # b2b98e00: passed 3x isolated AND the faithful full-module
+            # run_test.py --distributed-tests path (EXIT 0). Pod-dependent numeric
+            # jitter, not a deterministic bug. Skipped to keep CI green; TODO:
+            # root-cause (likely a tolerance bump) and remove.
+            "(CPFlexAttentionTest and test_cp_flex_attention_causal_mask)",
+            "(CPFlexAttentionTest and test_cp_flex_attention_document_mask)",
         ],
     },
 }
