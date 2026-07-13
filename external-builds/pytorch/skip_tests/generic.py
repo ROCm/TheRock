@@ -8,6 +8,28 @@ skip_tests = {
             "test_autocast_torch_fp16",
         }
     },
+    # Tests that require the ROCm SDK development package (rocm[devel], i.e. the
+    # rocm_sdk_devel wheel) to be installed. They JIT-compile C++/HIP extensions
+    # via torch.utils.cpp_extension, which needs the ROCm headers (e.g.
+    # hipblas/hipblas.h) and compiler that only ship in the devel package.
+    #
+    # This section is applied ONLY when the devel package is not available in the
+    # environment (see is_devel_package_available() in create_skip_tests.py).
+    # When rocm[devel] is installed (e.g. the full test suite, and the core
+    # suite once it installs rocm[devel]), these tests are run instead of
+    # skipped. Without devel they fail with errors like:
+    #   RuntimeError: Error building extension 'dummy_allocator'
+    #   fatal error: hipblas/hipblas.h: No such file or directory
+    "requires_devel": {
+        "cuda": [
+            # See https://github.com/pytorch/pytorch/pull/173330
+            "test_mempool_empty_cache_inactive",
+            "test_mempool_with_allocator",
+            "test_tensor_delete_after_allocator_delete",
+            "test_deleted_mempool_not_used_on_oom",
+            "test_mempool_expandable",
+        ],
+    },
     "common": {
         "autograd": [
             # Stream comparison mismatch on ROCm (non-default stream vs default stream)
@@ -16,10 +38,6 @@ skip_tests = {
             "test_side_stream_backward_overlap",
         ],
         "cuda": [
-            # RuntimeError: Error building extension 'dummy_allocator'
-            # Skipped across all PyTorch versions; the hipblas.h include error
-            # persists in the ROCm SDK environment.
-            "test_mempool_empty_cache_inactive",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",
@@ -37,22 +55,6 @@ skip_tests = {
             # 'num_host_free': 0, 'reserved_bytes.allocated': 0, 'reserved_bytes.current': 0, 'reserved_bytes.freed': 0,
             # 'reserved_bytes.peak': 0, 'segment.allocated': 0, 'segment.current': 0, 'segment.freed': 0, 'segment.peak': 0})
             "test_host_memory_stats",
-            # THIS IS AN OLD ERROR
-            # In file included from /home/tester/.cache/torch_extensions/py312_cpu/dummy_allocator/main_hip.cpp:5:
-            # /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/include/ATen/hip/Exceptions.h:4:10: fatal error: hipblas/hipblas.h: No such file or directory
-            #     4 | #include <hipblas/hipblas.h>
-            #     |          ^~~~~~~~~~~~~~~~~~~
-            # compilation terminated.
-            # NEW ERROR
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_mempool_with_allocator",
-            # RuntimeError: Error building extension 'dummy_allocator_v3'
-            "test_tensor_delete_after_allocator_delete",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_deleted_mempool_not_used_on_oom",
-            # Same hipblas.h compilation error as test_mempool_with_allocator.
-            # See https://github.com/pytorch/pytorch/pull/173330
-            "test_mempool_expandable",
             # Change detector test (Cublaslt vs Cublas depending on gcn_arch and torch version)
             # Always skip as this test is very basic and needs manual intervention for new architectures
             # See
