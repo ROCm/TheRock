@@ -183,7 +183,11 @@ jobs:
           ROCM_KPACK_DEBUG: "1"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
-          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
+          # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),
+          # whose Windows memory path OOMs some tests (e.g. rocsparse bsr*0 graph_test).
+          # Default unset components to the platform backend, mirroring the runtime fix
+          # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
+          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
           RETRY_THIS_STEP: "true"
           RETRY_COUNT: "1"
           RETRY_DELAY: "7"
