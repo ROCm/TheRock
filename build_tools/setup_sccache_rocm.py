@@ -43,6 +43,7 @@ Prerequisites:
 """
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -99,6 +100,52 @@ def sccache_build_env(sccache_path: Path, hip_launcher: bool = True) -> dict[str
     return env
 
 
+def cuid_launcher_path() -> Path:
+    """Absolute path to the per-TU ``-cuid`` injecting launcher (sibling script)."""
+    return Path(__file__).parent.resolve() / "cuid_launcher.py"
+
+
+def resolve_sccache(explicit_path: Path | None, gha: bool) -> Path | None:
+    """Locate and validate a usable sccache binary.
+
+    A missing or non-functional sccache is a config problem that would otherwise
+    silently degrade the build to "no cache". Under ``--gha`` we surface it as a
+    GitHub Actions ``::warning::`` (visible in the run summary) and return None so
+    the build proceeds uncached; locally it is a hard error so the developer
+    notices immediately. Flip the ``::warning::`` to ``::error::`` + a non-zero
+    exit if a broken cache config should fail CI instead.
+    """
+
+    def _unusable(message: str) -> None:
+        if gha:
+            print(
+                f"::warning::sccache unusable: {message}. "
+                "Building WITHOUT compiler cache."
+            )
+            return None
+        raise RuntimeError(message)
+
+    if explicit_path is not None:
+        if not explicit_path.exists():
+            return _unusable(f"specified path not found: {explicit_path}")
+        sccache_path = explicit_path
+    else:
+        sccache_path = find_sccache()
+        if not sccache_path:
+            return _unusable(
+                "not found (install: https://github.com/mozilla/sccache#installation; "
+                "for CI it ships in the manylinux build image)"
+            )
+
+    try:
+        subprocess.run(
+            [str(sccache_path), "--version"], capture_output=True, text=True, check=True
+        )
+    except (subprocess.CalledProcessError, OSError) as e:
+        return _unusable(f"{sccache_path} failed `--version`: {e}")
+    return sccache_path
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Locate sccache and print the env to configure a ROCm HIP build."
@@ -113,35 +160,58 @@ def main():
         action="store_true",
         help="Omit HIP_CLANG_LAUNCHER (host C/C++ caching only)",
     )
+    parser.add_argument(
+        "--gha",
+        action="store_true",
+        help=(
+            "Write HIP_CLANG_LAUNCHER (+ THEROCK_SCCACHE) to $GITHUB_ENV for use in "
+            "subsequent steps. CMAKE_C/CXX_COMPILER_LAUNCHER are intentionally excluded "
+            "— setting them globally breaks stages that use custom compiler wrappers "
+            "(e.g. profiler-apps). Those launchers are passed via cmake -D args in the "
+            "Configure step instead."
+        ),
+    )
+    parser.add_argument(
+        "--no-cuid-launcher",
+        action="store_true",
+        help=(
+            "Point HIP_CLANG_LAUNCHER straight at sccache instead of the cuid_launcher.py "
+            "wrapper. The wrapper injects a per-TU -cuid so RDC objects don't collide on "
+            "__hip_cuid_ under caching (ROCm/TheRock#748); use this to opt out."
+        ),
+    )
     args = parser.parse_args()
 
-    if args.sccache_path:
-        sccache_path = args.sccache_path
-        if not sccache_path.exists():
-            raise RuntimeError(f"Specified sccache not found: {sccache_path}")
-    else:
-        sccache_path = find_sccache()
-        if not sccache_path:
-            raise RuntimeError(
-                "sccache not found.\n"
-                "Install: https://github.com/mozilla/sccache#installation\n"
-                "For CI, sccache is pre-installed in the manylinux build image:\n"
-                "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
-            )
-
+    sccache_path = resolve_sccache(args.sccache_path, args.gha)
+    if sccache_path is None:
+        # --gha already emitted a ::warning::; proceed without configuring a cache.
+        return
     print(f"Using sccache: {sccache_path}")
-    try:
-        result = subprocess.run(
-            [str(sccache_path), "--version"], capture_output=True, text=True, check=True
-        )
-        print(f"sccache version: {result.stdout.strip()}")
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"sccache verification failed: {e}") from e
 
     env = sccache_build_env(sccache_path, hip_launcher=not args.no_hip_launcher)
-    print("Configure a ROCm build with:")
-    for key, value in env.items():
-        print(f"  export {key}={value}")
+    if args.gha:
+        # Only HIP_CLANG_LAUNCHER (+ THEROCK_SCCACHE) is written to $GITHUB_ENV;
+        # see the --gha help for why the CMAKE launchers are excluded here.
+        gha_vars: dict[str, str] = {}
+        if "HIP_CLANG_LAUNCHER" in env:
+            if args.no_cuid_launcher:
+                gha_vars["HIP_CLANG_LAUNCHER"] = str(sccache_path)
+            else:
+                # Route hipcc's device compiles through the cuid launcher, which
+                # injects a per-TU -cuid ahead of sccache (ROCm/TheRock#748). The
+                # wrapper locates the real sccache via THEROCK_SCCACHE.
+                gha_vars["THEROCK_SCCACHE"] = str(sccache_path)
+                gha_vars["HIP_CLANG_LAUNCHER"] = str(cuid_launcher_path())
+        github_env = Path(os.environ["GITHUB_ENV"])
+        with github_env.open("a") as f:
+            for key, value in gha_vars.items():
+                f.write(f"{key}={value}\n")
+        for key, value in gha_vars.items():
+            print(f"Wrote {key}={value} to $GITHUB_ENV")
+    else:
+        print("Configure a ROCm build with:")
+        for key, value in env.items():
+            print(f"  export {key}={value}")
 
 
 if __name__ == "__main__":

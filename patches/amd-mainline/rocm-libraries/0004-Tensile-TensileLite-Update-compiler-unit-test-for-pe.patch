@@ -1,0 +1,45 @@
+From f181dbf47fff0028b28a4980c08fca12169c3829 Mon Sep 17 00:00:00 2001
+From: subodh-dubey-amd <subodh-dubey-amd@users.noreply.github.com>
+Date: Sun, 12 Jul 2026 17:19:25 +0000
+Subject: [PATCH] [Tensile/TensileLite] Update compiler unit test for per-arch
+ compilation
+
+The per-arch compilation change (0002) makes Compiler.__call__ emit one
+invocation per architecture (each a single source -> single output), so the
+characterization test must expect one call per arch instead of a single call
+carrying every --offload-arch.
+---
+ .../test_toolchain_component_char.py            | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/ToolchainComponent/test_toolchain_component_char.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/ToolchainComponent/test_toolchain_component_char.py
+index cdc3ae8..f00e241 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/ToolchainComponent/test_toolchain_component_char.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/characterization/ToolchainComponent/test_toolchain_component_char.py
+@@ -168,11 +168,18 @@ def test_compiler_windows_branch(fixed_version, monkeypatch):
+ def test_compiler_call_builds_arch_flags(fixed_version, captured_invoke):
+     comp = C.Compiler(Path("/x/amdclang++"), build_id_kind="sha1")
+     comp("/inc", ["gfx942", "gfx90a"], "k.cpp", "k.o")
+-    args = captured_invoke[0]
+-    assert "--offload-arch=gfx942" in args
+-    assert "--offload-arch=gfx90a" in args
+-    assert args[-4:] == ["k.cpp", "-c", "-o", "k.o"]
+-    assert "/inc" in args
++    # Multiple arches are compiled one at a time so each invocation is a single
++    # source -> single output (sccache-cacheable): one call per arch, each with
++    # a single --offload-arch and a per-arch output object.
++    assert len(captured_invoke) == 2
++    first, second = captured_invoke
++    assert "--offload-arch=gfx942" in first
++    assert "--offload-arch=gfx90a" not in first
++    assert first[-4:] == ["k.cpp", "-c", "-o", "k.gfx942.o"]
++    assert "--offload-arch=gfx90a" in second
++    assert "--offload-arch=gfx942" not in second
++    assert second[-4:] == ["k.cpp", "-c", "-o", "k.gfx90a.o"]
++    assert "/inc" in first and "/inc" in second
+ 
+ 
+ # ---------------------------------------------------------------------------
+-- 
+2.43.0
+
