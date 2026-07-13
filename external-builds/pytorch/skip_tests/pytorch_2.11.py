@@ -51,9 +51,6 @@ skip_tests = {
             # after a worker dies (preceded by threaded-PG 'ThreadLocalWorld has
             # no attribute comms'). Proof: proofs/f1_replicate_device_id_multiproc_hang_stack.txt
             "test_replicate_device_id",
-            # TestMultiProc - process join timeout (~300s). Order-dependent;
-            # self-heals on rerun in a fresh process (same isolation family).
-            "test_get_pg_attr",
             # TestFullyShard1DTrainingCore - Scalars not close by ~1.72e-5 (allowed
             # 1e-5) at world_size=8. Benign fp reduction-order drift; NOT
             # reproducible locally (14/14 pass). Sibling class caps world_size to 2
@@ -67,15 +64,6 @@ skip_tests = {
             # runs last will hit the same teardown deadlock. ROCm ticket:
             # proofs/ROCM_TICKET_rccl_symm_mem_teardown_deadlock.md
             "test_two_shot_all_reduce",
-            # TestParityWithDDPCUDA - Scalars not close by ~0.136 (6% rel) on the
-            # CPU-offload (offload_true) + NO_SHARD path. Run-order bisect done
-            # (FIXES_FOR_triage_skips_2.11_0626.md): global-state pollution
-            # DISPROVEN - the exact CI shard order does not reproduce it (target
-            # passed ~10+ times: alone, in-class predecessors, all TestHooksCUDA,
-            # and the exact CI prefix). Reclassified as a rare intermittent flake,
-            # likely a CPU-offload copy-stream sync race; self-heals on rerun.
-            "test_delayed_optim_step_offload_true_no_shard_cuda",
-            "test_delayed_reduce_scatter_offload_true_no_shard_cuda",
         ],
     },
     "gfx942": {
