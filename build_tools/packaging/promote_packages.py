@@ -4,9 +4,13 @@
 
 """Promotes / repackages ROCm and PyTorch Python packages.
 
-This script transforms the version segment of Python wheels (.whl) and source
-distributions (.tar.gz) and optionally restricts which gfx target architectures
-are referenced by the package metadata.
+This script promotes the version of two kinds of artifact:
+  - Python wheels (.whl) and the `rocm` source distribution (`rocm-<ver>.tar.gz`),
+    whose internal version metadata is rewritten in place, and
+  - standalone `therock-dist-*.tar.gz` distribution tarballs, which are renamed
+    to the promoted version (their contents are NOT opened or modified).
+It optionally also restricts which gfx target architectures are referenced by the
+package metadata.
 
 Promotion is parameterised by:
   --src-version-type   prerelease type to look for in source: 'rc' or 'a'
@@ -38,7 +42,7 @@ PREREQUISITES:
 
 SIDE EFFECTS:
   - Creates NEW promoted package files side-by-side with the original files
-  - By default, DOES NOT delete original files (safe to run with no --delete flag)
+  - By default, DOES NOT delete original files (safe to run without --delete-old-on-success)
   - With --delete-old-on-success flag, removes original files after promotion
   - Multi-arch per-gfx wheels for archs NOT in --multi-arch-targets are always skipped
     (and deleted with --delete-old-on-success), since they are not retained
@@ -64,7 +68,8 @@ TYPICAL USAGE:
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --skip-version-promotion --multi-arch-targets=gfx1201,gfx1010,gfx11
 
 TESTING:
-  python ./build_tools/packaging/tests/promote_packages_test.py
+  # Point the on-demand test at a directory of already-downloaded RC packages:
+  python ./build_tools/packaging/tests/promote_packages_test.py --input-dir ./rc_packages
 """
 
 import argparse

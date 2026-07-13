@@ -4,80 +4,74 @@
 
 """Manual / on-demand test suite for the promote_packages promotion script.
 
-This exercises promote_packages.py end-to-end against **live multi-arch**
-release-candidate (RC) artifacts published to
-https://rocm.prereleases.amd.com/. Promotion strips the RC suffix from version
-strings (e.g. 7.14.0rc1 -> 7.14.0) and, for multi-arch indices, prunes the
-per-gfx device wheels down to a requested set of architectures.
+This exercises promote_packages.py end-to-end against a **local directory of
+already-downloaded** release-candidate (RC) artifacts. It does NOT fetch
+anything over the network: point it at a directory that already contains the
+wheels / sdist / therock-dist tarballs for one RC (e.g. produced by
+download_python_packages.py, or copied by hand) and it will run every
+promotion scenario over that set.
+
+Promotion strips the RC suffix from version strings (e.g. 7.14.0rc1 -> 7.14.0)
+and, for multi-arch inputs, prunes the per-gfx device wheels down to a subset of
+architectures.
 
 It is intentionally a standalone, on-demand script (run by a human before a
-release), NOT a pytest/CI target: it pulls large artifacts over the network
-from the prerelease index and builds virtualenvs, which is too heavy and too
-coupled to live infrastructure for per-PR CI. Keep it runnable by hand.
+release), NOT a pytest/CI target: it installs the wheels into throwaway
+virtualenvs, which is too heavy for per-PR CI. Keep it runnable by hand.
 
 WHAT IS VALIDATED
   1. Full promotion of the arch-agnostic aggregator packages
      (rocm, rocm_sdk_core, rocm_sdk_devel, rocm_sdk_libraries, torch,
      torchvision, torchaudio, triton) succeeds and installs.
-  2. Multi-arch promotion with an explicit keep-list keeps only the requested
-     per-gfx device wheels (amd_torch_device_gfx*, amd_torchvision_device_gfx*,
-     rocm_sdk_device_gfx*) and deletes the rest, while still stripping the RC
-     suffix everywhere.
+  2. Multi-arch promotion with a keep-list keeps only ONE arch's per-gfx device
+     wheels (amd_torch_device_gfx*, amd_torchvision_device_gfx*,
+     rocm_sdk_device_gfx*) and prunes the rest, while still stripping the RC
+     suffix everywhere. The kept arch and the pruned arch(es) are auto-detected
+     from whatever device wheels are present.
   3. JAX wheels (jax_rocm7_plugin, jax_rocm7_pjrt) promote correctly: the RC
      suffix is stripped from the `+rocm<ver>` local segment and the wheels stay
      structurally installable (installed --no-deps, since jax/jaxlib live on
      PyPI). Note jaxlib itself is NOT published multi-arch (see ROCm/TheRock#6158).
   4. Partial promotions (only ROCm, or only torch) do NOT produce a coherent,
      installable, single-version set (expected to FAIL).
-  5. Promoted filenames drop the RC suffix and every wheel reports the final
+  5. Every therock-dist tarball present (per-gfx AND multiarch) is promoted by
+     its filename rc->final rename (promote_targz_tarball never opens the
+     archive, so this is exercised with cheap stand-ins).
+  6. Promoted filenames drop the RC suffix and every wheel reports the final
      version.
 
-The expected promoted filenames are DERIVED from whatever was actually fetched
-(by replacing the RC version string with the final version), so the test does
-not carry brittle hardcoded per-arch package lists that rot every release.
+The RC version, the target platform, and the set of gfx architectures are all
+DERIVED from the files in the input directory (the RC token is read from the
+rocm sdist / rocm_sdk_core wheel; the final version is that with the prerelease
+segment stripped). Expected promoted filenames are derived by applying the same
+rc->final rename to whatever was found, so there are no brittle hardcoded lists.
+
+triton is handled specially: torch pins one exact triton build
+(`Requires-Dist: triton==<ver>`) but a download can contain several triton
+builds, so the pinned one MUST be present in the directory (this is asserted)
+and any non-pinned triton wheels are excluded from the staged set.
 
 PREREQUISITES
   pip install -r ./build_tools/packaging/requirements.txt
 
-The RC version is pinned explicitly (--version is required) so a run is
-deterministic for the release branch under test rather than tracking whatever
-is newest in the index that day.
-
 USAGE
-  # Pin the RC for the release branch under test:
-  python ./build_tools/packaging/tests/promote_packages_test.py --version 7.14.0rc1
+  # Promote + verify everything already downloaded into ./rc_packages:
+  python ./build_tools/packaging/tests/promote_packages_test.py --input-dir ./rc_packages
 
-  # Cache downloads between runs:
+  # Force a platform (otherwise inferred from the wheel tags present):
   python ./build_tools/packaging/tests/promote_packages_test.py \
-      --version 7.14.0rc1 --cache-dir /tmp/promote_cache
-
-  # Choose which gfx arch(es) to keep for the multi-arch keep-list scenario:
-  python ./build_tools/packaging/tests/promote_packages_test.py \
-      --version 7.14.0rc1 --keep-arch gfx942 --extra-arch gfx1201
-
-The therock-dist multi-arch tarball is covered too: its name follows the
-fixed `therock-dist-linux-multiarch-<version>.tar.gz` convention, so it is
-constructed directly (no dependency on the JS-rendered tarball-multi-arch/
-directory listing).
-
-OPEN QUESTIONS (tracked in ROCm/TheRock#6266 follow-up; resolve before merge)
-  - Should the run assert on a fixed arch set, or accept whatever the index
-    currently publishes for the chosen gfx targets? (Currently dynamic.)
+      --input-dir ./rc_packages --platform linux
 """
 
 import argparse
 import io
 import os
-import platform as platform_module
 import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
-import urllib.error
-import urllib.parse
-import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -90,122 +84,33 @@ import promote_packages
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 import setup_venv
 
-PRERELEASE_BASE = "https://rocm.prereleases.amd.com"
-WHL_INDEX = f"{PRERELEASE_BASE}/whl-multi-arch"
-TARBALL_INDEX = f"{PRERELEASE_BASE}/tarball-multi-arch"
+PLATFORMS = ("linux", "windows")
 
-# Arch-agnostic packages: always promoted, never pruned by the keep-list. Their
-# per-package index page links back to files hosted at the WHL_INDEX root.
-AGGREGATOR_PKG_DIRS = [
-    "rocm",
-    "rocm-sdk-core",
-    "rocm-sdk-devel",
-    "rocm-sdk-libraries",
-    "torch",
-    "torchvision",
-    "torchaudio",
-    # triton is intentionally NOT selected by max-upstream here: the multi-arch
-    # index can publish several triton builds for one RC and torch pins one
-    # exact build. It is resolved from torch's own metadata (resolve_pinned_triton).
-]
+# Arch-agnostic aggregator wheels: always promoted, never pruned by the
+# keep-list. Matched by filename prefix (device wheels use the distinct
+# `*_device_gfx<N>` form and are matched separately).
+AGGREGATOR_WHEEL_PREFIXES = (
+    "rocm_sdk_core-",
+    "rocm_sdk_devel-",
+    "rocm_sdk_libraries-",
+    "torch-",
+    "torchvision-",
+    "torchaudio-",
+    "triton-",
+)
 
-# Per-gfx device wheels: subject to keep-list pruning during multi-arch
-# promotion. Directory name is f"{prefix}-{arch}", e.g. amd-torch-device-gfx942.
-DEVICE_PKG_PREFIXES = [
-    "amd-torch-device",
-    "amd-torchvision-device",
-    "rocm-sdk-device",
-]
+# JAX wheels are arch-agnostic and Linux-only. They are promoted via the
+# local-version path (the RC suffix is stripped from the `+rocm<ver>` segment).
+JAX_WHEEL_PREFIXES = ("jax_rocm7_plugin-", "jax_rocm7_pjrt-")
 
-# JAX wheels are arch-agnostic and Linux-only. They carry a `manylinux_*` tag
-# (not `linux_x86_64`) and are promoted via the local-version path (the RC
-# suffix is stripped from the `+rocm<ver>` segment). jax_rocm7_pjrt is
-# py3-none; jax_rocm7_plugin is cpXX-specific.
-JAX_PKG_DIRS = [
-    "jax-rocm7-plugin",
-    "jax-rocm7-pjrt",
-]
-_MANYLINUX_X86 = re.compile(r"manylinux_[\d_]+x86_64")
+# Per-gfx device wheel marker, e.g. `rocm_sdk_device_gfx942-...` /
+# `amd_torch_device_gfx1201-...`. The trailing `-` anchors the arch token so
+# `gfx11` can't match `gfx1153`.
+_DEVICE_ARCH_RE = re.compile(r"device_(gfx[0-9a-z]+)-")
 
-PLATFORM_TAGS = {"linux": "linux_x86_64", "windows": "win_amd64"}
-
-# Matches the cpXX-cpXX ABI tag pair present in every Python-tag-specific wheel
-# (torch-family aggregators AND per-gfx device wheels). SDK wheels are py3-none
-# and do not match, so they are never filtered by python tag.
-_CP_TAG_RE = re.compile(r"-(cp\d+)-cp\d+-")
-
-
-def _http_get(url: str) -> str:
-    with urllib.request.urlopen(url, timeout=60) as resp:
-        return resp.read().decode("utf-8", errors="replace")
-
-
-def _url_exists(url: str) -> bool:
-    """Cheap existence probe: open the connection and read a single byte, then
-    close, so we never pull the whole (multi-GB) tarball just to confirm it is
-    published."""
-    try:
-        with urllib.request.urlopen(url, timeout=60) as resp:
-            resp.read(1)
-            return resp.status == 200
-    except urllib.error.HTTPError as e:
-        # The prerelease CDN denies bucket listing, so a missing object comes
-        # back as 403 (CloudFront masking non-existence), not 404. Treat both
-        # as "not published" rather than a hard error.
-        if e.code in (403, 404):
-            return False
-        raise
-
-
-def list_index_files(pkg_dir: str) -> list[str]:
-    """Return the real (decoded) filenames listed under a package index dir.
-
-    The prerelease index links to files as `../<file>` (hosted at the index
-    root) and URL-encodes `+` as `%2B`; both are normalized here.
-    """
-    url = f"{WHL_INDEX}/{pkg_dir}/"
-    try:
-        html = _http_get(url)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return []
-        raise
-    names = set()
-    for href in re.findall(r'href="([^"]+)"', html):
-        name = urllib.parse.unquote(href).rsplit("/", 1)[-1]
-        if name.endswith(".whl") or name.endswith(".tar.gz"):
-            names.add(name)
-    return sorted(names)
-
-
-def _cp_tags(pkg_dir: str, version: str, platform_tag: str) -> set[str]:
-    tags = set()
-    for name in list_index_files(pkg_dir):
-        if version in name and platform_tag in name:
-            m = _CP_TAG_RE.search(name)
-            if m:
-                tags.add(m.group(1))
-    return tags
-
-
-def detect_py_tag(version: str, platform_tag: str, arches: list[str]) -> str:
-    """Pick the highest cpXX tag present across torch AND the device dirs.
-
-    The newest tag published for the arch-agnostic `torch` wheel (e.g. cp314)
-    is not always built for every per-gfx device wheel, so intersect the
-    availability to guarantee a coherent, installable set.
-    """
-    dirs = ["torch"]
-    for arch in arches:
-        dirs += [f"amd-torch-device-{arch}", f"amd-torchvision-device-{arch}"]
-    tag_sets = [_cp_tags(d, version, platform_tag) for d in dirs]
-    tag_sets = [s for s in tag_sets if s]
-    if not tag_sets:
-        raise RuntimeError(f"No torch wheel found for {version} / {platform_tag}")
-    common = set.intersection(*tag_sets) if len(tag_sets) > 1 else tag_sets[0]
-    tags = common or tag_sets[0]
-    # cp313 > cp312 > ... by trailing integer.
-    return max(tags, key=lambda t: int(t[2:]))
+# RC version token as it appears on the rocm sdist / rocm_sdk_core wheel.
+_SDIST_VER_RE = re.compile(r"^rocm-(\d+\.\d+\.\d+(?:rc\d+|a\d+)?)\.tar\.gz$")
+_CORE_VER_RE = re.compile(r"^rocm_sdk_core-(\d+\.\d+\.\d+(?:rc\d+|a\d+)?)-")
 
 
 def _upstream_version(name: str) -> Version:
@@ -213,7 +118,6 @@ def _upstream_version(name: str) -> Version:
 
     torch-2.11.0+rocm7.14.0rc1-...  -> 2.11.0
     rocm_sdk_core-7.14.0rc1-...     -> 7.14.0rc1
-    rocm-7.14.0rc1.tar.gz           -> 7.14.0rc1
     """
     field = name.split("-", 2)[1] if "-" in name else name
     field = field.split("+", 1)[0]
@@ -222,104 +126,27 @@ def _upstream_version(name: str) -> Version:
     return Version(field)
 
 
-def _keep_max_upstream(names: list[str]) -> list[str]:
-    """A single package dir can publish several upstream versions for one RC
-    (e.g. torch 2.10.0 and 2.11.0 both `+rocm7.14.0rc1`). Keep only the newest
-    so the promoted set stays single-version and installable."""
-    if len(names) <= 1:
-        return names
-    try:
-        newest = max(_upstream_version(n) for n in names)
-    except Exception:
-        return names
-    return [n for n in names if _upstream_version(n) == newest]
+def _is_aggregator(name: str) -> bool:
+    if name.startswith(AGGREGATOR_WHEEL_PREFIXES):
+        return name.endswith(".whl")
+    # rocm-<digit>... is the meta wheel / sdist; rocm-bootstrap / rocm-profiler
+    # start with a letter after `rocm-` and are intentionally excluded.
+    if re.match(r"rocm-\d", name):
+        return name.endswith(".whl") or name.endswith(".tar.gz")
+    return False
 
 
-def _matches(name: str, version: str, platform_tag: str, py_tag: str) -> bool:
-    if version not in name:
-        return False
-    # rocm-<ver>.tar.gz sdist has no platform tag.
-    if name.endswith(".tar.gz"):
-        return True
-    if platform_tag not in name:
-        return False
-    # Python-tag-specific wheels (torch-family + device wheels) must match the
-    # single chosen cpXX tag; py3-none SDK wheels have no cp tag and pass.
-    if _CP_TAG_RE.search(name):
-        return f"-{py_tag}-" in name
-    return True
-
-
-def select_packages(
-    version: str, platform_tag: str, py_tag: str, arches: list[str]
-) -> tuple[list[tuple[str, str]], set[str]]:
-    """Return (download list, device-wheel filenames) for the given arches.
-
-    download list is [(base_url, filename), ...]; every file is hosted at the
-    WHL_INDEX root, so base_url is the same for all of them.
-    """
-    base = f"{WHL_INDEX}/"
-    downloads: list[tuple[str, str]] = []
-    seen: set[str] = set()
-
-    def add(pkg_dir: str) -> list[str]:
-        matched = [
-            name
-            for name in list_index_files(pkg_dir)
-            if name not in seen and _matches(name, version, platform_tag, py_tag)
-        ]
-        picked = _keep_max_upstream(matched)
-        for name in picked:
-            seen.add(name)
-            downloads.append((base, name))
-        return picked
-
-    for pkg_dir in AGGREGATOR_PKG_DIRS:
-        add(pkg_dir)
-
-    device_files: set[str] = set()
-    for prefix in DEVICE_PKG_PREFIXES:
-        for arch in arches:
-            for name in add(f"{prefix}-{arch}"):
-                device_files.add(name)
-
-    return downloads, device_files
-
-
-def select_jax_packages(
-    version: str, py_tag: str
-) -> tuple[list[tuple[str, str]], set[str]]:
-    """Return (download list, jax filenames) for the Linux JAX wheels.
-
-    JAX uses `manylinux_*` tags rather than `linux_x86_64`, and the index can
-    carry two upstream versions per RC on different manylinux baselines (e.g.
-    0.10.0 on manylinux_2_27 and 0.9.1 on manylinux_2_28); keep only the newest
-    upstream so the promoted set is single-version. jax_rocm7_plugin is cpXX
-    specific and must match the chosen py_tag; jax_rocm7_pjrt is py3-none.
-    """
-    base = f"{WHL_INDEX}/"
-    downloads: list[tuple[str, str]] = []
-    jax_files: set[str] = set()
-    for pkg_dir in JAX_PKG_DIRS:
-        matched = [
-            name
-            for name in list_index_files(pkg_dir)
-            if version in name
-            and _MANYLINUX_X86.search(name)
-            and (not _CP_TAG_RE.search(name) or f"-{py_tag}-" in name)
-        ]
-        for name in _keep_max_upstream(matched):
-            downloads.append((base, name))
-            jax_files.add(name)
-    return downloads, jax_files
+def _device_arch(name: str) -> str | None:
+    m = _DEVICE_ARCH_RE.search(name)
+    return m.group(1) if m else None
 
 
 def _torch_triton_pin(wheel_path: Path) -> str | None:
     """The exact triton version torch pins (`Requires-Dist: triton==<ver>`).
 
-    The multi-arch index can publish several triton builds for one RC (e.g.
-    3.6.0, 3.7.0+gitXXXX, 3.7.1+gitYYYY); only the one torch pins is a coherent
-    match, so read it from torch's own metadata rather than assuming newest.
+    A download can contain several triton builds for one RC (e.g. 3.7.0+gitXXXX,
+    3.7.1+gitYYYY); only the one torch pins is a coherent match, so read it from
+    torch's own metadata rather than assuming newest.
     """
     with zipfile.ZipFile(wheel_path) as z:
         meta = next(n for n in z.namelist() if n.endswith(".dist-info/METADATA"))
@@ -328,30 +155,81 @@ def _torch_triton_pin(wheel_path: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def resolve_pinned_triton(
-    tmp_dir: Path, platform_tag: str, py_tag: str
-) -> tuple[str, str] | None:
-    """Return (base_url, filename) for the triton the downloaded torch pins, or
-    None if torch pins no triton. Raises if the pinned triton is not on the
-    index for this platform/py_tag."""
-    torch_wheels = sorted(tmp_dir.glob("torch-*.whl"))
-    if not torch_wheels:
-        raise RuntimeError("no torch wheel present to resolve the triton pin")
-    torch_wheel = max(torch_wheels, key=lambda p: _upstream_version(p.name))
-    pin = _torch_triton_pin(torch_wheel)
-    if not pin:
-        return None
-    for name in list_index_files("triton"):
-        if (
-            pin in name
-            and platform_tag in name
-            and (not _CP_TAG_RE.search(name) or f"-{py_tag}-" in name)
-        ):
-            return f"{WHL_INDEX}/", name
+def detect_rc_version(names: set[str]) -> str:
+    """Read the RC version token from the rocm sdist or rocm_sdk_core wheel."""
+    for regex in (_SDIST_VER_RE, _CORE_VER_RE):
+        for name in sorted(names):
+            m = regex.match(name)
+            if m:
+                return m.group(1)
     raise RuntimeError(
-        f"{torch_wheel.name} pins triton=={pin} but no matching wheel is "
-        f"published on the index for {platform_tag}/{py_tag}"
+        "Could not determine the RC version from the input directory: expected a "
+        "rocm-<ver>.tar.gz sdist or a rocm_sdk_core-<ver>-*.whl to be present."
     )
+
+
+class InputSet:
+    """Classification of an input directory into promotion groups."""
+
+    def __init__(self, input_dir: Path, platform: str | None) -> None:
+        names = {p.name for p in input_dir.iterdir() if p.is_file()}
+        if not names:
+            raise RuntimeError(f"No files found in input directory {input_dir}")
+
+        self.input_dir = input_dir
+        self.rc_str = detect_rc_version(names)
+        self.rc_version = Version(self.rc_str)
+        self.final_version = Version(self.rc_version.base_version)
+        self.final_str = str(self.final_version)
+        self.src_version_type = "rc" if "rc" in self.rc_str else "a"
+        self.platform = platform or (
+            "windows" if any("win_amd64" in n for n in names) else "linux"
+        )
+
+        self.device_files = {n for n in names if _device_arch(n)}
+        self.jax_files = {n for n in names if n.startswith(JAX_WHEEL_PREFIXES)}
+        self.tarball_files = {
+            n
+            for n in names
+            if n.startswith("therock-dist")
+            and n.endswith(".tar.gz")
+            and self.rc_str in n
+        }
+        self.aggregator_files = {
+            n for n in names if _is_aggregator(n) and n not in self.device_files
+        }
+        # Keep only torch's pinned triton; drop any other triton builds so the
+        # staged set stays installable.
+        self.aggregator_files -= self._non_pinned_triton()
+
+        self.present_arches = sorted(
+            {a for n in self.device_files if (a := _device_arch(n))}
+        )
+        # Auto-detect: keep the first present arch, everything else is pruned.
+        self.keep_arch = self.present_arches[0] if self.present_arches else None
+        self.dropped_device_files = {
+            n for n in self.device_files if _device_arch(n) != self.keep_arch
+        }
+
+    def _non_pinned_triton(self) -> set[str]:
+        torch_wheels = [n for n in self.aggregator_files if n.startswith("torch-")]
+        triton_wheels = {n for n in self.aggregator_files if n.startswith("triton-")}
+        if not torch_wheels or not triton_wheels:
+            return set()
+        torch = max(torch_wheels, key=_upstream_version)
+        pin = _torch_triton_pin(self.input_dir / torch)
+        if not pin:
+            return set()
+        matched = {n for n in triton_wheels if pin in n}
+        if not matched:
+            raise RuntimeError(
+                f"{torch} pins triton=={pin} but no matching triton wheel is "
+                f"present in {self.input_dir} (found: {sorted(triton_wheels)})"
+            )
+        return triton_wheels - matched
+
+    def promoted(self, names: set[str]) -> set[str]:
+        return {promoted_name(n, self.rc_str, self.final_str) for n in names}
 
 
 def promoted_name(rc_name: str, version: str, final_version: str) -> str:
@@ -467,12 +345,13 @@ def checkPromoteEverything(
     expected_version: Version,
     input_files: set[str],
     expected_files: set[str],
+    src_version_type: str = "rc",
 ) -> bool:
     _banner("TEST: promotion of all aggregator packages (should SUCCEED)")
     with tempfile.TemporaryDirectory(prefix="PromoteTest-Everything-") as tmp:
         tmp_dir = Path(tmp)
         _stage_inputs(dir_path, tmp_dir, input_files)
-        promote_packages.main(tmp_dir, delete=True)
+        promote_packages.main(tmp_dir, delete=True, src_version_type=src_version_type)
         ok = _run_checks(
             tmp_dir,
             [
@@ -501,12 +380,18 @@ def checkPromoteMultiArch(
     input_files: set[str],
     dropped_promoted_names: set[str],
     expected_files: set[str],
+    src_version_type: str = "rc",
 ) -> bool:
     _banner(f"TEST: multi-arch promotion keeping only {keep_arch} (should SUCCEED)")
     with tempfile.TemporaryDirectory(prefix="PromoteTest-MultiArch-") as tmp:
         tmp_dir = Path(tmp)
         _stage_inputs(dir_path, tmp_dir, input_files)
-        promote_packages.main(tmp_dir, delete=True, multi_arch_targets=[keep_arch])
+        promote_packages.main(
+            tmp_dir,
+            delete=True,
+            multi_arch_targets=[keep_arch],
+            src_version_type=src_version_type,
+        )
 
         checks = [
             ("checkPromotedFileNames", checkPromotedFileNames(tmp_dir, expected_files)),
@@ -537,6 +422,7 @@ def checkPromoteJax(
     expected_version: Version,
     input_files: set[str],
     expected_files: set[str],
+    src_version_type: str = "rc",
 ) -> bool:
     _banner("TEST: promotion of JAX wheels (should SUCCEED)")
     if not input_files:
@@ -546,7 +432,7 @@ def checkPromoteJax(
     with tempfile.TemporaryDirectory(prefix="PromoteTest-Jax-") as tmp:
         tmp_dir = Path(tmp)
         _stage_inputs(dir_path, tmp_dir, input_files)
-        promote_packages.main(tmp_dir, delete=True)
+        promote_packages.main(tmp_dir, delete=True, src_version_type=src_version_type)
         ok = _run_checks(
             tmp_dir,
             [
@@ -571,7 +457,7 @@ def checkPromoteJax(
 def _write_placeholder_targz(path: Path) -> None:
     """A minimal valid .tar.gz stand-in. promote_targz_tarball renames the
     therock-dist tarball by filename and never opens it, so the contents are
-    irrelevant -- this avoids pulling the real multi-GB artifact."""
+    irrelevant -- this avoids copying the real multi-GB artifacts."""
     with tarfile.open(path, "w:gz") as tar:
         data = b"placeholder\n"
         info = tarfile.TarInfo(name="README")
@@ -579,42 +465,45 @@ def _write_placeholder_targz(path: Path) -> None:
         tar.addfile(info, io.BytesIO(data))
 
 
-def checkPromoteTarball(version: str, final_version: Version) -> bool:
-    """The therock-dist multi-arch tarball is promoted by a filename-based
-    rc->final rename (promote_targz_tarball), not by repacking. Its name follows
-    the fixed `therock-dist-linux-multiarch-<version>.tar.gz` convention, so we
-    construct it directly rather than scraping the JS-rendered tarball listing.
+def checkPromoteTarball(
+    dir_path: Path,
+    tarball_names: set[str],
+    version: str,
+    final_version: str,
+    src_version_type: str = "rc",
+) -> bool:
+    """Every therock-dist tarball present (per-gfx AND multiarch) is promoted by
+    a filename-based rc->final rename (promote_targz_tarball), not by repacking.
 
-    We (1) confirm the RC tarball is really published under tarball-multi-arch/
-    via a cheap single-byte probe, then (2) stage a local stand-in with that exact
-    name and assert promotion renames it to the final version, dropping the rc
-    suffix. A real multi-GB download is unnecessary because promotion of these
-    tarballs never inspects their contents.
+    promote_targz_tarball never opens the archive, so each real (multi-GB)
+    tarball is exercised with a cheap same-named stand-in. The expected promoted
+    name is derived by applying the same rc->final rename to the discovered name.
     """
-    _banner("TEST: promotion of the therock-dist multi-arch tarball (should SUCCEED)")
-    rc_name = f"therock-dist-linux-multiarch-{version}.tar.gz"
-    fin_name = f"therock-dist-linux-multiarch-{final_version}.tar.gz"
-    url = f"{TARBALL_INDEX}/{rc_name}"
-    if not _url_exists(url):
-        print(f"[SKIP] {rc_name} not published at {url}; skipping.")
+    _banner("TEST: promotion of therock-dist tarballs (per-gfx + multiarch, should SUCCEED)")
+    if not tarball_names:
+        print("[SKIP] no therock-dist tarballs found in the input dir; skipping.")
         _banner("TEST DONE: promote tarball. Result: SKIPPED")
         return True
-    print(f"  confirmed published: {url}")
+
+    print(f"  discovered {len(tarball_names)} tarball(s):")
+    for n in sorted(tarball_names):
+        print(f"    {n}")
 
     ok = True
     with tempfile.TemporaryDirectory(prefix="PromoteTest-Tarball-") as tmp:
         tmp_dir = Path(tmp)
-        _write_placeholder_targz(tmp_dir / rc_name)
-        promote_packages.main(tmp_dir, delete=True)
+        for rc_name in tarball_names:
+            _write_placeholder_targz(tmp_dir / rc_name)
+        promote_packages.main(tmp_dir, delete=True, src_version_type=src_version_type)
         produced = {p.name for p in tmp_dir.glob("*")}
-        if fin_name not in produced:
-            print(
-                f"\n[ERROR] expected {fin_name} after promotion; got {sorted(produced)}"
-            )
-            ok = False
-        elif rc_name in produced:
-            print(f"\n[ERROR] rc tarball {rc_name} survived promotion")
-            ok = False
+        for rc_name in sorted(tarball_names):
+            fin_name = promoted_name(rc_name, version, final_version)
+            if fin_name not in produced:
+                print(f"\n[ERROR] expected {fin_name} after promotion; got {sorted(produced)}")
+                ok = False
+            elif rc_name in produced:
+                print(f"\n[ERROR] rc tarball {rc_name} survived promotion")
+                ok = False
     _banner("TEST DONE: promote tarball. Result: " + ("SUCCESS" if ok else "FAILURE"))
     return ok
 
@@ -626,12 +515,18 @@ def checkPartialPromotion(
     expected_files: set[str],
     match_files: str,
     label: str,
+    src_version_type: str = "rc",
 ) -> bool:
     _banner(f"TEST: promotion of only {label} packages (should FAIL)")
     with tempfile.TemporaryDirectory(prefix=f"PromoteTest-Only-{label}-") as tmp:
         tmp_dir = Path(tmp)
         _stage_inputs(dir_path, tmp_dir, input_files)
-        promote_packages.main(tmp_dir, match_files=match_files, delete=True)
+        promote_packages.main(
+            tmp_dir,
+            match_files=match_files,
+            delete=True,
+            src_version_type=src_version_type,
+        )
         ok = _run_checks(
             tmp_dir,
             [
@@ -653,159 +548,90 @@ def checkPartialPromotion(
     return ok
 
 
-def fetchPackage(
-    base_url: str, package_name: str, tmp_dir: Path, cache_dir: Path | None
-) -> None:
-    if cache_dir is not None and (cache_dir / package_name).exists():
-        print(f"  Found in cache: {package_name}")
-        shutil.copy2(cache_dir / package_name, tmp_dir / package_name)
-        return
-    print(f"  Downloading {package_name}")
-    # Safe-encode: the "+" in torch local versions confuses curl otherwise.
-    url = base_url + urllib.parse.quote(package_name)
-    subprocess.run(
-        ["curl", "-fSL", "--output", tmp_dir / package_name, url], check=True
-    )
-    if cache_dir is not None:
-        shutil.copy2(tmp_dir / package_name, cache_dir / package_name)
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="On-demand test of RC->final multi-arch package promotion."
+        description="On-demand test of RC->final package promotion over a local directory."
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="Directory of already-downloaded RC packages (wheels / sdist / tarballs) to promote and test.",
     )
     parser.add_argument(
         "--platform",
-        choices=sorted(PLATFORM_TAGS),
-        default="linux" if platform_module.system() != "Windows" else "windows",
-        help="Target platform tag to fetch (default: auto-detected).",
-    )
-    parser.add_argument(
-        "--version",
-        required=True,
-        help=(
-            "RC version to test (e.g. 7.14.0rc1). Pin the RC for the release "
-            "branch under test so runs are deterministic across days."
-        ),
-    )
-    parser.add_argument(
-        "--keep-arch",
-        default="gfx942",
-        help="gfx arch to KEEP in the multi-arch keep-list scenario.",
-    )
-    parser.add_argument(
-        "--extra-arch",
-        default="gfx1201",
-        help="Additional gfx arch to fetch but expect to be pruned.",
-    )
-    parser.add_argument(
-        "--cache-dir",
-        type=Path,
+        choices=PLATFORMS,
         default=None,
-        help="Directory to cache downloaded packages between runs.",
+        help="Target platform (default: inferred from the wheel tags in --input-dir).",
     )
     p = parser.parse_args(sys.argv[1:])
 
-    platform = p.platform
-    platform_tag = PLATFORM_TAGS[platform]
-    cache_dir = p.cache_dir
-    if cache_dir is not None:
-        cache_dir.mkdir(parents=True, exist_ok=True)
+    if not p.input_dir.is_dir():
+        parser.error(f"--input-dir {p.input_dir} is not a directory")
 
-    rc_version = Version(p.version)
-    rc_str = str(rc_version)
-    fin_str = rc_str.split("rc")[0]
-    final_version = Version(fin_str)
-
-    keep_arch = p.keep_arch
-    extra_arch = p.extra_arch
-    arches = [keep_arch, extra_arch]
-    py_tag = detect_py_tag(rc_str, platform_tag, arches)
+    inputs = InputSet(p.input_dir, p.platform)
 
     print(
-        f"Testing promotion {rc_version} -> {final_version} on {platform} "
-        f"({platform_tag}, {py_tag}); arches fetched: {arches}, kept: {keep_arch}"
+        f"Testing promotion {inputs.rc_version} -> {inputs.final_version} on "
+        f"{inputs.platform} from {inputs.input_dir}"
+    )
+    print(f"  arches present: {inputs.present_arches or '(none)'}; kept: {inputs.keep_arch}")
+    print(f"  aggregators: {len(inputs.aggregator_files)}, device: {len(inputs.device_files)}, "
+          f"jax: {len(inputs.jax_files)}, tarballs: {len(inputs.tarball_files)}")
+
+    multi_arch_input = inputs.aggregator_files | inputs.device_files
+    expected_aggregators = inputs.promoted(inputs.aggregator_files)
+    expected_multi_arch = inputs.promoted(multi_arch_input - inputs.dropped_device_files)
+    dropped_promoted_names = inputs.promoted(inputs.dropped_device_files)
+    expected_jax = inputs.promoted(inputs.jax_files)
+
+    src = inputs.src_version_type
+
+    res_everything = checkPromoteEverything(
+        inputs.input_dir, inputs.final_version, inputs.aggregator_files, expected_aggregators, src
     )
 
-    downloads, device_files = select_packages(rc_str, platform_tag, py_tag, arches)
-    # JAX is Linux-only (manylinux wheels); skip on Windows.
-    jax_downloads: list[tuple[str, str]] = []
-    jax_files: set[str] = set()
-    if platform == "linux":
-        jax_downloads, jax_files = select_jax_packages(rc_str, py_tag)
-    # A device wheel belongs to keep_arch iff its filename carries the exact
-    # `device_<arch>-` token (trailing `-` avoids gfx1201 matching gfx1200).
-    kept_device_files = {n for n in device_files if f"device_{keep_arch}-" in n}
-    dropped_device_files = device_files - kept_device_files
-    if not dropped_device_files:
-        print(
-            f"[WARN] no device wheels found for --extra-arch {extra_arch}; "
-            "the multi-arch prune assertion will be a no-op."
-        )
-
-    with tempfile.TemporaryDirectory(prefix=f"PromoteTest-{platform}-") as tmp:
-        tmp_dir = Path(tmp)
-        all_downloads = downloads + jax_downloads
-        print(f"Fetching {len(all_downloads)} packages (cache: {cache_dir}) ...")
-        for base_url, name in all_downloads:
-            fetchPackage(base_url, name, tmp_dir, cache_dir)
-        # triton is picked by torch's pin, not max-upstream, so it is resolved
-        # from the just-downloaded torch wheel and fetched here.
-        triton_entry = resolve_pinned_triton(tmp_dir, platform_tag, py_tag)
-        if triton_entry is not None:
-            print(f"  torch pins triton -> {triton_entry[1]}")
-            fetchPackage(triton_entry[0], triton_entry[1], tmp_dir, cache_dir)
-            downloads = downloads + [triton_entry]
-        print(" ...done")
-
-        all_rc_files = {n for _, n in downloads}
-        aggregator_files = all_rc_files - device_files
-        multi_arch_input = aggregator_files | device_files
-        expected_aggregators = {
-            promoted_name(n, rc_str, fin_str) for n in aggregator_files
-        }
-        # Multi-arch keep-list run: aggregators + kept-arch device wheels survive.
-        expected_multi_arch = {
-            promoted_name(n, rc_str, fin_str)
-            for n in (multi_arch_input - dropped_device_files)
-        }
-        dropped_promoted_names = {
-            promoted_name(n, rc_str, fin_str) for n in dropped_device_files
-        }
-        expected_jax = {promoted_name(n, rc_str, fin_str) for n in jax_files}
-
-        res_everything = checkPromoteEverything(
-            tmp_dir, final_version, aggregator_files, expected_aggregators
-        )
+    if inputs.keep_arch is not None and inputs.dropped_device_files:
         res_multi = checkPromoteMultiArch(
-            tmp_dir,
-            final_version,
-            keep_arch,
+            inputs.input_dir,
+            inputs.final_version,
+            inputs.keep_arch,
             multi_arch_input,
             dropped_promoted_names,
             expected_multi_arch,
+            src,
         )
-        res_only_rocm = checkPartialPromotion(
-            tmp_dir,
-            final_version,
-            aggregator_files,
-            expected_aggregators,
-            "rocm*",
-            "rocm",
+    else:
+        _banner(
+            "TEST: multi-arch promotion — SKIPPED "
+            "(need >=2 gfx arches with device wheels to exercise pruning)"
         )
-        res_only_torch = checkPartialPromotion(
-            tmp_dir,
-            final_version,
-            aggregator_files,
-            expected_aggregators,
-            "*torch*",
-            "torch",
-        )
-        res_jax = checkPromoteJax(tmp_dir, final_version, jax_files, expected_jax)
+        res_multi = True
 
-    # The tarball scenario stages its own stand-in and does not use the fetched
-    # wheel set, so it runs outside the download tempdir.
-    res_tarball = checkPromoteTarball(rc_str, final_version)
+    res_only_rocm = checkPartialPromotion(
+        inputs.input_dir,
+        inputs.final_version,
+        inputs.aggregator_files,
+        expected_aggregators,
+        "rocm*",
+        "rocm",
+        src,
+    )
+    res_only_torch = checkPartialPromotion(
+        inputs.input_dir,
+        inputs.final_version,
+        inputs.aggregator_files,
+        expected_aggregators,
+        "*torch*",
+        "torch",
+        src,
+    )
+    res_jax = checkPromoteJax(
+        inputs.input_dir, inputs.final_version, inputs.jax_files, expected_jax, src
+    )
+    res_tarball = checkPromoteTarball(
+        inputs.input_dir, inputs.tarball_files, inputs.rc_str, inputs.final_str, src
+    )
 
     _banner("SUMMARY")
     print(f"checkPromoteEverything:  {'SUCCESS' if res_everything else 'FAILURE'}")
