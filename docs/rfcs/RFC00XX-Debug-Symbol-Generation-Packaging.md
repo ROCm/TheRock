@@ -1,7 +1,7 @@
 ---
 author: Nick Kuo (amd-nicknick)
 created: 2026-06-09
-modified: 2026-06-22
+modified: 2026-07-13
 status: draft
 discussion: https://github.com/ROCm/TheRock/discussions/6032
 ---
@@ -31,9 +31,10 @@ Our goals are to:
 1. **Cover every TheRock-compiled host binary and library built through CMake**,
    including `rocm-systems`, `rocm-libraries`, CMake-built system dependencies, and the
    bootstrapped compiler.
-1. **Remove the unused `amd-llvm` static-link archives from packaging** (static LLVM
-   linking against the SDK is unsupported), eliminating their size and debug-info bloat
-   — see §5 and its discussion point.
+1. **Provide global defaults with per-component overrides** so release configurations
+   can control symbol volume without changing build types or package contents. In
+   particular, large components such as `amd-llvm` can opt out of debug-info generation
+   with `-Damd-llvm_GENERATE_DEBUG_INFO=OFF`.
 1. **Package debug symbols as separate, opt-out-able deliverables** that never bloat
    the runtime or development packages.
 1. **Enforce one common, OS-agnostic CMake mechanism** so that every configuration
@@ -52,6 +53,8 @@ Our goals are to:
   (`amd-llvm`, `amd-comgr`, `hipcc`).
 - Native libraries **supplied by** the `rocm_sdk` Python packages.
 - Debug-symbol level control (minimal vs. full; public vs. private PDB).
+- Per-component overrides for generation, detail level, and splitting, following the
+  same naming model as `{project}_BUILD_TYPE`.
 - Separate debug packaging for tarball, Python wheel, and native (deb/rpm) channels.
 - `ccache`/`sccache` compatibility for debug-info-bearing compilation.
 - Default enablement in nightly/release CI workflows.
@@ -99,10 +102,10 @@ essential because this RFC formalizes and extends it rather than replacing it.
    full (`-g2`) level and no public/private PDB distinction.
 1. **`RelWithDebInfo` uses its own path** (CMake's built-in `-g`) rather than a shared
    `THEROCK_` mechanism, so behavior diverges across OSes and build types.
-1. **`amd-llvm` static archives** are shipped in the `dev` component
-   (`**/*.a`, `**/*.lib`; `artifact_builder.py`). With full debug info these
-   would bloat packages dramatically, and `amd-llvm` does not currently flow through
-   the debug-info flags or strip/split logic.
+1. **No per-component size control.** A global-only switch would force debug info into
+   every component, even when one component (notably the bootstrapped compiler) would
+   dominate symbol storage. Release policy needs a per-component opt-out without
+   changing that component's build type or packaged file set.
 1. **`dbg` is sliced but not shipped.** Debug artifacts are not yet emitted as deb
    `-dbgsym` / rpm `-debuginfo` / debug wheels, and several artifact descriptors
    (e.g. `sysdeps`) do not declare a `dbg` component at all.
@@ -111,31 +114,55 @@ essential because this RFC formalizes and extends it rather than replacing it.
 
 ### 1. Unified, OS-agnostic CMake mechanism
 
-Introduce two new project-wide options that supersede the ad-hoc handling and apply
-uniformly on all OSes and to all build types, including `Release`:
+Define three project-wide settings that apply uniformly to every build type, including
+`Release`:
 
-- `THEROCK_GENERATE_DEBUG_INFO` (`BOOL`, default `OFF`): master switch enabling debug
-  symbol generation.
-- `THEROCK_DEBUG_INFO_LEVEL` (`STRING`, one of `minimal`, `full`; default `full`):
-  selects the amount of debug information.
-- `THEROCK_SPLIT_DEBUG_INFO` (existing, generalized): when `ON`, debug info is
-  extracted into separate files and primary binaries are stripped. **Defaults to `OFF`**
-  and is enabled by the nightly/release packaging presets, since splitting is a
-  packaging concern — it only pays off when producing shippable `dbg` artifacts and adds
-  needless install-time overhead to local/dev builds. Embedding (`OFF`) is the local
-  developer mode on Linux; on Windows splitting is unconditional because PDBs cannot be
-  embedded in the image.
+- `THEROCK_GENERATE_DEBUG_INFO` (`STRING`, one of empty, `ON`, or `OFF`; default
+  empty): tri-state master control. Empty means **auto**: enable generation for
+  `Debug` and `RelWithDebInfo`, and disable it for other build types. Explicit `ON` or
+  `OFF` becomes the default for every subproject.
+- `THEROCK_DEBUG_INFO_LEVEL` (`STRING`, one of `minimal`, `full`, or `extra`; default
+  `full`): selects the amount of debug information. Windows supports `minimal` and
+  `full`; `extra` emits a warning and is treated as `full`.
+- `THEROCK_SPLIT_DEBUG_INFO` (`BOOL`): extracts debug info into separate files and
+  strips primary binaries. It defaults to `OFF` on Linux. Windows always uses split
+  symbols because PDBs cannot be embedded in the image, so it defaults to `ON`; an
+  explicit `OFF` emits a warning and is overridden to `ON`.
 
-The options inject flags into the **active configuration's** flag set rather than into
-a single build type. Concretely, the toolchain emitted by `therock_subproject.cmake`
-appends to the flag variables for the configuration being built — crucially including
-`CMAKE_<LANG>_FLAGS_RELEASE` — so that `Release` keeps `-O3 -DNDEBUG` and merely gains
-symbols.
+Each setting has a per-subproject counterpart, keyed by the exact TheRock subproject
+target name:
 
-| OS / compiler     | `minimal`                                      | `full`                         |
-| :---------------- | :--------------------------------------------- | :----------------------------- |
-| Linux (GCC/Clang) | `-g1 -gz`                                      | `-g2 -gz`                      |
-| Windows (MSVC)    | public PDB (`/Z7` + `/DEBUG` + `/PDBSTRIPPED`) | private PDB (`/Z7` + `/DEBUG`) |
+- `{project}_GENERATE_DEBUG_INFO`
+- `{project}_DEBUG_INFO_LEVEL`
+- `{project}_SPLIT_DEBUG_INFO`
+
+This follows the existing `{project}_BUILD_TYPE` convention. For each subproject, the
+effective settings are resolved as follows:
+
+1. Generation uses `{project}_GENERATE_DEBUG_INFO` when explicitly defined.
+1. Otherwise, an explicit global `THEROCK_GENERATE_DEBUG_INFO=ON|OFF` is inherited.
+1. Otherwise, generation follows the effective build type: `{project}_BUILD_TYPE` when
+   set, else `CMAKE_BUILD_TYPE`; `Debug`/`RelWithDebInfo` resolve to `ON`, all other
+   build types to `OFF`.
+1. Level uses `{project}_DEBUG_INFO_LEVEL` when defined, else
+   `THEROCK_DEBUG_INFO_LEVEL` (`full` by default).
+1. On non-Windows platforms, splitting uses `{project}_SPLIT_DEBUG_INFO` when defined,
+   else `THEROCK_SPLIT_DEBUG_INFO`. On Windows it always resolves to `ON`.
+
+Boolean spellings are validated and normalized to `ON`/`OFF`. An invalid level is a
+configuration error. A per-subproject level or split setting whose generation resolves
+to `OFF` emits a warning because that value is ignored.
+
+On Linux, a generated `CMAKE_USER_MAKE_RULES_OVERRIDE` adjusts the composed
+`CMAKE_<LANG>_FLAGS_<CONFIG>_INIT` values after platform defaults are known and before
+the cache entries are created. It strips CMake's built-in `-g` selection and appends the
+resolved level to every standard configuration, including `Release`, while preserving
+that configuration's optimization flags.
+
+| OS / compiler     | `minimal`                                      | `full`                         | `extra`                          |
+| :---------------- | :--------------------------------------------- | :----------------------------- | :------------------------------- |
+| Linux (GCC/Clang) | `-g1 -gz`                                      | `-g2 -gz`                      | `-g3 -gz`                        |
+| Windows (MSVC)    | public PDB (`/Z7` + `/DEBUG` + `/PDBSTRIPPED`) | private PDB (`/Z7` + `/DEBUG`) | unsupported; warning, use `full` |
 
 `-gz` keeps the separated `.debug` files compressed. `/Z7` (object-embedded debug,
 not `/Zi`) is mandatory for compiler-cache compatibility (see §4).
@@ -143,12 +170,12 @@ not `/Zi`) is mandatory for compiler-cache compatibility (see §4).
 ### 2. `RelWithDebInfo` unification
 
 `RelWithDebInfo` retains its own optimization level; only its debug-info handling
-changes. The build clears CMake's built-in `-g` from `CMAKE_<LANG>_FLAGS_RELWITHDEBINFO`
-and enables the unified options with `THEROCK_GENERATE_DEBUG_INFO=ON`,
-`THEROCK_DEBUG_INFO_LEVEL=full`, and `THEROCK_SPLIT_DEBUG_INFO=OFF` — i.e. full debug
-information embedded in the binaries (no split) on Linux, since this configuration
-targets local debugging rather than packaging; Windows still emits a separate PDB, as it
-cannot embed one.
+changes. With `THEROCK_GENERATE_DEBUG_INFO` left in its empty auto state, a
+`RelWithDebInfo` project resolves generation to `ON`. The build clears CMake's built-in
+`-g` from the composed flags and injects the resolved level through the unified
+mechanism. Linux retains the default `THEROCK_SPLIT_DEBUG_INFO=OFF` for local debugging;
+Windows still emits a separate PDB because splitting is mandatory there. An explicit
+global or per-project generation setting takes precedence over this build-type default.
 
 ### 3. Linux pipeline
 
@@ -168,24 +195,22 @@ for a `RelWithDebInfo` preset.
 
 **Non-CMake dependencies.** The build-id split hook operates on CMake targets, so
 sysdeps built through autotools or meson (e.g. `elfutils`, `libdrm`, `numactl`) are not
-seen by it. For these, debug info is enabled through their native flag channels — the
-`-g{level}` flags are passed via the `CFLAGS`/`CXXFLAGS` (or meson `-Dc_args`/`buildtype`)
-that the sub-project's configure step already forwards — and their `.debug` extraction
-plus stripping is performed at the artifact/stage level over the installed binaries
-rather than per-target. Where a dependency exposes no controllable flags or ships
-prebuilt, its debug info is treated as best-effort and it is simply omitted from the
-`dbg` deliverable; this is the reason the goal is scoped to *TheRock-compiled* binaries.
+seen by it. Their debug output remains best-effort and is omitted from the `dbg`
+deliverable when the upstream build does not provide compatible symbols. This is why
+the guaranteed coverage is scoped to CMake-built host binaries.
 
 ### 4. Windows pipeline
 
 Windows gains a first-class PDB pipeline:
 
-1. `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded` (`/Z7`) is extended to apply to
-   `Release` (today it is limited to `Debug,RelWithDebInfo` in
-   `therock_compiler_config.cmake`). `/Z7` rather than `/Zi` is required so that
-   `ccache`/`sccache` can cache objects (see
-   [ROCm/TheRock#4419](https://github.com/ROCm/TheRock/pull/4419)).
-1. Linker is invoked with `/DEBUG`, which always emits the full private PDB at
+1. Each subproject whose effective generation setting is `ON` receives
+   `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded` (`/Z7`) through its generated
+   toolchain and `-DCMAKE_POLICY_DEFAULT_CMP0141=NEW` on its configure command. A
+   subproject that resolves generation to `OFF` receives an empty format and no policy
+   override, preventing a global `Embedded` baseline from leaking into an opted-out
+   project. `/Z7` rather than `/Zi` is required so `ccache`/`sccache` can cache objects
+   (see [ROCm/TheRock#4419](https://github.com/ROCm/TheRock/pull/4419)).
+1. The linker is invoked with `/DEBUG:FULL`, which emits the full private PDB at
    `<dir>/<name>.pdb` next to each DLL/EXE. For `minimal`, the linker is additionally
    passed `/PDBSTRIPPED:<dir>/stripped/<name>.pdb` to emit a stripped public PDB into a
    sibling sub-folder (the full PDB is always produced and cannot be suppressed; emitting
@@ -197,29 +222,29 @@ Windows gains a first-class PDB pipeline:
    `<name>.pdb` name, with the unselected PDB excluded. PDBs are inherently separate
    files, so this is the Windows analogue of the Linux `.build-id/**/*.debug` slice.
 
-### 5. Bootstrapped compiler (`amd-llvm`) static archives
+### 5. Per-component controls and release size policy
 
-The `amd-llvm` artifact's `dev` component ships the full set of LLVM/Clang/Flang
-component static archives (`lib/llvm/lib/*.a` / `*.lib`) together with the LLVM/Clang
-`include/` headers and `LLVMConfig.cmake` / `ClangConfig.cmake` packages. These are by
-far the largest contributor to package size and, with debug information enabled, would
-dominate the debug deliverables as well.
+Debug-info volume varies greatly by component. The bootstrapped compiler can dominate
+symbol storage, so enabling full debug information globally without a project-level
+escape hatch is not practical for every release configuration. Package and development
+artifact contents are unchanged by this RFC; size is controlled at debug-info generation
+time instead.
 
-Statically linking LLVM/Clang/Flang against the ROCm SDK is **not a supported downstream
-use case**. No TheRock component links these archives from the packaged SDK: the shipped
-compiler tools link the `libLLVM` / `libclang-cpp` dylibs (in the `lib` component), and
-`amd-comgr` links LLVM statically at build time and ships as a standalone shared library.
+Release configurations enable full debug information globally and disable generation
+for selected high-volume components. The initial compiler policy is:
 
-This RFC therefore proposes to **remove the LLVM/Clang/Flang component static archives —
-along with the LLVM/Clang `include/` and CMake config content that only served them —
-from the shipped `amd-llvm` `dev` package.** The clang resource-directory archives
-(`lib/llvm/lib/clang/**`, used by the shipped `clang` to link user programs) and the
-runtime dylibs are retained. Because the archives are no longer shipped, no debug-info
-handling is required for them.
+```cmake
+-DTHEROCK_GENERATE_DEBUG_INFO=ON
+-DTHEROCK_DEBUG_INFO_LEVEL=full
+-Damd-llvm_GENERATE_DEBUG_INFO=OFF
+```
 
-> **Discussion** This is a user-visible packaging reduction: any downstream
-> consumer that statically links LLVM/Clang or uses `find_package(LLVM/Clang)` against
-> the shipped SDK would lose that capability.
+All other subprojects inherit full debug information, while `amd-llvm` is compiled and
+linked without host debug symbols and contributes no files to the debug deliverable.
+Other components can use the same opt-out, or select a lower
+`{project}_DEBUG_INFO_LEVEL`, as release storage and debugging requirements evolve. This
+size-control requirement is the primary reason per-component settings are part of the
+core design rather than a preset-specific special case.
 
 ### 6. Packaging
 
@@ -246,13 +271,14 @@ will be updated so their debug output is captured rather than silently dropped.
 
 These changes become the default for nightly and release builds:
 
-- **Linux preset** (`CMakePresets.json` `linux-release-package`): switch
-  `CMAKE_BUILD_TYPE` from `RelWithDebInfo` back to `Release` and set
-  `THEROCK_GENERATE_DEBUG_INFO=ON`, `THEROCK_DEBUG_INFO_LEVEL=full`,
-  `THEROCK_SPLIT_DEBUG_INFO=ON`. The per-subproject `*_BUILD_TYPE=Release` overrides
-  for `amd-llvm`, host-blas, and SuiteSparse remain.
-- **Windows preset** (`windows-release`): add the same `THEROCK_GENERATE_DEBUG_INFO`
-  options, keeping `CMAKE_BUILD_TYPE=Release`.
+- **Linux release preset:** use `CMAKE_BUILD_TYPE=Release` and set
+  `THEROCK_GENERATE_DEBUG_INFO=ON`, `THEROCK_DEBUG_INFO_LEVEL=full`, and
+  `THEROCK_SPLIT_DEBUG_INFO=ON`. Existing per-subproject `*_BUILD_TYPE=Release`
+  overrides remain. Set `amd-llvm_GENERATE_DEBUG_INFO=OFF` because the bootstrapped
+  compiler's debug information would otherwise dominate release symbol size.
+- **Windows release preset:** keep `CMAKE_BUILD_TYPE=Release`, set generation and level
+  to `ON`/`full`, and rely on the Windows rule that splitting is always `ON`. Set
+  `amd-llvm_GENERATE_DEBUG_INFO=OFF` for the same release symbol-size constraint.
 - **ccache/sccache:** verify hit rates are unaffected. Linux `-g`/`-gz` hashing is
   cache-safe; Windows correctness depends on `/Z7` (above). No change to
   `setup_ccache.py` / `setup_sccache_rocm.py` is expected beyond validation.
@@ -261,9 +287,13 @@ These changes become the default for nightly and release builds:
 
 ### Phase 1: Unified CMake mechanism
 
-- Add `THEROCK_GENERATE_DEBUG_INFO` and `THEROCK_DEBUG_INFO_LEVEL`; wire flag injection
-  into the active config (including `Release`) in `therock_subproject.cmake`.
-- Route `RelWithDebInfo` through the same options.
+- Add tri-state `THEROCK_GENERATE_DEBUG_INFO`, three-level
+  `THEROCK_DEBUG_INFO_LEVEL`, and platform-defaulted `THEROCK_SPLIT_DEBUG_INFO`.
+- Add the three `{project}_*` overrides and central resolution/validation with the
+  precedence defined in §1.
+- Resolve settings before generating each subproject's init, toolchain, and make-rules
+  override files; route every build type, including `Release` and `RelWithDebInfo`,
+  through those effective settings.
 
 ### Phase 2: Per-OS pipelines
 
@@ -271,16 +301,15 @@ These changes become the default for nightly and release builds:
 - Implement the Windows PDB pipeline and add the `**/*.pdb` `dbg` default pattern.
 - Validate ccache/sccache behavior on both OSes.
 
-### Phase 3: `amd-llvm` static archive removal
+### Phase 3: Per-component size controls
 
-- Add `exclude` patterns to `[components.dev."compiler/amd-llvm/stage"]` in
-  `compiler/artifact-amd-llvm.toml` removing `lib/llvm/lib/*.a` / `lib/llvm/lib/*.lib`
-  (and the LLVM/Clang `include/**` + `cmake/**` dev content), preserving
-  `lib/llvm/lib/clang/**` and the runtime dylibs.
-- Validate: run the full TheRock build plus `rocm_sdk` devel tests with the archives
-  excluded and confirm no regression (exercise the Windows `LLVM_LINK_LLVM_DYLIB=OFF`
-  path explicitly); confirm no shipped example/doc instructs `find_package(LLVM)` use.
-- Announce the packaging reduction on the RFC discussion thread.
+- Validate generation, level, and split overrides independently for representative
+  subprojects on Linux and Windows.
+- Set `amd-llvm_GENERATE_DEBUG_INFO=OFF` in nightly/release configurations and measure
+  the resulting debug artifact size.
+- Verify that changing an override rewrites the generated configuration inputs,
+  changes the component fingerprint, and automatically reconfigures that subproject on
+  the next build after top-level CMake configuration.
 
 ### Phase 4: Packaging
 
@@ -295,11 +324,12 @@ These changes become the default for nightly and release builds:
 ## Risks and Considerations
 
 - **Package size / storage.** Full debug symbols are large. Mitigated by always
-  splitting, compressing (`-gz`), shipping debug separately.
-- **`amd-llvm` static archives.** Removing the shipped LLVM/Clang/Flang component
-  static archives (§5) is the single largest size win but is a **user-visible packaging
-  change**: downstream static-linking / `find_package(LLVM)` against the SDK is dropped.
-  Tracked as the §5 discussion point and gated on the build/validation experiment.
+  splitting for release packaging, compressing (`-gz`), shipping debug separately, and
+  disabling generation for selected high-volume components such as `amd-llvm`.
+- **Configuration precedence.** Global, per-project, and build-type-derived defaults
+  can be confusing unless resolution is deterministic. The precedence in §1 is
+  centralized, invalid values fail configuration, and ignored or unsupported settings
+  emit warnings.
 - **Stripping correctness** for unconventional ELF layouts (deb `debugedit`,
   issue 4047) and for kpack-split artifacts (RFC0008) must be re-verified.
 - **Build time / cache.** `/Zi` would break Windows caching; `/Z7` is mandatory.
@@ -307,8 +337,8 @@ These changes become the default for nightly and release builds:
 ## References
 
 - `CMakeLists.txt` — existing debug options.
-- `cmake/therock_subproject.cmake` — strip and minimal-debug flag
-  injection.
+- `cmake/therock_subproject.cmake` — generated init/toolchain/make-rules propagation,
+  per-platform flag injection, and install stripping.
 - `cmake/therock_global_post_subproject.cmake` and
   `cmake/therock_install_linux_build_id_files.cmake` — Linux build-id split.
 - `cmake/therock_compiler_config.cmake` — MSVC embedded debug for ccache/sccache.
