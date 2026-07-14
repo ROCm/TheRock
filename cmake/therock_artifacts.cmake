@@ -242,6 +242,23 @@ function(therock_provide_artifact slice_name)
       list(APPEND _split_manifest_files "${_split_manifest}")
       list(APPEND _split_component_dirs "${_split_generic_dir}")
 
+      # Host debug files are generic and may retain header-only device sections
+      # after --only-keep-debug, so do not process them as kpack inputs.
+      # TODO: Produce per-architecture GPU kernel debug-symbol artifacts while
+      # splitting runtime device code, then merge them with this host debug output.
+      if(_component STREQUAL "dbg")
+        add_custom_command(
+          OUTPUT "${_split_manifest}"
+          COMMENT "Copying ${_artifact_prefix} to generic artifact"
+          COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_split_generic_dir}"
+          COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${_unsplit_component_dir}" "${_split_generic_dir}"
+          DEPENDS "${_unsplit_manifest}"
+          VERBATIM
+        )
+        continue()
+      endif()
+
       # Build split command arguments
       set(_split_command_args
         --artifact-dir "${_unsplit_component_dir}"
