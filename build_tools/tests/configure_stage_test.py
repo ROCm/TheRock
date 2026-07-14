@@ -4,6 +4,7 @@
 
 import json
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -116,6 +117,26 @@ class ManifestValidationTest(unittest.TestCase):
                 valid_features,
                 f"Invalid feature '{feature}' for subproject '{subproject}'",
             )
+
+    def test_artifact_subprojects_matches_cmake(self):
+        """Verify artifact_subprojects.json matches what CMake generates."""
+        repo_root = Path(__file__).parent.parent.parent
+        # Skip if submodules aren't fetched (required for CMake configure)
+        hip_version = repo_root / "rocm-systems" / "projects" / "hip" / "VERSION"
+        if not hip_version.exists():
+            self.skipTest("Submodules not fetched")
+
+        script = repo_root / "build_tools" / "generate_subproject_manifest.py"
+        result = subprocess.run(
+            [sys.executable, str(script), "--verify"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"artifact_subprojects.json is out of sync:\n{result.stdout}{result.stderr}",
+        )
 
 
 if __name__ == "__main__":
