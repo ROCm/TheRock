@@ -175,8 +175,8 @@ Versions for each distribution channel:
 
 | Package name     | Example release version (stable x stable) | Example nightly version (stable x nightly) |
 | ---------------- | ----------------------------------------- | ------------------------------------------ |
-| jax-rocm7-pjrt   | `2.9.1+rocm7.10.0`                        | `0.10.2+rocm7.15.0a20260712`               |
-| jax-rocm7-plugin | `2.9.1+rocm7.10.0`                        | `0.10.2+rocm7.15.0a20260712`               |
+| jax-rocm7-pjrt   | `0.10.0+rocm7.14.0`                       | `0.10.2+rocm7.15.0a20260712`               |
+| jax-rocm7-plugin | `0.10.0+rocm7.14.0`                       | `0.10.2+rocm7.15.0a20260712`               |
 
 ### Working with Python package versions
 
