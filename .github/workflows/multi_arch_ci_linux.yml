@@ -14,6 +14,7 @@ on:
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, build_pytorch,
           build_native_linux, test_python_packages_matrix,
+          pytorch_build_matrix,
           prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
@@ -291,20 +292,26 @@ jobs:
   # inputs.kpack_split.
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
-    name: Build PyTorch (fat + split) | ${{ matrix.pytorch_git_ref }}
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
+    name: Build PyTorch (fat + split)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        fromJSON(inputs.build_config).build_pytorch == true &&
+        toJSON(fromJSON(inputs.build_config).pytorch_build_matrix) != '[]'
+      }}
     strategy:
       fail-fast: false
       matrix:
-        pytorch_git_ref: ["release/2.10", "release/2.11", "release/2.12"]
+        include: ${{ fromJSON(inputs.build_config).pytorch_build_matrix }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
-      python_version: "3.12"
+      python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
-      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      amdgpu_families: ${{ matrix.amdgpu_families }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
