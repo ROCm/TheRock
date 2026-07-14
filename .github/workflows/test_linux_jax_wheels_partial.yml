@@ -285,10 +285,11 @@ jobs:
           unset HIP_VISIBLE_DEVICES
           unset ROCR_VISIBLE_DEVICES
 
+          python -m pip install uv~=0.11.2
           python -c "import jax; print(jax.local_devices())"
 
           echo "=== Starting full test suite ==="
-          pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
-          pytest jax/tests/core_test.py -q --log-cli-level=INFO
-          pytest jax/tests/util_test.py -q --log-cli-level=INFO
-          pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO
+          cd jax
+          # Create a dist directory to avoid the issue with the pytest-rocm.sh script.
+          mkdir -p dist
+          ./ci/run_pytest_rocm.sh
