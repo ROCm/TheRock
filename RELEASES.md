@@ -567,7 +567,7 @@ the HIP SDK:
 
 ```bash
 install/
-  .kpack/     # GPU-specific kernel packs (multi-arch only)
+  .kpack/     # GPU-specific kernel packs
   bin/
   clients/
   include/
@@ -582,9 +582,9 @@ such as setting environment variables.
 Multi-arch tarballs separate GPU-specific kernel code into a `.kpack/`
 directory. Two variants are available:
 
-- **Per-family tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz`)
+- **Per-family multi-arch tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz`)
   that include `.kpack` files only for one family.
-- **Multi-arch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260430.tar.gz`)
+- **Full multi-arch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260430.tar.gz`)
   that include `.kpack` files for all supported targets.
 
 Browse and download tarballs from
