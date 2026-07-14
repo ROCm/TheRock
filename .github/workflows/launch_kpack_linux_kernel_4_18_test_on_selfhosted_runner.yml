@@ -21,10 +21,10 @@ on:
         required: true
         type: string
       vm_memory:
-        description: "VM memory size passed to QEMU."
+        description: "VM memory size passed to QEMU, including unit suffix. For example: 8192M or 8G."
         required: false
         type: string
-        default: "8192"
+        default: "8192M"
       vm_cpus:
         description: "VM vCPU count passed to QEMU."
         required: false
@@ -105,17 +105,18 @@ jobs:
 
           if command -v qemu-system-x86_64 >/dev/null &&
              command -v ssh >/dev/null &&
-             command -v lspci >/dev/null; then
+             command -v lspci >/dev/null &&
+             command -v python3 >/dev/null; then
             exit 0
           fi
 
           if command -v apt-get >/dev/null; then
             sudo apt-get update
-            sudo apt-get install -y qemu-system-x86 qemu-utils openssh-client pciutils
+            sudo apt-get install -y qemu-system-x86 qemu-utils openssh-client pciutils python3
           elif command -v dnf >/dev/null; then
-            sudo dnf install -y qemu-kvm qemu-img openssh-clients pciutils
+            sudo dnf install -y qemu-kvm qemu-img openssh-clients pciutils python3
           else
-            echo "Unsupported runner OS: install QEMU, OpenSSH client, and pciutils on the self-hosted runner."
+            echo "Unsupported runner OS: install QEMU, OpenSSH client, pciutils, and python3 on the self-hosted runner."
             exit 1
           fi
 
@@ -219,6 +220,37 @@ jobs:
 
           rm -f "${VM_PID_FILE}" "${VM_SERIAL_LOG}"
 
+          print_serial_log_tail() {
+            if [ -f "${VM_SERIAL_LOG}" ]; then
+              echo "Last lines from VM serial log:"
+              sudo tail -n 80 "${VM_SERIAL_LOG}" || true
+            fi
+          }
+
+          python3 - <<'PY'
+          import os
+          import socket
+          import sys
+
+          port = os.environ["VM_SSH_PORT"]
+          try:
+              port_number = int(port)
+          except ValueError:
+              print(f"::error::vm_ssh_port must be a TCP port number: {port}")
+              sys.exit(1)
+          if not 1 <= port_number <= 65535:
+              print(f"::error::vm_ssh_port must be between 1 and 65535: {port}")
+              sys.exit(1)
+
+          with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              try:
+                  sock.bind(("127.0.0.1", port_number))
+              except OSError as exc:
+                  print(f"::error::TCP port 127.0.0.1:{port} is not available for VM SSH forwarding: {exc}")
+                  print("Choose another vm_ssh_port or stop the process currently using this port.")
+                  sys.exit(1)
+          PY
+
           pci_args=()
           for pci_device in ${PCI_DEVICES}; do
             pci_args+=("-device" "vfio-pci,host=${pci_device}")
@@ -240,6 +272,19 @@ jobs:
             -monitor none \
             -daemonize \
             -pidfile "${VM_PID_FILE}"
+
+          if [ ! -f "${VM_PID_FILE}" ]; then
+            echo "::error::QEMU did not create pidfile: ${VM_PID_FILE}"
+            print_serial_log_tail
+            exit 1
+          fi
+
+          vm_pid="$(sudo cat "${VM_PID_FILE}")"
+          if ! sudo kill -0 "${vm_pid}" 2>/dev/null; then
+            echo "::error::QEMU process ${vm_pid} is not running after VM launch."
+            print_serial_log_tail
+            exit 1
+          fi
 
       - name: Wait for VM SSH
         run: |

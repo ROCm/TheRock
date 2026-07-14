@@ -79,7 +79,7 @@ jobs:
                   else:
                       device_type, device_name = description, "Unknown device"
 
-                  device_type = pci_id.sub("", device_type).strip().title()
+                  device_type = pci_id.sub("", device_type).strip()
 
                   device_name = revision.sub("", device_name)
                   device_name = pci_id.sub("", device_name)
