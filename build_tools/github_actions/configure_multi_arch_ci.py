@@ -1436,40 +1436,24 @@ def _parse_changed_paths_override() -> list[str] | None:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
-    # The "run everything" is initial state for superrepo multi-arch CI migration.
-    # We will eventually support path filtering and component selection.
-    # TODO: Provide custom decision logic to run specific components and paths
-    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
-
+    # TEMPORARY: Enable synthetic submodule bump analysis only on my test branch.
     override_changed_files = _parse_changed_paths_override()
 
     if override_changed_files is not None:
-        print("=== Git Diff (override) ===")
-        print("Using THEROCK_CHANGED_PATHS override for changed-file filtering")
+        print("=== Git Diff (test override) ===")
+        print("Using synthetic submodule bump for testing")
         git_context = GitContext(
             changed_files=override_changed_files,
             submodule_paths=list(get_git_submodule_paths() or []),
         )
-    elif skip_path_filters:
-        # External repo: skip path filtering, run everything
-        git_context = GitContext.empty()
-    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
-        # 'pull_request' and 'push' events can use the list of changed files
-        # compared to the "prior commit" to affect job selections/options.
+
+    elif ci_inputs.is_pull_request or ci_inputs.is_push:
         print("=== Git Diff ===")
+        print(f"Computing GitContext using base ref {ci_inputs.base_ref!r}")
         git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
         print()
-    elif ci_inputs.is_pull_request or ci_inputs.is_push:
-        # Some push events, such as branch creation, do not have a reliable
-        # base ref for changed-file filtering. Run without path filters.
-        print("=== Git Diff ===")
-        print("No diff base is available; running without changed-file filtering")
-        print()
-        git_context = GitContext.empty()
+
     else:
-        # 'workflow_dispatch' and 'schedule' events don't have as natural
-        # a "prior commit" to compare against.
         git_context = GitContext.empty()
 
     outputs = configure(ci_inputs, git_context)
