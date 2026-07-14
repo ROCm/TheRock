@@ -447,7 +447,6 @@ jobs:
       # checkout_from_manifest.py --no-hipify --no-submodules so tests use the
       # exact source commit that produced the package under test.
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
-      multi_arch: true
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
 
@@ -499,7 +498,6 @@ jobs:
               "pytorch_git_repo": "${{ inputs.pytorch_git_ref == 'nightly' && 'pytorch/pytorch' || 'ROCm/pytorch' }}",
               "test_configs": "default distributed inductor",
               "tests_to_include": "",
-              "multi_arch": true,
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref }}"
             }
