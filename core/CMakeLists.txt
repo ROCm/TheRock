@@ -576,7 +576,6 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-catch2
     RUNTIME_DEPS
       hip-clr

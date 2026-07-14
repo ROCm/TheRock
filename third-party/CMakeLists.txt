@@ -10,7 +10,6 @@
 add_custom_target(therock-third-party)
 
 # No-dep third party libraries (alphabetical)
-add_subdirectory(boost)
 add_subdirectory(Catch2)
 add_subdirectory(eigen)
 add_subdirectory(fftw3)
