@@ -61,25 +61,6 @@ on:
         required: false
         type: string
         default: regular
-    secrets:
-      gh_app_id:
-        description: >-
-          GitHub App ID used to mint an installation access token for
-          zizmor's online audits (e.g. the 'unpinned-uses' audit
-          resolves action SHAs against the GitHub API). Optional:
-          when both 'gh_app_id' and 'gh_app_private_key' are passed
-          the reusable workflow generates a short-lived App token
-          and exports it as 'GH_TOKEN' to zizmor; otherwise it falls
-          back to the calling workflow's default GITHUB_TOKEN, which
-          has only the permissions granted to this reusable workflow
-          (minimum: contents: read). Fork PRs that can't read the
-          base repo's secrets land on the fallback automatically.
-        required: false
-      gh_app_private_key:
-        description: >-
-          PEM-encoded private key paired with 'gh_app_id'. See
-          'gh_app_id' for usage details.
-        required: false
 
 permissions:
   contents: read
@@ -88,9 +69,7 @@ jobs:
   scan:
     name: Zizmor scan
     runs-on: ubuntu-24.04
-    env:
-      GH_APP_ID: ${{ secrets.gh_app_id }}
-      GH_APP_PRIVATE_KEY: ${{ secrets.gh_app_private_key }}
+    timeout-minutes: 20
     steps:
       - name: Bootstrap checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -112,14 +91,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generate GitHub App token
-        id: app-token
-        if: env.GH_APP_ID != '' && env.GH_APP_PRIVATE_KEY != ''
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ env.GH_APP_ID }}
-          private-key: ${{ env.GH_APP_PRIVATE_KEY }}
-
       - name: Run zizmor
         id: scan
         env:
@@ -128,7 +99,7 @@ jobs:
           ZIZMOR_SOURCE_DIR: ${{ inputs.scan_path }}
           ZIZMOR_SEVERITY_THRESHOLD: ${{ inputs.severity_threshold }}
           ZIZMOR_PERSONA: ${{ inputs.persona }}
-          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: python build_tools/scan_tools/github_actions/zizmor.py
 
       - name: Upload SARIF report to code scanning
