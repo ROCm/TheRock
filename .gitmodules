@@ -2,10 +2,6 @@
 	path = base/half
 	url = https://github.com/ROCm/half.git
 	branch = rocm
-[submodule "HIPIFY"]
-	path = compiler/hipify
-	url = https://github.com/ROCm/HIPIFY.git
-	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git

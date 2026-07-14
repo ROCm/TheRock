@@ -88,7 +88,7 @@ submodules = ["half", "rocm-cmake"]
 
 [source_sets.compilers]
 description = "Compiler toolchain submodules"
-submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
+submodules = ["llvm-project", "spirv-llvm-translator"]
 
 [source_sets.debug-tools]
 description = "ROCm debug tools submodules"

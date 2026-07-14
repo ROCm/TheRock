@@ -78,7 +78,7 @@ class StageImpactTest(unittest.TestCase):
             """
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
-            submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
+            submodules = ["llvm-project", "spirv-llvm-translator"]
 
             [artifact_groups.compiler]
             description = "Compiler"
@@ -381,8 +381,8 @@ class StageImpactTest(unittest.TestCase):
             """
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
-            submodules = ["llvm-project", "HIPIFY"]
-            path_prefixes = ["compiler/amd-llvm", "compiler/hipify"]
+            submodules = ["llvm-project"]
+            path_prefixes = ["compiler/amd-llvm"]
 
             [source_sets.math-libs]
             description = "Math libraries"
@@ -437,7 +437,7 @@ class StageImpactTest(unittest.TestCase):
 
         topology = BuildTopology(self.topology_path)
         result = analyze_stage_impact(
-            ["compiler/hipify/src/foo.cpp"],
+            ["compiler/amd-llvm/amd/hipify/src/foo.cpp"],
             topology=topology,
         )
 

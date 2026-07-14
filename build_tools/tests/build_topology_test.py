@@ -119,7 +119,7 @@ class BuildTopologyTest(unittest.TestCase):
             """
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
-            submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
+            submodules = ["llvm-project", "spirv-llvm-translator"]
 
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
@@ -145,7 +145,7 @@ class BuildTopologyTest(unittest.TestCase):
             """
             [source_sets.compilers]
             description = "Compiler toolchain submodules"
-            submodules = ["llvm-project", "HIPIFY"]
+            submodules = ["llvm-project"]
 
             [source_sets.rocm-libraries]
             description = "ROCm libraries"
