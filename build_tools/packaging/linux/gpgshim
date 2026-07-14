@@ -309,6 +309,14 @@ class GPGShim:
         self.logger.debug("gpgshim invoked (pid={}, ppid={})".format(os.getpid(), os.getppid()))
         self.logger.debug("args: {}".format(args))
 
+        # Handle --version probe: rpmsign calls 'gpg --version' before signing
+        # to verify the binary exists and is functional. Return a minimal gpg-
+        # compatible version string and exit immediately without reading stdin.
+        if args and args[0] in ('--version', '-v'):
+            sys.stdout.write("gpg (GnuPG) 2.2.0 [gpgshim]\n")
+            sys.stdout.flush()
+            return 0
+
         options = self.parse_args(args)
 
         self.logger.debug("parsed options:")
