@@ -58,7 +58,7 @@ Payload contract
 Top-level keys align with
 `scripts/receive_therock/therock_parse_input.py` in ROCm/Quartz-Tester.
 
-`dispatch_kind` is the dispatch envelope's lifecycle marker, used by the
+`event_type` is the dispatch envelope's lifecycle marker, used by the
 receiver to route to the correct ingest path and to record whether the
 run is still in flight. It is one of:
 
@@ -69,7 +69,7 @@ run is still in flight. It is one of:
   `repository` and a `workflow_run` object including the final
   `conclusion` and the `jobs` array fetched from the Actions API.
 
-`dispatch_kind` is intentionally distinct from two unrelated fields that
+`event_type` is intentionally distinct from two unrelated fields that
 also live on the payload and are easy to confuse with it:
 
 * `workflow_run.event`  — the GitHub Actions trigger that started the
@@ -86,6 +86,7 @@ import re
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -341,6 +342,24 @@ def _build_workflow_run_dict(
     }
 
 
+def _normalize_reporting_path(reporting_workflow: str) -> str:
+    """Normalize a caller-supplied workflow identifier to a `.github/workflows`
+    path whose basename is the workflow file.
+
+    Accepts a bare filename (`multi_arch_build_portable_linux.yml`), a workflow
+    path, or a full `github.workflow_ref`-style value
+    (`owner/repo/.github/workflows/x.yml@refs/heads/main`); the `@ref` suffix
+    and any leading directories are stripped. Returns `""` for an empty input,
+    signalling the caller to keep the run's API-reported path.
+    """
+    value = reporting_workflow.strip()
+    if not value:
+        return ""
+    value = value.split("@", 1)[0]  # drop any @ref suffix
+    name = PurePosixPath(value).name
+    return f".github/workflows/{name}" if name else ""
+
+
 def _build_payload(
     *,
     token: str,
@@ -349,15 +368,24 @@ def _build_payload(
     captured_outputs: dict[str, Any],
     run_conclusion: str,
     run_phase: str = "completed",
+    reporting_workflow: str = "",
 ) -> dict[str, Any]:
     """Build a payload for the current run using GITHUB_RUN_ID.
 
     Workflow inputs and the calling workflow's hand-picked job outputs
     (see `--embedded-inputs` / `--captured-outputs`) are threaded in by
-    the caller, since the Actions API does not expose them.
+    the caller, since the Actions API does not expose it.
+
+    `reporting_workflow` (when set) overrides the `workflow_run.path` the
+    receiver classifies on. Reusable workflows (`uses:`) all share the
+    top-level run's `GITHUB_RUN_ID`, so the Actions API returns the entry
+    workflow's path for every nested call; the caller passes its own file's
+    basename so each leaf is classified by its true workflow rather than
+    collapsing onto the orchestrator. `run_id` deliberately stays the shared
+    run's id (it links the leaf back to its parent run).
 
     When *run_phase* is `"started"`, the payload uses
-    `workflow_run_in_progress` as the `dispatch_kind` with the live run
+    `workflow_run_in_progress` as the `event_type` with the live run
     status from the API (typically `in_progress`). Jobs are skipped
     because they have not completed yet.
     """
@@ -393,7 +421,7 @@ def _build_payload(
     )
 
     if is_started:
-        dispatch_kind = "workflow_run_in_progress"
+        event_type = "workflow_run_in_progress"
         # The Actions API briefly returns null for `status` on a newly-queued
         # run before the runner picks it up. We're announcing the run at the
         # very start of its first job, so any null here means "in_progress" —
@@ -401,26 +429,40 @@ def _build_payload(
         status = wr.get("status") or "in_progress"
         conclusion = None
     else:
-        dispatch_kind = "workflow_run_completed"
+        event_type = "workflow_run_completed"
         # We deliberately do NOT trust `wr.get("status")` here: this script
         # runs from inside the workflow it's reporting on, so the API still
         # shows the run as `in_progress` even though we know we're at the end.
         status = "completed"
         conclusion = run_conclusion
 
+    workflow_run = _build_workflow_run_dict(
+        wr,
+        status=status,
+        conclusion=conclusion,
+        inputs=embedded_inputs,
+        captured_outputs=captured_outputs,
+        jobs=jobs,
+        parent_workflow=parent_workflow,
+        referenced_workflows=referenced_workflows,
+    )
+
+    reporting_path = _normalize_reporting_path(reporting_workflow)
+    if reporting_path and reporting_path != workflow_run.get("path"):
+        log.info(
+            "Overriding reported workflow path %r -> %r (reporting_workflow=%r); "
+            "run_id %s is the shared entry run.",
+            workflow_run.get("path"),
+            reporting_path,
+            reporting_workflow,
+            workflow_run.get("id"),
+        )
+        workflow_run["path"] = reporting_path
+
     return {
-        "dispatch_kind": dispatch_kind,
+        "event_type": event_type,
         "repository": repo,
-        "workflow_run": _build_workflow_run_dict(
-            wr,
-            status=status,
-            conclusion=conclusion,
-            inputs=embedded_inputs,
-            captured_outputs=captured_outputs,
-            jobs=jobs,
-            parent_workflow=parent_workflow,
-            referenced_workflows=referenced_workflows,
-        ),
+        "workflow_run": workflow_run,
     }
 
 
@@ -554,6 +596,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("started", "completed"),
         help="Phase of the workflow run: 'started' (in-progress) or 'completed' (default)",
     )
+    p.add_argument(
+        "--reporting-workflow",
+        default=os.environ.get("REPORTING_WORKFLOW", ""),
+        help=(
+            "Filename of the workflow doing the reporting (e.g. "
+            "'multi_arch_build_portable_linux.yml'). Overrides the "
+            "API-reported workflow_run.path so a reusable workflow (which "
+            "shares the top-level run's GITHUB_RUN_ID) is classified by its "
+            "own file rather than the entry workflow's. Empty = keep the "
+            "API path. Defaults to the REPORTING_WORKFLOW env var."
+        ),
+    )
     return p
 
 
@@ -627,6 +681,7 @@ def _load_payload(
         captured_outputs=captured_outputs,
         run_conclusion=args.run_conclusion,
         run_phase=args.run_phase,
+        reporting_workflow=args.reporting_workflow,
     )
 
 
