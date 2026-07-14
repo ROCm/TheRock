@@ -114,12 +114,16 @@ def validate_kpack_split_target_completeness(
 
     expected_target_set = set(expected_targets)
     discovered_target_set = artifacts.all_target_families
+
+    expected = ", ".join(sorted(expected_target_set)) or "(none)"
+    discovered = ", ".join(sorted(discovered_target_set)) or "(none)"
+    print(f"::: KPACK_SPLIT_ARTIFACTS expected device targets: {expected}")
+    print(f"::: KPACK_SPLIT_ARTIFACTS discovered artifact targets: {discovered}")
+
     missing_targets = sorted(expected_target_set - discovered_target_set)
     if not missing_targets:
         return
 
-    expected = ", ".join(sorted(expected_target_set)) or "(none)"
-    discovered = ", ".join(sorted(discovered_target_set)) or "(none)"
     missing = ", ".join(missing_targets)
     raise RuntimeError(
         "KPACK_SPLIT_ARTIFACTS target completeness check failed: "

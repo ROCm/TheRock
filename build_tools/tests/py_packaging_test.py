@@ -22,6 +22,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
+from build_python_packages import validate_kpack_split_target_completeness
 
 
 class TmpDirTestCase(unittest.TestCase):
@@ -703,9 +704,6 @@ class KpackSplitCompletenessTest(TmpDirTestCase):
         windows_targets: list[str] | None,
         platform_name: str,
     ) -> None:
-        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-        from build_python_packages import validate_kpack_split_target_completeness
-
         validate_kpack_split_target_completeness(
             kpack_split=kpack_split,
             artifact_dir=self.temp_dir / "artifacts",
