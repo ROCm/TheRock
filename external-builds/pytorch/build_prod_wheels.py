@@ -284,23 +284,28 @@ def get_version_suffix_for_installed_rocm_package() -> str:
 
 
 def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
-    """Read the LLVM hash from triton-windows cmake/llvm-hash.txt."""
-    hash_file = triton_dir / "cmake" / "llvm-hash.txt"
-    if not hash_file.exists():
-        raise RuntimeError(f"LLVM hash file not found: {hash_file}")
-    return hash_file.read_text().strip()
+    """Read the LLVM hash from triton-windows cmake/llvm-info.json."""
+    info_file = triton_dir / "cmake" / "llvm-info.json"
+    if not info_file.is_file():
+        raise RuntimeError(f"LLVM hash file not found: {info_file}")
+    return str(json.loads(info_file.read_text(encoding="utf-8"))["llvm_hash"]).strip()
 
 
 def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
     """Download and extract pre-built LLVM binaries for triton-windows.
 
     triton-windows requires a specific LLVM version that matches the hash
-    in cmake/llvm-hash.txt. Pre-built binaries are hosted at oaitriton.blob.core.windows.net.
+    in cmake/llvm-info.json. Pre-built binaries are hosted at oaitriton.blob.core.windows.net.
     """
     full_hash = get_triton_windows_llvm_hash(triton_dir)
     short_hash = full_hash[:8]
+    build_number = int(
+        json.loads(
+            (triton_dir / "cmake" / "llvm-info.json").read_text(encoding="utf-8")
+        )["build_number"]
+    )
 
-    llvm_dir = triton_dir.parent / f"llvm-{short_hash}-windows-x64"
+    llvm_dir = triton_dir.parent / f"llvm-{short_hash}-windows-x64-{build_number}"
     llvm_hash_marker = llvm_dir / ".llvm-hash"
 
     if llvm_hash_marker.exists():
@@ -312,7 +317,7 @@ def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
     if llvm_dir.exists():
         shutil.rmtree(llvm_dir)
 
-    filename = f"llvm-{short_hash}-windows-x64.tar.gz"
+    filename = f"llvm-{short_hash}-windows-x64-{build_number}.tar.gz"
     download_url = f"{LLVM_BASE_URL}/{filename}"
 
     print(f"Downloading LLVM for triton-windows...")
