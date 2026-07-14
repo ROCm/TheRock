@@ -48,6 +48,9 @@ for _path in (_BUILD_TOOLS_DIR, _LINUX_DIR):
         sys.path.insert(0, str(_path))
 
 _BP_PATH = _LINUX_DIR / "build_package.py"
+# importlib is required here: a normal ``import build_package`` would execute
+# ``build_package.py``'s module-level ``if __name__ == "__main__"`` guard and
+# call ``sys.exit`` when loaded as a test dependency.
 _BP_SPEC = importlib.util.spec_from_file_location("build_package", _BP_PATH)
 build_package = importlib.util.module_from_spec(_BP_SPEC)
 _BP_SPEC.loader.exec_module(build_package)
@@ -880,9 +883,13 @@ class MainAndRunTest(unittest.TestCase):
                 "--target",
                 "gfx1100",
             ]
-            with patch.object(build_package, "run") as mock_run:
+            with (
+                patch.object(build_package, "run") as mock_run,
+                patch.object(build_package, "build_package_variants") as mock_build_variants,
+            ):
                 build_package.main(argv)
             mock_run.assert_called_once()
+            mock_build_variants.assert_not_called()
             passed = mock_run.call_args[0][0]
             self.assertEqual(passed.pkg_type, "deb")
             self.assertEqual(passed.rocm_version, "7.1.0")
@@ -932,7 +939,11 @@ class MainAndRunTest(unittest.TestCase):
         _mock_cleanup,
         _mock_summary,
     ):
-        """``run`` exits with code 1 when no packages remain after list resolution."""
+        """``run`` exits with code 1 when no packages remain after list resolution.
+
+        Note: ``run()`` uses ``sys.exit(1)`` today, which is a known anti-pattern
+        (prefer raising an exception). This test documents current behavior only.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             mock_create_cfg.return_value = _config(Path(tmp))
             args = _args(Path(tmp))
