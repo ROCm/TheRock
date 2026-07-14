@@ -1,7 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Shared utilities for PyTorch testing."""
+"""Shared utilities for PyTorch testing.
+
+Several helpers here manage GPU visibility/isolation through HIP_VISIBLE_DEVICES,
+ROCR_VISIBLE_DEVICES, and GPU_DEVICE_ORDINAL. See
+https://rocm.docs.amd.com/en/latest/conceptual/gpu-isolation.html for the
+multiple ways to achieve isolation of GPUs in the ROCm software stack.
+"""
 
 import os
 import subprocess
@@ -18,9 +24,6 @@ def reconcile_agent_visibility_env() -> None:
     The runner scripts always set HIP_VISIBLE_DEVICES, which supersedes and
     conflicts with a GPU_DEVICE_ORDINAL injected by the CI runner's isolation
     env-file (HIP aborts fatally on the mismatch).
-
-    See https://rocm.docs.amd.com/en/latest/conceptual/gpu-isolation.html for
-    multiple ways to achieve isolation of GPUs in the ROCm software stack.
     """
     gpu_device_ordinal = os.environ.pop("GPU_DEVICE_ORDINAL", None)
     if gpu_device_ordinal is not None:
