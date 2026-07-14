@@ -331,7 +331,7 @@ source_sets = ["amd-mesa", "rocm-systems"]
 [artifact_groups.rocjitsu]
 description = "ROCm emulation, virtualization, and instrumentation tools"
 type = "generic"
-artifact_group_deps = []
+artifact_group_deps = ["third-party-sysdeps"]
 source_sets = ["rocm-systems"]
 disable_platforms = ["windows"]
 
