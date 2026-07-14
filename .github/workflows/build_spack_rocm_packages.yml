@@ -1,6 +1,13 @@
 name: Build Spack ROCm Packages
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - dockerfiles/spack_ubuntu24_04.Dockerfile
+      - dockerfiles/rocm-spack-env/**
+      - .github/workflows/build_spack_rocm_packages.yml
   push:
     branches:
       - main
