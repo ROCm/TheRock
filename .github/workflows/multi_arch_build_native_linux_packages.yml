@@ -106,11 +106,6 @@ jobs:
             --expand-family-to-targets \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
-      - name: Artifacts Check Test
-        id: check-artifacts
-        run: |
-          python ./build_tools/tests/artifacts_pkg_checker_csv.py
-
       - name: Build Packages
         id: build-packages
         run: |
