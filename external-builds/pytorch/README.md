@@ -243,6 +243,9 @@ capabilities tailored for AMD ROCm GPUs. See the script for detailed
 instructions. Here are a few examples:
 
 ```bash
+# Install test dependencies
+python -m pip install -r pytorch/.ci/docker/requirements-ci.txt
+
 # Basic usage (auto-detect everything, no extra args):
 python run_pytorch_tests.py
 
