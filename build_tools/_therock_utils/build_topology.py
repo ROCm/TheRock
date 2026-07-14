@@ -1165,25 +1165,19 @@ class BuildTopology:
         with manifest_path.open() as f:
             return json.load(f)
 
+    def _load_project_mappings(self) -> Optional[Dict]:
+        """Load project_mappings.json from repo root."""
+        return self._load_json_manifest("project_mappings.json")
+
     def get_subproject_to_feature_map(
         self, build_dir: Optional[Path] = None
     ) -> Dict[str, str]:
-        """Map subproject names directly to feature names.
-
-        This is feature-oriented: it maps each subproject to the CMake feature
-        flag that gates its compilation, not just its packaging artifact.
-
-        For example, hipSPARSE is packaged in the 'blas' artifact but is gated
-        by THEROCK_ENABLE_SPARSE, so it maps to 'SPARSE' not 'BLAS'.
-        """
+        """Map subproject names directly to feature names."""
         feature_map: Dict[str, str] = {}
-
-        # Load subproject_features.json which maps subproject -> feature directly
-        subproject_features = self._load_json_manifest("subproject_features.json")
-        if subproject_features:
-            for subproject, feature in subproject_features.items():
+        mappings = self._load_project_mappings()
+        if mappings and "subproject_features" in mappings:
+            for subproject, feature in mappings["subproject_features"].items():
                 feature_map[subproject.lower()] = feature
-
         return feature_map
 
     def get_alias_to_artifact_map(
@@ -1213,13 +1207,12 @@ class BuildTopology:
                 alias_map[db_name.lower()] = artifact.name
 
         # Include rocm-systems project mappings (e.g., "hip" -> "core-hip")
-        # This maps rocm-systems directory names to TheRock artifact names
-        # Skip entries that would override canonical artifact mappings
-        rocm_systems_manifest = self._load_json_manifest("rocm_systems_projects.json")
-        if rocm_systems_manifest:
-            for project_name, artifact_name in rocm_systems_manifest.items():
+        mappings = self._load_project_mappings()
+        if mappings and "rocm_systems_projects" in mappings:
+            for project_name, artifact_name in mappings[
+                "rocm_systems_projects"
+            ].items():
                 project_lower = project_name.lower()
-                # Don't override if the project name is already a canonical artifact name
                 if project_lower not in alias_map:
                     alias_map[project_lower] = artifact_name
 
@@ -1237,16 +1230,7 @@ class BuildTopology:
         platform_name: str = "",
         build_dir: Optional[Path] = None,
     ) -> Set[str]:
-        """Resolve project names to CMake feature names.
-
-        This uses a feature-oriented approach: subprojects map directly to the
-        CMake feature flag that gates their compilation, which may differ from
-        their packaging artifact.
-
-        Resolution order:
-        1. Check subproject_features.json for direct subproject -> feature mapping
-        2. Fall back to artifact mapping (artifact's feature_name)
-        """
+        """Resolve project names to CMake feature names."""
         features: Set[str] = set()
         feature_map = self.get_subproject_to_feature_map(build_dir)
         alias_map = self.get_alias_to_artifact_map(build_dir)
@@ -1286,19 +1270,7 @@ class BuildTopology:
         project_names: List[str],
         build_dir: Optional[Path] = None,
     ) -> Set[str]:
-        """Get build stages required to build the given projects.
-
-        This resolves projects to artifacts, then finds which stages produce
-        those artifacts. It also includes dependent stages and test artifact
-        stages transitively.
-
-        Args:
-            project_names: List of project/subproject names
-            build_dir: Optional build directory with artifact_subprojects.json
-
-        Returns:
-            Set of stage names required to build the projects
-        """
+        """Get build stages required to build the given projects."""
         # Resolve projects to artifacts
         alias_map = self.get_alias_to_artifact_map(build_dir)
         required_artifacts: Set[str] = set()

@@ -1,7 +1,0 @@
-{
-  "hipSPARSE": "SPARSE",
-  "hipSPARSELt": "SPARSE",
-  "rocSPARSE": "SPARSE",
-  "hipSOLVER": "SOLVER",
-  "rocSOLVER": "SOLVER"
-}
