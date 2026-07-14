@@ -94,7 +94,7 @@ BUILD_RUNNER_LABELS = {
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
-            {"label": "aws-linux-scale-rocm-sanitizer-r8a-dev", "weight": 1.0},
+            {"label": "aws-linux-rocm-large-dev", "weight": 1.0},
         ],
     },
     "windows": {
