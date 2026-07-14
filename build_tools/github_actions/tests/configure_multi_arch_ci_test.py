@@ -1384,6 +1384,42 @@ class TestFormatSummary(unittest.TestCase):
         outputs = cm.CIOutputs(is_ci_enabled=False)
         cm.write_outputs(self._inputs(), outputs)
 
+    def test_build_outputs_includes_manifest_diff_link(self):
+        linux = cm.BuildConfig(
+            per_family_info=[],
+            dist_amdgpu_families="gfx94X-dcgpu",
+            artifact_group="gfx94X-dcgpu",
+            build_variant_label="release",
+            build_variant_suffix="",
+            build_variant_cmake_preset="",
+            build_native_linux=True,
+            build_pytorch=False,
+            build_jax=False,
+        )
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            builds=cm.BuildConfigs(linux=linux),
+            jobs=jobs,
+        )
+        result = format_summary(self._inputs(), outputs)
+        self.assertIn("## Build outputs", result)
+        self.assertIn("Linux |", result)
+        self.assertIn("Windows |", result)
+        self.assertRegex(
+            result,
+            r"Manifest diff \*\(if produced\)\* \| "
+            r"https://[^|\s]+/12345-linux/logs/manifest-diff/index\.html "
+            r"\| — \| —",
+        )
+
 
 # ---------------------------------------------------------------------------
 # End-to-end: configure() pipeline
