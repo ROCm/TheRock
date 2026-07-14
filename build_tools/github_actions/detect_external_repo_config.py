@@ -53,10 +53,14 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "skip_submodules": ["rocm-systems"],
         "dvc_projects": ["external-rocm-systems"],
     },
+    "rocgdb": {
+        "cmake_source_var": "THEROCK_ROCGDB_SOURCE_DIR",
+        "submodule_path": "debug-tools/rocgdb/source",
+        "skip_submodules": ["rocgdb"],
+    },
     # Future repos can be added here:
     # "llvm-project": {...},
     # "hipify": {...},
-    # "rocgdb": {...},
     # "libhipcxx": {...},
 }
 
@@ -435,16 +439,21 @@ def main(argv=None):
             .replace("_SOURCE_DIR", "")
         )
 
-        # Extract projects and family_overrides from external_repo JSON if provided
+        # Extract caller-supplied fields from external_repo JSON if provided
         projects = ""
         family_overrides = {}
+        extra_cmake_options = ""
+
         if args.external_repo_json:
             try:
                 external_repo = json.loads(args.external_repo_json)
                 projects = external_repo.get("projects", "")
+
                 # family_overrides allows external repos to specify per-family config
                 # (e.g., test runners, test_labels_for_family) for their CI runs only
                 family_overrides = external_repo.get("family_overrides", {})
+
+                extra_cmake_options = external_repo.get("extra_cmake_options", "")
             except json.JSONDecodeError as e:
                 print(
                     f"Warning: failed to parse external_repo_json: {e}",
@@ -457,6 +466,7 @@ def main(argv=None):
             "checkout_path": checkout_path,
             "source_package": source_package,
             "fetch_sources_args": config.get("fetch_sources_args", ""),
+            "extra_cmake_options": extra_cmake_options,
             "projects": projects,
             "family_overrides": family_overrides,
         }

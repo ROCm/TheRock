@@ -144,6 +144,28 @@ class BuildCtestCommandTest(unittest.TestCase):
         le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
         self.assertNotIn("quick_exclude", le_patterns)
 
+    def test_verbose_flag_default(self):
+        # Components without a ctest_verbose override keep -V.
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "some-other-component"
+            cmd = self._build("quick", "", set())
+            self.assertIn("-V", cmd)
+        finally:
+            test_runner.test_component_job_name = original
+
+    def test_verbose_flag_dropped_for_rocprofiler_systems(self):
+        # rocprofiler-systems opts out of -V via COMPONENT_OVERRIDES.
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "rocprofiler-systems"
+            cmd = self._build("quick", "", set())
+            self.assertNotIn("-V", cmd)
+            # --output-on-failure must still be present so failures show output.
+            self.assertIn("--output-on-failure", cmd)
+        finally:
+            test_runner.test_component_job_name = original
+
     def test_therock_ci_exclude_label_applied(self):
         exclude_labels = {"quick_therock_ci_exclude"}
         cmd = self._build("quick", "", set(), exclude_labels)

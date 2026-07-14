@@ -182,6 +182,7 @@ amdgpu_family_info_matrix dictionary fields:
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
+- submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -189,20 +190,20 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
-            "test-runs-on": "linux-gfx942-1gpu-core42-ossci-rocm",
+            "test-runs-on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
             "test-runs-on-labels": [
                 {
                     "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.117,
-                },  # cirrascale (4/34)
+                    "weight": 0.1,
+                },  # ccs (5)
                 {
-                    "label": "linux-gfx942-1gpu-core42-ossci-rocm",
-                    "weight": 0.736,
-                },  # core42 (25/34)
+                    "label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+                    "weight": 0.8,
+                },  # ccs-csp (28)
                 {
                     "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.147,
-                },  # vultr (5/34)
+                    "weight": 0.1,
+                },  # vultr (5)
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
@@ -210,12 +211,8 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on-multi-gpu-labels": [
                 {
                     "label": "linux-gfx942-8gpu-ossci-rocm",
-                    "weight": 0.78,
-                },  # cirrascale (11/14)
-                {
-                    "label": "linux-gfx942-8gpu-core42-ossci-rocm",
-                    "weight": 0.21,
-                },  # core42 (3/14)
+                    "weight": 1.0,
+                },  # (10)
             ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
@@ -296,6 +293,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
+            # Only run tests on submodule bumps (builds always run)
+            "submodule_bump_tests_only": True,
         }
     },
 }
