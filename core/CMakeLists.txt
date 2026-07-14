@@ -654,3 +654,123 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enab
       rocrtst
   )
 endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)
+
+    # kfdtest statically links libhsakmt and dynamically links LLVM libraries.
+    # amd-llvm is needed at build time for headers and at runtime for shared libraries.
+    set(_kfdtest_build_deps
+      amd-llvm
+      ROCR-Runtime
+      therock-yaml-cpp
+    )
+
+    # Get the ROCR-Runtime binary directory to locate libhsakmt
+    get_target_property(_rocr_binary_dir ROCR-Runtime THEROCK_BINARY_DIR)
+
+    therock_cmake_subproject_declare(kfdtest
+      USE_TEST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/tests/kfdtest"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/kfdtest"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DCMAKE_PREFIX_PATH="
+        "-DLLVM_DIR="
+        "-DROCM_DIR="
+        "-DLIBHSAKMT_PATH=${_rocr_binary_dir}/libhsakmt"
+        "-DCMAKE_EXE_LINKER_FLAGS=-ldl"
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      BUILD_DEPS
+        ${_kfdtest_build_deps}
+      RUNTIME_DEPS
+        amd-llvm
+        ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_NUMACTL}
+        ${THEROCK_BUNDLED_ZLIB}
+        ${THEROCK_BUNDLED_ZSTD}
+      INTERFACE_LINK_DIRS
+        "lib"
+        "lib/rocm_sysdeps/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocm_sysdeps/lib"
+    )
+    therock_cmake_subproject_glob_c_sources(kfdtest SUBDIRS .)
+    therock_cmake_subproject_activate(kfdtest)
+
+    therock_provide_artifact(kfdtest
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-kfdtest.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        kfdtest
+    )
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)
+
+    # kfdtest statically links libhsakmt and dynamically links LLVM libraries.
+    # amd-llvm is needed at build time for headers and at runtime for shared libraries.
+    set(_kfdtest_build_deps
+      amd-llvm
+      ROCR-Runtime
+      therock-yaml-cpp
+    )
+
+    # Get the ROCR-Runtime binary directory to locate libhsakmt
+    get_target_property(_rocr_binary_dir ROCR-Runtime THEROCK_BINARY_DIR)
+
+    therock_cmake_subproject_declare(kfdtest
+      USE_TEST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/tests/kfdtest"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/kfdtest"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DCMAKE_PREFIX_PATH="
+        "-DLLVM_DIR="
+        "-DROCM_DIR="
+        "-DLIBHSAKMT_PATH=${_rocr_binary_dir}/libhsakmt"
+        "-DCMAKE_EXE_LINKER_FLAGS=-ldl"
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      BUILD_DEPS
+        ${_kfdtest_build_deps}
+      RUNTIME_DEPS
+        amd-llvm
+        ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_NUMACTL}
+        ${THEROCK_BUNDLED_ZLIB}
+        ${THEROCK_BUNDLED_ZSTD}
+      INTERFACE_LINK_DIRS
+        "lib"
+        "lib/rocm_sysdeps/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocm_sysdeps/lib"
+    )
+    therock_cmake_subproject_glob_c_sources(kfdtest SUBDIRS .)
+    therock_cmake_subproject_activate(kfdtest)
+
+    therock_provide_artifact(kfdtest
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-kfdtest.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        kfdtest
+    )
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)
