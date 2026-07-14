@@ -145,6 +145,12 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      # sysconfig bakes in the host toolcache include path, which does not exist
+      # inside the container; point CPATH at the container-visible include dir.
+      - name: Fix Python include path for containerized builds
+        run: |
+          echo "CPATH=${pythonLocation}/include/python${{ inputs.python_version }}" >> "${GITHUB_ENV}"
+
       # Multi-arch packages use pip extras (e.g. torch[device-gfx942]) to
       # select GPU-specific device packages. Expand the family to get the
       # comma-separated device extras string for pip install.
@@ -210,6 +216,14 @@ jobs:
               --index-subdir=${{ inputs.amdgpu_family }} \
               --activate-in-future-github-actions-steps
           fi
+
+      # libjpeg-dev/zlib1g-dev: pillow's only *required* build libs (setup.py
+      # `required = {"jpeg", "zlib"}`); needed whenever pip has no prebuilt
+      # pillow wheel for the test Python version and must build from source.
+      - name: Install system libraries for pip source builds
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends libjpeg-dev zlib1g-dev
 
       - name: Install test requirements
         run: |
