@@ -13,10 +13,7 @@ import re
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from setup_venv import (
-    GFX_TARGET_REGEX,
-    install_packages_into_venv,
-)
+from setup_venv import install_packages_into_venv
 
 
 class InstallPackagesTest(unittest.TestCase):
@@ -103,8 +100,8 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_url_complete(self, mock_run, mock_find_python):
-        """Passing index_url without index_subdir uses the URL as-is."""
+    def test_index_url(self, mock_run, mock_find_python):
+        """Passing index_url uses the URL as-is."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
@@ -116,31 +113,16 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_name_with_subdir(self, mock_run, mock_find_python):
-        """Passing index_name with index_subdir constructs full URL."""
+    def test_index_name(self, mock_run, mock_find_python):
+        """Passing index_name without index_url uses a known url."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
             index_name="stable",
-            index_subdir="gfx110X-all",
         )
 
         cmd = mock_run.call_args[0][0]
-        self.assertIn("--index-url=https://repo.amd.com/rocm/whl/gfx110X-all", cmd)
-
-    @patch("setup_venv.find_venv_python_exe", return_value="python")
-    @patch("setup_venv.run_command")
-    def test_index_url_with_subdir(self, mock_run, mock_find_python):
-        """Passing index_url with index_subdir constructs full URL."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
-            packages=["rocm"],
-            index_url="https://example.com/base",
-            index_subdir="gfx94X-dcgpu",
-        )
-
-        cmd = mock_run.call_args[0][0]
-        self.assertIn("--index-url=https://example.com/base/gfx94X-dcgpu", cmd)
+        self.assertIn("--index-url=https://repo.amd.com/rocm/whl-multi-arch/", cmd)
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
@@ -229,23 +211,6 @@ class InstallPackagesTest(unittest.TestCase):
 
         self.assertEqual(mock_run.call_count, 1)
         mock_sleep.assert_not_called()
-
-
-class GfxRegexPatternTest(unittest.TestCase):
-    def test_valid_match(self):
-        html_snippet = '<a href="relpath/to/wherever/gfx103X-all">gfx103X-all</a><br><a href="/relpath/gfx120X-all">gfx120X-all</a>'
-        matches = re.findall(GFX_TARGET_REGEX, html_snippet)
-        self.assertEqual(["gfx103X-all", "gfx120X-all"], matches)
-
-    def test_match_without_suffix(self):
-        html_snippet = "<a>gfx940</a><br><a>gfx1030</a>"
-        matches = re.findall(GFX_TARGET_REGEX, html_snippet)
-        self.assertEqual(["gfx940", "gfx1030"], matches)
-
-    def test_invalid_match(self):
-        html_snippet = "<a>gfx94000</a><br><a>gfx1030X-dgpu</a>"
-        matches = re.findall(GFX_TARGET_REGEX, html_snippet)
-        self.assertEqual(matches, [])
 
 
 if __name__ == "__main__":
