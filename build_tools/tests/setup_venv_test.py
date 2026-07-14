@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import os
-import re
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 

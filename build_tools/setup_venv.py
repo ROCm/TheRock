@@ -47,7 +47,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import re
 import time
 
 from github_actions.github_actions_api import *
