@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       runner_hostname:
-        description: "Self-hosted runner hostname. The runner must also have this value as a runner label parameters so that correct solf-hosted runner can be launched."
+        description: "Self-hosted runner hostname. The runner must also have this value as a runner label so the correct self-hosted runner can be selected."
         required: true
         type: string
         default: "kpack_old_kernel_test"
@@ -36,7 +36,7 @@ on:
         type: string
         default: "2222"
       vm_ssh_private_key_path:
-        description: "Path to SSH private key on the self-hosted runner to connect the VM with therock user. If empty, github secret THEROCK_ACTION_RUNNER_KVM_SSH_KEY is used."
+        description: "Path to SSH private key on the self-hosted runner to connect to the VM as therock. If empty or missing, the THEROCK_ACTION_RUNNER_KVM_SSH_KEY secret is used when configured."
         required: false
         type: string
         default: "/opt/github-runner/ssh/therock_ed25519"
@@ -180,21 +180,33 @@ jobs:
 
           install -m 700 -d "${HOME}/.ssh"
 
-          if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
-            if [ ! -f "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
-              echo "::error::VM SSH private key was not found: ${VM_SSH_PRIVATE_KEY_PATH}"
-              echo "Copy the therock SSH private key to this path on the self-hosted runner,"
-              echo "set vm_ssh_private_key_path to the correct key path, or clear it to use"
-              echo "the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
-              exit 1
-            fi
+          # Prefer the runner-local key when a path was provided and the file exists.
+          if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ] && [ -f "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
+            echo "Using VM SSH private key from VM_SSH_PRIVATE_KEY_PATH: ${VM_SSH_PRIVATE_KEY_PATH}"
             cp "${VM_SSH_PRIVATE_KEY_PATH}" "${HOME}/.ssh/therock_vm_key"
           else
+            # If the local key is unavailable, require the GitHub secret fallback.
             if [ -z "${THEROCK_ACTION_RUNNER_KVM_SSH_KEY}" ]; then
-              echo "::error::No VM SSH private key was provided."
-              echo "Set vm_ssh_private_key_path to a key file on the self-hosted runner,"
-              echo "or configure the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
+              if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
+                echo "::error::VM_SSH_PRIVATE_KEY_PATH was provided but file does not exist: ${VM_SSH_PRIVATE_KEY_PATH}"
+                echo "::error::and GitHub secret THEROCK_ACTION_RUNNER_KVM_SSH_KEY is also not defined."
+                echo "You need to either"
+                echo "    copy the therock SSH private key to this path on the self-hosted runner,"
+                echo "or configure"
+                echo "    the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
+              else
+                echo "::error::No VM_SSH_PRIVATE_KEY_PATH was provided."
+                echo "::error::and GitHub secret THEROCK_ACTION_RUNNER_KVM_SSH_KEY is also not defined."
+                echo "You need to either"
+                echo "    set vm_ssh_private_key_path to a key file on the self-hosted runner,"
+                echo "or configure"
+                echo "    the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
+              fi
               exit 1
+            fi
+            if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
+              echo "::warning::VM_SSH_PRIVATE_KEY_PATH was provided but file does not exist: ${VM_SSH_PRIVATE_KEY_PATH}"
+              echo "::warning::Because THEROCK_ACTION_RUNNER_KVM_SSH_KEY secret is defined, using it."
             fi
             printf '%s\n' "${THEROCK_ACTION_RUNNER_KVM_SSH_KEY}" > "${HOME}/.ssh/therock_vm_key"
           fi
@@ -258,13 +270,13 @@ jobs:
             rocm_gpg_key_for_guest="${ROCM_GPG_KEY}"
           fi
 
-          ssh \
-            -i "${HOME}/.ssh/therock_vm_key" \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -p "${VM_SSH_PORT}" \
-            "${VM_SSH_USER}@127.0.0.1" \
-            "ROCM_REPO_BASEURL='${ROCM_REPO_BASEURL}' ROCM_GPG_KEY='${rocm_gpg_key_for_guest}' ROCM_GPGCHECK='${ROCM_GPGCHECK}' ROCFFT_TEST_ARGS='${ROCFFT_TEST_ARGS}' bash -s" <<'EOF'
+          {
+            printf 'ROCM_REPO_BASEURL=%q\n' "${ROCM_REPO_BASEURL}"
+            printf 'ROCM_GPG_KEY=%q\n' "${rocm_gpg_key_for_guest}"
+            printf 'ROCM_GPGCHECK=%q\n' "${ROCM_GPGCHECK}"
+            printf 'ROCFFT_TEST_ARGS=%q\n' "${ROCFFT_TEST_ARGS}"
+            printf 'export ROCM_REPO_BASEURL ROCM_GPG_KEY ROCM_GPGCHECK ROCFFT_TEST_ARGS\n'
+            cat <<'EOF'
           set -euxo pipefail
 
           if [ "${ROCM_GPGCHECK}" = "true" ]; then
@@ -301,7 +313,7 @@ jobs:
 
           sudo dnf clean all
           # Remove any preinstalled ROCm test packages so the install below
-          # uses the versions from the currently configured repositories.
+          # uses the versions from the currently configured repositories even if they are older version.
           sudo dnf remove -y amdrocm-core-sdk amdrocm-fft-test || true
           echo "DNF install command: sudo dnf install -y amdrocm-core-sdk amdrocm-fft-test"
           sudo dnf install -y amdrocm-core-sdk amdrocm-fft-test
@@ -316,6 +328,13 @@ jobs:
           read -r -a rocfft_args <<< "${ROCFFT_TEST_ARGS}"
           ./rocfft-test "${rocfft_args[@]}"
           EOF
+          } | ssh \
+            -i "${HOME}/.ssh/therock_vm_key" \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -p "${VM_SSH_PORT}" \
+            "${VM_SSH_USER}@127.0.0.1" \
+            bash -s
 
       - name: Stop Linux kernel 4.18 QCOW VM
         if: always()
