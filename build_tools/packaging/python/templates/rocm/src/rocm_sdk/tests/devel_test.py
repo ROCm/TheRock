@@ -185,15 +185,9 @@ class ROCmDevelTest(unittest.TestCase):
                 # - On Windows, we must manually add the library directory (calculated
                 #   relative to the plugin) via add_dll_directory, as there is no RPATH equivalent.
                 # We assume the plugin is at .../{lib|bin}/hipdnn_plugins/engines/plugin.so
-                # and the dependencies are at .../{lib|bin}. The rocke engine also
-                # depends on the kpack runtime, which ships in the core wheel (located
-                # via find_libraries), so add its directory too.
+                # and the dependencies are at .../{lib|bin}.
                 lib_dir = str(so_path.parents[2]).replace("\\", "\\\\")
                 extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
-                kpack_paths = rocm_sdk.find_libraries("kpack")
-                if kpack_paths:
-                    kpack_dir = str(kpack_paths[0].parent).replace("\\", "\\\\")
-                    extra_setup += f"os.add_dll_directory('{kpack_dir}') if hasattr(os, 'add_dll_directory') else None; "
 
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
