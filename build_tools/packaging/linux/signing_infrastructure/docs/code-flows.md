@@ -13,7 +13,7 @@ This document traces the execution path through the code for each significant op
 |------|---------------|
 | `server/signing-server.py` | HTTP server, request handling, GPG subprocess, startup key loading |
 | `server/auth.py` | Token validation, authorization, rate limiting, audit logging |
-| `signing_infrastructure/gpgshim` | Drop-in gpg replacement for rpmsign; ppid cache; retry logic |
+| `build_tools/packaging/linux/gpgshim` | Drop-in gpg replacement for rpmsign; ppid cache; retry logic (canonical copy) |
 | `tools/sign-file` | Operator CLI; reads file, calls POST /sign, writes output |
 | `tools/setup-server.sh` | One-time EC2 provisioning; tmpfs, systemd, TLS cert |
 | `config/authorization.json` | Role definitions, key allowlists, rate limits |

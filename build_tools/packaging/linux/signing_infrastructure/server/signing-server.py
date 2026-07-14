@@ -226,6 +226,70 @@ class SigningHandler(BaseHTTPRequestHandler):
         return os.environ.get('AUDIT_LOG_FILE', '')
 
     # ------------------------------------------------------------------
+    # Tier + artifact resolution (simplified API)
+    # ------------------------------------------------------------------
+
+    def resolve_signing_params(self, request):
+        """
+        Resolve tier+artifact to signing parameters using authorization config.
+
+        If request contains 'tier' and 'artifact', looks them up in:
+          - authz_config['key_aliases']       tier    → key_id (GPG email)
+          - authz_config['artifact_profiles'] artifact → armor, clearsign, digest_algo
+
+        Falls back to direct fields (key_id, armor, clearsign, digest_algo)
+        if tier/artifact are absent — backward compatible with Phase 1 API.
+
+        Returns:
+            (key_id, digest_algo, armor, clearsign, error_msg)
+            error_msg is None on success, a string on failure.
+        """
+        tier     = request.get('tier', '')
+        artifact = request.get('artifact', '')
+
+        if tier or artifact:
+            # Simplified API path — both tier and artifact must be present
+            if not tier:
+                return None, None, None, None, "Missing 'tier' field"
+            if not artifact:
+                return None, None, None, None, "Missing 'artifact' field"
+
+            # Load config (cached)
+            if self._authz_cache is None:
+                self.__class__._authz_cache = load_authorization_config(
+                    self.AUTHZ_CONFIG_FILE)
+
+            aliases  = self._authz_cache.get('key_aliases', {})
+            profiles = self._authz_cache.get('artifact_profiles', {})
+
+            key_id = aliases.get(tier)
+            if not key_id:
+                known = ', '.join(sorted(aliases.keys())) or 'none configured'
+                return None, None, None, None, \
+                    f"Unknown tier '{tier}'. Known tiers: {known}"
+
+            profile = profiles.get(artifact)
+            if not profile:
+                known = ', '.join(sorted(profiles.keys())) or 'none configured'
+                return None, None, None, None, \
+                    f"Unknown artifact '{artifact}'. Known artifacts: {known}"
+
+            return (
+                key_id,
+                profile.get('digest_algo', 'SHA256').upper(),
+                profile.get('armor', False),
+                profile.get('clearsign', False),
+                None
+            )
+
+        # Legacy API path — use explicit fields
+        key_id      = request.get('key_id', '')
+        digest_algo = request.get('digest_algo', 'SHA256').upper()
+        armor       = request.get('armor', False)
+        clearsign   = request.get('clearsign', False)
+        return key_id, digest_algo, armor, clearsign, None
+
+    # ------------------------------------------------------------------
     # GET /health
     # ------------------------------------------------------------------
 
@@ -315,13 +379,16 @@ class SigningHandler(BaseHTTPRequestHandler):
                 self.send_json_error(400, "Missing 'data' field")
                 return
 
-            key_id = request.get('key_id', '')
-            digest_algo = request.get('digest_algo', 'SHA256').upper()
-            armor = request.get('armor', False)
-            clearsign = request.get('clearsign', False)
+            # Resolve tier+artifact (simplified API) or fall back to explicit fields
+            key_id, digest_algo, armor, clearsign, err = \
+                self.resolve_signing_params(request)
+            if err:
+                self.send_json_error(400, err)
+                return
 
             if not key_id:
-                self.send_json_error(400, "key_id is required")
+                self.send_json_error(400,
+                    "Specify either 'tier'+'artifact' or 'key_id'")
                 return
 
             if not self.validate_key_id(key_id):
