@@ -86,6 +86,7 @@ jobs:
       - name: Install test requirements
         run: |
           pip install -r requirements-test.txt
+          pip install toml
 
       - name: Fetch artifact archives (no extract)
         env:
