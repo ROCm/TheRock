@@ -5,7 +5,6 @@ on:
     branches:
       - main
     paths:
-      - dockerfiles/spack_ubuntu24_04.Dockerfile
       - dockerfiles/rocm-spack-env/**
       - .github/workflows/build_spack_rocm_packages.yml
   push:
@@ -14,7 +13,6 @@ on:
       - develop
       - 'stage/docker/**'
     paths:
-      - dockerfiles/spack_ubuntu24_04.Dockerfile
       - dockerfiles/rocm-spack-env/**
       - .github/workflows/build_spack_rocm_packages.yml
   workflow_dispatch:
@@ -27,30 +25,49 @@ permissions:
 
 jobs:
   build:
-    name: Build Spack ROCm Container
+    name: Spack install ROCm packages
     runs-on: aws-linux-scale-rocm-prod
     timeout-minutes: 1440
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+    env:
+      SPACK_ROOT: /home/tester/spack
+      SPACK_ENV_NAME: rocm
+      SPACK_HOME: /home/tester
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Build Docker Image
-        id: build
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
-        with:
-          context: dockerfiles/
-          file: dockerfiles/spack_ubuntu24_04.Dockerfile
-          push: false
-          tags: spack-rocm:latest
-
-      - name: Report Summary
-        if: always()
+      - name: Install system dependencies
         run: |
-          {
-            echo "## Docker image build"
-            if [[ "${{ steps.build.outcome }}" == "success" ]]; then
-              echo "Docker image built successfully with ROCm packages installed via Spack."
-            else
-              echo "Build did not succeed. Check the **Build Docker Image** step logs."
-            fi
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential \
+            gfortran \
+            python3-pip \
+            patch \
+            file
+
+      - name: Clone Spack and ROCm packages
+        run: |
+          git clone --depth 1 https://github.com/spack/spack.git "${SPACK_ROOT}"
+          git clone -b rocm-spack-ci-changes --depth 1 \
+            https://github.com/ROCm/rocm-spack-packages.git "${SPACK_HOME}/spack-packages"
+
+      - name: Bootstrap Spack
+        run: |
+          . "${SPACK_ROOT}/share/spack/setup-env.sh"
+          spack compiler find
+          spack repo set --destination "${SPACK_HOME}/spack-packages" builtin
+
+      - name: Install ROCm packages via Spack
+        run: |
+          . "${SPACK_ROOT}/share/spack/setup-env.sh"
+          mkdir -p "${SPACK_HOME}/rocm-spack-env"
+          cp dockerfiles/rocm-spack-env/spack.yaml "${SPACK_HOME}/rocm-spack-env/spack.yaml"
+          spack clean -m
+          spack env create "${SPACK_ENV_NAME}" "${SPACK_HOME}/rocm-spack-env/spack.yaml"
+          spack env activate "${SPACK_ENV_NAME}"
+          spack concretize -f
+          spack clean -m
+          spack install --fail-fast --reuse --use-cache
