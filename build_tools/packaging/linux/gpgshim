@@ -39,6 +39,11 @@ class GPGShim:
         # Authentication configuration
         self.auth_token = os.environ.get('GPG_SERVER_TOKEN', '')
 
+        # Simplified API: GPG_TIER maps to tier in authorization.json key_aliases.
+        # If set, the request uses {"tier": ..., "artifact": "rpm"} instead of
+        # {"key_id": ...}. GPG_KEY_ID is still supported as a fallback.
+        self.tier = os.environ.get('GPG_TIER', '')
+
         # TLS/HTTPS configuration
         self.ca_cert = os.environ.get('GPG_SERVER_CA_CERT', '')
         self.verify_ssl = os.environ.get('GPG_VERIFY_SSL', 'true').lower() != 'false'
@@ -138,16 +143,23 @@ class GPGShim:
         if data_hash in self.data_cache:
             return self.data_cache[data_hash]
 
-        # Prepare request payload - send the actual data
-        # The server will compute the digest and sign it
-        # Note: For RPM signing with ppid caching, only the first call (header ~4KB)
-        # actually sends data. The second call (full RPM) reuses the cached signature.
-        payload = {
-            'data': b64encode(data).decode('ascii'),
-            'key_id': options.get('local_user') or self.key_id,
-            'digest_algo': digest_algo,
-            'armor': options.get('armor', False),
-        }
+        # Prepare request payload.
+        # Simplified API: use tier+artifact when GPG_TIER is set.
+        # Legacy API: use key_id directly (GPG_KEY_ID or --local-user arg).
+        # artifact is always 'rpm' for gpgshim — it only handles rpmsign calls.
+        if self.tier:
+            payload = {
+                'data':     b64encode(data).decode('ascii'),
+                'tier':     self.tier,
+                'artifact': 'rpm',
+            }
+        else:
+            payload = {
+                'data':        b64encode(data).decode('ascii'),
+                'key_id':      options.get('local_user') or self.key_id,
+                'digest_algo': digest_algo,
+                'armor':       options.get('armor', False),
+            }
 
         # Retry with exponential backoff
         backoff = self.initial_backoff

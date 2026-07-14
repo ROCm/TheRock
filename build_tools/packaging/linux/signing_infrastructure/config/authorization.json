@@ -1,11 +1,43 @@
 {
   "$comment": "Authorization configuration for GPG signing server.",
-  "$comment2": "Phase 1: roles keyed by source IP are not used — 'default' role applies to all requests.",
-  "$comment3": "Phase 2: add token-named roles here to map pre-shared tokens to key allowlists.",
+  "$comment2": "key_aliases maps tier names to GPG key identifiers — update per environment.",
+  "$comment3": "artifact_profiles maps artifact types to GPG signing parameters.",
+
+  "key_aliases": {
+    "dev":     "nunnikri@amd.com",
+    "nightly": "nunnikrii_nightly@amd.com"
+  },
+
+  "artifact_profiles": {
+    "rpm": {
+      "armor":       false,
+      "clearsign":   false,
+      "digest_algo": "SHA256",
+      "description": "RPM package — binary detached signature embedded by rpmsign"
+    },
+    "repodata": {
+      "armor":       true,
+      "clearsign":   false,
+      "digest_algo": "SHA256",
+      "description": "RPM repo metadata — ASCII detached signature (repomd.xml.asc)"
+    },
+    "deb-release": {
+      "armor":       true,
+      "clearsign":   false,
+      "digest_algo": "SHA256",
+      "description": "DEB Release file — ASCII detached signature (Release.gpg)"
+    },
+    "deb-inrelease": {
+      "armor":       true,
+      "clearsign":   true,
+      "digest_algo": "SHA256",
+      "description": "DEB Release file — clearsigned combined file (InRelease)"
+    }
+  },
 
   "roles": {
     "default": {
-      "description": "Phase 1 catch-all role — applied to all requests when AUTH_ENABLED=false. Rate limit keyed by source IP.",
+      "description": "Phase 1 catch-all — applied to all requests when AUTH_ENABLED=false. Rate limit keyed by source IP.",
       "allowed_keys": [],
       "allowed_digest_algos": ["SHA256", "SHA512"],
       "max_requests_per_hour": 10000
@@ -17,19 +49,19 @@
       "max_requests_per_hour": 100
     },
     "therock-dev": {
-      "description": "Phase 2: TheRock dev/PR builds. Token: signing/tokens/therock-dev in Secrets Manager.",
+      "description": "Phase 2: TheRock dev/PR builds.",
       "allowed_keys": [],
       "allowed_digest_algos": ["SHA256", "SHA512"],
       "max_requests_per_hour": 10000
     },
     "therock-nightly": {
-      "description": "Phase 2: TheRock nightly builds. Token: signing/tokens/therock-nightly in Secrets Manager.",
+      "description": "Phase 2: TheRock nightly builds.",
       "allowed_keys": [],
       "allowed_digest_algos": ["SHA256", "SHA512"],
       "max_requests_per_hour": 5000
     },
     "therock-release": {
-      "description": "Phase 2: TheRock release builds. Token: signing/tokens/therock-release in Secrets Manager.",
+      "description": "Phase 2: TheRock release builds.",
       "allowed_keys": [],
       "allowed_digest_algos": ["SHA256", "SHA512"],
       "max_requests_per_hour": 1000

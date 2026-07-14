@@ -651,7 +651,7 @@ export GPG_TIMEOUT="30"
 export GPG_MAX_RETRIES="5"
 
 # Install gpgshim as the gpg binary for this session
-cp build_tools/packaging/linux/signing_infrastructure/gpgshim ~/.local/bin/gpgshim
+cp build_tools/packaging/linux/gpgshim ~/.local/bin/gpgshim
 chmod +x ~/.local/bin/gpgshim
 export PATH="$HOME/.local/bin:$PATH"
 ```
