@@ -1425,6 +1425,14 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 # ---------------------------------------------------------------------------
 
 
+def _parse_changed_paths_override() -> list[str] | None:
+    """Test-only override for changed-file analysis."""
+    override = os.environ.get("THEROCK_CHANGED_PATHS", "").strip()
+    if not override:
+        return None
+    return [p.strip() for p in override.split(",") if p.strip()]
+
+
 def main():
     ci_inputs = CIInputs.from_environ()
 
@@ -1434,7 +1442,16 @@ def main():
     # TODO: Provide custom decision logic to run specific components and paths
     skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
 
-    if skip_path_filters:
+    override_changed_files = _parse_changed_paths_override()
+
+    if override_changed_files is not None:
+        print("=== Git Diff (override) ===")
+        print("Using THEROCK_CHANGED_PATHS override for changed-file filtering")
+        git_context = GitContext(
+            changed_files=override_changed_files,
+            submodule_paths=list(get_git_submodule_paths() or []),
+        )
+    elif skip_path_filters:
         # External repo: skip path filtering, run everything
         git_context = GitContext.empty()
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
@@ -1451,18 +1468,9 @@ def main():
         print()
         git_context = GitContext.empty()
     else:
-        # Allow test-only override for bump analysis.
-        override = os.environ.get("THEROCK_CHANGED_PATHS", "").strip()
-        if override:
-            changed_files = [p.strip() for p in override.split(",") if p.strip()]
-            git_context = GitContext(
-                changed_files=changed_files,
-                submodule_paths=list(get_git_submodule_paths() or []),
-            )
-        else:
-            # 'workflow_dispatch' and 'schedule' events don't have as natural
-            # a "prior commit" to compare against.
-            git_context = GitContext.empty()
+        # 'workflow_dispatch' and 'schedule' events don't have as natural
+        # a "prior commit" to compare against.
+        git_context = GitContext.empty()
 
     outputs = configure(ci_inputs, git_context)
     write_outputs(ci_inputs=ci_inputs, outputs=outputs)
