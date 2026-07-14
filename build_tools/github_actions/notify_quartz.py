@@ -41,7 +41,7 @@ Required runtime context
 
 Receiving side
 --------------
-The Quartz repo (default `ROCm/Quartz-Tester`; override with
+The Quartz repo (default `ROCm/Quartz`; override with
 `--quartz-repo`) must expose a workflow file (default
 `receive_therock_data.yml`; override with `--quartz-workflow-file`) on
 the chosen ref (default `main`; override with `--quartz-workflow-ref`).
@@ -56,7 +56,7 @@ That workflow must accept two `workflow_dispatch` string inputs:
 Payload contract
 ----------------
 Top-level keys align with
-`scripts/receive_therock/therock_parse_input.py` in ROCm/Quartz-Tester.
+`scripts/receive_therock/therock_parse_input.py` in ROCm/Quartz.
 
 `event_type` is the dispatch envelope's lifecycle marker, used by the
 receiver to route to the correct ingest path and to record whether the
@@ -535,7 +535,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
         "--quartz-repo",
-        default=os.environ.get("QUARTZ_REPO", "ROCm/Quartz-Tester"),
+        default=os.environ.get("QUARTZ_REPO", "ROCm/Quartz"),
         help="Target Quartz repository (owner/repo)",
     )
     p.add_argument(
