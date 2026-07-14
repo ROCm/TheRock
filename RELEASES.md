@@ -37,7 +37,7 @@ Table of contents:
     - [Installing multi-arch JAX Python packages](#installing-multi-arch-jax-python-packages)
   - [Installing multi-arch native packages](#installing-multi-arch-native-packages)
     - [Installing multi-arch native Linux packages](#installing-multi-arch-native-linux-packages)
-      - [Using ROCm from WSL](#using-rocm-from-wsl)
+      <!-- - [Using ROCm from WSL](#using-rocm-from-wsl) -->
     <!-- TODO: native Windows packages -->
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
 - [Verifying your installation](#verifying-your-installation)
@@ -532,6 +532,10 @@ sudo dnf install amdrocm-core-sdk
 > supported GPU targets and their identifiers, see
 > [Supported Python `[device-*]` install extras](#supported-python-device--install-extras).
 
+<!-- TODO: include WSL documentation once we are satisfied with quality in nightly releases -->
+
+<!--
+
 ##### Using ROCm from WSL
 
 ROCm supports WSL via the DXG kernel interface. DXG detection is enabled by
@@ -552,7 +556,7 @@ To explicitly disable DXG detection, set:
 
 ```bash
 export HSA_ENABLE_DXG_DETECTION=0
-```
+``` -->
 
 ### Installing multi-arch tarballs
 

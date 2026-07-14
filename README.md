@@ -11,7 +11,7 @@ TheRock includes:
 - Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
 - Support for building PyTorch and JAX with ROCm from source
-- Operating system support including multiple Linux distributions, WSL, and native Windows
+- Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
 
