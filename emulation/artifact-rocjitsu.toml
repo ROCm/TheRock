@@ -4,7 +4,6 @@ default_patterns = false
 include = [
   "lib/librocjitsu.so",
   "lib/librocjitsu_hooks.so",
-  "lib/librocjitsu_kmd.so",
 ]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
