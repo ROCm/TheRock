@@ -6,7 +6,7 @@ import argparse
 import subprocess
 import tempfile
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 
 THEROCK_REPO = "ROCm/TheRock"
@@ -22,22 +22,19 @@ ROCM_SYSTEMS_FILES = [
 ]
 
 ROCM_LIBRARIES_FILES = [
-    ".github/workflows/therock-ci-linux.yml",
-    ".github/workflows/therock-ci-nightly.yml",
-    ".github/workflows/therock-ci-windows.yml",
-    ".github/workflows/therock-ci.yml",
-    ".github/workflows/therock-test-component.yml",
-    ".github/workflows/therock-test-packages.yml",
+    ".github/actions/ci-env/action.yml",
 ]
 
 SUBMODULE_CONFIG = {
     "rocm-systems": {
         "repo": "ROCm/rocm-systems",
         "files": ROCM_SYSTEMS_FILES,
+        "updater": "ref",
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
         "files": ROCM_LIBRARIES_FILES,
+        "updater": "ci-env",
     },
 }
 
@@ -137,12 +134,50 @@ def update_ref_in_file(file_path, new_sha):
 
                 # Replace the existing ref line, preserving indentation and removing old comment
                 indent = lines[ref_line_index][: lines[ref_line_index].find("ref:")]
-                date = datetime.utcnow().strftime("%Y-%m-%d")
+                date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 updated_lines.append(f"{indent}ref: {new_sha} # {date} commit\n")
 
                 # Skip past all lines we've already handled
                 i = ref_line_index
         i += 1
+
+    with open(file_path, "w") as f:
+        f.writelines(updated_lines)
+
+    print(f"[INFO] Updated {file_path}")
+
+
+def update_ci_env_file(file_path, new_sha):
+    """Update the therock-ref value in a ci-env composite action file.
+
+    Matches:
+      therock-ref:
+        description: ...
+        value: "<old_sha>" # <date> commit
+    """
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+
+    updated_lines = []
+    in_therock_ref = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "therock-ref:":
+            in_therock_ref = True
+            updated_lines.append(line)
+            continue
+
+        if in_therock_ref and stripped.startswith("value:"):
+            indent = line[: line.find("value:")]
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            updated_lines.append(f'{indent}value: "{new_sha}" # {date} commit\n')
+            in_therock_ref = False
+            continue
+
+        if in_therock_ref and stripped and not stripped.startswith("description:"):
+            in_therock_ref = False
+
+        updated_lines.append(line)
 
     with open(file_path, "w") as f:
         f.writelines(updated_lines)
@@ -253,10 +288,12 @@ def create_therock_bump(submodule, token):
         os.chdir(original_cwd)
 
 
-def handle_schedule(systems_token, libraries_token):
-    """Create bump PRs for both submodules"""
-    create_therock_bump("rocm-systems", systems_token)
-    create_therock_bump("rocm-libraries", libraries_token)
+def handle_schedule(systems_token, libraries_token, submodule="all"):
+    """Create bump PRs for the specified submodule(s)"""
+    if submodule in ("all", "rocm-systems"):
+        create_therock_bump("rocm-systems", systems_token)
+    if submodule in ("all", "rocm-libraries"):
+        create_therock_bump("rocm-libraries", libraries_token)
 
 
 def handle_push(before, after, systems_token, libraries_token):
@@ -296,8 +333,13 @@ def handle_push(before, after, systems_token, libraries_token):
 
         run(["git", "checkout", "-b", branch])
 
+        updater = (
+            update_ci_env_file
+            if config.get("updater") == "ci-env"
+            else update_ref_in_file
+        )
         for f in config["files"]:
-            update_ref_in_file(f, after)
+            updater(f, after)
 
         run(["git", "add"] + config["files"])
         run(["git", "commit", "-m", f"Update TheRock ref to {after[:7]}"])
@@ -318,6 +360,9 @@ def handle_push(before, after, systems_token, libraries_token):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
+    parser.add_argument(
+        "--submodule", default="all", choices=["all", "rocm-systems", "rocm-libraries"]
+    )
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
@@ -328,7 +373,7 @@ def main():
     run(["git", "config", "--global", "user.email", "therockbot@amd.com"])
 
     if args.event_type == "schedule":
-        handle_schedule(args.systems_token, args.libraries_token)
+        handle_schedule(args.systems_token, args.libraries_token, args.submodule)
     elif args.event_type == "push":
         handle_push(
             args.before,
