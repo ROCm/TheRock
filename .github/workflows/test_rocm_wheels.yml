@@ -20,7 +20,7 @@ on:
         description: >-
           Full Python package index URL for use with --index-url.
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
       package_find_links_url:
         description: Full Python package index URL for use with --find-links (usually instead of package_index_url)
         type: string
