@@ -89,7 +89,7 @@ Key differences from
 
 **Package availability:**
 
-| Package type            | Linux/WSL    | Windows                                                           |
+| Package type            | Linux        | Windows                                                           |
 | ----------------------- | ------------ | ----------------------------------------------------------------- |
 | ROCm Python packages    | ✅ Available | ✅ Available                                                      |
 | PyTorch Python packages | ✅ Available | ✅ Available                                                      |
