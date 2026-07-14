@@ -331,8 +331,6 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
-    # Renoir/Lucienne/Cezanne iGPU (Ryzen 4000/5000/6000).
-    # build + sanity check only.
     "gfx90c": {
         "linux": {
             "test-runs-on": "",

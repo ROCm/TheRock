@@ -441,8 +441,6 @@ amdgpu_family_info_matrix_all = {
             },
         }
     },
-    # Renoir/Lucienne/Cezanne iGPU (Ryzen 4000/5000/6000). No CI hardware, so
-    # build + sanity check only.
     "gfx90c": {
         "linux": {
             "build": {
