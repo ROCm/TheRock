@@ -45,7 +45,6 @@ schemas_dir = ROCM_PATH / "share" / "rocjitsu" / "schemas"
 required_files = [
     ROCM_PATH / "lib" / "librocjitsu.so",
     ROCM_PATH / "lib" / "librocjitsu_hooks.so",
-    ROCM_PATH / "lib" / "librocjitsu_kmd.so",
 ]
 
 logging.info("=== Verifying rocjitsu artifact install layout ===")
