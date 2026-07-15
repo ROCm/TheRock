@@ -159,6 +159,12 @@ jobs:
             --linux-amdgpu-families="${{ inputs.linux_amdgpu_families }}" \
             --windows-amdgpu-families="${{ inputs.windows_amdgpu_families }}"
 
+      - name: Validate wheel integrity
+        run: |
+          python build_tools/github_actions/validate_wheels.py \
+            --wheel-dir "${{ env.PACKAGES_DIR }}" \
+            --report "${{ env.PACKAGES_DIR }}/wheel-validation.json"
+
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
@@ -175,3 +181,12 @@ jobs:
             --artifact-group="${{ inputs.artifact_group }}" \
             --run-id="${{ github.run_id }}" \
             ${{ inputs.multiarch_index && '--multiarch' || '' }}
+
+      - name: Upload wheel validation report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel-validation
+          path: |
+            ${{ env.PACKAGES_DIR }}/wheel-validation.json
+          if-no-files-found: ignore

@@ -164,9 +164,35 @@ jobs:
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
-      - name: Build stage
+      - name: Install GNU time
         run: |
-          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y time
+          elif command -v yum >/dev/null 2>&1; then
+            yum install -y time
+          elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y time
+          else
+            echo "ERROR: No supported package manager found to install 'time'" >&2
+            exit 1
+          fi
+
+      - name: Configure build parallelism override
+        if: ${{ inputs.cmake_parallel_level != '' }}
+        run: |
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${{ inputs.cmake_parallel_level }}" >> "${GITHUB_ENV}"
+          echo "Configured CMAKE_BUILD_PARALLEL_LEVEL=${{ inputs.cmake_parallel_level }}"
+
+      - name: Build stage (with metrics)
+        env:
+          STAGE_VARIANT_LABEL: ${{ inputs.build_variant_cmake_preset }}
+        run: |
+          python3 build_tools/github_actions/run_stage_build.py \
+            --stage "${STAGE_NAME}" \
+            --build-dir "${BUILD_DIR}" \
+            --variant "${STAGE_VARIANT_LABEL}" \
+            ${{ inputs.amdgpu_family != '' && format('--amdgpu-family={0}', inputs.amdgpu_family) || '' }}
 
       - name: Generate failed log summaries
         if: ${{ !cancelled() }}
@@ -198,6 +224,15 @@ jobs:
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
           release_type: ${{ inputs.release_type }}
+
+      - name: Upload build metrics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-${{ inputs.stage_name }}${{ inputs.amdgpu_family != '' && format('-{0}', inputs.amdgpu_family) || '' }}
+          path: |
+            ${BUILD_DIR}/metrics/**
+          if-no-files-found: ignore
 
       # TODO(#3336): Attempt upload `always()`?
       #   * If some part of the build failed, partial artifacts may be useful for debugging.
