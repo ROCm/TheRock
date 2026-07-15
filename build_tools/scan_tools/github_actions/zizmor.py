@@ -224,16 +224,28 @@ def _diff_range(event_name: str, event: dict[str, object]) -> tuple[str, str] | 
     return None
 
 
+def _segments_match(path_parts: list[str], pattern_parts: list[str]) -> bool:
+    if not pattern_parts:
+        return not path_parts
+    head, rest = pattern_parts[0], pattern_parts[1:]
+    if head == "**":
+        # Try consuming zero segments, then one-or-more.
+        if _segments_match(path_parts, rest):
+            return True
+        return bool(path_parts) and _segments_match(path_parts[1:], pattern_parts)
+    if not path_parts:
+        return False
+    if not fnmatch.fnmatchcase(path_parts[0], head):
+        return False
+    return _segments_match(path_parts[1:], rest)
+
+
 def _is_audited_path(relpath: str) -> bool:
     norm = relpath.replace(os.sep, "/")
-    for pattern in _AUDITED_PATTERNS:
-        if fnmatch.fnmatchcase(norm, pattern):
-            return True
-        if pattern.startswith("**/") and fnmatch.fnmatchcase(
-            norm, pattern[len("**/") :]
-        ):
-            return True
-    return False
+    parts = norm.split("/")
+    return any(
+        _segments_match(parts, pattern.split("/")) for pattern in _AUDITED_PATTERNS
+    )
 
 
 def _determine_changed_audited_files(
@@ -586,13 +598,6 @@ def main(argv: list[str]) -> int:
         gha_set_output({"sarif_path": "", "non_sarif_paths": ""})
         return 0
 
-    gha_set_output(
-        {
-            "sarif_path": "" if sarif_target is None else str(sarif_target.path),
-            "non_sarif_paths": "\n".join(str(t.path) for t in non_sarif),
-        }
-    )
-
     internal_tally_used = not any(t.fmt == "json" for t in targets)
     try:
         binary = _ensure_zizmor()
@@ -603,6 +608,18 @@ def main(argv: list[str]) -> int:
             persona=args.persona,
             files=files,
             scan_path=source_dir,
+        )
+        gha_set_output(
+            {
+                "sarif_path": (
+                    str(sarif_target.path)
+                    if sarif_target is not None and sarif_target.path.is_file()
+                    else ""
+                ),
+                "non_sarif_paths": "\n".join(
+                    str(t.path) for t in non_sarif if t.path.is_file()
+                ),
+            }
         )
         counts = _tally_findings_by_severity(tally_path)
     except RuntimeError as exc:
