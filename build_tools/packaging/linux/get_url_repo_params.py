@@ -222,12 +222,18 @@ def cmd_extract_gfx_arch(args: argparse.Namespace) -> int:
 
 # --- get-container-image ---
 
-# Maps OS profile prefixes to container images (checked in order).
+# Maps OS profile prefixes to container images (checked in order; first match wins).
+# Single-profile entries (e.g. "rhel8") require an exact match so "rhel10" does not
+# match the "rhel8" prefix via startswith.
 _OS_PROFILE_TO_IMAGE: list[tuple[tuple[str, ...], str]] = [
     (("sles",), "registry.suse.com/bci/bci-base:16.0"),
     (("ubuntu", "debian"), "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
-    ((), "registry.access.redhat.com/ubi10/ubi:10.1"),  # default (e.g. rhel*)
+    (("rhel8",), "registry.access.redhat.com/ubi8/ubi:8.10"),
+    ((), "registry.access.redhat.com/ubi10/ubi:10.1"),  # default (e.g. rhel10)
 ]
+
+# Single-prefix entries that must match the full profile (not startswith).
+_EXACT_PROFILE_PREFIXES = frozenset({"rhel8"})
 
 
 def get_container_image(os_profile: str) -> str:
@@ -237,10 +243,18 @@ def get_container_image(os_profile: str) -> str:
         ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
         debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
         sles16      -> registry.suse.com/bci/bci-base:16.0
+        rhel8       -> registry.access.redhat.com/ubi8/ubi:8.10
         rhel10      -> registry.access.redhat.com/ubi10/ubi:10.1
     """
+    profile = os_profile.lower()
     for prefixes, image in _OS_PROFILE_TO_IMAGE:
-        if not prefixes or any(os_profile.startswith(p) for p in prefixes):
+        if not prefixes:
+            return image
+        if len(prefixes) == 1 and prefixes[0] in _EXACT_PROFILE_PREFIXES:
+            if profile == prefixes[0]:
+                return image
+            continue
+        if any(profile.startswith(p) for p in prefixes):
             return image
     return _OS_PROFILE_TO_IMAGE[-1][1]  # unreachable but satisfies type checker
 

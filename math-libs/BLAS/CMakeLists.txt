@@ -69,7 +69,6 @@ if(_enable_rocRoller)
     BUILD_DEPS
       mxDataGenerator
       rocm-cmake
-      therock-boost
       therock-catch2
       therock-fmt
       therock-googletest
@@ -114,7 +113,6 @@ set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
     mxDataGenerator
-    therock-boost
     therock-fmt
     therock-yaml-cpp
     therock-spdlog

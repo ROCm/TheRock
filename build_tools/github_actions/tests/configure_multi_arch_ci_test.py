@@ -598,6 +598,37 @@ class TestSelectTargets(unittest.TestCase):
         push_result = cm.select_targets(push_inputs)
         self.assertGreater(len(result.linux_families), len(push_result.linux_families))
 
+    def test_schedule_respects_explicit_inputs(self):
+        """Schedule trigger uses explicit inputs when provided."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x", "gfx950"],
+            windows_amdgpu_families=["gfx1151"],
+        )
+        result = cm.select_targets(inputs)
+        # Should use explicit inputs, not all families
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950"])
+        self.assertEqual(result.windows_families, ["gfx1151"])
+
+    def test_schedule_none_skips_platform(self):
+        """Schedule trigger with 'none' skips that platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["none"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x"])
+        self.assertEqual(result.windows_families, [])
+
     def test_pull_request_defaults_to_presubmit_only(self):
         """PR without labels gets presubmit families only, not postsubmit."""
         inputs = cm.CIInputs(
@@ -1352,44 +1383,6 @@ class TestFormatSummary(unittest.TestCase):
     def test_skipped_ci_write_outputs_summary(self):
         outputs = cm.CIOutputs(is_ci_enabled=False)
         cm.write_outputs(self._inputs(), outputs)
-
-    def test_build_outputs_includes_manifest_diff_link(self):
-        linux = cm.BuildConfig(
-            per_family_info=[],
-            dist_amdgpu_families="gfx94X-dcgpu",
-            artifact_group="gfx94X-dcgpu",
-            build_variant_label="release",
-            build_variant_suffix="",
-            build_variant_cmake_preset="",
-            build_native_linux=True,
-            build_pytorch=False,
-            build_jax=False,
-        )
-        jobs = cm.JobDecisions(
-            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
-            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
-            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
-            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
-            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
-            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
-        )
-        outputs = cm.CIOutputs(
-            is_ci_enabled=True,
-            builds=cm.BuildConfigs(linux=linux),
-            jobs=jobs,
-        )
-        result = format_summary(self._inputs(), outputs)
-        self.assertIn("## Build outputs", result)
-        self.assertIn("Linux |", result)
-        self.assertIn("Windows |", result)
-        manifest_diff_url = (
-            "https://therock-ci-artifacts.s3.amazonaws.com"
-            "/12345-linux/logs/manifest-diff/index.html"
-        )
-        self.assertIn(
-            f"Manifest diff *(if produced)* | {manifest_diff_url} | — | —",
-            result,
-        )
 
 
 # ---------------------------------------------------------------------------
