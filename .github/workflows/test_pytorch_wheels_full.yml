@@ -21,10 +21,10 @@ on:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
-        description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
+        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2-staging"
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
       python_version:
         required: true
         type: string
@@ -73,12 +73,6 @@ on:
           - "single"
           - "all"
         default: "auto"
-      multi_arch:
-        description: >-
-          Install from a multi-arch index using device extras
-          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
-        type: boolean
-        default: false
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -113,12 +107,6 @@ on:
       pytorch_git_repo:
         type: string
         default: "pytorch/pytorch"
-      multi_arch:
-        description: >-
-          Install from a multi-arch index using device extras
-          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
-        type: boolean
-        default: false
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -227,7 +215,6 @@ jobs:
       # select GPU-specific device packages. Expand the family to get the
       # comma-separated device extras string for pip install.
       - name: Expand GPU family to device extras
-        if: ${{ inputs.multi_arch }}
         id: expand
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
@@ -256,18 +243,10 @@ jobs:
       - name: Set up virtual environment
         timeout-minutes: 15
         run: |
-          if [ "${{ inputs.multi_arch }}" = "true" ]; then
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
-              --index-url=${{ inputs.package_index_url }} \
-              --activate-in-future-github-actions-steps
-          else
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "torch==${{ inputs.torch_version }} rocm[devel]" \
-              --index-url=${{ inputs.package_index_url }} \
-              --index-subdir=${{ inputs.amdgpu_family }} \
-              --activate-in-future-github-actions-steps
-          fi
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
+            --index-url=${{ inputs.package_index_url }} \
+            --activate-in-future-github-actions-steps
 
       - name: Initialize ROCm SDK and configure environment
         run: |
