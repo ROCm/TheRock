@@ -14,30 +14,56 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
 
-PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
-JAX_REFS = [
-    {
+RELEASE_TYPES = ["ci", "dev", "nightly", "prerelease"]
+
+# TODO: add opt-ins for CI runs to use python versions and JAX refs normally
+#       only included in release runs.
+RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
+CI_PYTHON_VERSIONS = {
+    "linux": ["3.12"],
+}
+
+JAX_REF_CONFIGS = {
+    "rocm-jaxlib-v0.9.1": {
         "jax_ref": "rocm-jaxlib-v0.9.1",
         "jax_repository": "ROCm/rocm-jax",
         "build_mode": "native",
         "gfx_arch": "",
     },
-    {
+    "rocm-jaxlib-v0.10.0": {
         "jax_ref": "rocm-jaxlib-v0.10.0",
         "jax_repository": "ROCm/jax",
         "build_mode": "manylinux",
         "gfx_arch": "device-all",
     },
-    {
+    "rocm-jaxlib-v0.10.2": {
         "jax_ref": "rocm-jaxlib-v0.10.2",
         "jax_repository": "ROCm/jax",
         "build_mode": "manylinux",
         "gfx_arch": "device-all",
     },
-]
+}
 
-CI_JAX_REFS = {"rocm-jaxlib-v0.10.0"}
-CI_PYTHON_VERSIONS = ["3.12"]
+# Keep release behavior equivalent to the old generate_jax_matrix(None):
+# all release refs across all release Python versions.
+#
+# TODO: separate out nightly/dev/prerelease JAX refs if those release types
+# should differ later.
+RELEASE_JAX_REFS = {
+    "linux": [
+        "rocm-jaxlib-v0.9.1",
+        "rocm-jaxlib-v0.10.0",
+        "rocm-jaxlib-v0.10.2",
+    ],
+}
+
+# CI uses the manylinux package path only. Exclude rocm-jaxlib-v0.9.1 because
+# it uses the legacy native/tarball flow.
+CI_JAX_REFS = {
+    "linux": [
+        "rocm-jaxlib-v0.10.0",
+    ],
+}
 
 
 def _split_values(raw: str) -> list[str]:
@@ -49,78 +75,119 @@ def _split_values(raw: str) -> list[str]:
     ]
 
 
-def generate_jax_matrix(
-    python_versions: list[str] | None,
-) -> list[dict[str, object]]:
-    versions = python_versions if python_versions else PYTHON_VERSIONS
-    matrix: list[dict[str, object]] = []
-    for py in versions:
-        for ref_cfg in JAX_REFS:
-            matrix.append(
-                {
-                    "python_version": py,
-                    "jax_ref": ref_cfg["jax_ref"],
-                    "jax_repository": ref_cfg["jax_repository"],
-                    "build_mode": ref_cfg["build_mode"],
-                    "gfx_arch": ref_cfg["gfx_arch"],
-                }
-            )
-    return matrix
+def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
+    if release_type == "ci":
+        return list(CI_PYTHON_VERSIONS[platform])
+    return list(RELEASE_PYTHON_VERSIONS)
 
 
-def generate_jax_matrix_for_ci(
-    python_versions: list[str] | None,
+def _default_jax_refs(*, release_type: str, platform: str) -> list[str]:
+    if release_type == "ci":
+        return list(CI_JAX_REFS[platform])
+    return list(RELEASE_JAX_REFS[platform])
+
+
+def generate_jax_matrix_for_release_type(
+    *,
+    release_type: str,
+    platform: str,
+    python_versions: list[str] | None = None,
+    jax_refs: list[str] | None = None,
 ) -> list[dict[str, str]]:
-    """Generate the JAX matrix used by Multi-Arch CI.
+    if release_type not in RELEASE_TYPES:
+        raise ValueError(f"Unknown release_type: {release_type!r}")
+    if platform not in ["linux"]:
+        raise ValueError(f"Unknown platform: {platform!r}")
 
-    The release matrix includes legacy/native JAX entries such as
-    rocm-jaxlib-v0.9.1. The CI workflow is manylinux-only, so filter the
-    release matrix to the supported manylinux entries.
-    """
-    versions = python_versions if python_versions else CI_PYTHON_VERSIONS
+    versions = python_versions or _default_python_versions(
+        release_type=release_type,
+        platform=platform,
+    )
+    refs = jax_refs or _default_jax_refs(
+        release_type=release_type,
+        platform=platform,
+    )
+
+    unknown_refs = sorted(set(refs) - set(JAX_REF_CONFIGS))
+    if unknown_refs:
+        raise ValueError(f"Unknown JAX refs: {unknown_refs!r}")
 
     matrix: list[dict[str, str]] = []
-    for cell in generate_jax_matrix(versions):
-        build_mode = str(cell["build_mode"])
-        jax_ref = str(cell["jax_ref"])
-
-        if build_mode != "manylinux":
-            continue
-        if jax_ref not in CI_JAX_REFS:
-            continue
-
-        matrix.append(
-            {
-                "python_version": str(cell["python_version"]),
-                "jax_ref": jax_ref,
-                "jax_repository": str(cell["jax_repository"]),
-                "build_mode": build_mode,
-                "gfx_arch": str(cell["gfx_arch"]),
+    for py in versions:
+        for ref in refs:
+            ref_cfg = JAX_REF_CONFIGS[ref]
+            row: dict[str, str] = {
+                "python_version": py,
+                "jax_ref": ref_cfg["jax_ref"],
+                "jax_repository": ref_cfg["jax_repository"],
+                "build_mode": ref_cfg["build_mode"],
+                "gfx_arch": ref_cfg["gfx_arch"],
             }
-        )
-
-    if not matrix:
-        raise ValueError(
-            "No supported manylinux JAX CI matrix entries were generated. "
-            f"Allowed refs: {sorted(CI_JAX_REFS)}"
-        )
+            matrix.append(row)
 
     return matrix
+
+
+def generate_jax_matrix(
+    python_versions: list[str] | None,
+) -> list[dict[str, str]]:
+    """Generate the full JAX release matrix.
+
+    Kept as a compatibility wrapper for callers that still expect the old
+    release-only helper.
+    """
+    return generate_jax_matrix_for_release_type(
+        release_type="dev",
+        platform="linux",
+        python_versions=python_versions,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate JAX release build matrix")
+    parser = argparse.ArgumentParser(description="Generate JAX build matrix")
     parser.add_argument(
         "--python-versions",
         type=str,
         default="",
-        help="Comma, semicolon, or whitespace separated list of Python versions (default: all)",
+        help=(
+            "Comma, semicolon, or whitespace separated list of Python versions "
+            "(default depends on --release-type)"
+        ),
+    )
+    parser.add_argument(
+        "--jax-refs",
+        type=str,
+        default="",
+        help=(
+            "Comma, semicolon, or whitespace separated list of JAX refs "
+            "(default depends on --release-type and --platform)"
+        ),
+    )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default="linux",
+        choices=["linux"],
+        help="Platform to generate matrix for (default: linux)",
+    )
+    parser.add_argument(
+        "--release-type",
+        type=str,
+        default="dev",
+        choices=RELEASE_TYPES,
+        help="Release type selecting default JAX/Python matrix (default: dev)",
     )
     args = parser.parse_args(argv)
 
     python_versions = _split_values(args.python_versions) or None
+    jax_refs = _split_values(args.jax_refs) or None
 
-    matrix = generate_jax_matrix(python_versions)
+    matrix = generate_jax_matrix_for_release_type(
+        release_type=args.release_type,
+        platform=args.platform,
+        python_versions=python_versions,
+        jax_refs=jax_refs,
+    )
     gha_set_output({"jax_matrix": json.dumps(matrix)})
     return 0
 
