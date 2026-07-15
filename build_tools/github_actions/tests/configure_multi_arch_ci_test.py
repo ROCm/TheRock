@@ -598,6 +598,37 @@ class TestSelectTargets(unittest.TestCase):
         push_result = cm.select_targets(push_inputs)
         self.assertGreater(len(result.linux_families), len(push_result.linux_families))
 
+    def test_schedule_respects_explicit_inputs(self):
+        """Schedule trigger uses explicit inputs when provided."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x", "gfx950"],
+            windows_amdgpu_families=["gfx1151"],
+        )
+        result = cm.select_targets(inputs)
+        # Should use explicit inputs, not all families
+        self.assertEqual(result.linux_families, ["gfx94x", "gfx950"])
+        self.assertEqual(result.windows_families, ["gfx1151"])
+
+    def test_schedule_none_skips_platform(self):
+        """Schedule trigger with 'none' skips that platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["none"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx94x"])
+        self.assertEqual(result.windows_families, [])
+
     def test_pull_request_defaults_to_presubmit_only(self):
         """PR without labels gets presubmit families only, not postsubmit."""
         inputs = cm.CIInputs(

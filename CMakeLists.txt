@@ -125,6 +125,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -264,9 +265,10 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # The HIP runtime for ROCm uses different implementations per platform today:
 #   * HIP on Linux uses the HSA runtime in ROCR-Runtime, used by CLR.
 #   * HIP on Windows uses the PAL runtime included directly as part of CLR.
+#     The ROCR-Runtime/rocminfo payload in core-runtime can be enabled
+#     experimentally with THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME.
 # https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
-# Platform-specific dependencies are handled automatically by therock_add_feature()
-# which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
+# Platform-specific dependencies are handled automatically by therock_add_feature().
 
 # Optional sub-features that control behavior within artifacts
 cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL

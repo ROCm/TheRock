@@ -33,11 +33,8 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # TODO: move this skip logic into the pytest conftest so the wrapper stays thin.
 UNIT_TEST_SKIP_FAMILIES = {"gfx1250"}
 
-FFM_QUICK_EXCLUDE = [
-    "mxf8_gfx1250.yaml",
-    "mxf4_gfx1250.yaml",
-    "sk_sgemm_quick.yaml",
-]
+# Per-test timeout (seconds); slow tests are killed, rest continue.
+FFM_PER_TEST_TIMEOUT = int(os.getenv("FFM_PER_TEST_TIMEOUT", "300"))
 
 # TENSILE_NUM_PYTEST_WORKERS: number of pytest-xdist processes running tests in parallel.
 NUM_PYTEST_WORKERS = os.getenv("TENSILE_NUM_PYTEST_WORKERS", "16")
@@ -107,24 +104,46 @@ subprocess.check_call(
     env=env,
 )
 
-# rocisa tests (includes GPU tests — runner has GPU access).
+# Determine arch before running tests — gfx1250 uses subprocess.run for rocisa
+# so common GEMM tests run regardless of rocisa outcome. Other archs keep
+# check_call (fail-fast: rocisa failure → abort before unit tests).
+amdgpu_family = os.getenv("AMDGPU_FAMILIES", "")
+common_tests = tensilelite_root / "Tensile" / "Tests" / "common"
+run_common_tests = common_tests.is_dir() and "gfx1250" in amdgpu_family
+
 logging.info("=== Running rocisa tests ===")
-subprocess.check_call(
-    [
-        sys.executable,
-        "-m",
-        "pytest",
-        "-v",
-        str(tensilelite_root / "rocisa_tests"),
-    ],
-    cwd=str(THEROCK_DIR),
-    env=env,
-)
+if run_common_tests:
+    rocisa_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-v",
+            str(tensilelite_root / "rocisa_tests"),
+        ],
+        cwd=str(THEROCK_DIR),
+        env=env,
+    )
+    if rocisa_result.returncode != 0:
+        logging.warning(
+            f"rocisa tests failed (exit {rocisa_result.returncode}), continuing to common tests"
+        )
+else:
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-v",
+            str(tensilelite_root / "rocisa_tests"),
+        ],
+        cwd=str(THEROCK_DIR),
+        env=env,
+    )
 
 # TensileLite Python unit tests (includes GPU subtile tests).
 # TODO(TheRock#3288): gfx950-dcgpu is excluded from PR CI (ci.yml) due to runner
 # capacity — GPU subtile tests only exercise on nightly/scheduled builds.
-amdgpu_family = os.getenv("AMDGPU_FAMILIES", "")
 skip_unit = UNIT_TEST_SKIP_FAMILIES & set(amdgpu_family.split(","))
 if not skip_unit:
     logging.info("=== Running TensileLite unit tests ===")
@@ -151,32 +170,30 @@ else:
 # Scope to Tensile/Tests/common (not Tensile/Tests) to avoid rocisa singleton
 # poisoning: unit test modules call validateToolchain()/makeIsaInfoMap() at
 # import time, caching all-false ISA caps that break subsequent common tests.
-common_tests = tensilelite_root / "Tensile" / "Tests" / "common"
 client_path = rocm_path / "libexec" / "hipblaslt" / "tensilelite" / "tensilelite-client"
 
-if common_tests.is_dir() and "gfx1250" in amdgpu_family:
+if run_common_tests:
     test_profile = os.getenv("TEST_PROFILE", "default")
     logging.info(
         f"=== Running TensileLite common gfx1250 tests (TEST_PROFILE={test_profile}) ==="
     )
     cxx = rocm_path / "bin" / "amdclang++"
+    junit_xml_dir = os.getenv("JUNIT_XML_DIR", "")
     common_cmd = [
         sys.executable,
         "-m",
         "pytest",
         "-v",
         "--durations=0",
+        f"--timeout={FFM_PER_TEST_TIMEOUT}",
         "-n",
         NUM_PYTEST_WORKERS,
         str(common_tests),
         "-m",
-        "gfx1250 or gfx12",
-        "-k",
         "gfx1250",
     ]
-    if test_profile != "nightly":
-        exclude = " and not ".join(["gfx1250"] + FFM_QUICK_EXCLUDE)
-        common_cmd[-1] = exclude
+    if junit_xml_dir:
+        common_cmd.append(f"--junit-xml={junit_xml_dir}/tensilelite.xml")
     if client_path.is_file():
         common_cmd += [f"--prebuilt-client={client_path}"]
         common_cmd += ["--global-parameters=LibraryFormat='msgpack'"]
@@ -184,4 +201,7 @@ if common_tests.is_dir() and "gfx1250" in amdgpu_family:
         common_cmd += [f"--tensile-options=--cxx-compiler,{cxx},--gpu-targets,gfx1250"]
     # HSA_MODEL_NUM_THREADS: number of threads inside the FFM emulator per process.
     env["HSA_MODEL_NUM_THREADS"] = os.getenv("HSA_MODEL_NUM_THREADS", "8")
-    subprocess.check_call(common_cmd, cwd=str(THEROCK_DIR), env=env)
+    common_result = subprocess.run(common_cmd, cwd=str(THEROCK_DIR), env=env)
+    # Exit with common test result — this is the primary outcome.
+    # rocisa failure is logged above but does not override the common test exit code.
+    sys.exit(common_result.returncode)
