@@ -104,6 +104,8 @@ def setup_env(pytorch_dir: str) -> None:
     os.environ["PYTORCH_TEST_WITH_ROCM"] = "1"
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
     os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
+    # disable rocprofiler-sdk
+    os.environ["HSA_TOOLS_DISABLE_REGISTER"] = "1"
 
     old_pythonpath = os.getenv("PYTHONPATH", "")
     test_dir = f"{pytorch_dir}/test"
