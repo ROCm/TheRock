@@ -232,6 +232,16 @@ jobs:
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
+          # JIT C++ extension tests (e.g. test_mempool_limited_memory_with_allocator)
+          # include ROCm headers like <hipblas/hipblas.h>. Those live in
+          # _rocm_sdk_devel/include, which torch cpp_extension does not add to the
+          # -isystem line for the plain-c++ host-object compile. Put it on
+          # CPLUS_INCLUDE_PATH so the JIT compile can find them.
+          DEVEL_INCLUDE="$(python -c 'import importlib.util, pathlib; s = importlib.util.find_spec("_rocm_sdk_devel"); print(pathlib.Path(s.submodule_search_locations[0]) / "include") if s else "")"
+          if [ -n "${DEVEL_INCLUDE}" ]; then
+            export CPLUS_INCLUDE_PATH="${DEVEL_INCLUDE}${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}"
+            echo "CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH}"
+          fi
           python ./external-builds/pytorch/run_pytorch_tests.py \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
