@@ -123,11 +123,13 @@ jobs:
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${{ inputs.python_version }}" \
             --platform=windows \
+            --release-type="${{ inputs.release_type }}" \
             --amdgpu-families="${{ inputs.amdgpu_families }}"
 
   build_pytorch_wheels:
     needs: setup_matrix
     name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    if: ${{ needs.setup_matrix.outputs.pytorch_matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:

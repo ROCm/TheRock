@@ -3,7 +3,6 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
-  "share/hipdnn/python/**",
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
@@ -11,20 +10,10 @@ include = [
 ]
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
-exclude = [
-  "share/hipdnn/python/**",
-]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
 include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-]
-# Exclude python frontend from the test artifact; ships with a dead CI RPATH
-# and is ABI-locked to cp312. See https://github.com/ROCm/TheRock/issues/5678
-# Needed because single-arch builds don't exclude test artifacts (multi-arch
-# does); remove this once single-arch is removed.
-exclude = [
-  "share/hipdnn/python/**",
 ]
