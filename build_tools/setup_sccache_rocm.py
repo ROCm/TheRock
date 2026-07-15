@@ -43,6 +43,7 @@ Prerequisites:
 """
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -113,6 +114,16 @@ def main():
         action="store_true",
         help="Omit HIP_CLANG_LAUNCHER (host C/C++ caching only)",
     )
+    parser.add_argument(
+        "--gha",
+        action="store_true",
+        help=(
+            "Write HIP_CLANG_LAUNCHER to $GITHUB_ENV for use in subsequent steps. "
+            "CMAKE_C/CXX_COMPILER_LAUNCHER are intentionally excluded — setting them "
+            "globally breaks stages that use custom compiler wrappers (e.g. profiler-apps). "
+            "Those launchers are passed via cmake -D args in the Configure step instead."
+        ),
+    )
     args = parser.parse_args()
 
     if args.sccache_path:
@@ -139,9 +150,18 @@ def main():
         raise RuntimeError(f"sccache verification failed: {e}") from e
 
     env = sccache_build_env(sccache_path, hip_launcher=not args.no_hip_launcher)
-    print("Configure a ROCm build with:")
-    for key, value in env.items():
-        print(f"  export {key}={value}")
+    if args.gha:
+        github_env = Path(os.environ["GITHUB_ENV"])
+        with github_env.open("a") as f:
+            for key, value in env.items():
+                if key == "HIP_CLANG_LAUNCHER":
+                    f.write(f"{key}={value}\n")
+        if "HIP_CLANG_LAUNCHER" in env:
+            print(f"Wrote HIP_CLANG_LAUNCHER={env['HIP_CLANG_LAUNCHER']} to $GITHUB_ENV")
+    else:
+        print("Configure a ROCm build with:")
+        for key, value in env.items():
+            print(f"  export {key}={value}")
 
 
 if __name__ == "__main__":
