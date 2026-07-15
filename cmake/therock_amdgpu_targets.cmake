@@ -265,6 +265,7 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V"
     composable_kernel
     hipBLAS rocBLAS
     hipBLASLt hipblasltprovider
+    hip-tests
     hipDNN_samples
     hipFFT rocFFT
     hipRAND rocRAND
@@ -278,6 +279,7 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V"
     rocprofiler-sdk
     rocprofiler-systems rocprofiler-systems-examples
     rocRoller
+    rocrtst
     rocshmem
     roctracer
     rocWMMA

@@ -73,9 +73,9 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 
 This target produces an architecture-independent SPIR-V code object that the runtime finalizes to the concrete device ISA.
 
-| Architecture | LLVM target   | Build Passing | Sanity Tested | Release Ready |
-| ------------ | ------------- | ------------- | ------------- | ------------- |
-| Portable     | amdgcnspirv   |               |               |               |
+| Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
+| ------------ | ----------- | ------------- | ------------- | ------------- |
+| Portable     | amdgcnspirv |               |               |               |
 
 ## ROCm on Windows
 
