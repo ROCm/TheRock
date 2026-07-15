@@ -185,6 +185,10 @@ jobs:
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
 
+          # TODO(#6388): Replace this per-run rocm-jax manylinux Dockerfile
+          # build with a frozen/prebuilt TheRock build image. Building this image
+          # in every CI run is expensive and currently rebuilds dependencies such
+          # as LLVM.
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
