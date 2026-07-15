@@ -4,14 +4,16 @@
 
 """
 ===============================================================================
-AMDSMI Test Runner (Manual Execution Only)
+AMDSMI Test Runner
 
-This script is NOT part of automated CI runs.
+Runs the `amdsmitst` GTest binary shipped with the amd-smi component.
 
-`amdsmitst` requires GPU device access (/dev/kfd, /dev/dri), elevated
-permissions, and execution on a ROCm-enabled system. GitHub-hosted CI
-environments do not expose these capabilities, so this script must be run
-manually by developers inside a privileged ROCm environment or container.
+ASIC-specific exclusions are delegated to the amd-smi test tree itself
+(amdsmitst.exclude + detect_asic_filter.sh), so this runner stays agnostic to
+which tests each ASIC skips. Environment tiering (privileged docker /
+unprivileged docker / baremetal) is detected here and surfaced to the binary
+via AMDSMI_NON_PRIVILEGED so state-modifying tests skip themselves when the
+runtime lacks the privileges they need.
 
 Usage:
     python test_amdsmi.py
@@ -21,27 +23,93 @@ Usage:
 
 import logging
 import os
-import platform
 import shlex
 import subprocess
 from pathlib import Path
-
-
-def is_windows():
-    return "windows" == platform.system().lower()
-
 
 logging.basicConfig(level=logging.INFO)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-AMDSMITST_BIN = (
-    THEROCK_DIR / "build" / "share" / "amd_smi" / "tests" / "amdsmitst"
-).resolve()
+TESTS_DIR = (THEROCK_DIR / "build" / "share" / "amd_smi" / "tests").resolve()
+AMDSMITST_BIN = TESTS_DIR / "amdsmitst"
 
-platform_key = "windows" if is_windows() else "linux"
-AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
+def get_asic_exclude_filter(test_dir):
+    """Source amdsmitst.exclude and detect_asic_filter.sh, return GTEST_EXCLUDE."""
+    exclude_script = test_dir / "amdsmitst.exclude"
+    detect_script = test_dir / "detect_asic_filter.sh"
+
+    if not exclude_script.exists():
+        logging.warning(f"amdsmitst.exclude not found in {test_dir}")
+        return ""
+    if not detect_script.exists():
+        logging.warning(f"detect_asic_filter.sh not found in {test_dir}")
+        return ""
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{exclude_script}" && source "{detect_script}" && echo "$GTEST_EXCLUDE"',
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(test_dir),
+    )
+
+    if result.returncode != 0:
+        logging.warning(
+            f"ASIC detection failed (rc={result.returncode}): {result.stderr.strip()}"
+        )
+        return ""
+
+    gtest_exclude = result.stdout.strip()
+    if gtest_exclude:
+        logging.info(f"ASIC exclude filter: {gtest_exclude}")
+    else:
+        logging.info("ASIC detection returned no exclusions")
+    return gtest_exclude
+
+
+def _cgroup_mentions_container():
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text()
+    except OSError:
+        return False
+    return any(marker in cgroup for marker in ("docker", "kubepods", "containerd"))
+
+
+def detect_privilege_tier():
+    """Classify the runtime as 'baremetal', 'privileged', or 'unprivileged'.
+
+    amdsmitst gates state-modifying tests on is_sudo_user() (uid == 0). Inside an
+    unprivileged docker container the process is uid 0 yet lacks the full
+    capability set a privileged container or baremetal root has, so is_sudo_user()
+    alone cannot tell the two apart. Inspect the effective capability mask to
+    distinguish them so the caller can set AMDSMI_NON_PRIVILEGED accordingly.
+    """
+    in_container = Path("/.dockerenv").exists() or _cgroup_mentions_container()
+    if not in_container:
+        return "baremetal"
+
+    # CapEff is a 64-bit hex mask in /proc/self/status. A privileged container
+    # (or --cap-add=ALL) exposes the full mask; unprivileged containers get the
+    # trimmed default docker set. CAP_SYS_ADMIN (bit 21) is the practical marker
+    # for "can touch the sysfs/debugfs knobs the write tests need".
+    cap_sys_admin = 21
+    try:
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("CapEff:"):
+                cap_eff = int(line.split()[1], 16)
+                return "privileged" if cap_eff & (1 << cap_sys_admin) else "unprivileged"
+    except (OSError, ValueError):
+        pass
+    # Unknown capability state inside a container: treat as unprivileged so we
+    # err on the side of skipping state-modifying tests rather than hanging.
+    return "unprivileged"
+
 
 # -----------------------------
 # GTest sharding
@@ -52,77 +120,85 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", "1")
 environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+
+# -----------------------------
+# Environment tiering
+# -----------------------------
+# Surface the privilege tier to the binary. Never override an explicit setting
+# from the caller; only add AMDSMI_NON_PRIVILEGED when we detect an unprivileged
+# runtime that cannot safely run state-modifying tests.
+privilege_tier = detect_privilege_tier()
+logging.info(f"Detected privilege tier: {privilege_tier}")
+if "AMDSMI_NON_PRIVILEGED" in environ_vars:
+    logging.info(
+        "AMDSMI_NON_PRIVILEGED already set by caller "
+        f"({environ_vars['AMDSMI_NON_PRIVILEGED']!r}); leaving as-is"
+    )
+elif privilege_tier == "unprivileged":
+    environ_vars["AMDSMI_NON_PRIVILEGED"] = "1"
+    logging.info("Unprivileged runtime: setting AMDSMI_NON_PRIVILEGED=1")
+
+# -----------------------------
+# Test filtering
+# -----------------------------
 test_type = os.getenv("TEST_TYPE", "standard")
 
 if test_type == "quick":
-    logging.info("Running quick tests only for amdsmitst")
-    test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
-
+    # Rename-agnostic: matches both the legacy AmdSmiDynamicMetricTest suite and
+    # the GpuUnit suite it is being renamed to. gtest treats unmatched patterns
+    # as a no-op, so listing both is safe before and after the rename.
+    include_tests = [
+        "AmdSmiDynamicMetricTest.*",
+        "*Unit*",
+    ]
+    include_filter = ":".join(include_tests)
+    gtest_filter_arg = [f"--gtest_filter={include_filter}"]
+    logging.info(f"Quick mode: include filter = {include_filter}")
 else:
-    logging.info("Running standard amdsmitst test suite (include + exclude filter)")
-
+    # Full mode: rename-agnostic positive whitelist minus the sourced exclusions.
+    # Listing both the legacy amdsmitst* suites and the new *Functional*/*Unit*
+    # suites keeps the logical test set stable across the suite rename without
+    # automatically pulling in unrelated new suites (NIC/IFoE/etc.).
     include_tests = [
         "amdsmitstReadOnly.*",
-        "amdsmitstReadWrite.FanReadWrite",
-        "amdsmitstReadWrite.TestOverdriveReadWrite",
-        "amdsmitstReadWrite.TestPciReadWrite",
-        "amdsmitstReadWrite.TestPowerReadWrite",
-        "amdsmitstReadWrite.TestPerfCntrReadWrite",
-        "amdsmitstReadWrite.TestEvtNotifReadWrite",
+        "amdsmitstReadWrite.*",
         "AmdSmiDynamicMetricTest.*",
+        "*FunctionalReadOnly.*",
+        "*FunctionalReadWrite.*",
+        "*Unit*",
     ]
 
+    # Manual exclusions — always applied regardless of ASIC. Listed under both
+    # the legacy and renamed suite names so they survive the rename.
     exclude_tests = [
         "amdsmitstReadOnly.TempRead",
         "amdsmitstReadOnly.TestFrequenciesRead",
         "amdsmitstReadWrite.TestPowerReadWrite",
+        "GpuFunctionalReadOnly.TempRead",
+        "GpuFunctionalReadOnly.TestFrequenciesRead",
+        "GpuFunctionalReadWrite.TestPowerReadWrite",
     ]
 
-    # -----------------------------
-    # Arch-specific ignores (CI parity)
-    # -----------------------------
-    TESTS_TO_IGNORE = {
-        "gfx90a": {
-            "linux": [
-                "amdsmitstReadOnly.TestSysInfoRead",
-                "amdsmitstReadOnly.TestIdInfoRead",
-                "amdsmitstReadWrite.TestPciReadWrite",
-            ]
-        },
-        "gfx110X-all": {
-            "linux": [
-                "amdsmitstReadWrite.FanReadWrite",
-            ]
-        },
-        "gfx103X-all": {
-            "linux": [
-                "amdsmitstReadWrite.FanReadWrite",
-            ]
-        },
-    }
+    # ASIC- and environment-specific exclusions come from detect_asic_filter.sh,
+    # which sources the exclude table shipped alongside the binary, so the names
+    # always match the binary being tested.
+    asic_exclude = get_asic_exclude_filter(TESTS_DIR)
+    if asic_exclude:
+        for test in asic_exclude.split(":"):
+            if test and test not in exclude_tests:
+                exclude_tests.append(test)
+        logging.info(
+            f"Combined exclude list ({len(exclude_tests)} entries): {exclude_tests}"
+        )
 
-    if (
-        AMDGPU_FAMILIES in TESTS_TO_IGNORE
-        and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
-    ):
-        ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
-        logging.info(f"Adding arch-specific excludes: {ignored_tests}")
-        exclude_tests.extend(ignored_tests)
-
-    logging.info(f"AMDGPU_FAMILIES={AMDGPU_FAMILIES}")
-    logging.info(f"platform_key={platform_key}")
-    logging.info(f"Final exclude_tests={exclude_tests}")
-
-    # -----------------------------
-    # Build final filter
-    # -----------------------------
     gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
-    test_filter = [f"--gtest_filter={gtest_filter}"]
+    gtest_filter_arg = [f"--gtest_filter={gtest_filter}"]
+    logging.info(f"Full mode: filter = {gtest_filter}")
 
 # -----------------------------
 # Build command
 # -----------------------------
-cmd = [str(AMDSMITST_BIN)] + test_filter
+cmd = [str(AMDSMITST_BIN)] + gtest_filter_arg
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
