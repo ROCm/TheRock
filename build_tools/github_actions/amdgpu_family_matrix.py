@@ -487,6 +487,38 @@ def _get_local_families_for_trigger_types(trigger_types) -> dict:
     return result
 
 
+def _extract_runner_labels_from_v1(external_config: dict) -> dict:
+    """Extract runner labels from V1 gpu_families format.
+
+    V1 config has full family definitions in gpu_families organized by trigger type.
+    This extracts just the runner-related keys for overlay.
+    """
+    runner_labels: dict = {}
+    gpu_families = external_config.get("gpu_families", {})
+    runner_keys = {
+        "test-runs-on",
+        "test-runs-on-labels",
+        "test-runs-on-sandbox",
+        "test-runs-on-multi-gpu",
+        "test-runs-on-multi-gpu-labels",
+        "test-runs-on-kernel",
+        "benchmark-runs-on",
+    }
+
+    for _trigger, families in gpu_families.items():
+        for family_name, family_config in families.items():
+            if family_name not in runner_labels:
+                runner_labels[family_name] = {}
+            for platform, platform_config in family_config.items():
+                if platform not in runner_labels[family_name]:
+                    runner_labels[family_name][platform] = {}
+                for key, value in platform_config.items():
+                    if key in runner_keys and value:  # Only non-empty values
+                        runner_labels[family_name][platform][key] = value
+
+    return runner_labels
+
+
 def _overlay_runner_config(families: dict, external_config: dict) -> dict:
     """Overlay external runner configuration onto local family definitions.
 
@@ -495,6 +527,8 @@ def _overlay_runner_config(families: dict, external_config: dict) -> dict:
     definitions. This allows CI runner configuration to be managed separately
     from build architecture support.
 
+    Handles both V1 (gpu_families) and V2 (runner_labels) config formats.
+
     Args:
         families: Local family definitions (source of truth for build support)
         external_config: External runner config from therock-ci-config
@@ -502,13 +536,28 @@ def _overlay_runner_config(families: dict, external_config: dict) -> dict:
     Returns:
         Family definitions with runner labels overlaid from external config
     """
+    # V2 format: runner_labels directly available
+    # V1 format: extract from gpu_families
     runner_labels = external_config.get("runner_labels", {})
+    if not runner_labels:
+        runner_labels = _extract_runner_labels_from_v1(external_config)
+
     if not runner_labels:
         return families
 
     import copy
 
     result = copy.deepcopy(families)
+
+    runner_keys = [
+        "test-runs-on",
+        "test-runs-on-labels",
+        "test-runs-on-sandbox",
+        "test-runs-on-multi-gpu",
+        "test-runs-on-multi-gpu-labels",
+        "test-runs-on-kernel",
+        "benchmark-runs-on",
+    ]
 
     for family_name, family_config in result.items():
         if family_name not in runner_labels:
@@ -523,15 +572,6 @@ def _overlay_runner_config(families: dict, external_config: dict) -> dict:
 
             # Overlay runner-specific keys from external config
             external_platform = external_family[platform]
-            runner_keys = [
-                "test-runs-on",
-                "test-runs-on-labels",
-                "test-runs-on-sandbox",
-                "test-runs-on-multi-gpu",
-                "test-runs-on-multi-gpu-labels",
-                "test-runs-on-kernel",
-                "benchmark-runs-on",
-            ]
             for key in runner_keys:
                 if key in external_platform:
                     family_config[platform][key] = external_platform[key]

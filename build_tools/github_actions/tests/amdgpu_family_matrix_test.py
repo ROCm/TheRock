@@ -215,6 +215,39 @@ class TestExternalConfig(unittest.TestCase):
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
         self.assertNotEqual(result["gfx94x"]["linux"]["build_variants"], ["should-not-override"])
 
+    def test_v1_external_config_extracts_runner_labels(self):
+        """V1 config format (gpu_families) is handled for backward compatibility."""
+        # V1 format has gpu_families organized by trigger type
+        fake_v1_config = {
+            "gpu_families": {
+                "presubmit": {
+                    "gfx94x": {
+                        "linux": {
+                            "test-runs-on": "v1-runner-label",
+                            "test-runs-on-multi-gpu": "v1-multi-gpu-runner",
+                            "family": "gfx94X-dcgpu",  # Should be ignored
+                            "build_variants": ["release"],  # Should be ignored
+                        }
+                    }
+                }
+            }
+        }
+        with mock.patch.object(
+            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_v1_config
+        ):
+            result = get_all_families_for_trigger_types(["presubmit"])
+
+        # Runner labels should be extracted and overlaid
+        self.assertEqual(
+            result["gfx94x"]["linux"]["test-runs-on"], "v1-runner-label"
+        )
+        self.assertEqual(
+            result["gfx94x"]["linux"]["test-runs-on-multi-gpu"], "v1-multi-gpu-runner"
+        )
+        # Non-runner keys should come from local definitions
+        self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
+        self.assertIn("asan", result["gfx94x"]["linux"]["build_variants"])
+
 
 if __name__ == "__main__":
     unittest.main()
