@@ -12,6 +12,11 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+# Clear CI_CONFIG_PATH before importing to ensure tests use local definitions only.
+# This prevents external config from affecting test results.
+if "CI_CONFIG_PATH" in os.environ:
+    del os.environ["CI_CONFIG_PATH"]
+
 import amdgpu_family_matrix
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
@@ -19,9 +24,24 @@ from amdgpu_family_matrix import (
     load_external_runner_config,
 )
 
-ALL_FAMILIES = get_all_families_for_trigger_types(
-    ["presubmit", "postsubmit", "nightly"]
-)
+
+def _get_all_families_local_only():
+    """Get all families using only local definitions (no external config)."""
+    # Ensure CI_CONFIG_PATH is not set so we use local definitions
+    orig_env = os.environ.get("CI_CONFIG_PATH")
+    if "CI_CONFIG_PATH" in os.environ:
+        del os.environ["CI_CONFIG_PATH"]
+    try:
+        return get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+    finally:
+        if orig_env is not None:
+            os.environ["CI_CONFIG_PATH"] = orig_env
+
+
+# Load families using local definitions only for invariant tests
+ALL_FAMILIES = _get_all_families_local_only()
 
 
 class TestFamilyMatrixInvariants(unittest.TestCase):
@@ -187,16 +207,15 @@ class TestExternalConfig(unittest.TestCase):
         # Build variants should still be defined
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
 
-    def test_external_config_only_overlays_runner_keys(self):
-        """External config only overlays runner-specific keys, not build config."""
+    def test_runner_labels_overlays_all_keys(self):
+        """runner_labels section overlays all its keys onto local definitions."""
         fake_config = {
             "runner_labels": {
                 "gfx94x": {
                     "linux": {
                         "test-runs-on": "external-runner",
-                        # These should NOT be applied - they're not runner keys
-                        "family": "should-not-override",
-                        "build_variants": ["should-not-override"],
+                        "test-runs-on-multi-gpu": "external-multi-gpu",
+                        "custom-runner-key": "custom-value",
                     }
                 }
             }
@@ -206,14 +225,19 @@ class TestExternalConfig(unittest.TestCase):
         ):
             result = get_all_families_for_trigger_types(["presubmit"])
 
-        # Runner key should be overlaid
+        # All keys from runner_labels should be overlaid
         self.assertEqual(
             result["gfx94x"]["linux"]["test-runs-on"], "external-runner"
         )
-        # Non-runner keys should NOT be overwritten
+        self.assertEqual(
+            result["gfx94x"]["linux"]["test-runs-on-multi-gpu"], "external-multi-gpu"
+        )
+        self.assertEqual(
+            result["gfx94x"]["linux"]["custom-runner-key"], "custom-value"
+        )
+        # Local build config should still be present (not in runner_labels)
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
-        self.assertNotEqual(result["gfx94x"]["linux"]["build_variants"], ["should-not-override"])
 
     def test_v1_external_config_extracts_runner_labels(self):
         """V1 config format (gpu_families) is handled for backward compatibility."""
