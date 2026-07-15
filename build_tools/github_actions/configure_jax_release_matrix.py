@@ -87,6 +87,27 @@ def _default_jax_refs(*, release_type: str, platform: str) -> list[str]:
     return list(RELEASE_JAX_REFS[platform])
 
 
+def generate_jax_matrix(
+    *,
+    jax_refs: list[str],
+    python_versions: list[str],
+) -> list[dict[str, str]]:
+    matrix: list[dict[str, str]] = []
+    for py in python_versions:
+        for ref in jax_refs:
+            ref_cfg = JAX_REF_CONFIGS[ref]
+            row: dict[str, str] = {
+                "python_version": py,
+                "jax_ref": ref_cfg["jax_ref"],
+                "jax_repository": ref_cfg["jax_repository"],
+                "build_mode": ref_cfg["build_mode"],
+                "gfx_arch": ref_cfg["gfx_arch"],
+            }
+            matrix.append(row)
+
+    return matrix
+
+
 def generate_jax_matrix_for_release_type(
     *,
     release_type: str,
@@ -112,34 +133,9 @@ def generate_jax_matrix_for_release_type(
     if unknown_refs:
         raise ValueError(f"Unknown JAX refs: {unknown_refs!r}")
 
-    matrix: list[dict[str, str]] = []
-    for py in versions:
-        for ref in refs:
-            ref_cfg = JAX_REF_CONFIGS[ref]
-            row: dict[str, str] = {
-                "python_version": py,
-                "jax_ref": ref_cfg["jax_ref"],
-                "jax_repository": ref_cfg["jax_repository"],
-                "build_mode": ref_cfg["build_mode"],
-                "gfx_arch": ref_cfg["gfx_arch"],
-            }
-            matrix.append(row)
-
-    return matrix
-
-
-def generate_jax_matrix(
-    python_versions: list[str] | None,
-) -> list[dict[str, str]]:
-    """Generate the full JAX release matrix.
-
-    Kept as a compatibility wrapper for callers that still expect the old
-    release-only helper.
-    """
-    return generate_jax_matrix_for_release_type(
-        release_type="dev",
-        platform="linux",
-        python_versions=python_versions,
+    return generate_jax_matrix(
+        jax_refs=refs,
+        python_versions=versions,
     )
 
 
