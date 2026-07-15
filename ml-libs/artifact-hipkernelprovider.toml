@@ -5,6 +5,9 @@
 # bundles under engines/arch_content/rocke/<arch>/ (split per-arch via
 # split_databases). The rocKE Python SDK under bin/**/rocke/** is dev/test only
 # and ships via [test] below, not here.
+# Capture is intentionally NOT asserted by tests yet: it is gated on
+# HIPKERNELPROVIDER_ENABLE_ROCKE (default off) and only has content once
+# rocm-libraries #9207 lands. Follow-up tests tracked by ROCm/TheRock#6553.
 include = [
   "**/engines/arch_content/**",
 ]
