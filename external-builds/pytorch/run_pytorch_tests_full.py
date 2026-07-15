@@ -97,6 +97,8 @@ THEROCK_ENV_VARS = [
     "PYTORCH_PRINT_REPRO_ON_FAILURE",
     "PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL",
     "MIOPEN_CUSTOM_CACHE_DIR",
+    "TORCH_SERIALIZATION_DEBUG",
+    "ROCPROFILER_LOG_LEVEL",
     "TEST_CONFIG",
     "PYTHONPATH",
     "HIP_VISIBLE_DEVICES",
@@ -202,6 +204,12 @@ def _register_rocm_libs_with_ldconfig() -> None:
                 sysdeps = base / "rocm_sysdeps" / "lib"
                 if sysdeps.is_dir():
                     candidates.append(str(sysdeps))
+                # Bundled math libs (librocm-openblas.so.0 etc.) live in a nested
+                # host-math/lib; without it torch_shm_manager still exits 127 after
+                # the core libs resolve.
+                host_math = base / "host-math" / "lib"
+                if host_math.is_dir():
+                    candidates.append(str(host_math))
         if not candidates:
             return
         conf = Path("/etc/ld.so.conf.d/therock-rocm-sdk.conf")
@@ -221,6 +229,20 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
     os.environ.setdefault("PYTORCH_PRINT_REPRO_ON_FAILURE", "0")
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
+
+    # Upstream CI (.ci/pytorch/test.sh) exports this; test_serialization
+    # test_debug_set_in_ci asserts it is "1".
+    os.environ.setdefault("TORCH_SERIALIZATION_DEBUG", "1")
+    # Silence rocprofiler-sdk's GLOG W-line ("Attempt to enable hip visibility
+    # ... not visible to HSA (ROCR)") that pollutes captured log streams under
+    # the CI HIP-vs-ROCR mask skew (dynamo test_logs_out asserts a clean stream).
+    os.environ.setdefault("ROCPROFILER_LOG_LEVEL", "error")
+
+    # Make TheRock's wheel-shipped ROCm lib dirs resolvable by the dynamic
+    # linker so spawned C++ helpers (torch_shm_manager), standalone JIT link
+    # steps, and inductor's vec-ISA probe can load librocprofiler-sdk.so.1 /
+    # libamdhip64.so.7 / bundled math libs from _rocm_sdk_*/lib.
+    _register_rocm_libs_with_ldconfig()
 
     if test_config:
         os.environ.setdefault("TEST_CONFIG", test_config)
