@@ -975,7 +975,8 @@ def promote_targz_sdist(
 
         targz = tarfile.open(filename)
         # PEP 706: refuse members with absolute paths / `..` traversal and strip
-        # unsafe metadata when extracting the downloaded sdist.
+        # unsafe metadata when extracting the downloaded sdist. The `filter`
+        # keyword requires Python 3.12+ (per the repo's Python baseline).
         targz.extractall(tmp_path, filter="data")
         targz.close()
         print(" ...done")
