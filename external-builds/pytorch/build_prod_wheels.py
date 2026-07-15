@@ -22,8 +22,8 @@ builds, etc):
 
 The following commands check out custom patched versions into this directory,
 which the script will use by default if they exist. Otherwise, checkout your
-own and specify with `--pytorch-dir`, `--pytorch-audio-dir`, `--pytorch-vision-dir`
-during the build step.
+own and specify `--root-checkout-dir` or the more specific `--pytorch-dir`,
+`--pytorch-audio-dir`, and `--pytorch-vision-dir` options during the build step.
 
 ```
 # On Linux, using default paths (nested under this folder):
@@ -400,6 +400,28 @@ def directory_if_exists(dir: Path) -> Path | None:
         return dir
     else:
         return None
+
+
+def apply_root_checkout_dir(args: argparse.Namespace) -> None:
+    """Default per-project source dirs from --root-checkout-dir."""
+    root_checkout_dir: Path | None = args.root_checkout_dir
+    if not root_checkout_dir:
+        return
+
+    if args.pytorch_dir is None:
+        args.pytorch_dir = directory_if_exists(root_checkout_dir / "pytorch")
+    if args.pytorch_audio_dir is None:
+        args.pytorch_audio_dir = directory_if_exists(
+            root_checkout_dir / "pytorch_audio"
+        )
+    if args.pytorch_vision_dir is None:
+        args.pytorch_vision_dir = directory_if_exists(
+            root_checkout_dir / "pytorch_vision"
+        )
+    if args.triton_dir is None:
+        args.triton_dir = directory_if_exists(root_checkout_dir / "triton")
+    if args.apex_dir is None:
+        args.apex_dir = directory_if_exists(root_checkout_dir / "apex")
 
 
 def do_install_rocm(args: argparse.Namespace):
@@ -1127,6 +1149,21 @@ def do_build_pytorch(
         + pip_install_args,
         cwd=pytorch_dir,
     )
+
+    # PEP 517 build backend requirements. We build below with
+    # `python -m build --wheel --no-isolation`, which (unlike an isolated build)
+    # does not auto-install the backend declared in pyproject.toml's
+    # [build-system]. PyTorch's backend switches from setuptools to
+    # scikit-build-core on 2026-07-20 (ROCm/TheRock#6523); newer checkouts ship
+    # requirements-build.txt (pinning scikit-build-core>=1.0), older ones do
+    # not. `build` provides the `python -m build` frontend itself.
+    print("+++ Installing pytorch build backend requirements:")
+    build_backend_install = [sys.executable, "-m", "pip", "install", "build"]
+    pytorch_build_requirements = pytorch_dir / "requirements-build.txt"
+    if pytorch_build_requirements.exists():
+        build_backend_install += ["-r", pytorch_build_requirements]
+    run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
+
     if is_windows:
         # As of 2025-06-24, the 'ninja' package on pypi is trailing too far
         # behind upstream:
@@ -1148,7 +1185,16 @@ def do_build_pytorch(
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_dir / "build")
-    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
+    # `python -m build --wheel --no-isolation` is the standard replacement for
+    # the removed `setup.py bdist_wheel` (ROCm/TheRock#6523). It drives the
+    # legacy setuptools backend and the new scikit-build-core backend alike, and
+    # all build-configuration env vars (USE_ROCM, PYTORCH_ROCM_ARCH, MAX_JOBS,
+    # ...) continue to be honored as they now seed the CMake cache directly.
+    run_command(
+        [sys.executable, "-m", "build", "--wheel", "--no-isolation"],
+        cwd=pytorch_dir,
+        env=env,
+    )
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
@@ -1310,7 +1356,7 @@ def main(argv: list[str]):
             ),
         )
 
-    sub_p = p.add_subparsers(required=True)
+    sub_p = p.add_subparsers(dest="command", required=True)
     install_rocm_p = sub_p.add_parser(
         "install-rocm", help="Install rocm-sdk wheels to the current venv"
     )
@@ -1357,32 +1403,43 @@ def main(argv: list[str]):
         "when hipcc lacks HIP_CLANG_LAUNCHER support.",
     )
     build_p.add_argument(
+        "--root-checkout-dir",
+        default=script_dir,
+        type=Path,
+        help=(
+            "Root directory containing PyTorch source checkouts named pytorch, "
+            "pytorch_audio, pytorch_vision, triton, and apex. Explicit "
+            "--pytorch-dir, --pytorch-audio-dir, --pytorch-vision-dir, "
+            "--triton-dir, and --apex-dir arguments override this."
+        ),
+    )
+    build_p.add_argument(
         "--pytorch-dir",
-        default=directory_if_exists(script_dir / "pytorch"),
+        default=None,
         type=Path,
         help="PyTorch source directory",
     )
     build_p.add_argument(
         "--pytorch-audio-dir",
-        default=directory_if_exists(script_dir / "pytorch_audio"),
+        default=None,
         type=Path,
         help="pytorch_audio source directory",
     )
     build_p.add_argument(
         "--pytorch-vision-dir",
-        default=directory_if_exists(script_dir / "pytorch_vision"),
+        default=None,
         type=Path,
         help="pytorch_vision source directory",
     )
     build_p.add_argument(
         "--triton-dir",
-        default=directory_if_exists(script_dir / "triton"),
+        default=None,
         type=Path,
         help="pinned triton directory",
     )
     build_p.add_argument(
         "--apex-dir",
-        default=directory_if_exists(script_dir / "apex"),
+        default=None,
         type=Path,
         help="apex source directory",
     )
@@ -1450,6 +1507,8 @@ def main(argv: list[str]):
     build_p.set_defaults(func=do_build)
 
     args = p.parse_args(argv)
+    if args.command == "build":
+        apply_root_checkout_dir(args)
     args.func(args)
 
 

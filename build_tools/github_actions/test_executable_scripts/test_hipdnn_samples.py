@@ -18,8 +18,6 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/hipdnn_samples",
     "--output-on-failure",
-    "--parallel",
-    "8",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 

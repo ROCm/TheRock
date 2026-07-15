@@ -138,8 +138,8 @@ class FetchPackageTargetsTest(unittest.TestCase):
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.1 (< 0.369 first weight)
-        with patch("random.random", return_value=0.1):
+        # Mock random.random() to return 0.05 (< 0.1 first weight)
+        with patch("random.random", return_value=0.05):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
@@ -152,13 +152,13 @@ class FetchPackageTargetsTest(unittest.TestCase):
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.4 (>= 0.369, < 0.455)
-        with patch("random.random", return_value=0.4):
+        # Mock random.random() to return 0.5 (>= 0.1, < 0.9)
+        with patch("random.random", return_value=0.5):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
         self.assertEqual(
-            targets[0]["test_machine"], "linux-gfx942-1gpu-core42-ossci-rocm"
+            targets[0]["test_machine"], "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
         )
 
     def test_gfx94x_multi_label_selects_third_when_random_high(self):
@@ -168,14 +168,12 @@ class FetchPackageTargetsTest(unittest.TestCase):
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.5 (>= 0.455)
-        with patch("random.random", return_value=0.5):
+        # Mock random.random() to return 0.95 (>= 0.9)
+        with patch("random.random", return_value=0.95):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
-        self.assertEqual(
-            targets[0]["test_machine"], "linux-gfx942-1gpu-core42-ossci-rocm"
-        )
+        self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ossci-rocm")
 
     def test_families_without_multi_label_use_primary(self):
         """Families without multi-label config should use primary label."""

@@ -10,8 +10,7 @@ TheRock includes:
 
 - Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
-- Support for building PyTorch with ROCm from source
-  - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Support for building PyTorch and JAX with ROCm from source
 - Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
@@ -20,11 +19,11 @@ TheRock includes:
 
 > [!IMPORTANT]
 > See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-> ROCm and PyTorch packages.
+> ROCm, PyTorch, and JAX packages.
 
 ## Project status
 
-See the unified project HUD at https://therock-hud-dev.amd.com/
+See the unified project HUD at https://therock-hud.amd.com/
 
 ### Nightly release status
 
@@ -203,8 +202,10 @@ minimal build):
 | `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`    | Enables MIOpen_plugin                               |
 | `-DTHEROCK_ENABLE_HIPDNN_SAMPLES=ON`   | Enables hipDNN samples (hipDNN Usage Examples)      |
 | `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                      |
+| `-DTHEROCK_ENABLE_HIPTENSOR=ON`        | Enables hipTensor                                   |
 | `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                            |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                     |
+| `-DTHEROCK_ENABLE_ROCALUTION=ON`       | Enables rocALUTION                                  |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |

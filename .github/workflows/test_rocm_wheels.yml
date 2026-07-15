@@ -15,16 +15,14 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-gfx942-1gpu-core42-ossci-rocm"
-      package_index_url_base:
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+      package_index_url:
         description: >-
-          Base Python package index URL. For legacy per-family builds, this is
-          without the GPU family subdir. For kpack-split builds, this is the
-          full flat index URL.
+          Full Python package index URL for use with --index-url.
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
       package_find_links_url:
-        description: Full Python package index URL for use with --find-links (usually instead of package_index_url_base)
+        description: Full Python package index URL for use with --find-links (usually instead of package_index_url)
         type: string
       python_version:
         required: true
@@ -61,11 +59,9 @@ on:
       test_runs_on:
         required: true
         type: string
-      package_index_url_base:
+      package_index_url:
         description: >-
-          Base Python package index URL. For legacy per-family builds, this is
-          without the GPU family subdir. For kpack-split builds, this is the
-          full flat index URL.
+          Full Python package index URL for use with --index-url.
         type: string
       package_find_links_url:
         type: string
@@ -75,10 +71,6 @@ on:
       rocm_version:
         required: true
         type: string
-      kpack_split:
-        description: "'true' if this is a kpack-split flat build."
-        type: string
-        default: "false"
       container_image_name:
         description: >-
           Short, human-readable label for the container image (e.g. 'ubuntu24.04',
@@ -132,7 +124,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -140,12 +132,11 @@ jobs:
       # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python
         if: ${{ inputs.container_image_url == '' || contains(inputs.container_image_name, 'ubuntu') }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python_version }}
 
       - name: Compute ROCm device extras
-        if: ${{ inputs.kpack_split == 'true' }}
         id: device_extras
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
@@ -160,20 +151,11 @@ jobs:
           if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
             pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
           fi
-          if [ "${{ inputs.kpack_split }}" = "true" ]; then
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --find-links=${{ inputs.package_find_links_url }} \
-              --activate-in-future-github-actions-steps
-          else
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --index-subdir=${{ inputs.amdgpu_family }} \
-              --find-links=${{ inputs.package_find_links_url }} \
-              --activate-in-future-github-actions-steps
-          fi
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "${pkg}==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }} \
+            --activate-in-future-github-actions-steps
 
       - name: Show installed packages (libraries)
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
@@ -195,18 +177,10 @@ jobs:
           if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
             pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
           fi
-          if [ "${{ inputs.kpack_split }}" = "true" ]; then
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --find-links=${{ inputs.package_find_links_url }}
-          else
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --index-subdir=${{ inputs.amdgpu_family }} \
-              --find-links=${{ inputs.package_find_links_url }}
-          fi
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "${pkg}==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }}
 
       - name: Show installed packages (libraries,devel)
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}

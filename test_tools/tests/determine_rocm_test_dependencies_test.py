@@ -3,6 +3,7 @@
 
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -46,6 +47,41 @@ class TestDetermineRocmTestDependencies(unittest.TestCase):
         # Verify rocWMMA has empty TEST_SUBPROJECTS (tests only itself)
         self.assertIn("rocwmma", test_deps)
         self.assertEqual(test_deps["rocwmma"], [])
+
+    def test_parse_hyphenated_subproject_names(self):
+        """Subproject names and TEST_SUBPROJECTS deps may contain hyphens."""
+        cmake = """\
+therock_cmake_subproject_declare(amd-dbgapi
+  RUNTIME_DEPS
+    amd-comgr
+  TEST_SUBPROJECTS
+    rocgdb
+    rocr-debug-agent-tests
+)
+
+therock_cmake_subproject_declare(rocr-debug-agent
+  RUNTIME_DEPS
+    amd-dbgapi
+  TEST_SUBPROJECTS
+    rocr-debug-agent-tests
+)
+
+therock_cmake_subproject_declare(rocr-debug-agent-tests
+  RUNTIME_DEPS
+    rocr-debug-agent
+  TEST_SUBPROJECTS
+)
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "CMakeLists.txt").write_text(cmake)
+            test_deps = parse_cmake_test_subprojects(tmp)
+
+        self.assertEqual(
+            set(test_deps["amd-dbgapi"]), {"rocgdb", "rocr-debug-agent-tests"}
+        )
+        self.assertEqual(test_deps["rocr-debug-agent"], ["rocr-debug-agent-tests"])
+        # Empty TEST_SUBPROJECTS placed last: tests only itself.
+        self.assertEqual(test_deps["rocr-debug-agent-tests"], [])
 
     def test_get_subprojects_to_test(self):
         """Test dependency resolution with case-insensitive input."""
