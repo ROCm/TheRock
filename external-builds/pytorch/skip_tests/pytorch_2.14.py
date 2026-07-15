@@ -14,6 +14,14 @@ skip_tests = {
             # TestCuda - conflicts with how our test script and runners are
             # configured.
             "test_hip_device_count",
+            # TestCudaAllocator::test_allocator_backend spawns a subprocess with a
+            # wiped environment (env={}); the child exits 127, i.e. it fails before the
+            # test body — a dynamic-loader failure resolving the interpreter/torch
+            # shared libs under an empty environment. The ldconfig registration added
+            # to run_pytorch_tests_full.py registers the ROCm SDK dirs but not whatever
+            # the wiped-env child is still missing (libpython / loader path). RCA OPEN:
+            # pin the exact unresolved object in the exit-127 child. Run 29384801639.
+            "(TestCudaAllocator and test_allocator_backend)",
         ],
         "cuda_expandable_segments": [
             # test_cuda_expandable_segments un-excluded from EXCLUDED_TEST_MODULES
@@ -61,6 +69,23 @@ skip_tests = {
             # incorrect") on ROCm. TODO: root-cause the dtype-support divergence.
             "(TestCommonCUDA and test_dtypes_sparse_sampled_addmm_cuda)",
         ],
+        "export": [
+            # TestExportOnFakeCudaCUDA spawns subprocesses with a near-wiped env
+            # (env={"CUDA_VISIBLE_DEVICES":""}); the children exit 127 — a dynamic-
+            # loader failure before the test body, same class as test_allocator_backend
+            # above. The ldconfig SDK registration did not resolve it. RCA OPEN: pin the
+            # exact shared object the wiped-env child cannot load. Run 29384801639
+            # failed all 9 (default shard 5/10).
+            "test_fake_export___getitem___cuda_float32",
+            "test_fake_export_nn_functional_batch_norm_cuda_float32",
+            "test_fake_export_nn_functional_batch_norm_without_cudnn_cuda_float32",
+            "test_fake_export_nn_functional_conv2d_cuda_float32",
+            "test_fake_export_nn_functional_instance_norm_cuda_float32",
+            "test_fake_export_nn_functional_multi_margin_loss_cuda_float32",
+            "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
+            "test_fake_export_nonzero_cuda_float32",
+            "test_preserve_original_behavior_cuda",
+        ],
         "linalg": [
             # Run 27657923936 default shard 1/10 plus local Rock-vs-nightly probe:
             # TestLinalgCUDA::test_cholesky_solve_batched_many_batches fails in the
@@ -76,58 +101,28 @@ skip_tests = {
             "(TestLinalgCUDA and test_cholesky_solve_batched_many_batches)",
         ],
         "inductor": [
+            # log10 inductor_numerics fp16/fp32 XPASS: log10 is now bitwise-correct on
+            # ROCm but still listed in ROCM_UNARY_NUMERICAL_XFAILS["inductor_numerics"],
+            # so the strict-xfail unexpectedly passes and the test FAILS. Removing the
+            # skip UNMASKS the XPASS (full-suite run 29384801639 failed both) — the skip
+            # must stay until log10 is dropped from that xfail dict upstream.
+            "test_unary_ufunc_numerical_log10_backend_inductor_numerics_cuda_float16",
+            "test_unary_ufunc_numerical_log10_backend_inductor_numerics_cuda_float32",
             # Run 27228539427 default shard 6/10:
             # log10 inductor_default float32 differs from eager under exact equality.
             "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float32",
             # Run 27228539427 default shard 6/10:
             # log10 inductor_default float16 differs from eager under exact equality.
             "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float16",
-            # Run 27657923936 default shard 10/10:
-            # DynamicShapesCpuTests::test_tmp_not_defined_issue3_dynamic_shapes_cpu
-            # still fails consistently with a small tensor mismatch
-            # (3/6144 elements, max abs diff 9.1552734375e-05). Local Rock Jun12
-            # source does not generate this CPU variant; nightly source generates it and passes.
-            "(DynamicShapesCpuTests and test_tmp_not_defined_issue3_dynamic_shapes_cpu)",
-            # Run 27473608564 default shard 1/10, job 81208818457:
-            # TestGpuWrapper::test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code
-            # expects at::vec:: in generated cpp wrapper; ROCm codegen omits CPU vec ISA.
-            # Re-verified GENUINE on b2b98e00 (debug run 29215386233 shard 8): assertIn
-            # "at::vec::" still fails (ROCm host codegen emits scalar loop, no vectorization).
-            "(TestGpuWrapper and test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code)",
-        ],
-        "dynamo": [
-            # LoggingTests::test_logs_out — ROCm runtime emits a spurious
-            # `W... agent.cpp:151] Attempt to enable hip visibility for agent-N` warning
-            # into the captured log stream, which the test's assertExpectedInline string
-            # match does not expect (a W-line appears between the expected I-lines).
-            # ROCm-specific log pollution, re-confirmed GENUINE on b2b98e00 (debug run
-            # 29215386233 shard 4). (The prior "raise ..." + generator throw/send skew
-            # entries here were test/interpreter version skew from running `nightly`
-            # sources ahead of the wheel; on wheel-pinned sources they pass or no longer
-            # exist, so they were removed 2026-07-13.)
-            "(LoggingTests and test_logs_out)",
-        ],
-        "serialization": [
-            # Mirrored from pytorch_2.12.py — TestSerialization/TestOldSerialization
-            # expect debug env flags set in CI; TheRock wheel CI does not enable them.
-            # Run 27390088455 default shard 1/10, job 80945585178: FAILED CONSISTENTLY.
-            "test_debug_set_in_ci",
-        ],
-        "utils": [
-            # Run 27228539427 default shard 9/10:
-            # TestStandaloneCPPJIT::test_load_standalone sees versioned
-            # extension paths (`_v1`/`_v2`) while the test expects the base path.
-            "(TestStandaloneCPPJIT and test_load_standalone)",
-        ],
-        "multiprocessing": [
-            # Run 27228539427 default shard 1/10:
-            # torch_shm_manager cannot load librocprofiler-sdk.so.1 in CI, so
-            # file-system sharing tests fail consistently.
-            "test_fs",
-            "test_fs_is_shared",
-            "test_fs_pool",
-            "test_fs_preserve_sharing",
-            "test_fs_sharing",
+            # NOTE: test_tmp_not_defined_issue3_dynamic_shapes_cpu and
+            # test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code REMOVED here.
+            # Root cause: inductor's CPU vec-ISA probe dlopens a test .so that links
+            # librocprofiler-sdk.so.1 etc. from the SDK dirs; when those dirs are off the
+            # loader path the probe fails, valid_vec_isa_list() returns [] and codegen
+            # falls back to scalar loops (no at::vec) -> the vec_isa assertion fails and
+            # the tmp_not_defined reduction reassociates and drifts. Fixed by wiring up
+            # _register_rocm_libs_with_ldconfig() (incl. host-math/lib) in
+            # run_pytorch_tests_full.py, which puts the SDK dirs on the loader path.
         ],
         "distributed": [
             # Child process exits with SIGABRT inside torchelastic launcher (test_run.py)
@@ -138,6 +133,13 @@ skip_tests = {
             # NCCL symmetric memory rendezvous not supported; host communicator not found
             "test_ce_allgather",
             "test_ce_alltoall",
+            # TestFullyShard1DTrainingCore::test_post_optim_event — fp32 FSDP
+            # post-optimizer-event value drift, nondeterministic (fails intermittently,
+            # run 29384801639 distributed shard 2/3). Suspected tie to the ROCm
+            # device_count / NUM_PROCS visibility handling (fw#16969) rather than a
+            # per-test numeric bug. RCA OPEN: determine the nondeterminism source
+            # (reduce-scatter ordering vs process-count/visibility) and the fix owner.
+            "(TestFullyShard1DTrainingCore and test_post_optim_event)",
             # Run 29223117302 distributed shard 3/3:
             # SymmMemCollectiveTest::test_two_shot_all_reduce hangs in
             # tearDownClass (process.join() on the multi-rank PG never returns)
