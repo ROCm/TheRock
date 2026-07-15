@@ -137,7 +137,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ROCm/therock-ci-config
-          ref: users/justchen/windows-aws-10-percent
+          ref: users/justchen/windows-aws-100-percent
           path: ci-config
         continue-on-error: true
 
