@@ -690,12 +690,12 @@ def main(argv: list[str]) -> int:
         level=logging.INFO,
         format="%(levelname)-8s %(message)s",
     )
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     token = args.token
     if not token:
-        log.error("No GitHub token provided (--token or QUARTZ_HAULY_TOKEN)")
-        return 1
+        parser.error("No GitHub token provided (--token or QUARTZ_HAULY_TOKEN)")
 
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not repo:
