@@ -52,7 +52,7 @@ diff --git a/clang/lib/Driver/Driver.cpp b/clang/lib/Driver/Driver.cpp
 index 90fa0b363823..000000000000 100644
 --- a/clang/lib/Driver/Driver.cpp
 +++ b/clang/lib/Driver/Driver.cpp
-@@ -138,6 +138,7 @@ CUIDOptions::CUIDOptions(llvm::opt::DerivedArgList &Args, const Driver &D)
+@@ -142,6 +142,7 @@ CUIDOptions::CUIDOptions(llvm::opt::DerivedArgList &Args, const Driver &D)
      UseCUID = llvm::StringSwitch<Kind>(UseCUIDStr)
                    .Case("hash", Kind::Hash)
                    .Case("random", Kind::Random)
