@@ -119,7 +119,7 @@ permissions:
 
 jobs:
   build_jax_wheels:
-    name: Build JAX | multi-arch-release | jax ${{ inputs.jax_ref }} | py ${{ inputs.python_version }}
+    name: Build JAX | ${{ inputs.artifact_group }} | jax ${{ inputs.jax_ref }} | py ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
       package_find_links_url: ${{ steps.upload_jax_wheels.outputs.package_find_links_url }}
@@ -130,6 +130,7 @@ jobs:
     env:
       MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
       RELEASE_TYPE: ci
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
       - name: Checkout TheRock
@@ -173,10 +174,6 @@ jobs:
             echo "Only build_mode=manylinux is supported by this CI workflow."
             exit 1
           fi
-
-      - name: Set package dist dir
-        run: |
-          echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/jax-source/dist" >> "$GITHUB_ENV"
 
       - name: Build manylinux image
         working-directory: jax-source
