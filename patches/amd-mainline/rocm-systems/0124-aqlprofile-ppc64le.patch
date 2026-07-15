@@ -1,0 +1,60 @@
+From 3a048682868384ac06f984e384432a67839c21ad Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 14 Jul 2026 19:07:23 +0000
+Subject: [PATCH] [aqlprofile] PowerPC compatability
+
+---
+ projects/aqlprofile/test/util/perf_timer.cpp | 10 ++++++++++
+ projects/aqlprofile/test/util/perf_timer.h   |  2 ++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/projects/aqlprofile/test/util/perf_timer.cpp b/projects/aqlprofile/test/util/perf_timer.cpp
+index 577e9a73a3..f6d1e703b8 100644
+--- a/projects/aqlprofile/test/util/perf_timer.cpp
++++ b/projects/aqlprofile/test/util/perf_timer.cpp
+@@ -23,6 +23,10 @@
+ 
+ #include "util/perf_timer.h"
+ 
++#if defined(__powerpc64__) || defined(__PPC64__)
++#include <sys/platform/ppc.h>
++#endif
++
+ PerfTimer::PerfTimer() { freq_in_100mhz_ = MeasureTSCFreqHz(); }
+ 
+ PerfTimer::~PerfTimer() {
+@@ -158,6 +162,7 @@ uint64_t PerfTimer::CoarseTimestampUs() {
+ }
+ 
+ uint64_t PerfTimer::MeasureTSCFreqHz() {
++#if defined(__x86_64__) || defined(_M_X64)
+   // Make a coarse interval measurement of TSC ticks for 1 gigacycles.
+   unsigned int unused;
+   uint64_t tscTicksEnd;
+@@ -174,4 +179,9 @@ uint64_t PerfTimer::MeasureTSCFreqHz() {
+   uint64_t coarseIntervalNs = (coarseEndUs - coarseBeginUs) * 1000;
+   uint64_t tscIntervalTicks = tscTicksEnd - tscTicksBegin;
+   return (tscIntervalTicks * 10 + (coarseIntervalNs / 2)) / coarseIntervalNs;
++#elif defined(__ppc64le__) || defined(__PPC64__)
++  return __ppc_get_timebase_freq() / 100000000;
++#else
++#error "Unsupported architecture"
++#endif
+ }
+diff --git a/projects/aqlprofile/test/util/perf_timer.h b/projects/aqlprofile/test/util/perf_timer.h
+index 0c2953e888..af07c686b6 100644
+--- a/projects/aqlprofile/test/util/perf_timer.h
++++ b/projects/aqlprofile/test/util/perf_timer.h
+@@ -38,7 +38,9 @@
+ #else
+ #if defined(__GNUC__)
+ #include <sys/time.h>
++#if defined(__x86_64__) || defined(__i386__)
+ #include <x86intrin.h>
++#endif
+ #endif  // __GNUC__
+ #endif  // _MSC_VER
+ 
+-- 
+2.52.0
+
