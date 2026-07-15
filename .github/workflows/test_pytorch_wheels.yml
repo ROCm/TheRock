@@ -200,12 +200,12 @@ jobs:
         run: |
           if [ "${{ inputs.multi_arch }}" = "true" ]; then
             python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
               --index-url=${{ inputs.package_index_url }} \
               --activate-in-future-github-actions-steps
           else
             python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages torch==${{ inputs.torch_version }} \
+              --packages "torch==${{ inputs.torch_version }} rocm[devel]" \
               --index-url=${{ inputs.package_index_url }} \
               --index-subdir=${{ inputs.amdgpu_family }} \
               --activate-in-future-github-actions-steps
@@ -214,6 +214,7 @@ jobs:
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
       - name: Run rocm-sdk sanity tests
