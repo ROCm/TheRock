@@ -87,14 +87,14 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 # Build runner configuration for Linux builds
 # Uses weighted distribution: 100% AWS
-# Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
+# Sanitizer builds (asan/tsan) use ramdisk variants (100% AWS prod r8a large)
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
-            {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
     },
     "windows": {
