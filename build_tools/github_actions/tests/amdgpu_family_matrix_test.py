@@ -16,7 +16,7 @@ import amdgpu_family_matrix
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     get_build_runner_labels,
-    load_external_config,
+    load_external_runner_config,
 )
 
 ALL_FAMILIES = get_all_families_for_trigger_types(
@@ -81,45 +81,56 @@ class TestExternalConfig(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self._orig_env)
 
-    def test_load_external_config_returns_none_when_env_not_set(self):
-        """load_external_config returns None when CI_CONFIG_PATH is not set."""
+    def test_load_external_runner_config_returns_none_when_env_not_set(self):
+        """load_external_runner_config returns None when CI_CONFIG_PATH is not set."""
         if "CI_CONFIG_PATH" in os.environ:
             del os.environ["CI_CONFIG_PATH"]
-        result = load_external_config()
+        result = load_external_runner_config()
         self.assertIsNone(result)
 
-    def test_load_external_config_returns_none_when_env_empty(self):
-        """load_external_config returns None when CI_CONFIG_PATH is empty."""
+    def test_load_external_runner_config_returns_none_when_env_empty(self):
+        """load_external_runner_config returns None when CI_CONFIG_PATH is empty."""
         os.environ["CI_CONFIG_PATH"] = ""
-        result = load_external_config()
+        result = load_external_runner_config()
         self.assertIsNone(result)
 
-    def test_load_external_config_returns_none_when_import_fails(self):
-        """load_external_config returns None when ci_config_api import fails."""
+    def test_load_external_runner_config_returns_none_when_import_fails(self):
+        """load_external_runner_config returns None when ci_config_api import fails."""
         os.environ["CI_CONFIG_PATH"] = "/nonexistent/path"
-        result = load_external_config()
+        result = load_external_runner_config()
         self.assertIsNone(result)
 
-    def test_get_all_families_uses_external_config_when_available(self):
-        """get_all_families_for_trigger_types uses external config when available."""
+    def test_get_all_families_overlays_external_runner_config(self):
+        """get_all_families_for_trigger_types overlays external runner labels."""
+        # External config provides runner labels that overlay local definitions
         fake_config = {
-            "gpu_families": {
-                "presubmit": {
-                    "test_family": {
-                        "linux": {
-                            "family": "test-family",
-                            "test-runs-on": "test-runner",
-                        }
+            "runner_labels": {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "external-runner-label",
+                        "test-runs-on-multi-gpu": "external-multi-gpu-runner",
                     }
                 }
             }
         }
         with mock.patch.object(
-            amdgpu_family_matrix, "load_external_config", return_value=fake_config
+            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
         ):
             result = get_all_families_for_trigger_types(["presubmit"])
-        self.assertIn("test_family", result)
-        self.assertEqual(result["test_family"]["linux"]["family"], "test-family")
+
+        # gfx94x should exist from local definitions
+        self.assertIn("gfx94x", result)
+        # Runner labels should be overlaid from external config
+        self.assertEqual(
+            result["gfx94x"]["linux"]["test-runs-on"], "external-runner-label"
+        )
+        self.assertEqual(
+            result["gfx94x"]["linux"]["test-runs-on-multi-gpu"],
+            "external-multi-gpu-runner",
+        )
+        # Non-runner fields should come from local definitions
+        self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
+        self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
 
     def test_get_all_families_falls_back_to_local_when_no_external_config(self):
         """get_all_families_for_trigger_types uses local matrix when no external config."""
@@ -137,7 +148,7 @@ class TestExternalConfig(unittest.TestCase):
             }
         }
         with mock.patch.object(
-            amdgpu_family_matrix, "load_external_config", return_value=fake_config
+            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
         ):
             result = get_build_runner_labels()
         self.assertEqual(result["linux"]["default"][0]["label"], "custom-runner")
@@ -150,6 +161,59 @@ class TestExternalConfig(unittest.TestCase):
         # Should contain local BUILD_RUNNER_LABELS
         self.assertIn("linux", result)
         self.assertIn("default", result["linux"])
+
+    def test_families_without_external_runners_still_buildable(self):
+        """Families defined locally are buildable even without external runner config."""
+        # External config with no runner_labels - simulates external config
+        # that only has build_runners but no test runner config for a family
+        fake_config = {
+            "build_runners": {
+                "linux": {"default": [{"label": "build-runner", "weight": 1.0}]}
+            },
+            "runner_labels": {},  # No test runners configured
+        }
+        with mock.patch.object(
+            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
+        ):
+            result = get_all_families_for_trigger_types(["presubmit"])
+
+        # gfx94x should still exist from local definitions
+        self.assertIn("gfx94x", result)
+        # Should have local runner label (not overlaid)
+        self.assertEqual(
+            result["gfx94x"]["linux"]["test-runs-on"],
+            "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+        )
+        # Build variants should still be defined
+        self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
+
+    def test_external_config_only_overlays_runner_keys(self):
+        """External config only overlays runner-specific keys, not build config."""
+        fake_config = {
+            "runner_labels": {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "external-runner",
+                        # These should NOT be applied - they're not runner keys
+                        "family": "should-not-override",
+                        "build_variants": ["should-not-override"],
+                    }
+                }
+            }
+        }
+        with mock.patch.object(
+            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
+        ):
+            result = get_all_families_for_trigger_types(["presubmit"])
+
+        # Runner key should be overlaid
+        self.assertEqual(
+            result["gfx94x"]["linux"]["test-runs-on"], "external-runner"
+        )
+        # Non-runner keys should NOT be overwritten
+        self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
+        self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
+        self.assertNotEqual(result["gfx94x"]["linux"]["build_variants"], ["should-not-override"])
 
 
 if __name__ == "__main__":

@@ -4,9 +4,15 @@
 """
 AMD GPU Family Matrix and runner selection utilities for GitHub workflows.
 
-NOTE: The primary source of truth for GPU families and runner labels is
-ROCm/therock-ci-config (runner-config.json). The definitions in this file
-serve as a fallback when external config is not available.
+Architecture:
+- SUPPORTED BUILD ARCHITECTURES are defined locally in this file (TheRock repo).
+  This is the source of truth for what GPU families can be built.
+- CI RUNNER CONFIGURATION is loaded from external config (ROCm/therock-ci-config)
+  when available. This only provides runner labels (test-runs-on, etc.) for where
+  tests can actually be executed.
+
+The external config overlays runner labels onto the local architecture definitions.
+A family can exist for building even without CI runners configured for testing.
 
 For presubmit, postsubmit and nightly family selection:
 
@@ -32,16 +38,20 @@ def _log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def load_external_config() -> dict | None:
-    """Load external CI config from CI_CONFIG_PATH if set.
+def load_external_runner_config() -> dict | None:
+    """Load external CI runner config from CI_CONFIG_PATH if set.
 
     The CI config API lives in therock-ci-config repo, which is checked out
     to CI_CONFIG_PATH. Returns None if CI_CONFIG_PATH is not set or config
-    doesn't exist (fallback to local definitions).
+    doesn't exist.
+
+    The external config only provides runner labels (test-runs-on, etc.),
+    not the full family definitions. Build architecture support is defined
+    locally in this file.
     """
     ci_config_path = os.environ.get("CI_CONFIG_PATH", "").strip()
     if not ci_config_path:
-        _log("CI_CONFIG_PATH not set, using local amdgpu_family_matrix.py")
+        _log("CI_CONFIG_PATH not set, using local runner definitions")
         return None
     config_path = Path(ci_config_path)
     sys.path.insert(0, str(config_path))
@@ -54,8 +64,12 @@ def load_external_config() -> dict | None:
         _log(f"CI config not found at {ci_config_path}, using local fallback")
         return None
     config = load_runner_config(config_path)
-    _log(f"Using external CI config from {ci_config_path}")
+    _log(f"Loaded external runner config from {ci_config_path}")
     return config
+
+
+# Keep old name as alias for backwards compatibility
+load_external_config = load_external_runner_config
 
 
 def is_asan():
@@ -456,25 +470,8 @@ amdgpu_family_info_matrix_nightly = {
 }
 
 
-def get_all_families_for_trigger_types(trigger_types):
-    """Returns combined family matrix for the specified trigger types.
-
-    Attempts to load external config from CI_CONFIG_PATH. Falls back to local
-    definitions if external config is unavailable.
-    """
-    external_config = load_external_config()
-
-    # Use external config if available
-    if external_config is not None:
-        gpu_families = external_config.get("gpu_families", {})
-        result = {}
-        for trigger_type in trigger_types:
-            if trigger_type in gpu_families:
-                for name, cfg in gpu_families[trigger_type].items():
-                    result[name] = cfg
-        return result
-
-    # Fall back to local definitions
+def _get_local_families_for_trigger_types(trigger_types) -> dict:
+    """Returns combined family matrix from local definitions for trigger types."""
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,
@@ -490,13 +487,83 @@ def get_all_families_for_trigger_types(trigger_types):
     return result
 
 
+def _overlay_runner_config(families: dict, external_config: dict) -> dict:
+    """Overlay external runner configuration onto local family definitions.
+
+    The external config provides runner labels (test-runs-on, test-runs-on-labels,
+    test-runs-on-multi-gpu, etc.) which are overlaid onto the local family
+    definitions. This allows CI runner configuration to be managed separately
+    from build architecture support.
+
+    Args:
+        families: Local family definitions (source of truth for build support)
+        external_config: External runner config from therock-ci-config
+
+    Returns:
+        Family definitions with runner labels overlaid from external config
+    """
+    runner_labels = external_config.get("runner_labels", {})
+    if not runner_labels:
+        return families
+
+    import copy
+
+    result = copy.deepcopy(families)
+
+    for family_name, family_config in result.items():
+        if family_name not in runner_labels:
+            continue
+
+        external_family = runner_labels[family_name]
+        for platform in ["linux", "windows"]:
+            if platform not in family_config:
+                continue
+            if platform not in external_family:
+                continue
+
+            # Overlay runner-specific keys from external config
+            external_platform = external_family[platform]
+            runner_keys = [
+                "test-runs-on",
+                "test-runs-on-labels",
+                "test-runs-on-sandbox",
+                "test-runs-on-multi-gpu",
+                "test-runs-on-multi-gpu-labels",
+                "test-runs-on-kernel",
+                "benchmark-runs-on",
+            ]
+            for key in runner_keys:
+                if key in external_platform:
+                    family_config[platform][key] = external_platform[key]
+
+    return result
+
+
+def get_all_families_for_trigger_types(trigger_types):
+    """Returns combined family matrix for the specified trigger types.
+
+    Local definitions (this file) are the source of truth for build architecture
+    support. External config (therock-ci-config) provides runner labels which
+    are overlaid onto local definitions when available.
+    """
+    # Always start with local definitions - source of truth for build support
+    result = _get_local_families_for_trigger_types(trigger_types)
+
+    # Overlay external runner config if available
+    external_config = load_external_runner_config()
+    if external_config is not None:
+        result = _overlay_runner_config(result, external_config)
+
+    return result
+
+
 def get_build_runner_labels():
     """Returns build runner label configuration.
 
     Attempts to load external config from CI_CONFIG_PATH. Falls back to local
     definitions if external config is unavailable.
     """
-    external_config = load_external_config()
+    external_config = load_external_runner_config()
 
     if external_config is not None:
         return external_config.get("build_runners", {})
