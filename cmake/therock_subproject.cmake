@@ -1674,8 +1674,24 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@CMAKE_C_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@CMAKE_CXX_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@CMAKE_LINKER@\")\n")
-  string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
-  string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
+  # Some subprojects drive the compiler through their own wrapper and break when
+  # a compiler launcher is inserted in front of it:
+  #   rocprofiler-systems-examples: uses rocprof-sys-launch-compiler, which loses
+  #     the HIP flags (e.g. --hip-path) when wrapped -> "hip/hip_runtime.h not found".
+  #   hip-tests: emits multi-arch bundles with multiple outputs per invocation.
+  # Drop the launcher for those (they build without caching).
+  get_target_property(_logical_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+  if(NOT _logical_name)
+    set(_logical_name "${target_name}")
+  endif()
+  set(_compiler_launcher_blocklist "rocprofiler-systems-examples" "hip-tests")
+  if(_logical_name IN_LIST _compiler_launcher_blocklist)
+    string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"\")\n")
+  else()
+    string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
+  endif()
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
   if(MSVC AND compiler_toolchain)
     # The system compiler and the toolchain compiler are incompatible, so we
@@ -1769,8 +1785,11 @@ function(_therock_cmake_subproject_setup_toolchain
     # defeats ccache. Passing -resource-dir with the unresolved path avoids this.
     string(APPEND _toolchain_contents "file(GLOB _therock_clang_resource_dirs \"@_amd_llvm_dist_dir@/lib/llvm/lib/clang/*\")\n")
     string(APPEND _toolchain_contents "list(GET _therock_clang_resource_dirs 0 _therock_clang_resource_dir)\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
+    # Use joined form (-resource-dir=<dir>) not space-separated: sccache's clang
+    # parser does not consume the space-separated value and miscounts it as a
+    # second input file, marking every such compile non-cacheable (ROCm/TheRock#5901).
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -resource-dir=\${_therock_clang_resource_dir}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir=\${_therock_clang_resource_dir}\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
     therock_sanitizer_configure(
@@ -1806,6 +1825,14 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    # Inject -fuse-cuid=hash-no-output when sccache is active so clang's CUID
+    # hash excludes -o, matching sccache's cache key. Without this the default
+    # hash mode produces different CUIDs for TUs that differ only in -o, but
+    # sccache collapses them to the same entry -> __hip_cuid_ duplicate symbols
+    # at RDC link time (ROCm/TheRock#748).
+    if(DEFINED ENV{SCCACHE_BUCKET} OR DEFINED ENV{SCCACHE_DIR})
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fuse-cuid=hash-no-output\")\n")
+    endif()
     # Propagate HIP_CLANG_LAUNCHER so hipcc routes its internal clang invocations
     # through sccache. Scoped to amd-hip subprojects only — other stages use
     # custom compiler wrappers incompatible with sccache interception.
