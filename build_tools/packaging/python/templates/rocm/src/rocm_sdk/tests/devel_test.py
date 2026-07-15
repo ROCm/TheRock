@@ -190,7 +190,7 @@ class ROCmDevelTest(unittest.TestCase):
                 extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
                 # The rocke-client engine also DT_NEEDEDs the kpack runtime, which
                 # ships in the core wheel and is not under lib_dir; add its dir too.
-                kpack_paths = rocm_sdk.find_libraries("kpack")
+                kpack_paths = rocm_sdk.find_libraries("rocm_kpack")
                 if kpack_paths:
                     kpack_dir = str(kpack_paths[0].parent).replace("\\", "\\\\")
                     extra_setup += f"os.add_dll_directory('{kpack_dir}') if hasattr(os, 'add_dll_directory') else None; "

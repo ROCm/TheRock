@@ -325,7 +325,6 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       therock-flatbuffers
       therock-nlohmann-json
       amd-comgr
-      rocm-kpack
     RUNTIME_DEPS
       hip-clr
       hipdnn_integration_tests

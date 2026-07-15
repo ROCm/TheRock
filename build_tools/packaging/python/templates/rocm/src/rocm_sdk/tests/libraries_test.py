@@ -93,7 +93,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # kpack is the rocke-client engine's runtime dep (DT_NEEDED), also in
                 # _rocm_sdk_core/bin; like amd_comgr it must be preloaded by name --
                 # co-location behind amdhip64's preload does not make it resolvable.
-                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'kpack');"
+                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'rocm_kpack');"
 
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
