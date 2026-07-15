@@ -88,12 +88,14 @@ def _default_jax_refs(*, release_type: str, platform: str) -> list[str]:
 
 
 def generate_jax_matrix(
-    python_versions: list[str] | None,
-) -> list[dict[str, object]]:
-    versions = python_versions if python_versions else PYTHON_VERSIONS
-    matrix: list[dict[str, object]] = []
-    for py in versions:
-        for ref_cfg in JAX_REFS:
+    *,
+    jax_refs: list[str],
+    python_versions: list[str],
+) -> list[dict[str, str]]:
+    matrix: list[dict[str, str]] = []
+    for py in python_versions:
+        for ref in jax_refs:
+            ref_cfg = JAX_REF_CONFIGS[ref]
             # These row keys are the contract with workflow files which use them
             # via matrix.<key> expressions. Empty values are allowed when the
             # workflow handles them explicitly, but undefined keys are not.
@@ -109,6 +111,7 @@ def generate_jax_matrix(
                     "gfx_arch": ref_cfg["gfx_arch"],
                 }
             )
+
     return matrix
 
 
