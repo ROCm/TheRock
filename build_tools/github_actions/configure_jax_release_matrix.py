@@ -88,23 +88,27 @@ def _default_jax_refs(*, release_type: str, platform: str) -> list[str]:
 
 
 def generate_jax_matrix(
-    *,
-    jax_refs: list[str],
-    python_versions: list[str],
-) -> list[dict[str, str]]:
-    matrix: list[dict[str, str]] = []
-    for py in python_versions:
-        for ref in jax_refs:
-            ref_cfg = JAX_REF_CONFIGS[ref]
-            row: dict[str, str] = {
-                "python_version": py,
-                "jax_ref": ref_cfg["jax_ref"],
-                "jax_repository": ref_cfg["jax_repository"],
-                "build_mode": ref_cfg["build_mode"],
-                "gfx_arch": ref_cfg["gfx_arch"],
-            }
-            matrix.append(row)
-
+    python_versions: list[str] | None,
+) -> list[dict[str, object]]:
+    versions = python_versions if python_versions else PYTHON_VERSIONS
+    matrix: list[dict[str, object]] = []
+    for py in versions:
+        for ref_cfg in JAX_REFS:
+            # These row keys are the contract with workflow files which use them
+            # via matrix.<key> expressions. Empty values are allowed when the
+            # workflow handles them explicitly, but undefined keys are not.
+            matrix.append(
+                {
+                    "python_version": py,
+                    "jax_ref": ref_cfg["jax_ref"],
+                    "jax_repository": ref_cfg["jax_repository"],
+                    "build_mode": ref_cfg["build_mode"],
+                    # gfx_arch is intentionally empty for native JAX builds and
+                    # non-empty for manylinux builds. This direct lookup raises
+                    # KeyError if JAX_REFS omits the key.
+                    "gfx_arch": ref_cfg["gfx_arch"],
+                }
+            )
     return matrix
 
 
