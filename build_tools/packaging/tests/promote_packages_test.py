@@ -65,8 +65,12 @@ specific release. How the expected output is worked out:
 Coherent install stack: promote_packages works on any subset of wheels, so where
 `wheels/` carries several versions of a distribution (torch 2.9..2.14, jax
 0.9/0.10) the install checks use only the newest of each, with triton pinned to
-whatever the chosen torch requires (`Requires-Dist: triton==<ver>`). Promotion
-behaves identically for the versions left out.
+whatever the chosen torch requires (`Requires-Dist: triton==<ver>`). A download
+also ships every supported CPython (cp310..cp314) while the install checks run
+under just one interpreter, so version-specific wheels are further narrowed to
+that interpreter's tag (Python-agnostic files -- the rocm sdist, `py3-none-*` SDK
+wheels -- always qualify). Promotion is Python-agnostic and behaves identically
+for the versions/CPythons left out.
 
 PREREQUISITES
   pip install -r ./build_tools/packaging/requirements.txt
@@ -145,6 +149,32 @@ def _wheel_platform(name: str) -> str | None:
     if "linux" in name:  # linux_x86_64, manylinux_2_XX_x86_64, ...
         return "linux"
     return None
+
+
+# CPython tag of the interpreter running this script (e.g. "cp312"); the install
+# checks build a venv from this interpreter, so only wheels for this CPython (or
+# Python-agnostic ones) can be installed.
+_RUNNER_PYTAG = f"cp{sys.version_info.major}{sys.version_info.minor}"
+
+
+def _wheel_pytag(name: str) -> str | None:
+    """The CPython tag a wheel is built for (e.g. "cp312"), or None when the
+    wheel is Python-version-agnostic (`py3-none-*`, the rocm sdist)."""
+    m = re.search(r"-(cp3\d+)-", name)
+    return m.group(1) if m else None
+
+
+def _py_installable(name: str) -> bool:
+    """Whether `name` can be installed under the interpreter running the tests.
+
+    A real download ships every supported CPython (cp310..cp314); the install
+    checks run under exactly one, so version-specific wheels for other CPythons
+    must be dropped -- pip rejects them with "not a supported wheel on this
+    platform". Python-agnostic files (rocm sdist, `py3-none-*` SDK wheels) always
+    qualify. Promotion itself is Python-agnostic, so this only narrows the
+    install/expectation sets, never what promotion is exercised against."""
+    tag = _wheel_pytag(name)
+    return tag is None or tag == _RUNNER_PYTAG
 
 
 def _list_files(directory: Path) -> set[str]:
@@ -246,7 +276,17 @@ class InputSet:
         )
         names = {n for n in names if _wheel_platform(n) in (self.platform, None)}
 
-        self.device_files = {n for n in names if _device_arch(n)}
+        # Device wheels feed the multi-arch scenario, which both promotes (prunes
+        # non-kept archs) and installs the kept arch. They are narrowed to the
+        # runner's CPython (like the aggregator install set) and collapsed to the
+        # newest version per package: a download ships several torch/torchvision
+        # versions per arch (e.g. amd_torch_device_gfx1010 2.10/2.11/2.12) whose
+        # device wheels cannot co-install, and the newest ones line up with the
+        # newest torch/torchvision picked for the aggregator install stack.
+        # Pruning is still fully exercised across every arch within that CPython.
+        self.device_files = self._newest_per_package(
+            {n for n in names if _device_arch(n) and _py_installable(n)}
+        )
         self.jax_files = {n for n in names if "jax" in n}
         self.aggregator_files = {
             n for n in names if _is_aggregator(n) and n not in self.device_files
@@ -315,10 +355,14 @@ class InputSet:
         return Version(meta.version)
 
     def _newest_per_package(self, names: set[str]) -> set[str]:
-        """Keep only the highest version of each distribution. A download can
-        ship several torch / jax versions that cannot be installed together."""
+        """Keep only the highest version of each distribution, restricted to
+        wheels installable under the running interpreter. A download can ship
+        several torch / jax versions (that cannot be installed together) across
+        several CPythons (only one of which matches this interpreter)."""
         newest: dict[str, str] = {}
         for n in names:
+            if not _py_installable(n):
+                continue
             pkg = n.split("-", 1)[0]  # wheel/sdist distribution name (no hyphens)
             if pkg not in newest or self._dist_version(n) > self._dist_version(
                 newest[pkg]
@@ -339,7 +383,7 @@ class InputSet:
                 picks |= {
                     n
                     for n in self.aggregator_files
-                    if n.startswith("triton-") and pin in n
+                    if n.startswith("triton-") and pin in n and _py_installable(n)
                 }
         return picks
 
