@@ -53,6 +53,24 @@ Cite the specific guide section for a style finding.
 
 ______________________________________________________________________
 
+## PR-policy gate
+
+The source of truth for TheRock's contributing policies is the repo's
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md) — follow it first. In practice those policies are enforced
+by an automated gate (`therock_pr_bot`), which is the hoop every PR must actually clear before it can
+be reviewed. Treat that gate as **authoritative**: conform the PR to it before author or pre-merge
+sign-off, it overrides this skill's waivers and self-evident exemptions, and the skill never works
+around it. This overlay only points at the gate; it does not restate the gate's rules, so if the gate
+is later corrected to match `CONTRIBUTING.md`, the overlay needs no change.
+
+When you advise the author to do something solely to clear the gate that is **not** stated in
+`CONTRIBUTING.md`, say so explicitly — name it as a gate requirement, not a guide requirement — so the
+author knows where it came from (for example: "the bot requires a resolving `ISSUE ID` / `JIRA ID`
+line even though the contributing guide doesn't, so add one"). `skills/therock_pr_bot/FAQ.md` explains
+how to clear a specific failure.
+
+______________________________________________________________________
+
 ## Supplements
 
 ### Adds — change classes (bind to TheRock paths)
