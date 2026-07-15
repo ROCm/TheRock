@@ -3,17 +3,79 @@
 
 """Shared helpers for workflow YAML tests."""
 
+import re
 from pathlib import Path
 
 import yaml
 
 WORKFLOWS_DIR = Path(__file__).resolve().parents[3] / ".github" / "workflows"
+_MATRIX_REFERENCE_RE = re.compile(r"\bmatrix\.([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def load_workflow(path: Path) -> dict:
     """Loads a YAML workflow file from the given Path as a JSON dictionary."""
     with open(path) as f:
         return yaml.safe_load(f)
+
+
+def get_workflow_job(workflow: dict, job_name: str) -> dict:
+    """Returns a workflow job definition.
+
+    For a workflow with:
+        jobs:
+          build_wheels:
+            uses: ./.github/workflows/build_wheels.yml
+            with:
+              python_version: ${{ matrix.python_version }}
+
+    get_workflow_job(workflow, "build_wheels") returns the dictionary
+    containing the uses/with blocks for that job.
+    """
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict):
+        raise KeyError("workflow has no jobs block")
+
+    job = jobs[job_name]
+    if not isinstance(job, dict):
+        raise KeyError(f"workflow job {job_name!r} is not a mapping")
+    return job
+
+
+def get_matrix_references(value: object) -> set[str]:
+    """Extracts top-level matrix keys referenced by a workflow YAML value.
+
+    For a workflow value with:
+        with:
+          python_version: ${{ matrix.python_version }}
+          package_url: >-
+            ${{
+              format('{0}/{1}/index.html',
+                  needs.build.outputs.package_find_links_url,
+                  matrix.amdgpu_family)
+            }}
+
+    get_matrix_references(value) returns:
+        {"python_version", "amdgpu_family"}
+
+    Nested matrix objects like matrix.family_info.amdgpu_family return only the
+    top-level matrix key, {"family_info"}.
+    """
+    if isinstance(value, str):
+        return set(_MATRIX_REFERENCE_RE.findall(value))
+
+    if isinstance(value, dict):
+        references = set()
+        for child_value in value.values():
+            references.update(get_matrix_references(child_value))
+        return references
+
+    if isinstance(value, list):
+        references = set()
+        for child_value in value:
+            references.update(get_matrix_references(child_value))
+        return references
+
+    return set()
 
 
 def _get_workflow_dispatch_block(workflow: dict) -> dict | None:
