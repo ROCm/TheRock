@@ -59,7 +59,13 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 
 amdgpu_family_predefined_groups = {
     # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
-    "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all"],
+    "amdgpu_presubmit": [
+        "gfx94X-dcgpu",
+        "gfx110X-all",
+        "gfx1151",
+        "gfx120X-all",
+        "gfx125X-dcgpu",
+    ],
     # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
     "amdgpu_postsubmit": ["gfx950-dcgpu"],
     # The 'nightly' matrix runs on 'schedule' triggers.
@@ -70,7 +76,6 @@ amdgpu_family_predefined_groups = {
         "gfx1150",
         "gfx1152",
         "gfx1153",
-        "gfx125X-dcgpu",
     ],
 }
 

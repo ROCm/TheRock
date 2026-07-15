@@ -281,6 +281,16 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            # PyTorch builds are included for manual and postsubmit runs.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
 }
 
 
@@ -437,18 +447,6 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx125x": {
-        "linux": {
-            # No hardware available for testing yet; build-only.
-            # PyTorch builds are included — workflow_dispatch can be used
-            # to trigger manually; nightly schedule runs both ROCm stack
-            # and PyTorch builds.
-            "test-runs-on": "",
-            "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
