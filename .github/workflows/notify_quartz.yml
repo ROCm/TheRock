@@ -80,10 +80,6 @@ jobs:
           app-id: ${{ secrets.GH_APP_HAULY_ID }}
           private-key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
           owner: "ROCm"
-          # Scope the token to just the Quartz repo instead of every repo the
-          # app is installed for (least-privilege). Hardcoded because Quartz is
-          # the only consumer of this workflow; if that changes, derive this
-          # from inputs.quartz_repo (stripping the owner prefix).
           repositories: "Quartz"
       - name: Notify Quartz
         env:
