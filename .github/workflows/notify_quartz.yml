@@ -79,8 +79,7 @@ jobs:
         with:
           app-id: ${{ secrets.GH_APP_HAULY_ID }}
           private-key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-          owner: "ROCm"
-          repositories: "Quartz"
+          repositories: ${{ inputs.quartz_repo }}
       - name: Notify Quartz
         env:
           QUARTZ_HAULY_TOKEN: ${{ steps.app-token.outputs.token }}
