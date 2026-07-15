@@ -65,6 +65,7 @@ from pytorch_utils import (
     check_pytorch_source_version,
     configure_gpu_visibility,
     detect_pytorch_version,
+    reconcile_agent_visibility_env,
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -140,6 +141,8 @@ INDUCTOR_UNIT_TESTS = [
 
 
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
+    reconcile_agent_visibility_env()
+
     os.environ.setdefault("CI", "1")
     build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
         amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
@@ -519,6 +522,12 @@ def main(argv: list[str]) -> int:
         pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
     )
 
+    setup_env(
+        pytorch_dir=args.pytorch_dir,
+        test_config=args.test_config,
+        amdgpu_family=args.amdgpu_family,
+    )
+
     # Set HIP_VISIBLE_DEVICES BEFORE importing torch or running pytest. Once
     # torch.cuda is initialized, changing HIP_VISIBLE_DEVICES has no effect.
     selected_archs = configure_gpu_visibility(
@@ -540,11 +549,6 @@ def main(argv: list[str]) -> int:
             create_skip_list=not args.debug,
         )
 
-    setup_env(
-        pytorch_dir=args.pytorch_dir,
-        test_config=args.test_config,
-        amdgpu_family=args.amdgpu_family,
-    )
     print_env()
 
     if args.test_config == "inductor":

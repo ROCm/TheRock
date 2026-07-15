@@ -84,6 +84,7 @@ from pytorch_utils import (
     check_pytorch_source_version,
     configure_gpu_visibility,
     detect_pytorch_version,
+    reconcile_agent_visibility_env,
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -100,6 +101,8 @@ def setup_env(pytorch_dir: str) -> None:
         - Creates a temporary directory for MIOpen cache
         - Modifies sys.path to include the test directory
     """
+    reconcile_agent_visibility_env()
+
     os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
     os.environ["PYTORCH_TEST_WITH_ROCM"] = "1"
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
@@ -255,6 +258,8 @@ def main() -> int:
             pytorch_dir=pytorch_dir, allow_mismatch=args.allow_version_mismatch
         )
 
+        setup_env(pytorch_dir)
+
         # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
         # changing HIP_VISIBLE_DEVICES has no effect.
@@ -279,8 +284,6 @@ def main() -> int:
         # Allow manual override of test selection
         if args.k:
             tests_to_skip = args.k
-
-        setup_env(pytorch_dir)
 
         pytest_args = [
             f"{pytorch_dir}/test/test_nn.py",

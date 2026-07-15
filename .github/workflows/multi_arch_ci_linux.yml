@@ -200,6 +200,23 @@ jobs:
       contents: read
       id-token: write
 
+  test_native_packages_rhel8:
+    needs: [build_native_rpm_packages]
+    name: Test RPM Install - rhel8
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+      release_type: ci
+      os_profile: rhel8
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel10
@@ -277,7 +294,6 @@ jobs:
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
-      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.container_image_name }}
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
