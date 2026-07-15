@@ -265,13 +265,14 @@ endif(THEROCK_ENABLE_COMPILER)
 
 if(THEROCK_ENABLE_HIPIFY)
   ##############################################################################
-  # HIPIFY
+  # hipify
   ##############################################################################
 
   therock_cmake_subproject_declare(hipify
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
-    EXTERNAL_SOURCE_DIR "hipify"
+    EXTERNAL_SOURCE_DIR "amd-llvm/amd/hipify"
+    BINARY_DIR "hipify"
     BACKGROUND_BUILD
     INTERFACE_PROGRAM_DIRS
       bin

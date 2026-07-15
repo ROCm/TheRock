@@ -878,7 +878,6 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
-            "HIPIFY",
             "llvm-project",
             "spirv-llvm-translator",
         ],
