@@ -137,7 +137,11 @@ def _artifact_suffix_for_staging(
 
     if "Artifact_Gfxarch" in artifact:
         is_artifact_gfx = str(artifact["Artifact_Gfxarch"]).lower() == "true"
-        if enable_kpack and gfx_arch not in (GFX_HOST, GFX_META) and not is_artifact_gfx:
+        if (
+            enable_kpack
+            and gfx_arch not in (GFX_HOST, GFX_META)
+            and not is_artifact_gfx
+        ):
             return None
         return gfx_arch if is_artifact_gfx else "generic"
     return dir_suffix
@@ -193,13 +197,7 @@ def _kpack_config(tmp: Path, **overrides) -> build_package.PackageConfig:
 def _control_path(pkg_name: str, config: build_package.PackageConfig) -> Path:
     """Return path to generated ``debian/control`` for a versioned DEB build."""
     updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
-    return (
-        Path(config.dest_dir)
-        / config.pkg_type
-        / updated
-        / "debian"
-        / "control"
-    )
+    return Path(config.dest_dir) / config.pkg_type / updated / "debian" / "control"
 
 
 # ---------------------------------------------------------------------------
@@ -260,9 +258,7 @@ class CreateVersionedDebPackageTest(unittest.TestCase):
             deb_package.create_versioned_deb_package("amdrocm-fft", host_cfg)
 
             control = _control_path("amdrocm-fft", host_cfg).read_text(encoding="utf-8")
-            self.assertEqual(
-                _control_field(control, "Package"), "amdrocm-fft-host7.1"
-            )
+            self.assertEqual(_control_field(control, "Package"), "amdrocm-fft-host7.1")
             self.assertEqual(_control_field(control, "Architecture"), "amd64")
             self.assertIn("amdrocm-runtime", _control_field(control, "Depends"))
 
@@ -319,7 +315,9 @@ class CreateVersionedDebPackageTest(unittest.TestCase):
 
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")
-    def test_developer_tools_versioned_metapackage_control(self, _mock_dpkg, _mock_move):
+    def test_developer_tools_versioned_metapackage_control(
+        self, _mock_dpkg, _mock_move
+    ):
         """Simple kpack metapackage with no Artifactory entries."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -361,7 +359,9 @@ class BuildPackageVariantsRoutingTest(unittest.TestCase):
 
     @patch.object(build_package, "build_gfxarch_package_variants")
     @patch.object(build_package, "build_simple_package_variants", return_value=[])
-    def test_fft_without_gfx_artifacts_routes_to_simple(self, mock_simple, mock_gfxarch):
+    def test_fft_without_gfx_artifacts_routes_to_simple(
+        self, mock_simple, mock_gfxarch
+    ):
         """#5874: Gfxarch metadata alone must not trigger gfx splits without artifacts."""
         with tempfile.TemporaryDirectory() as tmp:
             cfg = _kpack_config(tmp)
