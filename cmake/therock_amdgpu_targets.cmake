@@ -257,6 +257,32 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
+# amdgcnspirv architecture-independent portable SPIR-V target.
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V"
+  EXCLUDE_TARGET_PROJECTS
+    # TODO: Add issue for enabling projects
+    aqlprofile
+    composable_kernel
+    hipBLAS rocBLAS
+    hipBLASLt hipblasltprovider
+    hipDNN_samples
+    hipFFT rocFFT
+    hipRAND rocRAND
+    hipSOLVER rocSOLVER
+    hipSPARSE rocSPARSE
+    hipSPARSELt
+    MIOpen miopenprovider
+    rccl rccl-tests
+    rdc
+    rocprofiler-compute
+    rocprofiler-sdk
+    rocprofiler-systems rocprofiler-systems-examples
+    rocRoller
+    rocshmem
+    roctracer
+    rocWMMA
+)
+
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)
 
