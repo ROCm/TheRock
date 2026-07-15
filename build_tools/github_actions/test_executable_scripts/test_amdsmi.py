@@ -103,7 +103,8 @@ def detect_privilege_tier():
         for line in Path("/proc/self/status").read_text().splitlines():
             if line.startswith("CapEff:"):
                 cap_eff = int(line.split()[1], 16)
-                return "privileged" if cap_eff & (1 << cap_sys_admin) else "unprivileged"
+                has_admin = cap_eff & (1 << cap_sys_admin)
+                return "privileged" if has_admin else "unprivileged"
     except (OSError, ValueError):
         pass
     # Unknown capability state inside a container: treat as unprivileged so we
