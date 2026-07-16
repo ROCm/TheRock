@@ -317,6 +317,7 @@ class ForbiddenFileTests(unittest.TestCase):
 
 # ----------------------------- unit tests check ------------------------------
 
+
 class UnitTestRuleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.policy = make_policy()
