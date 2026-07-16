@@ -47,7 +47,7 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            check=False,
+            check=True,
             stdin=subprocess.DEVNULL,
         )
         log(proc.stdout.rstrip())
