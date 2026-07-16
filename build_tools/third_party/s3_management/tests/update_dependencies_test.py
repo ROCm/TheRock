@@ -12,6 +12,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import update_dependencies
 from update_dependencies import (
     PACKAGES_PER_PROJECT,
+    _run_structured,
     get_dependency_package_names,
     get_project_paths,
     get_selected_packages,
@@ -286,6 +287,24 @@ def test_get_selected_packages_unknown_dependency_raises() -> None:
     with pytest.raises(ValueError, match="Unknown --dependency-package"):
         get_selected_packages(
             package="torch", dependency_names=frozenset({"not-a-dep"})
+        )
+
+
+# ---------------------------------------------------------------------------
+# _run_structured early validation
+# ---------------------------------------------------------------------------
+
+
+def test_run_structured_rejects_bad_index() -> None:
+    # Guards programmatic callers that bypass argparse choices: fail fast
+    # before any network/upload work rather than mid-run.
+    with pytest.raises(ValueError, match="index="):
+        _run_structured(
+            bucket=FakeBucket(),
+            selected_packages={"numpy": PACKAGES_PER_PROJECT["numpy"]},
+            index="wheels",
+            dry_run=True,
+            only_pypi=False,
         )
 
 

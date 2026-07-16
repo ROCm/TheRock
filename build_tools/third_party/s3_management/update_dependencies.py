@@ -479,6 +479,11 @@ def _run_structured(
     The structured layout is not prefix-driven: each wheel's destination key is
     computed from its package name, so there is no prefix fan-out.
     """
+    if index not in _STRUCTURED_INDEX_NAMES:
+        raise ValueError(
+            f"index={index!r} is invalid; "
+            f"expected one of {sorted(_STRUCTURED_INDEX_NAMES)}"
+        )
     for pkg_name, pkg_info in selected_packages.items():
         for target_version in pkg_info["versions"]:
             upload_missing_whls(
