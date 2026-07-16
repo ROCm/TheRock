@@ -99,6 +99,33 @@ def _get_all_build_stages() -> list[str]:
     return list(topology.build_stages.keys())
 
 
+def _get_affected_stages(changed_projects: str) -> str:
+    """Get build stages affected by the changed projects.
+
+    Args:
+        changed_projects: Comma-separated list of changed project paths/names
+
+    Returns:
+        Comma-separated list of affected stage names, or "all" if no projects
+        specified (full build)
+    """
+    if not changed_projects or not changed_projects.strip():
+        return "all"
+
+    projects = [p.strip() for p in changed_projects.split(",") if p.strip()]
+    if not projects:
+        return "all"
+
+    topology = get_topology()
+    affected = topology.get_stages_for_projects(projects)
+
+    if not affected:
+        # No stages found - fall back to full build
+        return "all"
+
+    return ",".join(sorted(affected))
+
+
 def _parse_comma_list(raw: str) -> list[str]:
     """Parse a comma-separated string into a list of stripped, lowercased, non-empty names.
 
