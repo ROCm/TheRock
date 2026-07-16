@@ -321,9 +321,7 @@ class GitShaOverrideTest(unittest.TestCase):
         self.assertRegex(
             captured_outputs["rocm_deb_package_version"], r"^7\.99\.0~dev[0-9]{8}$"
         )
-        self.assertNotIn(
-            override_sha[:8], captured_outputs["rocm_deb_package_version"]
-        )
+        self.assertNotIn(override_sha[:8], captured_outputs["rocm_deb_package_version"])
         # RPM embeds the 8-char truncation of the same override SHA.
         self.assertRegex(
             captured_outputs["rocm_rpm_package_version"],
