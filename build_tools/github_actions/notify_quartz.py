@@ -484,8 +484,9 @@ def dispatch_to_quartz(
     # workflow_dispatch inputs are strings; serialize the bool at the boundary.
     inputs = {"payload_json": payload_json, "fetch_jobs": str(fetch_jobs).lower()}
 
-    if len(json.dumps(inputs)) > GITHUB_INPUTS_MAX_CHARS:
-        original_size = len(payload_json)
+    original_inputs_size = len(json.dumps(inputs))
+    if original_inputs_size > GITHUB_INPUTS_MAX_CHARS:
+        original_payload_size = len(payload_json)
         payload.get("workflow_run", {}).pop("jobs", None)
         payload_json = json.dumps(payload)
         fetch_jobs = True
@@ -493,8 +494,8 @@ def dispatch_to_quartz(
         log.warning(
             "Inputs too large (%d encoded chars), stripped jobs (%d -> %d chars); "
             "receiving side will re-fetch",
-            original_size,
-            original_size,
+            original_inputs_size,
+            original_payload_size,
             len(payload_json),
         )
 
