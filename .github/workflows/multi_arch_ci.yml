@@ -43,8 +43,11 @@ on:
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
       stage_reuse_mode:
-        type: string
+        type: choice
         default: "dry-run"
+        options:
+          - "dry-run"
+          - "reuse-stage"
         # This drives the AUTOMATIC stage-reuse detection layer, which is
         # separate from the manual `prebuilt_stages` input above. dry-run only
         # reports which unaffected stages could be reused; reuse-stage actually

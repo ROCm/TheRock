@@ -19,10 +19,12 @@ jobs; automatic reuse simply *adds* to whatever you set manually.
 
 ## How it works
 
-`setup_multi_arch.yml` runs `build_tools/github_actions/configure_multi_arch_ci.py`,
-which calls into `build_tools/github_actions/stage_reuse_decision.py`. For every
-stage the change leaves unaffected, two gates must both pass before the stage is
-reused:
+[`setup_multi_arch.yml`](https://github.com/ROCm/TheRock/.github/workflows/setup_multi_arch.yml) runs
+[`configure_multi_arch_ci.py`](https://github.com/ROCm/TheRock/build_tools/github_actions/configure_multi_arch_ci.py),
+which calls into
+[`stage_reuse_decision.py`](https://github.com/ROCm/TheRock/build_tools/github_actions/stage_reuse_decision.py).
+For every stage the change leaves unaffected, two gates must both pass before the
+stage is reused:
 
 1. **Impact gate** (`stage_impact.analyze_stage_impact`) — the changed files do
    not affect the stage, so it is a *candidate* for reuse.
