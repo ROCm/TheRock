@@ -511,21 +511,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # !! DISABLED because of https://github.com/ROCm/TheRock/issues/5689
-    # !! Windows loading of the python bindings require special LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
-    # !! We need AddDllDirectory. Commenting out to unblock CI issues.
-    # hipDNN Python bindings wheel build + install + pytest
-    # "hipdnn_python_bindings": {
-    #     "job_name": "hipdnn_python_bindings",
-    #     "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
-    #     "timeout_minutes": 30,
-    #     "test_script": f"python {_get_script_path('test_hipdnn_frontend_python.py')}",
-    #     "platform": ["linux", "windows"],
-    #     "total_shards_dict": {
-    #         "linux": 1,
-    #         "windows": 1,
-    #     },
-    # },
     # hipDNN integration tests (unit tests for the integration test harness)
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",

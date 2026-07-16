@@ -193,10 +193,23 @@ COMPONENT_OVERRIDES = {
         "test_dir": ["share", "rocprofiler-systems", "tests"],
         "additional_env_paths": {
             "PATH": [["bin"]],
-            "LD_LIBRARY_PATH": [["share", "rocprofiler-systems", "examples", "lib"]],
+            "LD_LIBRARY_PATH": [
+                [
+                    "lib",
+                    "rocprofiler-systems",
+                ],  # Prioritize the bundled Dyninst runtime
+                ["share", "rocprofiler-systems", "examples", "lib"],
+            ],
         },
         "env": {
             "ROCPROFSYS_INSTALL_DIR": "{rocm_path}",
+            # Open MPI bakes its build-time install prefix (the manylinux
+            # container path) into its binaries, so plugin/help-file discovery
+            # fails outside the container. Override it with the ROCm install
+            # tree so MPI-based tests run.
+            "OPAL_PREFIX": "{rocm_path}",
+            "PRTE_PREFIX": "{rocm_path}",
+            "PMIX_PREFIX": "{rocm_path}",
         },
         # rocprofiler-systems tests instrument processes and attach to a shared
         # profiling backend; running them concurrently causes flaky failures.

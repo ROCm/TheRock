@@ -65,6 +65,7 @@
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
+#   disable_platforms_if_flags_not_set = { windows = "FOO" }  # Optional: conditional platform disables
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
@@ -330,7 +331,7 @@ source_sets = ["amd-mesa", "rocm-systems"]
 [artifact_groups.rocjitsu]
 description = "ROCm emulation, virtualization, and instrumentation tools"
 type = "generic"
-artifact_group_deps = []
+artifact_group_deps = ["third-party-sysdeps"]
 source_sets = ["rocm-systems"]
 disable_platforms = ["windows"]
 
@@ -512,7 +513,7 @@ type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
-disable_platforms = ["windows"]
+disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -677,8 +678,11 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
-type = "target-neutral"
+# hip-kernel-provider is a device lib: the rocKE engine ships per-arch AOT content
+# (kpack + manifest) under engines/arch_content/rocke/<arch>/, so split it per-arch.
+type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
+split_databases = ["hipkernelprovider"]
 
 # --- Media Integration ---
 
