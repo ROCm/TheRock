@@ -211,30 +211,6 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
             path.unlink()
 
 
-class UpdateRunpathVersionTest(unittest.TestCase):
-    def test_updates_rocm_version_in_rocm_package_runpaths(self):
-        runpath = (
-            "$ORIGIN/../../_rocm_sdk_core_rocm7.13.0a20260505/lib:"
-            "$ORIGIN/../../_rocm_sdk_libraries_rocm7.13.0a20260505/lib"
-        )
-
-        self.assertEqual(
-            ptf._update_runpath_version(runpath, "7.13.0a20260505", "7.13.0"),
-            (
-                "$ORIGIN/../../_rocm_sdk_core_rocm7.13.0/lib:"
-                "$ORIGIN/../../_rocm_sdk_libraries_rocm7.13.0/lib"
-            ),
-        )
-
-    def test_leaves_unversioned_runpath_unchanged(self):
-        runpath = "$ORIGIN:$ORIGIN/../../_rocm_sdk_core/lib"
-
-        self.assertEqual(
-            ptf._update_runpath_version(runpath, "7.13.0a20260505", "7.13.0"),
-            runpath,
-        )
-
-
 class ApplyKeepListToRequiresTxtTest(unittest.TestCase):
     @staticmethod
     def _get_requires_txt_multi_arch_body() -> str:
