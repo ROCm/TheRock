@@ -7,8 +7,9 @@ Run a single TheRock build stage under Ninja while collecting resource
 and timing telemetry.
 
 This script wraps the stage build with `/usr/bin/time -v`, enables Ninja's
-`--profile` output, parses the resulting trace, and emits a JSON summary that
-can be uploaded as a workflow artifact.
+`--profile` output, parses the resulting trace, and emits a JSON summary.
+Metrics are written to build/logs/metrics/<stage>/ by default so that
+post_stage_upload.py includes them in the S3 log index automatically.
 
 Example (from GitHub Actions):
 
@@ -40,7 +41,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--metrics-dir",
         default=None,
-        help="Directory to store metrics (defaults to <build-dir>/metrics/<stage>)",
+        help="Directory to store metrics (defaults to <build-dir>/logs/metrics/<stage>)",
     )
     parser.add_argument(
         "--variant",
@@ -277,7 +278,7 @@ def main() -> int:
     metrics_root = (
         Path(args.metrics_dir).resolve()
         if args.metrics_dir
-        else build_dir / "metrics" / args.stage.replace("/", "_")
+        else build_dir / "logs" / "metrics" / args.stage.replace("/", "_")
     )
     _ensure_dir(metrics_root)
 
