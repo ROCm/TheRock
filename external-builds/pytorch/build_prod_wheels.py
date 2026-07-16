@@ -284,23 +284,28 @@ def get_version_suffix_for_installed_rocm_package() -> str:
 
 
 def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
-    """Read the LLVM hash from triton-windows cmake/llvm-hash.txt."""
-    hash_file = triton_dir / "cmake" / "llvm-hash.txt"
-    if not hash_file.exists():
-        raise RuntimeError(f"LLVM hash file not found: {hash_file}")
-    return hash_file.read_text().strip()
+    """Read the LLVM hash from triton-windows cmake/llvm-info.json."""
+    info_file = triton_dir / "cmake" / "llvm-info.json"
+    if not info_file.is_file():
+        raise RuntimeError(f"LLVM hash file not found: {info_file}")
+    return str(json.loads(info_file.read_text(encoding="utf-8"))["llvm_hash"]).strip()
 
 
 def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
     """Download and extract pre-built LLVM binaries for triton-windows.
 
     triton-windows requires a specific LLVM version that matches the hash
-    in cmake/llvm-hash.txt. Pre-built binaries are hosted at oaitriton.blob.core.windows.net.
+    in cmake/llvm-info.json. Pre-built binaries are hosted at oaitriton.blob.core.windows.net.
     """
     full_hash = get_triton_windows_llvm_hash(triton_dir)
     short_hash = full_hash[:8]
+    build_number = int(
+        json.loads(
+            (triton_dir / "cmake" / "llvm-info.json").read_text(encoding="utf-8")
+        )["build_number"]
+    )
 
-    llvm_dir = triton_dir.parent / f"llvm-{short_hash}-windows-x64"
+    llvm_dir = triton_dir.parent / f"llvm-{short_hash}-windows-x64-{build_number}"
     llvm_hash_marker = llvm_dir / ".llvm-hash"
 
     if llvm_hash_marker.exists():
@@ -312,7 +317,7 @@ def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
     if llvm_dir.exists():
         shutil.rmtree(llvm_dir)
 
-    filename = f"llvm-{short_hash}-windows-x64.tar.gz"
+    filename = f"llvm-{short_hash}-windows-x64-{build_number}.tar.gz"
     download_url = f"{LLVM_BASE_URL}/{filename}"
 
     print(f"Downloading LLVM for triton-windows...")
@@ -760,11 +765,16 @@ def do_build(args: argparse.Namespace):
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
-def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
+def build_triton_windows(
+    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+) -> str:
     """Build triton wheel for Windows using triton-windows repository."""
     print("Building Triton for Windows (using triton-windows repository)")
 
     llvm_build_dir = download_llvm_for_triton_windows(triton_dir)
+
+    version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
+    version_suffix += str(args.version_suffix)
 
     # Prepare environment for triton-windows build.
     # Note: MSVC environment (vcvars64.bat) must already be set up.
@@ -778,10 +788,14 @@ def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
             "LLVM_SYSPATH": str(llvm_build_dir),
             "TRITON_BUILD_PROTON": "OFF",
             "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
-            # Override package name to "triton" for consistency with Linux
-            "TRITON_WHEEL_NAME": "triton",
+            "TRITON_WHEEL_VERSION_SUFFIX": version_suffix,
         }
     )
+
+    # Enable build caching
+    for launcher_var in ["CMAKE_C_COMPILER_LAUNCHER", "CMAKE_CXX_COMPILER_LAUNCHER"]:
+        if launcher_var in env:
+            windows_env[launcher_var] = env[launcher_var]
 
     print("+++ Installing build dependencies:")
     run_command(
@@ -800,13 +814,18 @@ def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
         env=windows_env,
     )
 
-    # Build produces wheel named "triton" (overridden via TRITON_WHEEL_NAME)
-    built_wheel = find_built_wheel(triton_dir / "dist", "triton")
+    # triton-windows produces wheels named "triton_windows"
+    built_wheel = find_built_wheel(triton_dir / "dist", "triton_windows")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
-    wheel_version = built_wheel.stem.split("-")[1]
-    return f"triton=={wheel_version}"
+    print("+++ Installing built triton_windows:")
+    run_command(
+        [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
+    )
+
+    installed_triton_version = get_installed_package_version("triton_windows")
+    return f"triton_windows=={installed_triton_version}"
 
 
 def build_triton_linux(
@@ -897,7 +916,7 @@ def do_build_triton(
 ) -> str:
     """Build triton wheel. Dispatches to platform-specific build functions."""
     if is_windows:
-        return build_triton_windows(args, triton_dir)
+        return build_triton_windows(args, triton_dir, env)
     else:
         return build_triton_linux(args, triton_dir, env)
 

@@ -7,7 +7,8 @@
 #   - One fat build_prod_wheels.py invocation for one python_version and
 #     pytorch_git_ref, covering all gfx targets expanded from the
 #     inputs.amdgpu_families set. Builds torch, torchaudio, and torchvision
-#     in a single invocation.
+#     in a single invocation. For pytorch_git_ref nightly, also builds
+#     triton_windows (matching legacy release_windows_pytorch_wheels.yml).
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
 #     other packages ship as-is (nothing to split).
@@ -235,6 +236,10 @@ jobs:
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_vision \
             --repo-hashtag nightly \
             --no-commit-hipify
+          python ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/triton \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
+            --no-commit-hipify
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
@@ -291,12 +296,15 @@ jobs:
 
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
+      # Triton nightly-only; keep triton args inline in the build step below for #5110 checkout cleanup.
       - name: Build PyTorch wheels
         shell: cmd
         run: |
           set "CACHE_FLAG="
           if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+          set "TRITON_ARGS="
+          if "${{ inputs.pytorch_git_ref }}"=="nightly" set "TRITON_ARGS=--triton-dir ${{ env.CHECKOUT_ROOT }}/triton --build-triton"
 
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_families }} (cache: ${{ inputs.cache_type }})"
           python ./external-builds/pytorch/build_prod_wheels.py ^
@@ -305,6 +313,7 @@ jobs:
             --index-url="${{ inputs.rocm_package_index_url }}" ^
             --find-links="${{ inputs.rocm_package_find_links_url }}" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
+            %TRITON_ARGS% ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
@@ -375,7 +384,7 @@ jobs:
 
           # The splitter writes the host wheel under the same filename as the
           # input, so relocate each fat wheel out of PACKAGE_DIST_DIR before
-          # invoking the splitter. torchaudio ships as-is.
+          # invoking the splitter. torchaudio and triton_windows ship as-is.
           FAT_STAGE="$(cygpath -u "${RUNNER_TEMP}")/pytorch-fat"
           mkdir -p "${FAT_STAGE}"
 

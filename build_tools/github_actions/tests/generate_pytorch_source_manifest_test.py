@@ -388,7 +388,6 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
         self.assertNotIn("apex", manifest)
         self.assertNotIn("triton", manifest)
 
-    @unittest.skip("Enable when Windows Triton nightly builds are on by default")
     def test_windows_nightly_default_projects_include_triton(self) -> None:
         self.assertEqual(
             m.default_projects_for_pytorch_ref("windows", "nightly"),
@@ -413,14 +412,17 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                 ".ci/docker/triton_version.txt",
                 shas["pytorch"],
             ): "3.6.0\n",
+            (
+                "pytorch/pytorch",
+                ".ci/docker/ci_commit_pins/triton_windows.txt",
+                shas["pytorch"],
+            ): shas["triton_windows"],
             ("pytorch/pytorch", "version.txt", shas["pytorch"]): "2.13.0a0\n",
             ("pytorch/audio", "version.txt", shas["audio"]): "2.13.0a0\n",
             ("pytorch/vision", "version.txt", shas["vision"]): "0.28.0a0\n",
         }
 
-        with mock.patch.object(
-            m, "read_triton_windows_pin", return_value=shas["triton_windows"]
-        ), self._patch_github_api(resolves=resolves, files=files):
+        with self._patch_github_api(resolves=resolves, files=files):
             manifest = m.generate_manifest(
                 pytorch_git_ref="nightly",
                 rocm_version="7.13.0.dev0+abc",

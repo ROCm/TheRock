@@ -47,7 +47,6 @@ DEFAULT_PYTORCH_GIT_REFS = [
 ]
 SCHEMA_VERSION = 1
 
-THEROCK_DIR = Path(__file__).resolve().parents[2]
 TRITON_WINDOWS_REPO = "triton-lang/triton-windows"
 
 Manifest = dict[str, GitSourceInfo]
@@ -177,23 +176,6 @@ def _parse_related_commits(content: str) -> dict[str, dict[str, str]]:
     return pins
 
 
-def read_triton_windows_pin() -> str:
-    """Read TheRock's current Windows Triton commit pin."""
-    pin_file = (
-        THEROCK_DIR
-        / "external-builds"
-        / "pytorch"
-        / "ci_commit_pins"
-        / "triton-windows.txt"
-    )
-    if not pin_file.is_file():
-        raise FileNotFoundError(f"Windows Triton pin file does not exist: {pin_file}")
-    pin = pin_file.read_text(encoding="utf-8").strip()
-    if not pin:
-        raise ValueError(f"Windows Triton pin file is empty: {pin_file}")
-    return pin
-
-
 def _resolve_triton(
     pytorch_repo: str,
     pytorch_ref: str,
@@ -206,9 +188,11 @@ def _resolve_triton(
 
     The triton base version lives in pytorch's ``.ci/docker/triton_version.txt``.
     On Linux the commit comes from ``ci_commit_pins/triton.txt``.
+    On Windows the commit comes from ``ci_commit_pins/triton_windows.txt``.
     See:
     https://github.com/pytorch/pytorch/blob/main/.ci/docker/triton_version.txt
     https://github.com/pytorch/pytorch/blob/main/.ci/docker/ci_commit_pins/triton.txt
+    https://github.com/pytorch/pytorch/blob/main/.ci/docker/ci_commit_pins/triton_windows.txt
     """
     is_windows = platform == "windows"
 
@@ -225,20 +209,14 @@ def _resolve_triton(
     version = f"{base_version}{version_suffix}"
     log(f"  triton: {base_version} -> {version}")
 
-    if is_windows:
-        pin = read_triton_windows_pin()
-        log(f"  triton-windows pin: {pin[:12]}")
-        return GitSourceInfo(
-            commit=pin,
-            repo=f"https://github.com/{TRITON_WINDOWS_REPO}",
-            version=version,
-        )
-
     config = REPOS["triton"]
     triton_repo = (
         config.nightly_repo if pytorch_ref == "nightly" else config.stable_repo
     )
-    pin_file = ".ci/docker/ci_commit_pins/triton.txt"
+    if not is_windows:
+        pin_file = ".ci/docker/ci_commit_pins/triton.txt"
+    else:
+        pin_file = ".ci/docker/ci_commit_pins/triton_windows.txt"
 
     # Use PyTorch's explicit Triton pin. triton_version.txt only provides the
     # package version; the matching release branch can move independently.
@@ -246,7 +224,11 @@ def _resolve_triton(
     log(f"  triton pin: {pin[:12]}")
     return GitSourceInfo(
         commit=pin,
-        repo=f"https://github.com/{triton_repo}",
+        repo=(
+            f"https://github.com/{TRITON_WINDOWS_REPO}"
+            if is_windows
+            else f"https://github.com/{triton_repo}"
+        ),
         version=version,
     )
 
@@ -264,16 +246,8 @@ def default_projects_for_pytorch_ref(platform: str, pytorch_ref: str) -> list[st
     """Return default projects for a platform and PyTorch ref."""
     projects = default_projects_for_platform(platform)
 
-    if False:
-        # TODO: Flip this once Windows Triton nightly builds are ready by
-        # default. Release branches still need a shared PyTorch-hosted pin
-        # format.
-        if (
-            platform == "windows"
-            and pytorch_ref == "nightly"
-            and "triton" not in projects
-        ):
-            projects.append("triton")
+    if platform == "windows" and pytorch_ref == "nightly" and "triton" not in projects:
+        projects.append("triton")
     return projects
 
 

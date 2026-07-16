@@ -4,7 +4,9 @@
 # Multi-arch release entry point for Windows PyTorch wheels.
 #
 # This workflow owns the release matrix and delegates each matrix cell to the
-# reusable single-build workflow. For convergence with CI and testing plans see:
+# reusable single-build workflow (multi_arch_build_windows_pytorch_wheels.yml),
+# which builds torch, torchaudio, torchvision, and (for nightly) triton_windows.
+# For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
