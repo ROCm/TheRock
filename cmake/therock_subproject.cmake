@@ -714,6 +714,14 @@ function(therock_cmake_subproject_activate target_name)
 
   # Compose CMAKE_PROJECT_TOP_LEVEL_INCLUDES for the subproject: its generated
   # init file first, then any files listed in THEROCK_SUBPROJECT_CMAKE_INCLUDES.
+  foreach(_hook IN LISTS THEROCK_SUBPROJECT_CMAKE_INCLUDES)
+    if(NOT IS_ABSOLUTE "${_hook}")
+      message(FATAL_ERROR "THEROCK_SUBPROJECT_CMAKE_INCLUDES: '${_hook}' must be an absolute path")
+    endif()
+    if(NOT EXISTS "${_hook}")
+      message(FATAL_ERROR "THEROCK_SUBPROJECT_CMAKE_INCLUDES: '${_hook}' does not exist")
+    endif()
+  endforeach()
   set(_subproject_top_level_includes "${_cmake_project_init_file}" ${THEROCK_SUBPROJECT_CMAKE_INCLUDES})
 
   # Handle compiler toolchain.
@@ -723,6 +731,7 @@ function(therock_cmake_subproject_activate target_name)
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}"
     "${_subproject_top_level_includes}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
+  list(APPEND _fprint_files ${THEROCK_SUBPROJECT_CMAKE_INCLUDES})
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
