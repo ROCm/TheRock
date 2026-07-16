@@ -11,14 +11,6 @@ GITHUB_STEP_SUMMARY file.
 
 The script can be tested locally with inputs like this:
 
-    # Per-family mode:
-    python ./build_tools/github_actions/summarize_test_pytorch_workflow.py \
-      --pytorch-git-ref=release/2.7 \
-      --index-url=https://rocm.nightlies.amd.com/v2-staging \
-      --index-subdir=gfx110X-dgpu \
-      --torch-version=2.7.1+rocm7.10.0a20251120
-
-    # Multi-arch mode:
     python ./build_tools/github_actions/summarize_test_pytorch_workflow.py \
       --pytorch-git-ref=release/2.10 \
       --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ \
@@ -48,12 +40,8 @@ def run(args: argparse.Namespace):
     pytorch_web_url = f"https://github.com/{pytorch_repo_org}/pytorch"
     pytorch_web_url_with_branch = f"{pytorch_web_url}/tree/{args.pytorch_git_ref}"
 
-    # Build index URL — per-family installs use a family subdir; multi-arch
-    # installs use device extras on the flat whl-multi-arch index instead.
-    index_url = args.index_url.rstrip("/")
-    if args.index_subdir and not args.device_extras:
-        index_url += f"/{args.index_subdir.strip('/')}"
-    index_url += "/"
+    # Normalize the index URL to end with a single /
+    index_url = args.index_url.rstrip("/") + "/"
 
     # Build package spec — add device extras and/or version when provided.
     package_spec = "torch"
@@ -61,9 +49,6 @@ def run(args: argparse.Namespace):
         package_spec += f"[{args.device_extras}]"
     if args.torch_version:
         package_spec += f"=={args.torch_version}"
-
-    # Label for the summary display.
-    gpu_label = " / ".join(filter(None, [args.index_subdir, args.device_extras]))
 
     # This report should be as brief as possible while still conveying what
     # is unique to the given arguments.
@@ -74,7 +59,8 @@ def run(args: argparse.Namespace):
     # Summary information.
     summary += f"* Torch version: `{args.torch_version}`\n"
     summary += f"* Python version: `{args.python_version}`\n"
-    summary += f"* GPU target: `{gpu_label}`\n"
+    if args.device_extras:
+        summary += f"* Device extras: `{args.device_extras}`\n"
     summary += f"* Package index: {index_url}\n"
     summary += f"* PyTorch source code: {pytorch_web_url_with_branch}\n"
 
@@ -121,22 +107,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--index-url",
         type=str,
-        default="https://rocm.nightlies.amd.com/v2-staging",
+        default="https://rocm.nightlies.amd.com/whl-multi-arch/",
         help="Full URL for a release index to use with 'pip install --index-url='",
     )
-    # Per-family mode: --index-subdir selects the GPU family subdirectory.
-    parser.add_argument(
-        "--index-subdir",
-        type=str,
-        default="",
-        help="Index subdirectory (e.g. gfx110X-dgpu). Used for per-family installs.",
-    )
-    # Multi-arch mode: --device-extras selects GPU-specific device packages.
     parser.add_argument(
         "--device-extras",
         type=str,
         default="",
-        help="Comma-separated device extras (e.g. 'device-gfx942'). Used for multi-arch installs.",
+        help="Comma-separated device extras (e.g. 'device-gfx942')",
     )
     args = parser.parse_args()
 
