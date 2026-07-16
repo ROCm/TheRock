@@ -314,6 +314,7 @@ class ForbiddenFileTests(unittest.TestCase):
     def test_removed_forbidden_file_is_ignored(self) -> None:
         self.assertEqual(self._errs([make_file("secret.pem", status="removed")]), [])
 
+
 # ----------------------------- unit tests check ------------------------------
 
 class UnitTestRuleTests(unittest.TestCase):
@@ -361,7 +362,6 @@ class UnitTestRuleTests(unittest.TestCase):
             with self.subTest(test_path=test_path):
                 files = [make_file("src/module.py"), make_file(test_path)]
                 self.assertEqual(self._errs(files), [])
-
 
 
 # ----------------------------- draft + bump ----------------------------------
