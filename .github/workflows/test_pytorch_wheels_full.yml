@@ -73,6 +73,14 @@ on:
           - "single"
           - "all"
         default: "auto"
+      max_gpus:
+        description: >-
+          Cap the number of GPUs made visible under the "all" gpu-policy
+          (--max-gpus). Only affects multi-GPU (distributed) configs; other
+          configs use a single GPU regardless. "0" means no cap (use every GPU
+          on the runner).
+        type: string
+        default: "4"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -132,6 +140,12 @@ on:
           GPUs visible at once; "auto": derive from the test config.
         type: string
         default: "auto"
+      max_gpus:
+        description: >-
+          --max-gpus. Cap the number of GPUs made visible under the "all"
+          gpu-policy (only affects multi-GPU/distributed configs). "0" = no cap.
+        type: string
+        default: "4"
 
 permissions:
   contents: read
@@ -326,6 +340,7 @@ jobs:
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
+            --max-gpus "${{ inputs.max_gpus }}" \
             -- \
             --continue-on-collection-errors
 

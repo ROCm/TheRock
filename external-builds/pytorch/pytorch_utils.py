@@ -274,6 +274,7 @@ def set_gpu_execution_policy(
     supported_devices: dict[str, list[int]],
     policy: str,
     offset: int = 0,
+    max_devices: int = 0,
 ) -> list[tuple[str, int]]:
     """
     Configures the HIP_VISIBLE_DEVICES environment variable according to a GPU selection policy,
@@ -288,6 +289,9 @@ def set_gpu_execution_policy(
         policy (str): Device selection policy. Must be one of:
             - "single": Use a single device from the provided devices at the given offset.
             - "all": Use all provided devices. The offset parameter is ignored.
+        max_devices (int): Cap on the number of devices made visible under the "all" policy.
+            When > 0, only the first ``max_devices`` devices of the flattened (arch, idx) list
+            are used. 0 (default) means no cap (use every device). Ignored for "single" policy.
         offset (int): Index offset for selecting device with "single" policy. Ignored for "all" policy.
             Offset is applied to the flattened list of (arch, idx) pairs made from supported_devices dictionary.
             Depending on the function used to get supported_devices:
@@ -337,6 +341,10 @@ def set_gpu_execution_policy(
             for arch, indices in supported_devices.items()
             for idx in indices
         ]
+        # Optionally cap how many devices are made visible (e.g. run distributed
+        # tests on 4 GPUs even when the runner has 8 physical GPUs).
+        if max_devices > 0:
+            flat_devices = flat_devices[:max_devices]
         device_indices_str = ",".join(str(idx) for _, idx in flat_devices)
         os.environ["HIP_VISIBLE_DEVICES"] = device_indices_str
         device_pairs_str = ", ".join(f"{arch}: {idx}" for arch, idx in flat_devices)
@@ -348,6 +356,7 @@ def configure_gpu_visibility(
     amdgpu_family: str,
     device_query: str,
     gpu_policy: str,
+    max_devices: int = 0,
 ) -> list[str]:
     """Query candidate GPUs, apply the selection policy, and set HIP_VISIBLE_DEVICES.
 
@@ -362,6 +371,8 @@ def configure_gpu_visibility(
         amdgpu_family: AMDGPU family filter (empty string auto-detects).
         device_query: Stage-1 candidate selection, "unique" or "all".
         gpu_policy: Stage-2 visibility policy, "single" or "all".
+        max_devices: Cap on the number of GPUs made visible under the "all"
+            policy (0 = no cap). Has no effect on the "single" policy.
 
     Returns:
         Sorted list of the architectures that were made visible.
@@ -371,13 +382,16 @@ def configure_gpu_visibility(
     else:
         supported_devices = get_all_supported_devices(amdgpu_family)
 
-    selected_devices = set_gpu_execution_policy(supported_devices, policy=gpu_policy)
+    selected_devices = set_gpu_execution_policy(
+        supported_devices, policy=gpu_policy, max_devices=max_devices
+    )
 
     selected_archs = sorted({arch for arch, _ in selected_devices})
     device_ids = [str(dev_id) for _, dev_id in selected_devices]
     print(
         f"Selected {len(selected_devices)} GPU(s): "
         f"query={device_query}, policy={gpu_policy}, "
+        f"max_devices={max_devices or 'none'}, "
         f"arch(es)={', '.join(selected_archs)}, "
         f"device(s)={', '.join(device_ids)}"
     )

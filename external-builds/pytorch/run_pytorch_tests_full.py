@@ -101,6 +101,7 @@ THEROCK_ENV_VARS = [
     "TEST_CONFIG",
     "PYTHONPATH",
     "HIP_VISIBLE_DEVICES",
+    "MAX_GPUS",
     "SHARD_NUMBER",
     "NUM_TEST_SHARDS",
     "TESTS_TO_INCLUDE",
@@ -336,6 +337,16 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     )
 
     parser.add_argument(
+        "--max-gpus",
+        type=int,
+        default=int(os.getenv("MAX_GPUS", "0")),
+        help="Cap the number of GPUs made visible under the 'all' gpu-policy "
+        "(e.g. run distributed tests on 4 GPUs even when the runner has 8). "
+        "0 (default) means no cap. Also reads the MAX_GPUS env var. Has no "
+        "effect on the 'single' policy.",
+    )
+
+    parser.add_argument(
         "--allow-version-mismatch",
         default=False,
         required=False,
@@ -531,7 +542,7 @@ def main(argv: list[str]) -> int:
     # Set HIP_VISIBLE_DEVICES BEFORE importing torch or running pytest. Once
     # torch.cuda is initialized, changing HIP_VISIBLE_DEVICES has no effect.
     selected_archs = configure_gpu_visibility(
-        args.amdgpu_family, args.device_query, args.gpu_policy
+        args.amdgpu_family, args.device_query, args.gpu_policy, args.max_gpus
     )
 
     pytorch_version = args.pytorch_version
