@@ -105,6 +105,13 @@ endif()
 ################################################################################
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(THEROCK_EXAMPLES_ENABLE_DEVICE_TESTS
+  "Enable example CTests that require an AMDGPU device"
+  OFF)
+option(THEROCK_EXAMPLES_ENABLE_GFX1250_HOTSWAP_TEST
+  "Enable the opt-in gfx1250 B0-to-A0 hotswap device smoke test in examples"
+  OFF)
+
 set(THEROCK_BACKGROUND_BUILD_JOBS "0" CACHE STRING "Number of jobs to reserve for projects marked for background building (empty=auto or a number)")
 
 set(THEROCK_PACKAGE_VERSION "git" CACHE STRING "Sets the package version string")
