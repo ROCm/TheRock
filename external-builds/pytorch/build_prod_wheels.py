@@ -1149,6 +1149,7 @@ def do_build_pytorch(
         + pip_install_args,
         cwd=pytorch_dir,
     )
+
     if is_windows:
         # As of 2025-06-24, the 'ninja' package on pypi is trailing too far
         # behind upstream:
@@ -1166,11 +1167,46 @@ def do_build_pytorch(
             ],
             cwd=pytorch_dir,
         )
+    else:
+        # PEP 517 build backend requirements. Linux builds below with
+        # `python -m build --wheel --no-isolation`, which (unlike an isolated
+        # build) does not auto-install the backend declared in pyproject.toml's
+        # [build-system]. PyTorch's backend switches from setuptools to
+        # scikit-build-core on 2026-07-20 (ROCm/TheRock#6523); newer checkouts
+        # ship requirements-build.txt (pinning scikit-build-core>=1.0), older
+        # ones do not. `build` provides the `python -m build` frontend itself.
+        print("+++ Installing pytorch build backend requirements:")
+        build_backend_install = [sys.executable, "-m", "pip", "install", "build"]
+        pytorch_build_requirements = pytorch_dir / "requirements-build.txt"
+        if pytorch_build_requirements.exists():
+            build_backend_install += ["-r", pytorch_build_requirements]
+        run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
+
     print("+++ Building pytorch:")
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_dir / "build")
-    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
+    if is_windows:
+        # Windows keeps `setup.py bdist_wheel` for now (ROCm/TheRock#6594).
+        # `python -m build` validates PEP 517 build dependencies before invoking
+        # the backend and fails with "Missing dependencies: ninja" after we
+        # uninstall the PyPI ninja package (1.11.1 is buggy on Windows; runners
+        # provide a system ninja on PATH instead).
+        run_command(
+            [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env
+        )
+    else:
+        # `python -m build --wheel --no-isolation` is the standard replacement
+        # for the removed `setup.py bdist_wheel` (ROCm/TheRock#6523). It drives
+        # the legacy setuptools backend and the new scikit-build-core backend
+        # alike, and all build-configuration env vars (USE_ROCM,
+        # PYTORCH_ROCM_ARCH, MAX_JOBS, ...) continue to be honored as they now
+        # seed the CMake cache directly.
+        run_command(
+            [sys.executable, "-m", "build", "--wheel", "--no-isolation"],
+            cwd=pytorch_dir,
+            env=env,
+        )
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
