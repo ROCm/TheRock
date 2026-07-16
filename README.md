@@ -208,6 +208,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_ROCALUTION=ON`       | Enables rocALUTION                                  |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
+| `-DTHEROCK_ENABLE_HIPTHREADS=ON`       | Enables hipThreads                                  |
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
