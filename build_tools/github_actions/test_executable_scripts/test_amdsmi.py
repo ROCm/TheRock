@@ -48,6 +48,10 @@ def get_asic_exclude_filter(test_dir):
         logging.warning(f"detect_asic_filter.sh not found in {test_dir}")
         return ""
 
+    # check=True: a detection failure is a hard error (raises
+    # CalledProcessError and ends the run) rather than silently degrading to an
+    # unfiltered test set. capture_output is kept because we still need the
+    # GTEST_EXCLUDE value echoed on stdout.
     result = subprocess.run(
         [
             "bash",
@@ -57,13 +61,8 @@ def get_asic_exclude_filter(test_dir):
         capture_output=True,
         text=True,
         cwd=str(test_dir),
+        check=True,
     )
-
-    if result.returncode != 0:
-        logging.warning(
-            f"ASIC detection failed (rc={result.returncode}): {result.stderr.strip()}"
-        )
-        return ""
 
     gtest_exclude = result.stdout.strip()
     if gtest_exclude:
@@ -81,6 +80,17 @@ def _cgroup_mentions_container():
     return any(marker in cgroup for marker in ("docker", "kubepods", "containerd"))
 
 
+def _in_container():
+    # /.dockerenv (docker) and /run/.containerenv (podman) are the standard
+    # marker files; the `container` env var is set by systemd-nspawn and several
+    # OCI runtimes. Fall back to cgroup inspection for runtimes that set none.
+    if Path("/.dockerenv").exists() or Path("/run/.containerenv").exists():
+        return True
+    if os.environ.get("container"):
+        return True
+    return _cgroup_mentions_container()
+
+
 def detect_privilege_tier():
     """Classify the runtime as 'baremetal', 'privileged', or 'unprivileged'.
 
@@ -90,8 +100,7 @@ def detect_privilege_tier():
     alone cannot tell the two apart. Inspect the effective capability mask to
     distinguish them so the caller can set AMDSMI_NON_PRIVILEGED accordingly.
     """
-    in_container = Path("/.dockerenv").exists() or _cgroup_mentions_container()
-    if not in_container:
+    if not _in_container():
         return "baremetal"
 
     # CapEff is a 64-bit hex mask in /proc/self/status. A privileged container
