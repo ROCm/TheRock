@@ -414,7 +414,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--include-intermediate-dirs",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help=(
             "Also generate index.html for directories whose contents are "
             "only subdirectories (no direct files). Without this, links to "
