@@ -257,7 +257,7 @@ def upload_missing_whls(
     dry_run: bool = False,
     only_pypi: bool = False,
     target_version: str = "latest",
-) -> None:
+) -> str | None:
     pypi_idx = parse_simple_idx(f"https://pypi.org/simple/{pkg_name}")
     pypi_versions = get_whl_versions(pypi_idx)
 
@@ -274,7 +274,7 @@ def upload_missing_whls(
 
     if not selected_version:
         print(f"No stable versions found for {pkg_name}")
-        return
+        return None
 
     pypi_latest_packages = get_wheels_of_version(pypi_idx, selected_version)
 
@@ -318,6 +318,45 @@ def upload_missing_whls(
         print(
             f"{pkg_name} is already at latest version {selected_version} for {prefix}"
         )
+
+    return selected_version
+
+
+def remove_stale_whls(
+    bucket: ServiceResource,
+    pkg_name: str,
+    prefix: str,
+    allowed_versions: set[str],
+    *,
+    dry_run: bool = False,
+) -> None:
+    """Remove wheels whose version is not in the allowed set."""
+    whl_name_prefix = re.sub(r"[-_.]+", "_", pkg_name).lower()
+    s3_prefix = f"{prefix}/{whl_name_prefix}-"
+
+    client = bucket.meta.client
+    paginator = client.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(Bucket=bucket.name, Prefix=s3_prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            filename = key.rsplit("/", 1)[-1]
+            if not filename.endswith(".whl"):
+                continue
+            parts = filename[:-4].split("-")
+            if len(parts) < 5:
+                continue
+            whl_version = parts[1]
+            if whl_version in allowed_versions:
+                continue
+            if dry_run:
+                print(
+                    f"Dry Run - would delete stale {filename} "
+                    f"from s3://{bucket.name}/{key}"
+                )
+            else:
+                print(f"Deleting stale {filename} from s3://{bucket.name}/{key}")
+                client.delete_object(Bucket=bucket.name, Key=key)
 
 
 def run_update_dependencies(
@@ -388,14 +427,26 @@ def run_update_dependencies(
             if "target" in pkg_info and pkg_info["target"] != "":
                 pkg_prefix = f"{full_path}/{pkg_info['target']}"
 
+            resolved_versions: set[str] = set()
             for target_version in pkg_info["versions"]:
-                upload_missing_whls(
+                resolved = upload_missing_whls(
                     bucket,
                     pkg_name,
                     pkg_prefix,
                     dry_run=dry_run,
                     only_pypi=only_pypi,
                     target_version=target_version,
+                )
+                if resolved:
+                    resolved_versions.add(resolved)
+
+            if resolved_versions:
+                remove_stale_whls(
+                    bucket,
+                    pkg_name,
+                    pkg_prefix,
+                    resolved_versions,
+                    dry_run=dry_run,
                 )
 
 
