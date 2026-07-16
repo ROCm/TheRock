@@ -23,6 +23,8 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
+if not gpu_arch:
+    raise RuntimeError("Could not determine HIP architecture for libhipcxx test")
 logging.info(f"++ Detected GPU architecture: {gpu_arch}")
 
 
