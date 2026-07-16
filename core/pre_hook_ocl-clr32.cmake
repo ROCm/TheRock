@@ -21,12 +21,7 @@ if(DEFINED THEROCK_PROVIDED_PACKAGES)
   set(THEROCK_PACKAGE_DIR_amd_comgr "${THEROCK_BINARY_DIR}/compiler/amd-comgr32/stage/lib32/lib/cmake/amd_comgr" CACHE PATH "" FORCE)
 endif()
 
-# Use lib32 for 32-bit library installation
-if(NOT WIN32)
-  set(AMDOCL_INSTALL_LIBDIR "opencl32")
-  set(CMAKE_INSTALL_RPATH "$ORIGIN:$ORIGIN/../../lib:$ORIGIN/../../lib32")
-else()
-  # Windows uses standard DLL search path
-  set(AMDOCL_INSTALL_LIBDIR "opencl32")
-endif()
+# Use opencl32 directory for 32-bit library installation
+# Windows uses standard DLL search path
+set(AMDOCL_INSTALL_LIBDIR "opencl32")
 
