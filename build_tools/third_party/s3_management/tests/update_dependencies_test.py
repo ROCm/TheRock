@@ -210,7 +210,9 @@ def test_resolve_target_prefixes_auto_detect_requires_base_prefix() -> None:
 
 def test_structured_dependency_key_composition() -> None:
     key = structured_dependency_key(
-        "whl", "numpy", "numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
+        index="whl",
+        pkg_name="numpy",
+        filename="numpy-2.0.0-cp312-cp312-linux_x86_64.whl",
     )
     assert key == "core/whl/numpy/numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
 
