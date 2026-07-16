@@ -102,7 +102,7 @@ def structured_dependency_key(index: str, pkg_name: str, filename: str) -> str:
     """Return the structured product-local S3 key for a dependency wheel.
 
     The package directory is derived from ``pkg_name`` (normalized to the
-    canonical dashed form); ``filename`` is the wheel/sdist basename and keeps
+    canonical dashed form); ``filename`` is the wheel basename and keeps
     its original PEP 427 escaping (underscores).
 
     Example:
