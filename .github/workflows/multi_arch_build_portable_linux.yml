@@ -64,6 +64,10 @@ on:
         description: "Space-separated list of specific projects to build (e.g., 'rocblas miopen'). For external repo builds to enable only touched projects."
         type: string
         default: ""
+      affected_stages:
+        description: "Comma-separated list of build stages to run, or 'all' for full build. Stages not listed will be skipped."
+        type: string
+        default: "all"
 
 permissions:
   contents: read
@@ -74,7 +78,12 @@ jobs:
   # STAGE: compiler-runtime (generic)
   # ==========================================================================
   compiler-runtime:
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'compiler-runtime') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'compiler-runtime'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -99,7 +108,12 @@ jobs:
   # ==========================================================================
   runtime-tests:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'runtime-tests'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -124,7 +138,12 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'wsl-rocdxg') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'wsl-rocdxg'))
+      }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
@@ -148,7 +167,12 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'math-libs') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'math-libs'))
+      }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -186,7 +210,12 @@ jobs:
   # ==========================================================================
   comm-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'comm-libs') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'comm-libs'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -213,7 +242,12 @@ jobs:
   # ==========================================================================
   storage-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'storage-libs') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'storage-libs'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -239,7 +273,12 @@ jobs:
   # ==========================================================================
   debug-tools:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'debug-tools'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -264,7 +303,12 @@ jobs:
   # ==========================================================================
   dctools-core:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'dctools-core') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'dctools-core'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -289,7 +333,12 @@ jobs:
   # ==========================================================================
   profiler-apps:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'profiler-apps') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'profiler-apps'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -314,7 +363,12 @@ jobs:
   # ==========================================================================
   media-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'media-libs') &&
+        (inputs.affected_stages == 'all' || contains(inputs.affected_stages, 'media-libs'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:

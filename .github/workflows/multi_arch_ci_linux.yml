@@ -40,6 +40,10 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      affected_stages:
+        description: "Comma-separated list of build stages to run, or 'all' for full build."
+        type: string
+        default: "all"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -111,6 +115,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
       projects: ${{ inputs.changed_projects }}
+      affected_stages: ${{ inputs.affected_stages }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
