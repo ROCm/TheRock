@@ -42,12 +42,25 @@ def get_affected_stages(changed_projects: str) -> str:
         print("No changed_projects specified, building all stages")
         return "all"
 
-    projects = [p.strip() for p in changed_projects.split(",") if p.strip()]
-    if not projects:
+    raw_projects = [p.strip() for p in changed_projects.split(",") if p.strip()]
+    if not raw_projects:
         print("Empty projects list after parsing, building all stages")
         return "all"
 
-    print(f"Changed projects: {projects}")
+    # Normalize project paths to just the project name
+    # e.g., "projects/hip" -> "hip", "projects/rocblas" -> "rocblas"
+    projects = []
+    for p in raw_projects:
+        # Strip common path prefixes used by external repos
+        if "/" in p:
+            # Take the last component (e.g., "projects/hip" -> "hip")
+            name = p.split("/")[-1]
+        else:
+            name = p
+        projects.append(name)
+
+    print(f"Raw changed projects: {raw_projects}")
+    print(f"Normalized projects: {projects}")
 
     topology = get_topology()
     affected = topology.get_stages_for_projects(projects)
