@@ -139,6 +139,16 @@ permissions:
   id-token: write
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: multi_arch_build_linux_jax_wheels.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   build_jax_wheels:
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
@@ -338,3 +348,14 @@ jobs:
       jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
       jax_pjrt_version: ${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [build_jax_wheels, generate_target_to_run, test_jax_wheels]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: multi_arch_build_linux_jax_wheels.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
