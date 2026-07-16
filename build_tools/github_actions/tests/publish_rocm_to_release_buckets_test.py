@@ -206,6 +206,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "therock-dev-artifacts",
                 "123-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl",
             ),
+            # Non-accepted artifact in the listing must be ignored.
+            StorageLocation("therock-dev-artifacts", "123-linux/python/index.html"),
         ]
         main(
             [
@@ -225,12 +227,13 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
 
         # copy_directory used only for tarballs (not python) under structured.
         self.assertEqual(mock_copy_dir.call_count, 1)
-        # One copy_file per accepted artifact.
+        # One copy_file per accepted artifact; index.html is filtered out.
         self.assertEqual(mock_copy_file.call_count, 3)
         dest_by_src = {
             call.args[0].relative_path: call.args[1].relative_path
             for call in mock_copy_file.call_args_list
         }
+        self.assertNotIn("123-linux/python/index.html", dest_by_src)
         self.assertEqual(
             dest_by_src[
                 "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"

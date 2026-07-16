@@ -184,7 +184,7 @@ def _publish_python_packages_structured(
     ``core/<index>/<normalized-package>/<filename>`` so the structured index
     generator can discover per-package directories.
     """
-    source_objects = backend.list_files(source, include=["*.whl", "*.tar.gz"])
+    source_objects = backend.list_files(source, include=["*.whl", "*.tar.gz", "*.zip"])
     plans = plan_key_copies(
         source_keys=[obj.relative_path for obj in source_objects],
         source_bucket=source.bucket,
