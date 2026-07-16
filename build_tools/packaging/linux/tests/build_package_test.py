@@ -7,8 +7,9 @@
 Tests stage artifact trees by walking ``package.json`` via ``get_package_info()`` and
 the same ``{Artifact}_{Component}_{suffix}`` layout consumed by
 ``filter_components_fromartifactory``. Config is built via ``create_package_config()``.
-DEB generation runs through real ``create_versioned_deb_package()``; only
-``package_with_dpkg_build`` and ``move_packages_to_destination`` are mocked.
+DEB generation runs through real ``create_versioned_deb_package()``; RPM generation
+runs through real ``create_versioned_rpm_package()``; only ``package_with_dpkg_build`` /
+``package_with_rpmbuild`` and ``move_packages_to_destination`` are mocked.
 
 Run::
 
@@ -39,6 +40,8 @@ TEST_INSTALL_PREFIX = "/opt/rocm/core"
 TEST_GFX_TARGET = "gfx1100"
 TEST_GFX_TARGET_ALT = "gfx942"
 TEST_PKG_TYPE_DEB = "deb"
+TEST_PKG_TYPE_RPM = "rpm"
+TEST_BUILD_ARCH = "x86_64"
 
 PKG_FFT = "amdrocm-fft"
 PKG_CORE_SDK = "amdrocm-core-sdk"
@@ -78,6 +81,7 @@ def _load_module(name: str, path: Path) -> types.ModuleType:
 _setup_import_path()
 build_package = _load_module("build_package", LINUX_DIR / "build_package.py")
 deb_package = _load_module("deb_package", LINUX_DIR / "deb_package.py")
+rpm_package = _load_module("rpm_package", LINUX_DIR / "rpm_package.py")
 
 # packaging_utils depends on sys.path setup above.
 from packaging_utils import (  # noqa: E402
@@ -143,13 +147,25 @@ def _write_kpack_manifest(artifacts_dir: Path) -> None:
         raise RuntimeError(f"Failed to write kpack manifest: {manifest_path}")
 
 
-def _control_field(control_text: str, field: str) -> str:
-    """Return the value of a ``debian/control`` field (e.g. ``Package``)."""
+def _metadata_field(metadata_text: str, field: str) -> str:
+    """Return the value of a DEB control or RPM spec field (e.g. ``Package`` / ``Name``)."""
     prefix = f"{field}:"
-    for line in control_text.splitlines():
+    for line in metadata_text.splitlines():
         if line.startswith(prefix):
             return line.split(":", 1)[1].strip()
-    raise AssertionError(f"Field {field!r} not found in control file:\n{control_text}")
+    raise AssertionError(
+        f"Field {field!r} not found in metadata file:\n{metadata_text}"
+    )
+
+
+def _control_field(control_text: str, field: str) -> str:
+    """Return the value of a ``debian/control`` field (e.g. ``Package``)."""
+    return _metadata_field(control_text, field)
+
+
+def _spec_field(spec_text: str, field: str) -> str:
+    """Return the value of an RPM ``specfile`` field (e.g. ``Name``)."""
+    return _metadata_field(spec_text, field)
 
 
 def _artifact_suffix_for_staging(
@@ -270,6 +286,20 @@ def _read_control_file(pkg_name: str, config: PackageConfig) -> str:
     if not control_path.exists():
         raise AssertionError(f"Expected control file was not created: {control_path}")
     return control_path.read_text(encoding="utf-8")
+
+
+def _spec_path(pkg_name: str, config: PackageConfig) -> Path:
+    """Return path to generated RPM ``specfile`` for a versioned RPM build."""
+    updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
+    return Path(config.dest_dir) / config.pkg_type / updated / "specfile"
+
+
+def _read_spec_file(pkg_name: str, config: PackageConfig) -> str:
+    """Read generated RPM ``specfile`` after validating it was created."""
+    spec_path = _spec_path(pkg_name=pkg_name, config=config)
+    if not spec_path.exists():
+        raise AssertionError(f"Expected spec file was not created: {spec_path}")
+    return spec_path.read_text(encoding="utf-8")
 
 
 def _stage_fft_kpack_tree(artifacts_dir: Path, *, include_host: bool = False) -> None:
@@ -449,6 +479,96 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
         control = _read_control_file(pkg_name=PKG_DEVELOPER_TOOLS, config=versioned_cfg)
         self.assertEqual(_control_field(control, "Package"), DEVELOPER_TOOLS_PACKAGE)
         self.assertIn("amdrocm-debugger", _control_field(control, "Depends"))
+
+
+# ---------------------------------------------------------------------------
+# create_versioned_rpm_package — real spec file generation
+# ---------------------------------------------------------------------------
+class CreateVersionedRpmPackageTest(BuildPackageTestCase):
+    """Real ``create_versioned_rpm_package`` with API-staged artifacts."""
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_fft_host_generates_spec_file(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        _stage_package_artifacts(
+            pkg_name=PKG_FFT,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+        _stage_package_artifacts(
+            pkg_name=PKG_FFT,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        _stage_package_artifacts(
+            pkg_name=PKG_RUNTIME,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+        host_cfg = replace(cfg, gfx_arch=GFX_HOST)
+
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_FFT, config=host_cfg)
+
+        spec = _read_spec_file(pkg_name=PKG_FFT, config=host_cfg)
+        self.assertEqual(_spec_field(spec, "Name"), FFT_HOST_PACKAGE)
+        self.assertEqual(_spec_field(spec, "BuildArch"), TEST_BUILD_ARCH)
+        self.assertIn("amdrocm-runtime", _spec_field(spec, "Requires"))
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_fft_device_generates_spec_file(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        _stage_package_artifacts(
+            pkg_name=PKG_FFT,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_FFT, config=device_cfg)
+
+        spec = _read_spec_file(pkg_name=PKG_FFT, config=device_cfg)
+        self.assertEqual(_spec_field(spec, "Name"), FFT_DEVICE_PACKAGE)
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_fft_meta_generates_spec_file(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        meta_cfg = replace(cfg, gfx_arch=GFX_META)
+
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_FFT, config=meta_cfg)
+
+        spec = _read_spec_file(pkg_name=PKG_FFT, config=meta_cfg)
+        self.assertEqual(_spec_field(spec, "Name"), FFT_META_PACKAGE)
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_core_sdk_device_meta_generates_spec_file(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        """Gfx-arch metapackage ``amdrocm-core-sdk`` device variant (#6093)."""
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+
+        rpm_package.create_versioned_rpm_package(
+            pkg_name=PKG_CORE_SDK, config=device_cfg
+        )
+
+        spec = _read_spec_file(pkg_name=PKG_CORE_SDK, config=device_cfg)
+        self.assertEqual(_spec_field(spec, "Name"), CORE_SDK_DEVICE_PACKAGE)
+        # RPM keeps -devel naming (no debian_replace_devel_name mapping).
+        self.assertIn("amdrocm-core-devel", _spec_field(spec, "Requires"))
 
 
 # ---------------------------------------------------------------------------
