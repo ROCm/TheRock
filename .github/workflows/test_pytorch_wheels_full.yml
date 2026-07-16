@@ -198,6 +198,10 @@ jobs:
       PYTORCH_NUM_PYTEST_RERUNS: "2"
       TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
+      # PyTorch's test infrastructure expects these variables in CI mode.
+      # Without them, it logs "Failed to get job_id" errors every ~18 seconds.
+      JOB_ID: ${{ github.job }}
+      WORKFLOW_ID: ${{ github.run_id }}
 
     steps:
       - name: Checkout
