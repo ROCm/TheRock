@@ -72,7 +72,6 @@ TABLE_ORDER = [
     "Unit Test",
     "pre-commit",
     "Draft PR",
-    "PR Size",
     "Feature Flag",
     "Code Coverage",
     "therock-pr-bot",
@@ -107,9 +106,6 @@ class Policy:
     description_checklist_patterns: List[re.Pattern[str]]
     block_draft: bool
     forbidden_title_patterns: List[re.Pattern[str]]
-    max_files_changed: int
-    max_total_changes: int
-    max_single_file_changes: int
     forbidden_paths: List[str]
     unit_test_code_extensions: List[str]
     unit_test_patterns: List[str]
@@ -159,11 +155,6 @@ def load_policy(policy_path: Path) -> Policy:
     forbidden_title_raw = pr.get("forbidden_title_patterns", []) or []
     forbidden_title_patterns = [re.compile(str(p)) for p in forbidden_title_raw]
 
-    # PR "reviewable shape" limits live under the diff: section.
-    max_files_changed = int(diff.get("max_files_changed", 0) or 0)
-    max_total_changes = int(diff.get("max_total_changes", 0) or 0)
-    max_single_file_changes = int(diff.get("max_single_file_changes", 0) or 0)
-
     forbidden_paths = [str(p) for p in (diff.get("forbidden_paths", []) or [])]
 
     # Unit test rules live under pr.unit_tests.
@@ -198,9 +189,6 @@ def load_policy(policy_path: Path) -> Policy:
         description_checklist_patterns=description_checklist_patterns,
         block_draft=block_draft,
         forbidden_title_patterns=forbidden_title_patterns,
-        max_files_changed=max_files_changed,
-        max_total_changes=max_total_changes,
-        max_single_file_changes=max_single_file_changes,
         forbidden_paths=forbidden_paths,
         unit_test_code_extensions=unit_test_code_extensions,
         unit_test_patterns=unit_test_patterns,
@@ -566,51 +554,6 @@ def pr_has_code_files(policy: Policy, pr_files: Iterable[Dict[str, Any]]) -> boo
         if ext in policy.unit_test_code_extensions:
             return True
     return False
-
-
-def ensure_pr_reviewable(
-    policy: Policy, pr_files: List[Dict[str, Any]], errors: List[str]
-) -> None:
-    """Keep PRs small enough to review: file count, total churn, per-file churn."""
-    if not (
-        policy.max_files_changed
-        or policy.max_total_changes
-        or policy.max_single_file_changes
-    ):
-        return
-
-    num_files = len(pr_files)
-    total_changes = 0
-
-    for f in pr_files:
-        additions = int(f.get("additions") or 0)
-        deletions = int(f.get("deletions") or 0)
-        changes = int(f.get("changes") or (additions + deletions))
-        total_changes += changes
-
-        filename = Path(str(f.get("filename") or "")).as_posix()
-        if policy.max_single_file_changes and changes > policy.max_single_file_changes:
-            errors.append(
-                "**Error:** A single file changes too much to review easily.\n"
-                f"**Expected:** at most {policy.max_single_file_changes} changes "
-                "in one file.\n"
-                f"**Current:** `{filename}` has {changes} changes"
-            )
-
-    if policy.max_files_changed and num_files > policy.max_files_changed:
-        errors.append(
-            "**Error:** Too many files changed in one PR.\n"
-            f"**Expected:** at most {policy.max_files_changed} files.\n"
-            f"**Current:** {num_files} files changed"
-        )
-
-    if policy.max_total_changes and total_changes > policy.max_total_changes:
-        errors.append(
-            "**Error:** Total diff is too large to review easily.\n"
-            f"**Expected:** at most {policy.max_total_changes} total "
-            "additions + deletions.\n"
-            f"**Current:** {total_changes} total changes"
-        )
 
 
 def summarize_required_checks(

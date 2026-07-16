@@ -57,15 +57,17 @@ ______________________________________________________________________
 
 > **Note:** In the results table, the title and description checks are reported together as a single **PR Title/Description** row. Any title *or* description failure shows up there.
 
-**Length rules**
+**Length rules (only)**
 
 - Minimum: **10** characters
-- Maximum: **80** characters
+- Maximum: **100** characters
 
-**Forbidden words** — titles containing `WIP` or `do not merge` are blocked.
+> The title is validated by **length only**. There is no enforced format
+> (e.g. Conventional Commits) and no forbidden-word list — any wording is
+> accepted as long as it is 10–100 characters long.
 
 **How to fix**
-Edit the PR title on GitHub (top of the PR page → pencil icon) to match the format, e.g.:
+Edit the PR title on GitHub (top of the PR page → pencil icon) so it is between 10 and 100 characters, e.g.:
 
 ```
 Add token refresh support
@@ -113,15 +115,14 @@ ______________________________________________________________________
 ## 📏 PR Size
 
 **What does it check?**
-Large PRs are hard to review thoroughly. Three limits are enforced:
+Large PRs are hard to review thoroughly.
 
-| Limit                   | Value | Reason                                         |
-| ----------------------- | ----- | ---------------------------------------------- |
-| Max files changed       | 50    | Avoids PRs that touch too many unrelated areas |
-| Max total changes       | 2000  | Keeps the overall diff reviewable              |
-| Max changes in one file | 700   | Flags files that may need splitting            |
+> **Note:** PR size limits are **not currently enforced** by `policy.yml`
+> (there are no `max_files_changed` / `max_total_changes` /
+> `max_single_file_changes` values configured). This section is guidance only
+> and the bot does not fail a PR on size today.
 
-**How to fix**
+**Recommended guidance**
 Split your work into smaller, focused PRs. Each PR should ideally do one thing:
 
 - One feature, one fix, or one refactor — not all three at once.
@@ -257,7 +258,7 @@ A **Bump PR** is an automated pull request that updates dependencies (e.g. from 
 When a PR is detected as a bump update from a configured bot account (e.g. `@assistant-librarian[bot]`), **all policy checks are auto-approved**. This includes:
 
 - Branch name validation
-- Conventional Commits title check
+- PR title (length) check
 - JIRA/ISSUE ID reference requirement
 - Unit test requirement
 - And all other policies
