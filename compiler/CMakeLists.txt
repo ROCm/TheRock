@@ -160,10 +160,80 @@ if(THEROCK_ENABLE_COMPILER)
 
 
   ##############################################################################
+  # amd-llvm-static
+  # A second, BUILD-ONLY build of LLVM/Clang/LLD from the same sources as
+  # amd-llvm, but configured for STATIC linking (LLVM_LINK_LLVM_DYLIB=OFF, see
+  # pre_hook_amd-llvm-static.cmake). It exists solely so amd-comgr can embed a
+  # single, isolated copy of LLVM: the shipped amd-llvm build is dylib-enabled,
+  # and linking its clang/lld libraries drags in libLLVM.so (their
+  # INTERFACE_LINK_LIBRARIES carries "LLVM"). A static comgr linked against that
+  # would contain TWO copies of LLVM and corrupt its in-process compiler.
+  #
+  # This subproject is NOT shipped (it is intentionally absent from
+  # therock_provide_artifact below); comgr consumes it at build time only, via
+  # explicit *_DIR arguments (see the amd-comgr declaration). Because TheRock
+  # package names are globally unique, it deliberately does NOT call
+  # therock_cmake_subproject_provide_package for Clang/LLD/LLVM (amd-llvm already
+  # provides those names) -- comgr resolves them through IGNORE_PACKAGES +
+  # explicit dirs instead.
+  ##############################################################################
+
+  therock_cmake_subproject_declare(amd-llvm-static
+    USE_DIST_AMDGPU_TARGETS
+    NO_INSTALL_RPATH
+    EXTERNAL_SOURCE_DIR "amd-llvm"
+    CMAKE_LISTS_RELPATH "llvm"
+    BINARY_DIR "amd-llvm-static"
+    # Stage into a self-contained tree consumed only by amd-comgr at build time.
+    INSTALL_DESTINATION "lib/llvm"
+    CMAKE_ARGS
+      # Version configuration (mirror amd-llvm so the embedded compiler matches
+      # the shipped toolchain revision).
+      -DLLVM_APPEND_VC_REV=ON
+      "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
+      "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
+
+      # No tests/examples for the build-only static LLVM.
+      -DLLVM_INCLUDE_TESTS=OFF
+      -DLLVM_INCLUDE_EXAMPLES=OFF
+      -DLLVM_BUILD_EXAMPLES=OFF
+
+      -DLLVM_ENABLE_ZLIB=FORCE_ON
+      -DLLVM_ENABLE_Z3_SOLVER=OFF
+      -DLLVM_ENABLE_LIBXML2=OFF
+      -DCLANG_ENABLE_AMDCLANG=ON
+      -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
+      -DLLVM_BUILD_LLVM_C_DYLIB=OFF
+      -DCLANG_ENABLE_ARCMT=OFF
+      -DCLANG_ENABLE_STATIC_ANALYZER=OFF
+      -DCLANG_ENABLE_CLANGD=OFF
+      -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
+
+      ${_extra_llvm_cmake_args}
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      ${THEROCK_BUNDLED_ZLIB}
+      ${THEROCK_BUNDLED_ZSTD}
+    INTERFACE_LINK_DIRS
+      "lib/llvm/lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib/llvm/lib"
+  )
+  therock_cmake_subproject_activate(amd-llvm-static)
+
+  # cmake package directories produced by the static build, consumed by comgr.
+  set(_amd_llvm_static_cmake_dir
+    "${CMAKE_BINARY_DIR}/compiler/amd-llvm-static/dist/lib/llvm/lib/cmake")
+
+
+  ##############################################################################
   # amd-comgr
-  # A client of libLLVM which provides an in-process compiler API to the HIP
+  # A client of LLVM which provides an in-process compiler API to the HIP
   # runtime. LLVM/Clang/LLD are statically linked and hidden behind comgr's
-  # version script, avoiding symbol interposition issues.
+  # version script, avoiding symbol interposition issues. To get a single,
+  # isolated static copy of LLVM, comgr links the dedicated amd-llvm-static
+  # build above (not the shipped dylib amd-llvm); see that subproject for why.
   ##############################################################################
 
   set(_comgr_hotswap_cmake_args)
@@ -182,19 +252,38 @@ if(THEROCK_ENABLE_COMPILER)
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
     BINARY_DIR "amd-comgr"
     BACKGROUND_BUILD
+    # Resolve Clang/LLD/LLVM from the dedicated static build instead of the
+    # super-project's dylib amd-llvm packages. The dep provider would otherwise
+    # route find_package(Clang/LLD/LLVM) to amd-llvm (dylib); ignoring them here
+    # lets the explicit *_DIR args below take effect. AMDDeviceLibs is left to
+    # resolve from amd-llvm (device libs are bitcode, link-mode agnostic).
+    IGNORE_PACKAGES
+      Clang
+      LLD
+      LLVM
     CMAKE_ARGS
       # Statically link LLVM/Clang into comgr. Combined with comgr's
       # -fvisibility=hidden and version script (local: *;), this hides all LLVM
       # symbols inside libamd_comgr.so, preventing symbol interposition without
       # requiring namespace isolation via dlmopen.
       -DCOMGR_STATIC_LLVM=ON
+      # Point comgr at the static LLVM/Clang/LLD build (see amd-llvm-static).
+      "-DLLVM_DIR=${_amd_llvm_static_cmake_dir}/llvm"
+      "-DClang_DIR=${_amd_llvm_static_cmake_dir}/clang"
+      "-DLLD_DIR=${_amd_llvm_static_cmake_dir}/lld"
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
       ${_comgr_hotswap_cmake_args}
     BUILD_DEPS
       rocm-cmake
+      # Build-time only: provides the static Clang/LLD/LLVM consumed via the
+      # explicit *_DIR args above. Not shipped.
+      amd-llvm-static
     RUNTIME_DEPS
+      # amd-llvm is still needed at runtime for the device libraries (and to be
+      # co-located in the shipped compiler tree); LLVM itself is now embedded
+      # statically in libamd_comgr.so.
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
     INTERFACE_LINK_DIRS
