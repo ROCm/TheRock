@@ -300,7 +300,7 @@ These run as separate CI workflows. The bot waits for them and folds their resul
 **The bot timed out — what do I do?**
 
 If `pre-commit` or CodeQL takes longer than 15 minutes, the bot times out.
-Push an empty commit to re-trigger the workflow:
+Push an empty commit to re-trigger the workflow or close and reopen PR:
 
 ```bash
 git commit --allow-empty -m "ci: retrigger policy check"
@@ -313,6 +313,10 @@ Push any commit (including `--allow-empty`) to the PR branch.
 The `synchronize` event triggers a fresh policy check automatically.
 
 ______________________________________________________________________
+
+## 🙋 Wish to Override the Policy Process and get unblocked?
+
+Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
 
 ## 🙋 For any policy related feedback?
 
