@@ -268,6 +268,7 @@ def main(argv):
             args.custom_version_suffix,
             args.prerelease_version,
             args.override_base_version,
+            args.override_git_sha,
         )
 
         # Set appropriate output variable based on package type
