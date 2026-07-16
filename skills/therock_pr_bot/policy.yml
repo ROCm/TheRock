@@ -43,12 +43,8 @@ pr:
     - assistant-librarian
     - systems-assistant
 
-  # PR title rules (Conventional Commits style):
-  #   type(optional-scope): short description
-  # Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+  # PR title rules
   title:
-    pattern:
-      - '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9\-]+\))?(!)?: .+'
     title_min_length: 10
     title_max_length: 100
 
