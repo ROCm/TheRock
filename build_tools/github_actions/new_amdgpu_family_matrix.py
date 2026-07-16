@@ -145,13 +145,12 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-                    # fetch-gfx-targets should be ["gfx1100"] when re-enabled
+                    # TODO(#2740): Re-enable run_tests once `amdsmi` test is fixed.
                     "run_tests": False,
                     "runs_on": {
                         "test": "linux-gfx110X-gpu-rocm",
                     },
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {

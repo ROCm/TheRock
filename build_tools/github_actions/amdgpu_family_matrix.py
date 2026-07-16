@@ -227,7 +227,7 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
