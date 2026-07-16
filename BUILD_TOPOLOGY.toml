@@ -114,7 +114,7 @@ submodules = ["libhipcxx"]
 
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
-submodules = []
+submodules = ["AMDMIGraphX"]
 
 [source_sets.comm-libs]
 description = "Communication library submodules"
@@ -653,6 +653,13 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
 split_databases = ["miopen"]
+
+[artifacts.migraphx]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "miopen", "rand", "rocprofiler-sdk"]
+feature_name = "MIGRAPHX"
+feature_group = "ML_LIBS"
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"

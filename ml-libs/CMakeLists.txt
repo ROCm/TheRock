@@ -85,6 +85,61 @@ if(THEROCK_ENABLE_MIOPEN)
   )
 endif(THEROCK_ENABLE_MIOPEN)
 
+if(THEROCK_ENABLE_MIGRAPHX)
+    ##############################################################################
+    # MIGraphX
+    ##############################################################################
+    therock_cmake_subproject_declare(MIGraphX
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/ml-frameworks/AMDMIGraphX"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIGraphX"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DHIP_PLATFORM=amd
+        -DROCM_PATH=
+        -DROCM_DIR=
+        "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+        "-DMIGRAPHX_ENABLE_PYTHON=OFF" # TODO: enable
+        "-DMIGRAPHX_USE_COMPOSABLEKERNEL=OFF" # TODO: enable
+        "-DMIGRAPHX_ENABLE_MLIR=OFF" # TODO: enable
+      CMAKE_INCLUDES
+        therock_explicit_finders.cmake
+      COMPILER_TOOLCHAIN
+        amd-hip
+      BUILD_DEPS
+        rocm-cmake
+        therock-googletest
+        therock-nlohmann-json
+        therock-eigen
+        therock-msgpack-cxx
+        therock-grpc
+      RUNTIME_DEPS
+        hipBLAS-common
+        hip-clr
+        hipBLAS
+        hipBLASLt
+        rocm-half
+        rocBLAS
+        rocRAND
+        MIOpen
+    )
+    therock_cmake_subproject_provide_package(MIGraphX migraphx lib/cmake/migraphx)
+    therock_cmake_subproject_activate(MIGraphX)
+
+    therock_provide_artifact(migraphx
+      DESCRIPTOR artifact-migraphx.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        MIGraphX
+    )
+  endif()
+endif(THEROCK_ENABLE_MIGRAPHX)
+
 if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
   # hipDNN
