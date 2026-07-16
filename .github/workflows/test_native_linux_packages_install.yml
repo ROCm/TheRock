@@ -46,6 +46,11 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
+      test_runs_on:
+        description: "GitHub runner label to use for the test job."
+        required: false
+        type: string
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
   workflow_dispatch:
     inputs:
       package_install_url:
@@ -91,6 +96,10 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
+      test_runs_on:
+        description: "GitHub runner label to use for the test job."
+        type: string
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
 
 permissions:
   id-token: write
@@ -131,7 +140,7 @@ jobs:
     needs: [prepare_install_context]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.test_runs_on || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
