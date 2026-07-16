@@ -258,31 +258,83 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
 # amdgcnspirv architecture-independent portable SPIR-V target.
+# Bring-up baseline: every first-party subproject is excluded, then re-enabled
+# one-by-one as it is proven to build and test for amdgcnspirv. See
+# docs/09_full_enable_plan.md.
 therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V"
   EXCLUDE_TARGET_PROJECTS
     # TODO: Add issue for enabling projects
+    MIOpen
+    ROCR-Runtime
+    amd-comgr
+    amd-dbgapi
+    amd-llvm
+    amdsmi
     aqlprofile
     composable_kernel
-    hipBLAS rocBLAS
-    hipBLASLt hipblasltprovider
+    hip-clr
     hip-tests
+    hipBLAS
+    hipBLAS-common
+    hipBLASLt
+    hipCUB
+    hipDNN
     hipDNN_samples
-    hipFFT rocFFT
-    hipRAND rocRAND
-    hipSOLVER rocSOLVER
-    hipSPARSE rocSPARSE
+    hipFFT
+    hipInfo
+    hipRAND
+    hipSOLVER
+    hipSPARSE
     hipSPARSELt
-    MIOpen miopenprovider
-    rccl rccl-tests
+    hipTensor
+    hipblasltprovider
+    hipcc
+    hipdnn_integration_tests
+    hipfile
+    hipify
+    hipkernelprovider
+    hrx
+    libhipcxx
+    miopenprovider
+    mirage
+    mxDataGenerator
+    ocl-clr
+    ocl-icd
+    rccl
+    rccl-tests
     rdc
-    rocprofiler-compute
-    rocprofiler-sdk
-    rocprofiler-systems rocprofiler-systems-examples
+    rocALUTION
+    rocBLAS
+    rocFFT
+    rocPRIM
+    rocPRIM_tests
+    rocRAND
     rocRoller
+    rocSOLVER
+    rocSPARSE
+    rocThrust
+    rocWMMA
+    rocdecode
+    rocgdb
+    rocjitsu
+    rocjpeg
+    rocm-cmake
+    rocm-core
+    rocm-half
+    rocm-kpack
+    rocm_smi_lib
+    rocminfo
+    rocprof-trace-decoder
+    rocprofiler-compute
+    rocprofiler-register
+    rocprofiler-sdk
+    rocprofiler-systems
+    rocprofiler-systems-examples
+    rocr-debug-agent
+    rocr-debug-agent-tests
     rocrtst
     rocshmem
     roctracer
-    rocWMMA
 )
 
 # Optional extension targets (used for out of tree target development).
