@@ -80,7 +80,6 @@ import importlib.util
 import pathlib
 import re
 import shutil
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -284,73 +283,6 @@ def compute_new_version_str(
     # src_version_type is constrained to "rc" or "a" by argparse; regex-safe.
     replacement = "" if dest_version == "release" else dest_version
     return re.sub(rf"{src_version_type}\d*", replacement, version_str)
-
-
-def _update_runpath_version(
-    runpath: str, old_rocm_version: str, new_rocm_version: str
-) -> str:
-    return runpath.replace(old_rocm_version, new_rocm_version)
-
-
-def _is_elf_file(path: pathlib.Path) -> bool:
-    try:
-        with path.open("rb") as f:
-            return f.read(4) == b"\x7fELF"
-    except OSError:
-        return False
-
-
-def _file_contains_bytes(path: pathlib.Path, needle: bytes) -> bool:
-    if not needle:
-        return False
-    overlap = len(needle) - 1
-    previous = b""
-    try:
-        with path.open("rb") as f:
-            while chunk := f.read(1024 * 1024):
-                data = previous + chunk
-                if needle in data:
-                    return True
-                previous = data[-overlap:] if overlap else b""
-    except OSError:
-        return False
-    return False
-
-
-def _update_torch_elf_runpath_versions(
-    torch_dir: pathlib.Path, old_rocm_version: str, new_rocm_version: str
-) -> None:
-    if old_rocm_version == new_rocm_version:
-        return
-
-    old_rocm_version_bytes = old_rocm_version.encode("utf-8")
-    elf_files = [
-        file_path
-        for file_path in sorted(torch_dir.rglob("*"))
-        if not file_path.is_symlink()
-        and file_path.is_file()
-        and _is_elf_file(file_path)
-        and _file_contains_bytes(file_path, old_rocm_version_bytes)
-    ]
-    if not elf_files:
-        return
-    if not shutil.which("patchelf"):
-        raise RuntimeError("patchelf is required to promote torch ELF RUNPATHs")
-
-    for file_path in elf_files:
-        try:
-            runpath = subprocess.check_output(
-                ["patchelf", "--print-rpath", file_path], text=True
-            ).strip()
-        except subprocess.CalledProcessError:
-            continue
-        updated_runpath = _update_runpath_version(
-            runpath, old_rocm_version, new_rocm_version
-        )
-        if updated_runpath == runpath:
-            continue
-        print(f"      Updating ELF RUNPATH: {file_path}")
-        subprocess.check_call(["patchelf", "--set-rpath", updated_runpath, file_path])
 
 
 # Arch token shape used in wheel filenames, extras names, and dep names. Covers
@@ -922,11 +854,6 @@ def wheel_change_extra_files(
             new_dir_path / package_name_no_version / "_rocm_init.py",
             new_dir_path / package_name_no_version / "version.py",
         ]
-        _update_torch_elf_runpath_versions(
-            new_dir_path / package_name_no_version,
-            old_rocm_version,
-            new_rocm_version,
-        )
     elif "apex" in package_name_no_version:
         files_to_change = [
             new_dir_path / package_name_no_version / "git_version_info_installed.py",
