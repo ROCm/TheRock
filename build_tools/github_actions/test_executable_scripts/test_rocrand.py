@@ -82,20 +82,44 @@ QUICK_TESTS = [
     "-*basic_tests/rocrand_basic_tests.rocrand_create_destroy_generator_test/10*",
 ]
 
+# When launched under the rocjitsu simulator, simulator_runner.py sets these
+# opt-in knobs. They are unset on the real-GPU lane, where behavior below is
+# unchanged.
+in_simulator = bool(os.getenv("SIMULATOR_CTEST_DIR"))
+include_regex = os.getenv("SIMULATOR_CTEST_INCLUDE_REGEX")
+exclude_regex = os.getenv("SIMULATOR_CTEST_EXCLUDE_REGEX")
+no_retry = os.getenv("SIMULATOR_NO_RETRY") == "1"
+test_timeout = os.getenv("CTEST_TEST_TIMEOUT")
+
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocRAND",
     "--output-on-failure",
-    "--repeat",
-    "until-pass:3",
 ]
+# Narrow which ctest binaries run (e.g. only test_rocrand_basic) so the
+# simulator does not walk the entire 200+ binary suite.
+if include_regex:
+    cmd += ["-R", include_regex]
+# Drop specific binaries from the include set (ctest -E). Needed for suite
+# variants whose CMake-baked GTEST_FILTER overrides the runner's filter, so they
+# cannot be reached via the gtest skip list (e.g. the cpp_basic suite with a
+# 7200s timeout, or the philox/xorwow poisson hangs).
+if exclude_regex:
+    cmd += ["-E", exclude_regex]
+# Retrying is pointless under the deterministic simulator and only hides bugs.
+if not no_retry:
+    cmd += ["--repeat", "until-pass:3"]
+# Bound each test so a stall fails fast instead of eating the step budget.
+if test_timeout:
+    cmd += ["--timeout", test_timeout]
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the standard test suite.
+# Otherwise, we run the standard test suite. Under the simulator the runner has
+# already composed GTEST_FILTER, so do not clobber it here.
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "standard")
-if test_type == "quick":
+if test_type == "quick" and not in_simulator:
     environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

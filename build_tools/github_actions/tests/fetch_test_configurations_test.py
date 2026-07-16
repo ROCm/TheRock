@@ -141,8 +141,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         for job in components:
+            # Jobs that opt in via "shard_even_when_quick" (e.g. the CPU
+            # simulator, which runs its own preset regardless of TEST_TYPE) keep
+            # their configured shard count.
+            if job.get("shard_even_when_quick"):
+                continue
             self.assertEqual(job["total_shards"], 1)
             self.assertEqual(job["shard_arr"], [1])
+
+    def test_shard_even_when_quick_keeps_shards(self):
+        # The rocrand-simulator opts into sharding even under TEST_TYPE=quick.
+        os.environ["TEST_TYPE"] = "quick"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        sim = next(j for j in components if j["job_name"] == "rocrand-simulator")
+        self.assertTrue(sim.get("shard_even_when_quick"))
+        self.assertEqual(sim["total_shards"], 2)
+        self.assertEqual(sim["shard_arr"], [1, 2])
 
     def test_platform_specific_shards(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
