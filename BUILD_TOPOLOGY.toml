@@ -792,14 +792,7 @@ feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THE
 [artifacts.rocr-debug-agent]
 artifact_group = "debug-tools"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-runtime", "amd-dbgapi", "sysdeps"]
-feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
-disable_platforms = ["windows"]
-
-[artifacts.rocr-debug-agent-tests]
-artifact_group = "debug-tools"
-type = "target-neutral"
-artifact_deps = ["rocr-debug-agent", "core-hip"]
+artifact_deps = ["amd-llvm", "core-runtime", "core-hip", "amd-dbgapi", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 
