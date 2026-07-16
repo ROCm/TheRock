@@ -548,6 +548,9 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       .
   )
   therock_cmake_subproject_require_host_program(libhipcxx lit)
+  # Make libhipcxx's CMake package resolvable by dependents (e.g. hipthreads)
+  # via find_package(libhipcxx).
+  therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
   therock_cmake_subproject_activate(libhipcxx)
 
   therock_provide_artifact(libhipcxx
