@@ -134,7 +134,9 @@ class TestExternalConfig(unittest.TestCase):
             }
         }
         with mock.patch.object(
-            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
+            amdgpu_family_matrix,
+            "load_external_runner_config",
+            return_value=fake_config,
         ):
             result = get_all_families_for_trigger_types(["presubmit"])
 
@@ -168,7 +170,9 @@ class TestExternalConfig(unittest.TestCase):
             }
         }
         with mock.patch.object(
-            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
+            amdgpu_family_matrix,
+            "load_external_runner_config",
+            return_value=fake_config,
         ):
             result = get_build_runner_labels()
         self.assertEqual(result["linux"]["default"][0]["label"], "custom-runner")
@@ -193,7 +197,9 @@ class TestExternalConfig(unittest.TestCase):
             "runner_labels": {},  # No test runners configured
         }
         with mock.patch.object(
-            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
+            amdgpu_family_matrix,
+            "load_external_runner_config",
+            return_value=fake_config,
         ):
             result = get_all_families_for_trigger_types(["presubmit"])
 
@@ -221,20 +227,18 @@ class TestExternalConfig(unittest.TestCase):
             }
         }
         with mock.patch.object(
-            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_config
+            amdgpu_family_matrix,
+            "load_external_runner_config",
+            return_value=fake_config,
         ):
             result = get_all_families_for_trigger_types(["presubmit"])
 
         # All keys from runner_labels should be overlaid
-        self.assertEqual(
-            result["gfx94x"]["linux"]["test-runs-on"], "external-runner"
-        )
+        self.assertEqual(result["gfx94x"]["linux"]["test-runs-on"], "external-runner")
         self.assertEqual(
             result["gfx94x"]["linux"]["test-runs-on-multi-gpu"], "external-multi-gpu"
         )
-        self.assertEqual(
-            result["gfx94x"]["linux"]["custom-runner-key"], "custom-value"
-        )
+        self.assertEqual(result["gfx94x"]["linux"]["custom-runner-key"], "custom-value")
         # Local build config should still be present (not in runner_labels)
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
@@ -257,14 +261,14 @@ class TestExternalConfig(unittest.TestCase):
             }
         }
         with mock.patch.object(
-            amdgpu_family_matrix, "load_external_runner_config", return_value=fake_v1_config
+            amdgpu_family_matrix,
+            "load_external_runner_config",
+            return_value=fake_v1_config,
         ):
             result = get_all_families_for_trigger_types(["presubmit"])
 
         # Runner labels should be extracted and overlaid
-        self.assertEqual(
-            result["gfx94x"]["linux"]["test-runs-on"], "v1-runner-label"
-        )
+        self.assertEqual(result["gfx94x"]["linux"]["test-runs-on"], "v1-runner-label")
         self.assertEqual(
             result["gfx94x"]["linux"]["test-runs-on-multi-gpu"], "v1-multi-gpu-runner"
         )
