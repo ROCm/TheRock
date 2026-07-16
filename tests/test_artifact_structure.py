@@ -58,6 +58,28 @@ PACKAGE_JSON_PATH = REPO_ROOT / "build_tools" / "packaging" / "linux" / "package
 # Components intentionally excluded from packaging coverage checks.
 IGNORED_COMPONENTS = {"dbg"}
 
+# (artifact_name, component) pairs known to be intentionally uncovered by
+# package.json today. Entries here should generally be temporary — either
+# the artifact is new/experimental and not yet meant for distribution, or
+# it's a test-only artifact that isn't shipped. Remove an entry once real
+# package.json coverage is added for that artifact/component.
+
+KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
+    ("base", "test"),
+    ("fftw3", "dev"),  # fftw3 is currently test-only; may be distributed later.
+    ("fftw3", "doc"),
+    ("fftw3", "run"),
+    ("hipkernelprovider", "lib"),
+    ("hipkernelprovider", "test"),
+    ("mirage", "dev"),  # new artifact, no packages yet.
+    ("rocjitsu", "dev"),  # new artifact, no packages yet.
+    ("rocprofiler-systems-examples", "test"),
+    ("rocrtst", "lib"),
+    ("support", "dev"),
+    ("support", "doc"),
+    ("sysdeps-util-linux", "dev"),
+}
+
 
 @pytest.fixture(scope="session")
 def artifacts_dir() -> Path:
@@ -220,6 +242,8 @@ def find_uncovered_components(
     uncovered = []
     for info in archive_index:
         if info.component in IGNORED_COMPONENTS:
+            continue
+        if (info.artifact_name.lower(), info.component) in KNOWN_UNCOVERED_COMPONENTS:
             continue
         covered = info.component in packaged.get(info.artifact_name.lower(), set())
         if not covered:
