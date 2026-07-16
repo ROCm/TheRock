@@ -68,7 +68,7 @@ on:
 
 jobs:
   notify:
-    if: false  # TEMP: disabled - notify_quartz noop, revert to re-enable
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}  # TEMP: disabled - notify_quartz noop, revert to re-enable
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
