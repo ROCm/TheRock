@@ -231,11 +231,9 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
   # amd-comgr32
   # 32-bit version of amd-comgr for x86 (i686) compatibility
-  # Supported on both Windows and Linux
+  # Windows only
   ##############################################################################
 
-  # 32-bit builds: On Windows, use build_32bit_windows.ps1 script for separate build
-  # Linux 32-bit works with -m32 flags in main build
   if(THEROCK_ENABLE_COMGR32)
     set(_comgr32_cmake_args)
 
@@ -275,24 +273,12 @@ if(THEROCK_ENABLE_COMPILER)
         list(APPEND _comgr32_cmake_args "-DCMAKE_LINKER:FILEPATH=${_linker_32}")
       endif()
     else()
-      # Linux 32-bit flags
-      list(APPEND _comgr32_cmake_args
-        "-DCMAKE_C_FLAGS=-m32"
-        "-DCMAKE_CXX_FLAGS=-m32"
-        "-DCMAKE_EXE_LINKER_FLAGS=-m32"
-        "-DCMAKE_SHARED_LINKER_FLAGS=-m32"
-        "-DCMAKE_MODULE_LINKER_FLAGS=-m32"
-      )
+      message(FATAL_ERROR "THEROCK_ENABLE_COMGR32 is only supported on Windows")
     endif()
 
-    # Add hotswap options if enabled (Linux only for hotswap tool)
+    # Add hotswap options if enabled
     if(THEROCK_ENABLE_HOTSWAP)
       list(APPEND _comgr32_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=ON)
-      if(NOT WIN32)
-        list(APPEND _comgr32_cmake_args
-          -DHOTSWAP_BUILD_TOOL=OFF  # Disable for 32-bit
-        )
-      endif()
     endif()
 
     therock_cmake_subproject_declare(amd-comgr32

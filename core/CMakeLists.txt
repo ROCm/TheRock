@@ -1,12 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# On Linux, we compile core libraries with our own LLVM. This gets us the
+# We compile core libraries with our own LLVM on Linux. This gets us the
 # best optimizations and, most importantly, gives us uniform access to
 # sanitizers. Currently, some of these projects, though, are hard-coded
 # for MSVC on Windows, so on that platform, just build them with the system
 # compiler.
-# TODO: Switch windows to use our own clang.
+# TODO: Switch Windows to use our own clang.
 set(_system_toolchain "amd-llvm")
 if(WIN32)
   set(_system_toolchain "")
@@ -557,12 +557,12 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
 endif(THEROCK_ENABLE_OCL_RUNTIME)
 
 ################################################################################
+################################################################################
 # ocl-clr32
 # 32-bit OpenCL runtime (amdocl32)
+# Windows only
 ################################################################################
 
-# 32-bit builds: On Windows, use build_32bit_windows.ps1 script for separate build
-# Linux 32-bit works with -m32 flags in main build
 if(THEROCK_ENABLE_OCL32_RUNTIME)
   set(OCL32_CLR_CMAKE_ARGS)
   set(OCL32_CLR_RUNTIME_DEPS)
@@ -597,18 +597,7 @@ if(THEROCK_ENABLE_OCL32_RUNTIME)
       "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
     )
   else()
-    # Linux 32-bit flags
-    list(APPEND OCL32_CLR_CMAKE_ARGS
-      "-DCMAKE_C_FLAGS=-m32"
-      "-DCMAKE_CXX_FLAGS=-m32"
-      "-DCMAKE_EXE_LINKER_FLAGS=-m32"
-      "-DCMAKE_SHARED_LINKER_FLAGS=-m32"
-      "-DCMAKE_MODULE_LINKER_FLAGS=-m32"
-      "-DBUILD_TESTS=OFF"  # Disable tests for 32-bit build
-    )
-    list(APPEND OCL32_CLR_RUNTIME_DEPS
-      rocprofiler-register
-    )
+    message(FATAL_ERROR "THEROCK_ENABLE_OCL32_RUNTIME is only supported on Windows")
   endif()
 
   if(_therock_enable_hsa_runtime)
