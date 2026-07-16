@@ -9,6 +9,7 @@
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git
+	branch = users/preble/rocm-24185
 	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
