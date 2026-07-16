@@ -165,7 +165,6 @@ LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
-    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
     # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
     "roctracer64",  # Linux only for the moment.
@@ -369,6 +368,169 @@ def get_rocm_init_contents(args: argparse.Namespace):
                 check_version='{sdk_version}')
         """
     )
+
+
+ROCM_NEEDED_LIBRARY_PREFIXES = (
+    "libamd",
+    "libdrm_amdgpu",
+    "libhip",
+    "libhsa",
+    "libMIOpen",
+    "librccl",
+    "libroc",
+)
+
+
+def _split_runpath(runpath: str) -> list[str]:
+    return [entry for entry in runpath.split(":") if entry]
+
+
+def _strip_absolute_and_append_runpaths(
+    existing_runpath: str, addl_runpaths: list[str]
+) -> str:
+    merged: list[str] = []
+    for entry in _split_runpath(existing_runpath):
+        if os.path.isabs(entry):
+            continue
+        if entry not in merged:
+            merged.append(entry)
+    for entry in addl_runpaths:
+        if entry not in merged:
+            merged.append(entry)
+    return ":".join(merged)
+
+
+def _origin_relative_runpath(elf_path: Path, target_dir: Path) -> str:
+    relpath = os.path.relpath(target_dir, elf_path.parent)
+    if relpath == ".":
+        return "$ORIGIN"
+    return f"$ORIGIN/{Path(relpath).as_posix()}"
+
+
+def _is_rocm_linked(needed_libraries: list[str]) -> bool:
+    return any(
+        needed.startswith(ROCM_NEEDED_LIBRARY_PREFIXES) for needed in needed_libraries
+    )
+
+
+def _runpath_references_rocm(runpath: str) -> bool:
+    return any("rocm" in entry.lower() for entry in _split_runpath(runpath))
+
+
+def _patchelf_output(*args: str | Path) -> str:
+    return subprocess.check_output(
+        ["patchelf", *(str(arg) for arg in args)], text=True
+    ).strip()
+
+
+def _get_rocm_dependency_wheel_runpath_dirs(wheel_root: Path) -> list[Path]:
+    import importlib
+
+    from rocm_sdk import _dist_info
+
+    runpath_dirs: list[Path] = []
+    for lib_entry in _dist_info.ALL_LIBRARIES.values():
+        if not lib_entry.so_pattern:
+            continue
+        package = lib_entry.package
+        target_family = None
+        if package.is_target_specific:
+            target_family = _dist_info.determine_target_family()
+        py_package_name = package.get_py_package_name(target_family)
+        py_module = importlib.import_module(py_package_name)
+        py_root = Path(py_module.__file__).parent
+        runpath_dir = wheel_root / py_root.name / lib_entry.posix_relpath
+        if runpath_dir not in runpath_dirs:
+            runpath_dirs.append(runpath_dir)
+    return runpath_dirs
+
+
+def configure_pytorch_wheel_rocm_runpaths(wheel_path: Path) -> None:
+    """Configure torch shared object RUNPATHs for ROCm wheel library resolution."""
+    if is_windows:
+        return
+    if not shutil.which("patchelf"):
+        raise RuntimeError("patchelf is required to configure PyTorch wheel RUNPATHs")
+
+    with tempfile.TemporaryDirectory(prefix="therock-pytorch-wheel-") as temp_dir_str:
+        temp_dir = Path(temp_dir_str)
+        unpack_dir = temp_dir / "unpacked"
+        output_dir = temp_dir / "output"
+        unpack_dir.mkdir()
+        output_dir.mkdir()
+
+        run_command(
+            [sys.executable, "-m", "wheel", "unpack", "--dest", unpack_dir, wheel_path],
+            cwd=temp_dir,
+        )
+        wheel_roots = [path for path in unpack_dir.iterdir() if path.is_dir()]
+        if len(wheel_roots) != 1:
+            raise RuntimeError(
+                f"Expected one unpacked wheel directory, found {wheel_roots}"
+            )
+        wheel_root = wheel_roots[0]
+        torch_dir = wheel_root / "torch"
+        if not torch_dir.is_dir():
+            raise RuntimeError(
+                f"Unpacked torch wheel has no torch package: {wheel_root}"
+            )
+
+        rocm_runpath_dirs = _get_rocm_dependency_wheel_runpath_dirs(wheel_root)
+        updated_paths: list[Path] = []
+        for so_path in sorted(torch_dir.rglob("*.so*")):
+            if so_path.is_symlink() or not so_path.is_file():
+                continue
+            try:
+                needed_libraries = _patchelf_output(
+                    "--print-needed", so_path
+                ).splitlines()
+            except subprocess.CalledProcessError:
+                continue
+            try:
+                existing_runpath = _patchelf_output("--print-rpath", so_path)
+            except subprocess.CalledProcessError:
+                existing_runpath = ""
+            if not _is_rocm_linked(needed_libraries) and not _runpath_references_rocm(
+                existing_runpath
+            ):
+                continue
+            addl_runpaths = [
+                _origin_relative_runpath(so_path, target_dir)
+                for target_dir in rocm_runpath_dirs
+            ]
+            updated_runpath = _strip_absolute_and_append_runpaths(
+                existing_runpath, addl_runpaths
+            )
+            if updated_runpath == existing_runpath:
+                continue
+            print(f"+++ Configuring ROCm RUNPATH: {so_path.relative_to(wheel_root)}")
+            print(f"    old: {existing_runpath}")
+            print(f"    new: {updated_runpath}")
+            run_command(
+                ["patchelf", "--set-rpath", updated_runpath, so_path],
+                cwd=temp_dir,
+            )
+            updated_paths.append(so_path)
+
+        if not updated_paths:
+            print(
+                "WARNING: Did not find any ROCm-linked torch shared objects to update"
+            )
+
+        run_command(
+            [
+                sys.executable,
+                "-m",
+                "wheel",
+                "pack",
+                "--dest-dir",
+                output_dir,
+                wheel_root,
+            ],
+            cwd=temp_dir,
+        )
+        output_wheel = find_built_wheel(output_dir, "torch")
+        shutil.copy2(output_wheel, wheel_path)
 
 
 def remove_dir_if_exists(dir: Path):
@@ -1140,6 +1302,7 @@ def do_build_pytorch(
     run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
+    configure_pytorch_wheel_rocm_runpaths(built_wheel)
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built torch:")
