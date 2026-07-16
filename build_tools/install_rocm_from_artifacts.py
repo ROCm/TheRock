@@ -47,6 +47,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocwmma | --no-rocwmma]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
+    [--hipthreads | --no-hipthreads]
     [--tests | --no-tests]
     [--base-only]
 
@@ -399,6 +400,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocalution,
             args.rocwmma,
             args.libhipcxx,
+            args.hipthreads,
         ]
     ):
         argv.extend(base_artifact_patterns)
@@ -523,6 +525,28 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("amd-llvm_dev")
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
+        if args.hipthreads:
+            extra_artifacts.append("hipthreads")
+            # hipthreads ships a static library (libhipthreads.a) and headers in
+            # its _dev component, and its lit suite includes the libhipcxx
+            # headers, so both _dev artifacts are required at test time.
+            argv.append("hipthreads_dev")
+            extra_artifacts.append("libhipcxx")
+            argv.append("libhipcxx_dev")
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
+            argv.append("base_dev_generic")
+            if args.prim:
+                # The hipthreads example apps link roc::rocthrust and call
+                # find_package(rocthrust/rocprim CONFIG); those headers and
+                # CMake package configs live in prim's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("prim_dev")
+            if args.rand:
+                # The InOneWeekend example includes <hiprand/hiprand.hpp>; the
+                # hipRAND/rocRAND headers live in rand's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("rand_dev")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test
@@ -913,6 +937,13 @@ def main(argv):
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipthreads",
+        default=False,
+        help="Include 'hipthreads' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
