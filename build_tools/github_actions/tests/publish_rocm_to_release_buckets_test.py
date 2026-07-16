@@ -10,6 +10,7 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 from github_actions.publish_rocm_to_release_buckets import main
+from _therock_utils.storage_location import StorageLocation
 
 
 class TestPublishRocmToReleaseBuckets(unittest.TestCase):
@@ -183,6 +184,153 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
         # ASAN tarballs go to separate folder
         self.assertEqual(tarball_dest.relative_path, "v4/tarball-asan")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_structured_places_rocm_packages_in_package_dirs(
+        self, mock_copy_dir, mock_list, mock_copy_file
+    ):
+        # Structured multi-arch: python packages go into per-package dirs via
+        # list_files + copy_file, not the flat copy_directory.
+        mock_copy_dir.return_value = 2  # tarballs still use copy_directory
+        mock_list.return_value = [
+            StorageLocation(
+                "therock-dev-artifacts",
+                "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+            ),
+            StorageLocation(
+                "therock-dev-artifacts", "123-linux/python/rocm-7.13.0.tar.gz"
+            ),
+            StorageLocation(
+                "therock-dev-artifacts",
+                "123-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl",
+            ),
+        ]
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--kpack-split",
+                "true",
+                "--structured",
+                "--skip-native-packages",
+                "--dry-run",
+            ]
+        )
+
+        # copy_directory used only for tarballs (not python) under structured.
+        self.assertEqual(mock_copy_dir.call_count, 1)
+        # One copy_file per accepted artifact.
+        self.assertEqual(mock_copy_file.call_count, 3)
+        dest_by_src = {
+            call.args[0].relative_path: call.args[1].relative_path
+            for call in mock_copy_file.call_args_list
+        }
+        self.assertEqual(
+            dest_by_src[
+                "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
+            ],
+            "core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+        )
+        self.assertEqual(
+            dest_by_src["123-linux/python/rocm-7.13.0.tar.gz"],
+            "core/whl/rocm/rocm-7.13.0.tar.gz",
+        )
+        self.assertEqual(
+            dest_by_src[
+                "123-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl"
+            ],
+            "core/whl/rocm-sdk-device-gfx1100/"
+            "rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl",
+        )
+        # Destination bucket is the release python bucket.
+        for call in mock_copy_file.call_args_list:
+            self.assertEqual(call.args[1].bucket, "therock-dev-python")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
+    def test_structured_whl_next(self, mock_list, mock_copy_file, mock_copy_dir):
+        mock_copy_dir.return_value = 2  # tarballs
+        mock_list.return_value = [
+            StorageLocation(
+                "therock-dev-artifacts",
+                "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+            ),
+        ]
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--kpack-split",
+                "true",
+                "--structured",
+                "--index",
+                "whl-next",
+                "--skip-native-packages",
+                "--dry-run",
+            ]
+        )
+        _, dest = mock_copy_file.call_args_list[0].args
+        self.assertEqual(
+            dest.relative_path,
+            "core/whl-next/rocm-sdk-core/"
+            "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+        )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
+    def test_structured_raises_when_no_python_packages(
+        self, mock_list, mock_copy_file, mock_copy_dir
+    ):
+        mock_copy_dir.return_value = 2  # tarballs succeed
+        mock_list.return_value = []
+        with self.assertRaises(FileNotFoundError):
+            main(
+                [
+                    "--run-id",
+                    "123",
+                    "--platform",
+                    "linux",
+                    "--release-type",
+                    "dev",
+                    "--kpack-split",
+                    "true",
+                    "--structured",
+                    "--skip-native-packages",
+                    "--dry-run",
+                ]
+            )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_structured_requires_kpack_split(self, mock_copy):
+        # Structured only applies to the multi-arch (kpack-split) path; using it
+        # with the legacy per-family layout is rejected.
+        mock_copy.return_value = 2
+        with self.assertRaises(SystemExit):
+            main(
+                [
+                    "--run-id",
+                    "123",
+                    "--platform",
+                    "linux",
+                    "--release-type",
+                    "dev",
+                    "--structured",
+                    "--skip-native-packages",
+                    "--dry-run",
+                ]
+            )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_asan_native_packages_use_separate_path(self, mock_copy):
