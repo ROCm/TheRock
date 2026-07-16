@@ -51,7 +51,7 @@ def normalize_target_list(
         raw = [str(a) for a in value]
 
     tokens = [
-        tok.lower() if lowercase else tok
+        (tok.split(":", 1)[0].lower() if lowercase else tok.split(":", 1)[0])
         for item in raw
         for tok in _GFX_ARCH_SPLIT_RE.split(item)
         if tok
@@ -933,30 +933,32 @@ def filter_components_fromartifactory(
             component_list = subdir["Components"]
 
             for component in component_list:
-                source_dir = (
-                    Path(artifacts_dir)
-                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
-                )
-                filename = source_dir / "artifact_manifest.txt"
-                if not filename.exists():
-                    print(f"{pkg_name} : Missing {filename}")
-                    continue
-                try:
-                    with filename.open("r", encoding="utf-8") as file:
-                        for line in file:
+                # Find base artifact and all xnack variants (e.g., :xnack+, :xnack-)
+                base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
+                artifact_dirs = [Path(artifacts_dir) / base_pattern]
+                artifact_dirs.extend(Path(artifacts_dir).glob(f"{base_pattern}:*"))
 
-                            match_found = (
-                                isinstance(artifact_subdir, str)
-                                and (artifact_subdir.lower() + "/") in line.lower()
-                            )
+                for source_dir in artifact_dirs:
+                    filename = source_dir / "artifact_manifest.txt"
+                    if not filename.exists():
+                        print(f"{pkg_name} : Missing {filename}")
+                        continue
+                    try:
+                        with filename.open("r", encoding="utf-8") as file:
+                            for line in file:
 
-                            if match_found and line.strip():
-                                print("Matching line:", line.strip())
-                                source_path = source_dir / line.strip()
-                                sourcedir_list.append(source_path)
-                except OSError as e:
-                    print(f"Could not read manifest {filename}: {e}")
-                    continue
+                                match_found = (
+                                    isinstance(artifact_subdir, str)
+                                    and (artifact_subdir.lower() + "/") in line.lower()
+                                )
+
+                                if match_found and line.strip():
+                                    print("Matching line:", line.strip())
+                                    source_path = source_dir / line.strip()
+                                    sourcedir_list.append(source_path)
+                    except OSError as e:
+                        print(f"Could not read manifest {filename}: {e}")
+                        continue
 
     return sourcedir_list
 
