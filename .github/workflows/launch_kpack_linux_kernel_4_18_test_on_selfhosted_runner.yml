@@ -295,6 +295,7 @@ jobs:
               -i "${HOME}/.ssh/therock_vm_key" \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
+              -o BatchMode=yes \
               -o ConnectTimeout=5 \
               -p "${VM_SSH_PORT}" \
               "${VM_SSH_USER}@127.0.0.1" true; then
@@ -377,6 +378,8 @@ jobs:
             -i "${HOME}/.ssh/therock_vm_key" \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
+            -o BatchMode=yes \
+            -o ConnectTimeout=5 \
             -p "${VM_SSH_PORT}" \
             "${VM_SSH_USER}@127.0.0.1" \
             bash -s
