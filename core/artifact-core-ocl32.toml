@@ -1,0 +1,31 @@
+# Artifact descriptor for 32-bit OpenCL runtime
+# Defines packaging for amdocl32.dll and related files
+
+[options]
+unmatched_exclude = []
+
+# Runtime libraries - 32-bit OpenCL implementation
+[components.lib."core/ocl-clr32/stage"]
+include = [
+  "lib32/opencl/**/*.lib",
+  "lib32/opencl/**/*.so",
+  "lib32/opencl/**/*.so.*",
+]
+
+# Runtime binaries - DLLs and shared objects
+[components.run."core/ocl-clr32/stage"]
+include = [
+  "bin/*.dll",
+  "lib32/opencl/**/*.dll",
+]
+
+# Debug symbols
+[components.dbg."core/ocl-clr32/stage"]
+include = [
+  "**/*.pdb",
+]
+
+# Development files - headers and cmake configs
+[components.dev."core/ocl-clr32/stage"]
+include = []
+

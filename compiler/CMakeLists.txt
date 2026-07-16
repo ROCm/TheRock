@@ -229,6 +229,104 @@ if(THEROCK_ENABLE_COMPILER)
   )
 
   ##############################################################################
+  # amd-comgr32
+  # 32-bit version of amd-comgr for x86 (i686) compatibility
+  # Supported on both Windows and Linux
+  ##############################################################################
+
+  # 32-bit builds: On Windows, use build_32bit_windows.ps1 script for separate build
+  # Linux 32-bit works with -m32 flags in main build
+  if(THEROCK_ENABLE_COMGR32)
+    set(_comgr32_cmake_args)
+
+    # Configure for 32-bit build
+    if(WIN32)
+      # Windows 32-bit: Point to x86 compilers and libraries
+      # Get the current C and CXX compiler paths and replace x64 with x86
+      string(REPLACE "/Hostx64/x64/" "/Hostx64/x86/" _c_compiler_32 "${CMAKE_C_COMPILER}")
+      string(REPLACE "/Hostx64/x64/" "/Hostx64/x86/" _cxx_compiler_32 "${CMAKE_CXX_COMPILER}")
+
+      # Also get the 32-bit linker path
+      if(CMAKE_LINKER)
+        string(REPLACE "/Hostx64/x64/" "/Hostx64/x86/" _linker_32 "${CMAKE_LINKER}")
+      endif()
+
+      # Get MSVC and Windows SDK paths for x86 libraries
+      get_filename_component(_msvc_dir "${CMAKE_C_COMPILER}" DIRECTORY)
+      get_filename_component(_msvc_root "${_msvc_dir}/../../../.." ABSOLUTE)
+      string(REPLACE "/x64" "/x86" _msvc_lib_32 "${_msvc_root}/lib/x86")
+
+      list(APPEND _comgr32_cmake_args
+        # Use FILEPATH type to override toolchain settings
+        "-DCMAKE_C_COMPILER:FILEPATH=${_c_compiler_32}"
+        "-DCMAKE_CXX_COMPILER:FILEPATH=${_cxx_compiler_32}"
+        "-DCMAKE_SYSTEM_PROCESSOR:STRING=x86"
+        "-DCMAKE_SIZEOF_VOID_P:STRING=4"
+        "-DCMAKE_LIBRARY_ARCHITECTURE=x86"
+        # Force x86 runtime library path
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"
+        "-DCMAKE_C_FLAGS=/DWIN32 /D_WINDOWS /guard:cf"
+        "-DCMAKE_CXX_FLAGS=/DWIN32 /D_WINDOWS /EHsc /guard:cf"
+        "-DCMAKE_EXE_LINKER_FLAGS=/guard:cf /DYNAMICBASE /LARGEADDRESSAWARE /machine:X86"
+        "-DCMAKE_SHARED_LINKER_FLAGS=/guard:cf /DYNAMICBASE /machine:X86"
+      )
+
+      if(_linker_32)
+        list(APPEND _comgr32_cmake_args "-DCMAKE_LINKER:FILEPATH=${_linker_32}")
+      endif()
+    else()
+      # Linux 32-bit flags
+      list(APPEND _comgr32_cmake_args
+        "-DCMAKE_C_FLAGS=-m32"
+        "-DCMAKE_CXX_FLAGS=-m32"
+        "-DCMAKE_EXE_LINKER_FLAGS=-m32"
+        "-DCMAKE_SHARED_LINKER_FLAGS=-m32"
+        "-DCMAKE_MODULE_LINKER_FLAGS=-m32"
+      )
+    endif()
+
+    # Add hotswap options if enabled (Linux only for hotswap tool)
+    if(THEROCK_ENABLE_HOTSWAP)
+      list(APPEND _comgr32_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=ON)
+      if(NOT WIN32)
+        list(APPEND _comgr32_cmake_args
+          -DHOTSWAP_BUILD_TOOL=OFF  # Disable for 32-bit
+        )
+      endif()
+    endif()
+
+    therock_cmake_subproject_declare(amd-comgr32
+      USE_DIST_AMDGPU_TARGETS
+      NO_INSTALL_RPATH  # See manual handling in the pre_hook.
+      EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
+      BINARY_DIR "amd-comgr32"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        # Statically link LLVM/Clang into comgr32
+        -DCOMGR_STATIC_LLVM=ON
+        -DTHEROCK_BUILD_COMGR_TESTS=OFF  # Disable tests for 32-bit build
+        "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
+        -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
+        ${_comgr32_cmake_args}
+      BUILD_DEPS
+        rocm-cmake
+      RUNTIME_DEPS
+        amd-llvm
+        ${THEROCK_BUNDLED_ZSTD}
+      INSTALL_DESTINATION "lib32"
+      INTERFACE_LINK_DIRS
+        "lib32"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib32"
+    )
+    # Provide as "amd_comgr32" to avoid conflict with 64-bit amd_comgr
+    therock_cmake_subproject_provide_package(amd-comgr32 amd_comgr32 lib32/cmake/amd_comgr)
+    therock_cmake_subproject_activate(amd-comgr32)
+
+    message(STATUS "32-bit comgr build enabled (amd_comgr32) for ${CMAKE_SYSTEM_NAME}")
+  endif()
+
+  ##############################################################################
   # hipcc
   # Provides hipcc and hipconfig
   ##############################################################################
