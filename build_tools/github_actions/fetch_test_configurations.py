@@ -511,21 +511,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # !! DISABLED because of https://github.com/ROCm/TheRock/issues/5689
-    # !! Windows loading of the python bindings require special LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
-    # !! We need AddDllDirectory. Commenting out to unblock CI issues.
-    # hipDNN Python bindings wheel build + install + pytest
-    # "hipdnn_python_bindings": {
-    #     "job_name": "hipdnn_python_bindings",
-    #     "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
-    #     "timeout_minutes": 30,
-    #     "test_script": f"python {_get_script_path('test_hipdnn_frontend_python.py')}",
-    #     "platform": ["linux", "windows"],
-    #     "total_shards_dict": {
-    #         "linux": 1,
-    #         "windows": 1,
-    #     },
-    # },
     # hipDNN integration tests (unit tests for the integration test harness)
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",
@@ -714,9 +699,10 @@ test_matrix = {
         "fetch_artifact_args": "--hiptensor --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
     },
 }
@@ -738,6 +724,7 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
+    build_variant = os.getenv("BUILD_VARIANT", "release")
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -745,6 +732,8 @@ def run():
     test_runs_on_default = None
     test_runs_on_multi_gpu_labels = None
     test_runs_on_multi_gpu_default = None
+    # For ASAN builds, use the sandbox runner if available
+    test_runs_on_sandbox = None
     if amdgpu_families:
         shortened_family = amdgpu_families.split("-")[0].lower()
         all_families = get_all_families_for_trigger_types(
@@ -760,6 +749,7 @@ def run():
             test_runs_on_multi_gpu_default = platform_info.get(
                 "test-runs-on-multi-gpu", ""
             )
+            test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -901,6 +891,8 @@ def run():
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
+    # For ASAN builds, use the sandbox runner to isolate potentially failing tests
+    is_asan_build = build_variant in ("asan", "host-asan")
     for component in all_components:
         job_name = component.get("job_name", "unknown")
         if "multi_gpu_runner" in component:
@@ -912,8 +904,13 @@ def run():
             elif test_runs_on_multi_gpu_default:
                 component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
         else:
-            # Regular components use standard runner labels
-            if test_runs_on_labels:
+            # For ASAN builds, use the sandbox runner if available
+            if is_asan_build and test_runs_on_sandbox:
+                component["test_runner"] = test_runs_on_sandbox
+                logging.info(
+                    f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
+                )
+            elif test_runs_on_labels:
                 component["test_runner"] = select_weighted_label(
                     test_runs_on_labels, job_name
                 )

@@ -170,6 +170,22 @@ class TestGenerateIndex(unittest.TestCase):
             self.assertTrue((dist_dir / "gfx94X-dcgpu" / "index.html").is_file())
             self.assertFalse((dist_dir / "index.html").is_file())
 
+    def test_dot_dir_treated_as_flat(self):
+        """A dot-directory (e.g. .kpack_staging) is a staging artifact, not a
+        GPU family, so it must not flip detection into per-family mode."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+            (dist_dir / ".kpack_staging").mkdir()
+            (dist_dir / ".kpack_staging" / "scratch.whl").write_bytes(b"scratch")
+
+            self.assertEqual(upload_python_packages.detect_family_subdirs(dist_dir), [])
+
+            upload_python_packages.generate_index(dist_dir, multiarch=True)
+
+            # Flat (kpack-split) handling: no per-family index generated.
+            self.assertFalse((dist_dir / ".kpack_staging" / "index.html").exists())
+
     def test_dry_run_creates_nothing(self):
         """dry_run=True creates no files regardless of layout."""
         with tempfile.TemporaryDirectory() as tmp:

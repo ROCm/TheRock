@@ -102,7 +102,6 @@ if(THEROCK_ENABLE_HIPDNN)
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DHIP_DNN_BUILD_PLUGINS=OFF
       -DHIP_DNN_GENERATE_SDK_HEADERS=OFF
-      -DHIPDNN_BUILD_PYTHON_BINDINGS=ON
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
@@ -112,8 +111,6 @@ if(THEROCK_ENABLE_HIPDNN)
     BUILD_DEPS
       therock-googletest
       therock-fmt
-      therock-nanobind
-      therock-robin-map
       therock-spdlog
     RUNTIME_DEPS
       hip-clr

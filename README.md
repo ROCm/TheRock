@@ -10,8 +10,7 @@ TheRock includes:
 
 - Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
-- Support for building PyTorch with ROCm from source
-  - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Support for building PyTorch and JAX with ROCm from source
 - Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
@@ -20,11 +19,11 @@ TheRock includes:
 
 > [!IMPORTANT]
 > See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-> ROCm and PyTorch packages.
+> ROCm, PyTorch, and JAX packages.
 
 ## Project status
 
-See the unified project HUD at https://therock-hud-dev.amd.com/
+See the unified project HUD at https://therock-hud.amd.com/
 
 ### Nightly release status
 

@@ -53,12 +53,18 @@ def generate_jax_matrix(
     matrix: list[dict[str, object]] = []
     for py in versions:
         for ref_cfg in JAX_REFS:
+            # These row keys are the contract with workflow files which use them
+            # via matrix.<key> expressions. Empty values are allowed when the
+            # workflow handles them explicitly, but undefined keys are not.
             matrix.append(
                 {
                     "python_version": py,
                     "jax_ref": ref_cfg["jax_ref"],
                     "jax_repository": ref_cfg["jax_repository"],
                     "build_mode": ref_cfg["build_mode"],
+                    # gfx_arch is intentionally empty for native JAX builds and
+                    # non-empty for manylinux builds. This direct lookup raises
+                    # KeyError if JAX_REFS omits the key.
                     "gfx_arch": ref_cfg["gfx_arch"],
                 }
             )
