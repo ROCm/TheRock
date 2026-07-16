@@ -26,26 +26,25 @@ CI_PYTHON_VERSIONS = {
     "windows": ["3.12"],
 }
 
-# TODO: separate out "nightly" pytorch refs from "prerelease" pytorch refs?
-# That would let us:
-#   1. choose to not build the "nightly" pytorch branch for prerelease builds,
-#      saving some CI resources and possibly simplifying package promotion
-#      scripts.
-#   2. filter out some AMDGPU families from prereleases if we only want them
-#      built for nightly but not published to stable.
-RELEASE_PYTORCH_REFS = {
+# Refs for the "prerelease" release type. The "nightly" release type extends
+# this set with additional refs (see RELEASE_PYTORCH_REFS).
+RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
         "release/2.10",
         "release/2.11",
         "release/2.12",
-        "nightly",
     ],
     "windows": [
         "release/2.10",
         "release/2.11",
         "release/2.12",
-        "nightly",
     ],
+}
+
+# Refs for the "nightly" release type: stable refs + "nightly" branch.
+RELEASE_PYTORCH_REFS = {
+    platform: [*refs, "nightly"]
+    for platform, refs in RELEASE_STABLE_PYTORCH_REFS.items()
 }
 
 CI_PYTORCH_REFS = {
@@ -96,7 +95,7 @@ def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
     if release_type == "ci":
         return list(CI_PYTORCH_REFS[platform])
     if release_type == "prerelease":
-        return [ref for ref in RELEASE_PYTORCH_REFS[platform] if ref != "nightly"]
+        return list(RELEASE_STABLE_PYTORCH_REFS[platform])
     return list(RELEASE_PYTORCH_REFS[platform])
 
 
