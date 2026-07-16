@@ -805,6 +805,22 @@ if(BUILD_TESTING)
     message(WARNING "rocgdb tests: xfails ignore list not found at "
       "${ROCGDB_SOURCE_DIR}/.github/scripts/rocgdb_ignore_list.json; skipping installation.")
   endif()
+
+  # Install the optional test-filter (RFC0010) tier definition, if present in
+  # the sources. It is a non-upstream helper kept out of gdb's source tree
+  # (under .github/test-runner/), so the EXISTS guard keeps this wrapper
+  # compatible with upstream gdb. It installs next to the testsuite at
+  # tests/rocgdb/gdb/testsuite/, where test_rocgdb.py --tier looks for it.
+  if(EXISTS "${ROCGDB_SOURCE_DIR}/.github/test-runner/test_categories.yaml")
+    install(
+      FILES ${ROCGDB_SOURCE_DIR}/.github/test-runner/test_categories.yaml
+      DESTINATION tests/rocgdb/gdb/testsuite
+      COMPONENT tests
+    )
+  else()
+    message(WARNING "rocgdb tests: test-filter tier definition not found at "
+      "${ROCGDB_SOURCE_DIR}/.github/test-runner/test_categories.yaml; skipping installation.")
+  endif()
 else()
   message(STATUS "rocgdb tests: BUILD_TESTING not set. Skipping installation integrity tests.")
 endif()

@@ -308,16 +308,20 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # rocgdb test-filter standardization (RFC0010): both jobs share one tier
+    # definition (ROCgdb's .github/test-runner/test_categories.yaml, installed
+    # next to the testsuite) and split it by --domain. --tier defaults to
+    # 'quick' here; nightly/extended pipelines can raise it later.
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tier quick --domain cpu",
         "linux_cpu_runner": True,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tier quick --domain gpu",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
