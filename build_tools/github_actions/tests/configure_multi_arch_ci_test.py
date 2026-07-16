@@ -474,6 +474,7 @@ class TestDecideJobs(unittest.TestCase):
                 pr_labels=["test_filter:standard"],
             ),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "standard")
 
@@ -495,6 +496,7 @@ class TestDecideJobs(unittest.TestCase):
             self._inputs(
                 event_name="workflow_dispatch",
                 linux_test_labels=["test_filter:comprehensive"],
+                targets=cm.TargetSelection(),
             ),
             git_context=cm.GitContext(),
         )
@@ -509,6 +511,7 @@ class TestDecideJobs(unittest.TestCase):
                 prebuilt_stages="compiler-runtime,runtime-tests",
             ),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(
             sorted(result.build_rocm.prebuilt_stages),
