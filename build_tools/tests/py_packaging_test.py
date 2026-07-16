@@ -22,6 +22,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
+from build_python_packages import validate_kpack_split_target_completeness
 
 
 class TmpDirTestCase(unittest.TestCase):
@@ -634,6 +635,12 @@ class DevicePackagingTest(TmpDirTestCase):
         an_rccl = ArtifactName("rccl", "lib", "gfx942")
         self.assertTrue(device_artifact_filter("gfx942", an_rccl))
 
+        # hipkernelprovider is target-specific + kpack-split (its rocKE engine ships
+        # per-arch AOT bundles), so its per-ISA lib artifact must land in the device
+        # wheel.
+        an_hkp = ArtifactName("hipkernelprovider", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_hkp))
+
         # Should NOT match generic.
         an_generic = ArtifactName("blas", "lib", "generic")
         self.assertFalse(device_artifact_filter("gfx942", an_generic))
@@ -665,6 +672,250 @@ class DevicePackagingTest(TmpDirTestCase):
         content = dist_info_path.read_text()
         self.assertIn("LIBRARIES_PY_PACKAGE_NAME", content)
         self.assertIn("_rocm_sdk_libraries", content)
+
+
+class KpackSplitCompletenessTest(TmpDirTestCase):
+    """Tests for validating kpack-split artifact coverage before packaging."""
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+    ) -> None:
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        stage.mkdir(parents=True, exist_ok=True)
+        (stage / "placeholder.txt").write_text("x")
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_artifact_catalog(self, target_families: list[str]) -> ArtifactCatalog:
+        artifact_dir = self.temp_dir / "artifacts"
+        for target_family in target_families:
+            self._add_artifact(
+                artifact_dir=artifact_dir,
+                name="blas",
+                component="lib",
+                target_family=target_family,
+            )
+        return ArtifactCatalog(artifact_dir)
+
+    def _validate_completeness(
+        self,
+        *,
+        kpack_split: bool,
+        artifacts: ArtifactCatalog,
+        linux_targets: list[str] | None,
+        windows_targets: list[str] | None,
+        platform_name: str,
+    ) -> None:
+        validate_kpack_split_target_completeness(
+            kpack_split=kpack_split,
+            artifact_dir=self.temp_dir / "artifacts",
+            artifacts=artifacts,
+            linux_targets=linux_targets,
+            windows_targets=windows_targets,
+            platform_name=platform_name,
+        )
+
+    def test_linux_completeness_passes_when_targets_match(self):
+        artifacts = self._make_artifact_catalog(["gfx1100", "gfx1101"])
+
+        self._validate_completeness(
+            kpack_split=True,
+            artifacts=artifacts,
+            linux_targets=["gfx1100", "gfx1101"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+    def test_linux_completeness_fails_when_target_is_missing(self):
+        artifacts = self._make_artifact_catalog(["gfx1100"])
+
+        with self.assertRaisesRegex(RuntimeError, "gfx1101"):
+            self._validate_completeness(
+                kpack_split=True,
+                artifacts=artifacts,
+                linux_targets=["gfx1100", "gfx1101"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_windows_completeness_uses_windows_targets(self):
+        artifacts = self._make_artifact_catalog(["gfx1200"])
+
+        self._validate_completeness(
+            kpack_split=True,
+            artifacts=artifacts,
+            linux_targets=["gfx1100"],
+            windows_targets=["gfx1200"],
+            platform_name="win32",
+        )
+
+    def test_completeness_skips_without_platform_target_input(self):
+        artifacts = self._make_artifact_catalog(["gfx1100"])
+
+        self._validate_completeness(
+            kpack_split=True,
+            artifacts=artifacts,
+            linux_targets=None,
+            windows_targets=["gfx1200"],
+            platform_name="linux",
+        )
+
+    def test_completeness_skips_when_kpack_split_is_disabled(self):
+        artifacts = self._make_artifact_catalog(["gfx1100"])
+
+        self._validate_completeness(
+            kpack_split=False,
+            artifacts=artifacts,
+            linux_targets=["gfx1100", "gfx1101"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+
+class RequiredDistPackagesTest(TmpDirTestCase):
+    """Tests for validating required files in the final dist directory."""
+
+    version = "0.0.1.test"
+    wheel_tag = "py3-none-linux_x86_64"
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+    ) -> None:
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        stage.mkdir(parents=True, exist_ok=True)
+        (stage / "placeholder.txt").write_text("x")
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_artifact_catalog(
+        self, artifact_specs: list[tuple[str, str, str]]
+    ) -> ArtifactCatalog:
+        artifact_dir = self.temp_dir / "artifacts"
+        for name, component, target_family in artifact_specs:
+            self._add_artifact(
+                artifact_dir=artifact_dir,
+                name=name,
+                component=component,
+                target_family=target_family,
+            )
+        return ArtifactCatalog(artifact_dir)
+
+    def _write_dist_file(self, filename: str) -> None:
+        dist_dir = self.temp_dir / "packages" / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        (dist_dir / filename).write_text("package")
+
+    def _write_required_kpack_split_runtime_files(self, target: str) -> None:
+        self._write_dist_file(f"rocm-{self.version}.tar.gz")
+        self._write_dist_file(f"rocm_sdk_core-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(f"rocm_sdk_libraries-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(
+            f"rocm_sdk_device_{target}-{self.version}-{self.wheel_tag}.whl"
+        )
+
+    def _validate_required_dist_packages(
+        self,
+        *,
+        artifacts: ArtifactCatalog,
+        kpack_split: bool,
+        linux_targets: list[str] | None,
+        windows_targets: list[str] | None,
+        platform_name: str,
+    ) -> None:
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import validate_required_dist_packages
+
+        validate_required_dist_packages(
+            dest_dir=self.temp_dir / "packages",
+            version=self.version,
+            artifacts=artifacts,
+            kpack_split=kpack_split,
+            linux_targets=linux_targets,
+            windows_targets=windows_targets,
+            platform_name=platform_name,
+        )
+
+    def test_required_kpack_split_dist_packages_pass(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_required_kpack_split_runtime_files("gfx1100")
+
+        self._validate_required_dist_packages(
+            artifacts=artifacts,
+            kpack_split=True,
+            linux_targets=["gfx1100"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+    def test_required_dist_packages_fail_when_rocm_sdist_is_missing(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_dist_file(f"rocm_sdk_core-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(f"rocm_sdk_libraries-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(
+            f"rocm_sdk_device_gfx1100-{self.version}-{self.wheel_tag}.whl"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, f"rocm-{self.version}.tar.gz"):
+            self._validate_required_dist_packages(
+                artifacts=artifacts,
+                kpack_split=True,
+                linux_targets=["gfx1100"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_required_dist_packages_fail_when_device_wheel_is_missing(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_dist_file(f"rocm-{self.version}.tar.gz")
+        self._write_dist_file(f"rocm_sdk_core-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(f"rocm_sdk_libraries-{self.version}-{self.wheel_tag}.whl")
+
+        with self.assertRaisesRegex(RuntimeError, "rocm_sdk_device_gfx1100"):
+            self._validate_required_dist_packages(
+                artifacts=artifacts,
+                kpack_split=True,
+                linux_targets=["gfx1100"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_required_dist_packages_require_devel_when_dev_artifacts_exist(self):
+        artifacts = self._make_artifact_catalog(
+            [
+                ("blas", "lib", "gfx1100"),
+                ("core-hip", "dev", "generic"),
+            ]
+        )
+        self._write_required_kpack_split_runtime_files("gfx1100")
+
+        with self.assertRaisesRegex(RuntimeError, "rocm_sdk_devel"):
+            self._validate_required_dist_packages(
+                artifacts=artifacts,
+                kpack_split=True,
+                linux_targets=["gfx1100"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_required_dist_packages_skip_devel_without_dev_artifacts(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_required_kpack_split_runtime_files("gfx1100")
+
+        self._validate_required_dist_packages(
+            artifacts=artifacts,
+            kpack_split=True,
+            linux_targets=["gfx1100"],
+            windows_targets=None,
+            platform_name="linux",
+        )
 
 
 # ---------------------------------------------------------------------------

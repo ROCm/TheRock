@@ -13,6 +13,7 @@ Pointer file schema (the only one we handle):
     - md5: <32-char-hex>      # may end with `.dir` for directory hashes
       size: <bytes>
       hash: md5
+      remote: <name>         # optional: per-output remote override (see below)
       path: <relpath-from-pointer-file-dir>
 
 Remote config (.dvc/config, INI):
@@ -21,6 +22,16 @@ Remote config (.dvc/config, INI):
     ['remote "storage"']
         url = s3://<bucket>/<prefix>
         allow_anonymous_login = true
+    ['remote "golden-data"']
+        url = s3://<bucket>/<other-prefix>
+        allow_anonymous_login = true
+
+An `outs:` entry may carry an optional `remote: <name>` key that routes that
+specific output to a non-default remote (dvc's per-output remote routing). When
+present, `<name>` must match a `['remote "<name>"']` section; when absent the
+[core] default remote is used. Remotes are resolved per output, so a single
+pointer file (and a single pull) may pull blobs from several buckets/prefixes,
+each with its own `allow_anonymous_login` setting.
 
 S3 key scheme (dvc 3.x "new" layout, used by therock-dvc):
     `<prefix>/files/md5/<md5[:2]>/<md5[2:]>` for both files and `.dir` manifests.
@@ -78,11 +89,16 @@ class PullResult:
 
 @dataclass(frozen=True)
 class _Out:
-    """One entry from a .dvc pointer file's `outs:` list."""
+    """One entry from a .dvc pointer file's `outs:` list.
+
+    `remote` is the optional per-output remote name (dvc's per-output routing);
+    None means "use the [core] default remote".
+    """
 
     md5: str
     size: int
     path: str
+    remote: str | None = None
 
     @property
     def is_dir(self) -> bool:
@@ -95,6 +111,7 @@ class _Out:
 
 @dataclass(frozen=True)
 class _Remote:
+    name: str
     bucket: str
     prefix: str
     anonymous: bool
@@ -158,7 +175,8 @@ def _to_out(d: dict[str, str], path: Path) -> _Out:
     bare = md5[:-4] if md5.endswith(".dir") else md5
     if len(bare) != 32 or not all(c in "0123456789abcdef" for c in bare):
         raise FetchError(f"{path}: invalid md5 {md5!r}")
-    return _Out(md5=md5, size=size, path=out_path)
+    remote = d.get("remote") or None
+    return _Out(md5=md5, size=size, path=out_path, remote=remote)
 
 
 # --------------------------------------------------------------------------
@@ -166,39 +184,82 @@ def _to_out(d: dict[str, str], path: Path) -> _Out:
 # --------------------------------------------------------------------------
 
 
-def _parse_dvc_config(path: Path) -> _Remote:
-    """Extract the configured remote's URL and anonymous flag from .dvc/config.
+@dataclass(frozen=True)
+class _RemoteConfig:
+    """All remotes declared in .dvc/config, plus the [core] default name."""
 
-    DVC's .dvc/config uses INI section headers like ['remote "storage"'] -
-    the single quotes are literally part of the section name in the file, and
-    Python's configparser preserves them. We canonicalize by stripping the
-    surrounding single quotes before matching `remote "<name>"`.
+    default: str
+    remotes: dict[str, _Remote]
+
+    def resolve(self, name: str | None, pointer: Path) -> _Remote:
+        """Return the _Remote for a per-output name (None -> default remote)."""
+        key = name or self.default
+        remote = self.remotes.get(key)
+        if remote is None:
+            raise FetchError(
+                f"{pointer}: references remote {key!r} which is not defined in "
+                f".dvc/config (known: {sorted(self.remotes)})"
+            )
+        return remote
+
+
+def _canonical_remote_name(section: str) -> str | None:
+    """Return the remote name if `section` is a `remote "<name>"` header, else None.
+
+    DVC's .dvc/config uses INI section headers like ['remote "storage"'] - the
+    single quotes are literally part of the section name in the file, and
+    Python's configparser preserves them. We strip the surrounding single quotes
+    before matching, then extract the quoted name.
+    """
+    s = section.strip("'")
+    if not (s.startswith('remote "') and s.endswith('"')):
+        return None
+    return s[len('remote "') : -1]
+
+
+def _parse_dvc_remotes(path: Path) -> _RemoteConfig:
+    """Parse every remote in .dvc/config and the [core] default remote name.
+
+    Every declared remote is parsed eagerly (URL validated, anonymous flag read)
+    so that a per-output `remote:` key can be resolved to any of them, and so a
+    malformed remote surfaces up front rather than mid-download.
     """
     cp = configparser.ConfigParser()
     cp.read(path)
     if "core" not in cp:
         raise FetchError(f"{path}: missing [core] section")
-    remote_name = cp["core"].get("remote")
-    if not remote_name:
+    default_name = cp["core"].get("remote")
+    if not default_name:
         raise FetchError(f"{path}: [core] missing 'remote' key")
-    target = f'remote "{remote_name}"'
-    section_name: str | None = None
-    for s in cp.sections():
-        if s == target or s.strip("'") == target:
-            section_name = s
-            break
-    if section_name is None:
-        raise FetchError(f"{path}: missing [{target}] section")
-    url = cp[section_name].get("url")
-    if not url:
-        raise FetchError(f"{path}: [{target}] missing 'url'")
-    parsed = urlparse(url)
-    if parsed.scheme != "s3":
-        raise FetchError(f"{path}: only s3:// remotes are supported, got {url!r}")
-    bucket = parsed.netloc
-    prefix = parsed.path.lstrip("/")
-    anonymous = cp[section_name].getboolean("allow_anonymous_login", fallback=False)
-    return _Remote(bucket=bucket, prefix=prefix, anonymous=anonymous)
+
+    remotes: dict[str, _Remote] = {}
+    for section in cp.sections():
+        name = _canonical_remote_name(section)
+        if name is None:
+            continue
+        url = cp[section].get("url")
+        if not url:
+            raise FetchError(f"{path}: [remote \"{name}\"] missing 'url'")
+        parsed = urlparse(url)
+        if parsed.scheme != "s3":
+            raise FetchError(f"{path}: only s3:// remotes are supported, got {url!r}")
+        anonymous = cp[section].getboolean("allow_anonymous_login", fallback=False)
+        remotes[name] = _Remote(
+            name=name,
+            bucket=parsed.netloc,
+            prefix=parsed.path.lstrip("/"),
+            anonymous=anonymous,
+        )
+
+    if default_name not in remotes:
+        raise FetchError(f'{path}: missing [remote "{default_name}"] section')
+    return _RemoteConfig(default=default_name, remotes=remotes)
+
+
+def _parse_dvc_config(path: Path) -> _Remote:
+    """Return the [core] default remote. Thin wrapper over _parse_dvc_remotes."""
+    cfg = _parse_dvc_remotes(path)
+    return cfg.remotes[cfg.default]
 
 
 # --------------------------------------------------------------------------
@@ -460,16 +521,23 @@ def _make_s3_client(remote: _Remote, *, max_pool_connections: int):
 
 
 def _process_pointer(
-    s3,
-    remote: _Remote,
+    cfg: _RemoteConfig,
+    client_for: Callable[[_Remote], object],
     pointer: Path,
     cache_dir: Path | None,
     log: Callable[[str], None],
 ) -> PullResult:
-    """Materialize every entry in one .dvc pointer file."""
+    """Materialize every entry in one .dvc pointer file.
+
+    Each entry's remote is resolved independently from its `remote:` key (falling
+    back to the [core] default), so one pointer file may pull from several
+    remotes. Children of a `.dir` manifest inherit the parent output's remote.
+    """
     outs = _parse_dvc_pointer(pointer)
     result = PullResult()
     for out in outs:
+        remote = cfg.resolve(out.remote, pointer)
+        s3 = client_for(remote)
         dest = pointer.parent / out.path
         if out.is_dir:
             result += _materialize_dir(s3, remote, out, dest, cache_dir, log)
@@ -501,26 +569,36 @@ def pull(
     config_file = project_dir / ".dvc" / "config"
     if not config_file.exists():
         raise FetchError(f"no .dvc/config in {project_dir}")
-    remote = _parse_dvc_config(config_file)
+    cfg = _parse_dvc_remotes(config_file)
 
     pointers = _walk_dvc_pointers(project_dir)
     if not pointers:
         log(f"no .dvc pointer files found under {project_dir}")
         return PullResult()
 
+    # One S3 client per configured remote, built up front (before any worker
+    # starts) so the dict is read-only during the parallel phase - no locking
+    # needed. Clients are shared across workers (boto3 clients are thread-safe);
+    # they can't be shared across remotes because the anonymous flag differs.
     pool_size = max(jobs * _INNER_S3TRANSFER_CONCURRENCY, _MIN_POOL_CONNECTIONS)
-    s3 = _make_s3_client(remote, max_pool_connections=pool_size)
+    clients = {
+        name: _make_s3_client(remote, max_pool_connections=pool_size)
+        for name, remote in cfg.remotes.items()
+    }
 
-    log(
-        f"pull: {len(pointers)} pointer file(s) from "
-        f"s3://{remote.bucket}/{remote.prefix}"
+    def client_for(remote: _Remote) -> object:
+        return clients[remote.name]
+
+    remotes_desc = ", ".join(
+        f"s3://{r.bucket}/{r.prefix}" for r in cfg.remotes.values()
     )
+    log(f"pull: {len(pointers)} pointer file(s) from {remotes_desc}")
 
     result = PullResult()
     errors: list[tuple[Path, Exception]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
         futures = {
-            ex.submit(_process_pointer, s3, remote, p, cache_dir, log): p
+            ex.submit(_process_pointer, cfg, client_for, p, cache_dir, log): p
             for p in pointers
         }
         for fut in concurrent.futures.as_completed(futures):

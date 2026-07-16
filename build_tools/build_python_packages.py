@@ -78,6 +78,114 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
             link.symlink_to(target.name)
 
 
+def _platform_targets(
+    *,
+    linux_targets: list[str] | None,
+    windows_targets: list[str] | None,
+    platform_name: str,
+) -> list[str] | None:
+    if platform_name.startswith("linux"):
+        return linux_targets
+    if platform_name == "win32":
+        return windows_targets
+    return None
+
+
+def validate_kpack_split_target_completeness(
+    *,
+    kpack_split: bool,
+    artifact_dir: Path,
+    artifacts: ArtifactCatalog,
+    linux_targets: list[str] | None,
+    windows_targets: list[str] | None,
+    platform_name: str = sys.platform,
+) -> None:
+    """Validate that kpack-split artifacts cover this platform's targets."""
+    if not kpack_split:
+        return
+
+    expected_targets = _platform_targets(
+        linux_targets=linux_targets,
+        windows_targets=windows_targets,
+        platform_name=platform_name,
+    )
+    if expected_targets is None:
+        return
+
+    expected_target_set = set(expected_targets)
+    discovered_target_set = artifacts.all_target_families
+
+    expected = ", ".join(sorted(expected_target_set)) or "(none)"
+    discovered = ", ".join(sorted(discovered_target_set)) or "(none)"
+    print(f"::: KPACK_SPLIT_ARTIFACTS expected device targets: {expected}")
+    print(f"::: KPACK_SPLIT_ARTIFACTS discovered artifact targets: {discovered}")
+
+    missing_targets = sorted(expected_target_set - discovered_target_set)
+    if not missing_targets:
+        return
+
+    missing = ", ".join(missing_targets)
+    raise RuntimeError(
+        "KPACK_SPLIT_ARTIFACTS target completeness check failed: "
+        f"missing fetched artifact targets: {missing}. "
+        f"Expected targets: {expected}. "
+        f"Discovered artifact targets in {artifact_dir}: {discovered}. "
+        "The fetched/extracted artifact catalog is incomplete; refusing to "
+        "build a partial device wheel set."
+    )
+
+
+def _has_devel_artifacts(artifacts: ArtifactCatalog) -> bool:
+    return any(an.component == "dev" for an in artifacts.artifact_names)
+
+
+def validate_required_dist_packages(
+    *,
+    dest_dir: Path,
+    version: str,
+    artifacts: ArtifactCatalog,
+    kpack_split: bool,
+    linux_targets: list[str] | None,
+    windows_targets: list[str] | None,
+    platform_name: str = sys.platform,
+) -> None:
+    """Validate required kpack-split files in the final dist directory."""
+    if not kpack_split:
+        return
+
+    required_patterns = [
+        f"rocm-{version}.tar.gz",
+        f"rocm_sdk_core-{version}-*.whl",
+        f"rocm_sdk_libraries-{version}-*.whl",
+    ]
+
+    expected_targets = _platform_targets(
+        linux_targets=linux_targets,
+        windows_targets=windows_targets,
+        platform_name=platform_name,
+    )
+    for target in expected_targets or []:
+        required_patterns.append(f"rocm_sdk_device_{target}-{version}-*.whl")
+
+    if _has_devel_artifacts(artifacts):
+        required_patterns.append(f"rocm_sdk_devel-{version}-*.whl")
+
+    dist_dir = dest_dir / "dist"
+    missing_patterns = [
+        pattern for pattern in required_patterns if not list(dist_dir.glob(pattern))
+    ]
+    if not missing_patterns:
+        return
+
+    present_files = sorted(p.name for p in dist_dir.glob("*") if p.is_file())
+    raise RuntimeError(
+        "Required kpack-split Python packages are missing from "
+        f"{dist_dir}: {', '.join(missing_patterns)}. "
+        f"Present files: {', '.join(present_files) or '(none)'}. "
+        "Refusing to publish an incomplete Python package set."
+    )
+
+
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
@@ -105,11 +213,20 @@ def run(args: argparse.Namespace):
             family_map = amdgpu_family_map()
         windows_targets = expand_families(args.windows_amdgpu_families, family_map)
 
+    artifacts = ArtifactCatalog(args.artifact_dir)
+    validate_kpack_split_target_completeness(
+        kpack_split=kpack_split,
+        artifact_dir=args.artifact_dir,
+        artifacts=artifacts,
+        linux_targets=linux_targets,
+        windows_targets=windows_targets,
+    )
+
     params = Parameters(
         dest_dir=args.dest_dir,
         version=args.version,
         version_suffix=args.version_suffix,
-        artifacts=ArtifactCatalog(args.artifact_dir),
+        artifacts=artifacts,
         kpack_split=kpack_split,
         linux_target_families=linux_targets,
         windows_target_families=windows_targets,
@@ -195,6 +312,16 @@ def run(args: argparse.Namespace):
     else:
         _run_legacy(args, params, core)
 
+    if args.build_packages:
+        validate_required_dist_packages(
+            dest_dir=args.dest_dir,
+            version=args.version,
+            artifacts=artifacts,
+            kpack_split=kpack_split,
+            linux_targets=linux_targets,
+            windows_targets=windows_targets,
+        )
+
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
     )
@@ -257,11 +384,16 @@ def _run_kpack_split(
     devel = PopulatedDistPackage(params, logical_name="devel", target_family=None)
     devel.populate_devel_files(
         addl_artifact_names=[
+            # Header-only libraries not included in runtime packages.
             "prim",
             "rocwmma",
+            "libhipcxx",
+            # Third party dependencies needed by hipDNN consumers.
             "flatbuffers",
             "nlohmann-json",
+            # rocshmem only provides a static library.
             "rocshmem",
+            # rocjitsu emulation suite.
             "rocjitsu",
             "mirage",
         ],
@@ -454,6 +586,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "miopen",
             "miopenprovider",
             "hipblasltprovider",
+            "hipkernelprovider",
             "rand",
             "rccl",
         ]
