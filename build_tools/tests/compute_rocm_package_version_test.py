@@ -305,7 +305,7 @@ class GitShaOverrideTest(unittest.TestCase):
                     "--release-type",
                     "dev",
                     "--override-base-version",
-                    "8.0.0",
+                    "7.99.0",
                     "--override-git-sha",
                     override_sha,
                 ]
@@ -315,12 +315,19 @@ class GitShaOverrideTest(unittest.TestCase):
 
         # Wheel embeds the full override SHA.
         self.assertEqual(
-            captured_outputs["rocm_package_version"], f"8.0.0.dev0+{override_sha}"
+            captured_outputs["rocm_package_version"], f"7.99.0.dev0+{override_sha}"
+        )
+        # DEB uses the dev-date format and does not embed a git SHA at all.
+        self.assertRegex(
+            captured_outputs["rocm_deb_package_version"], r"^7\.99\.0~dev[0-9]{8}$"
+        )
+        self.assertNotIn(
+            override_sha[:8], captured_outputs["rocm_deb_package_version"]
         )
         # RPM embeds the 8-char truncation of the same override SHA.
         self.assertRegex(
             captured_outputs["rocm_rpm_package_version"],
-            rf"^8\.0\.0~[0-9]{{8}}g{override_sha[:8]}$",
+            rf"^7\.99\.0~[0-9]{{8}}g{override_sha[:8]}$",
         )
 
 

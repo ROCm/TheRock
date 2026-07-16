@@ -263,12 +263,12 @@ def main(argv):
     outputs = {}
     for pkg_type in ["wheel", "deb", "rpm"]:
         version = compute_version(
-            pkg_type,
-            args.release_type,
-            args.custom_version_suffix,
-            args.prerelease_version,
-            args.override_base_version,
-            args.override_git_sha,
+            package_type=pkg_type,
+            release_type=args.release_type,
+            custom_version_suffix=args.custom_version_suffix,
+            prerelease_version=args.prerelease_version,
+            override_base_version=args.override_base_version,
+            override_git_sha=args.override_git_sha,
         )
 
         # Set appropriate output variable based on package type
