@@ -416,9 +416,13 @@ def ensure_pr_description(policy: Policy, body: str, errors: List[str]) -> None:
             "• `JIRA ID : TESTAUTO-6039`\n"
             "• `JIRA ID - #330`\n"
             "• `JIRA ID #330`\n"
+            "• `JIRA ID` (on separate line)\n"
+            "  `ROCM-25757`\n"
             "• `ISSUE ID : TESTUTO-3334`\n"
             "• `ISSUE ID #3334`\n"
             "• `ISSUE ID - TESTAUTO-3433`\n"
+            "• `ISSUE ID` (on separate line)\n"
+            "  `AIRUNTIME-2352`\n"
             "• `ISSUE ID : https://github.com/<org_name>/<repo_name>/issues/1234`\n"
             "• `Closes #10`\n"
             "• `Fixes octo-org/octo-repo#100`\n"
@@ -451,6 +455,24 @@ def _matches_forbidden(filename: str, pattern: str) -> bool:
     # Allow '**/<x>' patterns to also match root-level files (e.g. '.env').
     if pattern.startswith("**/") and fnmatch.fnmatch(filename, pattern[3:]):
         return True
+    return False
+
+
+def _is_test_file(filename: str, patterns: Iterable[str]) -> bool:
+    """Return True if `filename` is recognised as a test file.
+
+    Patterns that contain a '/' are treated as FULL-PATH globs (e.g.
+    '**/test/gtest/**' matches any file under a test/gtest/ directory).
+    Patterns without a '/' are matched against the BASENAME only
+    (e.g. 'test_*', '*_test.*').
+    """
+    base = Path(filename).name
+    for pat in patterns:
+        if "/" in pat:
+            if _matches_forbidden(filename, pat):
+                return True
+        elif fnmatch.fnmatch(base, pat):
+            return True
     return False
 
 
@@ -513,7 +535,7 @@ def ensure_unit_tests(
         ext = Path(filename).suffix.lower()
 
         # A test file satisfies the requirement.
-        if any(fnmatch.fnmatch(base, pat) for pat in policy.unit_test_patterns):
+        if _is_test_file(filename, policy.unit_test_patterns):
             has_test = True
             continue
 
@@ -551,7 +573,7 @@ def pr_has_code_files(policy: Policy, pr_files: Iterable[Dict[str, Any]]) -> boo
             continue
         base = Path(filename).name
         ext = Path(filename).suffix.lower()
-        if any(fnmatch.fnmatch(base, pat) for pat in policy.unit_test_patterns):
+        if _is_test_file(filename, policy.unit_test_patterns):
             continue
         if ext in policy.unit_test_code_extensions:
             return True
@@ -1044,7 +1066,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if is_bump_pr(policy, author):
         marker = "<!-- therock-pr-bot-policy-check -->"
         note = (
-            f"> 🤖 **Bump PR detected** (author `@{author}`). All policy checks "
+            f"🤖 **Bump PR detected** (author `@{author}`). All policy checks "
             "are auto-approved for automated dependency bumps."
         )
         upsert_comment(
@@ -1053,9 +1075,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             pr_number,
             token,  # type: ignore[arg-type]
             marker,
-            build_policy_table_comment(
-                build_bump_pr_results(policy), marker, ready=True, note=note
-            ),
+            note,
         )
         remove_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
         update_comment_if_exists(

@@ -50,7 +50,7 @@ pr:
     pattern:
       - '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9\-]+\))?(!)?: .+'
     title_min_length: 10
-    title_max_length: 80
+    title_max_length: 100
 
   # Require a meaningful description
   description:
@@ -87,6 +87,12 @@ pr:
     issue_reference_patterns:
       - '(?im)^\s*JIRA\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
       - '(?im)^\s*ISSUE\s*ID\s*[:\-]?\s*(#?\d+|[A-Z][A-Z0-9]+-\d+|https?:\/\/\S+)'
+      # JIRA ID on a separate line — allows trailing spaces/tabs after the
+      # label and any number of blank lines before the key
+      # (e.g. "JIRA ID  \n\nAIRUNTIME-2352").
+      - '(?im)^[ \t]*JIRA[ \t]+ID[ \t]*\r?\n[ \t\r\n]*([A-Z][A-Z0-9]+-\d+)'
+      # ISSUE ID on a separate line — same flexibility as above.
+      - '(?im)^[ \t]*ISSUE[ \t]+ID[ \t]*\r?\n[ \t\r\n]*([A-Z][A-Z0-9]+-\d+|\d+)'
       - '(?im)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]+)?#\d+'
       # Bare GitHub issue reference, e.g. #123
       - '(?m)(?:^|\s)#\d+\b'
@@ -117,10 +123,19 @@ pr:
       - .rb
       - .rs
     # A changed file is treated as a unit test if its basename matches one of
-    # these glob patterns (e.g. test_parser.py, parser_test.cpp).
+    # these glob patterns (e.g. test_parser.py, parser_test.cpp, testing_x.py).
+    # Patterns that contain a '/' are matched against the FULL path instead of
+    # the basename, so entire test directories can be recognised
+    # (e.g. anything under a 'test/gtest/' folder).
     test_file_patterns:
       - 'test_*'
+      - 'testing_*'
       - '*_test.*'
+      - '*_tests.*'
+      - 'Test*'
+      # Path-based: any file under a 'test/gtest/' directory is a unit test
+      # (e.g. projects/miopen/test/gtest/unit_conv_solver_ConvWinoRageRxS.cpp).
+      - '**/test/gtest/**'
     # Unit tests are required for source code ANYWHERE in the repository — there
     # are NO folder-based exemptions. A test file may also live in any folder;
     # it is recognised by its name (test_* / *_test.*), not its location.

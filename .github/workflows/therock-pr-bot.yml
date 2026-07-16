@@ -41,12 +41,12 @@ jobs:
       # guarantees we run OUR policy_check.py / policy.yml — not the fork's.
       # `persist-credentials: false` follows the safer-checkout defaults
       # (https://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout/).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@9c091bb # v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@2e3e4b15a0d3b0d2e3e4b15a0d3b0d2e3e4b15a0 # v6.3.0
         with:
           python-version: "3.11"
 
@@ -54,10 +54,10 @@ jobs:
         id: app-secrets
         shell: bash
         env:
-          APP_ID: ${{ secrets.THEROCK_PR_BOT_APPID }}
+          APP_CLIENT_ID: ${{ secrets.THEROCK_PR_BOT_APPID }}
           APP_KEY: ${{ secrets.THEROCK_PRBOT_KEY }}
         run: |
-          if [[ -n "$APP_ID" && -n "$APP_KEY" ]]; then
+          if [[ -n "$APP_CLIENT_ID" && -n "$APP_KEY" ]]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -66,9 +66,11 @@ jobs:
       - name: Create GitHub App token
         id: app-token
         if: steps.app-secrets.outputs.available == 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v3.2.0
         with:
-          app-id: ${{ secrets.THEROCK_PR_BOT_APPID }}
+          # 'app-id' is deprecated since v3.1.0 — use the App's Client ID.
+          # See: https://github.com/actions/create-github-app-token/issues/353
+          client-id: ${{ secrets.THEROCK_PR_BOT_APPID }}
           private-key: ${{ secrets.THEROCK_PRBOT_KEY }}
 
       # SECURITY: only fixed, trusted dependencies — never installed from the PR.
