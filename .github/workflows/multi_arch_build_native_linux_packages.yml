@@ -68,6 +68,7 @@ jobs:
       options: -v /runner/config:/home/awsconfig/
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
@@ -149,6 +150,11 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}"
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   notify_quartz_completed:
     if: ${{ always() && github.repository == 'ROCm/rockrel' }}

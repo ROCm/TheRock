@@ -114,6 +114,7 @@ jobs:
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
       kpack_split: ${{ steps.upload.outputs.kpack_split }}
+      summary: ${{ steps.summary.outputs.summary }}
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
@@ -186,6 +187,11 @@ jobs:
             --artifact-group="${{ inputs.artifact_group }}" \
             --run-id="${{ github.run_id }}" \
             ${{ inputs.multiarch_index && '--multiarch' || '' }}
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   notify_quartz_completed:
     if: ${{ always() && github.repository == 'ROCm/rockrel' }}

@@ -85,6 +85,8 @@ jobs:
     name: ${{ inputs.stage_display_name }}
     runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     permissions:
       id-token: write
     container:
@@ -230,6 +232,11 @@ jobs:
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   notify_quartz_completed:
     if: ${{ always() && github.repository == 'ROCm/rockrel' }}

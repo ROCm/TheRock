@@ -64,6 +64,8 @@ jobs:
     runs-on:
       group: ROCR-Runtime-libhsakmt-WSL
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     permissions:
       contents: read
       id-token: write
@@ -315,6 +317,11 @@ jobs:
             --stage="${STAGE_NAME}" \
             --build-dir="${THEROCK_HOST_BUILD_DIR}" \
             --amdgpu-family=""
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   notify_quartz_completed:
     if: ${{ always() && github.repository == 'ROCm/rockrel' }}
