@@ -42,6 +42,7 @@ TEST_GFX_TARGET_ALT = "gfx942"
 TEST_PKG_TYPE_DEB = "deb"
 TEST_PKG_TYPE_RPM = "rpm"
 TEST_BUILD_ARCH = "x86_64"
+EMPTY_GFX_ARCH = ""
 
 PKG_FFT = "amdrocm-fft"
 PKG_CORE_SDK = "amdrocm-core-sdk"
@@ -69,7 +70,12 @@ def _setup_import_path() -> None:
 
 
 def _load_module(name: str, path: Path) -> types.ModuleType:
-    """Load a module from an explicit file path without executing its CLI entry."""
+    """Load a packaging script by path for unit tests, not CLI execution.
+
+    Uses ``importlib`` so ``build_package`` / ``deb_package`` / ``rpm_package``
+    resolve from ``LINUX_DIR`` regardless of cwd, without invoking each script's
+    ``main()`` or ``if __name__ == \"__main__\"`` entry point.
+    """
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load module {name!r} from {path}")
@@ -176,7 +182,14 @@ def _artifact_suffix_for_staging(
     enable_kpack: bool,
     artifacts_dir: Path,
 ) -> str | None:
-    """Compute artifact directory suffix using packaging naming rules."""
+    """Compute artifact directory suffix using packaging naming rules.
+
+    Duplicates suffix routing from ``filter_components_fromartifactory`` so staged
+    trees use ``{Artifact}_{Component}_{suffix}`` paths production expects. If that
+    function's kpack/gfxarch rules change, update this helper in the same change;
+    otherwise tests may stage the wrong layout and still pass (false positive).
+    ``ArtifactStagingTest`` catches gross mismatches but not every routing edge case.
+    """
     if enable_kpack:
         if gfx_arch == GFX_META:
             return None
@@ -467,10 +480,10 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
         _stage_package_artifacts(
             pkg_name=PKG_DEBUGGER,
             artifacts_dir=cfg.artifacts_dir,
-            gfx_arch="",
+            gfx_arch=EMPTY_GFX_ARCH,
             enable_kpack=True,
         )
-        versioned_cfg = replace(cfg, gfx_arch="")
+        versioned_cfg = replace(cfg, gfx_arch=EMPTY_GFX_ARCH)
 
         deb_package.create_versioned_deb_package(
             pkg_name=PKG_DEVELOPER_TOOLS, config=versioned_cfg
@@ -633,6 +646,8 @@ class BuildPackageVariantsRoutingTest(BuildPackageTestCase):
 # create_package_config — CLI → PackageConfig (real function, no hand-built config)
 # ---------------------------------------------------------------------------
 class CreatePackageConfigTest(BuildPackageTestCase):
+    """``create_package_config`` maps CLI args to ``PackageConfig``."""
+
     def test_explicit_targets_in_kpack_mode(self) -> None:
         cfg = build_package.create_package_config(
             _args(
@@ -660,6 +675,8 @@ class CreatePackageConfigTest(BuildPackageTestCase):
 # load_kpack_from_manifest
 # ---------------------------------------------------------------------------
 class LoadKpackFromManifestTest(BuildPackageTestCase):
+    """``load_kpack_from_manifest`` reads ``therock_manifest.json`` kpack flags."""
+
     def test_true_when_kpack_flag_set(self) -> None:
         _write_kpack_manifest(self.artifacts_dir())
         self.assertTrue(
@@ -676,6 +693,8 @@ class LoadKpackFromManifestTest(BuildPackageTestCase):
 # parse_input_package_list — real package.json names
 # ---------------------------------------------------------------------------
 class ParseInputPackageListTest(BuildPackageTestCase):
+    """``parse_input_package_list`` filters names against ``package.json``."""
+
     def test_explicit_pkg_names_filter_package_json(self) -> None:
         pkg_list, skipped = build_package.parse_input_package_list(
             pkg_name=[PKG_CORE_SDK, PKG_CK, "no-such-package"],
