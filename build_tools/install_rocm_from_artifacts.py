@@ -412,7 +412,6 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("amd-dbgapi")
             extra_artifacts.append("rocgdb")
             extra_artifacts.append("rocr-debug-agent")
-            extra_artifacts.append("rocr-debug-agent-tests")
             # Contains the rocgdb executable.
             argv.append("rocgdb_run")
 

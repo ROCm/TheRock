@@ -3033,7 +3033,7 @@
     ],
     "Maintainer": "ROCm Debugger Support <rocm-gdb.support@amd.com>",
     "Description_Short": "ROCm debugger test files",
-    "Description_Long": "Test files for AMD ROCm debugger including rocr-debug-agent-tests and rocgdb-test",
+    "Description_Long": "Test files for AMD ROCm debugger including rocr-debug-agent and rocgdb-test",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -3042,13 +3042,12 @@
     "Homepage": "https://github.com/ROCm/rocGdb",
     "Artifactory": [
       {
-        "Artifact": "rocr-debug-agent-tests",
+        "Artifact": "rocr-debug-agent",
         "Artifact_Subdir": [
           {
-            "Name": "rocr-debug-agent-tests",
+            "Name": "rocr-debug-agent",
             "Components": [
-              "test",
-              "doc"
+              "test"
             ]
           }
         ]
