@@ -141,6 +141,8 @@ jobs:
     name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
 
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
@@ -302,6 +304,11 @@ jobs:
           pytest jax/tests/core_test.py -q --log-cli-level=INFO
           pytest jax/tests/util_test.py -q --log-cli-level=INFO
           pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   notify_quartz_completed:
     if: ${{ always() && github.repository == 'ROCm/rockrel' }}

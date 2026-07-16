@@ -172,6 +172,7 @@ jobs:
       torchaudio_version: ${{ steps.pytorch-versions.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
       package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
@@ -438,6 +439,11 @@ jobs:
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   configure_pytorch_tests:
     name: Configure PyTorch Tests
     runs-on: ubuntu-24.04
@@ -446,6 +452,7 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -470,6 +477,11 @@ jobs:
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
             --platform windows
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
