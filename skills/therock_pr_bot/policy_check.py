@@ -339,7 +339,6 @@ def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
             f"{fmt}"
         )
 
-
     if policy.forbidden_title_patterns:
         matched = [
             p.pattern for p in policy.forbidden_title_patterns if p.search(title)
