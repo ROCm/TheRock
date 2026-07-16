@@ -678,8 +678,11 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
-type = "target-neutral"
+# hip-kernel-provider is a device lib: the rocKE engine ships per-arch AOT content
+# (kpack + manifest) under engines/arch_content/rocke/<arch>/, so split it per-arch.
+type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
+split_databases = ["hipkernelprovider"]
 
 # --- Media Integration ---
 

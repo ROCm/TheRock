@@ -635,6 +635,12 @@ class DevicePackagingTest(TmpDirTestCase):
         an_rccl = ArtifactName("rccl", "lib", "gfx942")
         self.assertTrue(device_artifact_filter("gfx942", an_rccl))
 
+        # hipkernelprovider is target-specific + kpack-split (its rocKE engine ships
+        # per-arch AOT bundles), so its per-ISA lib artifact must land in the device
+        # wheel.
+        an_hkp = ArtifactName("hipkernelprovider", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_hkp))
+
         # Should NOT match generic.
         an_generic = ArtifactName("blas", "lib", "generic")
         self.assertFalse(device_artifact_filter("gfx942", an_generic))
