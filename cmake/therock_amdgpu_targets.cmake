@@ -209,8 +209,6 @@ therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu
 therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    composable_kernel # https://github.com/ROCm/TheRock/issues/4836
-    hipTensor # https://github.com/ROCm/TheRock/issues/2074
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892

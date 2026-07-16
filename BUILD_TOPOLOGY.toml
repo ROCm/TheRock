@@ -65,6 +65,7 @@
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
+#   disable_platforms_if_flags_not_set = { windows = "FOO" }  # Optional: conditional platform disables
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
@@ -330,7 +331,7 @@ source_sets = ["amd-mesa", "rocm-systems"]
 [artifact_groups.rocjitsu]
 description = "ROCm emulation, virtualization, and instrumentation tools"
 type = "generic"
-artifact_group_deps = []
+artifact_group_deps = ["third-party-sysdeps"]
 source_sets = ["rocm-systems"]
 disable_platforms = ["windows"]
 
@@ -512,7 +513,8 @@ type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
-disable_platforms = ["windows"]
+disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+test_artifacts = ["core-hiptests", "rocrtst"]  # When building ROCR, also build hip-tests and rocrtst
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -542,6 +544,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
+test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
 
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
@@ -585,7 +588,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
-split_databases = ["rocblas", "hipblaslt", "hipsparselt"]
+split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
@@ -606,6 +609,7 @@ artifact_deps = ["core-runtime", "core-hip", "rand"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim"]
+split_databases = ["hipsparselt"]
 
 [artifacts.solver]
 artifact_group = "math-libs"
@@ -631,7 +635,6 @@ artifact_deps = ["core-runtime", "core-hip"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
-disable_platforms = ["windows"]
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
@@ -678,8 +681,11 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 
 [artifacts.hipkernelprovider]
 artifact_group = "ml-libs"
-type = "target-neutral"
+# hip-kernel-provider is a device lib: the rocKE engine ships per-arch AOT content
+# (kpack + manifest) under engines/arch_content/rocke/<arch>/, so split it per-arch.
+type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
+split_databases = ["hipkernelprovider"]
 
 # --- Media Integration ---
 

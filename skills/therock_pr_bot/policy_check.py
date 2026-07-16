@@ -358,11 +358,7 @@ def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
     if policy.title_patterns and not any(
         p.search(title) for p in policy.title_patterns
     ):
-        errors.append(
-            "**Error:** Title does not follow Conventional Commits style.\n"
-            "**Expected:** start with a valid type (feat, fix, docs, …).\n"
-            f"{fmt}"
-        )
+        errors.append("**Error:** Title does not follow policy patterns.\n" f"{fmt}")
 
     if policy.forbidden_title_patterns:
         matched = [
