@@ -57,6 +57,19 @@ function(therock_sanitizer_configure
     # https://github.com/ROCm/TheRock/issues/1782
     string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=${_sanitizer_string}>\n")
     string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    # Fix FindThreads detection under ASAN. The threads probe is a try_compile
+    # that inherits CMAKE_C/CXX_FLAGS_INIT (-fsanitize) but NOT the directory
+    # add_link_options() above, so it never sees -shared-libsan and links clang's
+    # default STATIC sanitizer runtime, which auto-links -lpthread. The probe then
+    # passes trivially, CMAKE_HAVE_LIBC_PTHREAD=1, and Threads::Threads is empty.
+    # Feed the same shared-runtime flag to the probe via CMAKE_REQUIRED_LINK_OPTIONS
+    # so it matches real link behavior and detects the real pthread dependency.
+    # try_compile does NOT evaluate generator expressions, so guard on compiler path
+    # at configure time (keeps -shared-libsan off gcc/gfortran, cf. issue #1782).
+    # https://github.com/ROCm/rocm-libraries/issues/8889
+    string(APPEND _stanza "if(CMAKE_CXX_COMPILER MATCHES \"clang\")\n")
+    string(APPEND _stanza "  list(APPEND CMAKE_REQUIRED_LINK_OPTIONS -shared-libsan)\n")
+    string(APPEND _stanza "endif()\n")
 
     # Note: autotools-based subprojects (e.g. rocgdb) ignore add_link_options() because
     # they pass CMAKE_*_LINKER_FLAGS directly to their configure script. Those subprojects
