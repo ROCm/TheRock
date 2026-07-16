@@ -487,6 +487,11 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
+        # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
+        # the specialized openmpi image.
+        # TODO: pin to a published @sha256 digest once the image exists.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi:latest",
     },
     # hipDNN tests
     "hipdnn": {
