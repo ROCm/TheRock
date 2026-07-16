@@ -100,7 +100,6 @@ class CheckResult:
 @dataclass(frozen=True)
 class Policy:
     branch_patterns: List[re.Pattern[str]]
-    title_patterns: List[re.Pattern[str]]
     title_min_length: int
     title_max_length: int
     description_min_length: int
@@ -140,8 +139,6 @@ def load_policy(policy_path: Path) -> Policy:
 
     # PR title rules now live under the nested `title:` mapping.
     title_cfg = pr.get("title", {}) or {}
-    title_patterns_raw = title_cfg.get("pattern", []) or []
-    title_patterns = [re.compile(str(p)) for p in title_patterns_raw]
     title_min_length = int(title_cfg.get("title_min_length", 0) or 0)
     title_max_length = int(title_cfg.get("title_max_length", 0) or 0)
 
@@ -194,7 +191,6 @@ def load_policy(policy_path: Path) -> Policy:
 
     return Policy(
         branch_patterns=branch_patterns,
-        title_patterns=title_patterns,
         title_min_length=title_min_length,
         title_max_length=title_max_length,
         description_min_length=description_min_length,
@@ -333,10 +329,10 @@ def _short(value: str, limit: int = 80) -> str:
 
 
 def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
-    """Validate the PR title (length, Conventional Commits style, forbidden words).
+    """Validate the PR title (length and forbidden words).
 
-    Appends a structured Error/Expected/Desired-format message to `errors` for
-    each rule that fails.
+    Appends a structured Error/Expected message to `errors` for each rule that
+    fails.
     """
     title = (title or "").strip()
     fmt = "**Desired format:** `type(optional-scope): short description`"
@@ -355,10 +351,6 @@ def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
             f"{fmt}"
         )
 
-    if policy.title_patterns and not any(
-        p.search(title) for p in policy.title_patterns
-    ):
-        errors.append("**Error:** Title does not follow policy patterns.\n" f"{fmt}")
 
     if policy.forbidden_title_patterns:
         matched = [

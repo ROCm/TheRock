@@ -60,12 +60,6 @@ def make_policy(**overrides: Any) -> pc.Policy:
             re.compile(r"^dependabot\/.+"),
             re.compile(r"^revert-[0-9]+-.+"),
         ],
-        title_patterns=[
-            re.compile(
-                r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
-                r"(\([a-z0-9\-]+\))?(!)?: .+"
-            )
-        ],
         title_min_length=10,
         title_max_length=80,
         description_min_length=30,
@@ -183,11 +177,6 @@ class TitleTests(unittest.TestCase):
     def test_too_long(self) -> None:
         long_title = "feat: " + ("x" * 90)
         self.assertTrue(any("too long" in x for x in self._errs(long_title)))
-
-    def test_bad_type_fails_pattern(self) -> None:
-        self.assertTrue(
-            any("Conventional Commits" in x for x in self._errs("feature: do stuff"))
-        )
 
     def test_forbidden_word(self) -> None:
         self.assertTrue(
@@ -593,7 +582,6 @@ class LoadPolicyTests(unittest.TestCase):
             self.skipTest("policy.yml not present next to tests")
         policy = pc.load_policy(policy_path)
         self.assertGreater(len(policy.branch_patterns), 0)
-        self.assertGreater(len(policy.title_patterns), 0)
         self.assertIn("pre-commit", policy.required_checks)
         self.assertGreaterEqual(policy.title_max_length, policy.title_min_length)
 
