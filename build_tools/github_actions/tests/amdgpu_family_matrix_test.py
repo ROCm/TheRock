@@ -129,6 +129,21 @@ class TestExternalConfig(unittest.TestCase):
         # Should contain entries from local presubmit matrix
         self.assertIn("gfx94x", result)
 
+    def test_local_fallback_has_gfx125x_presubmit_build_only(self):
+        """The local fallback keeps gfx125x as a presubmit build-only target."""
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+        result = get_all_families_for_trigger_types(["presubmit"])
+        self.assertEqual(
+            result["gfx125x"]["linux"],
+            {
+                "test-runs-on": "",
+                "family": "gfx125X-dcgpu",
+                "fetch-gfx-targets": [],
+                "build_variants": ["release"],
+            },
+        )
+
     def test_get_build_runner_labels_uses_external_config_when_available(self):
         """get_build_runner_labels uses external config when available."""
         fake_config = {

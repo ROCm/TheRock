@@ -4,9 +4,8 @@
 """
 AMD GPU Family Matrix and runner selection utilities for GitHub workflows.
 
-NOTE: The primary source of truth for GPU families and runner labels is
-ROCm/therock-ci-config (runner-config.json). The definitions in this file
-serve as a fallback when external config is not available.
+NOTE: GitHub CI loads ROCm/therock-ci-config via CI_CONFIG_PATH. The
+definitions in this file are the local fallback when that config is unavailable.
 
 For presubmit, postsubmit and nightly family selection:
 
