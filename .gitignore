@@ -15,6 +15,7 @@ sources/
 __pycache__
 /.ccache
 .cline_storage/
+/patchelf*
 
 # Patch control files.
 .*.smrev
