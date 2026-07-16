@@ -13,6 +13,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
     _clone_url,
     close_stale_prs,
+    create_therock_bump,
     generate_pr_body,
     get_submodule_sha,
     handle_push,
@@ -303,6 +304,56 @@ class HandlePushTest(unittest.TestCase):
         # submodule-only entries have no upstream ref files, so the handler must
         # bail out before cloning the upstream repo.
         mock_tmp.assert_not_called()
+
+
+class CreateTheRockBumpTest(unittest.TestCase):
+    def test_skips_when_pr_already_open(self):
+        """create_therock_bump must bail out without cloning when an open PR
+        already targets the exact bump branch for the latest commit."""
+        with patch("bump_automation.latest_commit", return_value="abc1234567890"):
+            with patch(
+                "bump_automation.gh_api",
+                return_value=[{"number": 99}],
+            ) as mock_api:
+                with patch("bump_automation.tempfile.TemporaryDirectory") as mock_tmp:
+                    create_therock_bump("rocm-systems", "token")
+
+        mock_tmp.assert_not_called()
+        # Only the open-PR check should have hit the API.
+        self.assertEqual(mock_api.call_count, 1)
+        endpoint = mock_api.call_args.args[1]
+        self.assertIn("pulls?state=open", endpoint)
+        self.assertIn("bump-rocm-systems-abc1234", endpoint)
+
+    def test_proceeds_when_no_open_pr(self):
+        """create_therock_bump must proceed to clone when no open PR exists."""
+        # First gh_api call is the open-PR check (returns []); subsequent calls
+        # are PR creation (returns a PR dict) and label addition (ignored).
+        api_responses = [[], {"number": 1}, {}]
+
+        def _gh_api_side_effect(*args, **kwargs):
+            return api_responses.pop(0) if api_responses else {}
+
+        with patch("bump_automation.latest_commit", return_value="abc1234567890"):
+            with patch(
+                "bump_automation.gh_api", side_effect=_gh_api_side_effect
+            ) as mock_api:
+                with patch("bump_automation.run"):
+                    with patch("bump_automation.os.chdir"):
+                        with patch("bump_automation.os.path.exists", return_value=True):
+                            with patch(
+                                "bump_automation.get_submodule_sha",
+                                return_value="old1234",
+                            ):
+                                with patch(
+                                    "bump_automation.generate_pr_body",
+                                    return_value="body",
+                                ):
+                                    with patch("bump_automation._git_commit"):
+                                        create_therock_bump("rocm-systems", "token")
+
+        # Must have made at least the open-PR check + PR creation calls.
+        self.assertGreaterEqual(mock_api.call_count, 2)
 
 
 if __name__ == "__main__":

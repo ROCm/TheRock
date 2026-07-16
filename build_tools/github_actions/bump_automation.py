@@ -267,6 +267,22 @@ def create_therock_bump(submodule: str, token: str) -> None:
     # Get latest SHA from upstream submodule repo
     latest = latest_commit(repo, token, branch)
 
+    # The submodule path may contain slashes (e.g. debug-tools/rocgdb/source);
+    # flatten it so the bump branch name is a single ref component.
+    branch_name = f"bump-{submodule.replace('/', '-')}-{latest[:7]}"
+
+    # Skip if a PR for this exact commit is already open.
+    open_prs = gh_api(
+        token,
+        f"repos/{THEROCK_REPO}/pulls?state=open&head=ROCm:{branch_name}",
+    )
+    if open_prs:
+        print(
+            f"[INFO] Bump PR for {branch_name} already open"
+            f" (#{open_prs[0]['number']}), skipping"
+        )
+        return
+
     # Use a temp directory for safe cloning
     with tempfile.TemporaryDirectory() as tmpdir:
         clone_dir = os.path.join(tmpdir, "TheRock")
@@ -276,9 +292,6 @@ def create_therock_bump(submodule: str, token: str) -> None:
         )
         os.chdir(clone_dir)
 
-        # The submodule path may contain slashes (e.g. debug-tools/rocgdb/source);
-        # flatten it so the bump branch name is a single ref component.
-        branch_name = f"bump-{submodule.replace('/', '-')}-{latest[:7]}"
         run(["git", "checkout", "-b", branch_name])
 
         # Initialize the submodule if needed
