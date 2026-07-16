@@ -153,22 +153,6 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
     os.environ.setdefault("PYTORCH_PRINT_REPRO_ON_FAILURE", "0")
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
 
-    # Work around a rocprofiler-sdk static-destruction-order bug. rocprofiler-sdk
-    # is auto-loaded as an HSA tool (HSA_TOOLS_LIB) even though we never request
-    # profiling. Its atexit teardown (destroy_static_objects / executable-unload
-    # callback) corrupts the glibc heap, so any module that initializes HIP and
-    # runs to completion aborts at interpreter shutdown with "corrupted double-
-    # linked list" / "malloc(): unsorted double linked list corrupted" (SIGABRT/-6),
-    # AFTER all tests pass. With run_test.py's --reruns=2 this re-runs whole long
-    # modules up to 3x and blows past the 6h shard cap (looks like a hang). The same
-    # corruption also kills forked DataLoader and distributed worker subprocesses.
-    # HSA_TOOLS_DISABLE_REGISTER=1 disables the HSA tool registration so the crashing
-    # teardown path never runs; verified locally on MI300X to turn the SIGABRT into a
-    # clean exit across test_sparse/test_linalg/test_meta/test_decomp/test_modules/
-    # distributed and more. Profiling is never used in this suite, so this is safe.
-    # TODO: file a ROCm/rocprofiler-sdk issue and drop this once fixed upstream.
-    os.environ.setdefault("HSA_TOOLS_DISABLE_REGISTER", "1")
-
     if test_config:
         os.environ.setdefault("TEST_CONFIG", test_config)
 
