@@ -255,15 +255,29 @@ function(therock_provide_artifact slice_name)
       if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
         list(APPEND _split_command_args --gpu-targets ${THEROCK_AMDGPU_TARGETS})
       endif()
+      if("${_component}" STREQUAL "test")
+        set(_pair_test_binaries_tool "${THEROCK_SOURCE_DIR}/build_tools/pair_kpack_test_binaries.py")
+        set(_pair_test_binaries_command
+          COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python"
+            "${Python3_EXECUTABLE}" "${_pair_test_binaries_tool}"
+              --artifacts-dir "${THEROCK_BINARY_DIR}/artifacts/"
+              --artifact-prefix "${_artifact_prefix}"
+        )
+      else()
+        set(_pair_test_binaries_tool)
+        set(_pair_test_binaries_command)
+      endif()
 
       add_custom_command(
         OUTPUT "${_split_manifest}"
         COMMENT "Splitting ${_artifact_prefix} into generic and arch-specific artifacts"
         COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python"
           "${Python3_EXECUTABLE}" "${_split_tool}" ${_split_command_args}
+        ${_pair_test_binaries_command}
         DEPENDS
           "${_unsplit_manifest}"
           "${_split_tool}"
+          ${_pair_test_binaries_tool}
         VERBATIM
       )
     endforeach()
