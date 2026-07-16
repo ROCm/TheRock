@@ -1,0 +1,94 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Notify Quartz
+
+on:
+  workflow_call:
+    inputs:
+      run_phase:
+        description: >-
+          Phase of the workflow run. Must be exactly one of:
+          'started' (run is in progress) or 'completed' (run has finished).
+        required: true
+        type: string
+      run_conclusion:
+        description: >-
+          Overall conclusion for the calling workflow
+          (success / failure / cancelled). Optional: when omitted and
+          run_phase=completed, notify_quartz.py derives it from the per-job
+          `result` values found in workflow_captured_outputs (i.e. the
+          toJSON(needs) blob below). Pass an explicit value here only when
+          you need to override the derived result (e.g. mark a run as
+          failure even though every dependency reported success).
+        required: false
+        type: string
+        default: ""
+      reporting_workflow:
+        description: >-
+          Filename of the workflow that is reporting (e.g.
+          'multi_arch_build_portable_linux.yml'). Each caller passes its own
+          filename as a literal so nested reusable workflows self-identify
+          (they otherwise share the top-level caller's github.workflow context).
+          The receiver keys on this filename to classify the leaf/orchestrator.
+        required: false
+        type: string
+        default: ""
+      workflow_inputs:
+        description: "JSON string of workflow inputs captured at dispatch time via toJSON(inputs)"
+        required: true
+        type: string
+      workflow_captured_outputs:
+        description: >-
+          JSON object of caller-supplied job context. Canonical pattern is
+          toJSON(needs) from a `notify_completed` job whose `needs:` lists
+          every job whose result/outputs you want recorded; the receiver then
+          has per-job `result` + `outputs` without any plucking on the caller
+          side. NOT a dump of env / vars / secrets: anything passed here is
+          stored verbatim in Quartz, so the caller is responsible for not
+          including secrets.
+        required: false
+        type: string
+        default: "{}"
+      quartz_repo:
+        description: "Target Quartz repository (owner/repo)"
+        required: false
+        type: string
+        default: "ROCm/Quartz"
+      quartz_workflow_file:
+        description: "Filename of the Quartz ingest workflow to dispatch to"
+        required: false
+        type: string
+        default: "receive_therock_data.yml"
+      quartz_workflow_ref:
+        description: "Branch in Quartz repo where the ingest workflow lives"
+        required: false
+        type: string
+        default: "main"
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.GH_APP_HAULY_ID }}
+          private-key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          repositories: ${{ inputs.quartz_repo }}
+      - name: Notify Quartz
+        env:
+          QUARTZ_HAULY_TOKEN: ${{ steps.app-token.outputs.token }}
+          WORKFLOW_INPUTS: ${{ inputs.workflow_inputs }}
+          WORKFLOW_CAPTURED_OUTPUTS: ${{ inputs.workflow_captured_outputs }}
+          REPORTING_WORKFLOW: ${{ inputs.reporting_workflow }}
+          RUN_CONCLUSION: ${{ inputs.run_conclusion }}
+          RUN_PHASE: ${{ inputs.run_phase }}
+          QUARTZ_REPO: ${{ inputs.quartz_repo }}
+          QUARTZ_WORKFLOW_FILE: ${{ inputs.quartz_workflow_file }}
+          QUARTZ_WORKFLOW_REF: ${{ inputs.quartz_workflow_ref }}
+        run: python build_tools/github_actions/notify_quartz.py
