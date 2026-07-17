@@ -1,33 +1,20 @@
-From a22c536fea8682d687199d85dd7449c88fb14c4f Mon Sep 17 00:00:00 2001
+From e1954f70f3c95b0a4e955323a77e5de8779983c1 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Fri, 12 Jun 2026 23:41:37 +0000
-Subject: [PATCH] [rocprofiler-sdk] Add CPU detection for ppc64le
+Date: Wed, 15 Jul 2026 22:12:51 -0400
+Subject: [PATCH] [rocprofiler-sdk] Add proc/cpuinfo parsing for PowerPC
 
 ---
- .../platform/gnulinux/agent.cpp               | 31 +++++++++++++++++--
- 1 file changed, 28 insertions(+), 3 deletions(-)
+ .../platform/gnulinux/agent.cpp               | 29 +++++++++++++++++--
+ 1 file changed, 26 insertions(+), 3 deletions(-)
 
 diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp
-index 3b42648b8c..ede1ade355 100644
+index b2ed06be40..f31b4b67f1 100644
 --- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp
 +++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/platform/gnulinux/agent.cpp
-@@ -95,8 +95,12 @@ struct cpu_info
- 
-     bool is_valid() const
-     {
-+#if defined(__x86_64__) || defined(_M_X64)
-         return !(processor < 0 || family < 0 || model < 0 || physical_id < 0 || core_id < 0 ||
-                  apicid < 0 || vendor_id.empty() || model_name.empty());
-+#else
-+        return !(processor < 0 || model_name.empty());
-+#endif
-     }
- };
- 
-@@ -178,7 +182,10 @@ parse_cpu_info()
+@@ -178,7 +178,10 @@ parse_cpu_info()
                      }
                  }
- 
+
 -                if(itr.find("vendor_id") == 0)
 +                if(itr.find("processor") == 0)
 +                    info_v.processor = get_stol(value);
@@ -36,7 +23,7 @@ index 3b42648b8c..ede1ade355 100644
                      info_v.vendor_id = value;
                  else if(itr.find("model name") == 0)
                  {
-@@ -187,8 +194,6 @@ parse_cpu_info()
+@@ -187,8 +190,6 @@ parse_cpu_info()
                      info_v.model_name =
                          sdk::parse::strip(std::string{info_v.model_name}, " \t\n\v\f\r");
                  }
@@ -45,7 +32,7 @@ index 3b42648b8c..ede1ade355 100644
                  else if(itr.find("cpu family") == 0)
                      info_v.family = get_stol(value);
                  else if(itr.find("model") == 0 && itr.find("model name") != 0)
-@@ -199,6 +204,15 @@ parse_cpu_info()
+@@ -199,6 +200,17 @@ parse_cpu_info()
                      info_v.core_id = get_stol(value);
                  else if(itr.find("apicid") == 0)
                      info_v.apicid = get_stol(value);
@@ -57,16 +44,18 @@ index 3b42648b8c..ede1ade355 100644
 +                    info_v.model_name =
 +                        sdk::parse::strip(std::string{info_v.model_name}, " \t\n\v\f\r");
 +                }
++#else
++#error "Unsupported architecture: /proc/cpuinfo parsing not implemented"
 +#endif
              }
              else
              {
-@@ -213,6 +227,17 @@ parse_cpu_info()
+@@ -213,6 +225,17 @@ parse_cpu_info()
              }
          }
- 
-+#if !defined(__x86_64__) && !defined(_M_X64)
-+        // Zero out x86-specific fields that have no equivalent on non-x86 architectures.
+
++#if defined(__powerpc64__) || defined(__PPC64__)
++        // Default x86-specific fields that have no equivalent in POWER /proc/cpuinfo.
 +        // Use processor index as a proxy for apicid to allow CPU agent matching.
 +        if(info_v.family < 0) info_v.family = 0;
 +        if(info_v.model < 0) info_v.model = 0;
@@ -79,6 +68,6 @@ index 3b42648b8c..ede1ade355 100644
          if(info_v.is_valid())
              processor_info.emplace_back(info_v);
          else
--- 
-2.52.0
+--
+2.43.0
 
