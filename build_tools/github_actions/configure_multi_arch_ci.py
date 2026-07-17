@@ -179,6 +179,9 @@ class CIInputs:
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
 
+    # External repo build (e.g., rocm-systems or rocm-libraries calling TheRock)
+    is_external_repo: bool = False
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -277,6 +280,7 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            is_external_repo=os.environ.get("IS_EXTERNAL_REPO", "").lower() == "true",
         )
 
 
@@ -1131,9 +1135,10 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
-        build_pytorch=build_pytorch,
-        build_jax=build_jax,
+        # Disable native packages and PyTorch/JAX for external repos (incomplete builds)
+        build_native_linux=(suffix != "asan") and not ci_inputs.is_external_repo,
+        build_pytorch=build_pytorch and not ci_inputs.is_external_repo,
+        build_jax=build_jax and not ci_inputs.is_external_repo,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
