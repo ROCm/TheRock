@@ -31,7 +31,17 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, List, Mapping, Optional, Set, Tuple, Type, TypeVar
+from typing import (
+    Callable,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -97,9 +107,7 @@ def retry(
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    logger.warning(
-                        f"Attempt {attempt + 1}/{max_attempts} failed: {e}"
-                    )
+                    logger.warning(f"Attempt {attempt + 1}/{max_attempts} failed: {e}")
                     if attempt < max_attempts - 1:
                         time.sleep(delay_seconds * (2**attempt))
             raise last_exception  # type: ignore[misc]
@@ -113,8 +121,13 @@ def retry(
 def get_modified_paths_api(github_repo: str, base_sha: str, head_sha: str) -> Set[str]:
     """Get paths of files changed using GitHub API (compare endpoint)."""
     result = subprocess.run(
-        ["gh", "api", f"repos/{github_repo}/compare/{base_sha}...{head_sha}",
-         "--jq", ".files[].filename"],
+        [
+            "gh",
+            "api",
+            f"repos/{github_repo}/compare/{base_sha}...{head_sha}",
+            "--jq",
+            ".files[].filename",
+        ],
         capture_output=True,
         text=True,
         check=True,
@@ -198,7 +211,9 @@ def configure(
     # Schedule/workflow_dispatch events run all tests
     if event_name in ("schedule", "workflow_dispatch"):
         logger.info(f"{event_name} event - running all tests")
-        return ConfigureResult(changed_projects="", run_all_tests=True, skip_tests=False)
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, skip_tests=False
+        )
 
     # Get modified paths via GitHub API
     if event_name == "pull_request" and base_sha and head_sha:
@@ -210,29 +225,39 @@ def configure(
         modified_paths = get_modified_paths_api(github_repo, f"{head_sha}^", head_sha)
     else:
         logger.warning("No SHAs provided - running all tests")
-        return ConfigureResult(changed_projects="", run_all_tests=True, skip_tests=False)
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, skip_tests=False
+        )
 
     if not modified_paths:
         logger.info("No modified paths - skipping tests")
-        return ConfigureResult(changed_projects="", run_all_tests=False, skip_tests=True)
+        return ConfigureResult(
+            changed_projects="", run_all_tests=False, skip_tests=True
+        )
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
     # Check if CI files changed (run all tests)
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
         logger.info("CI files changed - running all tests")
-        return ConfigureResult(changed_projects="", run_all_tests=True, skip_tests=False)
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, skip_tests=False
+        )
 
     # Check if only skippable files changed
     if not has_non_skippable(modified_paths):
         logger.info("Only skippable files changed - skipping tests")
-        return ConfigureResult(changed_projects="", run_all_tests=False, skip_tests=True)
+        return ConfigureResult(
+            changed_projects="", run_all_tests=False, skip_tests=True
+        )
 
     # Find changed projects from config
     config = load_repo_config(config_path)
     if not config:
         logger.warning("No config loaded - running all tests")
-        return ConfigureResult(changed_projects="", run_all_tests=True, skip_tests=False)
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, skip_tests=False
+        )
 
     valid_prefixes = get_valid_prefixes(config)
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
@@ -294,11 +319,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         config_path=args.config_path,
     )
 
-    set_github_output({
-        "changed_projects": result.changed_projects,
-        "run_all_tests": str(result.run_all_tests).lower(),
-        "skip_tests": str(result.skip_tests).lower(),
-    })
+    set_github_output(
+        {
+            "changed_projects": result.changed_projects,
+            "run_all_tests": str(result.run_all_tests).lower(),
+            "skip_tests": str(result.skip_tests).lower(),
+        }
+    )
 
     return 0
 
