@@ -1,31 +1,33 @@
-From 4884e1145ae185f745987465b37574be40b8b1c4 Mon Sep 17 00:00:00 2001
+From f71e94599fbe2b2df9ab47f6cdd41f654b7fc844 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 2 Apr 2026 21:15:16 +0000
-Subject: [PATCH] rocshmem ppc64le
+Date: Fri, 17 Jul 2026 18:14:57 +0000
+Subject: [PATCH] rocshmem: fix x86-only intrinsics and asm for portability
 
+Remove unused x86 intrinsic headers (immintrin.h, smmintrin.h) from
+backend_ro.cpp. Replace bare sfence asm in queue.cpp with
+platform-guarded barriers for x86 and PowerPC.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
 ---
- projects/rocshmem/src/reverse_offload/backend_ro.cpp | 5 +++--
+ projects/rocshmem/src/reverse_offload/backend_ro.cpp | 2 --
  projects/rocshmem/src/reverse_offload/queue.cpp      | 8 +++++++-
- 2 files changed, 10 insertions(+), 3 deletions(-)
+ 2 files changed, 7 insertions(+), 3 deletions(-)
 
 diff --git a/projects/rocshmem/src/reverse_offload/backend_ro.cpp b/projects/rocshmem/src/reverse_offload/backend_ro.cpp
-index 3386da626d..0250cb397b 100644
+index f1be503045..b594e12091 100644
 --- a/projects/rocshmem/src/reverse_offload/backend_ro.cpp
 +++ b/projects/rocshmem/src/reverse_offload/backend_ro.cpp
-@@ -24,8 +24,9 @@
+@@ -24,8 +24,6 @@
  
  #include "backend_ro.hpp"
  
 -#include <immintrin.h>
 -#include <smmintrin.h>
-+// TODO: Why are these here?
-+//#include <immintrin.h>
-+//#include <smmintrin.h>
  #include <unistd.h>
  
  #include <cassert>
 diff --git a/projects/rocshmem/src/reverse_offload/queue.cpp b/projects/rocshmem/src/reverse_offload/queue.cpp
-index 3504075b36..7ad47c0216 100644
+index bca71162c8..63fc248028 100644
 --- a/projects/rocshmem/src/reverse_offload/queue.cpp
 +++ b/projects/rocshmem/src/reverse_offload/queue.cpp
 @@ -85,7 +85,13 @@ void Queue::flush_hdp() {
@@ -33,16 +35,16 @@ index 3504075b36..7ad47c0216 100644
  void Queue::sfence_flush_hdp() {
    if (envvar::ro::net_cpu_queue) {
 -    asm volatile("sfence" ::: "memory");
-+#ifdef __powerpc64__
-+    asm volatile("lwsync" ::: "memory");  // PowerPC memory barrier
-+#elif defined(__x86_64__)
++#if defined(__x86_64__) || defined(__i386__)
 +    asm volatile("sfence" ::: "memory"); // x86 store fence
++#elif defined(__powerpc64__) || defined(__PPC64__)
++    asm volatile("lwsync" ::: "memory"); // PowerPC memory barrier
 +#else
-+    std::atomic_thread_fence(std::memory_order_seq_cst); // Portable fallback
++#error "Unsupported architecture"
 +#endif
      hdp_proxy_.get()->hdp_flush();
    }
  }
 -- 
-2.47.3
+2.52.0
 
