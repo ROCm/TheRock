@@ -431,7 +431,6 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         result = compute_auto_stage_reuse(
             changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
             mode=StageReuseMode.REUSE_STAGE,
-            platforms=[],
             topology=FakeTopology(),
             baseline_selector=_selector(_baseline("123", ["base_lib_generic.tar.zst"])),
         )
@@ -485,7 +484,7 @@ class TargetFamiliesTest(unittest.TestCase):
         self.assertEqual(srd._target_families((), ()), ("generic",))
 
     def test_dedupes_and_appends_generic(self):
-        fams = srd.stage_reuse_target_families(["gfx94x"], ["gfx94x", "gfx120x"])
+        fams = srd._target_families(["gfx94x"], ["gfx94x", "gfx120x"])
         self.assertEqual(fams, ("gfx94x", "gfx120x", "generic"))
 
 

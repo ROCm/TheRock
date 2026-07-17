@@ -496,9 +496,9 @@ class TestDecideJobs(unittest.TestCase):
             self._inputs(
                 event_name="workflow_dispatch",
                 linux_test_labels=["test_filter:comprehensive"],
-                targets=cm.TargetSelection(),
             ),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "comprehensive")
         self.assertIn("test_filter", result.test_rocm.test_type_reason)
