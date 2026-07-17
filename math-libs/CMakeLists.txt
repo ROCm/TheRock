@@ -638,7 +638,7 @@ if(_ck_enabled)
   )
 endif()
 
-if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
+if(THEROCK_ENABLE_HIPTENSOR)
   ##############################################################################
   # hipTensor
   ##############################################################################
