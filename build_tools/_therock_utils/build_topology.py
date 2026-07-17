@@ -1149,24 +1149,26 @@ class BuildTopology:
     def load_subproject_manifest(
         self, manifest_path: Optional[Path] = None
     ) -> Optional[Dict[str, List[str]]]:
-        """Load artifact_subprojects.json from manifest_path or repo root."""
+        """Load artifact_subprojects.json from manifest_path or build_tools/."""
         if manifest_path is None:
-            manifest_path = self.toml_path.parent / "artifact_subprojects.json"
+            manifest_path = (
+                self.toml_path.parent / "build_tools" / "artifact_subprojects.json"
+            )
         if not manifest_path.exists():
             return None
         with manifest_path.open() as f:
             return json.load(f)
 
     def _load_json_manifest(self, filename: str) -> Optional[Dict]:
-        """Load a JSON manifest file from repo root."""
-        manifest_path = self.toml_path.parent / filename
+        """Load a JSON manifest file from build_tools/."""
+        manifest_path = self.toml_path.parent / "build_tools" / filename
         if not manifest_path.exists():
             return None
         with manifest_path.open() as f:
             return json.load(f)
 
     def _load_project_mappings(self) -> Optional[Dict]:
-        """Load project_mappings.json from repo root."""
+        """Load project_mappings.json from build_tools/."""
         return self._load_json_manifest("project_mappings.json")
 
     def get_subproject_to_feature_map(

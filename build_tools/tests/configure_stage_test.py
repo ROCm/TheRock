@@ -98,8 +98,7 @@ class ManifestValidationTest(unittest.TestCase):
 
     def test_project_mappings_has_valid_features(self):
         """Verify subproject_features in project_mappings.json has valid feature names."""
-        repo_root = Path(__file__).parent.parent.parent
-        manifest_path = repo_root / "project_mappings.json"
+        manifest_path = Path(__file__).parent.parent / "project_mappings.json"
         if not manifest_path.exists():
             self.skipTest("project_mappings.json not found")
 
