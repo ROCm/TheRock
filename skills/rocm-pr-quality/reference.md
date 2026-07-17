@@ -286,3 +286,44 @@ When a defect is known but the fix is not ready, M1 may be met by a tracked two-
 
 The quarantine must be tracked, time-boxed, and removed by the fix — not left in place. Overlays
 define the concrete mechanism (e.g. a `known_bugs` data file).
+
+______________________________________________________________________
+
+## Review attestation (Action 2, approvals only)
+
+When a review concludes `APPROVED`, the skill appends this block to the drafted approval comment
+(never to `CHANGES REQUESTED` / `REJECTED`, and never to a PR description). The human posts it; the
+skill never posts on its own. The `<!-- rocm-pr-quality:attestation v1 -->` marker is what a
+consumer (e.g. a pre-review gate) keys on, and the digest binds the attestation to the exact diff
+so a stale or copied block can be detected.
+
+Block (leaned-into default):
+
+```markdown
+<!-- rocm-pr-quality:attestation v1 -->
+> **Reviewed with the ROCm PR-quality skill.**
+> - Skill: `rocm-pr-quality` (base) - overlays: `<applied overlays, or "none">`
+> - Action: `review` - Result: **APPROVED** (`<n>` BLOCKING; `<n>` IMPORTANT)
+> - Risk: `<1-5>`
+> - Commit: `<full 40-char head SHA>`
+> - Diff digest: `<8-hex>`
+>
+> <sub>Machine-checkable attestation. The digest binds this review to the exact file set at the
+> commit above; pushing new commits invalidates it, at which point the skill should be re-run.</sub>
+```
+
+One-line paste fallback (same marker, for when an approval was already posted without a block):
+
+```text
+<!-- rocm-pr-quality:attestation v1 --> rocm-pr-quality review APPROVED - commit <full-sha> - digest <8-hex>
+```
+
+### Digest algorithm (pinned, so a consumer can recompute)
+
+- **head SHA:** the full 40-char PR head SHA — `gh pr view --json headRefOid -q .headRefOid` (or
+  `git rev-parse HEAD`).
+- **files:** the PR's changed-file paths — `gh pr diff --name-only` — as POSIX paths, sorted by
+  Unicode code point (Python `sorted()` / `LC_ALL=C sort`), newline-joined, with no trailing
+  newline.
+- **payload:** `head_sha + "\n" + "\n".join(sorted_files)`.
+- **digest:** `sha256(payload.encode("utf-8")).hexdigest()[:8]`.
