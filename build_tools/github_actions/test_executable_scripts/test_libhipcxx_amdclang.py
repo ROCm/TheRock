@@ -33,9 +33,12 @@ amdgpu_targets = os.getenv("AMDGPU_TARGETS")
 if amdgpu_targets:
     valid_targets = amdgpu_targets.split(",")
     if gpu_arch not in valid_targets:
-        gpu_arch = valid_targets[0]
+        # offload-arch returned a wrong/default arch (e.g. gfx906 on MxGPU).
+        # Compile for all AMDGPU_TARGETS so the binary runs on whichever
+        # GPU is actually present at test time.
+        gpu_arch = ";".join(valid_targets)
         logging.info(
-            f"++ GPU arch not in AMDGPU_TARGETS, using first target: {gpu_arch}"
+            f"++ GPU arch not in AMDGPU_TARGETS, compiling for all targets: {gpu_arch}"
         )
 
 
