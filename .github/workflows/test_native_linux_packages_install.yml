@@ -99,6 +99,16 @@ permissions:
 run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: test_native_linux_packages_install.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   prepare_install_context:
     name: Prepare install context (package type, GPU arch, container image)
     runs-on: ubuntu-24.04
@@ -132,6 +142,8 @@ jobs:
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' || 'ubuntu-24.04' }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
@@ -215,3 +227,19 @@ jobs:
         run: |
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [prepare_install_context, test_native_linux_packages_install]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: test_native_linux_packages_install.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit

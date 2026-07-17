@@ -66,6 +66,16 @@ permissions:
   contents: read
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: test_artifacts_structure.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   test_artifact_structure:
     name: "Validate artifact structure"
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
@@ -107,3 +117,14 @@ jobs:
         run: |
           python -m pytest tests/test_artifact_structure.py \
             -v --log-cli-level=info --timeout=300
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [test_artifact_structure]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: test_artifacts_structure.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit

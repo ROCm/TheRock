@@ -139,6 +139,16 @@ permissions:
   contents: read
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   build_pytorch_wheels:
     name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
@@ -162,6 +172,7 @@ jobs:
       torchaudio_version: ${{ steps.pytorch-versions.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
       package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
@@ -428,6 +439,11 @@ jobs:
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   configure_pytorch_tests:
     name: Configure PyTorch Tests
     runs-on: ubuntu-24.04
@@ -436,6 +452,7 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -461,6 +478,11 @@ jobs:
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
             --platform windows
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
     if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
@@ -483,3 +505,14 @@ jobs:
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit

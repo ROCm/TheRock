@@ -98,9 +98,21 @@ permissions:
 run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: test_pytorch_wheels.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   test_wheels:
     name: Test PyTorch | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
@@ -214,3 +226,19 @@ jobs:
             --continue-on-collection-errors \
             --import-mode=importlib \
             -v
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [test_wheels]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: test_pytorch_wheels.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit

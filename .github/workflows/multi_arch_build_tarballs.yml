@@ -80,6 +80,16 @@ permissions:
 run-name: Build Multi-Arch Tarballs (${{ inputs.dist_amdgpu_families }}, ${{ inputs.platform }})
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: multi_arch_build_tarballs.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   build_tarballs:
     name: Build Tarballs
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
@@ -133,3 +143,14 @@ jobs:
             --run-id="${{ github.run_id }}" \
             --platform="${{ inputs.platform }}" \
             --release-type="${{ inputs.release_type }}"
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [build_tarballs]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: multi_arch_build_tarballs.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit

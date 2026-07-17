@@ -107,6 +107,16 @@ run-name: >-
   | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: multi_arch_release.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
@@ -164,3 +174,14 @@ jobs:
       contents: read
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [setup, linux_release, windows_release]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: multi_arch_release.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit

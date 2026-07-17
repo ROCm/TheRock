@@ -139,10 +139,21 @@ permissions:
 run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
 
 jobs:
+  notify_quartz_start:
+    if: ${{ github.repository == 'ROCm/rockrel' }}
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: started
+      reporting_workflow: test_pytorch_wheels_full.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
+
   prepare_matrix:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -157,10 +168,17 @@ jobs:
             --default-runner '${{ inputs.test_runs_on }}' \
             --multi-gpu-runner '${{ inputs.test_runs_on_multi_gpu }}'
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   test_wheels:
     needs: prepare_matrix
     name: Test PyTorch Full | ${{ inputs.amdgpu_family }} / ${{ matrix.test_config }} (shard ${{ matrix.shard }}/${{ matrix.num_shards }})
     runs-on: ${{ matrix.runs_on }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
@@ -362,6 +380,11 @@ jobs:
             exit 1
           fi
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   # Aggregate every shard's JUnit XML test reports into a single failure table
   # on the run's summary page, so all failures across configs/shards are visible
   # in one place without digging into individual matrix jobs or artifacts.
@@ -372,6 +395,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -396,3 +421,19 @@ jobs:
         run: |
           python external-builds/pytorch/summarize_test_results.py \
             --combined-dir artifacts
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+  notify_quartz_completed:
+    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    needs: [prepare_matrix, test_wheels, test_summary]
+    uses: ./.github/workflows/notify_quartz.yml
+    with:
+      run_phase: completed
+      reporting_workflow: test_pytorch_wheels_full.yml
+      workflow_inputs: ${{ toJSON(inputs) }}
+      workflow_captured_outputs: ${{ toJSON(needs) }}
+    secrets: inherit
