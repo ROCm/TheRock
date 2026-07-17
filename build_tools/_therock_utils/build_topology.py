@@ -8,7 +8,6 @@ This module provides classes and utilities for parsing BUILD_TOPOLOGY.toml
 and computing artifact dependencies for sharded build pipelines.
 """
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -124,9 +123,6 @@ class Artifact:
     split_databases: List[str] = field(
         default_factory=list
     )  # Database handlers to use when splitting artifacts (e.g., ["rocblas", "hipblaslt"])
-    test_artifacts: List[str] = field(
-        default_factory=list
-    )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
 
 
 class BuildTopology:
@@ -236,7 +232,6 @@ class BuildTopology:
                 disable_platforms_if_flags_not_set=disable_platforms_if_flags_not_set,
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
-                test_artifacts=artifact_data.get("test_artifacts", []),
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -1145,180 +1140,3 @@ class BuildTopology:
                         requires.append(req)
 
         return requires
-
-    def load_subproject_manifest(
-        self, manifest_path: Optional[Path] = None
-    ) -> Optional[Dict[str, List[str]]]:
-        """Load artifact_subprojects.json from manifest_path or repo root."""
-        if manifest_path is None:
-            manifest_path = self.toml_path.parent / "artifact_subprojects.json"
-        if not manifest_path.exists():
-            return None
-        with manifest_path.open() as f:
-            return json.load(f)
-
-    def _load_json_manifest(self, filename: str) -> Optional[Dict]:
-        """Load a JSON manifest file from repo root."""
-        manifest_path = self.toml_path.parent / filename
-        if not manifest_path.exists():
-            return None
-        with manifest_path.open() as f:
-            return json.load(f)
-
-    def _load_project_mappings(self) -> Optional[Dict]:
-        """Load project_mappings.json from repo root."""
-        return self._load_json_manifest("project_mappings.json")
-
-    def get_subproject_to_feature_map(
-        self, build_dir: Optional[Path] = None
-    ) -> Dict[str, str]:
-        """Map subproject names directly to feature names."""
-        feature_map: Dict[str, str] = {}
-        mappings = self._load_project_mappings()
-        if mappings and "subproject_features" in mappings:
-            for subproject, feature in mappings["subproject_features"].items():
-                feature_map[subproject.lower()] = feature
-        return feature_map
-
-    def get_alias_to_artifact_map(
-        self, build_dir: Optional[Path] = None
-    ) -> Dict[str, str]:
-        """Map subproject/artifact names to artifact names."""
-        alias_map: Dict[str, str] = {}
-
-        manifest = None
-        if build_dir:
-            build_manifest = build_dir / "artifact_subprojects.json"
-            if build_manifest.exists():
-                manifest = self.load_subproject_manifest(build_manifest)
-        if manifest is None:
-            manifest = self.load_subproject_manifest()
-
-        for artifact in self.artifacts.values():
-            alias_map[artifact.name.lower()] = artifact.name
-
-            if manifest and artifact.name in manifest:
-                for alias in manifest[artifact.name]:
-                    alias_lower = alias.lower()
-                    if alias_lower not in alias_map or alias_lower == artifact.name:
-                        alias_map[alias_lower] = artifact.name
-
-            for db_name in artifact.split_databases:
-                alias_map[db_name.lower()] = artifact.name
-
-        # Include rocm-systems project mappings (e.g., "hip" -> "core-hip")
-        mappings = self._load_project_mappings()
-        if mappings and "rocm_systems_projects" in mappings:
-            for project_name, artifact_name in mappings[
-                "rocm_systems_projects"
-            ].items():
-                project_lower = project_name.lower()
-                if project_lower not in alias_map:
-                    alias_map[project_lower] = artifact_name
-
-        return alias_map
-
-    def resolve_project_to_artifact(
-        self, project_name: str, build_dir: Optional[Path] = None
-    ) -> Optional[str]:
-        """Resolve a project name to its artifact name."""
-        return self.get_alias_to_artifact_map(build_dir).get(project_name.lower())
-
-    def resolve_projects_to_features(
-        self,
-        project_names: List[str],
-        platform_name: str = "",
-        build_dir: Optional[Path] = None,
-    ) -> Set[str]:
-        """Resolve project names to CMake feature names."""
-        features: Set[str] = set()
-        feature_map = self.get_subproject_to_feature_map(build_dir)
-        alias_map = self.get_alias_to_artifact_map(build_dir)
-
-        for project in project_names:
-            project_lower = project.lower()
-
-            # First check direct subproject -> feature mapping
-            if project_lower in feature_map:
-                features.add(feature_map[project_lower])
-                continue
-
-            # Fall back to artifact mapping
-            artifact_name = alias_map.get(project_lower)
-            if artifact_name and artifact_name in self.artifacts:
-                artifact = self.artifacts[artifact_name]
-                if platform_name and platform_name in artifact.disable_platforms:
-                    continue
-                features.add(self.get_artifact_feature_name(artifact))
-
-        return features
-
-    def get_stage_for_artifact(self, artifact_name: str) -> Optional[str]:
-        """Get the build stage that produces a given artifact."""
-        if artifact_name not in self.artifacts:
-            return None
-        artifact = self.artifacts[artifact_name]
-        artifact_group = artifact.artifact_group
-
-        for stage in self.build_stages.values():
-            if artifact_group in stage.artifact_groups:
-                return stage.name
-        return None
-
-    def get_stages_for_projects(
-        self,
-        project_names: List[str],
-        build_dir: Optional[Path] = None,
-    ) -> Set[str]:
-        """Get build stages required to build the given projects."""
-        # Resolve projects to artifacts
-        alias_map = self.get_alias_to_artifact_map(build_dir)
-        required_artifacts: Set[str] = set()
-        for project in project_names:
-            artifact_name = alias_map.get(project.lower())
-            if artifact_name:
-                required_artifacts.add(artifact_name)
-
-        # Also include test_artifacts for each required artifact
-        artifacts_to_process = list(required_artifacts)
-        while artifacts_to_process:
-            artifact_name = artifacts_to_process.pop()
-            if artifact_name not in self.artifacts:
-                continue
-            artifact = self.artifacts[artifact_name]
-            for test_artifact in artifact.test_artifacts:
-                if test_artifact not in required_artifacts:
-                    required_artifacts.add(test_artifact)
-                    artifacts_to_process.append(test_artifact)
-
-        # Get stages that produce these artifacts
-        required_stages: Set[str] = set()
-        for artifact_name in required_artifacts:
-            stage_name = self.get_stage_for_artifact(artifact_name)
-            if stage_name:
-                required_stages.add(stage_name)
-
-        # Include dependent stages (stages that produce artifacts we depend on)
-        # Walk the dependency chain
-        stages_to_check = list(required_stages)
-        while stages_to_check:
-            stage_name = stages_to_check.pop()
-            if stage_name not in self.build_stages:
-                continue
-            stage = self.build_stages[stage_name]
-
-            # Get all artifacts in this stage's groups
-            for group_name in stage.artifact_groups:
-                for artifact in self.get_artifacts_in_group(group_name):
-                    # Check artifact dependencies
-                    for dep_artifact_name in artifact.artifact_deps:
-                        dep_stage = self.get_stage_for_artifact(dep_artifact_name)
-                        if dep_stage and dep_stage not in required_stages:
-                            required_stages.add(dep_stage)
-                            stages_to_check.append(dep_stage)
-
-        return required_stages
-
-    def get_all_stage_names(self) -> Set[str]:
-        """Get all build stage names."""
-        return set(self.build_stages.keys())
