@@ -10,6 +10,7 @@ It consolidates logic previously duplicated across external repo workflows.
 Usage:
     python configure_external_repo_ci.py \
         --event-name pull_request \
+        --github-repo ROCm/rocm-libraries \
         --base-sha abc123 \
         --head-sha def456 \
         --config-path .github/repos-config.json
@@ -265,6 +266,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="GitHub event name",
     )
     parser.add_argument(
+        "--github-repo",
+        required=True,
+        help="GitHub repository (e.g., ROCm/rocm-libraries)",
+    )
+    parser.add_argument(
         "--base-sha",
         default="",
         help="Base SHA for PR (github.event.pull_request.base.sha)",
@@ -285,6 +291,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[List[str]] = None) -> int:
     """Main entry point."""
     args = parse_args(argv)
+
+    logger.info(f"Configuring CI for {args.github_repo}")
 
     result = configure(
         event_name=args.event_name,
