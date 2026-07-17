@@ -25,6 +25,19 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
 logging.info(f"++ Detected GPU architecture: {gpu_arch}")
 
+# AMDGPU_TARGETS is set authoritatively by CI. MxGPU virtual GPUs can cause
+# offload-arch to return an incorrect default (e.g. gfx906) even when the
+# actual GPU is different (e.g. gfx1101). If the detected arch is not in
+# AMDGPU_TARGETS, fall back to the first entry in AMDGPU_TARGETS.
+amdgpu_targets = os.getenv("AMDGPU_TARGETS")
+if amdgpu_targets:
+    valid_targets = amdgpu_targets.split(",")
+    if gpu_arch not in valid_targets:
+        gpu_arch = valid_targets[0]
+        logging.info(
+            f"++ GPU arch not in AMDGPU_TARGETS, using first target: {gpu_arch}"
+        )
+
 
 # Load ROCm version from version.json
 def load_rocm_version() -> str:
