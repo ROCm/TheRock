@@ -327,7 +327,6 @@ Select your GPU target using the `[device-*]` extras from the
 >   | 2.12          | 2.11               | 0.27                | 1.12         |
 >   | 2.11          | 2.11               | 0.26                | 1.11         |
 >   | 2.10          | 2.10               | 0.25                | 1.10         |
->   | 2.9           | 2.9                | 0.24                | 1.9          |
 >
 >   For example, `torch` 2.11 and compatible wheels can be installed by specifying
 >

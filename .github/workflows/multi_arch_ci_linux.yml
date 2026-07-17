@@ -12,9 +12,9 @@ on:
           JSON object with build configuration for this platform. Fields:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
-          build_variant_suffix, build_pytorch,
+          build_variant_suffix, build_pytorch, build_jax,
           build_native_linux, test_python_packages_matrix,
-          pytorch_build_matrix,
+          pytorch_build_matrix, jax_build_matrix,
           prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
@@ -294,7 +294,6 @@ jobs:
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
-      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.container_image_name }}
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
@@ -332,6 +331,36 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+  build_jax_wheels:
+    needs: [build_python_packages]
+    name: Build JAX Wheels
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        fromJSON(inputs.build_config).build_jax == true &&
+        toJSON(fromJSON(inputs.build_config).jax_build_matrix) != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.build_config).jax_build_matrix }}
+    uses: ./.github/workflows/multi_arch_build_linux_jax_wheels_ci.yml
+    with:
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      python_version: ${{ matrix.python_version }}
+      jax_repository: ${{ matrix.jax_repository }}
+      build_mode: ${{ matrix.build_mode }}
+      gfx_arch: ${{ matrix.gfx_arch }}
+      jax_ref: ${{ matrix.jax_ref }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:

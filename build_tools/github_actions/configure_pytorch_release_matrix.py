@@ -26,28 +26,25 @@ CI_PYTHON_VERSIONS = {
     "windows": ["3.12"],
 }
 
-# TODO: separate out "nightly" pytorch refs from "prerelease" pytorch refs?
-# That would let us:
-#   1. choose to not build the "nightly" pytorch branch for prerelease builds,
-#      saving some CI resources and possibly simplifying package promotion
-#      scripts.
-#   2. filter out some AMDGPU families from prereleases if we only want them
-#      built for nightly but not published to stable.
-RELEASE_PYTORCH_REFS = {
+# Refs for the "prerelease" release type. The "nightly" release type extends
+# this set with additional refs (see RELEASE_PYTORCH_REFS).
+RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
-        "release/2.9",
         "release/2.10",
         "release/2.11",
         "release/2.12",
-        "nightly",
     ],
     "windows": [
-        "release/2.9",
         "release/2.10",
         "release/2.11",
         "release/2.12",
-        "nightly",
     ],
+}
+
+# Refs for the "nightly" release type: stable refs + "nightly" branch.
+RELEASE_PYTORCH_REFS = {
+    platform: [*refs, "nightly"]
+    for platform, refs in RELEASE_STABLE_PYTORCH_REFS.items()
 }
 
 CI_PYTORCH_REFS = {
@@ -59,8 +56,6 @@ CI_PYTORCH_REFS = {
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
-        # gfx125x not supported for PyTorch 2.9.
-        "release/2.9": {"gfx125X-dcgpu"},
         # gfx125x not supported for PyTorch 2.10.
         "release/2.10": {"gfx125X-dcgpu"},
         # gfx125x supported for PyTorch 2.11 via https://github.com/ROCm/pytorch/pull/3346.
@@ -99,6 +94,8 @@ def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
 def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
     if release_type == "ci":
         return list(CI_PYTORCH_REFS[platform])
+    if release_type == "prerelease":
+        return list(RELEASE_STABLE_PYTORCH_REFS[platform])
     return list(RELEASE_PYTORCH_REFS[platform])
 
 
@@ -145,7 +142,7 @@ def generate_pytorch_matrix_for_release_type(
     # [
     #   {
     #     "python_version": "3.10",
-    #     "pytorch_git_ref": "release/2.9",
+    #     "pytorch_git_ref": "release/2.12",
     #     "amdgpu_families": "gfx94X-dcgpu"
     #   },
     #   ...
