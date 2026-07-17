@@ -157,7 +157,8 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() }}
+    # Skip for external repos (incomplete builds won't have all packages)
+    if: ${{ !failure() && !cancelled() && inputs.external_repo_config == '' }}
     uses: ./.github/workflows/build_windows_python_packages.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
