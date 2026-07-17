@@ -141,6 +141,51 @@ def _parse_time_report(time_path: Path) -> Dict[str, Any]:
     return parsed
 
 
+def _capture_command_output(cmd: Sequence[str], output_path: Path) -> Dict[str, Any] | None:
+    """
+    Execute a diagnostic command (when available) and write stdout/stderr to disk.
+    Returns structured metadata or None if the binary was missing.
+    """
+    binary = cmd[0]
+    if shutil.which(binary) is None:
+        return None
+
+    result = _run(cmd, capture_output=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        "\n".join(
+            [
+                f"Command: {' '.join(shlex.quote(token) for token in cmd)}",
+                f"Return code: {result.returncode}",
+                "",
+                "STDOUT:",
+                result.stdout or "",
+                "",
+                "STDERR:",
+                result.stderr or "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "command": cmd,
+        "return_code": result.returncode,
+        "output_path": str(output_path),
+    }
+
+
+def _du_kilobytes(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    result = _run(["du", "-sk", str(path)], capture_output=True)
+    if result.returncode != 0 or not result.stdout:
+        return None
+    try:
+        return int(result.stdout.split()[0])
+    except (IndexError, ValueError):
+        return None
+
+
 def _load_profile_json(build_dir: Path, profile_path: Path, output_json_path: Path, output_text_path: Path) -> Tuple[Dict[str, Any] | None, str | None]:
     """
     Convert the Ninja profile data to JSON (if supported) and capture textual fallback.
@@ -288,6 +333,12 @@ def main() -> int:
     profile_json_path = metrics_root / f"{args.stage}-ninja-profile-{stamp}.json"
     profile_text_path = metrics_root / f"{args.stage}-ninja-profile-{stamp}.txt"
     summary_path = metrics_root / f"{args.stage}-summary-{stamp}.json"
+    timing_log_path = metrics_root / f"{args.stage}-rule-timings-{stamp}.jsonl"
+    ccache_pre_path = metrics_root / f"{args.stage}-ccache-before-{stamp}.txt"
+    ccache_post_path = metrics_root / f"{args.stage}-ccache-after-{stamp}.txt"
+    vmstat_path = metrics_root / f"{args.stage}-vmstat-{stamp}.txt"
+    iostat_path = metrics_root / f"{args.stage}-iostat-{stamp}.txt"
+    disk_usage_path = metrics_root / f"{args.stage}-disk-usage-{stamp}.json"
 
     targets = args.targets or [f"stage-{args.stage}", "therock-artifacts"]
     ninja_cmd = ["ninja", "-C", str(build_dir), "-k", "0"]
@@ -309,6 +360,16 @@ def main() -> int:
     if time_binary is None and Path("/usr/bin/time").exists():
         time_binary = "/usr/bin/time"
 
+    # Wire in per-command timing instrumentation unless the workflow already provided overrides.
+    timing_script = Path(__file__).resolve().with_name("record_rule_launch.py")
+    if timing_script.exists():
+        os.environ.setdefault("RUN_STAGE_TIMING_LOG", str(timing_log_path))
+        os.environ.setdefault("RUN_STAGE_VARIANT", args.variant or "")
+        if not os.environ.get("CMAKE_RULE_LAUNCH_COMPILE"):
+            os.environ["CMAKE_RULE_LAUNCH_COMPILE"] = f"{sys.executable} {timing_script} compile"
+        if not os.environ.get("CMAKE_RULE_LAUNCH_LINK"):
+            os.environ["CMAKE_RULE_LAUNCH_LINK"] = f"{sys.executable} {timing_script} link"
+
     trace_supported: bool = False
     ninja_help_result = _run(["ninja", "--help"], capture_output=True)
     try:
@@ -329,6 +390,12 @@ def main() -> int:
         time_cmd = ninja_cmd
 
     print(f"[run_stage_build] Executing: {' '.join(shlex.quote(tok) for tok in time_cmd)}")
+
+    disk_usage_before_kb = _du_kilobytes(build_dir)
+    ccache_pre_meta = _capture_command_output(["ccache", "-s"], ccache_pre_path)
+    vmstat_meta = _capture_command_output(["vmstat", "-s"], vmstat_path)
+    iostat_meta = _capture_command_output(["iostat", "-dx"], iostat_path)
+
     start = datetime.now(tz=timezone.utc)
     result = _run(time_cmd)
     end = datetime.now(tz=timezone.utc)
@@ -370,7 +437,41 @@ def main() -> int:
         "time_summary": time_summary,
         "environment": env_snapshot,
         "resource_metrics_available": bool(time_binary),
+        "timing_log_path": str(timing_log_path) if timing_log_path.exists() else None,
+        "ccache_pre_path": str(ccache_pre_path) if ccache_pre_path.exists() else None,
+        "ccache_post_path": None,
+        "vmstat_path": str(vmstat_path) if vmstat_path.exists() else None,
+        "iostat_path": str(iostat_path) if iostat_path.exists() else None,
+        "disk_usage_before_kb": disk_usage_before_kb,
+        "disk_usage_after_kb": None,
+        "disk_usage_delta_kb": None,
+        "ccache_pre_metadata": ccache_pre_meta,
+        "vmstat_metadata": vmstat_meta,
+        "iostat_metadata": iostat_meta,
     }
+
+    disk_usage_after_kb = _du_kilobytes(build_dir)
+    if disk_usage_after_kb is not None and disk_usage_before_kb is not None:
+        summary["disk_usage_after_kb"] = disk_usage_after_kb
+        summary["disk_usage_delta_kb"] = disk_usage_after_kb - disk_usage_before_kb
+        disk_usage_path.write_text(
+            json.dumps(
+                {
+                    "before_kb": disk_usage_before_kb,
+                    "after_kb": disk_usage_after_kb,
+                    "delta_kb": disk_usage_after_kb - disk_usage_before_kb,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        summary["disk_usage_path"] = str(disk_usage_path)
+
+    ccache_post_meta = _capture_command_output(["ccache", "-s"], ccache_post_path)
+    if ccache_post_meta:
+        summary["ccache_post_path"] = str(ccache_post_path)
+        summary["ccache_post_metadata"] = ccache_post_meta
 
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
 
