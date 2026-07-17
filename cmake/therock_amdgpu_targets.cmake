@@ -257,24 +257,24 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
-# amdgcnspirv architecture-independent portable SPIR-V target.
-# Bring-up baseline: every first-party subproject is excluded, then re-enabled
-# one-by-one as it is proven to build and test for amdgcnspirv. See
-# docs/09_full_enable_plan.md.
-therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V"
-  EXCLUDE_TARGET_PROJECTS
-    # TODO: Add issue for enabling projects
-    # These projects compile device/test code that the amdgcnspirv target cannot
-    # currently handle (OpenCL -mcpu, Fortran offload, direct-to-ISA test kernels,
-    # or SPIR-V translator gaps). Everything else builds/tests fine for spirv.
-    aqlprofile
-    hip-tests
-    rccl
-    rccl-tests
-    rocprofiler-systems-examples
-    rocrtst
-    rocshmem
-)
+# # amdgcnspirv architecture-independent portable SPIR-V target.
+# # Bring-up baseline: every first-party subproject is excluded, then re-enabled
+# # one-by-one as it is proven to build and test for amdgcnspirv. See
+# # docs/09_full_enable_plan.md.
+# therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V"
+#   EXCLUDE_TARGET_PROJECTS
+#     # TODO: Add issue for enabling projects
+#     # These projects compile device/test code that the amdgcnspirv target cannot
+#     # currently handle (OpenCL -mcpu, Fortran offload, direct-to-ISA test kernels,
+#     # or SPIR-V translator gaps). Everything else builds/tests fine for spirv.
+#     aqlprofile
+#     hip-tests
+#     rccl
+#     rccl-tests
+#     rocprofiler-systems-examples
+#     rocrtst
+#     rocshmem
+# )
 
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)

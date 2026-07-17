@@ -393,9 +393,10 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
     else()
-      therock_filter_amdgpu_targets(_ROCPROFSYS_GFX_TARGETS
-        rocprofiler-systems-examples ${THEROCK_TEST_AMDGPU_TARGETS})
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${_ROCPROFSYS_GFX_TARGETS}")
+      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
+      # therock_filter_amdgpu_targets(_ROCPROFSYS_GFX_TARGETS
+      #   rocprofiler-systems-examples ${THEROCK_TEST_AMDGPU_TARGETS})
+      # string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${_ROCPROFSYS_GFX_TARGETS}")
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems-examples
