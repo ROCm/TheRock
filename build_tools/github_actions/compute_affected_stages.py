@@ -2,42 +2,27 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Compute affected build stages from changed projects.
-
-For selective builds (e.g., external repos like rocm-systems or rocm-libraries),
-this script determines which build stages need to run based on which projects
-have changes.
-
-Inputs:
-    CHANGED_PROJECTS: Comma-separated list of changed project paths/names.
-                      Empty or unset means full build (all stages).
-
-Outputs (written to GITHUB_OUTPUT):
-    affected_stages: Comma-separated list of affected stage names,
-                     or "all" for full build.
-"""
+"""Compute affected build stages from changed projects, expanding TEST_SUBPROJECTS."""
 
 import os
 import sys
 from pathlib import Path
 
 # Add parent directory to path for _therock_utils imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR.parent))
 from _therock_utils.build_topology import get_topology
+
+# Add test_tools to path for TEST_SUBPROJECTS parsing
+REPO_ROOT = SCRIPT_DIR.parents[1]
+sys.path.insert(0, str(REPO_ROOT / "test_tools"))
+from determine_rocm_test_dependencies import get_subprojects_to_test
 
 from github_actions_api import gha_set_output
 
 
 def get_affected_stages(changed_projects: str) -> str:
-    """Get build stages affected by the changed projects.
-
-    Args:
-        changed_projects: Comma-separated list of changed project paths/names
-
-    Returns:
-        Comma-separated list of affected stage names, or "all" if no projects
-        specified (full build)
-    """
+    """Return comma-separated affected stage names, or 'all' for full build."""
     if not changed_projects or not changed_projects.strip():
         print("No changed_projects specified, building all stages")
         return "all"
@@ -47,23 +32,18 @@ def get_affected_stages(changed_projects: str) -> str:
         print("Empty projects list after parsing, building all stages")
         return "all"
 
-    # Normalize project paths to just the project name
-    # e.g., "projects/hip" -> "hip", "projects/rocblas" -> "rocblas"
-    projects = []
-    for p in raw_projects:
-        # Strip common path prefixes used by external repos
-        if "/" in p:
-            # Take the last component (e.g., "projects/hip" -> "hip")
-            name = p.split("/")[-1]
-        else:
-            name = p
-        projects.append(name)
+    # Normalize "projects/hip" -> "hip"
+    projects = [p.split("/")[-1] if "/" in p else p for p in raw_projects]
 
     print(f"Raw changed projects: {raw_projects}")
     print(f"Normalized projects: {projects}")
 
+    # Expand to include TEST_SUBPROJECTS dependencies (e.g., rocprim -> rocsparse)
+    expanded_projects = get_subprojects_to_test(projects, REPO_ROOT)
+    print(f"Expanded projects (with TEST_SUBPROJECTS): {sorted(expanded_projects)}")
+
     topology = get_topology()
-    affected = topology.get_stages_for_projects(projects)
+    affected = topology.get_stages_for_projects(list(expanded_projects))
 
     if not affected:
         # No stages found - fall back to full build
