@@ -540,6 +540,3 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
-
-# Write artifact→subprojects manifest for Python scripts to use
-therock_write_subproject_manifest()
