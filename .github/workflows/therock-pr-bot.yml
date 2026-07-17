@@ -54,10 +54,10 @@ jobs:
         id: app-secrets
         shell: bash
         env:
-          APP_CLIENT_ID: ${{ secrets.THEROCK_PR_BOT_APPID }}
+          APP_ID: ${{ secrets.THEROCK_PR_BOT_APPID }}
           APP_KEY: ${{ secrets.THEROCK_PRBOT_KEY }}
         run: |
-          if [[ -n "$APP_CLIENT_ID" && -n "$APP_KEY" ]]; then
+          if [[ -n "$APP_ID" && -n "$APP_KEY" ]]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -68,9 +68,7 @@ jobs:
         if: steps.app-secrets.outputs.available == 'true'
         uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v3.2.0
         with:
-          # 'app-id' is deprecated since v3.1.0 — use the App's Client ID.
-          # See: https://github.com/actions/create-github-app-token/issues/353
-          client-id: ${{ secrets.THEROCK_PR_BOT_APPID }}
+          app-id: ${{ secrets.THEROCK_PR_BOT_APPID }}
           private-key: ${{ secrets.THEROCK_PRBOT_KEY }}
 
       # SECURITY: only fixed, trusted dependencies — never installed from the PR.
