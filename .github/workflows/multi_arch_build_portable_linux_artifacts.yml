@@ -121,6 +121,20 @@ jobs:
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
+      - name: Install build telemetry tooling
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y time sysstat
+          elif command -v yum >/dev/null 2>&1; then
+            yum install -y time sysstat
+          elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y time sysstat
+          else
+            echo "ERROR: No supported package manager found to install telemetry prerequisites (time, sysstat)" >&2
+            exit 1
+          fi
+
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
@@ -136,9 +150,61 @@ jobs:
             --output-dir="${BUILD_DIR}" \
             --bootstrap
 
+      - name: Restore third-party cache
+        run: |
+          set -eu
+          CACHE_STAGE_DIR="${CACHE_DIR}/thirdparty"
+          mkdir -p "$CACHE_STAGE_DIR" "$BUILD_DIR"
+          ARCHIVE_ZST="${CACHE_STAGE_DIR}/${STAGE_NAME}.tar.zst"
+          ARCHIVE_GZ="${CACHE_STAGE_DIR}/${STAGE_NAME}.tar.gz"
+          if [ -f "$ARCHIVE_ZST" ]; then
+            if command -v zstd >/dev/null 2>&1; then
+              echo "Restoring third-party cache from $ARCHIVE_ZST"
+              zstd -dc "$ARCHIVE_ZST" | tar -C "$BUILD_DIR" -x || true
+            else
+              echo "zstd not available; skipping $ARCHIVE_ZST restore" >&2
+            fi
+          elif [ -f "$ARCHIVE_GZ" ]; then
+            echo "Restoring third-party cache from $ARCHIVE_GZ"
+            tar -C "$BUILD_DIR" -xzf "$ARCHIVE_GZ" || true
+          else
+            echo "No third-party cache archive for $STAGE_NAME"
+          fi
+
       - name: Fetch sources
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+
+      - name: Save third-party cache
+        if: ${{ always() }}
+        run: |
+          set -eu
+          CACHE_STAGE_DIR="${CACHE_DIR}/thirdparty"
+          mkdir -p "$CACHE_STAGE_DIR"
+          ARCHIVE_ZST="${CACHE_STAGE_DIR}/${STAGE_NAME}.tar.zst"
+          ARCHIVE_GZ="${CACHE_STAGE_DIR}/${STAGE_NAME}.tar.gz"
+          cd "${BUILD_DIR}"
+          set --
+          if [ -d third-party ]; then
+            set -- "$@" third-party
+          fi
+          if [ -d base/aux-overlay ]; then
+            set -- "$@" base/aux-overlay
+          fi
+          if [ $# -eq 0 ]; then
+            echo "No third-party directories to cache"
+            exit 0
+          fi
+          if command -v zstd >/dev/null 2>&1; then
+            echo "Archiving third-party cache to $ARCHIVE_ZST"
+            tar -c "$@" | zstd -T0 -3 > "${ARCHIVE_ZST}.tmp"
+            mv "${ARCHIVE_ZST}.tmp" "${ARCHIVE_ZST}"
+            rm -f "${ARCHIVE_GZ}"
+          else
+            echo "Archiving third-party cache to $ARCHIVE_GZ (gzip fallback)"
+            tar -czf "${ARCHIVE_GZ}.tmp" "$@"
+            mv "${ARCHIVE_GZ}.tmp" "${ARCHIVE_GZ}"
+          fi
 
       - name: Get stage configuration
         id: stage_config
@@ -154,6 +220,28 @@ jobs:
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
         run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
+      - name: Configure timing instrumentation
+        run: |
+          set -eu
+          PYTHON_BIN="$(command -v python3)"
+          if [ -z "$PYTHON_BIN" ]; then
+            echo "python3 not found in PATH" >&2
+            exit 1
+          fi
+          LAUNCH_COMPILE="$PYTHON_BIN ${GITHUB_WORKSPACE}/build_tools/github_actions/record_rule_launch.py compile"
+          LAUNCH_LINK="$PYTHON_BIN ${GITHUB_WORKSPACE}/build_tools/github_actions/record_rule_launch.py link"
+          echo "CMAKE_RULE_LAUNCH_COMPILE=${LAUNCH_COMPILE}" >> "${GITHUB_ENV}"
+          echo "CMAKE_RULE_LAUNCH_LINK=${LAUNCH_LINK}" >> "${GITHUB_ENV}"
+
+      - name: Default build parallelism
+        run: |
+          if [ -z "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=144" >> "${GITHUB_ENV}"
+            echo "Defaulted CMAKE_BUILD_PARALLEL_LEVEL to 144"
+          else
+            echo "CMAKE_BUILD_PARALLEL_LEVEL already set to ${CMAKE_BUILD_PARALLEL_LEVEL}"
+          fi
+
       - name: Configure
         run: |
           cmake -B "${BUILD_DIR}" -S . -GNinja \
@@ -163,20 +251,6 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
-
-      - name: Install GNU time
-        run: |
-          if command -v apt-get >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y time
-          elif command -v yum >/dev/null 2>&1; then
-            yum install -y time
-          elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y time
-          else
-            echo "ERROR: No supported package manager found to install 'time'" >&2
-            exit 1
-          fi
 
       - name: Configure build parallelism override
         if: ${{ inputs.cmake_parallel_level != '' }}

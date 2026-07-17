@@ -168,6 +168,95 @@ def _capture_command_output(cmd: Sequence[str], output_path: Path) -> Dict[str, 
         encoding="utf-8",
     )
     return {
+        "command": list(cmd),
+        "return_code": result.returncode,
+        "output_path": str(output_path),
+    }
+
+
+def _capture_ccache_stats(path: Path) -> Dict[str, Any] | None:
+    """
+    Attempt to gather ccache statistics, trying richer commands before falling back.
+    """
+    candidates: Sequence[Sequence[str]] = (
+        ["ccache", "--show-stats"],
+        ["ccache", "--print-stats"],
+        ["ccache", "-s"],
+    )
+    for cmd in candidates:
+        meta = _capture_command_output(cmd, path)
+        if meta and meta["return_code"] == 0:
+            try:
+                contents = path.read_text()
+            except OSError:
+                contents = ""
+            if contents.strip():
+                meta["command"] = list(cmd)
+                return meta
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError:
+                pass
+    return None
+
+
+def _capture_diskstats(path: Path) -> Dict[str, Any] | None:
+    """
+    Capture /proc/diskstats as a fallback when iostat is unavailable.
+    """
+    try:
+        data = Path("/proc/diskstats").read_text()
+    except OSError:
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(data, encoding="utf-8")
+    return {
+        "command": ["cat", "/proc/diskstats"],
+        "return_code": 0,
+        "output_path": str(path),
+    }
+
+
+def _du_kilobytes(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    result = _run(["du", "-sk", str(path)], capture_output=True)
+    if result.returncode != 0 or not result.stdout:
+        return None
+    try:
+        return int(result.stdout.split()[0])
+    except (IndexError, ValueError):
+        return None
+
+
+def _capture_command_output(cmd: Sequence[str], output_path: Path) -> Dict[str, Any] | None:
+    """
+    Execute a diagnostic command (when available) and write stdout/stderr to disk.
+    Returns structured metadata or None if the binary was missing.
+    """
+    binary = cmd[0]
+    if shutil.which(binary) is None:
+        return None
+
+    result = _run(cmd, capture_output=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        "\n".join(
+            [
+                f"Command: {' '.join(shlex.quote(token) for token in cmd)}",
+                f"Return code: {result.returncode}",
+                "",
+                "STDOUT:",
+                result.stdout or "",
+                "",
+                "STDERR:",
+                result.stderr or "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return {
         "command": cmd,
         "return_code": result.returncode,
         "output_path": str(output_path),
@@ -338,6 +427,7 @@ def main() -> int:
     ccache_post_path = metrics_root / f"{args.stage}-ccache-after-{stamp}.txt"
     vmstat_path = metrics_root / f"{args.stage}-vmstat-{stamp}.txt"
     iostat_path = metrics_root / f"{args.stage}-iostat-{stamp}.txt"
+    diskstats_path = metrics_root / f"{args.stage}-diskstats-{stamp}.txt"
     disk_usage_path = metrics_root / f"{args.stage}-disk-usage-{stamp}.json"
 
     targets = args.targets or [f"stage-{args.stage}", "therock-artifacts"]
@@ -391,10 +481,26 @@ def main() -> int:
 
     print(f"[run_stage_build] Executing: {' '.join(shlex.quote(tok) for tok in time_cmd)}")
 
+    tooling_notes: List[str] = []
     disk_usage_before_kb = _du_kilobytes(build_dir)
-    ccache_pre_meta = _capture_command_output(["ccache", "-s"], ccache_pre_path)
+    if disk_usage_before_kb is None:
+        tooling_notes.append("du_missing")
+
+    ccache_pre_meta = _capture_ccache_stats(ccache_pre_path)
+    if ccache_pre_meta is None:
+        tooling_notes.append("ccache_stats_unavailable")
+
     vmstat_meta = _capture_command_output(["vmstat", "-s"], vmstat_path)
+    if vmstat_meta is None:
+        tooling_notes.append("vmstat_missing")
+
     iostat_meta = _capture_command_output(["iostat", "-dx"], iostat_path)
+    diskstats_meta = None
+    if iostat_meta is None:
+        tooling_notes.append("iostat_missing")
+        diskstats_meta = _capture_diskstats(diskstats_path)
+        if diskstats_meta is None:
+            tooling_notes.append("diskstats_missing")
 
     start = datetime.now(tz=timezone.utc)
     result = _run(time_cmd)
@@ -442,12 +548,15 @@ def main() -> int:
         "ccache_post_path": None,
         "vmstat_path": str(vmstat_path) if vmstat_path.exists() else None,
         "iostat_path": str(iostat_path) if iostat_path.exists() else None,
+        "diskstats_path": str(diskstats_path) if diskstats_path.exists() else None,
         "disk_usage_before_kb": disk_usage_before_kb,
         "disk_usage_after_kb": None,
         "disk_usage_delta_kb": None,
         "ccache_pre_metadata": ccache_pre_meta,
         "vmstat_metadata": vmstat_meta,
         "iostat_metadata": iostat_meta,
+        "diskstats_metadata": diskstats_meta,
+        "tooling_notes": tooling_notes or None,
     }
 
     disk_usage_after_kb = _du_kilobytes(build_dir)
@@ -468,7 +577,7 @@ def main() -> int:
         )
         summary["disk_usage_path"] = str(disk_usage_path)
 
-    ccache_post_meta = _capture_command_output(["ccache", "-s"], ccache_post_path)
+    ccache_post_meta = _capture_ccache_stats(ccache_post_path)
     if ccache_post_meta:
         summary["ccache_post_path"] = str(ccache_post_path)
         summary["ccache_post_metadata"] = ccache_post_meta
@@ -485,6 +594,15 @@ def main() -> int:
             )
     if time_summary.get("max_rss_gb") is not None:
         print(f"[run_stage_build] Max RSS: {time_summary['max_rss_gb']:.2f} GiB")
+    if disk_usage_after_kb is not None and disk_usage_before_kb is not None:
+        delta_gib = (disk_usage_after_kb - disk_usage_before_kb) * 1024 / (1024 ** 3)
+        print(f"[run_stage_build] Disk delta: {delta_gib:+.2f} GiB ({disk_usage_before_kb/1024/1024:.2f} → {disk_usage_after_kb/1024/1024:.2f} GiB)")
+    if summary.get("timing_log_path"):
+        print(f"[run_stage_build] Timing log captured: {summary['timing_log_path']}")
+    else:
+        print("[run_stage_build] Timing log missing (check CMAKE_RULE_LAUNCH_* wiring)")
+    if tooling_notes:
+        print(f"[run_stage_build] Tooling notes: {', '.join(tooling_notes)}")
 
     return result.returncode
 
