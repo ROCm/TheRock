@@ -72,7 +72,6 @@ TABLE_ORDER = [
     "Unit Test",
     "pre-commit",
     "Draft PR",
-    "PR Size",
     "Feature Flag",
     "Code Coverage",
     "therock-pr-bot",
@@ -100,7 +99,6 @@ class CheckResult:
 @dataclass(frozen=True)
 class Policy:
     branch_patterns: List[re.Pattern[str]]
-    title_patterns: List[re.Pattern[str]]
     title_min_length: int
     title_max_length: int
     description_min_length: int
@@ -108,9 +106,6 @@ class Policy:
     description_checklist_patterns: List[re.Pattern[str]]
     block_draft: bool
     forbidden_title_patterns: List[re.Pattern[str]]
-    max_files_changed: int
-    max_total_changes: int
-    max_single_file_changes: int
     forbidden_paths: List[str]
     unit_test_code_extensions: List[str]
     unit_test_patterns: List[str]
@@ -140,8 +135,6 @@ def load_policy(policy_path: Path) -> Policy:
 
     # PR title rules now live under the nested `title:` mapping.
     title_cfg = pr.get("title", {}) or {}
-    title_patterns_raw = title_cfg.get("pattern", []) or []
-    title_patterns = [re.compile(str(p)) for p in title_patterns_raw]
     title_min_length = int(title_cfg.get("title_min_length", 0) or 0)
     title_max_length = int(title_cfg.get("title_max_length", 0) or 0)
 
@@ -161,11 +154,6 @@ def load_policy(policy_path: Path) -> Policy:
     block_draft = bool(pr.get("block_draft", False))
     forbidden_title_raw = pr.get("forbidden_title_patterns", []) or []
     forbidden_title_patterns = [re.compile(str(p)) for p in forbidden_title_raw]
-
-    # PR "reviewable shape" limits live under the diff: section.
-    max_files_changed = int(diff.get("max_files_changed", 0) or 0)
-    max_total_changes = int(diff.get("max_total_changes", 0) or 0)
-    max_single_file_changes = int(diff.get("max_single_file_changes", 0) or 0)
 
     forbidden_paths = [str(p) for p in (diff.get("forbidden_paths", []) or [])]
 
@@ -194,7 +182,6 @@ def load_policy(policy_path: Path) -> Policy:
 
     return Policy(
         branch_patterns=branch_patterns,
-        title_patterns=title_patterns,
         title_min_length=title_min_length,
         title_max_length=title_max_length,
         description_min_length=description_min_length,
@@ -202,9 +189,6 @@ def load_policy(policy_path: Path) -> Policy:
         description_checklist_patterns=description_checklist_patterns,
         block_draft=block_draft,
         forbidden_title_patterns=forbidden_title_patterns,
-        max_files_changed=max_files_changed,
-        max_total_changes=max_total_changes,
-        max_single_file_changes=max_single_file_changes,
         forbidden_paths=forbidden_paths,
         unit_test_code_extensions=unit_test_code_extensions,
         unit_test_patterns=unit_test_patterns,
@@ -333,10 +317,10 @@ def _short(value: str, limit: int = 80) -> str:
 
 
 def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
-    """Validate the PR title (length, Conventional Commits style, forbidden words).
+    """Validate the PR title (length and forbidden words).
 
-    Appends a structured Error/Expected/Desired-format message to `errors` for
-    each rule that fails.
+    Appends a structured Error/Expected message to `errors` for each rule that
+    fails.
     """
     title = (title or "").strip()
     fmt = "**Desired format:** `type(optional-scope): short description`"
@@ -354,11 +338,6 @@ def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
             f"**Expected:** at most {policy.title_max_length} characters.\n"
             f"{fmt}"
         )
-
-    if policy.title_patterns and not any(
-        p.search(title) for p in policy.title_patterns
-    ):
-        errors.append("**Error:** Title does not follow policy patterns.\n" f"{fmt}")
 
     if policy.forbidden_title_patterns:
         matched = [
@@ -412,9 +391,13 @@ def ensure_pr_description(policy: Policy, body: str, errors: List[str]) -> None:
             "• `JIRA ID : TESTAUTO-6039`\n"
             "• `JIRA ID - #330`\n"
             "• `JIRA ID #330`\n"
+            "• `JIRA ID` (on separate line)\n"
+            "  `ROCM-25757`\n"
             "• `ISSUE ID : TESTUTO-3334`\n"
             "• `ISSUE ID #3334`\n"
             "• `ISSUE ID - TESTAUTO-3433`\n"
+            "• `ISSUE ID` (on separate line)\n"
+            "  `AIRUNTIME-2352`\n"
             "• `ISSUE ID : https://github.com/<org_name>/<repo_name>/issues/1234`\n"
             "• `Closes #10`\n"
             "• `Fixes octo-org/octo-repo#100`\n"
@@ -447,6 +430,24 @@ def _matches_forbidden(filename: str, pattern: str) -> bool:
     # Allow '**/<x>' patterns to also match root-level files (e.g. '.env').
     if pattern.startswith("**/") and fnmatch.fnmatch(filename, pattern[3:]):
         return True
+    return False
+
+
+def _is_test_file(filename: str, patterns: Iterable[str]) -> bool:
+    """Return True if `filename` is recognised as a test file.
+
+    Patterns that contain a '/' are treated as FULL-PATH globs (e.g.
+    '**/test/gtest/**' matches any file under a test/gtest/ directory).
+    Patterns without a '/' are matched against the BASENAME only
+    (e.g. 'test_*', '*_test.*').
+    """
+    base = Path(filename).name
+    for pat in patterns:
+        if "/" in pat:
+            if _matches_forbidden(filename, pat):
+                return True
+        elif fnmatch.fnmatch(base, pat):
+            return True
     return False
 
 
@@ -509,7 +510,7 @@ def ensure_unit_tests(
         ext = Path(filename).suffix.lower()
 
         # A test file satisfies the requirement.
-        if any(fnmatch.fnmatch(base, pat) for pat in policy.unit_test_patterns):
+        if _is_test_file(filename, policy.unit_test_patterns):
             has_test = True
             continue
 
@@ -547,56 +548,11 @@ def pr_has_code_files(policy: Policy, pr_files: Iterable[Dict[str, Any]]) -> boo
             continue
         base = Path(filename).name
         ext = Path(filename).suffix.lower()
-        if any(fnmatch.fnmatch(base, pat) for pat in policy.unit_test_patterns):
+        if _is_test_file(filename, policy.unit_test_patterns):
             continue
         if ext in policy.unit_test_code_extensions:
             return True
     return False
-
-
-def ensure_pr_reviewable(
-    policy: Policy, pr_files: List[Dict[str, Any]], errors: List[str]
-) -> None:
-    """Keep PRs small enough to review: file count, total churn, per-file churn."""
-    if not (
-        policy.max_files_changed
-        or policy.max_total_changes
-        or policy.max_single_file_changes
-    ):
-        return
-
-    num_files = len(pr_files)
-    total_changes = 0
-
-    for f in pr_files:
-        additions = int(f.get("additions") or 0)
-        deletions = int(f.get("deletions") or 0)
-        changes = int(f.get("changes") or (additions + deletions))
-        total_changes += changes
-
-        filename = Path(str(f.get("filename") or "")).as_posix()
-        if policy.max_single_file_changes and changes > policy.max_single_file_changes:
-            errors.append(
-                "**Error:** A single file changes too much to review easily.\n"
-                f"**Expected:** at most {policy.max_single_file_changes} changes "
-                "in one file.\n"
-                f"**Current:** `{filename}` has {changes} changes"
-            )
-
-    if policy.max_files_changed and num_files > policy.max_files_changed:
-        errors.append(
-            "**Error:** Too many files changed in one PR.\n"
-            f"**Expected:** at most {policy.max_files_changed} files.\n"
-            f"**Current:** {num_files} files changed"
-        )
-
-    if policy.max_total_changes and total_changes > policy.max_total_changes:
-        errors.append(
-            "**Error:** Total diff is too large to review easily.\n"
-            f"**Expected:** at most {policy.max_total_changes} total "
-            "additions + deletions.\n"
-            f"**Current:** {total_changes} total changes"
-        )
 
 
 def summarize_required_checks(
@@ -1040,7 +996,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if is_bump_pr(policy, author):
         marker = "<!-- therock-pr-bot-policy-check -->"
         note = (
-            f"> 🤖 **Bump PR detected** (author `@{author}`). All policy checks "
+            f"🤖 **Bump PR detected** (author `@{author}`). All policy checks "
             "are auto-approved for automated dependency bumps."
         )
         upsert_comment(
@@ -1049,9 +1005,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             pr_number,
             token,  # type: ignore[arg-type]
             marker,
-            build_policy_table_comment(
-                build_bump_pr_results(policy), marker, ready=True, note=note
-            ),
+            note,
         )
         remove_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
         update_comment_if_exists(
