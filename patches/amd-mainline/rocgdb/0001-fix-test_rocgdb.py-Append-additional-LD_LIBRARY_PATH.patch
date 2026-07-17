@@ -1,0 +1,51 @@
+From eaf125c07d531ff3c744b55deecc95f7cc97c10b Mon Sep 17 00:00:00 2001
+From: Ethan Stewart <ethan.stewart@amd.com>
+Date: Fri, 17 Jul 2026 15:49:50 -0500
+Subject: [PATCH] fix(test_rocgdb.py): Append additional LD_LIBRARY_PATH entry
+
+When -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON, libomp.so and libomptarget.so
+will be installed one level down in lib/x86_64-unknown-linux-gnu for example.
+This patch  will query clang to get the host triple and add it to the LD_LIBRARY_PATH
+being passed to rocgdb.
+
+This LLVM option will be the default in ROCm once https://github.com/ROCm/TheRock/pull/5758
+lands, which is currently blocked by this test issue.
+---
+ .github/scripts/test_rocgdb.py | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/.github/scripts/test_rocgdb.py b/.github/scripts/test_rocgdb.py
+index d1d7385587a..dd64f71efec 100644
+--- a/.github/scripts/test_rocgdb.py
++++ b/.github/scripts/test_rocgdb.py
+@@ -1252,6 +1252,27 @@ def setup_environment(artifacts_dir: Path) -> Dict[str, str]:
+         f"{artifacts_dir}/llvm/lib",
+         f"{artifacts_dir}/lib/llvm/lib",
+     ]
++
++   # Determine host triple
++    amdclang_path = artifacts_dir / "lib" / "llvm" /"bin"/ "amdclang++"
++    if amdclang_path.exists():
++        try:
++            host_triple = subprocess.run(
++                [str(amdclang_path), "--print-target-triple"],
++                capture_output=True,
++                text=True,
++                timeout=10,
++                check=True,
++            ).stdout.strip()
++        except (subprocess.SubprocessError, OSError) as exc:
++            raise RuntimeError(
++                f"'{amdclang_path} --print-target-triple' failed; "
++                "this suggests a broken toolchain."
++            ) from exc
++
++    if host_triple:
++        ld_library_parts += [f"{artifacts_dir}/lib/llvm/lib/{host_triple}",]
++
+     _prepend_to_path_var(env_vars, "PATH", path_parts)
+     _prepend_to_path_var(env_vars, "LD_LIBRARY_PATH", ld_library_parts)
+ 
+-- 
+2.34.1
+
