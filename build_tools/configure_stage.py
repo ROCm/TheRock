@@ -2,39 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate CMake configuration for building a specific stage or projects.
-
-This script uses BUILD_TOPOLOGY.toml to determine which features/artifacts
-should be enabled for a specific build stage or set of projects, and outputs
-the appropriate CMake arguments.
-
-Usage:
-    # Generate CMake args for a stage
-    python configure_stage.py \
-        --stage math-libs \
-        --amdgpu-families gfx94X-dcgpu \
-        --output-cmake-args /tmp/stage_args.txt
-
-    # Generate CMake args for specific projects
-    python configure_stage.py --projects rocblas miopen --oneline
-    # Output: -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_MIOPEN=ON
-
-    # List available projects/subprojects
-    python configure_stage.py --list-projects
-
-    # Then use the generated args with CMake
-    cmake -B build -S . $(cat /tmp/stage_args.txt) -GNinja
-
-    # Or print to stdout for inspection
-    python configure_stage.py --stage math-libs --print
-
-The script generates flags like:
-    -DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu
-    -DTHEROCK_ENABLE_ALL=OFF
-    -DTHEROCK_ENABLE_BLAS=ON
-    -DTHEROCK_ENABLE_FFT=ON
-    ...
-"""
+"""Generate CMake configuration for building a specific stage or projects."""
 
 import argparse
 import platform as platform_module
@@ -56,17 +24,9 @@ def log(msg: str):
 
 
 def normalize_project_name(name: str) -> str:
-    """Normalize a project name, handling paths like 'projects/hip' -> 'hip'.
-
-    The changed_projects input from external repos may include paths like:
-    - 'projects/hip' -> 'hip'
-    - 'projects/rocblas' -> 'rocblas'
-    - 'hip' -> 'hip' (already normalized)
-    """
-    # Strip 'projects/' prefix if present
+    """Normalize 'projects/hip' -> 'hip'."""
     if name.startswith("projects/"):
         name = name[len("projects/") :]
-    # Strip any trailing path components (e.g., 'hip/src/foo.cpp' -> 'hip')
     if "/" in name:
         name = name.split("/")[0]
     return name
@@ -187,12 +147,8 @@ def generate_cmake_args(
         args.append("# Disable all features by default")
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
-    # Get features to enable
-    # When both --stage and --projects are specified, filter projects to only
-    # those produced by this stage. This enables stage-specific routing where
-    # each stage only builds the projects it's responsible for.
+    # When both --stage and --projects are specified, filter to projects produced by this stage
     if stage_name and project_names:
-        # Filter to projects produced by this stage
         filtered_projects = topology.filter_projects_for_stage(
             project_names, stage_name, build_dir
         )

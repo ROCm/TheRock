@@ -1331,20 +1331,7 @@ class BuildTopology:
         stage_name: str,
         build_dir: Optional[Path] = None,
     ) -> List[str]:
-        """Filter projects to only those produced by a specific stage.
-
-        This enables stage-specific project routing: when building multiple
-        projects across different stages, each stage only gets the projects
-        it actually produces.
-
-        Args:
-            project_names: List of project/subproject names to filter
-            stage_name: Stage to filter for
-            build_dir: Optional build directory with artifact_subprojects.json
-
-        Returns:
-            Filtered list of project names that belong to this stage
-        """
+        """Return only projects produced by the given stage."""
         if stage_name not in self.build_stages:
             return []
 
