@@ -59,6 +59,7 @@ import functools
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,6 +118,7 @@ class AutoStageReuse:
     reasons: tuple[str, ...]
     report_lines: tuple[str, ...] = field(default_factory=tuple)
     platform_available: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    stage_artifacts: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 LOG_PREFIX = "[STAGE-REUSE]"
@@ -170,7 +172,6 @@ def _stage_artifacts_available(
     """True when every artifact this stage produces has an archive present."""
     from artifact_manager import ARTIFACT_COMPONENTS
     from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
-
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     stage = topology.build_stages.get(stage_name)
     if stage is None:
@@ -179,9 +180,9 @@ def _stage_artifacts_available(
         for artifact_name in artifacts_by_group.get(group_name, []):
             for family in target_families:
                 found = False
-                for component in ARTIFACT_COMPONENTS:
+                for artifact in ARTIFACT_COMPONENTS:
                     for extension in ARTIFACT_EXTENSIONS:
-                        filename = f"{artifact_name}_{component}_{family}{extension}"
+                        filename = f"{artifact_name}_{artifact}_{family}{extension}"
                         if filename in available_filenames:
                             found = True
                             break
@@ -283,6 +284,12 @@ def compute_auto_stage_reuse(
     candidates = plan.candidate_stages
     rebuild = plan.rebuild_stages
     families = tuple(target_families) or ("generic",)
+    stage_artifacts = (
+        {stage: _stage_artifact_names(topology, stage) for stage in candidates}
+        if topology is not None
+        else {}
+    )
+
     if changed_files is None:
         return _empty_result(
             mode,
@@ -304,6 +311,7 @@ def compute_auto_stage_reuse(
             baseline_run_id=None,
             available=(),
             unavailable=candidates,
+            stage_artifacts=stage_artifacts,
         )
         return AutoStageReuse(
             mode=mode,
@@ -317,6 +325,7 @@ def compute_auto_stage_reuse(
             applied_reuse_stages=(),
             reasons=plan.reasons,
             report_lines=lines,
+            stage_artifacts=stage_artifacts,
         )
 
     required = required_artifacts_for_stages(topology, candidates, families)
@@ -415,6 +424,7 @@ def compute_auto_stage_reuse(
         baseline_error=baseline_error,
         platforms=resolved_platforms,
         platform_available=per_platform_available,
+        stage_artifacts=stage_artifacts,
     )
     return AutoStageReuse(
         mode=mode,
@@ -429,6 +439,7 @@ def compute_auto_stage_reuse(
         reasons=plan.reasons,
         report_lines=lines,
         platform_available=per_platform_available,
+        stage_artifacts=stage_artifacts,
     )
 
 
@@ -548,8 +559,10 @@ def _format_report(
     baseline_error=None,
     platforms: Sequence[str] = (),
     platform_available: dict[str, tuple[str, ...]] | None = None,
+    stage_artifacts: dict[str, tuple[str, ...]] | None = None,
 ):
     platform_available = platform_available or {}
+    stage_artifacts = stage_artifacts or {}
     lines: list[str] = [f"{LOG_PREFIX} mode={mode.value}"]
     if platforms:
         lines.append(f"{LOG_PREFIX} platforms verified: {', '.join(platforms)}")
@@ -594,6 +607,16 @@ def _format_report(
             lines.append(
                 f"{LOG_PREFIX}   stage '{stage}' unaffected but artifacts "
                 f"NOT available -> rebuild"
+            )
+
+    if stage_artifacts:
+        for stage in candidates:
+            artifacts = stage_artifacts.get(stage, ())
+            if not artifacts:
+                continue
+            lines.append(
+                f"{LOG_PREFIX}   stage '{stage}' builds: "
+                f"{', '.join(f'`{artifact}`' for artifact in artifacts)}"
             )
 
     if rebuild:
@@ -647,6 +670,14 @@ def render_step_summary(result: AutoStageReuse) -> str:
         lines.append(f"- available in baseline: {available}")
         lines.append(f"- not available on this platform: {unavailable}")
         lines.append(f"- applied: {applied}")
+        if result.stage_artifacts:
+            lines.append("- stage artifacts:")
+            for stage in result.candidate_stages:
+                artifacts = result.stage_artifacts.get(stage, ())
+                if not artifacts:
+                    continue
+                artifact_list = ", ".join(f"`{artifact}`" for artifact in artifacts)
+                lines.append(f"  - `{stage}`: {artifact_list} ")
         if result.reasons:
             lines.append("- reasons:")
             for reason in result.reasons:
@@ -661,6 +692,25 @@ def render_step_summary(result: AutoStageReuse) -> str:
         lines.append("")
 
     return "\n".join(lines).rstrip()
+
+
+def _stage_artifact_names(topology, stage_name: str) -> tuple[str, ...]:
+    """Return the artifact names produced by a stage."""
+    stage = topology.build_stages.get(stage_name)
+    if stage is None:
+        return ()
+
+    artifacts_by_group = topology.get_artifact_group_to_artifacts()
+    names: list[str] = []
+    seen: set[str] = set()
+
+    for group_name in stage.artifact_groups:
+        for artifact_name in artifacts_by_group.get(group_name, []):
+            if artifact_name not in seen:
+                seen.add(artifact_name)
+                names.append(artifact_name)
+
+    return tuple(names)
 
 
 def log_report(result: AutoStageReuse) -> None:

@@ -18,7 +18,8 @@ from baseline_runs import (
     WorkflowJobHealth,
 )
 
-
+from build_tools.artifact_manager import ARTIFACT_COMPONENTS
+from build_tools._therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
 class _FakeStage:
     def __init__(self, groups):
         self.artifact_groups = groups
@@ -246,8 +247,16 @@ class GuardrailTest(unittest.TestCase):
         summary = srd.render_step_summary(result)
         self.assertIn("baseline run checked: `123`", summary)
         self.assertIn("available in baseline", summary)
+        self.assertIn("stage artifacts", summary)
+        self.assertIn("compiler-runtime", summary)
+        self.assertIn("base", summary)
         self.assertIn("no build steps were skipped", summary)
 
+    def test_stage_artifact_names(self):
+        self.assertEqual(
+            srd._stage_artifact_names(FakeTopology(), "compiler-runtime"),
+            ("base",),
+        )
 
 class DefaultBaselineSelectorTest(unittest.TestCase):
     """_default_baseline_selector must fetch real branch history and never pass
