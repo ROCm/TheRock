@@ -1,0 +1,48 @@
+From f215e4998325ae89bbfe3f6e772e7bb69c32f379 Mon Sep 17 00:00:00 2001
+From: chiranjeevipattigidi <chiranjeevi.pattigidi@amd.com>
+Date: Fri, 17 Jul 2026 11:38:36 +0000
+Subject: [PATCH] [rocWMMA] Fix duplicate __hip_cuid_ symbols when using
+ -fuse-cuid=hash-no-output
+
+When building with sccache and -fuse-cuid=hash-no-output, rocWMMA unit tests
+fail at RDC link time with duplicate __hip_cuid_<hash> symbols. The root cause
+is that parameterized test TUs like load_contamination_a_64_u8.cpp and
+load_contamination_a_32_u8.cpp have identical preprocessed content -- they
+include the same headers and differ only in type aliases that expand to the
+same tokens. With hash-no-output mode (which excludes -o from the CUID hash
+to align with sccache's cache key), all such files collapse to the same CUID.
+
+Fix: in add_rocwmma_test(), assign an explicit -cuid=<target>_<filestem> to
+each source file via set_source_files_properties(COMPILE_OPTIONS). This gives
+every TU a guaranteed-unique CUID regardless of the -fuse-cuid mode in use.
+---
+ projects/rocwmma/test/CMakeLists.txt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/projects/rocwmma/test/CMakeLists.txt b/projects/rocwmma/test/CMakeLists.txt
+index 44831cb1caf..e1596f29e0f 100644
+--- a/projects/rocwmma/test/CMakeLists.txt
++++ b/projects/rocwmma/test/CMakeLists.txt
+@@ -144,6 +144,19 @@ function(add_rocwmma_test TEST_TARGET TEST_SOURCE)
+ 
+   list(APPEND TEST_SOURCE ${ARGN})
+   add_executable(${TEST_TARGET} ${TEST_SOURCE})
++
++  # Assign a unique -cuid= per source file so that multiple TUs with identical
++  # preprocessed content (parameterized template instantiations) do not collide
++  # when -fuse-cuid=hash-no-output is active (e.g. when building with sccache).
++  # Without this, files like load_contamination_a_64_u8.cpp and
++  # load_contamination_a_32_u8.cpp hash to the same CUID and produce duplicate
++  # __hip_cuid_<hash> symbols at RDC link time.
++  foreach(_src ${TEST_SOURCE})
++    get_filename_component(_src_stem "${_src}" NAME_WE)
++    set_source_files_properties("${_src}" TARGET_DIRECTORY ${TEST_TARGET}
++      PROPERTIES COMPILE_OPTIONS "-cuid=${TEST_TARGET}_${_src_stem}")
++  endforeach()
++
+   target_link_libraries(${TEST_TARGET} rocwmma GTest::gtest)
+   target_link_libraries(${TEST_TARGET} ${ROCWMMA_OPENMP_LIBRARY})
+   if(UNIX)
+-- 
+2.53.0
+
