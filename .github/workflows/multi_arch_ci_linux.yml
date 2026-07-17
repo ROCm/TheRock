@@ -40,6 +40,10 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      expanded_projects:
+        description: "Space-separated list of projects to build (includes TEST_SUBPROJECTS dependencies)."
+        type: string
+        default: ""
       affected_stages:
         description: "Comma-separated list of build stages to run, or 'all' for full build."
         type: string
@@ -114,7 +118,7 @@ jobs:
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
-      projects: ${{ inputs.changed_projects }}
+      projects: ${{ inputs.expanded_projects }}
       affected_stages: ${{ inputs.affected_stages }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

@@ -128,6 +128,9 @@ on:
       affected_stages:
         description: "Comma-separated list of build stages affected by changed_projects, or 'all' for full build."
         value: ${{ jobs.setup.outputs.affected_stages }}
+      expanded_projects:
+        description: "Space-separated list of projects to build (includes TEST_SUBPROJECTS dependencies)."
+        value: ${{ jobs.setup.outputs.expanded_projects }}
 
 permissions:
   contents: read
@@ -148,6 +151,7 @@ jobs:
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
       affected_stages: ${{ steps.affected_stages.outputs.affected_stages }}
+      expanded_projects: ${{ steps.affected_stages.outputs.expanded_projects }}
     steps:
       - name: Checking out repository
         id: checkout
