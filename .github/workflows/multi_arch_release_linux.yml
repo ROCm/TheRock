@@ -199,7 +199,8 @@ jobs:
               "test_type": "${{ inputs.test_type }}",
               "release_type": "${{ inputs.release_type }}",
               "repository": "${{ inputs.repository }}",
-              "ref": "${{ inputs.ref }}"
+              "ref": "${{ inputs.ref }}",
+              "build_variant": "${{ inputs.build_variant }}"
             }
 
   # Install tests are dispatched asynchronously (sanity) so publish
@@ -213,7 +214,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os_profile: [ubuntu2404, rhel10, sles16]
+        os_profile: [ubuntu2404, rhel8, rhel10, sles16]
     steps:
       - name: Trigger test_native_linux_packages_install
         uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2

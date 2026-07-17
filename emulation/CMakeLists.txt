@@ -19,6 +19,8 @@ if(THEROCK_ENABLE_ROCJITSU)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     CMAKE_ARGS
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
+    RUNTIME_DEPS
+      ${THEROCK_BUNDLED_LIBDRM}
   )
 
   therock_cmake_subproject_glob_c_sources(rocjitsu

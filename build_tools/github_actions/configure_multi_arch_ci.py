@@ -70,7 +70,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from configure_jax_release_matrix import generate_jax_matrix
+from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
@@ -932,10 +932,25 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_schedule:
-        # Full nightly coverage: every known family, including targets
-        # that are too slow or expensive for per-push CI.
-        linux_names = list(all_families.keys())
-        windows_names = list(all_families.keys())
+        # Schedule trigger: use explicit inputs if provided, else all families.
+        # "all" or empty = all known families. "none" = skip platform.
+        linux_names = list(ci_inputs.linux_amdgpu_families)
+        windows_names = list(ci_inputs.windows_amdgpu_families)
+        if linux_names == ["all"]:
+            linux_names = list(all_families.keys())
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif not linux_names:
+            linux_names = list(all_families.keys())
+        elif linux_names == ["none"]:
+            linux_names = []
+
+        if windows_names == ["all"]:
+            windows_names = list(all_families.keys())
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif not windows_names:
+            windows_names = list(all_families.keys())
+        elif windows_names == ["none"]:
+            windows_names = []
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
@@ -1165,7 +1180,12 @@ def _expand_build_config_for_platform(
     jax_build_matrix: list[dict[str, str]] = []
     build_jax = jobs.build_jax.action == JobAction.RUN and platform == "linux"
     if build_jax:
-        jax_build_matrix = generate_jax_matrix(ci_inputs.python_versions or None)
+        jax_build_matrix = generate_jax_matrix_for_release_type(
+            release_type=ci_inputs.release_type,
+            platform=platform,
+            python_versions=ci_inputs.python_versions or None,
+        )
+
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
