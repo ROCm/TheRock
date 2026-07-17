@@ -15,6 +15,9 @@ once all policy checks have passed.
 
 This document explains what each policy check means, why it exists, and how to fix a failure.
 
+> **Note:** This is **NOT an AI Bot and does not use any LLMs**. It is a
+> deterministic, rule-based checker driven entirely by `policy.yml`.
+
 ______________________________________________________________________
 
 ## 🌿 Branch Name
