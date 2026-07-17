@@ -17,6 +17,13 @@ Tests:
     component scanner should enforce this via the extends chain).
   - Manifest validation: every archive should have artifact_manifest.txt
     as its first member.
+  - Tensile code objects: any artifact that ships a Tensile lazy library
+    (TensileLibrary_lazy_*.dat) for a gfx target must also ship the matching
+    loadable code-object files (*.hsaco). A lazy library without its code
+    objects loads fine but fails at kernel dispatch with hipErrorFileNotFound,
+    which surfaces far downstream as an opaque error (e.g. rocBLAS ->
+    MIOpen -> "miopenStatusInternalError" in PyTorch RNN backward).
+    See https://github.com/ROCm/TheRock/issues/5976.
 
 Usage:
     THEROCK_ARTIFACTS_DIR=/path/to/archives \\
@@ -29,6 +36,7 @@ THEROCK_ARTIFACTS_DIR should point to a directory containing artifact archives
 import dataclasses
 import logging
 import os
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -138,6 +146,52 @@ class ComponentOverlap:
 
     artifact_name: str
     overlaps: dict[str, list[str]]  # path -> [component_name, ...]
+
+
+@dataclasses.dataclass
+class TensileCodeObjectGap:
+    """An artifact that ships a Tensile lazy library but no code objects."""
+
+    filename: str
+    artifact_name: str
+    lazy_libraries: list[str]  # flattened paths of TensileLibrary_lazy_*.dat
+
+
+# A Tensile lazy library is a manifest (.dat) that references code-object files
+# loaded on demand at kernel dispatch. Current builds emit those code objects as
+# ``.hsaco`` (with ``-xnack+``/``-xnack-`` variants). If the .dat ships without
+# any .hsaco, library load still succeeds but the first matching GEMM aborts with
+# hipErrorFileNotFound -> see issue #5976.
+_TENSILE_LAZY_LIBRARY_RE = re.compile(r"(^|/)TensileLibrary_lazy_[^/]*\.dat$")
+_CODE_OBJECT_RE = re.compile(r"\.hsaco$")
+
+
+def find_tensile_code_object_gaps(
+    archive_index: list[ArchiveInfo],
+) -> list[TensileCodeObjectGap]:
+    """Return archives that carry a Tensile lazy library but no code objects.
+
+    The check is scoped to the archive that actually contains the lazy
+    library: if that same archive ships no ``*.hsaco`` code objects, the lazy
+    library is unusable at runtime.
+    """
+    gaps: list[TensileCodeObjectGap] = []
+    for info in archive_index:
+        lazy_libraries = sorted(
+            p for p in info.flattened_paths if _TENSILE_LAZY_LIBRARY_RE.search(p)
+        )
+        if not lazy_libraries:
+            continue
+        has_code_objects = any(_CODE_OBJECT_RE.search(p) for p in info.flattened_paths)
+        if not has_code_objects:
+            gaps.append(
+                TensileCodeObjectGap(
+                    filename=info.filename,
+                    artifact_name=info.artifact_name,
+                    lazy_libraries=lazy_libraries,
+                )
+            )
+    return gaps
 
 
 @pytest.fixture(scope="session")
@@ -309,4 +363,49 @@ class TestArtifactStructure:
         logger.info(
             "Checked %d artifacts, no within-artifact component overlaps",
             len(artifact_names),
+        )
+
+    def test_tensile_lazy_library_has_code_objects(
+        self, archive_index: list[ArchiveInfo]
+    ):
+        """Tensile lazy libraries must ship with their code objects.
+
+        A ``TensileLibrary_lazy_<gfx>.dat`` is only a manifest; the actual
+        kernels live in ``*.hsaco`` code-object files loaded on demand. If an
+        artifact ships the lazy .dat but none of the .hsaco files (e.g. a
+        packaging step drops device code objects for a gfx target), the library
+        loads successfully but the first matching GEMM aborts with
+        ``hipErrorFileNotFound``. Downstream this surfaces as an opaque failure
+        far from the root cause -- in #5976 a rocBLAS GEMM invoked from MIOpen's
+        RNN backward raised ``miopenStatusInternalError`` for fp16 RNN tests on
+        gfx90a, because the rocBLAS device wheel shipped the lazy .dat and
+        ``.co`` files but zero ``.hsaco`` code objects.
+
+        See https://github.com/ROCm/TheRock/issues/5976.
+        """
+        gaps = find_tensile_code_object_gaps(archive_index)
+
+        if gaps:
+            lines = []
+            for gap in sorted(gaps, key=lambda g: g.filename):
+                lines.append(f"  {gap.filename} (artifact: {gap.artifact_name})")
+                for lib in gap.lazy_libraries:
+                    lines.append(f"    lazy library: {lib}")
+                lines.append("    code objects: (none -- expected *.hsaco)")
+            summary = "\n".join(lines)
+            pytest.fail(
+                f"Found {len(gaps)} artifact(s) shipping a Tensile lazy library "
+                f"without any *.hsaco code objects "
+                f"(see https://github.com/ROCm/TheRock/issues/5976):\n{summary}"
+            )
+
+        checked = sum(
+            1
+            for info in archive_index
+            if any(_TENSILE_LAZY_LIBRARY_RE.search(p) for p in info.flattened_paths)
+        )
+        logger.info(
+            "Checked %d archive(s) with Tensile lazy libraries, "
+            "all ship code objects",
+            checked,
         )
