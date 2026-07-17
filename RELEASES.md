@@ -40,8 +40,7 @@ Table of contents:
       <!-- - [Using ROCm from WSL](#using-rocm-from-wsl) -->
     <!-- TODO: native Windows packages -->
   - [Installing multi-arch tarballs](#installing-multi-arch-tarballs)
-  - [Installing ASAN-instrumented libraries](#installing-asan-instrumented-libraries)
-  - [Using ASAN-instrumented libraries](#using-asan-instrumented-libraries)
+  - [Installing ASan-instrumented libraries](#installing-asan-instrumented-libraries)
 - [Verifying your installation](#verifying-your-installation)
 
 ## About multi-arch releases
@@ -82,13 +81,13 @@ Key differences from
 | Job description                        | Status                                                                                                                                                                                                                                                     |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Build ROCm artifacts/tarballs/packages | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
+| ASan instrumented build                | [![Multi-Arch Release ASan](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_asan.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_asan.yml)                                                       |
 | Test ROCm artifacts                    | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
 | Test ROCm native Linux packages        | [![Test Native Linux Packages Install](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml)                      |
 | PyTorch packages - Linux build/test    | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
 | PyTorch packages - Windows build/test  | [![Multi-Arch Release Windows PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_windows_pytorch_wheels.yml) |
 | PyTorch packages - full tests          | [![Test PyTorch Wheels (Full Suite)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_pytorch_wheels_full.yml)                                            |
 | JAX packages - Linux build/test        | [![Multi-Arch Release Linux JAX Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml)                   |
-| ASAN instrumented build                | [![Multi-Arch Release ASAN](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_asan.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_asan.yml)                                                       |
 
 **Package availability:**
 
@@ -621,41 +620,43 @@ ls install/.kpack/
 > See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
 > relevant environment variables.
 
-### Installing ASAN-instrumented libraries
+### Installing ASan-instrumented libraries
 
 ROCm ships a set of libraries built with
-[AddressSanitizer (ASAN)](https://clang.llvm.org/docs/AddressSanitizer.html)
-instrumentation. These instrumented libraries let you run your HIP or ROCm
+[AddressSanitizer (ASan)](https://clang.llvm.org/docs/AddressSanitizer.html)
+instrumentation. See also [Building ROCm with Sanitizers](./docs/development/sanitizers.md)
+for information on building ASan-instrumented libraries from source. These instrumented libraries let you run your HIP or ROCm
 application under AddressSanitizer to detect memory errors — such as
 out-of-bounds accesses, use-after-free, and heap corruption — in **both host
 (CPU) and device (GPU) code paths** that pass through the ROCm runtime and math
 libraries.
 
-Device-side (GPU) ASAN additionally relies on the **XNACK**
+Device-side (GPU) ASan additionally relies on the **XNACK**
 (retry-on-page-fault) capability of supported AMD GPUs, which allows the
 sanitizer runtime to service the shadow-memory accesses that instrumentation
 generates on the device.
 
-#### Available ASAN packages
+#### Available ASan packages
 
-ASAN packages are currently published for the following GPU families:
+ASan packages are currently available for **Linux only** (not Windows) and are
+published for the following GPU families:
 
-| GPU Family | Example targets                          |
-| ---------- | ---------------------------------------- |
-| gfx94X     | gfx942 (MI300X / MI300A), gfx941, gfx940 |
-| gfx950     | gfx950 (MI350X)                          |
+| GPU Family | Targets                |
+| ---------- | ---------------------- |
+| gfx94X     | gfx942 (MI300X/MI300A) |
+| gfx950     | gfx950 (MI350X/MI355X) |
 
 > [!NOTE]
-> The ROCm compiler toolchain (`amdclang` / `amdclang++`) supports ASAN
+> The ROCm compiler toolchain (`amdclang` / `amdclang++`) supports ASan
 > instrumentation on any XNACK-capable GPU architecture. The table above
-> reflects which GPU families have pre-built ASAN packages available in the
+> reflects which GPU families have pre-built ASan packages available in the
 > nightly releases.
 
 #### Prerequisites
 
 - **Linux kernel 5.6 or higher** with Heterogeneous Memory Management (HMM)
-  support for device-side ASAN. Check with `uname -r`.
-- An **XNACK-capable GPU** for device-side ASAN. Host-side ASAN works without
+  support for device-side ASan. Check with `uname -r`.
+- An **XNACK-capable GPU** for device-side ASan. Host-side ASan works without
   XNACK, but device-side instrumentation requires it.
 - The ROCm compiler toolchain (`amdclang` / `amdclang++`) from your ROCm
   installation.
@@ -667,7 +668,7 @@ ASAN packages are currently published for the following GPU families:
 
 #### Installing via native packages (DEB / RPM)
 
-ASAN-instrumented native packages are published for Debian-based and RPM-based
+ASan-instrumented native packages are published for Debian-based and RPM-based
 distributions.
 
 ##### Debian-based systems (Ubuntu, Debian, etc.)
@@ -748,7 +749,7 @@ wget ${ASAN_TARBALL_BASE_URL}therock-dist-linux-multiarch-${ROCM_VERSION}.tar.gz
 
 Extract into a dedicated directory. **Do not extract over your production ROCm
 installation** — keep it in a separate location so you can opt in only when
-running under ASAN:
+running under ASan:
 
 ```bash
 mkdir -p <EXTRACT_PATH>
@@ -756,9 +757,9 @@ tar -xzf therock-dist-linux-gfx94X-dcgpu-${ROCM_VERSION}.tar.gz -C <EXTRACT_PATH
 ```
 
 > [!NOTE]
-> **Setting `ROCM_ASAN_PATH`:** The [Using ASAN-instrumented libraries](#using-asan-instrumented-libraries)
+> **Setting `ROCM_ASAN_PATH`:** The [Using ASan-instrumented libraries](#using-asan-instrumented-libraries)
 > section below uses a single variable `ROCM_ASAN_PATH` to refer to the root of
-> the ASAN install tree. Set it based on how you installed:
+> the ASan install tree. Set it based on how you installed:
 >
 > ```bash
 > # DEB / RPM install:
@@ -780,80 +781,11 @@ tar -xzf therock-dist-linux-gfx94X-dcgpu-${ROCM_VERSION}.tar.gz -C <EXTRACT_PATH
 >     └── ...   # additional instrumented ROCm libraries
 > ```
 
-### Using ASAN-instrumented libraries
+### Using ASan-instrumented libraries
 
-Once installed (via native packages or tarball), set `ROCM_ASAN_PATH` to the
-root of your ASAN install tree, then configure the remaining environment
-variables in the shell from which you launch your application. Your production
-ROCm installation is left untouched; unset the variables to return to normal
-operation.
-
-```bash
-# DEB / RPM install:
-export ROCM_ASAN_PATH=/opt/rocm/core
-# Tarball install:
-export ROCM_ASAN_PATH=<EXTRACT_PATH>
-```
-
-#### Step 1: Enable XNACK
-
-Required for device-side GPU instrumentation:
-
-```bash
-export HSA_XNACK=1
-```
-
-Without this, only host-side (CPU) errors will be detected.
-
-#### Step 2: Locate the ASAN runtime directory
-
-The host ASAN runtime is used here only to resolve the directory where all ASAN
-runtime libraries are installed:
-
-```bash
-ASAN_LIB_PATH=$(amdclang --print-file-name=libclang_rt.asan-x86_64.so)
-# ${ASAN_LIB_PATH%/*} strips the filename, giving the containing directory
-```
-
-#### Step 3: Set library paths
-
-Choose **one** of the following options:
-
-**Option 1 — `LD_LIBRARY_PATH` (recommended)**
-
-Prepend the instrumented library directories so the loader finds them ahead of
-the default ROCm libraries:
-
-```bash
-export LD_LIBRARY_PATH="${ASAN_LIB_PATH%/*}:${ROCM_ASAN_PATH}/lib:${ROCM_ASAN_PATH}/lib/llvm/lib:${ROCM_ASAN_PATH}/lib/rocm_sysdeps/lib/:$LD_LIBRARY_PATH"
-```
-
-- `${ASAN_LIB_PATH%/*}` — ASAN runtime directory, so the runtime is resolved
-  without a separate `LD_PRELOAD`
-- `${ROCM_ASAN_PATH}/lib` — instrumented ROCm libraries (e.g. `libamdhip64.so`,
-  `libhsa-runtime64.so`)
-- `${ROCM_ASAN_PATH}/lib/llvm/lib` — LLVM support libraries
-- `${ROCM_ASAN_PATH}/lib/rocm_sysdeps/lib/` — ROCm system dependency libraries
-
-**Option 2 — `LD_PRELOAD` + `LD_LIBRARY_PATH`**
-
-Use this when the application resolves ROCm libraries through a hardcoded
-`RPATH`/`RUNPATH` that `LD_LIBRARY_PATH` cannot override. `LD_PRELOAD` forces
-the ASAN runtime and the specified instrumented libraries to be loaded before
-anything else, bypassing RPATH lookups:
-
-```bash
-ASAN_LIB_NAME=$(amdclang --print-file-name=libclang_rt.asan-gfx90a.so)
-export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/libamdhip64.so:${ROCM_ASAN_PATH}/lib/libhsa-runtime64.so"
-```
-
-> [!NOTE]
-> `ASAN_LIB_NAME` holds only the filename of the GPU-specific ASAN runtime
-> (e.g. `libclang_rt.asan-gfx90a.so`). Replace `gfx90a` with your target GPU
-> architecture. The GPU-specific `--print-file-name` returns only a filename,
-> not a full path — that is why `ASAN_LIB_PATH` (derived from the host variant
-> in Step 2) is used to supply the directory. Add or remove libraries from
-> `LD_PRELOAD` depending on which ROCm components you need to instrument.
+For detailed instructions on configuring your environment to use ASan-instrumented
+libraries, see [Using ASan-Instrumented Libraries](./docs/development/sanitizers.md#using-asan-instrumented-libraries)
+in the development documentation.
 
 ## Verifying your installation
 
