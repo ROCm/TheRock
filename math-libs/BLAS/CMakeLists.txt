@@ -160,7 +160,9 @@ therock_cmake_subproject_declare(hipBLASLt
     ${optional_profiler_deps}
   TEST_SUBPROJECTS
     hipSPARSELt
+    hipblasltprovider
     MIOpen
+    rocBLAS
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
   SUBDIRS
@@ -238,7 +240,12 @@ therock_cmake_subproject_declare(rocBLAS
     ${optional_profiler_deps}
   TEST_SUBPROJECTS
     hipBLAS
+    hipblasltprovider
+    hipSPARSE
+    MIOpen
     rocSOLVER
+    rocSPARSE
+    rocWMMA
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
@@ -283,6 +290,8 @@ if(THEROCK_ENABLE_SPARSE)
       hipSPARSE
       rocSOLVER
       hipSOLVER
+      rocPRIM
+      rocBLAS
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS
@@ -515,6 +524,11 @@ therock_cmake_subproject_declare(hipBLAS
     rocBLAS
     ${hipBLAS_optional_deps}
   TEST_SUBPROJECTS
+    MIOpen
+    rocWMMA
+    hipSOLVER
+    hipSPARSE
+    rocSPARSE
 )
 therock_cmake_subproject_glob_c_sources(hipBLAS
 SUBDIRS
