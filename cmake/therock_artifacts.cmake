@@ -64,17 +64,6 @@ function(therock_provide_artifact slice_name)
     endif()
   endif()
 
-  # Record artifact→subprojects mapping for manifest generation.
-  # This allows Python scripts to dynamically discover which subprojects
-  # belong to each artifact without hardcoding in BUILD_TOPOLOGY.toml.
-  if(ARG_SUBPROJECT_DEPS)
-    # Convert list to comma-separated string and store
-    string(REPLACE ";" "," _subprojects_csv "${ARG_SUBPROJECT_DEPS}")
-    set_property(GLOBAL APPEND PROPERTY THEROCK_ARTIFACT_SUBPROJECT_MAP
-      "${slice_name}:${_subprojects_csv}"
-    )
-  endif()
-
   # Normalize arguments.
   set(_target_name "artifact-${slice_name}")
 
@@ -376,59 +365,4 @@ function(therock_provide_artifact slice_name)
       add_dependencies("${_subproject_dist_target}" "${_target_name}")
     endforeach()
   endif()
-endfunction()
-
-# therock_write_subproject_manifest
-# Writes artifact→subprojects mapping to a JSON file that Python scripts
-# can use for dynamic project resolution. This should be called at the end
-# of the top-level CMakeLists.txt after all therock_provide_artifact() calls.
-#
-# Output: ${THEROCK_BINARY_DIR}/artifact_subprojects.json
-function(therock_write_subproject_manifest)
-  get_property(_mappings GLOBAL PROPERTY THEROCK_ARTIFACT_SUBPROJECT_MAP)
-
-  if(NOT _mappings)
-    message(STATUS "No artifact subproject mappings to write")
-    return()
-  endif()
-
-  # Sort mappings for deterministic output
-  list(SORT _mappings)
-
-  # Build JSON content
-  set(_json_content "{\n")
-  set(_first TRUE)
-
-  foreach(_mapping ${_mappings})
-    # Parse "artifact_name:subproject1,subproject2,..."
-    string(FIND "${_mapping}" ":" _colon_pos)
-    if(_colon_pos EQUAL -1)
-      continue()
-    endif()
-
-    string(SUBSTRING "${_mapping}" 0 ${_colon_pos} _artifact_name)
-    math(EXPR _value_start "${_colon_pos} + 1")
-    string(SUBSTRING "${_mapping}" ${_value_start} -1 _subprojects_csv)
-
-    # Sort subprojects for deterministic output
-    string(REPLACE "," ";" _subprojects_list "${_subprojects_csv}")
-    list(SORT _subprojects_list)
-    string(REPLACE ";" "\", \"" _subprojects_json "${_subprojects_list}")
-
-    # Add comma before all entries except the first
-    if(_first)
-      set(_first FALSE)
-    else()
-      string(APPEND _json_content ",\n")
-    endif()
-
-    string(APPEND _json_content "  \"${_artifact_name}\": [\"${_subprojects_json}\"]")
-  endforeach()
-
-  string(APPEND _json_content "\n}\n")
-
-  # Write to file
-  set(_manifest_path "${THEROCK_BINARY_DIR}/artifact_subprojects.json")
-  file(WRITE "${_manifest_path}" "${_json_content}")
-  message(STATUS "Wrote artifact subproject manifest to ${_manifest_path}")
 endfunction()
