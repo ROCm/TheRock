@@ -264,77 +264,16 @@ therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY
 therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V"
   EXCLUDE_TARGET_PROJECTS
     # TODO: Add issue for enabling projects
-    MIOpen
-    ROCR-Runtime
-    amd-comgr
-    amd-dbgapi
-    amd-llvm
-    amdsmi
+    # These projects compile device/test code that the amdgcnspirv target cannot
+    # currently handle (OpenCL -mcpu, Fortran offload, direct-to-ISA test kernels,
+    # or SPIR-V translator gaps). Everything else builds/tests fine for spirv.
     aqlprofile
-    composable_kernel
-    hip-clr
     hip-tests
-    hipBLAS
-    hipBLAS-common
-    hipBLASLt
-    hipCUB
-    hipDNN
-    hipDNN_samples
-    hipFFT
-    hipInfo
-    hipRAND
-    hipSOLVER
-    hipSPARSE
-    hipSPARSELt
-    hipTensor
-    hipblasltprovider
-    hipcc
-    hipdnn_integration_tests
-    hipfile
-    hipify
-    hipkernelprovider
-    hrx
-    libhipcxx
-    miopenprovider
-    mirage
-    mxDataGenerator
-    ocl-clr
-    ocl-icd
     rccl
     rccl-tests
-    rdc
-    rocALUTION
-    rocBLAS
-    rocFFT
-    rocPRIM
-    rocPRIM_tests
-    rocRAND
-    rocRoller
-    rocSOLVER
-    rocSPARSE
-    rocThrust
-    rocWMMA
-    rocdecode
-    rocgdb
-    rocjitsu
-    rocjpeg
-    rocm-cmake
-    rocm-core
-    rocm-half
-    rocm-kpack
-    rocm_smi_lib
-    rocminfo
-    rocprof-trace-decoder
-    rocprofiler-compute
-    rocprofiler-register
-    rocprofiler-sdk
-    rocprofiler-systems
     rocprofiler-systems-examples
-    rocr-debug-agent
-    rocr-debug-agent-tests
     rocrtst
     rocshmem
-    roctracer
 )
 
 # Optional extension targets (used for out of tree target development).
