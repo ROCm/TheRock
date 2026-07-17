@@ -1,98 +1,95 @@
-From 0f64cfa9f74c9e37d74b23b756097da0668121f9 Mon Sep 17 00:00:00 2001
+From b02c595df1dea34d98ca5236fbee9e8955bacd8d Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 2 Jul 2026 02:54:16 +0000
-Subject: [PATCH] rocr-runtime ppc64le
+Date: Wed, 15 Jul 2026 13:43:56 -0400
+Subject: [PATCH] [rocr-runtime]  Add ppc64le platform support
 
+Guard x86-specific intrinsics behind architecture checks
+Add ppc64le timebase support to rocrtst perf timer
+Add vdso64.so to dl_iterate_phdr filter in os_linux.cpp
 ---
- .../rocr-runtime/rocrtst/common/hsatimer.cc    | 18 +++++++++++++-----
- .../hsa-runtime/core/util/lnx/os_linux.cpp     |  2 +-
- .../runtime/hsa-runtime/core/util/utils.h      |  4 +++-
- 3 files changed, 17 insertions(+), 7 deletions(-)
+ projects/rocr-runtime/rocrtst/common/hsatimer.cc      | 11 ++++++++++-
+ .../runtime/hsa-runtime/core/util/lnx/os_linux.cpp    |  2 +-
+ .../runtime/hsa-runtime/core/util/utils.h             |  9 +++++++--
+ 3 files changed, 18 insertions(+), 4 deletions(-)
 
 diff --git a/projects/rocr-runtime/rocrtst/common/hsatimer.cc b/projects/rocr-runtime/rocrtst/common/hsatimer.cc
-index 2610ecdd06..3b554c42f9 100755
+index 2610ecdd06..f63e190204 100755
 --- a/projects/rocr-runtime/rocrtst/common/hsatimer.cc
 +++ b/projects/rocr-runtime/rocrtst/common/hsatimer.cc
-@@ -44,7 +44,11 @@
+@@ -44,8 +44,11 @@
   */
- 
+
  #include "common/hsatimer.h"
-+#if defined(__x86_64__) || defined(_M_X64)
++#if defined(__x86_64__) || defined(__i386)
  #include <x86intrin.h>
+-
 +#elif defined(__powerpc64__) || defined(__PPC64__)
 +#include <sys/platform/ppc.h>
 +#endif
- 
  namespace rocrtst {
- 
-@@ -167,23 +171,27 @@ uint64_t PerfTimer::CoarseTimestampUs() {
+
+ static const uint64_t kNanosecondsPerSecond = 1000000000;
+@@ -167,6 +170,7 @@ uint64_t PerfTimer::CoarseTimestampUs() {
  }
- 
+
  uint64_t PerfTimer::MeasureTSCFreqHz() {
--  // Make a coarse interval measurement of TSC ticks for 1 gigacycles.
-+#if defined(__x86_64__) || defined(_M_X64)
-+  // Make a coarse interval measurement of TSC ticks for 1 gigacycles. 
++#if defined(__x86_64__) || defined(__i386__)
+   // Make a coarse interval measurement of TSC ticks for 1 gigacycles.
    unsigned int unused;
--  uint64_t tscTicksEnd;
--
-+  uint64_t tscTicksBegin, tscTicksEnd;
-   uint64_t coarseBeginUs = CoarseTimestampUs();
--  uint64_t tscTicksBegin = __rdtscp(&unused);
- 
-+  tscTicksBegin = __rdtscp(&unused);
-   do {
-     tscTicksEnd = __rdtscp(&unused);
-   } while (tscTicksEnd - tscTicksBegin < 1000000000);
--
-   uint64_t coarseEndUs = CoarseTimestampUs();
- 
-   // Compute the TSC frequency and round to nearest 100MHz.
+   uint64_t tscTicksEnd;
+@@ -184,6 +188,11 @@ uint64_t PerfTimer::MeasureTSCFreqHz() {
    uint64_t coarseIntervalNs = (coarseEndUs - coarseBeginUs) * 1000;
    uint64_t tscIntervalTicks = tscTicksEnd - tscTicksBegin;
    return (tscIntervalTicks * 10 + (coarseIntervalNs / 2)) / coarseIntervalNs;
-+#elif defined(__ppc64le__) || defined(__PPC64__)
++#elif defined(__powerpc64__) || defined(__PPC64__)
 +  return __ppc_get_timebase_freq() / 100000000;
 +#else
-+  #error "Unsupported architecture"
++#error "Unsupported architecture"
 +#endif
  }
- 
+
  }  // namespace rocrtst
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
-index d43b06d025..d3d6311bea 100644
+index a17ba0d018..6ef76e9f36 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/lnx/os_linux.cpp
-@@ -345,7 +345,7 @@ static int callback(struct dl_phdr_info* info, size_t size, void* data) {
+@@ -344,7 +344,7 @@ static int callback(struct dl_phdr_info* info, size_t size, void* data) {
     */
- 
+
    if ((info) && (info->dlpi_name) && (info->dlpi_name[0] != '\0')) {
 -    if (std::string(info->dlpi_name).find("vdso.so") != std::string::npos) return 0;
 +    if (std::string(info->dlpi_name).find("vdso64.so") != std::string::npos || std::string(info->dlpi_name).find("vdso.so") != std::string::npos) return 0;
- 
+
      /*
       * Iterate through the program headers of the loaded lib and check for PT_DYNAMIC program
 diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
-index 1839bacb68..00551b3dfe 100644
+index 6ce63c9410..cc34340ac8 100644
 --- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
 +++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/utils.h
-@@ -62,6 +62,9 @@
- 
- #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+@@ -60,8 +60,14 @@
+ #include <thread>
+ #include <locale>
+
+-#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
++#if defined(__GNUC__)
++#if defined(__i386__) || defined(__x86_64__)
  #include <x86intrin.h>
-+#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__powerpc64__))
-+#define NO_WARN_X86_INTRINSICS 1
-+#include <emmintrin.h>
++#elif defined(__powerpc64__) || defined(__PPC64__)
++// PowerPC has compatibility shim for x86 intrinsics
++#define NO_WARN_X86_INTRINSICS
++#include <x86intrin.h>
++#endif
  #endif
  #if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
  #include "intrin.h"
-@@ -83,7 +86,6 @@ typedef uint64_t uint64;
+@@ -83,7 +89,6 @@ typedef uint64_t uint64;
  void log_printf(const char* file, int line, const char* format, ...);
- 
+
  #if defined(__GNUC__)
 -
  #define __forceinline __inline__ __attribute__((always_inline))
  #define __declspec(x) __attribute__((x))
  #undef __stdcall
--- 
-2.52.0
+--
+2.43.0
 
