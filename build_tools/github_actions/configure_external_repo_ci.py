@@ -110,28 +110,17 @@ def retry(
 
 
 @retry(max_attempts=3, delay_seconds=2, exceptions=(subprocess.TimeoutExpired,))
-def get_modified_paths(base_ref: str) -> Set[str]:
-    """Get paths of files changed relative to base reference."""
+def get_modified_paths_api(github_repo: str, base_sha: str, head_sha: str) -> Set[str]:
+    """Get paths of files changed using GitHub API (compare endpoint)."""
     result = subprocess.run(
-        ["git", "diff", "--name-only", base_ref],
+        ["gh", "api", f"repos/{github_repo}/compare/{base_sha}...{head_sha}",
+         "--jq", ".files[].filename"],
         capture_output=True,
         text=True,
         check=True,
         timeout=60,
     )
     return set(result.stdout.splitlines())
-
-
-def get_merge_base(base_sha: str, head_sha: str) -> str:
-    """Compute merge-base for PR diff."""
-    result = subprocess.run(
-        ["git", "merge-base", base_sha, head_sha],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,
-    )
-    return result.stdout.strip()
 
 
 def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
@@ -199,27 +188,30 @@ def set_github_output(outputs: Mapping[str, str]) -> None:
 
 def configure(
     event_name: str,
+    github_repo: str,
     base_sha: Optional[str],
     head_sha: Optional[str],
     config_path: str,
 ) -> ConfigureResult:
     """Main configuration logic."""
 
-    # Schedule events run all tests
-    if event_name == "schedule":
-        logger.info("Schedule event - running all tests")
+    # Schedule/workflow_dispatch events run all tests
+    if event_name in ("schedule", "workflow_dispatch"):
+        logger.info(f"{event_name} event - running all tests")
         return ConfigureResult(changed_projects="", run_all_tests=True, skip_tests=False)
 
-    # Determine base ref for diff
+    # Get modified paths via GitHub API
     if event_name == "pull_request" and base_sha and head_sha:
-        base_ref = get_merge_base(base_sha, head_sha)
-        logger.info(f"PR merge-base: {base_ref}")
+        logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
+        modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
+    elif event_name == "push" and head_sha:
+        # For push, compare HEAD^ to HEAD using the API
+        logger.info(f"Getting push diff via API: {head_sha}^...{head_sha}")
+        modified_paths = get_modified_paths_api(github_repo, f"{head_sha}^", head_sha)
     else:
-        base_ref = "HEAD^"
-        logger.info("Using HEAD^ for push")
+        logger.warning("No SHAs provided - running all tests")
+        return ConfigureResult(changed_projects="", run_all_tests=True, skip_tests=False)
 
-    # Get modified paths
-    modified_paths = get_modified_paths(base_ref)
     if not modified_paths:
         logger.info("No modified paths - skipping tests")
         return ConfigureResult(changed_projects="", run_all_tests=False, skip_tests=True)
@@ -296,6 +288,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     result = configure(
         event_name=args.event_name,
+        github_repo=args.github_repo,
         base_sha=args.base_sha or None,
         head_sha=args.head_sha or None,
         config_path=args.config_path,
