@@ -334,6 +334,10 @@ jobs:
       - name: Upload stage logs
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
+        env:
+          # Bridge the AWS creds set by the configure step on the Windows host
+          # into WSL, matching the Push step; boto3 needs them for the S3 upload.
+          WSLENV: THEROCK_HOST_WORKSPACE/p:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           # post_stage_upload.py globs the whole build tree for **/.ninja_log and
           # reads logs/, so it must run against the WSL-native build dir via the
