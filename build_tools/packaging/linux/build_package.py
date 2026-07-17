@@ -233,6 +233,12 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     if pkg:
         built_packages.extend(pkg)
 
+    # Debug package (auto-generated; no package.json entry required)
+    print(f"\n=== Building debug variant for {pkg_name} ===")
+    pkg = build_debug_package(pkg_name, config)
+    if pkg:
+        built_packages.extend(pkg)
+
     # Non-versioned package
     if not config.enable_rpath:
         print(f"\n=== Building non-versioned variant for {pkg_name} ===")
@@ -426,6 +432,45 @@ def build_nonversioned_package(pkg_name, config: PackageConfig) -> list:
             return create_nonversioned_deb_package(pkg_name, nonversioned_config)
     except Exception as e:
         print(f"ERROR: Failed to build non-versioned package for {pkg_name}: {e}")
+        return []
+
+
+def build_debug_package(pkg_name, config: PackageConfig) -> list:
+    """Build the debug-symbol ("-dbg") package variant for a package, if it
+    has any "dbg" artifact content. Auto-generated; no package.json entry
+    is required.
+
+    Only produces the versioned debug package (e.g.
+    "amdrocm-amdsmi-dbg7.15_..."). A non-versioned debug package is
+    intentionally not built.
+    """
+    debug_pkg_name = register_debug_package(pkg_name)
+    if debug_pkg_name is None:
+        return []
+
+    debug_pkg_info = get_package_info(debug_pkg_name, raise_if_missing=False)
+    if debug_pkg_info is None or is_packaging_disabled(debug_pkg_info):
+        return []
+
+    versioned_config = replace(config, versioned_pkg=True)
+    sourcedirs = filter_components_fromartifactory(
+        debug_pkg_name,
+        versioned_config.artifacts_dir,
+        versioned_config.gfx_arch,
+        versioned_config.enable_kpack,
+    )
+    if not sourcedirs:
+        print(f"No debug artifacts found for {debug_pkg_name}; skipping.")
+        return []
+
+    try:
+        if versioned_config.pkg_type == "rpm":
+            pkg = create_versioned_rpm_package(debug_pkg_name, versioned_config)
+        else:
+            pkg = create_versioned_deb_package(debug_pkg_name, versioned_config)
+        return pkg if pkg else []
+    except Exception as e:
+        print(f"ERROR: Failed to build versioned debug package for {pkg_name}: {e}")
         return []
 
 

@@ -8,6 +8,7 @@ import platform
 import re
 import shutil
 import sys
+import copy
 
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -21,6 +22,10 @@ GFX_META = "gfx_meta"
 
 # Splits comma-, semicolon-, or whitespace-separated arch tokens in one string.
 _GFX_ARCH_SPLIT_RE = re.compile(r"[,;\s]+")
+
+_SYNTHESIZED_PACKAGES: dict[str, dict] = {}
+
+DEBUG_PACKAGE_SUFFIX = "-dbg"
 
 
 def normalize_target_list(
@@ -277,6 +282,64 @@ def is_gfxarch_package(
     return is_key_defined(pkg_info, "Gfxarch")
 
 
+def synthesize_debug_package_info(base_pkg_info):
+    """Build a package.json-style entry for a base package's debug-symbol sibling."""
+    debug_info = copy.deepcopy(base_pkg_info)
+
+    base_name = base_pkg_info["Package"]
+    debug_info["Package"] = f"{base_name}{DEBUG_PACKAGE_SUFFIX}"
+    debug_info["Description_Short"] = (
+        f"Debug symbols for {base_pkg_info.get('Description_Short', base_name)}"
+    )
+    debug_info["Description_Long"] = f"Split debug symbol files for {base_name}"
+    debug_info["Section"] = "debug"
+    debug_info["DEBDepends"] = [base_name]
+    debug_info["RPMRequires"] = [base_name]
+    for key in (
+        "DEBRecommends",
+        "RPMRecommends",
+        "DEBSuggests",
+        "RPMSuggests",
+        "Postinstall",
+        "Metapackage",
+    ):
+        debug_info.pop(key, None)
+
+    for artifact_entry in debug_info.get("Artifactory", []) or []:
+        for subdir in artifact_entry.get("Artifact_Subdir", []) or []:
+            subdir["Components"] = ["dbg"]
+
+    return debug_info
+
+
+def register_debug_package(pkg_name):
+    """Synthesize (or look up) the debug-symbol sibling package for pkg_name."""
+    if pkg_name.endswith(DEBUG_PACKAGE_SUFFIX):
+        return None
+
+    debug_pkg_name = f"{pkg_name}{DEBUG_PACKAGE_SUFFIX}"
+
+    explicit = get_package_info(debug_pkg_name, raise_if_missing=False)
+    if explicit is not None:
+        return debug_pkg_name
+
+    if debug_pkg_name in _SYNTHESIZED_PACKAGES:
+        return debug_pkg_name
+
+    base_pkg_info = get_package_info(pkg_name, raise_if_missing=False)
+    if base_pkg_info is None:
+        return None
+    if is_meta_package(base_pkg_info):
+        return None
+    if not base_pkg_info.get("Artifactory"):
+        return None
+
+    _SYNTHESIZED_PACKAGES[debug_pkg_name] = synthesize_debug_package_info(
+        base_pkg_info
+    )
+    return debug_pkg_name
+
+
 def get_package_info(pkgname, raise_if_missing=True):
     """Retrieves package details from a JSON file for the given package name
 
@@ -290,6 +353,8 @@ def get_package_info(pkgname, raise_if_missing=True):
     Raises:
     ValueError: If package not found and raise_if_missing=True
     """
+    if pkgname in _SYNTHESIZED_PACKAGES:
+            return _SYNTHESIZED_PACKAGES[pkgname]
 
     # Load JSON data from a file
     data = read_package_json_file()
