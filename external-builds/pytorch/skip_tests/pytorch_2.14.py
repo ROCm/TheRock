@@ -179,6 +179,11 @@ skip_tests = {
             # root-cause (likely a tolerance bump) and remove.
             "(CPFlexAttentionTest and test_cp_flex_attention_causal_mask)",
             "(CPFlexAttentionTest and test_cp_flex_attention_document_mask)",
+            # TheRock run 29645120650 (job 88082045739): Nccl2WindowTest::test_register_errors
+            # → win.tensor_register(win_buf) crashes with RuntimeError exit code 10 on both
+            # ranks. NCCL2 symmetric-memory window registration broken on ROCm 7.15 wheel.
+            # Same failure seen on upstream rocm-preview run 29619818031 (distributed shard 1).
+            "(Nccl2WindowTest and test_register_errors)",
         ],
     },
 }
