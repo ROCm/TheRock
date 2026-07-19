@@ -106,17 +106,16 @@ therock_cmake_subproject_declare(origami
     -DHIP_PLATFORM=amd
     -DORIGAMI_BUILD_SHARED_LIBS=ON
     -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
-    -DORIGAMI_ENABLE_PYTHON=ON
+    # Python bindings (and their nanobind/tsl-robin-map deps) are built out of
+    # TheRock; land the C++ library only. Re-enable alongside a nanobind
+    # provider once bindings have a home (mirrors the hipDNN direction, #6425).
+    -DORIGAMI_ENABLE_PYTHON=OFF
     -DORIGAMI_ENABLE_FETCH=OFF
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
     rocm-cmake
     therock-catch2
-    therock-nanobind
-    # nanobind_add_module() pulls find_dependency(tsl-robin-map) via nanobind's
-    # config; declare the provider so the super-project dep provider allows it.
-    therock-robin-map
   RUNTIME_DEPS
     hip-clr
 )
