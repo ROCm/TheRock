@@ -30,12 +30,15 @@ logging.info(f"++ Detected GPU architecture: {gpu_arch}")
 # actual GPU is different (e.g. gfx1101). If the detected arch is not in
 # AMDGPU_TARGETS, fall back to the first entry in AMDGPU_TARGETS.
 amdgpu_targets = os.getenv("AMDGPU_TARGETS")
-if amdgpu_targets:
+if amdgpu_targets and gpu_arch is not None:
+    # Only apply the AMDGPU_TARGETS check when offload-arch returned something.
+    # If gpu_arch is None (offload-arch failed entirely), leave it as None so
+    # cmake's enable_language(HIP) auto-detects via the HIP runtime, which
+    # works correctly on MxGPU virtual GPUs even when offload-arch doesn't.
     valid_targets = amdgpu_targets.split(",")
     if gpu_arch not in valid_targets:
-        # offload-arch returned a wrong/default arch (e.g. gfx906 on MxGPU).
-        # Compile for all AMDGPU_TARGETS so the binary runs on whichever
-        # GPU is actually present at test time.
+        # offload-arch returned a wrong arch (e.g. gfx906); compile for all
+        # AMDGPU_TARGETS so the binary runs on whichever GPU is present.
         gpu_arch = ";".join(valid_targets)
         logging.info(
             f"++ GPU arch not in AMDGPU_TARGETS, compiling for all targets: {gpu_arch}"
