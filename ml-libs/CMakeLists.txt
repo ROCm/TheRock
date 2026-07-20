@@ -65,6 +65,8 @@ if(THEROCK_ENABLE_MIOPEN)
       ${THEROCK_BUNDLED_BZIP2}
       ${THEROCK_BUNDLED_SQLITE3}
       ${optional_profiler_deps}
+    TEST_SUBPROJECTS
+      miopenprovider
   )
   therock_cmake_subproject_provide_package(MIOpen miopen lib/cmake/miopen)
   therock_cmake_subproject_activate(MIOpen)
@@ -100,7 +102,6 @@ if(THEROCK_ENABLE_HIPDNN)
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DHIP_DNN_BUILD_PLUGINS=OFF
       -DHIP_DNN_GENERATE_SDK_HEADERS=OFF
-      -DHIPDNN_BUILD_PYTHON_BINDINGS=ON
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
@@ -110,13 +111,16 @@ if(THEROCK_ENABLE_HIPDNN)
     BUILD_DEPS
       therock-googletest
       therock-fmt
-      therock-nanobind
-      therock-robin-map
       therock-spdlog
     RUNTIME_DEPS
       hip-clr
       therock-flatbuffers
       therock-nlohmann-json
+    TEST_SUBPROJECTS
+      miopenprovider
+      hipblasltprovider
+      hipkernelprovider
+      hipdnn_integration_tests
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
@@ -173,6 +177,8 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
       hipDNN
       therock-flatbuffers
       therock-nlohmann-json
+    TEST_SUBPROJECTS
+      miopenprovider
   )
   therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
   SUBDIRS
@@ -224,6 +230,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
     RUNTIME_DEPS
       hipdnn_integration_tests
       MIOpen
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(miopenprovider
   SUBDIRS
@@ -272,6 +279,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       hipBLAS-common
       hipBLASLt
       hipdnn_integration_tests
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipblasltprovider
   SUBDIRS
@@ -295,7 +303,6 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
-
   therock_cmake_subproject_declare(hipkernelprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
@@ -307,6 +314,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       -DHIPKERNELPROVIDER_ENABLE_TESTS=${THEROCK_BUILD_TESTING}
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
+      -DROCKE_KPACK_PYTHON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -316,9 +324,12 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
+      amd-comgr
     RUNTIME_DEPS
       hip-clr
       hipdnn_integration_tests
+      rocm-kpack
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipkernelprovider
   SUBDIRS
@@ -327,7 +338,6 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   therock_cmake_subproject_activate(hipkernelprovider)
 
   therock_provide_artifact(hipkernelprovider
-    TARGET_NEUTRAL
     DESCRIPTOR artifact-hipkernelprovider.toml
     COMPONENTS
       dbg
@@ -362,6 +372,7 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       therock-nlohmann-json
     RUNTIME_DEPS
       miopenprovider
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipDNN_samples
   SUBDIRS

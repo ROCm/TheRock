@@ -1,6 +1,16 @@
 # hipkernelprovider
 [components.dbg."ml-libs/hipkernelprovider/stage"]
 [components.lib."ml-libs/hipkernelprovider/stage"]
+# hip-kernel-provider is a device lib: capture the rocKE engine's per-arch AOT
+# bundles under engines/arch_content/rocke/<arch>/ (split per-arch via
+# split_databases). The rocKE Python SDK under bin/**/rocke/** is dev/test only
+# and ships via [test] below, not here.
+# Capture is intentionally NOT asserted by tests yet: it is gated on
+# HIPKERNELPROVIDER_ENABLE_ROCKE (default off) and only has content once
+# rocm-libraries #9207 lands. Follow-up tests tracked by ROCm/TheRock#6553.
+include = [
+  "**/engines/arch_content/**",
+]
 exclude = [
   "lib/*.a",
 ]
@@ -11,4 +21,11 @@ include = [
   # Test config TOMLs (e.g. HIP_KERNEL_ENGINE.toml) consumed by the cross-provider
   # integration suite (hipdnn_integration_tests --test-config).
   "bin/hip_kernel_provider/*.toml",
+  # rocKE IR parity gate: Python test scripts, harness, golden data, and the
+  # rocke Python package they import.
+  "bin/hip_kernel_provider/*.py",
+  "bin/hip_kernel_provider/golden/**",
+  "bin/hip_kernel_provider/rocke/**",
+  # rocKE pytest suite
+  "bin/hip_kernel_provider/tests/**",
 ]
