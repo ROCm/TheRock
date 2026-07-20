@@ -107,7 +107,7 @@ def structured_dependency_key(index: str, pkg_name: str, filename: str) -> str:
 
     Example:
         structured_dependency_key("whl", "ml_dtypes", "ml_dtypes-0.5.0-...whl")
-        -> "v5/core/whl/ml-dtypes/ml_dtypes-0.5.0-...whl"
+        -> "v5/rocm/core/whl/ml-dtypes/ml_dtypes-0.5.0-...whl"
     """
     if index not in _STRUCTURED_INDEX_NAMES:
         raise ValueError(
@@ -115,7 +115,7 @@ def structured_dependency_key(index: str, pkg_name: str, filename: str) -> str:
             f"expected one of {sorted(_STRUCTURED_INDEX_NAMES)}"
         )
     package_dir = normalize_package_name(pkg_name)
-    return f"v5/{_STRUCTURED_PRODUCT}/{index}/{package_dir}/{filename}"
+    return f"v5/rocm/{_STRUCTURED_PRODUCT}/{index}/{package_dir}/{filename}"
 
 
 def get_selected_packages(
