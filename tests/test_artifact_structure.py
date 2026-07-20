@@ -455,4 +455,3 @@ class TestArtifactStructure:
             "Checked %d archives, all components covered by package.json",
             len(archive_index),
         )
-
