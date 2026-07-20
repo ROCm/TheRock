@@ -57,14 +57,14 @@ def load_external_runner_config() -> dict | None:
     config_path = Path(ci_config_path)
     sys.path.insert(0, str(config_path))
     try:
-        from ci_config_api import config_exists, load_runner_config
+        from ci_config_api import get_gpu_runner_labels
     except ImportError:
         _log(f"CI config API not found at {ci_config_path}, using local fallback")
         return None
-    if not config_exists(config_path):
+    config = get_gpu_runner_labels(config_path)
+    if config is None:
         _log(f"CI config not found at {ci_config_path}, using local fallback")
         return None
-    config = load_runner_config(config_path)
     _log(f"Loaded external runner config from {ci_config_path}")
     return config
 
