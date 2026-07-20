@@ -57,16 +57,18 @@ def load_external_runner_config() -> dict | None:
     config_path = Path(ci_config_path)
     sys.path.insert(0, str(config_path))
     try:
-        from ci_config_api import get_gpu_runner_labels
+        from ci_config_api import get_gpu_runner_labels, load_runner_config
     except ImportError:
         _log(f"CI config API not found at {ci_config_path}, using local fallback")
         return None
-    config = get_gpu_runner_labels(config_path)
-    if config is None:
-        _log(f"CI config not found at {ci_config_path}, using local fallback")
+    try:
+        raw_config = load_runner_config(config_path)
+    except Exception as e:
+        _log(f"Failed to load CI config from {ci_config_path}: {e}")
         return None
+    runner_labels = get_gpu_runner_labels(raw_config)
     _log(f"Loaded external runner config from {ci_config_path}")
-    return config
+    return {"runner_labels": runner_labels}
 
 
 def is_asan():
