@@ -284,7 +284,8 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
-    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+    # Skip for external repos (build_python_packages is skipped)
+    if: ${{ !failure() && !cancelled() && inputs.external_repo_config == '' && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -320,10 +321,12 @@ jobs:
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
+    # Skip for external repos (build_python_packages is skipped)
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
+        inputs.external_repo_config == '' &&
         fromJSON(inputs.build_config).build_pytorch == true &&
         toJSON(fromJSON(inputs.build_config).pytorch_build_matrix) != '[]'
       }}
@@ -351,10 +354,12 @@ jobs:
   build_jax_wheels:
     needs: [build_python_packages]
     name: Build JAX Wheels
+    # Skip for external repos (build_python_packages is skipped)
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
+        inputs.external_repo_config == '' &&
         fromJSON(inputs.build_config).build_jax == true &&
         toJSON(fromJSON(inputs.build_config).jax_build_matrix) != '[]'
       }}
