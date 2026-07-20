@@ -473,6 +473,20 @@ test_matrix = {
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
     },
+    # rocSHMEM tests
+    "rocshmem": {
+        "job_name": "rocshmem",
+        "fetch_artifact_args": "--rocshmem --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        # rocSHMEM functional/unit tests launch via mpirun with RANKS 2..64, so
+        # they need a multi-GPU runner (same setup as rccl).
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
         "job_name": "rocprofiler-sdk",

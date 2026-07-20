@@ -34,6 +34,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
+    [--rocshmem | --no-rocshmem]
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocjitsu | --no-rocjitsu]
@@ -387,6 +388,7 @@ def retrieve_artifacts_by_run_id(args):
             args.mpi,
             args.rand,
             args.rccl,
+            args.rocshmem,
             args.rocdecode,
             args.rocjpeg,
             args.rocjitsu,
@@ -488,6 +490,16 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
+        if args.rocshmem:
+            extra_artifacts.append("rocshmem")
+            # The functional test binary (bin/rocshmem_functional_tests) and
+            # bin/rocshmem_info live in the _run component; the install-tree
+            # CTestTestfile.cmake references them via relative paths.
+            argv.append("rocshmem_run")
+            # rocSHMEM tests launch via mpirun and link against TheRock's
+            # vendored OpenMPI, so pull it (with its run component for mpiexec).
+            extra_artifacts.append("openmpi")
+            argv.append("openmpi_run")
         if args.rocprofiler_sdk:
             extra_artifacts.append("rocprofiler-sdk")
             extra_artifacts.append("aqlprofile")
@@ -850,6 +862,13 @@ def main(argv):
         "--rccl",
         default=False,
         help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocshmem",
+        default=False,
+        help="Include 'rocshmem' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
