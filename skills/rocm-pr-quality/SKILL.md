@@ -147,7 +147,7 @@ related PRs) is a SHOULD.
 ### Review attestation (approvals only)
 
 When Action 2 concludes `APPROVED`, append the machine-checkable attestation block (see
-`reference.md`) to the drafted review comment. Never attach it to `CHANGES REQUESTED` / `REJECTED`,
+`reference.md`) to the drafted approval comment. Never attach it to `CHANGES REQUESTED` / `REJECTED`,
 and never to a PR description. It is part of the text the human posts; the skill still never posts
 on its own (operating principle 2). Explain the block in plain language when you add it: what it is,
 that pushing new commits invalidates it, and that a pre-review gate can key on it. If an approval was
@@ -248,9 +248,10 @@ and add cross-cutting testing/reuse passes; otherwise do a single-pass review.
 **Output:** the overall assessment + the four answers + a severity-ordered findings list + a
 `BLOCKING`-items list. Only on request, and only after the user approves the wording, produce a
 draft request-changes comment. Never post it yourself. When the assessment is `APPROVED`, also
-produce the attestation block (see "Review attestation") as a trailer to the drafted approval
-comment and briefly explain it to the user; if the user already approved without it, give them the
-one-line paste form. Never post either yourself.
+produce the attestation block (see "Review attestation"). Drafting the approval comment itself is
+on request, like the request-changes comment above; when you draft it, include the block as its
+trailer, otherwise hand the block to the user directly. Briefly explain it; if the user already
+approved without it, give them the one-line paste form. Never post either yourself.
 
 ______________________________________________________________________
 

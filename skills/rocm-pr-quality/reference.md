@@ -322,8 +322,10 @@ One-line paste fallback (same marker, for when an approval was already posted wi
 
 - **head SHA:** the full 40-char PR head SHA — `gh pr view --json headRefOid -q .headRefOid` (or
   `git rev-parse HEAD`).
-- **files:** the PR's changed-file paths — `gh pr diff --name-only` — as POSIX paths, sorted by
-  Unicode code point (Python `sorted()` / `LC_ALL=C sort`), newline-joined, with no trailing
-  newline.
-- **payload:** `head_sha + "\n" + "\n".join(sorted_files)`.
+- **files:** the PR's changed-file paths (`gh pr diff --name-only`) as POSIX paths, sorted by
+  Unicode code point (Python `sorted()`; equivalently `LC_ALL=C sort`, since UTF-8 byte order
+  matches code-point order).
+- **payload:** the head SHA followed by the sorted paths, joined by a single `\n` with no trailing
+  newline (so an empty file list yields just the head SHA):
+  `payload = "\n".join([head_sha, *sorted_files])`.
 - **digest:** `sha256(payload.encode("utf-8")).hexdigest()[:8]`.
