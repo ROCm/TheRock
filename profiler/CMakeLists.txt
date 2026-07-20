@@ -147,6 +147,16 @@ if(THEROCK_ENABLE_ROCPROFV3)
       lib
       lib/rocm_sysdeps/lib
     TEST_SUBPROJECTS
+      hipBLAS
+      hipBLASLt
+      hipFFT
+      MIOpen
+      rccl
+      rdc
+      rocBLAS
+      rocFFT
+      rocprofiler-compute
+      rocprofiler-systems
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-sdk
     SUBDIRS .
