@@ -61,10 +61,12 @@ def compute_affected(changed_projects: str) -> tuple[str, str]:
 def main():
     changed_projects = os.environ.get("CHANGED_PROJECTS", "")
     affected_stages, expanded_projects = compute_affected(changed_projects)
-    gha_set_output({
-        "affected_stages": affected_stages,
-        "expanded_projects": expanded_projects,
-    })
+    gha_set_output(
+        {
+            "affected_stages": affected_stages,
+            "expanded_projects": expanded_projects,
+        }
+    )
 
 
 if __name__ == "__main__":
