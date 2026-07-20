@@ -66,9 +66,10 @@ def load_external_runner_config() -> dict | None:
     except Exception as e:
         _log(f"Failed to load CI config from {ci_config_path}: {e}")
         return None
-    runner_labels = get_gpu_runner_labels(raw_config)
+    # Add runner_labels for _overlay_runner_config (extracted from gpu_runner_labels)
+    raw_config["runner_labels"] = get_gpu_runner_labels(raw_config)
     _log(f"Loaded external runner config from {ci_config_path}")
-    return {"runner_labels": runner_labels}
+    return raw_config
 
 
 def is_asan():
