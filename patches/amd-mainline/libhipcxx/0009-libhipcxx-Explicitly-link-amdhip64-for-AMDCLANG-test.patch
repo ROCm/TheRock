@@ -1,7 +1,7 @@
 From ef122126b96d5f36ac9baf3caa60930e8b7f2564 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 1 Jul 2026 10:01:46 -0500
-Subject: [PATCH 09/15] [libhipcxx] Explicitly link amdhip64 for AMDCLANG test
+Subject: [PATCH 09/16] [libhipcxx] Explicitly link amdhip64 for AMDCLANG test
  path
 
 hipcc previously added the HIP runtime library automatically. With

@@ -1,7 +1,7 @@
 From 7d294a36da4bfc61d64393920e2efdba62ae2068 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Fri, 8 May 2026 11:51:02 -0500
-Subject: [PATCH 01/15] [ci] Deprecate hipcc: use amdclang++ as default
+Subject: [PATCH 01/16] [ci] Deprecate hipcc: use amdclang++ as default
  compiler in build_common.sh
 
 Replace the hipcc fallback defaults for HOST_COMPILER and CUDA_COMPILER

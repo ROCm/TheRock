@@ -1,7 +1,7 @@
 From 4b91144542d4cb0b780c8b789cef9b407c1c3045 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Thu, 16 Jul 2026 15:59:53 -0500
-Subject: [PATCH 15/15] [libhipcxx] Fix -O3 for AMDCLANG test flags (hipcc
+Subject: [PATCH 15/16] [libhipcxx] Fix -O3 for AMDCLANG test flags (hipcc
  defaults to -O3)
 
 hipBin_amd.h shows hipcc defaults to -O3 for HIPCXXFLAGS/HIPCFLAGS.

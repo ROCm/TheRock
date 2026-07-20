@@ -1,7 +1,7 @@
 From b3f6cb7ff789589bdc0db228364341e39e755947 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Thu, 16 Jul 2026 15:19:32 -0500
-Subject: [PATCH 14/15] [libhipcxx] Add -O2 to AMDCLANG test compiler flags
+Subject: [PATCH 14/16] [libhipcxx] Add -O2 to AMDCLANG test compiler flags
 
 hipcc implicitly added host optimization when compiling tests. With
 amdclang++ invoked directly the default is -O0, causing CPU-heavy

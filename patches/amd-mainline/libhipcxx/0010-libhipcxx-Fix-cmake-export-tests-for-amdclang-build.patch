@@ -1,7 +1,7 @@
 From a590fcdb91768900e83e09f8a6792dfd792f15de Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Wed, 1 Jul 2026 12:44:31 -0500
-Subject: [PATCH 10/15] [libhipcxx] Fix cmake export tests for amdclang++ build
+Subject: [PATCH 10/16] [libhipcxx] Fix cmake export tests for amdclang++ build
 
 Two fixes needed when building with amdclang++ directly:
 

@@ -1,7 +1,7 @@
 From 0d7a66c3d6b27cd8517b2088aa83a79f81f71678 Mon Sep 17 00:00:00 2001
 From: dsalinas <dsalinas@amd.com>
 Date: Mon, 13 Jul 2026 15:32:32 -0500
-Subject: [PATCH 12/15] [libhipcxx] Fix amdhip64 link path on Windows
+Subject: [PATCH 12/16] [libhipcxx] Fix amdhip64 link path on Windows
 
 On Windows the import library (.lib) is in lib/ while the DLL is in
 bin/. Using LOCATION gives the DLL path (bin/), so the linker can't

@@ -123,10 +123,14 @@ cmd = [
     "..",
 ]
 
-# Only pass HIP architectures if a GPU was detected. Passing "None" results
-# in --offload-arch=None which is rejected by the compiler.
+# Pass the detected GPU arch, or fall back to "native" which tells
+# amdclang++ to query the HIP runtime at compile time. This handles
+# MxGPU virtual GPUs on Windows where offload-arch.exe fails but the
+# HIP runtime correctly identifies the GPU (e.g. gfx1101).
 if gpu_arch is not None:
     cmd.append(f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}")
+else:
+    cmd.append("-DCMAKE_HIP_ARCHITECTURES=native")
 
 # Add rc compiler for windows
 if is_windows:

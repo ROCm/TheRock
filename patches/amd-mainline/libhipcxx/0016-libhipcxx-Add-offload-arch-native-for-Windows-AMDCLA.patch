@@ -1,0 +1,40 @@
+From e348041e83c9b017c3b02a9c3d1b943d16e06f5c Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Mon, 20 Jul 2026 15:18:43 -0500
+Subject: [PATCH 16/16] [libhipcxx] Add --offload-arch=native for Windows
+ AMDCLANG tests
+
+On Windows with MxGPU virtual GPUs, offload-arch.exe returns the wrong
+arch (e.g. gfx906 instead of gfx1101). lit's config.py ignores "native"
+for the hipcc compiler type (only processes gfx* strings), so we inject
+--offload-arch=native directly into LIBCUDACXX_TEST_COMPILER_FLAGS for
+WIN32. This causes amdclang++ to query the HIP runtime at compile time,
+which correctly identifies the GPU (e.g. gfx1101). Linux is unaffected.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index 629d293f6..aca6797b8 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -189,6 +189,14 @@ if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG")
+     " -O3"  # hipcc defaults to -O3; amdclang++ invoked directly does not
+ #    " CACHE INTERNAL "Flags for libcxx testing."
+   )
++  if (WIN32)
++    # On Windows, MxGPU virtual GPUs cause offload-arch.exe to return the
++    # wrong arch (e.g. gfx906). Add --offload-arch=native so amdclang++
++    # queries the HIP runtime directly at compile time to get the real GPU
++    # arch (e.g. gfx1101). lit's config.py ignores "native" for the hipcc
++    # compiler type, so this must be injected explicitly here.
++    string(APPEND LIBCUDACXX_TEST_COMPILER_FLAGS " --offload-arch=native")
++  endif()
+   # hipcc used to add the HIP runtime library automatically; with amdclang++
+   # we must link it explicitly.
+   # On Windows, the DLL (amdhip64.dll) is in bin/ but the import library
+-- 
+2.34.1
+
