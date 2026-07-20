@@ -11,14 +11,14 @@ product-local package directories:
 where <index> is ``whl`` or ``whl-next``. Release stream (dev/nightly/
 prerelease) is selected by the target bucket, never encoded in the path. This
 module computes the per-file destination keys the release publishers use when
-run with ``--structured``; the generator in
-``third_party/s3_management/manage_structured.py`` later discovers and indexes
-those directories.
+run with ``--structured``; the generator in ``manage_structured.py`` later
+discovers and indexes those directories.
 
 pep503_normalize + package-name extraction here intentionally mirror
 manage_structured.py so producer output round-trips through its
-discover_packages(). They are duplicated (a few lines) rather than shared to
-avoid a dependency from _therock_utils onto third_party/s3_management.
+discover_packages(). They are duplicated (a few lines) rather than shared
+because manage_structured.py runs server-side and is deployed on its own; a
+shared import would drag this module into that deployment.
 """
 
 import dataclasses

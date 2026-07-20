@@ -299,11 +299,11 @@ def main(argv: list[str]) -> None:
         "Multi-arch (--kpack-split true) only.",
     )
     parser.add_argument(
-        "--index",
+        "--python-index",
         default="whl",
         choices=["whl", "whl-next"],
-        help="Product-local index name for structured publishing (default: "
-        "whl). Selects the v5/core/<index>/ path segment.",
+        help="Product-local index name for structured Python publishing "
+        "(default: whl). Selects the v5/core/<index>/ path segment.",
     )
     parser.add_argument(
         "--skip-native-packages",
@@ -340,7 +340,7 @@ def main(argv: list[str]) -> None:
             backend,
             kpack_split,
             structured=args.structured,
-            index=args.index,
+            index=args.python_index,
         )
     else:
         logger.info("Skipping python packages for ASAN build variant")

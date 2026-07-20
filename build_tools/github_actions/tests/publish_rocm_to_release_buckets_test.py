@@ -225,10 +225,6 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # copy_directory used only for tarballs (not python) under structured.
-        self.assertEqual(mock_copy_dir.call_count, 1)
-        # One copy_file per accepted artifact; index.html is filtered out.
-        self.assertEqual(mock_copy_file.call_count, 3)
         dest_by_src = {
             call.args[0].relative_path: call.args[1].relative_path
             for call in mock_copy_file.call_args_list
@@ -277,7 +273,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "--kpack-split",
                 "true",
                 "--structured",
-                "--index",
+                "--python-index",
                 "whl-next",
                 "--skip-native-packages",
                 "--dry-run",

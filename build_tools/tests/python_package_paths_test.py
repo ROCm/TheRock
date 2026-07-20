@@ -218,7 +218,7 @@ def test_plan_key_copies() -> None:
 def test_generated_keys_round_trip_through_discover_packages() -> None:
     sys.path.insert(
         0,
-        os.fspath(Path(__file__).parent.parent / "third_party" / "s3_management"),
+        os.fspath(Path(__file__).parent.parent / "packaging" / "python"),
     )
     from manage_structured import discover_packages
 
