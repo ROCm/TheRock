@@ -384,11 +384,16 @@ def _run_kpack_split(
     devel = PopulatedDistPackage(params, logical_name="devel", target_family=None)
     devel.populate_devel_files(
         addl_artifact_names=[
+            # Header-only libraries not included in runtime packages.
             "prim",
             "rocwmma",
+            "libhipcxx",
+            # Third party dependencies needed by hipDNN consumers.
             "flatbuffers",
             "nlohmann-json",
+            # rocshmem only provides a static library.
             "rocshmem",
+            # rocjitsu emulation suite.
             "rocjitsu",
             "mirage",
         ],
@@ -581,6 +586,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "miopen",
             "miopenprovider",
             "hipblasltprovider",
+            "hipkernelprovider",
             "rand",
             "rccl",
         ]

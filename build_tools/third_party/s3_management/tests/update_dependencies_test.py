@@ -9,12 +9,18 @@ import pytest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+import update_dependencies
 from update_dependencies import (
+    PACKAGES_PER_PROJECT,
+    _run_structured,
     get_dependency_package_names,
     get_project_paths,
+    get_selected_packages,
     is_wheel_allowed,
+    main,
     normalize_package_name,
     resolve_target_prefixes,
+    structured_dependency_key,
 )
 
 
@@ -195,3 +201,163 @@ def test_resolve_target_prefixes_auto_detect_requires_base_prefix() -> None:
             bucket=FakeBucket(),
             auto_detect_prefixes=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# structured_dependency_key
+# ---------------------------------------------------------------------------
+
+
+def test_structured_dependency_key_composition() -> None:
+    key = structured_dependency_key(
+        index="whl",
+        pkg_name="numpy",
+        filename="numpy-2.0.0-cp312-cp312-linux_x86_64.whl",
+    )
+    assert key == "v5/core/whl/numpy/numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
+
+
+def test_structured_dependency_key_pure_python() -> None:
+    key = structured_dependency_key(
+        "whl", "networkx", "networkx-3.4.2-py3-none-any.whl"
+    )
+    assert key == "v5/core/whl/networkx/networkx-3.4.2-py3-none-any.whl"
+
+
+def test_structured_dependency_key_whl_next() -> None:
+    key = structured_dependency_key(
+        "whl-next", "numpy", "numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
+    )
+    assert key == "v5/core/whl-next/numpy/numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
+
+
+def test_structured_dependency_key_underscore_name_dashed_dir() -> None:
+    # The package directory is dashed; the wheel filename keeps underscores.
+    key = structured_dependency_key(
+        "whl", "ml_dtypes", "ml_dtypes-0.5.0-cp312-cp312-linux_x86_64.whl"
+    )
+    assert key == "v5/core/whl/ml-dtypes/ml_dtypes-0.5.0-cp312-cp312-linux_x86_64.whl"
+
+
+def test_structured_dependency_key_rejects_bad_index() -> None:
+    with pytest.raises(ValueError, match="index="):
+        structured_dependency_key("wheels", "numpy", "numpy-2.0.0.whl")
+
+
+# ---------------------------------------------------------------------------
+# get_selected_packages
+# ---------------------------------------------------------------------------
+
+
+def test_get_selected_packages_all() -> None:
+    selected = get_selected_packages(package="all")
+    assert selected == PACKAGES_PER_PROJECT
+    # Packages from every project are present.
+    projects = {info["project"] for info in selected.values()}
+    assert projects == {"jax", "rocm", "torch"}
+
+
+def test_get_selected_packages_filters_by_project() -> None:
+    selected = get_selected_packages(package="torch")
+    assert selected
+    assert all(info["project"] == "torch" for info in selected.values())
+    assert "numpy" in selected
+    # jax-only deps must be excluded.
+    assert "ml_dtypes" not in selected
+
+
+def test_get_selected_packages_unknown_project_raises() -> None:
+    with pytest.raises(ValueError, match="Unsupported package"):
+        get_selected_packages(package="nope")
+
+
+def test_get_selected_packages_dependency_filter() -> None:
+    selected = get_selected_packages(
+        package="torch", dependency_names=frozenset({"numpy"})
+    )
+    assert list(selected) == ["numpy"]
+
+
+def test_get_selected_packages_dependency_filter_across_all() -> None:
+    selected = get_selected_packages(
+        package="all", dependency_names=frozenset({"ml_dtypes", "numpy"})
+    )
+    assert set(selected) == {"ml_dtypes", "numpy"}
+
+
+def test_get_selected_packages_unknown_dependency_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown --dependency-package"):
+        get_selected_packages(
+            package="torch", dependency_names=frozenset({"not-a-dep"})
+        )
+
+
+# ---------------------------------------------------------------------------
+# _run_structured early validation
+# ---------------------------------------------------------------------------
+
+
+def test_run_structured_rejects_bad_index() -> None:
+    # Guards programmatic callers that bypass argparse choices: fail fast
+    # before any network/upload work rather than mid-run.
+    with pytest.raises(ValueError, match="index="):
+        _run_structured(
+            bucket=FakeBucket(),
+            selected_packages={"numpy": PACKAGES_PER_PROJECT["numpy"]},
+            index="wheels",
+            dry_run=True,
+            only_pypi=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# CLI validation: structured mode rejects flat-only prefix flags
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "extra_args",
+    [
+        ["--prefix", "v4/whl"],
+        ["--auto-detect-prefixes"],
+        ["--base-prefix", "v2/"],
+    ],
+)
+def test_structured_rejects_flat_prefix_flags(
+    monkeypatch: pytest.MonkeyPatch, extra_args: list[str]
+) -> None:
+    argv = ["prog", "--structured", "--bucket", "b"] + extra_args
+    monkeypatch.setattr(sys, "argv", argv)
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_structured_defaults_package_to_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(update_dependencies, "run_update_dependencies", fake_run)
+    monkeypatch.setattr(sys, "argv", ["prog", "--structured", "--bucket", "b"])
+    main()
+    assert captured["package"] == "all"
+    assert captured["structured"] is True
+    assert captured["index"] == "whl"
+
+
+def test_flat_defaults_package_to_torch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(update_dependencies, "run_update_dependencies", fake_run)
+    monkeypatch.setattr(sys, "argv", ["prog", "--bucket", "b", "--prefix", "v4/whl"])
+    main()
+    assert captured["package"] == "torch"
+    assert captured["structured"] is False

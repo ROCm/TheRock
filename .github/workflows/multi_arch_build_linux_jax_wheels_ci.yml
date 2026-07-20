@@ -1,11 +1,15 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Placeholder reusable workflow for the Linux JAX wheel CI flow.
+# Reusable single-build workflow for the Linux JAX wheel CI flow.
 #
-# This file intentionally does not build or upload JAX wheels yet.
-# It exists to land the reusable workflow interface first, so follow-up PRs can
-# wire and test the real JAX CI build implementation incrementally.
+# This workflow is called once per CI matrix cell from multi_arch_ci_linux.yml.
+#
+# Built shape:
+#   - One manylinux JAX wheel build for one python_version and jax_ref matrix cell.
+#   - Installs ROCm packages from the run-scoped CI find-links URL.
+#   - Uploads the resulting wheels to run-scoped CI Python artifacts.
+#   - Build-only for the first CI rollout; test wiring should be added separately.
 
 name: Multi-Arch Build Linux JAX Wheels (CI)
 
@@ -64,7 +68,6 @@ on:
         value: ${{ jobs.build_jax_wheels.outputs.jax_plugin_version }}
       jax_pjrt_version:
         value: ${{ jobs.build_jax_wheels.outputs.jax_pjrt_version }}
-
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -109,40 +112,141 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
-
-run-name: Placeholder Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})
-
+run-name: Build Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build_jax_wheels:
-    name: Placeholder | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
-    runs-on: ubuntu-24.04
+    name: Build JAX | ${{ inputs.artifact_group }} | jax ${{ inputs.jax_ref }} | py ${{ inputs.python_version }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
-      package_find_links_url: ${{ steps.placeholder_outputs.outputs.package_find_links_url }}
-      jax_version: ${{ steps.placeholder_outputs.outputs.jax_version }}
-      jaxlib_version: ${{ steps.placeholder_outputs.outputs.jaxlib_version }}
-      jax_plugin_version: ${{ steps.placeholder_outputs.outputs.jax_plugin_version }}
-      jax_pjrt_version: ${{ steps.placeholder_outputs.outputs.jax_pjrt_version }}
+      package_find_links_url: ${{ steps.upload_jax_wheels.outputs.package_find_links_url }}
+      jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
+      jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
+    env:
+      MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
+      RELEASE_TYPE: ci
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
-      - name: Validate placeholder inputs
+      - name: Checkout TheRock
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Checkout rocm-jax
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: rocm-jax
+          repository: ROCm/rocm-jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Checkout JAX
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: jax-source
+          repository: ${{ inputs.jax_repository }}
+          ref: ${{ inputs.jax_ref }}
+
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "therockbot"
+          git config --global user.email "therockbot@amd.com"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install python deps for CI
+        run: |
+          pip install -r external-builds/jax/requirements-jax.txt
+
+      - name: Validate CI build mode
         run: |
           if [ "${{ inputs.build_mode }}" != "manylinux" ]; then
-            echo "Only build_mode=manylinux is supported by the planned JAX CI workflow."
+            echo "Only build_mode=manylinux is supported by this CI workflow."
             exit 1
           fi
 
-      - name: Emit placeholder outputs
-        id: placeholder_outputs
+      - name: Build manylinux image
+        working-directory: jax-source
+        env:
+          THEROCK_VERSION: ""
+          GFX_ARCH: ${{ inputs.gfx_arch }}
+          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
         run: |
-          echo "::notice::Placeholder workflow only. No JAX wheels are built or uploaded."
+          cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
+            Dockerfile.jax-manylinux_2_28-therock
 
-          {
-            echo "package_find_links_url="
-            echo "jax_version="
-            echo "jaxlib_version="
-            echo "jax_plugin_version="
-            echo "jax_pjrt_version="
-          } >> "${GITHUB_OUTPUT}"
+          # TODO(#6388): Replace this per-run rocm-jax Dockerfile build with a
+          # frozen/prebuilt CI image and refine when JAX CI should run.
+          docker build \
+            -t "${MANYLINUX_IMAGE_TAG}" \
+            --file=Dockerfile.jax-manylinux_2_28-therock \
+            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
+            --build-arg=GFX_ARCH="${GFX_ARCH}" \
+            --progress=plain \
+            .
+
+      - name: Determine wheel version suffix
+        run: |
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version "${{ inputs.rocm_version }}"
+
+      - name: Build JAX Wheels in manylinux container
+        working-directory: jax-source
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
+        run: |
+          docker run --rm \
+            --user root \
+            --env ROCM_VERSION="${ROCM_VERSION}" \
+            --env PYTHON_VERSION="${PYTHON_VERSION}" \
+            --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
+            --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --workdir /workspace/jax-source \
+            "${MANYLINUX_IMAGE_TAG}" \
+            bash -lc '
+              python build/build.py build \
+                --wheels=jax-rocm-plugin,jax-rocm-pjrt \
+                --python_version="${PYTHON_VERSION}" \
+                --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
+                --bazel_options=--config=rocm_release_wheel \
+                --bazel_options=--repo_env=ROCM_PATH=$(rocm-sdk path --root) \
+                --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
+                --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
+                --bazel_options=--//jaxlib/tools:jaxlib_git_hash=$(git rev-parse HEAD) \
+                --verbose \
+                --detailed_timestamped_log \
+                --output_path=$(pwd)/dist
+            '
+
+      - name: Extract JAX versions from built wheels
+        id: write_jax_versions
+        run: |
+          python3 ./build_tools/github_actions/write_jax_versions.py \
+            --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
+
+      - name: Configure AWS Credentials
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ci
+
+      - name: Upload JAX wheels to CI artifacts
+        id: upload_jax_wheels
+        run: |
+          python build_tools/github_actions/upload_python_packages.py \
+            --input-packages-dir="${{ env.PACKAGE_DIST_DIR }}" \
+            --artifact-group="${{ inputs.artifact_group }}" \
+            --run-id="${{ github.run_id }}" \
+            --multiarch

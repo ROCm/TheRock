@@ -4,9 +4,13 @@
 
 """Promotes / repackages ROCm and PyTorch Python packages.
 
-This script transforms the version segment of Python wheels (.whl) and source
-distributions (.tar.gz) and optionally restricts which gfx target architectures
-are referenced by the package metadata.
+This script promotes the version of two kinds of artifact:
+  - Python wheels (.whl) and the `rocm` source distribution (`rocm-<ver>.tar.gz`),
+    whose internal version metadata is rewritten in place, and
+  - standalone `therock-dist-*.tar.gz` distribution tarballs, which are renamed
+    to the promoted version (their contents are NOT opened or modified).
+It optionally also restricts which gfx target architectures are referenced by the
+package metadata.
 
 Promotion is parameterised by:
   --src-version-type   prerelease type to look for in source: 'rc' or 'a'
@@ -38,7 +42,7 @@ PREREQUISITES:
 
 SIDE EFFECTS:
   - Creates NEW promoted package files side-by-side with the original files
-  - By default, DOES NOT delete original files (safe to run with no --delete flag)
+  - By default, DOES NOT delete original files (safe to run without --delete-old-on-success)
   - With --delete-old-on-success flag, removes original files after promotion
   - Multi-arch per-gfx wheels for archs NOT in --multi-arch-targets are always skipped
     (and deleted with --delete-old-on-success), since they are not retained
@@ -64,7 +68,8 @@ TYPICAL USAGE:
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --skip-version-promotion --multi-arch-targets=gfx1201,gfx1010,gfx11
 
 TESTING:
-  python ./build_tools/packaging/tests/promote_packages_test.py
+  # Point the on-demand test at a directory of already-downloaded RC packages:
+  python ./build_tools/packaging/tests/promote_packages_test.py --input-dir ./rc_packages
 """
 
 import argparse
@@ -540,6 +545,7 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
     # carry at most one body line.
     new_lines: list[str] = []
     section_name = ""
+    base_section = ""
     skip_section = False
     default_device_idx: int | None = None
     keep_body_lines: dict[str, str] = {}
@@ -552,8 +558,14 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
             section_match = section_re.match(stripped)
             if section_match:
                 section_name = section_match.group(1)
-                if section_name.startswith("device-") and section_name != "device-all":
-                    arch_token = section_name[len("device-") :]
+                # A section can carry an environment marker, e.g.
+                # `[device-gfx942:sys_platform == "linux"]` for a linux-only arch
+                # (its plain `[device-gfx942]` section is empty and the real dep
+                # lives under the marked one). Strip the marker so the arch is
+                # recognized for both the skip decision and the body-line pass.
+                base_section = section_name.split(":", 1)[0].strip()
+                if base_section.startswith("device-") and base_section != "device-all":
+                    arch_token = base_section[len("device-") :]
                     skip_section = (
                         re.fullmatch(_GFX_ARCH, arch_token) is not None
                         and arch_token not in keep_set
@@ -576,8 +588,8 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
             arch = dep_match.group(1)
 
             # Remember each kept arch's [device-gfx<N>] body for pass 2.
-            if section_name.startswith("device-") and section_name != "device-all":
-                section_arch = section_name[len("device-") :]
+            if base_section.startswith("device-") and base_section != "device-all":
+                section_arch = base_section[len("device-") :]
                 if section_arch in keep_set:
                     if section_arch in keep_body_lines:
                         raise ValueError(
@@ -588,7 +600,7 @@ def _apply_keep_list_to_requires_txt(path: pathlib.Path, keep_archs: list[str]) 
 
             # `[device]` body is the default-arch dep — always kept.
             # Save its index for pass 2 IFF its arch is dropped.
-            if section_name == "device":
+            if base_section == "device":
                 if arch not in keep_set:
                     if default_device_idx is not None:
                         raise ValueError(
@@ -824,9 +836,6 @@ def wheel_change_extra_files(
 
     # rocm packages needing extra handling
     if new_dir_path.name.startswith("rocm"):
-        # Workaround needed for multiarch until Jun 19, 2026 (see #6266 and #5984)
-        if "rocm_sdk_libraries" in new_dir_path.name and "gfx" not in new_dir_path.name:
-            package_name_no_version = "rocm_sdk_libraries_None"
         files_to_change = [
             new_dir_path / package_name_no_version / "_dist_info.py",
         ]
@@ -965,7 +974,10 @@ def promote_targz_sdist(
         tmp_path = pathlib.Path(tmp_dir)
 
         targz = tarfile.open(filename)
-        targz.extractall(tmp_path)
+        # PEP 706: refuse members with absolute paths / `..` traversal and strip
+        # unsafe metadata when extracting the downloaded sdist. The `filter`
+        # keyword requires Python 3.12+ (per the repo's Python baseline).
+        targz.extractall(tmp_path, filter="data")
         targz.close()
         print(" ...done")
 
