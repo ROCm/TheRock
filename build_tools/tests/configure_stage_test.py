@@ -192,8 +192,6 @@ class StageAndProjectsCombinedTest(unittest.TestCase):
 
     def test_stage_with_matching_project(self):
         """Test that --stage compiler-runtime --projects hip enables only HIP."""
-        from build_tools.configure_stage import generate_cmake_args
-
         args = generate_cmake_args(
             stage_name="compiler-runtime",
             amdgpu_families="",
@@ -209,8 +207,6 @@ class StageAndProjectsCombinedTest(unittest.TestCase):
 
     def test_stage_with_non_matching_project(self):
         """Test that --stage math-libs --projects hip falls back to stage defaults."""
-        from build_tools.configure_stage import generate_cmake_args
-
         args = generate_cmake_args(
             stage_name="math-libs",
             amdgpu_families="",
@@ -227,8 +223,6 @@ class StageAndProjectsCombinedTest(unittest.TestCase):
 
     def test_stage_with_mixed_projects(self):
         """Test --stage comm-libs --projects hip rccl enables only rccl."""
-        from build_tools.configure_stage import generate_cmake_args
-
         args = generate_cmake_args(
             stage_name="comm-libs",
             amdgpu_families="",
