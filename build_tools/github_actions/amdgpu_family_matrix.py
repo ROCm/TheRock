@@ -7,9 +7,9 @@ AMD GPU Family Matrix and runner selection utilities for GitHub workflows.
 Architecture:
 - SUPPORTED BUILD ARCHITECTURES are defined locally in this file (TheRock repo).
   This is the source of truth for what GPU families can be built.
-- CI RUNNER CONFIGURATION is loaded from external config (ROCm/therock-ci-config)
-  when available. This only provides runner labels (test-runs-on, etc.) for where
-  tests can actually be executed.
+- CI RUNNER CONFIGURATION is loaded from external config when available
+  (https://github.com/ROCm/therock-ci-config). This only provides runner labels
+  (test-runs-on, etc.) for where tests can actually be executed.
 
 The external config overlays runner labels onto the local architecture definitions.
 A family can exist for building even without CI runners configured for testing.
@@ -27,6 +27,7 @@ TODO(#2200): clarify AMD GPU family selection
 # NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
 #############################################################################################
 
+import copy
 import os
 import random
 import sys
@@ -66,10 +67,6 @@ def load_external_runner_config() -> dict | None:
     config = load_runner_config(config_path)
     _log(f"Loaded external runner config from {ci_config_path}")
     return config
-
-
-# Keep old name as alias for backwards compatibility
-load_external_config = load_external_runner_config
 
 
 def is_asan():
@@ -520,7 +517,18 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
 
 
 def _overlay_runner_config(families: dict, external_config: dict) -> dict:
-    """Overlay external runner configuration onto local family definitions."""
+    """Overlay external runner configuration onto local family definitions.
+
+    Merges runner labels from external config onto local build definitions.
+    Only runner-related keys (test-runs-on, build-runs-on) are overlaid;
+    build architecture support (amdgpu_targets, build_variants) stays local.
+
+    Example transformation for gfx94X:
+        Before (local):
+            "gfx94X": {"linux": {"test-runs-on": "", "amdgpu_targets": "gfx942"}}
+        After (with external config):
+            "gfx94X": {"linux": {"test-runs-on": "linux-mi300-gpu", "amdgpu_targets": "gfx942"}}
+    """
     # V2 format: runner_labels directly available
     # V1 format: extract from gpu_families
     runner_labels = external_config.get("runner_labels", {})
@@ -529,8 +537,6 @@ def _overlay_runner_config(families: dict, external_config: dict) -> dict:
 
     if not runner_labels:
         return families
-
-    import copy
 
     result = copy.deepcopy(families)
     _log("Overlaying runner labels from external config:")
