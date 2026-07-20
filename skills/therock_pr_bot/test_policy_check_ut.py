@@ -209,9 +209,14 @@ class DescriptionTests(unittest.TestCase):
         multiline_comment = """<!--
 Fixes #1234
 -->"""
+        multiple_comments = """This description has no visible issue reference.
+<!-- Related to #1234 -->
+Some visible text between the comments.
+<!-- https://github.com/ROCm/TheRock/issues/5678 -->"""
         for body in [
             "<!-- GitHub issue: https://github.com/ROCm/TheRock/issues/1234 -->",
             multiline_comment,
+            multiple_comments,
         ]:
             with self.subTest(body=body):
                 e: List[str] = []
