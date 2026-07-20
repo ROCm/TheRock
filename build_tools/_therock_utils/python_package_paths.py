@@ -79,9 +79,10 @@ def is_accepted_artifact(filename: str) -> bool:
 def structured_key(product: str, index: str, filename: str) -> str:
     """Compute the structured S3 key for an artifact.
 
-    Returns ``v5/<product>/<index>/<normalized-package>/<filename>``. The
-    ``v5`` prefix is the layout schema version; CloudFront needs to redirect
-    the served path to the current version.
+    Returns ``v5/rocm/<product>/<index>/<normalized-package>/<filename>``.
+    ``v5`` is the layout schema version and the S3 origin prefix; ``rocm`` is
+    the served tree segment, so the object serves at
+    ``<stream>.repo.amd.com/rocm/<product>/<index>/...`` with no rewrite.
 
     Raises:
         ValueError: if ``index`` is not a valid aggregate index name.
@@ -89,7 +90,7 @@ def structured_key(product: str, index: str, filename: str) -> str:
     if index not in INDEX_NAMES:
         raise ValueError(f"index={index!r} is invalid, must be one of {INDEX_NAMES}")
     package = package_name_from_filename(filename)
-    return f"v5/{product}/{index}/{package}/{filename}"
+    return f"v5/rocm/{product}/{index}/{package}/{filename}"
 
 
 @dataclasses.dataclass

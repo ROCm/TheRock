@@ -111,14 +111,17 @@ def test_is_accepted_artifact(filename: str, expected: bool) -> None:
 
 def test_structured_key_composition() -> None:
     key = structured_key("pytorch", "whl", "torch-2.10.0-cp310-cp310-linux_x86_64.whl")
-    assert key == "v5/pytorch/whl/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl"
+    assert key == "v5/rocm/pytorch/whl/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl"
 
 
 def test_structured_key_whl_next() -> None:
     key = structured_key(
         "pytorch", "whl-next", "torch-2.10.0-cp310-cp310-linux_x86_64.whl"
     )
-    assert key == "v5/pytorch/whl-next/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl"
+    assert (
+        key
+        == "v5/rocm/pytorch/whl-next/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl"
+    )
 
 
 def test_structured_key_underscore_filename_dashed_dir() -> None:
@@ -127,7 +130,7 @@ def test_structured_key_underscore_filename_dashed_dir() -> None:
         "core", "whl", "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
     )
     assert key == (
-        "v5/core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
+        "v5/rocm/core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
     )
 
 
@@ -159,8 +162,8 @@ def test_plan_local_uploads(tmp_path: Path) -> None:
     assert all(isinstance(p, PlannedUpload) for p in plans)
     dests = {p.dest.relative_path for p in plans}
     assert dests == {
-        "v5/pytorch/whl/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl",
-        "v5/pytorch/whl/amd-torch-device-gfx942/"
+        "v5/rocm/pytorch/whl/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl",
+        "v5/rocm/pytorch/whl/amd-torch-device-gfx942/"
         "amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl",
     }
     for p in plans:
@@ -197,11 +200,13 @@ def test_plan_key_copies() -> None:
     mapping = {p.source.relative_path: p.dest.relative_path for p in plans}
     assert mapping == {
         "12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl": (
-            "v5/core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
+            "v5/rocm/core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
         ),
-        "12345-linux/python/rocm-7.13.0.tar.gz": "v5/core/whl/rocm/rocm-7.13.0.tar.gz",
+        "12345-linux/python/rocm-7.13.0.tar.gz": (
+            "v5/rocm/core/whl/rocm/rocm-7.13.0.tar.gz"
+        ),
         "12345-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl": (
-            "v5/core/whl/rocm-sdk-device-gfx1100/"
+            "v5/rocm/core/whl/rocm-sdk-device-gfx1100/"
             "rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl"
         ),
     }
@@ -229,6 +234,6 @@ def test_generated_keys_round_trip_through_discover_packages() -> None:
     ]
     keys = [structured_key("pytorch", "whl", f) for f in filenames]
 
-    packages = discover_packages(keys, root="v5/pytorch/whl")
+    packages = discover_packages(keys, root="v5/rocm/pytorch/whl")
     names = sorted(p.name for p in packages)
     assert names == ["amd-torch-device-gfx942", "llnl-hatchet", "torch"]
