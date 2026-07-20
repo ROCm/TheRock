@@ -331,6 +331,40 @@ class CreateTheRockBumpTest(unittest.TestCase):
         self.assertIn("pulls?state=open", endpoint)
         self.assertIn("bump-rocm-systems-abc1234", endpoint)
 
+    def test_skips_when_submodule_already_at_latest(self):
+        """create_therock_bump must bail out without cloning when the submodule
+        is already pinned to the latest upstream commit."""
+        latest_sha = "abc1234567890"
+        api_responses = [
+            [],  # open-PR check returns nothing
+        ]
+
+        def _gh_api_side_effect(*args, **kwargs):
+            return api_responses.pop(0) if api_responses else {}
+
+        with patch("bump_automation.latest_commit", return_value=latest_sha):
+            with patch("bump_automation.gh_api", side_effect=_gh_api_side_effect):
+                with patch("bump_automation.run") as mock_run:
+                    with patch("bump_automation.os.chdir"):
+                        with patch("bump_automation.os.path.exists", return_value=True):
+                            with patch(
+                                "bump_automation.get_submodule_sha",
+                                return_value=latest_sha,
+                            ):
+                                with patch(
+                                    "bump_automation.tempfile.TemporaryDirectory"
+                                ) as mock_tmp:
+                                    create_therock_bump("rocm-systems", "token")
+
+        # The clone is created before we detect the no-op, so TemporaryDirectory
+        # will have been called. What must NOT happen is any git commit or push.
+        git_calls = [c for c in mock_run.call_args_list if "commit" in c.args[0]]
+        self.assertEqual(
+            git_calls, [], "git commit must not run when already at latest"
+        )
+        push_calls = [c for c in mock_run.call_args_list if "push" in c.args[0]]
+        self.assertEqual(push_calls, [], "git push must not run when already at latest")
+
     def test_proceeds_when_no_open_pr(self):
         """create_therock_bump must proceed to clone when no open PR exists."""
         # First gh_api call is the open-PR check (returns []); subsequent calls

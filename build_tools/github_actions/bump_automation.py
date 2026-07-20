@@ -302,6 +302,11 @@ def create_therock_bump(submodule: str, token: str) -> None:
 
         current_sha = get_submodule_sha("HEAD", submodule)
 
+        if current_sha == latest:
+            print(f"[INFO] {submodule} is already at {latest[:7]}, nothing to bump")
+            os.chdir(original_cwd)
+            return
+
         # Fetch the exact target commit in the submodule. A plain depth-1 fetch
         # only retrieves the default branch tip, which misses commits that live
         # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-16).
