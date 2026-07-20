@@ -198,9 +198,6 @@ jobs:
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
           WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_WIN_SDK_SHARED/p
         run: |
-          # The source and build trees live on the WSL-native ext4 filesystem
-          # (see the "Sync source tree to WSL" step for why), so they are not
-          # bridged /mnt/c paths.
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           if [ ! -d "${THEROCK_WIN_SDK_SHARED}" ]; then
             echo "Windows SDK include path not found: ${THEROCK_WIN_SDK_SHARED}"
@@ -211,16 +208,12 @@ jobs:
       - name: Sync source tree to WSL
         shell: wsl-bash {0}
         run: |
-          # CMake configure fingerprints every subproject with `git diff HEAD`
-          # (cmake/therock_subproject.cmake). Running that against the
-          # Windows-hosted source over the container's bind mount of WSL's
-          # 9p/DrvFs view of NTFS made configure ~9x slower after #6359 (288s ->
-          # 2548s): the container's git reads and CRLF-renormalizes every tracked
-          # file over 9p. Copy the tree onto the WSL-native ext4 filesystem once
-          # -- a single sequential pass, which 9p handles far better than the
-          # per-file random I/O git does -- so all later git/cmake I/O is local.
-          # The external repo (if any) is checked out under the workspace, so it
-          # is copied along with it.
+          # Subproject source files are checked out on the Windows side via actions/checkout.
+          # TheRock runs `git diff` against every subproject to check for changed files.
+          # File operations between Windows and WSL filesystems have a lot of overhead,
+          # so this method of diffing subprojects becomes very time consuming.
+          # To resolve this, copy the entire tree in one sequential operation from Windows to WSL.
+          # All `git diff` are now run on WSL-native files, giving a big speed boost.
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           rm -rf "${wsl_src_dir}"
           mkdir -p "${wsl_src_dir}"
@@ -247,15 +240,6 @@ jobs:
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
           WSLENV: THEROCK_WIN_SDK_SHARED/p:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
         run: |
-          # Source and build trees live on the WSL-native ext4 filesystem. They
-          # are bind-mounted src==dst so the in-container cmake invocation matches
-          # a native one, and ext4 is an ordinary Linux bind-mount source for the
-          # WSL dockerd. Configure runs entirely off ext4 -- no 9p/DrvFs in the
-          # hot path -- which is what fixes the #6359 configure regression. Only
-          # the SDK stays on /mnt/c, mounted read-only at a clean space-free path
-          # and passed as THEROCK_WSL_WIN_SDK. The external repo (if any) was
-          # copied under the source tree, so its relative -DTHEROCK_*_SOURCE_DIR
-          # resolves against the ext4 working dir.
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
@@ -335,13 +319,8 @@ jobs:
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
         env:
-          # Bridge the AWS creds set by the configure step on the Windows host
-          # into WSL, matching the Push step; boto3 needs them for the S3 upload.
           WSLENV: THEROCK_HOST_WORKSPACE/p:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
-          # post_stage_upload.py globs the whole build tree for **/.ninja_log and
-          # reads logs/, so it must run against the WSL-native build dir via the
-          # WSL venv rather than on the Windows host.
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/github_actions/post_stage_upload.py" \
