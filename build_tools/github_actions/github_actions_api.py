@@ -364,16 +364,40 @@ def gha_set_output(vars: Mapping[str, str | Path]):
         for k, v in vars.items():
             value = "" if v is None else str(v)
             if "\n" in value:
-                f.write(f"{k}<<EOF\n{value}\nEOF\n")
+                # EOF_mag1c delimiter must NOT occure in value
+                f.write(f"{k}<<EOF_mag1c\n{value}\nEOF_mag1c\n")
             else:
                 print(f"OUTPUT {k}={value}")
                 f.write(f"{k}={value}\n")
 
 
-def gha_append_step_summary(summary: str):
+def gha_job_summary_mirror_path() -> Path | None:
+    """Return the per-job summary mirror file under $RUNNER_TEMP, or None.
+
+    GitHub clears $GITHUB_STEP_SUMMARY between steps, so the rendered job
+    summary cannot be read back at the end of a job. We mirror every append
+    into $RUNNER_TEMP/job_summary.md, which persists for the whole job, so a
+    later step can publish it as a job output (see
+    gha_set_job_summary_output). $RUNNER_TEMP is emptied at the start and end
+    of each job, so the mirror does not leak between jobs.
+
+    Returns None when $RUNNER_TEMP is not set (the caller should skip
+    mirroring rather than fail). Local tests point $RUNNER_TEMP at a temp dir.
+    """
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / "job_summary.md"
+
+
+def gha_append_step_summary(summary: str, mirror_to_job_file: bool = True):
     """Appends a string to the GitHub Actions job summary.
 
-    This appends to the file located at the $GITHUB_STEP_SUMMARY environment variable.
+    This appends to the file located at the $GITHUB_STEP_SUMMARY environment
+    variable. When mirror_to_job_file is set (the default), the same text
+    is also appended to the persistent mirror at $RUNNER_TEMP/job_summary.md
+    (see gha_job_summary_mirror_path) so the accumulated summary can be read
+    back later in the job and published as an output.
 
     See
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#adding-a-job-summary
@@ -386,9 +410,45 @@ def gha_append_step_summary(summary: str):
         _log("  Warning: GITHUB_STEP_SUMMARY env var not set, can't write job summary")
         return
 
+    # Use double newlines to split sections in markdown.
+    block = summary + "\n\n"
+
     with open(step_summary_file, "a") as f:
         # Use double newlines to split sections in markdown.
-        f.write(summary + "\n\n")
+        f.write(block)
+
+    if mirror_to_job_file:
+        mirror_path = gha_job_summary_mirror_path()
+        if mirror_path:
+            with open(mirror_path, "a", encoding="utf-8") as f:
+                f.write(block)
+        else:
+            _log(
+                "  Warning: RUNNER_TEMP env var not set, cannot mirror job summary "
+                "for output capture"
+            )
+
+
+def gha_set_job_summary_output(output_name: str = "summary"):
+    """Publishes the accumulated job summary mirror as a step output.
+
+    Reads $RUNNER_TEMP/job_summary.md (written by gha_append_step_summary) and
+    writes it to $GITHUB_OUTPUT under output_name via gha_set_output.
+
+    Note: A missing or empty mirror file writes no output at all.
+    """
+    mirror_path = gha_job_summary_mirror_path()
+    summary = ""
+    if mirror_path and mirror_path.exists():
+        summary = mirror_path.read_text(encoding="utf-8")
+
+    if not summary:
+        _log(
+            f"  No job summary content to publish; skipping '{output_name}' to add to $GITHUB_OUTPUT"
+        )
+        return
+
+    gha_set_output({output_name: summary})
 
 
 def gha_load_github_event() -> dict[str, Any]:
