@@ -105,10 +105,13 @@ by ocltst
 | [`no_rocm_image_ubuntu24_04_openmpi.Dockerfile`](no_rocm_image_ubuntu24_04_openmpi.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_openmpi |
 
 Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing a system
-OpenMPI install (`libopenmpi-dev`, `openmpi-bin`) required to build and run the
-rocprofv3 `mpi-ranks` integration tests. OpenMPI is intentionally not bundled in
-TheRock artifacts (to avoid forcing a specific MPI onto users), so it is provided
-at the system level here for the test environment.
+OpenMPI install (`libopenmpi-dev`, `openmpi-bin`) for the rocprofv3 `mpi-ranks`
+integration tests. Like the other `no_rocm_image_*` images this is a test-only
+image (not a ROCm build image): the rocprofiler-sdk tests are configured and
+compiled in-container at test time, so `find_package(MPI)` needs the OpenMPI
+headers and `mpiexec`. OpenMPI is intentionally not bundled in TheRock artifacts
+(to avoid forcing a specific MPI onto users), so it is provided at the system
+level here for the test environment.
 
 ### `rocm_runtime.Dockerfile`
 
