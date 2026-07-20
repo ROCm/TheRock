@@ -131,7 +131,7 @@ jobs:
   build_opencl_cts:
     needs: [copy_prebuilt_stages]
     name: Build opencl-cts
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).expect_failure == false }}
+    if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/build_opencl_cts.yml
     secrets: inherit
     with:
