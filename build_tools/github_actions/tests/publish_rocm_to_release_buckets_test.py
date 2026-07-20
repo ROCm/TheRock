@@ -238,17 +238,17 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             dest_by_src[
                 "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl"
             ],
-            "core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+            "v5/core/whl/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
         )
         self.assertEqual(
             dest_by_src["123-linux/python/rocm-7.13.0.tar.gz"],
-            "core/whl/rocm/rocm-7.13.0.tar.gz",
+            "v5/core/whl/rocm/rocm-7.13.0.tar.gz",
         )
         self.assertEqual(
             dest_by_src[
                 "123-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl"
             ],
-            "core/whl/rocm-sdk-device-gfx1100/"
+            "v5/core/whl/rocm-sdk-device-gfx1100/"
             "rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl",
         )
         # Destination bucket is the release python bucket.
@@ -286,7 +286,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         _, dest = mock_copy_file.call_args_list[0].args
         self.assertEqual(
             dest.relative_path,
-            "core/whl-next/rocm-sdk-core/"
+            "v5/core/whl-next/rocm-sdk-core/"
             "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
         )
 

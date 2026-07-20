@@ -214,21 +214,21 @@ def test_structured_dependency_key_composition() -> None:
         pkg_name="numpy",
         filename="numpy-2.0.0-cp312-cp312-linux_x86_64.whl",
     )
-    assert key == "core/whl/numpy/numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
+    assert key == "v5/core/whl/numpy/numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
 
 
 def test_structured_dependency_key_pure_python() -> None:
     key = structured_dependency_key(
         "whl", "networkx", "networkx-3.4.2-py3-none-any.whl"
     )
-    assert key == "core/whl/networkx/networkx-3.4.2-py3-none-any.whl"
+    assert key == "v5/core/whl/networkx/networkx-3.4.2-py3-none-any.whl"
 
 
 def test_structured_dependency_key_whl_next() -> None:
     key = structured_dependency_key(
         "whl-next", "numpy", "numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
     )
-    assert key == "core/whl-next/numpy/numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
+    assert key == "v5/core/whl-next/numpy/numpy-2.0.0-cp312-cp312-linux_x86_64.whl"
 
 
 def test_structured_dependency_key_underscore_name_dashed_dir() -> None:
@@ -236,7 +236,7 @@ def test_structured_dependency_key_underscore_name_dashed_dir() -> None:
     key = structured_dependency_key(
         "whl", "ml_dtypes", "ml_dtypes-0.5.0-cp312-cp312-linux_x86_64.whl"
     )
-    assert key == "core/whl/ml-dtypes/ml_dtypes-0.5.0-cp312-cp312-linux_x86_64.whl"
+    assert key == "v5/core/whl/ml-dtypes/ml_dtypes-0.5.0-cp312-cp312-linux_x86_64.whl"
 
 
 def test_structured_dependency_key_rejects_bad_index() -> None:
