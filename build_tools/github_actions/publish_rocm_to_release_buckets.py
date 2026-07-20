@@ -142,7 +142,7 @@ def publish_python_packages(
     product-local package directories instead of the flat v4/whl prefix:
 
         s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-...whl
-          -> s3://therock-dev-python/v5/core/<index>/rocm-sdk-core/rocm_sdk_core-...whl
+          -> s3://therock-dev-python/v5/rocm/core/<index>/rocm-sdk-core/rocm_sdk_core-...whl
     """
     source = artifacts_root.python_packages()
     dest_bucket = get_release_bucket_config(release_type, "python")
@@ -181,7 +181,7 @@ def _publish_python_packages_structured(
     """Copy python packages into product-local package directories.
 
     Lists the flat source prefix, then copies each accepted artifact into
-    ``v5/core/<index>/<normalized-package>/<filename>`` so the structured
+    ``v5/rocm/core/<index>/<normalized-package>/<filename>`` so the structured
     index generator can discover per-package directories.
     """
     source_objects = backend.list_files(source, include=["*.whl", "*.tar.gz", "*.zip"])
@@ -295,7 +295,7 @@ def main(argv: list[str]) -> None:
         "--structured",
         action="store_true",
         help="Publish python packages into product-local package directories "
-        "(v5/core/<index>/<package>/) instead of the flat v4/whl prefix. "
+        "(v5/rocm/core/<index>/<package>/) instead of the flat v4/whl prefix. "
         "Multi-arch (--kpack-split true) only.",
     )
     parser.add_argument(
@@ -303,7 +303,7 @@ def main(argv: list[str]) -> None:
         default="whl",
         choices=["whl", "whl-next"],
         help="Product-local index name for structured Python publishing "
-        "(default: whl). Selects the v5/core/<index>/ path segment.",
+        "(default: whl). Selects the v5/rocm/core/<index>/ path segment.",
     )
     parser.add_argument(
         "--skip-native-packages",
