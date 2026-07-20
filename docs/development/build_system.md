@@ -313,3 +313,33 @@ therock_cmake_subproject_provide_package(ROCR-Runtime hsa-runtime64 lib/cmake/hs
 # to `FetchContent_MakeAvailable()` for that facility.
 therock_cmake_subproject_activate(ROCR-Runtime)
 ```
+
+## Injecting CMake Hooks into Sub-Projects
+
+Each sub-project is configured by its own nested `cmake` invocation, separate
+from the super-project's configure. The super-project always injects a generated
+`_init.cmake` for every sub-project via
+[`CMAKE_PROJECT_TOP_LEVEL_INCLUDES`](https://cmake.org/cmake/help/latest/variable/CMAKE_PROJECT_TOP_LEVEL_INCLUDES.html),
+which CMake reads at the top of the sub-project's first `project()` call.
+
+To inject an additional hook into every sub-project configure, set
+`THEROCK_SUBPROJECT_CMAKE_INCLUDES`. Files listed there are appended to each
+sub-project's `CMAKE_PROJECT_TOP_LEVEL_INCLUDES` (after the generated `_init.cmake`)
+and processed at the start of the sub-project's `project()` call:
+
+```bash
+cmake -B build -GNinja \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1100 \
+  -DTHEROCK_SUBPROJECT_CMAKE_INCLUDES=/abs/path/my_hook.cmake
+```
+
+`CMAKE_PROJECT_TOP_LEVEL_INCLUDES` is **not** forwarded to sub-projects. CMake
+uses it automatically for the TheRock super-project configure; if you also want
+the hook to run there, pass it via `-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=` as well.
+
+- **Ordering**: a sub-project's own generated `_init.cmake` is included first,
+  then your hook file(s). Your hook can therefore observe/override what the
+  generated init established.
+- **Multiple files**: use a standard CMake `;`-separated list.
+- **Absolute paths**: hook files must be absolute, since each sub-project
+  configures from a different working directory.

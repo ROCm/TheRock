@@ -164,6 +164,12 @@ therock_enable_external_source("rocr-debug-agent" "${THEROCK_ROCM_SYSTEMS_SOURCE
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 set(THEROCK_DEV_PROJECTS "" CACHE STRING "Semicolon-separated list of subprojects that opt in to source globbing even when otherwise skipped (e.g. amd-llvm).")
+set(THEROCK_SUBPROJECT_CMAKE_INCLUDES "" CACHE STRING
+  "Semicolon-separated list of absolute CMake file paths included at the top of \
+every subproject's first project() call (via CMAKE_PROJECT_TOP_LEVEL_INCLUDES). \
+Use this to inject hooks into all subproject configures without editing TheRock. \
+CMAKE_PROJECT_TOP_LEVEL_INCLUDES itself is not forwarded; it only affects the \
+TheRock super-project configure.")
 
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)

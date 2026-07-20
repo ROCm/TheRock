@@ -712,12 +712,26 @@ function(therock_cmake_subproject_activate target_name)
   # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
   _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
 
+  # Compose CMAKE_PROJECT_TOP_LEVEL_INCLUDES for the subproject: its generated
+  # init file first, then any files listed in THEROCK_SUBPROJECT_CMAKE_INCLUDES.
+  foreach(_hook IN LISTS THEROCK_SUBPROJECT_CMAKE_INCLUDES)
+    if(NOT IS_ABSOLUTE "${_hook}")
+      message(FATAL_ERROR "THEROCK_SUBPROJECT_CMAKE_INCLUDES: '${_hook}' must be an absolute path")
+    endif()
+    if(NOT EXISTS "${_hook}")
+      message(FATAL_ERROR "THEROCK_SUBPROJECT_CMAKE_INCLUDES: '${_hook}' does not exist")
+    endif()
+  endforeach()
+  set(_subproject_top_level_includes "${_cmake_project_init_file}" ${THEROCK_SUBPROJECT_CMAKE_INCLUDES})
+
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
-    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
+    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}"
+    "${_subproject_top_level_includes}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
+  list(APPEND _fprint_files ${THEROCK_SUBPROJECT_CMAKE_INCLUDES})
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
@@ -853,7 +867,15 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "set(THEROCK_USER_POST_HOOK \"@_post_hook_path@\")\n")
   endif()
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
-  string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
+  # The subproject toolchain sets CMAKE_PROJECT_TOP_LEVEL_INCLUDES, which try_compile
+  # re-reads during compiler detection, so this init file also runs inside the scratch
+  # project. Do not schedule the global post hook there: it references targets that only
+  # exist in the real subproject (aborting the compiler check) and its rpath/debug-split
+  # fixups are meaningless for a throwaway project. The scratch project is named
+  # CMAKE_TRY_COMPILE.
+  string(APPEND _init_contents "if(NOT CMAKE_PROJECT_NAME STREQUAL \"CMAKE_TRY_COMPILE\")\n")
+  string(APPEND _init_contents "  cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
+  string(APPEND _init_contents "endif()\n")
   foreach(_addl_cmake_include ${_cmake_includes})
     if(NOT IS_ABSOLUTE)
       find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
@@ -985,7 +1007,6 @@ function(therock_cmake_subproject_activate target_name)
         "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
-        "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
       # the build graph sane.
@@ -1629,7 +1650,7 @@ endfunction()
 #   * amd-hip: Extends the amd-llvm toolchain to also depend on HIP, making
 #     it ready to use to compile HIP code.
 function(_therock_cmake_subproject_setup_toolchain
-    target_name compiler_toolchain toolchain_file)
+    target_name compiler_toolchain toolchain_file top_level_includes)
   string(APPEND CMAKE_MESSAGE_INDENT "  ")
   set(_build_env_pairs "${_build_env_pairs}")
   set(_toolchain_contents)
@@ -1669,6 +1690,10 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
 
   # General settings applicable to all toolchains.
+  # Register the subproject's generated init file plus any THEROCK_SUBPROJECT_CMAKE_INCLUDES
+  # files. The toolchain is read during system determination, before project() consults
+  # CMAKE_PROJECT_TOP_LEVEL_INCLUDES.
+  string(APPEND _toolchain_contents "set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES \"@top_level_includes@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n")
   string(APPEND _toolchain_contents "set(CMAKE_INSTALL_LIBDIR @CMAKE_INSTALL_LIBDIR@)\n")
   string(APPEND _toolchain_contents "set(CMAKE_PLATFORM_NO_VERSIONED_SONAME @CMAKE_PLATFORM_NO_VERSIONED_SONAME@)\n")
