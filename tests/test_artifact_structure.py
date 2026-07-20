@@ -17,6 +17,9 @@ Tests:
     component scanner should enforce this via the extends chain).
   - Manifest validation: every archive should have artifact_manifest.txt
     as its first member.
+  - Package coverage: every artifact/component present in the fetched
+    archives should be covered by a Linux package definition in
+    build_tools/packaging/linux/package.json.
 
 Usage:
     THEROCK_ARTIFACTS_DIR=/path/to/archives \\
@@ -27,6 +30,7 @@ THEROCK_ARTIFACTS_DIR should point to a directory containing artifact archives
 """
 
 import dataclasses
+import json
 import logging
 import os
 import sys
@@ -44,6 +48,37 @@ from _therock_utils.archive_util import open_archive_for_read
 logger = logging.getLogger(__name__)
 
 ARTIFACTS_DIR = os.getenv("THEROCK_ARTIFACTS_DIR", "")
+
+# Resolve package.json relative to this source file (repo root), NOT the current
+# working directory. tests/test_artifact_structure.py lives one directory below
+# the repository root.
+REPO_ROOT = THIS_DIR.parent
+PACKAGE_JSON_PATH = REPO_ROOT / "build_tools" / "packaging" / "linux" / "package.json"
+
+# Components intentionally excluded from packaging coverage checks.
+IGNORED_COMPONENTS = {"dbg"}
+
+# (artifact_name, component) pairs known to be intentionally uncovered by
+# package.json today. Entries here should generally be temporary — either
+# the artifact is new/experimental and not yet meant for distribution, or
+# it's a test-only artifact that isn't shipped. Remove an entry once real
+# package.json coverage is added for that artifact/component.
+
+KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
+    ("base", "test"),
+    ("fftw3", "dev"),  # fftw3 is currently test-only; may be distributed later.
+    ("fftw3", "doc"),
+    ("fftw3", "run"),
+    ("hipkernelprovider", "lib"),
+    ("hipkernelprovider", "test"),
+    ("mirage", "dev"),  # new artifact, no packages yet.
+    ("rocjitsu", "dev"),  # new artifact, no packages yet.
+    ("rocprofiler-systems-examples", "test"),
+    ("rocrtst", "lib"),
+    ("support", "dev"),
+    ("support", "doc"),
+    ("sysdeps-util-linux", "dev"),
+}
 
 
 @pytest.fixture(scope="session")
@@ -138,6 +173,82 @@ class ComponentOverlap:
 
     artifact_name: str
     overlaps: dict[str, list[str]]  # path -> [component_name, ...]
+
+
+# ---------------------------------------------------------------------------
+# Package coverage helpers
+#
+# These cross-reference the artifact archives that were fetched (their name and
+# component, derived from the filename via ArtifactName.from_filename) against
+# the Linux packaging definitions in build_tools/packaging/linux/package.json.
+# ---------------------------------------------------------------------------
+def load_package_data(package_json_path: Path = PACKAGE_JSON_PATH) -> list:
+    """Load and parse the Linux packaging definitions (package.json)."""
+    with open(package_json_path) as f:
+        return json.load(f)
+
+
+def _clean_components(components) -> list[str]:
+    """Normalize a component spec to a list with ignored components removed."""
+    if isinstance(components, str):
+        components = [components]
+    return [c for c in components if c not in IGNORED_COMPONENTS]
+
+
+def build_packaged_components(package_data: list) -> dict[str, set[str]]:
+    """Map each packaged artifact name (lowercased) to the components it ships.
+
+    Handles both the nested ``Artifact_Subdir`` structure and the older flat
+    structure, mirroring build_tools/packaging/linux/package.json.
+
+    Returns:
+        { artifact_name_lower: {component, ...} }
+    """
+    packaged: dict[str, set[str]] = defaultdict(set)
+
+    all_packages = []
+    for item in package_data:
+        if "Artifactory" in item:
+            all_packages.extend(item["Artifactory"])
+
+    for pkg in all_packages:
+        artifact = pkg.get("Artifact")
+
+        if "Artifact_Subdir" in pkg:
+            # Nested structure: each subdir has its own Name + Components.
+            for subdir in pkg["Artifact_Subdir"]:
+                subdir_name = (subdir.get("Name") or "").lower()
+                components = _clean_components(subdir.get("Components", ["run"]))
+                for component in components:
+                    packaged[subdir_name].add(component)
+                    # Also attribute components to the top-level Artifact
+                    # (e.g. "host-blas") so either name resolves.
+                    if artifact:
+                        packaged[artifact.lower()].add(component)
+        else:
+            # Old flat structure without Artifact_Subdir.
+            pkg_name = pkg.get("Name", artifact)
+            key = (artifact or pkg_name or "").lower()
+            for component in _clean_components(pkg.get("Components", ["run"])):
+                packaged[key].add(component)
+
+    return packaged
+
+
+def find_uncovered_components(
+    archive_index: list["ArchiveInfo"], packaged: dict[str, set[str]]
+) -> list[tuple[str, str, str]]:
+    """Return (artifact_name, component, filename) not covered by any package."""
+    uncovered = []
+    for info in archive_index:
+        if info.component in IGNORED_COMPONENTS:
+            continue
+        if (info.artifact_name.lower(), info.component) in KNOWN_UNCOVERED_COMPONENTS:
+            continue
+        covered = info.component in packaged.get(info.artifact_name.lower(), set())
+        if not covered:
+            uncovered.append((info.artifact_name, info.component, info.filename))
+    return uncovered
 
 
 @pytest.fixture(scope="session")
@@ -309,4 +420,38 @@ class TestArtifactStructure:
         logger.info(
             "Checked %d artifacts, no within-artifact component overlaps",
             len(artifact_names),
+        )
+
+    def test_artifacts_covered_by_packages(self, archive_index: list[ArchiveInfo]):
+        """Every fetched artifact/component should be covered by a package.
+
+        Cross-references the fetched artifact archives (their name + component,
+        derived from the filename) against the Linux packaging definitions in
+        build_tools/packaging/linux/package.json. Any artifact component present
+        in the archives but missing from package.json fails the test.
+        """
+        packaged = build_packaged_components(load_package_data())
+        uncovered = find_uncovered_components(archive_index, packaged)
+
+        for artifact_name, component, filename in uncovered:
+            logger.error(
+                "MISSING package coverage: %s [%s] (%s)",
+                artifact_name,
+                component,
+                filename,
+            )
+
+        if uncovered:
+            summary = "\n".join(
+                f"  {name} [{component}] ({filename})"
+                for name, component, filename in sorted(uncovered)
+            )
+            pytest.fail(
+                f"Found {len(uncovered)} artifact component(s) not covered by "
+                f"package.json:\n{summary}"
+            )
+
+        logger.info(
+            "Checked %d archives, all components covered by package.json",
+            len(archive_index),
         )

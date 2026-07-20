@@ -66,7 +66,7 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from configure_jax_release_matrix import generate_jax_matrix
+from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
@@ -1080,7 +1080,12 @@ def _expand_build_config_for_platform(
     jax_build_matrix: list[dict[str, str]] = []
     build_jax = jobs.build_jax.action == JobAction.RUN and platform == "linux"
     if build_jax:
-        jax_build_matrix = generate_jax_matrix(ci_inputs.python_versions or None)
+        jax_build_matrix = generate_jax_matrix_for_release_type(
+            release_type=ci_inputs.release_type,
+            platform=platform,
+            python_versions=ci_inputs.python_versions or None,
+        )
+
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
