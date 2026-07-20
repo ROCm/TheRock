@@ -297,10 +297,16 @@ class HandlePushTest(unittest.TestCase):
                         handle_push(
                             "before",
                             "after",
-                            {"systems": "tok", "libraries": "tok", "rocgdb": "tok"},
+                            {
+                                "systems": "systems-token",
+                                "libraries": "libraries-token",
+                                "rocgdb": "rocgdb-token",
+                            },
                         )
 
         mock_close.assert_called_once()
+        # rocgdb reuses the systems token, so close_stale_prs must receive it.
+        self.assertEqual(mock_close.call_args.args[2], "systems-token")
         # submodule-only entries have no upstream ref files, so the handler must
         # bail out before cloning the upstream repo.
         mock_tmp.assert_not_called()
@@ -354,6 +360,72 @@ class CreateTheRockBumpTest(unittest.TestCase):
 
         # Must have made at least the open-PR check + PR creation calls.
         self.assertGreaterEqual(mock_api.call_count, 2)
+
+
+class HandleScheduleTest(unittest.TestCase):
+    def test_rocgdb_maps_to_correct_submodule_and_token(self):
+        """handle_schedule('rocgdb') must call create_therock_bump with
+        'debug-tools/rocgdb/source' and tokens['rocgdb'], not any other key."""
+        tokens = {
+            "systems": "systems-token",
+            "libraries": "libraries-token",
+            "rocgdb": "rocgdb-token",
+        }
+        with patch("bump_automation.create_therock_bump") as mock_bump:
+            from bump_automation import handle_schedule
+
+            handle_schedule(tokens, "rocgdb")
+
+        mock_bump.assert_called_once_with("debug-tools/rocgdb/source", "rocgdb-token")
+
+    def test_rocgdb_does_not_invoke_other_submodules(self):
+        tokens = {
+            "systems": "systems-token",
+            "libraries": "libraries-token",
+            "rocgdb": "rocgdb-token",
+        }
+        with patch("bump_automation.create_therock_bump") as mock_bump:
+            from bump_automation import handle_schedule
+
+            handle_schedule(tokens, "rocgdb")
+
+        called_submodules = [c.args[0] for c in mock_bump.call_args_list]
+        self.assertNotIn("rocm-systems", called_submodules)
+        self.assertNotIn("rocm-libraries", called_submodules)
+
+
+class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
+    def test_reads_repo_and_branch_from_submodule_config(self):
+        """create_therock_bump('debug-tools/rocgdb/source') must derive repo and
+        branch from SUBMODULE_CONFIG, not hard-code them."""
+        api_responses = [[], {"number": 1}, {}]
+
+        def _gh_api_side_effect(*args, **kwargs):
+            return api_responses.pop(0) if api_responses else {}
+
+        with patch(
+            "bump_automation.latest_commit", return_value="abc1234567890"
+        ) as mock_latest:
+            with patch("bump_automation.gh_api", side_effect=_gh_api_side_effect):
+                with patch("bump_automation.run"):
+                    with patch("bump_automation.os.chdir"):
+                        with patch("bump_automation.os.path.exists", return_value=True):
+                            with patch(
+                                "bump_automation.get_submodule_sha",
+                                return_value="old1234",
+                            ):
+                                with patch(
+                                    "bump_automation.generate_pr_body",
+                                    return_value="body",
+                                ):
+                                    with patch("bump_automation._git_commit"):
+                                        create_therock_bump(
+                                            "debug-tools/rocgdb/source", "token"
+                                        )
+
+        mock_latest.assert_called_once_with(
+            "ROCm/rocgdb", "token", "amd-staging-rocgdb-16"
+        )
 
 
 if __name__ == "__main__":
