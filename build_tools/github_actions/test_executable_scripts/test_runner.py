@@ -210,6 +210,10 @@ COMPONENT_OVERRIDES = {
             "OPAL_PREFIX": "{rocm_path}",
             "PRTE_PREFIX": "{rocm_path}",
             "PMIX_PREFIX": "{rocm_path}",
+            # dyninst relies on OpenMP to parallelize parsing/processing of the
+            # control flow graph. This is controlled by OMP_NUM_THREADS. Force it
+            # to 2 to speed up runtime-instrument tests.
+            "OMP_NUM_THREADS": "2",
         },
         # rocprofiler-systems tests instrument processes and attach to a shared
         # profiling backend; running them concurrently causes flaky failures.
