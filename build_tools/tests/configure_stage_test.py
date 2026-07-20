@@ -198,6 +198,7 @@ class StageAndProjectsCombinedTest(unittest.TestCase):
             dist_amdgpu_families="",
             topology=self.topology,
             project_names=["hip"],
+            platform_name="linux",
         )
         args_str = " ".join(args)
         self.assertIn("THEROCK_ENABLE_HIP_RUNTIME=ON", args_str)
@@ -213,6 +214,7 @@ class StageAndProjectsCombinedTest(unittest.TestCase):
             dist_amdgpu_families="",
             topology=self.topology,
             project_names=["hip"],  # hip is NOT in math-libs
+            platform_name="linux",
         )
         args_str = " ".join(args)
         # Should fall back to math-libs stage features (BLAS, FFT, etc.)
@@ -229,6 +231,7 @@ class StageAndProjectsCombinedTest(unittest.TestCase):
             dist_amdgpu_families="",
             topology=self.topology,
             project_names=["hip", "rccl"],  # Only rccl is in comm-libs
+            platform_name="linux",  # comm-libs disabled on Windows
         )
         args_str = " ".join(args)
         self.assertIn("THEROCK_ENABLE_RCCL=ON", args_str)
