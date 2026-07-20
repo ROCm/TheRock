@@ -13,10 +13,6 @@ include = [
 ]
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 
-# libiberty
-[components.lib."third-party/sysdeps/linux/libiberty/build/stage"]
-[components.dev."third-party/sysdeps/linux/libiberty/build/stage"]
-
 # elfutils
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
@@ -36,6 +32,10 @@ include = [
   "**/share/**",
 ]
 [components.dev."third-party/sysdeps/linux/libdrm/build/stage"]
+
+# libiberty
+[components.lib."third-party/sysdeps/linux/libiberty/build/stage"]
+[components.dev."third-party/sysdeps/linux/libiberty/build/stage"]
 
 # liblzma
 [components.lib."third-party/sysdeps/linux/liblzma/build/stage"]

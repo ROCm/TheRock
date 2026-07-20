@@ -125,6 +125,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -264,9 +265,10 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # The HIP runtime for ROCm uses different implementations per platform today:
 #   * HIP on Linux uses the HSA runtime in ROCR-Runtime, used by CLR.
 #   * HIP on Windows uses the PAL runtime included directly as part of CLR.
+#     The ROCR-Runtime/rocminfo payload in core-runtime can be enabled
+#     experimentally with THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME.
 # https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
-# Platform-specific dependencies are handled automatically by therock_add_feature()
-# which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
+# Platform-specific dependencies are handled automatically by therock_add_feature().
 
 # Optional sub-features that control behavior within artifacts
 cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
@@ -373,7 +375,6 @@ endif()
 ################################################################################
 
 set(THEROCK_BUNDLED_BZIP2)
-set(THEROCK_BUNDLED_LIBIBERTY)
 set(THEROCK_BUNDLED_ELFUTILS)
 set(THEROCK_BUNDLED_EXPAT)
 set(THEROCK_BUNDLED_GMP)
@@ -381,6 +382,7 @@ set(THEROCK_BUNDLED_HWLOC)
 set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
+set(THEROCK_BUNDLED_LIBIBERTY)
 set(THEROCK_BUNDLED_LIBLZMA)
 set(THEROCK_BUNDLED_LIBMNL)
 set(THEROCK_BUNDLED_LIBNL)
@@ -403,11 +405,11 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     # Core sysdeps (always part of the 'sysdeps' artifact)
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
-    set(THEROCK_BUNDLED_LIBIBERTY therock-libiberty)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
+    set(THEROCK_BUNDLED_LIBIBERTY therock-libiberty)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_LIBMNL therock-libmnl)
     set(THEROCK_BUNDLED_LIBNL therock-libnl)
@@ -498,6 +500,10 @@ add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)
 add_subdirectory(debug-tools)
+# media-libs (rocdecode/rocjpeg) must be added before profiler: rocprofiler-sdk
+# performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
+# feature detection.
+add_subdirectory(media-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -509,7 +515,6 @@ add_subdirectory(comm-libs)
 add_subdirectory(storage-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

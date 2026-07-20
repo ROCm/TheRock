@@ -12,7 +12,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/binutils-2.46.0.tar.gz"
       URL_HASH "SHA512=30d24f7461d459dcbd04e506bb74e487a92748ed411878aacf7388a79ac5b73f968569f43385c9f12c669a5c0b0295d3083a8a4f3ab1be1bb826b3a15ec1f029"
       TOUCH "${_download_stamp}"
-      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     therock_cmake_subproject_declare(therock-libiberty

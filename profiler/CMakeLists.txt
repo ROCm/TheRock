@@ -6,6 +6,18 @@ if(THEROCK_ENABLE_MPI)
   set(_openmpi_optional_dep therock-openmpi)
 endif()
 
+# rocprofiler-sdk performs optional find_package(rocdecode)/find_package(rocjpeg)
+# to detect the rocDecode/rocJPEG trace features. Declare them as dependencies
+# when available so they resolve from the super-project dist rather than
+# escaping to a stray build tree.
+set(_rocprofiler_sdk_optional_deps)
+if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  list(APPEND _rocprofiler_sdk_optional_deps rocdecode)
+endif()
+if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  list(APPEND _rocprofiler_sdk_optional_deps rocjpeg)
+endif()
+
 if(THEROCK_ENABLE_ROCPROFV3)
 
   ##############################################################################
@@ -20,6 +32,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprof-trace-decoder"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder"
     BACKGROUND_BUILD
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_provide_package(rocprof-trace-decoder rocprof-trace-decoder lib/cmake/rocprof-trace-decoder)
   therock_cmake_subproject_activate(rocprof-trace-decoder)
@@ -50,6 +63,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       amd-llvm
       ROCR-Runtime
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(aqlprofile
     SUBDIRS .
@@ -120,6 +134,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprof-trace-decoder
       rocprofiler-register
       therock-yaml-cpp
+      ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -131,6 +146,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     INTERFACE_INSTALL_RPATH_DIRS
       lib
       lib/rocm_sysdeps/lib
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-sdk
     SUBDIRS .
@@ -185,6 +201,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     RUNTIME_DEPS
       hip-clr
       ROCR-Runtime
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(roctracer
     SUBDIRS .
@@ -246,6 +263,7 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
       ${_openmpi_optional_dep}
+    TEST_SUBPROJECTS
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-compute
       SUBDIRS .
@@ -346,6 +364,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
       ${_openmpi_optional_dep}
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-systems
     SUBDIRS .
