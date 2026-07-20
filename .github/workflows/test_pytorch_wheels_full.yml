@@ -289,6 +289,11 @@ jobs:
           echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
           echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
+      - name: Restrict distributed jobs to 4 GPUs
+        if: matrix.test_config == 'distributed'
+        run: |
+          echo "HIP_VISIBLE_DEVICES=0,1,2,3" >> "${GITHUB_ENV}"
+
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
       # tools.stats.*) that expect the repo root on sys.path.
