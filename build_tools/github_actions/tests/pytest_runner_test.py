@@ -84,6 +84,28 @@ class ResolveComponentPathTest(unittest.TestCase):
             pytest_runner.resolve_component_path("bogus", Path("/opt/rocm"))
 
 
+class GetEnvIntOverrideTest(unittest.TestCase):
+    def test_unset_returns_zero(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(pytest_runner.get_env_int_override("PYTEST_X"), 0)
+
+    def test_blank_returns_zero(self):
+        with mock.patch.dict(os.environ, {"PYTEST_X": ""}, clear=True):
+            self.assertEqual(pytest_runner.get_env_int_override("PYTEST_X"), 0)
+
+    def test_positive_value(self):
+        with mock.patch.dict(os.environ, {"PYTEST_X": "42"}, clear=True):
+            self.assertEqual(pytest_runner.get_env_int_override("PYTEST_X"), 42)
+
+    def test_non_integer_returns_zero(self):
+        with mock.patch.dict(os.environ, {"PYTEST_X": "abc"}, clear=True):
+            self.assertEqual(pytest_runner.get_env_int_override("PYTEST_X"), 0)
+
+    def test_negative_returns_zero(self):
+        with mock.patch.dict(os.environ, {"PYTEST_X": "-5"}, clear=True):
+            self.assertEqual(pytest_runner.get_env_int_override("PYTEST_X"), 0)
+
+
 class LoadTestCategoriesYamlTest(unittest.TestCase):
     def setUp(self):
         self._tmp = (

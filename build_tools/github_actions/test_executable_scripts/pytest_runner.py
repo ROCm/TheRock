@@ -53,6 +53,26 @@ def get_env_value(name, default=None):
     return os.getenv(name, default)
 
 
+def get_env_int_override(name):
+    """Return a positive int from env var `name`, or 0 if unset/blank/invalid.
+
+    Used for optional overrides (per-test timeout, xdist worker count) that fall
+    back to the YAML value when the env var is absent or not a positive integer.
+    """
+    raw = os.getenv(name)
+    if not raw:
+        return 0
+    try:
+        value = int(raw)
+    except ValueError:
+        logging.warning(f"Ignoring non-integer {name}={raw!r}")
+        return 0
+    if value < 0:
+        logging.warning(f"Ignoring negative {name}={raw!r}")
+        return 0
+    return value
+
+
 def resolve_component_path(component_name, rocm_path):
     """Return the install directory that holds the component's tests + YAML."""
     rel = INSTALLED_COMPONENTS.get(component_name)
@@ -244,10 +264,17 @@ if __name__ == "__main__":
     ]
 
     exec_settings = config.get("execution_settings", {})
-    timeout = exec_settings.get("category_timeouts", {}).get(TEST_TYPE)
+    # Per-test timeout and worker count resolve as: env override > YAML > default.
+    # test_categories.yaml ships inside the installed artifact, so these env
+    # overrides let CI steps / reproduce_test_failure.py tune them without a
+    # rebuild. PYTEST_TEST_TIMEOUT is the per-test timeout in seconds (passed to
+    # pytest-timeout); PYTEST_NUM_WORKERS is the pytest-xdist worker count.
+    timeout = get_env_int_override("PYTEST_TEST_TIMEOUT") or exec_settings.get(
+        "category_timeouts", {}
+    ).get(TEST_TYPE)
     # parallel_workers may be overridden per category (e.g. GPU GEMM tests want
     # more xdist workers than the default), falling back to the global setting.
-    num_workers = category_config.get(
+    num_workers = get_env_int_override("PYTEST_NUM_WORKERS") or category_config.get(
         "parallel_workers", exec_settings.get("parallel_workers", 1)
     )
 
