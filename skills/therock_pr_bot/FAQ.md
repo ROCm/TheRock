@@ -138,6 +138,12 @@ ______________________________________________________________________
 **What does it check?**
 Certain file types must never be committed to the repository because they can expose secrets or introduce security risks.
 
+> **⚠️ Warning-only (non-blocking):** The Forbidden Files check **never fails
+> the workflow** and **never adds the `Not ready to Review` label**. If a
+> forbidden file is present, the results table shows a **⚠️ Warning** row
+> listing the offending file(s) — but the PR Bot check stays **green**. It is a
+> reminder to remove the file, not a hard gate.
+
 | Pattern                                                  | Reason                                                         |
 | -------------------------------------------------------- | -------------------------------------------------------------- |
 | `**/*.pem`                                               | TLS/SSL certificates — must not be stored in source control    |
@@ -168,6 +174,12 @@ ______________________________________________________________________
 **What does it check?**
 PRs that change real source code must include at least one accompanying unit test.
 
+> **⚠️ Warning-only (non-blocking):** The Unit Test check **never fails the
+> workflow** and **never adds the `Not ready to Review` label**. If a code
+> change is missing a test, the results table shows a **⚠️ Warning** row
+> explaining what is missing — but the PR Bot check stays **green**. It is a
+> reminder, not a gate.
+
 **Rules**
 
 - **Doc / config-only PRs are exempt.** If your PR only touches files like
@@ -178,8 +190,8 @@ PRs that change real source code must include at least one accompanying unit tes
 
 **What counts as a test file?**
 
-- Basename matches one of: `test_*`, `testing_*`, `*_test.*`, `*_tests.*`, or `Test*`
-  - ✅ `test_parser.py`, `testing_parser.py`, `parser_test.cpp`, `parser_tests.cpp`, `TestUtils.cpp`
+- Basename matches one of: `test_*`, `testing_*`, `*_test.*`, `*_tests.*`, `*_gtest.*`, or `Test*`
+  - ✅ `test_parser.py`, `testing_parser.py`, `parser_test.cpp`, `parser_tests.cpp`, `parser_gtest.cpp`, `TestUtils.cpp`
   - ❌ `test.py` (does NOT have the `test_` prefix)
 
 | Pattern     | Example             |
@@ -188,6 +200,7 @@ PRs that change real source code must include at least one accompanying unit tes
 | `testing_*` | `testing_parser.py` |
 | `*_test.*`  | `parser_test.cpp`   |
 | `*_tests.*` | `parser_tests.cpp`  |
+| `*_gtest.*` | `parser_gtest.cpp`  |
 | `Test*`     | `TestUtils.cpp`     |
 
 **Path-based recognition**
@@ -202,6 +215,9 @@ Add a unit test for the code you changed, named `test_<something>`:
 # example for Python
 touch tests/test_my_feature.py
 ```
+
+> Even though this is only a warning, adding the missing test clears the ⚠️
+> from the table.
 
 ______________________________________________________________________
 
@@ -285,16 +301,20 @@ ______________________________________________________________________
 
 The label is added when:
 
-1. **Unit Test check fails** — your PR changes source code but has no accompanying test file.
 1. **JIRA/ISSUE ID reference is missing** — your PR description does not include a tracking reference.
 
-All other policy failures (branch name, title format, description length, forbidden files, etc.) do not add the label; they are still reported in the table but do not block the PR.
+The Unit Test check is **warning-only** and does **not** add the label. All
+other policy failures (branch name, title format, description length, forbidden
+files, etc.) also do **not** add the label; they are still reported in the table but
+do not block the PR.
 
 **What is the "Not ready to Review" label?**
 
-When **PR Title/Description**, **Unit Test**, or **Forbidden Files** fails, the bot adds a **`Not ready to Review`** label to the PR so it is clearly gated.
-The label is removed automatically once all policy checks pass.
-Other failures (Branch Name, PR Size, Draft PR, pre-commit, CodeQL) do **not** add the label.
+When the **JIRA/ISSUE ID reference** is missing from the PR description, the bot
+adds a **`Not ready to Review`** label to the PR so it is clearly gated.
+The label is removed automatically once that reference is added.
+The **Unit Test** check (⚠️ warning-only) and other failures (Branch Name,
+Draft PR, pre-commit, CodeQL) do **not** add the label.
 
 **How are pre-commit and CodeQL shown?**
 
