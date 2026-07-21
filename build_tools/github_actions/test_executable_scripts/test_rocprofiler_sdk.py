@@ -243,9 +243,7 @@ def _cdash_build_name() -> str:
         parts.append("CI" if os.getenv("CI") else "local")
 
     parts.append(
-        _sanitize_build_name_part(
-            (os.getenv("RUNNER_OS") or platform.system()).lower()
-        )
+        _sanitize_build_name_part((os.getenv("RUNNER_OS") or platform.system()).lower())
     )
     for env_name in ("AMDGPU_FAMILIES", "BUILD_VARIANT"):
         if value := os.getenv(env_name):

@@ -51,25 +51,30 @@ class CdashBuildNameTest(unittest.TestCase):
 
 
 class DashboardGenerationTest(unittest.TestCase):
+    notes_file = Path(tempfile.gettempdir()) / "dashboard-notes.txt"
+
     def _generate(self, *, require_submission=False):
         return test_rocprofiler_sdk._generate_dashboard(
             model="Continuous",
             group="TheRock",
             require_cdash_submission=require_submission,
-            notes_file=Path("/tmp/dashboard-notes.txt"),
+            notes_file=self.notes_file,
         )
 
     def test_dashboard_uses_install_tree_and_artifact_notes(self):
         with patch.object(test_rocprofiler_sdk, "is_asan", return_value=False):
             dashboard = self._generate()
 
+        source_directory = test_rocprofiler_sdk._cmake_escape(
+            str(test_rocprofiler_sdk.ROCPROFILER_SDK_TESTS_PATH)
+        )
+        notes_file = test_rocprofiler_sdk._cmake_escape(str(self.notes_file))
         self.assertIn(
-            'set(CTEST_SOURCE_DIRECTORY "'
-            f'{test_rocprofiler_sdk.ROCPROFILER_SDK_TESTS_PATH}")',
+            f'set(CTEST_SOURCE_DIRECTORY "{source_directory}")',
             dashboard,
         )
         self.assertIn(
-            'set(CTEST_NOTES_FILES "/tmp/dashboard-notes.txt")',
+            f'set(CTEST_NOTES_FILES "{notes_file}")',
             dashboard,
         )
         self.assertNotIn("ctest_update(", dashboard)
