@@ -193,6 +193,11 @@ jobs:
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
+      - name: Install ROCm devel packages
+        run: |
+          pip install "rocm[devel]" \
+            --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
+
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
