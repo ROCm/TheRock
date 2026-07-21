@@ -182,10 +182,12 @@ jobs:
         # This is a pure topology calculation, so keep it on the Windows host
         # where GitHub step outputs are native. The explicit --platform=linux
         # still makes configure_stage.py emit Linux/WSL feature selections.
+        env:
+          PROJECTS: ${{ inputs.projects }}
         run: |
           PROJECTS_ARG=""
-          if [[ -n "${{ inputs.projects }}" ]]; then
-            PROJECTS_ARG="--projects ${{ inputs.projects }}"
+          if [[ -n "${PROJECTS}" ]]; then
+            PROJECTS_ARG="--projects ${PROJECTS}"
           fi
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \

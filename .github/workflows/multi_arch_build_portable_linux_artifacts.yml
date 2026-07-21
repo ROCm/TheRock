@@ -146,10 +146,12 @@ jobs:
 
       - name: Get stage configuration
         id: stage_config
+        env:
+          PROJECTS: ${{ inputs.projects }}
         run: |
           PROJECTS_ARG=""
-          if [[ -n "${{ inputs.projects }}" ]]; then
-            PROJECTS_ARG="--projects ${{ inputs.projects }}"
+          if [[ -n "${PROJECTS}" ]]; then
+            PROJECTS_ARG="--projects ${PROJECTS}"
           fi
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
