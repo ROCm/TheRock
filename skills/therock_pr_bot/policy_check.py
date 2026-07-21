@@ -737,11 +737,7 @@ def build_policy_table_comment(
         failing_names = [
             r.name
             for r in results
-            if not r.passed
-            and not r.pending
-            and not r.wip
-            and not r.tbe
-            and not r.warn
+            if not r.passed and not r.pending and not r.wip and not r.tbe and not r.warn
         ]
         failing_list = "\n".join(f"> - ❌ {n}" for n in failing_names)
         footer = (
