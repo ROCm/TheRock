@@ -4,7 +4,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from packaging_utils import *
+from _therock_utils.log_utils import get_logger
 from typing import List
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -28,7 +31,7 @@ def write_build_manifest(config: PackageConfig, pkg_list: PackageList):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("write_build_manifest")
 
     # Write successful packages manifest
     manifest_file = Path(config.dest_dir) / "built_packages.txt"
