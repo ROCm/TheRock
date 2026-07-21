@@ -50,6 +50,12 @@ on:
           on the runner (required for Windows and native Linux runners).
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26"
+      build_variant:
+        description: >-
+          Build variant label of the wheels under test (e.g. 'release', 'asan').
+          Used to preload the sanitizer runtime before running `rocm-sdk test`.
+        type: string
+        default: "release"
 
   workflow_call:
     inputs:
@@ -94,6 +100,12 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      build_variant:
+        description: >-
+          Build variant label of the wheels under test (e.g. 'release', 'asan').
+          Used to preload the sanitizer runtime before running `rocm-sdk test`.
+        type: string
+        default: "release"
 
 permissions:
   contents: read
@@ -167,6 +179,15 @@ jobs:
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         timeout-minutes: 5
         run: |
+          # ASan-instrumented ROCm libraries require their runtime to be the
+          # first entry in the process' initial library list, so it must be
+          # LD_PRELOAD'd before the interpreter starts. See TheRock#6331.
+          if [[ "${{ inputs.build_variant }}" == *asan* ]]; then
+            asan_rt="$(amdclang++ -print-file-name=libclang_rt.asan-$(uname -m).so)"
+            echo "ASAN build: preloading ASan runtime ${asan_rt}"
+            export LD_PRELOAD="${asan_rt}${LD_PRELOAD:+:${LD_PRELOAD}}"
+            export ASAN_OPTIONS="detect_leaks=0${ASAN_OPTIONS:+:${ASAN_OPTIONS}}"
+          fi
           rocm-sdk test
 
       - name: Install rocm[libraries,devel]
@@ -191,4 +212,13 @@ jobs:
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
         timeout-minutes: 5
         run: |
+          # ASan-instrumented ROCm libraries require their runtime to be the
+          # first entry in the process' initial library list, so it must be
+          # LD_PRELOAD'd before the interpreter starts. See TheRock#6331.
+          if [[ "${{ inputs.build_variant }}" == *asan* ]]; then
+            asan_rt="$(amdclang++ -print-file-name=libclang_rt.asan-$(uname -m).so)"
+            echo "ASAN build: preloading ASan runtime ${asan_rt}"
+            export LD_PRELOAD="${asan_rt}${LD_PRELOAD:+:${LD_PRELOAD}}"
+            export ASAN_OPTIONS="detect_leaks=0${ASAN_OPTIONS:+:${ASAN_OPTIONS}}"
+          fi
           rocm-sdk test

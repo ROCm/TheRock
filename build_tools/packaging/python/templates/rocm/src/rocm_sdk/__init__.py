@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 from typing import List, Optional
+import functools
 import importlib
 import os
 from pathlib import Path
@@ -88,6 +89,128 @@ def find_libraries(*shortnames: str) -> list[Path]:
 
 _ALL_CDLLS = {}
 
+_ASAN_RUNTIME_PREFIX = "libclang_rt.asan"
+
+
+@functools.lru_cache(maxsize=1)
+def _asan_runtime_loaded() -> bool:
+    """Whether the ASan runtime is already mapped into this process.
+
+    An ASan-instrumented library can only be loaded once its runtime is the first
+    entry in the process' initial library list, which in practice means the
+    process was started with `LD_PRELOAD=libclang_rt.asan*.so`. In that case the
+    runtime shows up in `/proc/self/maps`. Only meaningful on Linux.
+    """
+    try:
+        with open("/proc/self/maps", "r") as maps:
+            return _ASAN_RUNTIME_PREFIX in maps.read()
+    except OSError:
+        return False
+
+
+def _elf_needed_libraries(path: Path) -> list[str]:
+    """Return the `DT_NEEDED` shared-library names of a 64-bit ELF file.
+
+    Only the ELF header, program headers and the referenced dynamic-string
+    entries are read, so this stays cheap even for very large libraries. Returns
+    an empty list for non-ELF or unsupported files (best effort).
+    """
+    import struct
+
+    try:
+        with open(path, "rb") as f:
+            ident = f.read(16)
+            if ident[:4] != b"\x7fELF" or ident[4] != 2:  # 64-bit ELF only
+                return []
+            endian = "<" if ident[5] == 1 else ">"
+            f.seek(0x20)
+            (e_phoff,) = struct.unpack(endian + "Q", f.read(8))
+            f.seek(0x36)
+            e_phentsize, e_phnum = struct.unpack(endian + "HH", f.read(4))
+
+            dyn_off = 0
+            dyn_size = 0
+            loads = []  # (p_vaddr, p_offset, p_filesz) for PT_LOAD segments.
+            for i in range(e_phnum):
+                f.seek(e_phoff + i * e_phentsize)
+                phdr = f.read(56)  # sizeof(Elf64_Phdr)
+                if len(phdr) < 56:
+                    break
+                (p_type,) = struct.unpack(endian + "I", phdr[0:4])
+                p_offset, p_vaddr, _p_paddr, p_filesz = struct.unpack(
+                    endian + "QQQQ", phdr[8:40]
+                )
+                if p_type == 2:  # PT_DYNAMIC
+                    dyn_off, dyn_size = p_offset, p_filesz
+                elif p_type == 1:  # PT_LOAD
+                    loads.append((p_vaddr, p_offset, p_filesz))
+            if not dyn_off:
+                return []
+
+            f.seek(dyn_off)
+            dyn = f.read(dyn_size)
+            needed_offsets = []
+            strtab_vaddr = 0
+            for off in range(0, len(dyn) - 15, 16):  # array of Elf64_Dyn
+                d_tag, d_val = struct.unpack(endian + "qQ", dyn[off : off + 16])
+                if d_tag == 0:  # DT_NULL
+                    break
+                if d_tag == 1:  # DT_NEEDED (d_val is an offset into DT_STRTAB)
+                    needed_offsets.append(d_val)
+                elif d_tag == 5:  # DT_STRTAB (virtual address)
+                    strtab_vaddr = d_val
+            if not needed_offsets or not strtab_vaddr:
+                return []
+
+            strtab_off = None
+            for p_vaddr, p_offset, p_filesz in loads:
+                if p_vaddr <= strtab_vaddr < p_vaddr + p_filesz:
+                    strtab_off = p_offset + (strtab_vaddr - p_vaddr)
+                    break
+            if strtab_off is None:
+                return []
+
+            names = []
+            for rel in needed_offsets:
+                f.seek(strtab_off + rel)
+                raw = f.read(256)
+                end = raw.find(b"\x00")
+                names.append(
+                    raw[: end if end >= 0 else len(raw)].decode("utf-8", "replace")
+                )
+            return names
+    except OSError:
+        return []
+
+
+def _library_needs_asan_runtime(path: Path) -> bool:
+    """Whether an ELF library declares a `DT_NEEDED` on the ASan runtime."""
+    return any(n.startswith(_ASAN_RUNTIME_PREFIX) for n in _elf_needed_libraries(path))
+
+
+def _check_asan_preloaded(path: Path):
+    """Raise an actionable error before loading an instrumented library unsafely.
+
+    Loading an ASan-instrumented library via `dlopen` when the ASan runtime was
+    not preloaded at process startup makes ASan `abort()` the whole process with
+    "ASan runtime does not come first in initial library list" -- an uncatchable
+    SIGABRT. Detect that situation up front and raise a clear error instead. See
+    TheRock#6331.
+    """
+    if platform.system() != "Linux" or _asan_runtime_loaded():
+        return
+    if not _library_needs_asan_runtime(path):
+        return
+    asan_lib = f"{_ASAN_RUNTIME_PREFIX}-{platform.machine()}.so"
+    raise RuntimeError(
+        f"Cannot load '{path.name}': it was built with AddressSanitizer and "
+        f"requires the ASan runtime to be the first library in the process. "
+        f"Preload it at startup, e.g.:\n"
+        f"    LD_PRELOAD=$(amdclang++ -print-file-name={asan_lib}) <command>\n"
+        f"The ASan runtime cannot be loaded after the interpreter has started. "
+        f"See TheRock#6331."
+    )
+
 
 def preload_libraries(*shortnames: str, rtld_global: bool = True):
     """Preloads a list of library names, caching their handles globally.
@@ -111,6 +234,7 @@ def preload_libraries(*shortnames: str, rtld_global: bool = True):
         paths = find_libraries(shortname)
         if not paths:
             continue
+        _check_asan_preloaded(paths[0])
         cdll = ctypes.CDLL(str(paths[0]), mode=mode)
         _ALL_CDLLS[shortname] = cdll
 

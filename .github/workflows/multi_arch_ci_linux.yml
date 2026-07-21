@@ -298,6 +298,7 @@ jobs:
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
 
   # Multi-arch PyTorch build: one fat wheel covering every target, then
   # split into a host wheel + per-gfx device wheels via rocm-kpack.
