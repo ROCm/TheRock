@@ -125,5 +125,8 @@ jobs:
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       tar_url: ${{ inputs.tar_url }}
       release_type: ${{ inputs.release_type }}
+      # Test size by release type: nightly -> medium (full UT + 2 e2e),
+      # prerelease -> large (full UT + full e2e), everything else (dev) -> small.
+      test_size: ${{ inputs.release_type == 'nightly' && 'medium' || (inputs.release_type == 'prerelease' && 'large' || 'small') }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}

@@ -11,9 +11,13 @@ on:
         required: true
         type: string
       package_index_url:
-        description: Base URL for the multi-arch Python package index
-        required: true
+        description: "Base URL for the multi-arch Python package index (release path). Use wheel_find_links_url instead for CI-built wheels."
         type: string
+        default: ""
+      wheel_find_links_url:
+        description: "pip --find-links URL for CI-built JAX wheels (PR path). Takes precedence over package_index_url when set."
+        type: string
+        default: ""
       rocm_version:
         description: ROCm version
         required: true
@@ -26,6 +30,10 @@ on:
         description: "Release type"
         type: string
         required: true
+      test_size:
+        description: "Test size: small (PR, curated subset), medium (nightly, full UT + 2 e2e), large (weekly, full UT + full e2e)."
+        type: string
+        default: "small"
       python_version:
         description: Python version to test
         required: true
@@ -72,6 +80,10 @@ on:
         description: Base URL for the multi-arch Python package index
         type: string
         default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+      wheel_find_links_url:
+        description: "pip --find-links URL for CI-built JAX wheels (PR path). Takes precedence over package_index_url when set."
+        type: string
+        default: ""
       rocm_version:
         description: ROCm version
         type: string
@@ -86,6 +98,14 @@ on:
         options:
           - dev
         default: dev
+      test_size:
+        description: "Test size to run."
+        type: choice
+        options:
+          - small
+          - medium
+          - large
+        default: small
       python_version:
         description: Python version to test
         type: string
@@ -128,9 +148,11 @@ permissions:
 
 jobs:
   test_jax_wheels:
-    name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
+    name: Test JAX | ${{ inputs.test_size }} | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
-    timeout-minutes: 120
+    # Upper bound for the whole job (setup + tests). Per-size enforcement is on
+    # the "Run JAX tests" step below.
+    timeout-minutes: 360
 
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
@@ -153,6 +175,7 @@ jobs:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
+      WHEEL_FIND_LINKS_URL: ${{ inputs.wheel_find_links_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
@@ -232,18 +255,23 @@ jobs:
 
       - name: Install JAX wheels from package index
         run: |
-          echo "Installing from:"
-          echo "  ${WHEEL_INDEX_URL}"
+          # Release path publishes to a package index (--index-url); the PR/CI
+          # path uploads run-scoped wheels to a --find-links URL. Prefer
+          # find-links when provided.
+          if [ -n "${WHEEL_FIND_LINKS_URL}" ]; then
+            WHEEL_SRC=(--find-links "${WHEEL_FIND_LINKS_URL}")
+            echo "Installing JAX wheels via find-links: ${WHEEL_FIND_LINKS_URL}"
+          else
+            WHEEL_SRC=(--index-url "${WHEEL_INDEX_URL}")
+            echo "Installing JAX wheels via index: ${WHEEL_INDEX_URL}"
+          fi
 
-          pip install \
-            --index-url "${WHEEL_INDEX_URL}" \
+          pip install "${WHEEL_SRC[@]}" \
             "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
             "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
 
           if [ -n "${JAXLIB_VERSION}" ]; then
-            pip install \
-              --index-url "${WHEEL_INDEX_URL}" \
-              "jaxlib==${JAXLIB_VERSION}"
+            pip install "${WHEEL_SRC[@]}" "jaxlib==${JAXLIB_VERSION}"
 
             pip install "jax==${JAX_VERSION}"
           else
@@ -253,8 +281,13 @@ jobs:
           fi
 
       - name: Run JAX tests
-        timeout-minutes: 60
+        # Per-size execution-time enforcement using GH actions timeout):
+        #   small  -> 45 min   (PR curated subset)
+        #   medium -> 120 min  (nightly: full UT + 2 e2e workloads)
+        #   large  -> 300 min  (weekly: full UT + full e2e workloads)
+        timeout-minutes: ${{ inputs.test_size == 'small' && 45 || (inputs.test_size == 'medium' && 120 || 300) }}
         env:
+          TEST_SIZE: ${{ inputs.test_size }}
           # Avoid large upfront GPU memory reservation.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
 
@@ -287,8 +320,58 @@ jobs:
 
           python -c "import jax; print(jax.local_devices())"
 
-          echo "=== Starting full test suite ==="
-          pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
-          pytest jax/tests/core_test.py -q --log-cli-level=INFO
-          pytest jax/tests/util_test.py -q --log-cli-level=INFO
-          pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO
+          run_full_ut_suite() {
+            # TODO(#6558): replace with rocm-jax/ci/run_pytest_rocm.sh once that
+            # PR merges, so medium/large run the complete ROCm JAX UT suite.
+            echo "::warning::Full JAX UT suite is a placeholder (runs a subset only) until #6558 merges"
+            echo "=== Full JAX UT suite (placeholder until #6558) ==="
+            pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
+            pytest jax/tests/core_test.py -q --log-cli-level=INFO
+            pytest jax/tests/util_test.py -q --log-cli-level=INFO
+            pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO
+          }
+
+          run_e2e_workloads() {
+            # $1 = "partial" (medium: llama + mixtral) or "full" (large: all jax-lab)
+            # TODO: wire the maxtext jax-lab end-to-end workloads. For medium run
+            # llama + mixtral; for large run the full jax-lab workload set.
+            echo "::warning::End-to-end workloads ($1) not yet wired (placeholder, no e2e executed)"
+            echo "=== End-to-end workloads ($1) — placeholder, not yet wired ==="
+          }
+
+          case "${TEST_SIZE}" in
+            small)
+              SMALL_LIST="external-builds/jax/test_selection/small_tests.txt"
+              mapfile -t SMALL_TESTS < "${SMALL_LIST}"
+              # Filter to tests present in this jax_ref: the curated list is
+              # generated from one JAX snapshot, but test files can be
+              # added/removed/renamed between JAX versions.
+              PRESENT=(); MISSING=()
+              for t in "${SMALL_TESTS[@]}"; do
+                if [ -f "jax/${t}" ]; then PRESENT+=("jax/${t}"); else MISSING+=("${t}"); fi
+              done
+              if [ "${#MISSING[@]}" -gt 0 ]; then
+                echo "::warning::small suite: ${#MISSING[@]} listed test(s) absent in this jax_ref and skipped: ${MISSING[*]}"
+              fi
+              if [ "${#PRESENT[@]}" -eq 0 ]; then
+                echo "::error::small suite: none of the curated tests exist in this jax_ref" >&2
+                exit 1
+              fi
+              echo "=== small: curated subset (${#PRESENT[@]}/${#SMALL_TESTS[@]} tests present) ==="
+              pytest "${PRESENT[@]}" -q --log-cli-level=INFO
+              ;;
+            medium)
+              echo "=== medium: full UT suite + 2 e2e workloads ==="
+              run_full_ut_suite
+              run_e2e_workloads partial
+              ;;
+            large)
+              echo "=== large: full UT suite + full e2e workloads ==="
+              run_full_ut_suite
+              run_e2e_workloads full
+              ;;
+            *)
+              echo "Unknown TEST_SIZE='${TEST_SIZE}' (expected small|medium|large)" >&2
+              exit 1
+              ;;
+          esac

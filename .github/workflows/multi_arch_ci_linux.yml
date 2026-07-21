@@ -361,6 +361,10 @@ jobs:
       jax_ref: ${{ matrix.jax_ref }}
       rocm_version: ${{ inputs.rocm_package_version }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      # Run the small (PR) JAX test suite on a representative GPU family when the
+      # build targets it; empty family skips tests.
+      test_amdgpu_family: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}
+      test_size: small
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:

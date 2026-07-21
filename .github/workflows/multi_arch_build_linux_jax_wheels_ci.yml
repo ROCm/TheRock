@@ -56,6 +56,14 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      test_amdgpu_family:
+        description: "GPU family to run JAX tests on. Empty means skip tests."
+        type: string
+        default: ""
+      test_size:
+        description: "JAX test size to run (small|medium|large)."
+        type: string
+        default: "small"
     outputs:
       package_find_links_url:
         description: "pip --find-links URL for CI-uploaded JAX wheels."
@@ -112,6 +120,18 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      test_amdgpu_family:
+        description: "GPU family to run JAX tests on. Empty means skip tests."
+        type: string
+        default: ""
+      test_size:
+        description: "JAX test size to run."
+        type: choice
+        options:
+          - small
+          - medium
+          - large
+        default: small
 run-name: Build Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})
 permissions:
   contents: read
@@ -250,3 +270,58 @@ jobs:
             --artifact-group="${{ inputs.artifact_group }}" \
             --run-id="${{ github.run_id }}" \
             --multiarch
+
+  generate_target_to_run:
+    name: Generate target_to_run
+    if: ${{ inputs.test_amdgpu_family != '' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref_name }}
+
+      - name: Checkout CI config
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.test_amdgpu_family }}
+          PLATFORM: linux
+          CI_CONFIG_PATH: ci-config
+        run: python ./build_tools/github_actions/configure_target_run.py
+
+  test_jax_wheels:
+    if: ${{ inputs.test_amdgpu_family != '' }}
+    needs: [build_jax_wheels, generate_target_to_run]
+    name: Test JAX wheels | ${{ inputs.test_size }} | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/test_linux_jax_wheels_partial.yml
+    with:
+      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      # CI builds publish wheels to a run-scoped find-links URL (not an index).
+      wheel_find_links_url: ${{ needs.build_jax_wheels.outputs.package_find_links_url }}
+      rocm_version: ${{ inputs.rocm_version }}
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
+      release_type: ci
+      test_size: ${{ inputs.test_size }}
+      python_version: ${{ inputs.python_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+      jax_ref: ${{ inputs.jax_ref }}
+      jax_version: ${{ needs.build_jax_wheels.outputs.jax_version }}
+      jaxlib_version: ${{ needs.build_jax_wheels.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
