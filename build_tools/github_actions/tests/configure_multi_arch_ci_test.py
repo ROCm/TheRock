@@ -1076,6 +1076,11 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.13",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
             ],
         )
         self.assertEqual(

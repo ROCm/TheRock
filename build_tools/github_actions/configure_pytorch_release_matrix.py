@@ -33,11 +33,13 @@ RELEASE_STABLE_PYTORCH_REFS = {
         "release/2.10",
         "release/2.11",
         "release/2.12",
+        "release/2.13",
     ],
     "windows": [
         "release/2.10",
         "release/2.11",
         "release/2.12",
+        "release/2.13",
     ],
 }
 
@@ -48,7 +50,7 @@ RELEASE_PYTORCH_REFS = {
 }
 
 CI_PYTORCH_REFS = {
-    "linux": ["release/2.10", "release/2.11", "release/2.12"],
+    "linux": ["release/2.10", "release/2.11", "release/2.12", "release/2.13"],
     "windows": ["release/2.10"],
 }
 
@@ -64,6 +66,9 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         # 2026-06-26, but the ROCm 7.14 release is cut before that date.
         # See https://github.com/ROCm/TheRock/issues/5833.
         "release/2.12": {"gfx125X-dcgpu"},
+        # gfx125x not yet upstreamed to pytorch/pytorch.
+        # See https://github.com/ROCm/TheRock/issues/5833.
+        "release/2.13": {"gfx125X-dcgpu"},
         # gfx125x not yet upstreamed to pytorch/pytorch.
         # See https://github.com/ROCm/TheRock/issues/5833.
         "nightly": {"gfx125X-dcgpu"},
