@@ -382,17 +382,22 @@ test_matrix = {
         },
         "exclude_family": {
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx1200",
+                "gfx1201",
             ],
             "windows": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx1200",
+                "gfx1201",
             ],
         },
     },
