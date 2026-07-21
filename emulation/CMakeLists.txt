@@ -50,6 +50,7 @@ if(THEROCK_ENABLE_ROCJITSU)
       dev
       lib
       run
+      test
     SUBPROJECT_DEPS
       rocjitsu
   )
