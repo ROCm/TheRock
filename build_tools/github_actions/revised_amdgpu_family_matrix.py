@@ -148,7 +148,44 @@ class GpuTarget:
 # GPU Target Definitions
 # =============================================================================
 
-# CDNA3 - MI300 series (data center)
+# -----------------------------------------------------------------------------
+# CDNA1 - MI100 series (Arcturus)
+# -----------------------------------------------------------------------------
+_GFX908 = GpuTarget(
+    target="gfx908",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),  # No hardware available
+        test_scope="sanity",
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
+# -----------------------------------------------------------------------------
+# CDNA2 - MI200 series (Aldebaran)
+# -----------------------------------------------------------------------------
+_GFX90A = GpuTarget(
+    target="gfx90a",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test="linux-gfx90a-gpu-rocm"),
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
+# -----------------------------------------------------------------------------
+# CDNA3 - MI300 series (Aqua Vanjaram)
+# -----------------------------------------------------------------------------
 _GFX942 = GpuTarget(
     target="gfx942",
     linux=PlatformConfig(
@@ -175,7 +212,88 @@ _GFX950 = GpuTarget(
     ),
 )
 
-# RDNA3 - Consumer GPUs
+# -----------------------------------------------------------------------------
+# CDNA5 - MI455 series
+# -----------------------------------------------------------------------------
+_GFX1250 = GpuTarget(
+    target="gfx1250",
+    linux=PlatformConfig(
+        triggers={Trigger.PRESUBMIT, Trigger.POSTSUBMIT, Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test="linux-mi455-gpu-rocm"),
+    ),
+)
+
+# -----------------------------------------------------------------------------
+# GCN5 - Vega (gfx900, gfx906)
+# -----------------------------------------------------------------------------
+_GFX900 = GpuTarget(
+    target="gfx900",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),  # No hardware available
+        test_scope="sanity",
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
+_GFX906 = GpuTarget(
+    target="gfx906",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),  # No hardware available
+        test_scope="sanity",
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
+# -----------------------------------------------------------------------------
+# RDNA1 - Navi 10 (gfx1010, gfx1011, gfx1012, gfx1013)
+# -----------------------------------------------------------------------------
+_GFX1010 = GpuTarget(
+    target="gfx1010",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),  # No hardware available
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
+# -----------------------------------------------------------------------------
+# RDNA2 - Navi 2x (gfx1030, gfx1031, etc.)
+# -----------------------------------------------------------------------------
+_GFX1030 = GpuTarget(
+    target="gfx1030",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test="linux-gfx1030-gpu-rocm"),
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test="windows-gfx1030-gpu-rocm"),
+    ),
+)
+
+# -----------------------------------------------------------------------------
+# RDNA3 - Navi 3x (gfx1100, gfx1101, gfx1102, gfx1103)
+# -----------------------------------------------------------------------------
 _GFX1100 = GpuTarget(
     target="gfx1100",
     linux=PlatformConfig(
@@ -192,7 +310,23 @@ _GFX1100 = GpuTarget(
     ),
 )
 
-# Strix Point
+# -----------------------------------------------------------------------------
+# RDNA3.5 - Strix (gfx1150, gfx1151, gfx1152, gfx1153)
+# -----------------------------------------------------------------------------
+_GFX1150 = GpuTarget(
+    target="gfx1150",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test="linux-gfx1150-gpu-rocm"),
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
 _GFX1151 = GpuTarget(
     target="gfx1151",
     linux=PlatformConfig(
@@ -211,7 +345,37 @@ _GFX1151 = GpuTarget(
     ),
 )
 
-# RDNA4
+_GFX1152 = GpuTarget(
+    target="gfx1152",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
+_GFX1153 = GpuTarget(
+    target="gfx1153",
+    linux=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test="linux-gfx1153-gpu-rocm"),
+    ),
+    windows=PlatformConfig(
+        triggers={Trigger.NIGHTLY},
+        build_variants=["release"],
+        runners=RunnerConfig(test=""),
+    ),
+)
+
+# -----------------------------------------------------------------------------
+# RDNA4 - Navi 4x (gfx1200, gfx1201)
+# -----------------------------------------------------------------------------
 _GFX1200 = GpuTarget(
     target="gfx1200",
     linux=PlatformConfig(
@@ -225,16 +389,6 @@ _GFX1200 = GpuTarget(
         build_variants=["release"],
         runners=RunnerConfig(test="windows-gfx120X-gpu-rocm"),
         bypass_tests_for_releases=True,
-    ),
-)
-
-# CDNA5 - MI455
-_GFX1250 = GpuTarget(
-    target="gfx1250",
-    linux=PlatformConfig(
-        triggers={Trigger.PRESUBMIT, Trigger.POSTSUBMIT, Trigger.NIGHTLY},
-        build_variants=["release"],
-        runners=RunnerConfig(test="linux-mi455-gpu-rocm"),
     ),
 )
 
