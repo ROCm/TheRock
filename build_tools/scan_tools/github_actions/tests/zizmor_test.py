@@ -21,6 +21,7 @@ from zizmor import (
     _parse_report_formats,
     _resolve_config_path,
     _tally_findings_by_severity,
+    _tally_findings_from_sarif,
 )
 
 
@@ -229,6 +230,53 @@ class TallyFindingsBySeverityTest(unittest.TestCase):
         self.assertEqual(counts["UNKNOWN"], 2)
         for sev in _SEVERITY_ORDER:
             self.assertIn(sev, counts)
+
+
+class TallyFindingsFromSarifTest(unittest.TestCase):
+    """Tests for `_tally_findings_from_sarif`."""
+
+    def _write_sarif(self, payload: object) -> Path:
+        fd, name = tempfile.mkstemp(suffix=".sarif")
+        os.close(fd)
+        path = Path(name)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        self.addCleanup(path.unlink, missing_ok=True)
+        return path
+
+    def test_counts_known_and_unknown_severities_across_runs(self):
+        path = self._write_sarif(
+            {
+                "runs": [
+                    {
+                        "results": [
+                            {"properties": {"zizmor/severity": "High"}},
+                            {"properties": {"zizmor/severity": "medium"}},
+                        ]
+                    },
+                    {"results": [{"properties": {"zizmor/severity": "High"}}, {}]},
+                ]
+            }
+        )
+        counts = _tally_findings_from_sarif(path)
+        self.assertEqual(counts["HIGH"], 2)
+        self.assertEqual(counts["MEDIUM"], 1)
+        self.assertEqual(counts["UNKNOWN"], 1)
+        for sev in _SEVERITY_ORDER:
+            self.assertIn(sev, counts)
+
+    def test_no_results_returns_zero_counts(self):
+        path = self._write_sarif({"runs": [{"results": []}]})
+        counts = _tally_findings_from_sarif(path)
+        self.assertEqual(sum(counts.values()), 0)
+
+    def test_invalid_json_raises(self):
+        fd, name = tempfile.mkstemp(suffix=".sarif")
+        os.close(fd)
+        path = Path(name)
+        path.write_text("not json", encoding="utf-8")
+        self.addCleanup(path.unlink, missing_ok=True)
+        with self.assertRaises(RuntimeError):
+            _tally_findings_from_sarif(path)
 
 
 class ResolveConfigPathTest(unittest.TestCase):

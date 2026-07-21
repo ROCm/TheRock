@@ -114,7 +114,7 @@ def _ensure_zizmor() -> Path:
     log.info("Installing %s", spec)
     try:
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", "--upgrade", spec],
+            [sys.executable, "-m", "pip", "install", "--quiet", spec],
             check=True,
         )
     except subprocess.CalledProcessError as exc:
@@ -314,10 +314,9 @@ def _run_zizmor(
     persona: str,
     files: list[Path] | None,
     scan_path: Path,
-) -> Path:
-    """Run zizmor for each user target plus an internal JSON tally pass
-    if the user didn't already request one.
-    """
+) -> dict[str, int]:
+    """Run zizmor for each user-requested format and return a severity
+    tally."""
     base_args: list[str] = [
         str(binary),
         "--no-exit-codes",
@@ -332,46 +331,55 @@ def _run_zizmor(
         base_args.extend(str(p) for p in files)
 
     user_json = next((t for t in user_targets if t.fmt == "json"), None)
-    if user_json is not None:
-        tally_path = user_json.path
+    user_sarif = next((t for t in user_targets if t.fmt == "sarif"), None)
+    internal_tally: _ReportTarget | None = None
+    if user_json is not None or user_sarif is not None:
         runs: list[_ReportTarget] = list(user_targets)
     else:
-        tally_path = Path(_INTERNAL_TALLY_PATH)
-        runs = [*user_targets, _ReportTarget(fmt="json", path=tally_path)]
+        internal_tally = _ReportTarget(fmt="json", path=Path(_INTERNAL_TALLY_PATH))
+        runs = [*user_targets, internal_tally]
 
-    for tgt in runs:
-        cmd = [*base_args, "--format", tgt.fmt]
-        log.info("Running: %s > %s", " ".join(cmd), tgt.path)
-        try:
-            completed = subprocess.run(
-                cmd,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        except OSError as exc:
-            raise RuntimeError(
-                f"zizmor invocation for format '{tgt.fmt}' failed to start: {exc}"
-            ) from exc
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"zizmor exited unexpectedly with code {completed.returncode} "
-                f"for format '{tgt.fmt}'; stderr: "
-                f"{completed.stderr.strip() if completed.stderr else '<empty>'}"
-            )
-        try:
-            tgt.path.write_text(completed.stdout, encoding="utf-8")
-        except OSError as exc:
-            raise RuntimeError(
-                f"Failed to write zizmor {tgt.fmt} report to {tgt.path}: {exc}"
-            ) from exc
+    try:
+        for tgt in runs:
+            cmd = [*base_args, "--format", tgt.fmt]
+            log.info("Running: %s > %s", " ".join(cmd), tgt.path)
+            try:
+                completed = subprocess.run(
+                    cmd,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            except OSError as exc:
+                raise RuntimeError(
+                    f"zizmor invocation for format '{tgt.fmt}' failed to start: {exc}"
+                ) from exc
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    f"zizmor exited unexpectedly with code {completed.returncode} "
+                    f"for format '{tgt.fmt}'; stderr: "
+                    f"{completed.stderr.strip() if completed.stderr else '<empty>'}"
+                )
+            try:
+                tgt.path.write_text(completed.stdout, encoding="utf-8")
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Failed to write zizmor {tgt.fmt} report to {tgt.path}: {exc}"
+                ) from exc
 
-    # Enrich SARIF severity for the Security tab (tally pass is never SARIF).
-    for tgt in user_targets:
-        if tgt.fmt == "sarif" and tgt.path.is_file():
-            _enrich_sarif_with_security_severity(tgt.path)
+        # Enrich SARIF severity for the Security tab.
+        if user_sarif is not None and user_sarif.path.is_file():
+            _enrich_sarif_with_security_severity(user_sarif.path)
 
-    return tally_path
+        if user_json is not None:
+            return _tally_findings_by_severity(user_json.path)
+        if user_sarif is not None:
+            return _tally_findings_from_sarif(user_sarif.path)
+        assert internal_tally is not None
+        return _tally_findings_by_severity(internal_tally.path)
+    finally:
+        if internal_tally is not None:
+            internal_tally.path.unlink(missing_ok=True)
 
 
 def _enrich_sarif_with_security_severity(sarif_path: Path) -> None:
@@ -457,6 +465,34 @@ def _tally_findings_by_severity(json_path: Path) -> dict[str, int]:
         determ = issue.get("determinations") or {}
         sev = str(determ.get("severity") or "UNKNOWN").upper()
         counts[sev] = counts.get(sev, 0) + 1
+    return counts
+
+
+def _tally_findings_from_sarif(sarif_path: Path) -> dict[str, int]:
+    """Tally findings by severity from a SARIF report's `zizmor/severity`
+    result properties (see `_enrich_sarif_with_security_severity`), so
+    the tally doesn't require a separate zizmor JSON invocation.
+    """
+    try:
+        with open(sarif_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"Failed to read zizmor SARIF report at {sarif_path}: {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"zizmor SARIF report at {sarif_path} is not a JSON object")
+
+    counts: dict[str, int] = {sev: 0 for sev in _SEVERITY_ORDER}
+    for run in data.get("runs") or []:
+        if not isinstance(run, dict):
+            continue
+        for result in run.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            props = result.get("properties") or {}
+            sev = str(props.get("zizmor/severity") or "UNKNOWN").upper()
+            counts[sev] = counts.get(sev, 0) + 1
     return counts
 
 
@@ -598,10 +634,9 @@ def main(argv: list[str]) -> int:
         gha_set_output({"sarif_path": "", "non_sarif_paths": ""})
         return 0
 
-    internal_tally_used = not any(t.fmt == "json" for t in targets)
     try:
         binary = _ensure_zizmor()
-        tally_path = _run_zizmor(
+        counts = _run_zizmor(
             binary,
             targets,
             config_path=config_path,
@@ -621,14 +656,10 @@ def main(argv: list[str]) -> int:
                 ),
             }
         )
-        counts = _tally_findings_by_severity(tally_path)
     except RuntimeError as exc:
         log.error("%s", exc)
         _emit_non_sarif_reports(non_sarif)
         return 2
-    finally:
-        if internal_tally_used:
-            Path(_INTERNAL_TALLY_PATH).unlink(missing_ok=True)
 
     threshold = args.severity_threshold.upper()
     threshold_idx = _SEVERITY_ORDER.index(threshold)

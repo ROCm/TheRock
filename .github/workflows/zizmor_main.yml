@@ -17,15 +17,19 @@ on:
   # tab can be refreshed without an unrelated commit.
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   zizmor:
     uses: ./.github/workflows/zizmor.yml
     with:
       scan_mode: all
       report_formats: sarif
+    
     permissions:
       contents: read
       # Required so the reusable workflow can call
       # github/codeql-action/upload-sarif and have the findings
-      # appear under Security -> Code scanning
+      # appear under Security -> Code scanning.
       security-events: write
