@@ -6,3 +6,7 @@
 include = [
   "share/rocjitsu/**",
 ]
+[components.test."emulation/rocjitsu/stage"]
+include = [
+  "bin/rocjitsu",
+]
