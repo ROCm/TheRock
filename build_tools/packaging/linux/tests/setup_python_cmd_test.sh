@@ -102,6 +102,9 @@ test_sles_profiles() {
 
 test_rhel_profiles() {
     local output
+    output=$(run_github_format --os-profile rhel8)
+    assert_equals "PYTHON_CMD=python3.12" "$output" "RHEL 8 resolves to python3.12"
+
     output=$(run_github_format --os-profile rhel10)
     assert_equals "PYTHON_CMD=python3.12" "$output" "RHEL 10 resolves to python3.12"
 

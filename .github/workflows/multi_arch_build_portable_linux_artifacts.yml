@@ -162,6 +162,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -173,7 +174,17 @@ jobs:
         run: |
           python3 build_tools/github_actions/detect_failed_logs.py
 
-      - name: Run build tests
+      - name: Run build tests (Comgr, blocking)
+        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
+        env:
+          TEATIME_FORCE_INTERACTIVE: 1
+        run: |
+          cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
+
+      # Remaining build tests (e.g. rocjitsu, mirage) still run and report, but
+      # are not yet gating. Comgr is split out above so its failures block CI.
+      # TODO(#6112): rocjitsu tests are being moved out; drop this step once done.
+      - name: Run build tests (other, non-blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         env:

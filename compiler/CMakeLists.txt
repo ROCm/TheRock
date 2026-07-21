@@ -17,6 +17,11 @@ if(THEROCK_ENABLE_COMPILER)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
+  # Disable pre-compiled headers under clang as they cause conflicts related to
+  # differing optimization levels. This is a workaround.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    list(APPEND _extra_llvm_cmake_args "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
+  endif()
 
   # Building Flang is very memory-intensive on systems with many cores. Allow
   # users to specify the level of concurrency for these tasks so they can
@@ -79,6 +84,7 @@ if(THEROCK_ENABLE_COMPILER)
       # Features
       -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
+      -DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
