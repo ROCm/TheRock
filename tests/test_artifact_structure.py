@@ -81,6 +81,11 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
 }
 
 
+def is_windows_platform() -> bool:
+    """Check if the artifacts being validated are Windows artifacts and return bool"""
+    return os.getenv("PLATFORM", "linux").lower() == "windows"
+
+
 @pytest.fixture(scope="session")
 def artifacts_dir() -> Path:
     if not ARTIFACTS_DIR:
@@ -422,6 +427,12 @@ class TestArtifactStructure:
             len(artifact_names),
         )
 
+    @pytest.mark.skipif(
+        is_windows_platform(),
+        reason="package.json coverage check only applies to Linux artifacts; "
+        "package.json (build_tools/packaging/linux/package.json) has no "
+        "entries for Windows-only artifacts. ",
+    )
     def test_artifacts_covered_by_packages(self, archive_index: list[ArchiveInfo]):
         """Every fetched artifact/component should be covered by a package.
 
