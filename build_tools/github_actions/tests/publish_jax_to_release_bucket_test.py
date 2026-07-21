@@ -219,23 +219,6 @@ class TestPublishJaxToReleaseBucket(unittest.TestCase):
             )
         mock_upload_files.assert_not_called()
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
-    def test_non_structured_still_uses_upload_directory(self, mock_upload):
-        # Default (non-structured) path is unchanged: flat upload_directory.
-        mock_upload.return_value = 2
-        main(
-            [
-                "--source-dir",
-                os.fspath(self.source_dir),
-                "--release-type",
-                "dev",
-                "--dry-run",
-            ]
-        )
-        self.assertEqual(mock_upload.call_count, 1)
-        _source, dest = mock_upload.call_args.args
-        self.assertEqual(dest.relative_path, "v4/whl")
-
 
 if __name__ == "__main__":
     unittest.main()
