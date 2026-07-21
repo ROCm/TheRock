@@ -3520,7 +3520,8 @@
       "amdrocm-hipify",
       "amdrocm-hipfile",
       "amdrocm-decode",
-      "amdrocm-jpeg"
+      "amdrocm-jpeg",
+      "amdrocm-threads"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -3542,7 +3543,8 @@
       "amdrocm-hipify",
       "amdrocm-hipfile",
       "amdrocm-decode",
-      "amdrocm-jpeg"
+      "amdrocm-jpeg",
+      "amdrocm-threads"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core metapackage",
@@ -3682,7 +3684,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-threads-devel"
     ],
     "RPMRequires": [
       "amdrocm-core",
@@ -3701,7 +3704,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-threads-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core development metapackage",
