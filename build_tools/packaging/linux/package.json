@@ -1556,8 +1556,7 @@
           {
             "Name": "rocPRIM",
             "Components": [
-              "dev",
-              "doc"
+              "dev"
             ]
           },
           {
