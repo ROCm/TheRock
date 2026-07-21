@@ -78,6 +78,22 @@ def do_artifact(args):
         contents.write_artifact(output_dir)
 
 
+def _normalize_tarinfo(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Normalize TarInfo for reproducible archives.
+
+    Sets fixed timestamp, uid/gid, and uname/gname for deterministic output.
+    File permissions are preserved. When extracted as a non-root user, ownership
+    defaults to the extracting user. When extracted as root with -p, files are
+    owned by root:root.
+    """
+    tarinfo.mtime = 0
+    tarinfo.uid = 0
+    tarinfo.gid = 0
+    tarinfo.uname = "root"
+    tarinfo.gname = "root"
+    return tarinfo
+
+
 def do_artifact_archive(args):
     output_path: Path = args.o
     if output_path.exists():
@@ -91,7 +107,12 @@ def do_artifact_archive(args):
             manifest_path: Path = artifact_path / "artifact_manifest.txt"
             relpaths = manifest_path.read_text().splitlines()
             # Important: The manifest must be stored first.
-            arc.add(manifest_path, arcname=manifest_path.name, recursive=False)
+            arc.add(
+                manifest_path,
+                arcname=manifest_path.name,
+                recursive=False,
+                filter=_normalize_tarinfo,
+            )
             for relpath in relpaths:
                 if not relpath:
                     continue
@@ -100,9 +121,15 @@ def do_artifact_archive(args):
                     continue
                 pm = PatternMatcher()
                 pm.add_basedir(source_dir)
-                for subpath, dir_entry in pm.all.items():
+                # Sort files for deterministic archive order
+                for subpath, dir_entry in sorted(pm.all.items()):
                     fullpath = f"{relpath}/{subpath}"
-                    arc.add(dir_entry.path, arcname=fullpath, recursive=False)
+                    arc.add(
+                        dir_entry.path,
+                        arcname=fullpath,
+                        recursive=False,
+                        filter=_normalize_tarinfo,
+                    )
 
     if args.hash_file:
         digest = calculate_hash(output_path, args.hash_algorithm)
