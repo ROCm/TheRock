@@ -85,7 +85,7 @@ is_linux = platform.system() == "Linux"
 
 compiler_ext = ".exe" if is_windows else ""
 
-HIPCC_BINARY_NAME = f"hipcc{compiler_ext}"
+AMDCLANGPP_BINARY_NAME = f"amdclang++{compiler_ext}"
 
 HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
 if is_windows:
@@ -98,8 +98,7 @@ if is_windows:
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DHIP_HIPCC_EXECUTABLE={(THEROCK_BIN_PATH / HIPCC_BINARY_NAME).as_posix()}",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
+    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / AMDCLANGPP_BINARY_NAME}",
     f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT.as_posix()}",
     f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
     "-DLIBHIPCXX_TEST_WITH_HIPRTC=ON",
@@ -125,7 +124,7 @@ else:
         "bash",
         "../ci/hiprtc_libhipcxx.sh",
         "-cmake-options",
-        f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
+        f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / AMDCLANGPP_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
     ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
