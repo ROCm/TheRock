@@ -64,8 +64,7 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
-      THEROCK_HOST_BUILD_DIR: ${{ github.workspace }}\build-wsl-rocdxg
-      WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
+      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
       # Clean, space-free mount target for the Windows SDK shared include dir
@@ -142,7 +141,7 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           update: true
-          additional-packages: docker.io python3 python3-pip python3-psutil python3-venv
+          additional-packages: docker.io python3 python3-pip python3-psutil python3-venv rsync
 
       - name: Start Docker in WSL
         shell: wsl-bash {0}
@@ -197,51 +196,65 @@ jobs:
         shell: wsl-bash {0}
         env:
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
-          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:THEROCK_WIN_SDK_SHARED/p
+          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_WIN_SDK_SHARED/p
         run: |
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           if [ ! -d "${THEROCK_WIN_SDK_SHARED}" ]; then
             echo "Windows SDK include path not found: ${THEROCK_WIN_SDK_SHARED}"
             exit 1
           fi
-          mkdir -p "${THEROCK_HOST_BUILD_DIR}"
+          mkdir -p "${wsl_build_dir}"
+
+      - name: Sync source tree to WSL
+        shell: wsl-bash {0}
+        run: |
+          # Subproject source files are checked out on the Windows side via actions/checkout.
+          # TheRock runs `git diff` against every subproject to check for changed files.
+          # File operations between Windows and WSL filesystems have a lot of overhead,
+          # so this method of diffing subprojects becomes very time consuming.
+          # To resolve this, copy the entire tree in one sequential operation from Windows to WSL.
+          # All `git diff` are now run on WSL-native files, giving a big speed boost.
+          wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
+          rm -rf "${wsl_src_dir}"
+          mkdir -p "${wsl_src_dir}"
+          rsync -a "${THEROCK_HOST_WORKSPACE}/" "${wsl_src_dir}/"
 
       - name: Fetch inbound artifacts
         shell: wsl-bash {0}
         run: |
           stage_name="${{ inputs.stage_name }}"
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
-          mkdir -p "${THEROCK_HOST_BUILD_DIR}"
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
+          mkdir -p "${wsl_build_dir}"
           "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/artifact_manager.py" fetch \
             --run-id="${{ github.run_id }}" \
             --run-github-repo="${{ github.repository }}" \
             --platform=linux \
             --stage="${stage_name}" \
-            --output-dir="${THEROCK_HOST_BUILD_DIR}" \
+            --output-dir="${wsl_build_dir}" \
             --bootstrap
 
       - name: Configure
         shell: wsl-bash {0}
         env:
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
-          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:THEROCK_WIN_SDK_SHARED/p:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
+          WSLENV: THEROCK_WIN_SDK_SHARED/p:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
         run: |
-          # WSLENV translates the workspace/build/SDK paths to POSIX /mnt/c/...
-          # here, so binding src==dst keeps the in-container cmake invocation
-          # identical to a native WSL one. dockerd runs inside WSL, so /mnt/c
-          # paths are valid mount sources. The SDK is mounted read-only at a
-          # clean space-free path and passed as THEROCK_WSL_WIN_SDK.
+          wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
-            --mount "type=bind,src=${THEROCK_HOST_WORKSPACE},dst=${THEROCK_HOST_WORKSPACE}" \
-            --mount "type=bind,src=${THEROCK_HOST_BUILD_DIR},dst=${THEROCK_HOST_BUILD_DIR}" \
+            --mount "type=bind,src=${wsl_src_dir},dst=${wsl_src_dir}" \
+            --mount "type=bind,src=${wsl_build_dir},dst=${wsl_build_dir}" \
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
-            -w "${THEROCK_HOST_WORKSPACE}" \
+            -w "${wsl_src_dir}" \
+            -e "WSL_BUILD_DIR=${wsl_build_dir}" \
             "${MANYLINUX_IMAGE}" \
             bash -c '
               set -euo pipefail
-              git config --global --add safe.directory "'"${THEROCK_HOST_WORKSPACE}"'"
+              git config --global --add safe.directory "*"
               pip install -r requirements.txt
               ${{ steps.stage_config.outputs.pip_install_cmd && format('pip install {0}', steps.stage_config.outputs.pip_install_cmd) || 'true' }}
-              cmake -B "'"${THEROCK_HOST_BUILD_DIR}"'" -S . -G Ninja \
+              cmake -B "${WSL_BUILD_DIR}" -S . -G Ninja \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                 -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
                 -DTHEROCK_WSL_WIN_SDK="'"${THEROCK_WSL_WIN_SDK_MOUNT}"'" \
@@ -255,26 +268,31 @@ jobs:
         shell: wsl-bash {0}
         env:
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
-          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:THEROCK_WIN_SDK_SHARED/p:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
+          WSLENV: THEROCK_WIN_SDK_SHARED/p:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
         run: |
           stage_name="${{ inputs.stage_name }}"
+          wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
-            --mount "type=bind,src=${THEROCK_HOST_WORKSPACE},dst=${THEROCK_HOST_WORKSPACE}" \
-            --mount "type=bind,src=${THEROCK_HOST_BUILD_DIR},dst=${THEROCK_HOST_BUILD_DIR}" \
+            --mount "type=bind,src=${wsl_src_dir},dst=${wsl_src_dir}" \
+            --mount "type=bind,src=${wsl_build_dir},dst=${wsl_build_dir}" \
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
-            -w "${THEROCK_HOST_WORKSPACE}" \
+            -w "${wsl_src_dir}" \
             -e "STAGE_NAME=${stage_name}" \
+            -e "WSL_BUILD_DIR=${wsl_build_dir}" \
             "${MANYLINUX_IMAGE}" \
             bash -c '
               set -euo pipefail
-              cmake --build "'"${THEROCK_HOST_BUILD_DIR}"'" --target "stage-${STAGE_NAME}" -- -k 0
+              cmake --build "${WSL_BUILD_DIR}" --target "stage-${STAGE_NAME}" -- -k 0
             '
 
       - name: Report
         if: ${{ !cancelled() }}
+        shell: wsl-bash {0}
         run: |
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           echo "Artifacts:"
-          ls -lh "${THEROCK_HOST_BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+          ls -lh "${wsl_build_dir}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
@@ -286,22 +304,28 @@ jobs:
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
         env:
-          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_HOST_BUILD_DIR/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
+          WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           stage_name="${{ inputs.stage_name }}"
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/artifact_manager.py" push --run-id ${{ github.run_id }} \
             --run-github-repo="${{ github.repository }}" \
             --platform linux \
             --stage="${stage_name}" \
-            --build-dir="${THEROCK_HOST_BUILD_DIR}"
+            --build-dir="${wsl_build_dir}"
 
       - name: Upload stage logs
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
+        shell: wsl-bash {0}
+        env:
+          WSLENV: THEROCK_HOST_WORKSPACE/p:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
-          python build_tools/github_actions/post_stage_upload.py \
+          wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
+          "${wsl_venv_dir}/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/github_actions/post_stage_upload.py" \
             --run-id=${{ github.run_id }} \
             --platform=linux \
-            --stage="${STAGE_NAME}" \
-            --build-dir="${THEROCK_HOST_BUILD_DIR}" \
+            --stage="${{ inputs.stage_name }}" \
+            --build-dir="${wsl_build_dir}" \
             --amdgpu-family=""
