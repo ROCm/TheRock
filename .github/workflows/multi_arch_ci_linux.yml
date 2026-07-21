@@ -44,10 +44,10 @@ on:
         description: "Space-separated list of projects to build (includes TEST_SUBPROJECTS dependencies)."
         type: string
         default: ""
-      affected_stages:
-        description: "Comma-separated list of build stages to run, or 'all' for full build."
+      auto_prebuilt_stages:
+        description: "Comma-separated list of stages to copy from baseline (unaffected by changed_projects)."
         type: string
-        default: "all"
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -119,7 +119,6 @@ jobs:
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
       projects: ${{ inputs.expanded_projects }}
-      affected_stages: ${{ inputs.affected_stages }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -264,8 +263,7 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    # Skip for external repos (incomplete builds won't have all packages)
-    if: ${{ !failure() && !cancelled() && inputs.external_repo_config == '' }}
+    if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
@@ -284,8 +282,7 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python
-    # Skip for external repos (build_python_packages is skipped)
-    if: ${{ !failure() && !cancelled() && inputs.external_repo_config == '' && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+    if: ${{ !failure() && !cancelled() && toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -321,12 +318,10 @@ jobs:
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
-    # Skip for external repos (build_python_packages is skipped)
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
-        inputs.external_repo_config == '' &&
         fromJSON(inputs.build_config).build_pytorch == true &&
         toJSON(fromJSON(inputs.build_config).pytorch_build_matrix) != '[]'
       }}
@@ -354,12 +349,10 @@ jobs:
   build_jax_wheels:
     needs: [build_python_packages]
     name: Build JAX Wheels
-    # Skip for external repos (build_python_packages is skipped)
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
-        inputs.external_repo_config == '' &&
         fromJSON(inputs.build_config).build_jax == true &&
         toJSON(fromJSON(inputs.build_config).jax_build_matrix) != '[]'
       }}

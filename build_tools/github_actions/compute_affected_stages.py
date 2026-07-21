@@ -2,7 +2,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Compute affected build stages from changed projects, expanding TEST_SUBPROJECTS."""
+"""Compute affected build stages from changed projects, expanding TEST_SUBPROJECTS.
+
+For external repo builds (rocm-systems, rocm-libraries), this script determines:
+- affected_stages: Stages that need to be built (contain changed projects)
+- prebuilt_stages: Stages that can be copied from baseline (unaffected)
+- expanded_projects: Projects to build/test (includes TEST_SUBPROJECTS deps)
+"""
 
 import os
 import sys
@@ -20,17 +26,31 @@ from determine_rocm_test_dependencies import get_subprojects_to_test
 
 from github_actions_api import gha_set_output
 
+# All build stages that can be prebuilt/skipped
+ALL_STAGES = [
+    "compiler-runtime",
+    "runtime-tests",
+    "wsl-rocdxg",
+    "math-libs",
+    "comm-libs",
+    "storage-libs",
+    "debug-tools",
+    "dctools-core",
+    "profiler-apps",
+    "media-libs",
+]
 
-def compute_affected(changed_projects: str) -> tuple[str, str]:
-    """Return (affected_stages, expanded_projects) for the given changed projects."""
+
+def compute_affected(changed_projects: str) -> tuple[str, str, str]:
+    """Return (affected_stages, prebuilt_stages, expanded_projects)."""
     if not changed_projects or not changed_projects.strip():
         print("No changed_projects specified, building all stages")
-        return "all", ""
+        return "all", "", ""
 
     raw_projects = [p.strip() for p in changed_projects.split(",") if p.strip()]
     if not raw_projects:
         print("Empty projects list after parsing, building all stages")
-        return "all", ""
+        return "all", "", ""
 
     # Normalize "projects/hip" -> "hip"
     projects = [p.split("/")[-1] if "/" in p else p for p in raw_projects]
@@ -48,22 +68,32 @@ def compute_affected(changed_projects: str) -> tuple[str, str]:
 
     if not affected:
         print("No stages found for projects, building all stages")
-        return "all", ""
+        return "all", "", ""
 
-    stages = ",".join(sorted(affected))
+    # Compute prebuilt_stages = ALL_STAGES - affected_stages
+    # These are stages that don't need to be built, artifacts copied from baseline
+    prebuilt = [s for s in ALL_STAGES if s not in affected]
+
+    affected_str = ",".join(sorted(affected))
+    prebuilt_str = ",".join(prebuilt)
     # Space-separated for --projects arg compatibility
     projects_str = " ".join(expanded_list)
-    print(f"Affected stages: {stages}")
+
+    print(f"Affected stages (to build): {affected_str}")
+    print(f"Prebuilt stages (copy from baseline): {prebuilt_str}")
     print(f"Expanded projects output: {projects_str}")
-    return stages, projects_str
+    return affected_str, prebuilt_str, projects_str
 
 
 def main():
     changed_projects = os.environ.get("CHANGED_PROJECTS", "")
-    affected_stages, expanded_projects = compute_affected(changed_projects)
+    affected_stages, prebuilt_stages, expanded_projects = compute_affected(
+        changed_projects
+    )
     gha_set_output(
         {
             "affected_stages": affected_stages,
+            "prebuilt_stages": prebuilt_stages,
             "expanded_projects": expanded_projects,
         }
     )

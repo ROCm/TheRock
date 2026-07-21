@@ -128,6 +128,9 @@ on:
       affected_stages:
         description: "Comma-separated list of build stages affected by changed_projects, or 'all' for full build."
         value: ${{ jobs.setup.outputs.affected_stages }}
+      auto_prebuilt_stages:
+        description: "Comma-separated list of stages to copy from baseline (unaffected by changed_projects)."
+        value: ${{ jobs.setup.outputs.auto_prebuilt_stages }}
       expanded_projects:
         description: "Space-separated list of projects to build (includes TEST_SUBPROJECTS dependencies)."
         value: ${{ jobs.setup.outputs.expanded_projects }}
@@ -151,6 +154,7 @@ jobs:
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
       affected_stages: ${{ steps.affected_stages.outputs.affected_stages }}
+      auto_prebuilt_stages: ${{ steps.affected_stages.outputs.prebuilt_stages }}
       expanded_projects: ${{ steps.affected_stages.outputs.expanded_projects }}
     steps:
       - name: Checking out repository
@@ -170,6 +174,16 @@ jobs:
           path: ci-config
         continue-on-error: true
 
+      # For external repos, compute which stages are affected by the changed projects.
+      # This must run BEFORE configure_multi_arch_ci.py so prebuilt_stages can be passed.
+      - name: Compute affected stages
+        id: affected_stages
+        if: ${{ inputs.external_repo != '' }}
+        env:
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+        run: |
+          python ./build_tools/github_actions/compute_affected_stages.py
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
@@ -186,7 +200,8 @@ jobs:
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
-          PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          # For external repos, use auto-computed prebuilt_stages; otherwise use input
+          PREBUILT_STAGES: ${{ steps.affected_stages.outputs.prebuilt_stages || inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
@@ -194,8 +209,6 @@ jobs:
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
-          # Disable native packages and PyTorch for external repos (incomplete builds)
-          IS_EXTERNAL_REPO: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
@@ -228,11 +241,3 @@ jobs:
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json='${{ inputs.external_repo }}'
-
-      - name: Compute affected stages
-        id: affected_stages
-        if: ${{ inputs.external_repo != '' }}
-        env:
-          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
-        run: |
-          python ./build_tools/github_actions/compute_affected_stages.py
