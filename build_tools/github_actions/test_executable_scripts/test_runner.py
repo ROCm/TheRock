@@ -131,6 +131,24 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
+
+def _resolve_omp_num_threads(min_threads=2):
+    """
+    Sets the minimum OMP_NUM_THREADS as 2
+
+    dyninst, used by rocprofiler-systems, uses OpenMP to parse/process the
+    control flow graph. Less than 2 threads will significantly slow down the
+    runtime-instrument tests.
+    """
+    raw = os.getenv("OMP_NUM_THREADS")
+    try:
+        if float(raw) < min_threads:
+            return str(min_threads)
+    except (TypeError, ValueError):
+        return str(min_threads)
+    return raw
+
+
 # Component-specific ENV VARs/PATHs applied on top of defaults.
 #
 # - test_dir: The default TEST_DIR for ctest is THEROCK_BIN_DIR/TEST_COMPONENT.
@@ -203,6 +221,7 @@ COMPONENT_OVERRIDES = {
         },
         "env": {
             "ROCPROFSYS_INSTALL_DIR": "{rocm_path}",
+            "OMP_NUM_THREADS": _resolve_omp_num_threads(),
             # Open MPI bakes its build-time install prefix (the manylinux
             # container path) into its binaries, so plugin/help-file discovery
             # fails outside the container. Override it with the ROCm install
@@ -210,10 +229,6 @@ COMPONENT_OVERRIDES = {
             "OPAL_PREFIX": "{rocm_path}",
             "PRTE_PREFIX": "{rocm_path}",
             "PMIX_PREFIX": "{rocm_path}",
-            # dyninst relies on OpenMP to parallelize parsing/processing of the
-            # control flow graph. This is controlled by OMP_NUM_THREADS. Force it
-            # to 2 to speed up runtime-instrument tests.
-            "OMP_NUM_THREADS": "2",
         },
         # rocprofiler-systems tests instrument processes and attach to a shared
         # profiling backend; running them concurrently causes flaky failures.
