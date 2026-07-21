@@ -829,6 +829,7 @@ def run():
                     "total_shards": total_shards,
                     "test_type": test_type,
                     "shard_arr": shard_arr,
+                    "expect_failure": True,   # Non fatal- just for Info
                     "gpu_enable_pal": "1",
                 }
                 all_components.append(pal_entry)
@@ -844,7 +845,7 @@ def run():
                         "total_shards": total_shards,
                         "test_type": test_type,
                         "shard_arr": shard_arr,
-                        "expect_failure": True,
+                        "expect_failure": False, # Default and Fatal
                         "gpu_enable_pal": "0",
                     }
                     all_components.append(rocr_entry)
