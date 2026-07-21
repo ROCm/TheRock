@@ -125,6 +125,26 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             ],
         )
 
+    def test_nightly_includes_gfx125x(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            python_versions=["3.12"],
+            pytorch_git_refs=["nightly"],
+            amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertEqual(
+            matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "nightly",
+                    "amdgpu_families": "gfx94X-dcgpu;gfx125X-dcgpu",
+                }
+            ],
+        )
+
     def test_unknown_explicit_ref_keeps_families(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
