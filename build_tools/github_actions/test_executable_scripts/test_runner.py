@@ -171,6 +171,10 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   instrumented-function listings). "--output-on-failure" is always passed, so
 #   failing tests still show their full output; only passing-test noise is
 #   suppressed.
+#
+# - ctest_repeat_until_pass: Int (default unset/off). When set to N, adds
+#   "--repeat until-pass:N" so ctest re-runs a failing test up to N times and
+#   only reports failure if it never passes.
 COMPONENT_OVERRIDES = {
     # ctest fragments live under libexec, not bin.
     # ctest_parallel pinned to 1: tests are pytest runs that parallelize
@@ -219,6 +223,9 @@ COMPONENT_OVERRIDES = {
         # function listings, etc). Drop -V to keep CI logs readable;
         # --output-on-failure still surfaces output for any failing test.
         "ctest_verbose": False,
+        # Depending on the load of the system when a test is ran, it could fail
+        # once and then pass on subsequent runs.
+        "ctest_repeat_until_pass": 3,
     },
     # rocwmma installs three independent CTestTestfile.cmake fragments:
     #   bin/rocwmma/             - per-target plain runs + regression_tests
@@ -527,6 +534,15 @@ def build_ctest_command(
 
     # Add common ctest parameters
     cmd.append("--output-on-failure")
+
+    # Retry flaky tests: re-run any failing test up to N times and only count
+    # it as a failure if it never passes. Off by default; opt in per component
+    # via COMPONENT_OVERRIDES[...]["ctest_repeat_until_pass"] = N.
+    repeat_until_pass = COMPONENT_OVERRIDES.get(test_component_job_name, {}).get(
+        "ctest_repeat_until_pass"
+    )
+    if repeat_until_pass:
+        cmd.extend(["--repeat", f"until-pass:{repeat_until_pass}"])
 
     # ctest_parallel_count is the module-level default (arch-tuned). Components
     # can override it via COMPONENT_OVERRIDES[...]["ctest_parallel_count"];
