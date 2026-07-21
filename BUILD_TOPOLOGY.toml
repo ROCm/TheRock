@@ -514,6 +514,7 @@ artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+test_artifacts = ["core-hiptests", "rocrtst"]  # When building ROCR, also build hip-tests and rocrtst
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -543,6 +544,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
+test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
 
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
