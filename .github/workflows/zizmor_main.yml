@@ -26,7 +26,7 @@ jobs:
     with:
       scan_mode: all
       report_formats: sarif
-    
+
     permissions:
       contents: read
       # Required so the reusable workflow can call
