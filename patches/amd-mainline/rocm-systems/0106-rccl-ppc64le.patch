@@ -1,27 +1,28 @@
-From 2ab905d8dca60de495069b0b210d3ae91af8572f Mon Sep 17 00:00:00 2001
+From dc830523f8d485a236286ea2135fb2168de29a80 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Mon, 13 Jul 2026 18:14:15 +0000
-Subject: [PATCH] [rccl] guard x86 cpuid code
+Date: Mon, 20 Jul 2026 18:33:07 +0000
+Subject: [PATCH] [rccl] Guard x86-only code
 
 ---
- projects/rccl/src/init.cc | 4 ++++
- 1 file changed, 4 insertions(+)
+ projects/rccl/src/init.cc | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index 961d5a93ea..7735ff221d 100644
+index 0b29e6a8fe..3891da4f62 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
-@@ -77,7 +77,9 @@
- #include "latency_profiler/CollTraceFunc.h"
- #include "dda_all_reduce_ipc.h"
+@@ -78,7 +78,9 @@
+ #include "dda_all_reduce.h"
  #include "ipc_init.h"
+ #include "fabric_init.h"
+-#include  <cpuid.h>
 +#if defined(__x86_64__) || defined(__i386__)
- #include  <cpuid.h>
++#include <cpuid.h>
 +#endif
  #include <stdio.h>
  #include <stdlib.h>
  #include "kernel_config.h"
-@@ -287,6 +289,7 @@ static ncclResult_t ncclInit() {
+@@ -288,6 +290,7 @@ static ncclResult_t ncclInit() {
      }
      INFO(NCCL_INIT, "Kernel version: %s", verStr);
      if (strstr(verStr, "cray") == NULL) {
@@ -29,7 +30,7 @@ index 961d5a93ea..7735ff221d 100644
        unsigned int eax, ebx, ecx, edx;
        if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx))
          ecx = 0; // cpuid not supported
-@@ -307,6 +310,7 @@ static ncclResult_t ncclInit() {
+@@ -308,6 +311,7 @@ static ncclResult_t ncclInit() {
          if (!ncclIommuPassthroughOk(cmdlinePtr))
            WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
        }

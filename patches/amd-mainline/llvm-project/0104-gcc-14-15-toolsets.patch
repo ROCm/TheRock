@@ -1,0 +1,25 @@
+From 40b773676885173c72668daef2a3b738585c707a Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 21 Jul 2026 18:26:19 +0000
+Subject: [PATCH] [clang] Add gcc-toolset-14 and gcc-toolset-15
+
+---
+ clang/lib/Driver/ToolChains/Gnu.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/clang/lib/Driver/ToolChains/Gnu.cpp b/clang/lib/Driver/ToolChains/Gnu.cpp
+index bde8a3a3cd7d..af78e7587019 100644
+--- a/clang/lib/Driver/ToolChains/Gnu.cpp
++++ b/clang/lib/Driver/ToolChains/Gnu.cpp
+@@ -2345,6 +2345,8 @@ void Generic_GCC::GCCInstallationDetector::AddDefaultGCCPrefixes(
+       D.getVFS().exists("/opt/rh")) {
+     // TODO: We may want to remove this, since the functionality
+     //   can be achieved using config files.
++    Prefixes.push_back("/opt/rh/gcc-toolset-15/root/usr");
++    Prefixes.push_back("/opt/rh/gcc-toolset-14/root/usr");
+     Prefixes.push_back("/opt/rh/gcc-toolset-13/root/usr");
+     Prefixes.push_back("/opt/rh/gcc-toolset-12/root/usr");
+     Prefixes.push_back("/opt/rh/gcc-toolset-11/root/usr");
+-- 
+2.52.0
+

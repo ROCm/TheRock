@@ -1,0 +1,28 @@
+From d89c59c0c49ef4e9806b82a292768837d2a952a1 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 21 Jul 2026 14:00:23 -0400
+Subject: [PATCH] fix(miopen): remove deprecated <ciso646> include from
+ serializable.hpp
+
+<ciso646> is a no-op in C++ (the alternative operator tokens are already
+keywords) and was removed from the standard in C++20. GCC 15 libstdc++
+emits a #warning when it is included under -std=c++20, which becomes
+fatal with -Werror.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/miopen/src/include/miopen/serializable.hpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/projects/miopen/src/include/miopen/serializable.hpp b/projects/miopen/src/include/miopen/serializable.hpp
+index f7563f50be25..f0ba10fcf3ce 100644
+--- a/projects/miopen/src/include/miopen/serializable.hpp
++++ b/projects/miopen/src/include/miopen/serializable.hpp
+@@ -27,7 +27,6 @@
+ #ifndef GUARD_MLOPEN_SERIALIZABLE_HPP
+ #define GUARD_MLOPEN_SERIALIZABLE_HPP
+ 
+-#include <ciso646>
+ #include <miopen/config.h>
+ #include <iostream>
+ #include <sstream>
