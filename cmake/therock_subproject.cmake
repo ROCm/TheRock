@@ -1813,6 +1813,8 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"\${CMAKE_CXX_COMPILER}\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_FLAGS_INIT \"\${CMAKE_CXX_FLAGS_INIT}\")\n")
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()
