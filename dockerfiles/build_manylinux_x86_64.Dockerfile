@@ -86,6 +86,9 @@ RUN yum install -y epel-release && \
       gcc-toolset-13-libstdc++-devel \
       vim-common \
       git-lfs \
+      autoconf \
+      automake \
+      libtool \
     && yum install -y \
       texinfo \
       flex \
