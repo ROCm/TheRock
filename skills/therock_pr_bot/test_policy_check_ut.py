@@ -74,6 +74,7 @@ def make_policy(**overrides: Any) -> pc.Policy:
             "testing_*",
             "*_test.*",
             "*_tests.*",
+            "*_gtest.*",
             "**/test/gtest/**",
         ],
         unit_test_exempt_paths=[],
@@ -311,6 +312,23 @@ class ForbiddenFileTests(unittest.TestCase):
     def test_removed_forbidden_file_is_ignored(self) -> None:
         self.assertEqual(self._errs([make_file("secret.pem", status="removed")]), [])
 
+    def test_forbidden_files_is_warning_only_row(self) -> None:
+        # The Forbidden Files row is warning-only: passed=True + warn=True when a
+        # forbidden file is present, so it never blocks the workflow.
+        result = pc.CheckResult(
+            "Forbidden Files",
+            "⛔",
+            passed=True,
+            details=["Forbidden file present in PR: `secret.pem`"],
+            warn=True,
+        )
+        marker = "<!-- test -->"
+        body = pc.build_policy_table_comment([result], marker, ready=True)
+        self.assertIn("⚠️ Warning", body)
+        self.assertIn("secret.pem", body)
+        # Forbidden Files must NOT be in the label-triggering set.
+        self.assertNotIn("Forbidden Files", pc.LABEL_TRIGGER_CHECKS)
+
 
 # ----------------------------- unit tests check ------------------------------
 
@@ -400,6 +418,19 @@ class UnitTestRuleTests(unittest.TestCase):
         files = [make_file("projects/clr/hipamd/src/hip_memory.cpp")]
         pc.ensure_unit_tests(policy, files, errs)
         self.assertTrue(errs)
+
+    def test_unit_test_is_warning_only_row(self) -> None:
+        # The Unit Test row is warning-only: passed=True + warn=True when a
+        # code file has no accompanying test, so it never blocks the workflow.
+        result = pc.CheckResult(
+            "Unit Test", "🧪", passed=True, details=["missing test"], warn=True
+        )
+        marker = "<!-- test -->"
+        body = pc.build_policy_table_comment([result], marker, ready=True)
+        self.assertIn("⚠️ Warning", body)
+        self.assertIn("missing test", body)
+        # Unit Test must NOT be in the label-triggering set anymore.
+        self.assertNotIn("Unit Test", pc.LABEL_TRIGGER_CHECKS)
 
 
 # ----------------------------- draft + bump ----------------------------------
@@ -558,7 +589,7 @@ class LoadPolicyTests(unittest.TestCase):
         self.assertIn("test_*", policy.unit_test_patterns)
         self.assertIn("*_test.*", policy.unit_test_patterns)
         self.assertIn("*_tests.*", policy.unit_test_patterns)
-        self.assertIn("Test*", policy.unit_test_patterns)
+        self.assertIn("*_gtest.*", policy.unit_test_patterns)
         self.assertIn("**/test/gtest/**", policy.unit_test_patterns)
 
 
