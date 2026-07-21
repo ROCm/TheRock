@@ -48,9 +48,10 @@ def run(args: argparse.Namespace):
     pytorch_web_url = f"https://github.com/{pytorch_repo_org}/pytorch"
     pytorch_web_url_with_branch = f"{pytorch_web_url}/tree/{args.pytorch_git_ref}"
 
-    # Build index URL — append family subdir when provided.
+    # Build index URL — per-family installs use a family subdir; multi-arch
+    # installs use device extras on the flat whl-multi-arch index instead.
     index_url = args.index_url.rstrip("/")
-    if args.index_subdir:
+    if args.index_subdir and not args.device_extras:
         index_url += f"/{args.index_subdir.strip('/')}"
     index_url += "/"
 

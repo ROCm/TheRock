@@ -154,6 +154,23 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   checkout root) rather than ROCM_PATH (the install prefix). Use this for
 #   components whose tests need to load libraries straight out of the build
 #   tree, e.g. rocroller.
+#
+# - env: Literal environment variables to set (overwriting any inherited value).
+#   Values are formatted with str.format() and currently support the placeholder
+#   "{rocm_path}", which expands to the absolute ROCM_PATH.
+#
+# - ctest_parallel_count: Int. Overrides the module-level ctest_parallel_count
+#   default for this component. Use 0 to drop the "--parallel N" flag entirely
+#   (i.e. run ctest serially) for components whose tests can't share GPU/host
+#   resources safely (e.g. rocprofiler-systems, whose pytest-driven CTests
+#   attach to the same profiling backend).
+#
+# - ctest_verbose: Bool (default True). Controls the ctest "-V" flag. Set to
+#   False to drop "-V" for components whose tests emit very large per-test
+#   output (e.g. rocprofiler-systems, whose pytest-driven CTests dump
+#   instrumented-function listings). "--output-on-failure" is always passed, so
+#   failing tests still show their full output; only passing-test noise is
+#   suppressed.
 COMPONENT_OVERRIDES = {
     # ctest fragments live under libexec, not bin.
     # ctest_parallel pinned to 1: tests are pytest runs that parallelize
@@ -165,6 +182,30 @@ COMPONENT_OVERRIDES = {
             "LD_LIBRARY_PATH": [["lib"]],
         },
         "ctest_parallel": 1,
+    },
+    # rocprofiler-systems tests are pytest-driven CTests living under
+    # share/rocprofiler-systems/tests. They need the rocm bin on PATH so the
+    # `rocprofv3` / `rocprof-sys-*` wrappers resolve, plus the example shared
+    # libraries on LD_LIBRARY_PATH so instrumented binaries can run.
+    # ROCPROFSYS_INSTALL_DIR points the generated test scripts at the install
+    # tree.
+    "rocprofiler-systems": {
+        "test_dir": ["share", "rocprofiler-systems", "tests"],
+        "additional_env_paths": {
+            "PATH": [["bin"]],
+            "LD_LIBRARY_PATH": [["share", "rocprofiler-systems", "examples", "lib"]],
+        },
+        "env": {
+            "ROCPROFSYS_INSTALL_DIR": "{rocm_path}",
+        },
+        # rocprofiler-systems tests instrument processes and attach to a shared
+        # profiling backend; running them concurrently causes flaky failures.
+        # 0 = drop the --parallel flag (ctest runs serially).
+        "ctest_parallel_count": 0,
+        # pytest-driven CTests dump very large per-test output (instrumented
+        # function listings, etc). Drop -V to keep CI logs readable;
+        # --output-on-failure still surfaces output for any failing test.
+        "ctest_verbose": False,
     },
     # rocwmma installs three independent CTestTestfile.cmake fragments:
     #   bin/rocwmma/             - per-target plain runs + regression_tests
@@ -243,6 +284,8 @@ def apply_component_overrides(
     - 'env_prepend_from_therock' prepends therock_dir-relative (build tree)
       paths to env vars. Used by components like rocroller that load shared
       libraries straight out of the build tree.
+    - 'env' sets literal environment variables (str.format() with the
+      "{rocm_path}" placeholder).
 
     ctest_parallel: per-component ctest -j override; falls back to
     default_parallel_count when the component does not pin one.
@@ -260,6 +303,8 @@ def apply_component_overrides(
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
     _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
+    for env_key, value_template in overrides.get("env", {}).items():
+        env[env_key] = value_template.format(rocm_path=str(rocm_path))
     return test_dir, overrides.get("ctest_parallel", default_parallel_count)
 
 
@@ -468,18 +513,35 @@ def build_ctest_command(
         cmd.extend(["-LE", "|".join(le_patterns)])
 
     # Add common ctest parameters
+    cmd.append("--output-on-failure")
+
+    # ctest_parallel_count is the module-level default (arch-tuned). Components
+    # can override it via COMPONENT_OVERRIDES[...]["ctest_parallel_count"];
+    # a value of 0 means "drop --parallel entirely" (serial execution).
+    component_parallel_count = COMPONENT_OVERRIDES.get(test_component_job_name, {}).get(
+        "ctest_parallel_count", ctest_parallel_count
+    )
+    if component_parallel_count > 0:
+        cmd.extend(["--parallel", f"{component_parallel_count}"])
+
     cmd.extend(
         [
-            "--output-on-failure",
-            "--parallel",
-            f"{ctest_parallel_count}",
             "--timeout",
             str(ctest_timeout_seconds),
             "--test-dir",
             TEST_DIR,
-            "-V",
         ]
     )
+
+    # -V prints full stdout for every test (pass or fail). Components can opt
+    # out via COMPONENT_OVERRIDES[...]["ctest_verbose"] = False when their
+    # per-test output is too large for readable CI logs; --output-on-failure
+    # (added above) still surfaces output for failing tests.
+    component_verbose = COMPONENT_OVERRIDES.get(test_component_job_name, {}).get(
+        "ctest_verbose", True
+    )
+    if component_verbose:
+        cmd.append("-V")
 
     # Shard via the ctest entry stride only when we are NOT relying on gtest
     # case-level sharding. Applying both compounds and drops tests on multi-entry
