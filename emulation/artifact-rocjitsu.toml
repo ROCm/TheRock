@@ -1,10 +1,5 @@
 # rocjitsu
 [components.lib."emulation/rocjitsu/stage"]
-default_patterns = false
-include = [
-  "lib/librocjitsu.so",
-  "lib/librocjitsu_hooks.so",
-]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
 [components.run."emulation/rocjitsu/stage"]
