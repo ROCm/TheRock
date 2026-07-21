@@ -1245,8 +1245,6 @@ class SetupDnfRepositoryTest(unittest.TestCase):
     @patch("native_linux_package_install_test.Path.write_text")
     def test_returns_true_after_writing_repo_file(self, mock_write_text, mock_run):
         # Test that _setup_dnf_repository writes repo file and returns True (dnf clean may be mocked).
-        # Uses Path.write_text, not open().
-        mock_run.side_effect = None
         mock_run.return_value = MagicMock(returncode=0)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",

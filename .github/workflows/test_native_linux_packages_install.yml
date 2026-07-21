@@ -20,7 +20,7 @@ on:
         type: string
         default: ""
       os_profile:
-        description: OS profile (e.g., ubuntu2404, rhel10, sles16). Package type (deb/rpm) is derived from this.
+        description: OS profile (e.g., ubuntu2404, rhel8, rhel10, sles16). Package type (deb/rpm) is derived from this.
         required: true
         type: string
       artifact_group:
@@ -69,6 +69,7 @@ on:
         type: choice
         options:
           - ubuntu2404
+          - rhel8
           - rhel10
           - sles16
       artifact_group:
@@ -176,7 +177,7 @@ jobs:
               zypper install -y pciutils kmod
             fi
           else
-            # rpm (non-SLES on UBI 10); --allowerasing for curl vs curl-minimal on UBI
+            # rpm (non-SLES on RHEL/UBI); --allowerasing for curl vs curl-minimal on UBI
             dnf install -y --allowerasing \
               wget \
               curl \

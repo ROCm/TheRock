@@ -8,6 +8,7 @@ These tests verify end-to-end behavior of the artifact_manager push/fetch comman
 particularly error handling and exit codes.
 """
 
+import hashlib
 import os
 import shutil
 import sys
@@ -206,11 +207,13 @@ class ArtifactManagerTestBase(unittest.TestCase):
 
         archive_name = f"{name}_{component}_{target_family}.tar.zst"
         archive_path = artifacts_dir / archive_name
-        archive_path.write_bytes(b"fake zstd archive content")
+        archive_content = b"fake zstd archive content"
+        archive_path.write_bytes(archive_content)
 
         # Also create sha256sum
         sha_path = artifacts_dir / f"{archive_name}.sha256sum"
-        sha_path.write_text(f"abc123  {archive_name}\n")
+        sha256 = hashlib.sha256(archive_content).hexdigest()
+        sha_path.write_text(f"{sha256}  {archive_name}\n")
 
         return archive_path
 
@@ -319,7 +322,11 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
         """Test that push exits normally (no exception) when all uploads succeed."""
         import artifact_manager
 
-        self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
+        archive_path = self._create_fake_precompressed_artifact(
+            "test-artifact", "lib", "generic"
+        )
+        sha_path = Path(f"{archive_path}.sha256sum")
+        self.assertTrue(sha_path.exists())
 
         argv = [
             "push",
@@ -352,6 +359,45 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
 
         # Verify sha256sum was also uploaded
         self.assertTrue(
+            backend.artifact_exists("test-artifact_lib_generic.tar.zst.sha256sum")
+        )
+
+    def test_push_succeeds_when_precompressed_artifact_is_missing_sha256sum(self):
+        """Test that pre-compressed artifacts do not require a sha256sum sidecar."""
+        import artifact_manager
+
+        archive_path = self._create_fake_precompressed_artifact(
+            "test-artifact", "lib", "generic"
+        )
+        Path(f"{archive_path}.sha256sum").unlink()
+
+        argv = [
+            "push",
+            "--stage",
+            "upstream-stage",
+            "--build-dir",
+            str(self.build_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+        ]
+
+        artifact_manager.main(argv)
+
+        output_root = WorkflowOutputRoot.for_local(
+            run_id="local", platform=TEST_PLATFORM
+        )
+        backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=output_root,
+        )
+        self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.tar.zst"))
+        self.assertFalse(
             backend.artifact_exists("test-artifact_lib_generic.tar.zst.sha256sum")
         )
 

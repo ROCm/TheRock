@@ -10,6 +10,12 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import configure_rocm_python_test_matrix as m
+from workflow_utils import (
+    WORKFLOWS_DIR,
+    get_matrix_references,
+    get_workflow_job,
+    load_workflow,
+)
 
 
 class ConfigureRocmPythonTestMatrixTest(unittest.TestCase):
@@ -102,6 +108,54 @@ class ConfigureRocmPythonTestMatrixTest(unittest.TestCase):
                 per_family_info=[],
                 platform="not-a-platform",
             )
+
+    def test_generated_rows_cover_workflow_matrix_inputs(self):
+        # The build_rocm_python_test_matrix script produces matrix JSON for use
+        # in workflow files like:
+        #
+        #   matrix:
+        #     include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
+        #
+        # Then it passes values to the test workflow using expressions like:
+        #   with:
+        #     amdgpu_family: ${{ matrix.amdgpu_family }}
+        #     test_runs_on: ${{ matrix.test_runs_on }}
+        #     python_version: ${{ matrix.python_version }}
+        #
+        # This test checks that all `${{ matrix. }}` values are produced for
+        # every row in the generated matrix. It intentionally does not check
+        # that every generated key is consumed by each workflow; if we want to
+        # enforce exact schemas, do that with generator-local tests.
+        test_cases = [
+            ("multi_arch_ci_linux.yml", "linux"),
+            ("multi_arch_ci_windows.yml", "windows"),
+        ]
+
+        for workflow_filename, platform in test_cases:
+            with self.subTest(workflow_filename=workflow_filename):
+                workflow = load_workflow(WORKFLOWS_DIR / workflow_filename)
+                job = get_workflow_job(workflow, "test_python_packages_per_family")
+                matrix_references = get_matrix_references(job["with"])
+
+                matrix = m.build_rocm_python_test_matrix(
+                    per_family_info=[
+                        {
+                            "amdgpu_family": "gfxMOCKTEST",
+                            "test-runs-on": "mock-runner",
+                        }
+                    ],
+                    platform=platform,
+                )
+
+                self.assertGreater(len(matrix), 0)
+                for row in matrix:
+                    # This checks the row schema, not whether values are
+                    # truthy. Empty values are allowed, such as
+                    # container_image_url="" for native Windows tests.
+                    # Undefined values are not: if the workflow reads
+                    # `matrix.unknown`, this test fails until the generator
+                    # emits that key for every row.
+                    self.assertEqual(matrix_references - set(row), set())
 
 
 if __name__ == "__main__":
