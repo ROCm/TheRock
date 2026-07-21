@@ -83,6 +83,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      pull-requests: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
       options: -v /runner/config:/home/awsconfig/
@@ -126,3 +127,18 @@ jobs:
             --subfolder manifest-diff \
             --report-path reports \
             --index-file-name index.html
+
+      - name: Post manifest-diff report link to bump PR
+        if: >-
+          ${{
+            steps.gen-report.conclusion == 'success' &&
+            github.event_name == 'pull_request' &&
+            startsWith(github.event.pull_request.head.ref, 'bump-')
+          }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 build_tools/github_actions/post_manifest_diff_pr_comment.py \
+            --run-id ${{ github.run_id }} \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --commit-range-summary "${{ steps.gen-report.outputs.commit_range_summary }}"

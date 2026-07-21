@@ -55,6 +55,7 @@ from github_actions.github_actions_api import (
     gha_query_last_workflow_run,
     gha_query_workflow_run_by_id,
     gha_send_request,
+    gha_set_output,
 )
 
 # GitHub API constants
@@ -1397,12 +1398,25 @@ def generate_html_report(diff: ManifestDiff, output_dir: Path | None = None) -> 
     return HtmlReportGenerator(diff, output_dir).generate()
 
 
+def build_commit_range_summary(diff: ManifestDiff) -> str:
+    """One-line commit-range + changed-submodule-count summary.
+
+    Shared by generate_step_summary() (the full job-summary report) and
+    post_manifest_diff_pr_comment.py (the bump-PR comment), so both surfaces
+    show identical text without duplicating this formatting.
+    """
+    changed_count = len(diff.changed)
+    plural = "" if changed_count == 1 else "s"
+    return (
+        f"**Commit Range:** `{diff.start_commit[:8]}` -> `{diff.end_commit[:8]}` "
+        f"({changed_count} submodule{plural} changed)"
+    )
+
+
 def generate_step_summary(diff: ManifestDiff) -> None:
     """Generate GitHub Actions step summary using the shared utility."""
     summary = "# TheRock Manifest Diff Report\n\n"
-    summary += (
-        f"**Commit Range:** `{diff.start_commit[:8]}` -> `{diff.end_commit[:8]}`\n\n"
-    )
+    summary += f"{build_commit_range_summary(diff)}\n\n"
     summary += "## Submodule Changes\n\n"
 
     # Submodule changes
@@ -1496,6 +1510,9 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\n=== Generating Step Summary ===")
     generate_step_summary(diff)
+    # Exposed for downstream steps (e.g. post_manifest_diff_pr_comment.py)
+    # that want the same one-line summary without recomputing a ManifestDiff.
+    gha_set_output({"commit_range_summary": build_commit_range_summary(diff)})
 
     print("\n=== Done ===")
     return 0
