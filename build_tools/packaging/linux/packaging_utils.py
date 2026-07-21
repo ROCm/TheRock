@@ -25,7 +25,13 @@ _GFX_ARCH_SPLIT_RE = re.compile(r"[,;\s]+")
 
 _SYNTHESIZED_PACKAGES: dict[str, dict] = {}
 
-DEBUG_PACKAGE_SUFFIX = "-dbg"
+DEBUG_PACKAGE_SUFFIX_DEB = "-debuginfo"
+DEBUG_PACKAGE_SUFFIX_RPM = "-dbgsym"
+
+
+def get_debug_package_suffix(pkg_type: str) -> str:
+    """Return the debug-symbol package name suffix for the given package type."""
+    return DEBUG_PACKAGE_SUFFIX_RPM if pkg_type == "rpm" else DEBUG_PACKAGE_SUFFIX_DEB
 
 
 def normalize_target_list(
@@ -282,12 +288,12 @@ def is_gfxarch_package(
     return is_key_defined(pkg_info, "Gfxarch")
 
 
-def synthesize_debug_package_info(base_pkg_info):
+def synthesize_debug_package_info(base_pkg_info, suffix=DEBUG_PACKAGE_SUFFIX_DEB):
     """Build a package.json-style entry for a base package's debug-symbol sibling."""
     debug_info = copy.deepcopy(base_pkg_info)
 
     base_name = base_pkg_info["Package"]
-    debug_info["Package"] = f"{base_name}{DEBUG_PACKAGE_SUFFIX}"
+    debug_info["Package"] = f"{base_name}{suffix}"
     debug_info["Description_Short"] = (
         f"Debug symbols for {base_pkg_info.get('Description_Short', base_name)}"
     )
@@ -312,12 +318,15 @@ def synthesize_debug_package_info(base_pkg_info):
     return debug_info
 
 
-def register_debug_package(pkg_name):
+def register_debug_package(pkg_name, pkg_type="deb"):
     """Synthesize (or look up) the debug-symbol sibling package for pkg_name."""
-    if pkg_name.endswith(DEBUG_PACKAGE_SUFFIX):
+    suffix = get_debug_package_suffix(pkg_type)
+    if pkg_name.endswith(DEBUG_PACKAGE_SUFFIX_DEB) or pkg_name.endswith(
+        DEBUG_PACKAGE_SUFFIX_RPM
+    ):
         return None
 
-    debug_pkg_name = f"{pkg_name}{DEBUG_PACKAGE_SUFFIX}"
+    debug_pkg_name = f"{pkg_name}{suffix}"
 
     explicit = get_package_info(debug_pkg_name, raise_if_missing=False)
     if explicit is not None:
@@ -335,7 +344,7 @@ def register_debug_package(pkg_name):
         return None
 
     _SYNTHESIZED_PACKAGES[debug_pkg_name] = synthesize_debug_package_info(
-        base_pkg_info
+        base_pkg_info, suffix
     )
     return debug_pkg_name
 

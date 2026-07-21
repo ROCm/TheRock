@@ -444,7 +444,7 @@ def build_debug_package(pkg_name, config: PackageConfig) -> list:
     "amdrocm-amdsmi-dbg7.15_..."). A non-versioned debug package is
     intentionally not built.
     """
-    debug_pkg_name = register_debug_package(pkg_name)
+    debug_pkg_name = register_debug_package(pkg_name, config.pkg_type)
     if debug_pkg_name is None:
         return []
 
