@@ -102,6 +102,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
+    ldconfig_paths = []
+    ldconfig_filename = ""
     # amdrocm-debugger: Exclude libpython requirements
     # Multiple Python-version-specific binaries are included; the wrapper script
     # automatically selects the binary matching the system's Python version
@@ -139,6 +141,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)
+
+        ldconfig_paths = pkg_info.get("LdconfigPaths", [])
+        if ldconfig_paths:
+            major_minor = ".".join(config.rocm_version.split(".")[:2])
+            ldconfig_filename = f"10-{pkg_info['Package']}{major_minor}.conf"
 
         if config.enable_rpath:
             for path in sourcedir_list:
@@ -183,6 +190,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
+        "ldconfig_paths": ldconfig_paths,
+        "ldconfig_filename": ldconfig_filename,
         "exclude_libpython_requires": exclude_libpython_requires,
     }
 

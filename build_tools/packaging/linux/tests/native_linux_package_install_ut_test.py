@@ -8,6 +8,7 @@
 import contextlib
 import importlib.util
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -1025,7 +1026,12 @@ class RunBasicVerificationTest(unittest.TestCase):
         # Test that run_basic_verification handles CalledProcessError when querying packages (continues, then passes if enough components).
         import subprocess
 
-        mock_run.side_effect = subprocess.CalledProcessError(1, "dpkg")
+        mock_run.side_effect = [
+            subprocess.CalledProcessError(1, "dpkg"),
+            MagicMock(returncode=0, stdout=""),
+            MagicMock(returncode=0, stdout=""),
+            MagicMock(returncode=0, stdout=""),
+        ]
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
             (Path(d) / "lib").mkdir()
@@ -1046,6 +1052,8 @@ class RunBasicVerificationTest(unittest.TestCase):
         mock_run.side_effect = [
             MagicMock(returncode=0, stdout="ii rocm 1.0\n"),
             subprocess.TimeoutExpired("rocminfo", 30),
+            MagicMock(returncode=0, stdout=""),
+            MagicMock(returncode=0, stdout=""),
         ]
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
@@ -1058,6 +1066,43 @@ class RunBasicVerificationTest(unittest.TestCase):
                 install_prefix=d,
             )
             self.assertTrue(t.run_basic_verification())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_native_hip_consumer_clears_loader_environment(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with patch.dict(os.environ, {"LD_LIBRARY_PATH": "/custom/lib"}):
+                self.assertTrue(t.test_native_hip_consumer())
+
+        self.assertEqual(mock_run.call_count, 2)
+        self.assertNotIn("LD_LIBRARY_PATH", mock_run.call_args_list[1].kwargs["env"])
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_native_hip_consumer_returns_false_on_loader_failure(self, mock_run):
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=""),
+            subprocess.CalledProcessError(
+                127,
+                "native_hip_consumer",
+                output="libamdhip64.so.7: cannot open shared object file",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            self.assertFalse(t.test_native_hip_consumer())
 
 
 class SetupGpgKeyTest(unittest.TestCase):
