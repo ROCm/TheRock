@@ -10,11 +10,13 @@ from urllib.error import HTTPError
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from generate_manifest_diff_report import (
+    build_commit_range_summary,
     create_table,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
     generate_non_superrepo_html,
+    generate_step_summary,
     get_api_base_from_url,
     is_revert,
     ManifestDiff,
@@ -365,6 +367,71 @@ class HtmlReportStructureTest(unittest.TestCase):
         self.assertIn("component-row", html)
         self.assertIn("data-component=", html)
         self.assertIn("test-submodule", html)
+
+
+class BuildCommitRangeSummaryTest(unittest.TestCase):
+    """Tests for build_commit_range_summary()."""
+
+    def test_includes_short_shas_and_singular_changed_count(self):
+        diff = ManifestDiff(
+            start_commit="a" * 40,
+            end_commit="b" * 40,
+            submodules={
+                "changed-sub": Submodule(
+                    name="changed-sub",
+                    sha="c" * 40,
+                    api_base="https://api.github.com/repos/ROCm/changed-sub",
+                    branch="main",
+                    status="changed",
+                ),
+                "unchanged-sub": Submodule(
+                    name="unchanged-sub",
+                    sha="d" * 40,
+                    api_base="https://api.github.com/repos/ROCm/unchanged-sub",
+                    branch="main",
+                    status="unchanged",
+                ),
+            },
+        )
+
+        summary = build_commit_range_summary(diff)
+
+        self.assertIn(f"`{diff.start_commit[:8]}`", summary)
+        self.assertIn(f"`{diff.end_commit[:8]}`", summary)
+        self.assertIn("1 submodule changed", summary)
+
+    def test_zero_and_plural_changed_counts(self):
+        diff = ManifestDiff(start_commit="a" * 40, end_commit="b" * 40)
+        self.assertIn("0 submodules changed", build_commit_range_summary(diff))
+
+        for name in ("s1", "s2"):
+            diff.submodules[name] = Submodule(
+                name=name,
+                sha="e" * 40,
+                api_base="https://api.github.com/repos/ROCm/" + name,
+                branch="main",
+                status="changed",
+            )
+        self.assertIn("2 submodules changed", build_commit_range_summary(diff))
+
+
+class GenerateStepSummaryReusesCommitRangeSummaryTest(unittest.TestCase):
+    """generate_step_summary() should embed build_commit_range_summary()'s text
+    verbatim rather than re-deriving equivalent formatting, so both surfaces
+    (the job step summary and the bump-PR comment) agree exactly."""
+
+    def test_step_summary_includes_commit_range_summary_line(self):
+        diff = ManifestDiff(start_commit="a" * 40, end_commit="b" * 40)
+        expected_line = build_commit_range_summary(diff)
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_append_step_summary"
+        ) as append_summary:
+            generate_step_summary(diff)
+
+        append_summary.assert_called_once()
+        posted_summary = append_summary.call_args[0][0]
+        self.assertIn(expected_line, posted_summary)
 
 
 if __name__ == "__main__":
