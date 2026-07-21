@@ -143,9 +143,11 @@ _rocgdb_common = {
 # A component may instead pre-pin its runner by setting "test_runner" directly in
 # its test_matrix entry. The loop will detect this and leave the value untouched.
 # Use this when a component must run on a specific machine class regardless of the
-# GPU family being tested. For example, rocgdb-corefile requires runners that have
-# GPU core-dump support enabled, identified by the label
-# "linux-gfx90a-gpu-rocm-profiler", which is registered separately in the runner pool.
+# GPU family being tested. For example, rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile
+# are all pinned to "linux-gfx942-gpu-rocm-profiler" so they always land on the
+# same hardware class. Setting total_shards > 1 fans the same full suite out to
+# that many independent runner instances in parallel (useful for stress or flakiness
+# testing when the script itself does not support test-level sharding).
 #
 # Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
 # (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
@@ -334,16 +336,23 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # rocgdb-cpu and rocgdb-gpu are pinned to linux-gfx942-gpu-rocm-profiler and run
+    # with 10 shards so that the full test suite executes on 10 independent runner
+    # instances simultaneously. test_rocgdb.py does not consume SHARD_INDEX/TOTAL_SHARDS,
+    # so each runner sees the complete suite rather than a slice of it.
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
-        "linux_cpu_runner": True,
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "total_shards": 10,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "total_shards": 10,
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
@@ -358,7 +367,8 @@ test_matrix = {
             " gdb.rocm/load-core-remote-system.exp"
             " gdb.rocm/runtime-core.exp"
         ),
-        "test_runner": "linux-gfx90a-gpu-rocm-profiler",
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "total_shards": 10,
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
