@@ -46,6 +46,9 @@ override_dh_installdocs:
   # Empty block skip default documentation installation in /usr/share/doc
   :
 
+override_dh_makeshlibs:
+        dh_makeshlibs -X.co -X.hsaco
+
 override_dh_shlibdeps:
 	@echo "Skipping dh_shlibdeps"
 
