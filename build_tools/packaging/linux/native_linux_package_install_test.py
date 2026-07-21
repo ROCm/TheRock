@@ -982,14 +982,14 @@ gpgcheck=0
     def test_native_hip_consumer(self) -> bool:
         """Compile and run a HIP consumer without loader environment overrides."""
         install_path = Path(self.install_prefix).resolve()
-        hipcc_path = install_path / "bin" / "hipcc"
-        if not hipcc_path.exists():
-            print(f"\n[FAIL] hipcc not found at: {hipcc_path}")
+        clang_path = install_path / "lib" / "llvm" / "bin" / "clang"
+        if not clang_path.exists():
+            print(f"\n[FAIL] clang not found at: {clang_path}")
             return False
 
-        source_text = """extern "C" int hipRuntimeGetVersion(int *);
+        source_text = """extern int hipRuntimeGetVersion(int *);
 
-int main() {
+int native_hip_consumer(void) {
     int runtime_version = 0;
     return hipRuntimeGetVersion(&runtime_version);
 }
@@ -997,13 +997,17 @@ int main() {
         print("\nCompiling and running a native HIP consumer...")
         try:
             with tempfile.TemporaryDirectory(prefix="rocm-native-hip-") as temp_dir:
-                source_path = Path(temp_dir) / "native_hip_consumer.cpp"
-                binary_path = Path(temp_dir) / "native_hip_consumer"
+                source_path = Path(temp_dir) / "native_hip_consumer.c"
+                binary_path = Path(temp_dir) / "native_hip_consumer.so"
                 source_path.write_text(source_text, encoding="utf-8")
                 subprocess.run(
                     [
-                        str(hipcc_path),
-                        "-nogpulib",
+                        str(clang_path),
+                        "-x",
+                        "c",
+                        "-nostdlib",
+                        "-shared",
+                        "-fPIC",
                         str(source_path),
                         f"-L{install_path / 'lib'}",
                         "-Wl,--no-as-needed",
@@ -1044,7 +1048,16 @@ int main() {
                 clean_env = os.environ.copy()
                 clean_env.pop("LD_LIBRARY_PATH", None)
                 subprocess.run(
-                    [str(binary_path)],
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "import ctypes, sys; "
+                            "raise SystemExit(ctypes.CDLL(sys.argv[1])"
+                            ".native_hip_consumer())"
+                        ),
+                        str(binary_path),
+                    ],
                     check=True,
                     env=clean_env,
                     stdout=subprocess.PIPE,

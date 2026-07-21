@@ -1047,8 +1047,10 @@ class RunBasicVerificationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
             (Path(d) / "lib").mkdir()
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
             (Path(d) / "bin" / "rocminfo").write_text("")
             (Path(d) / "bin" / "hipcc").write_text("")
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1095,8 +1097,8 @@ class RunBasicVerificationTest(unittest.TestCase):
         mock_dynamic.iter_tags.return_value = [needed_tag]
         mock_elf_file.return_value.get_section_by_name.return_value = mock_dynamic
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "bin" / "hipcc").write_text("")
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1108,9 +1110,17 @@ class RunBasicVerificationTest(unittest.TestCase):
 
         self.assertEqual(mock_run.call_count, 2)
         compile_cmd = mock_run.call_args_list[0].args[0]
-        self.assertIn("-nogpulib", compile_cmd)
+        self.assertIn(str(Path(d) / "lib" / "llvm" / "bin" / "clang"), compile_cmd)
+        self.assertIn("-x", compile_cmd)
+        self.assertIn("c", compile_cmd)
+        self.assertIn("-nostdlib", compile_cmd)
+        self.assertIn("-shared", compile_cmd)
+        self.assertIn("-fPIC", compile_cmd)
         self.assertIn("-Wl,--no-as-needed", compile_cmd)
         self.assertIn("-lamdhip64", compile_cmd)
+        run_cmd = mock_run.call_args_list[1].args[0]
+        self.assertEqual(run_cmd[0], sys.executable)
+        self.assertIn("ctypes.CDLL", run_cmd[2])
         self.assertNotIn("LD_LIBRARY_PATH", mock_run.call_args_list[1].kwargs["env"])
 
     @patch("native_linux_package_install_test.subprocess.run")
@@ -1128,8 +1138,8 @@ class RunBasicVerificationTest(unittest.TestCase):
         mock_dynamic.iter_tags.return_value = [needed_tag, runpath_tag]
         mock_elf_file.return_value.get_section_by_name.return_value = mock_dynamic
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "bin" / "hipcc").write_text("")
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1160,8 +1170,8 @@ class RunBasicVerificationTest(unittest.TestCase):
         mock_dynamic.iter_tags.return_value = [needed_tag]
         mock_elf_file.return_value.get_section_by_name.return_value = mock_dynamic
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "bin" / "hipcc").write_text("")
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
