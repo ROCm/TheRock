@@ -479,17 +479,16 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-                    # fetch-gfx-targets should be ["gfx1030"] when re-enabled
-                    "run_tests": False,
+                    # Re-enabled after #2740 closed (amdsmi FanReadWrite runner issue).
+                    "run_tests": True,
                     "runs_on": {
                         "test": "linux-gfx1030-gpu-rocm",
                     },
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1030"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
-                    "push_on_success": False,
+                    "push_on_success": True,
                     "bypass_tests_for_releases": False,
                 },
             },

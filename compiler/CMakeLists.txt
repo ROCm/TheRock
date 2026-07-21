@@ -33,6 +33,25 @@ if(THEROCK_ENABLE_COMPILER)
      message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
   endif()
 
+  # LLVM compiling is also memory intensive. Allow users to adjust the number
+  # of parallel compile jobs, or auto-compute from available RAM.
+  # LLVM_RAM_PER_COMPILE_JOB takes precedence over LLVM_PARALLEL_COMPILE_JOBS
+  # (LLVM's HandleLLVMOptions.cmake will compute the job count from available RAM).
+  if(LLVM_RAM_PER_COMPILE_JOB)
+    if(LLVM_PARALLEL_COMPILE_JOBS)
+      message(WARNING "Both LLVM_RAM_PER_COMPILE_JOB and LLVM_PARALLEL_COMPILE_JOBS are set. "
+                      "LLVM_RAM_PER_COMPILE_JOB takes precedence.")
+    endif()
+    message(STATUS "LLVM will auto-compute compile jobs from RAM (${LLVM_RAM_PER_COMPILE_JOB} MB per job)")
+    list(APPEND _extra_llvm_cmake_args "-DLLVM_RAM_PER_COMPILE_JOB=${LLVM_RAM_PER_COMPILE_JOB}")
+  elseif(LLVM_PARALLEL_COMPILE_JOBS)
+    message(STATUS "LLVM parallel compile jobs set to ${LLVM_PARALLEL_COMPILE_JOBS}")
+    list(APPEND _extra_llvm_cmake_args "-DLLVM_PARALLEL_COMPILE_JOBS=${LLVM_PARALLEL_COMPILE_JOBS}")
+  else()
+     message(WARNING "LLVM parallel compile jobs are unlimited. Memory usage may be much higher. "
+                     "Set -DLLVM_PARALLEL_COMPILE_JOBS=N or -DLLVM_RAM_PER_COMPILE_JOB=4000 to reduce memory use.")
+  endif()
+
   # LLVM linking is also very memory intensive. Allow users to adjust the number
   # of parallel link jobs.
   if(LLVM_PARALLEL_LINK_JOBS)
