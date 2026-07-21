@@ -29,7 +29,7 @@ import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import (
     Callable,
@@ -117,23 +117,37 @@ def retry(
     return decorator  # type: ignore[return-value]
 
 
-@retry(max_attempts=3, delay_seconds=2, exceptions=(subprocess.TimeoutExpired,))
-def get_modified_paths_api(github_repo: str, base_sha: str, head_sha: str) -> Set[str]:
-    """Get paths of files changed using GitHub API (compare endpoint)."""
+@retry(
+    max_attempts=3,
+    delay_seconds=2,
+    exceptions=(subprocess.TimeoutExpired, subprocess.CalledProcessError),
+)
+def get_modified_paths_api(
+    github_repo: str, base_sha: str, head_sha: str
+) -> Optional[Set[str]]:
+    """Get paths of files changed using GitHub API (compare endpoint).
+
+    Returns None if the result is truncated (>300 files) to signal caller
+    should fall back to run_all_tests.
+    """
     result = subprocess.run(
         [
             "gh",
             "api",
             f"repos/{github_repo}/compare/{base_sha}...{head_sha}",
-            "--jq",
-            ".files[].filename",
         ],
         capture_output=True,
         text=True,
         check=True,
         timeout=60,
     )
-    return set(result.stdout.splitlines())
+    data = json.loads(result.stdout)
+    files = data.get("files", [])
+    # GitHub compare API returns max 300 files; if truncated, fall back to run-all
+    if len(files) >= 300:
+        logger.warning("Compare API returned 300+ files, result may be truncated")
+        return None
+    return {f["filename"] for f in files}
 
 
 def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
@@ -160,7 +174,13 @@ def load_repo_config(config_path: str) -> List[RepoEntry]:
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return [RepoEntry(**entry) for entry in data.get("repositories", [])]
+        # Filter to known fields to handle future additions gracefully
+        known_fields = {f.name for f in fields(RepoEntry)}
+        entries = []
+        for entry in data.get("repositories", []):
+            filtered = {k: v for k, v in entry.items() if k in known_fields}
+            entries.append(RepoEntry(**filtered))
+        return entries
     except FileNotFoundError:
         logger.warning(f"Config not found: {config_path}")
         return []
@@ -219,12 +239,20 @@ def configure(
     if event_name == "pull_request" and base_sha and head_sha:
         logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
         modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
-    elif event_name == "push" and head_sha:
-        # For push, compare HEAD^ to HEAD using the API
-        logger.info(f"Getting push diff via API: {head_sha}^...{head_sha}")
-        modified_paths = get_modified_paths_api(github_repo, f"{head_sha}^", head_sha)
+    elif event_name == "push" and base_sha and head_sha:
+        # For push, the caller passes github.event.before as base_sha;
+        # the compare API does not understand git "^" ancestry syntax.
+        logger.info(f"Getting push diff via API: {base_sha}...{head_sha}")
+        modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
     else:
         logger.warning("No SHAs provided - running all tests")
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, skip_tests=False
+        )
+
+    # If API returned None (truncated results), fall back to run-all
+    if modified_paths is None:
+        logger.info("Truncated API response - running all tests")
         return ConfigureResult(
             changed_projects="", run_all_tests=True, skip_tests=False
         )
