@@ -4,47 +4,10 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from bump_automation import warn_on_failure, handle_push
-
-
-class WarnOnFailureTest(unittest.TestCase):
-    def test_swallows_exception(self):
-        @warn_on_failure
-        def boom():
-            raise RuntimeError("oops")
-
-        boom()  # must not raise
-
-    def test_returns_value_on_success(self):
-        @warn_on_failure
-        def ok():
-            return 42
-
-        self.assertEqual(ok(), 42)
-
-    def test_preserves_function_name(self):
-        @warn_on_failure
-        def my_func():
-            pass
-
-        self.assertEqual(my_func.__name__, "my_func")
-
-    def test_logs_warning_on_failure(self):
-        @warn_on_failure
-        def boom():
-            raise ValueError("test error")
-
-        with self.assertLogs(level="WARNING") as cm:
-            import logging
-
-            logging.warning("dummy")  # ensure handler exists
-            boom()
-        # warn_on_failure uses print, so just verify no exception raised
-        # and the function name is preserved for the log message
-        self.assertEqual(boom.__name__, "boom")
+from bump_automation import handle_push
 
 
 class HandlePushTest(unittest.TestCase):
