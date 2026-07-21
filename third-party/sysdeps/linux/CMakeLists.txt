@@ -159,3 +159,33 @@ if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
       therock-util-linux
   )
 endif()
+
+# Optional sysdep: userspace-rcu (liburcu; dependency of lttng-ust).
+# Enabled implicitly whenever lttng-ust is enabled (see below).
+if(THEROCK_ENABLE_SYSDEPS_USERSPACE_RCU OR THEROCK_ENABLE_SYSDEPS_LTTNG_UST)
+  add_subdirectory(userspace-rcu)
+  therock_provide_artifact(sysdeps-userspace-rcu
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-userspace-rcu.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-userspace-rcu
+  )
+endif()
+
+# Optional sysdep: lttng-ust (LTTng userspace tracer; depends on userspace-rcu).
+# Provides liblttng-ust for the HIP/HSA curated tracepoint providers.
+if(THEROCK_ENABLE_SYSDEPS_LTTNG_UST)
+  add_subdirectory(lttng-ust)
+  therock_provide_artifact(sysdeps-lttng-ust
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-lttng-ust.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-lttng-ust
+  )
+endif()
