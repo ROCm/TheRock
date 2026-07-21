@@ -408,6 +408,34 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # rocRAND tests under the rocjitsu CPU simulator (no GPU required).
+    # Runs for every family that has a rocjitsu config mapping in
+    # simulator_runner.py (FAMILY_TO_ROCJITSU_CONFIG): CDNA3/4 and RDNA3/4 plus
+    # gfx1250. Keep this family list in sync with that mapping.
+    "rocrand-simulator": {
+        "job_name": "rocrand-simulator",
+        "fetch_artifact_args": "--rand --rocjitsu --tests",
+        # The extended preset runs the 13 kernel binaries plus the
+        # _quick_suite/_standard_suite/_ffm-quick_suite variants under PDES,
+        # measured at ~120-160 min; 180 gives margin. 60 min was hit in run
+        # 28490994039.
+        "timeout_minutes": 180,
+        "test_script": f"python {_get_script_path('simulator_runner.py')} --component rocrand --filter-preset extended",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "include_family": {
+            "linux": [
+                "gfx94X-dcgpu",
+                "gfx950-dcgpu",
+                "gfx110X-all",
+                "gfx120X-all",
+                "gfx125X-dcgpu",
+            ],
+        },
+    },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
@@ -790,6 +818,17 @@ def run():
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
+            )
+            continue
+
+        # If the test is only enabled for specific families, skip if not in the list
+        if (
+            "include_family" in selected_matrix[key]
+            and platform in selected_matrix[key]["include_family"]
+            and amdgpu_families not in selected_matrix[key]["include_family"][platform]
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform}: family {amdgpu_families} not in include_family list"
             )
             continue
 
