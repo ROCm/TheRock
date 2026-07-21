@@ -24,9 +24,6 @@ jobs:
     uses: ./.github/workflows/gitleaks.yml
     with:
       report_formats: csv
-
-  # Audit workflow/action/dependabot files introduced by this PR
-  # (`scan_mode: changed`, the reusable workflow's default).
   zizmor:
     uses: ./.github/workflows/zizmor.yml
     with:
