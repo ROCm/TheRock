@@ -393,6 +393,8 @@ def _run_kpack_split(
             "nlohmann-json",
             # rocshmem only provides a static library.
             "rocshmem",
+            # hipthreads only provides a static library.
+            "hipthreads",
             # rocjitsu emulation suite.
             "rocjitsu",
             "mirage",
