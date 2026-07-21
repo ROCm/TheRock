@@ -24,6 +24,7 @@ import argparse
 import functools
 import json
 from pathlib import Path
+import platform
 import sys
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
@@ -501,6 +502,14 @@ def _run_legacy(
 
 
 def core_artifact_filter(an: ArtifactName) -> bool:
+    # On Windows, OCL artifacts should only be in test packages, not release/production.
+    # Exclude core-ocl and core-ocl-icd from Windows core packages.
+    is_windows = platform.system() == "Windows"
+    ocl_artifacts = {"core-ocl", "core-ocl-icd"}
+
+    if is_windows and an.name in ocl_artifacts:
+        return False
+
     core = an.name in [
         "amd-dbgapi",
         "amd-llvm",
@@ -536,8 +545,12 @@ def core_artifact_filter(an: ArtifactName) -> bool:
     # hiprtc needs to be able to find HIP headers in its same tree.
     hip_dev = an.name in [
         "core-hip",
-        "core-ocl",
     ] and an.component in ["dev"]
+
+    # On Windows, exclude core-ocl dev component as well
+    if not is_windows:
+        hip_dev = hip_dev or (an.name == "core-ocl" and an.component in ["dev"])
+
     return core or hip_dev
 
 
