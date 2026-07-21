@@ -170,7 +170,11 @@ type = "per-arch"
 
 [build_stages.comm-libs]
 description = "Communication libraries (generic, single job parallel to math-libs)"
-artifact_groups = ["comm-libs"]
+# comm-libs-shmem (rocSHMEM) is listed first so it builds before rccl within the
+# job. rocSHMEM is a foundational comm-lib that rocprofiler-sdk optionally traces;
+# in local single-configure builds it is declared before profiler (see the
+# top-level CMakeLists.txt).
+artifact_groups = ["comm-libs-shmem", "comm-libs"]
 type = "generic"
 
 [build_stages.storage-libs]
@@ -283,6 +287,15 @@ description = "Machine learning libraries"
 type = "per-arch"
 artifact_group_deps = ["math-libs", "profiler-core"]
 source_sets = ["rocm-libraries", "ml-frameworks"]
+
+[artifact_groups.comm-libs-shmem]
+description = "rocSHMEM (declared before profiler-core so rocprofiler-sdk can optionally trace its API)"
+type = "generic"
+# base is included so rocprofiler-register (bundled in base) is available:
+# rocSHMEM registers its API tables with it (USE_ROCPROFILER_REGISTER).
+artifact_group_deps = ["hip-runtime", "base"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["comm-libs", "rocm-systems"]
 
 [artifact_groups.comm-libs]
 description = "Communication libraries"
@@ -714,9 +727,14 @@ disable_platforms = ["windows"]
 # target-neutral: rocshmem embeds device code via .hip_fatbin ELF sections
 # rather than the __CudaFatBinaryWrapper format (.hipFatBinSegment), so kpack
 # injection is not supported. Built for all targets to make upload races harmless.
-artifact_group = "comm-libs"
+artifact_group = "comm-libs-shmem"
+# Pin feature_group so THEROCK_ENABLE_ROCSHMEM keeps its default enablement
+# (it would otherwise derive COMM_LIBS_SHMEM from the new artifact_group).
+feature_group = "COMM_LIBS"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
+# base bundles rocprofiler-register, which rocSHMEM now optionally links
+# (USE_ROCPROFILER_REGISTER) so rocprofiler-sdk can trace its host-stream APIs.
+artifact_deps = ["core-runtime", "core-hip", "sysdeps", "base"]
 disable_platforms = ["windows"]
 
 # --- Storage Libraries ---
