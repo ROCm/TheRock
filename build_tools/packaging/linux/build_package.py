@@ -36,21 +36,23 @@ from pathlib import Path
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
-BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
-
-# Add build_tools directory to Python path to import _therock_utils
-# This allows the script to be run from anywhere: TheRock root or packaging/linux directory
-if str(BUILD_TOOLS_DIR) not in sys.path:
-    sys.path.insert(0, str(BUILD_TOOLS_DIR))
 
 from packaging_summary import *
 from packaging_utils import *
 from runpath_to_rpath import *
 
 from _therock_utils.artifacts import ArtifactCatalog
+from _therock_utils.log_utils import (
+    configure_logging,
+    get_logger,
+    capture_console,
+    github_group,
+)
 
 from deb_package import *
 from rpm_package import *
+
+logger = get_logger(__name__)
 
 
 # Default install prefix
@@ -177,7 +179,7 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     # Host package (contains generic artifacts)
     # Skip for metapackages - they have no artifacts, only dependencies
     if not is_meta:
-        print(f"\n=== Building host variant for {pkg_name} ===")
+        logger.info(f"Building host variant for {pkg_name}")
         pkg = build_host_package(pkg_name, config)
         if pkg:
             built_packages.extend(pkg)
@@ -185,21 +187,21 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     # Device packages (one per architecture)
     # For metapackages, these become arch-specific meta packages
     for device_arch in config.gfxarch_list:
-        print(f"\n=== Building device variant for {pkg_name} ({device_arch}) ===")
+        logger.info(f"Building device variant for {pkg_name} ({device_arch})")
         pkg = build_device_package(pkg_name, config, device_arch)
         if pkg:
             built_packages.extend(pkg)
 
     # Meta package (depends on host + all devices for regular packages,
     # or depends on all arch-specific metas for metapackages)
-    print(f"\n=== Building meta variant for {pkg_name} ===")
+    logger.info(f"Building meta variant for {pkg_name}")
     pkg = build_meta_package(pkg_name, config)
     if pkg:
         built_packages.extend(pkg)
 
     # Non-versioned package (user-facing, depends on meta)
     if not config.enable_rpath:
-        print(f"\n=== Building non-versioned variant for {pkg_name} ===")
+        logger.info(f"Building non-versioned variant for {pkg_name}")
         # For gfxarch packages in kpack mode, non-versioned has no arch suffix (e.g., amdrocm-fft)
         # It depends on the meta package which pulls in host + all devices
         meta_config = replace(config, gfx_arch=GFX_META)
@@ -228,14 +230,14 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     built_packages = []
 
     # Versioned package
-    print(f"\n=== Building versioned variant for {pkg_name} ===")
+    logger.info(f"Building versioned variant for {pkg_name}")
     pkg = build_versioned_package(pkg_name, config)
     if pkg:
         built_packages.extend(pkg)
 
     # Non-versioned package
     if not config.enable_rpath:
-        print(f"\n=== Building non-versioned variant for {pkg_name} ===")
+        logger.info(f"Building non-versioned variant for {pkg_name}")
         # For non-gfxarch packages, non-versioned has no arch suffix (e.g., amdrocm-core)
         simple_config = replace(config, gfx_arch="")
         pkg = build_nonversioned_package(pkg_name, simple_config)
@@ -266,7 +268,7 @@ def build_singlearch_package_variants(pkg_name, config: PackageConfig) -> list:
     built_packages = []
 
     # Versioned package
-    print(f"\n=== Building versioned package for {pkg_name} (single-arch mode) ===")
+    logger.info(f"Building versioned package for {pkg_name} (single-arch mode)")
     try:
         versioned_config = replace(config, versioned_pkg=True)
         if versioned_config.pkg_type == "rpm":
@@ -276,13 +278,11 @@ def build_singlearch_package_variants(pkg_name, config: PackageConfig) -> list:
         if pkg:
             built_packages.extend(pkg)
     except Exception as e:
-        print(f"ERROR: Failed to build versioned package for {pkg_name}: {e}")
+        logger.error(f"Failed to build versioned package for {pkg_name}: {e}")
 
     # Non-versioned package
     if not config.enable_rpath:
-        print(
-            f"\n=== Building non-versioned package for {pkg_name} (single-arch mode) ==="
-        )
+        logger.info(f"Building non-versioned package for {pkg_name} (single-arch mode)")
         try:
             # In single-arch mode, non-versioned packages keep the arch suffix
             # to indicate they're specific to that architecture (e.g., amdrocm-fft-gfx1100)
@@ -294,7 +294,7 @@ def build_singlearch_package_variants(pkg_name, config: PackageConfig) -> list:
             if pkg:
                 built_packages.extend(pkg)
         except Exception as e:
-            print(f"ERROR: Failed to build non-versioned package for {pkg_name}: {e}")
+            logger.error(f"Failed to build non-versioned package for {pkg_name}: {e}")
 
     cleanup_build_directory(config)
     return built_packages
@@ -320,7 +320,7 @@ def build_host_package(pkg_name, config: PackageConfig) -> list:
         else:
             return create_versioned_deb_package(pkg_name, host_config)
     except Exception as e:
-        print(f"ERROR: Failed to build host package for {pkg_name}: {e}")
+        logger.error(f"Failed to build host package for {pkg_name}: {e}")
         return []
 
 
@@ -345,8 +345,8 @@ def build_device_package(pkg_name, config: PackageConfig, device_arch: str) -> l
         else:
             return create_versioned_deb_package(pkg_name, device_config)
     except Exception as e:
-        print(
-            f"ERROR: Failed to build device package for {pkg_name} ({device_arch}): {e}"
+        logger.error(
+            f"Failed to build device package for {pkg_name} ({device_arch}): {e}"
         )
         return []
 
@@ -371,7 +371,7 @@ def build_meta_package(pkg_name, config: PackageConfig) -> list:
         else:
             return create_versioned_deb_package(pkg_name, meta_config)
     except Exception as e:
-        print(f"ERROR: Failed to build meta package for {pkg_name}: {e}")
+        logger.error(f"Failed to build meta package for {pkg_name}: {e}")
         return []
 
 
@@ -395,7 +395,7 @@ def build_versioned_package(pkg_name, config: PackageConfig) -> list:
         else:
             return create_versioned_deb_package(pkg_name, versioned_config)
     except Exception as e:
-        print(f"ERROR: Failed to build versioned package for {pkg_name}: {e}")
+        logger.error(f"Failed to build versioned package for {pkg_name}: {e}")
         return []
 
 
@@ -425,7 +425,7 @@ def build_nonversioned_package(pkg_name, config: PackageConfig) -> list:
         else:
             return create_nonversioned_deb_package(pkg_name, nonversioned_config)
     except Exception as e:
-        print(f"ERROR: Failed to build non-versioned package for {pkg_name}: {e}")
+        logger.error(f"Failed to build non-versioned package for {pkg_name}: {e}")
         return []
 
 
@@ -441,7 +441,7 @@ def cleanup_build_directory(config: PackageConfig):
     build_dir = Path(config.dest_dir) / config.pkg_type
     if build_dir.exists():
         remove_dir(build_dir)
-        print(f"Cleaned up build directory: {build_dir}")
+        logger.debug(f"Cleaned up build directory: {build_dir}")
 
 
 def cleanup_packaging_environment(config: PackageConfig):
@@ -456,7 +456,7 @@ def cleanup_packaging_environment(config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("cleanup_packaging_environment")
     PYCACHE_DIR = Path(SCRIPT_DIR) / "__pycache__"
     remove_dir(PYCACHE_DIR)
 
@@ -478,7 +478,7 @@ def parse_input_package_list(pkg_name, artifact_dir):
 
     Returns: Package list
     """
-    print_function_name()
+    logger.debug("parse_input_package_list")
     pkg_list = []
     skipped_list = []
     # If pkg_name is None, include all packages
@@ -502,7 +502,7 @@ def parse_input_package_list(pkg_name, artifact_dir):
                 pkg_list.append(name)
                 break
 
-    print(f"pkg_list:\n  {pkg_list}")
+    logger.debug(f"pkg_list: {pkg_list}")
     return pkg_list, skipped_list
 
 
@@ -531,12 +531,12 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         # Auto-detect from artifact directory
         normalized_targets = get_all_target_families(args.artifacts_dir)
         if not normalized_targets:
-            print(
+            logger.warning(
                 f"No GFX architectures found in artifact directory: {args.artifacts_dir}. "
                 "Either provide --target explicitly or ensure artifacts are present."
             )
         else:
-            print(f"Auto-detected GFX architectures: {normalized_targets}")
+            logger.info(f"Auto-detected GFX architectures: {normalized_targets}\n")
 
     # Output packaging architecture list to GitHub Actions
     github_output = os.environ.get("GITHUB_OUTPUT")
@@ -550,7 +550,7 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     if not args.enable_kpack:
         args.enable_kpack = load_kpack_from_manifest(artifacts_dir)
         if args.enable_kpack:
-            print(
+            logger.info(
                 "Detected KPACK_SPLIT_ARTIFACTS in manifest — producing host + device packages"
             )
 
@@ -617,7 +617,7 @@ def run(args: argparse.Namespace):
     )
 
     if not pkg_list:
-        print("Error: No packages found to build. Package list is empty.")
+        logger.error("No packages found to build. Package list is empty.")
         sys.exit(1)
 
     current_pkg_idx = 0
@@ -626,26 +626,31 @@ def run(args: argparse.Namespace):
         failed_pkglist = []
 
         for current_pkg_idx, pkg_name in enumerate(pkg_list):
-            print(f"Creating {config.pkg_type} package: {pkg_name}")
+            logger.info(f"Creating {config.pkg_type} package: {pkg_name}")
 
             # Build all package variants for this package
-            output_list = build_package_variants(pkg_name, config)
+            # Capture per-package logs
+            logs_dir = Path(config.dest_dir) / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            pkg_log_file = logs_dir / f"{config.pkg_type}-{pkg_name}.log"
+            with capture_console(pkg_log_file):
+                output_list = build_package_variants(pkg_name, config)
 
             if output_list:
                 built_pkglist.extend(output_list)
-                print(
-                    f"\n✓ Successfully built {len(output_list)} variant(s) for {pkg_name}"
+                logger.info(
+                    f"Successfully built {len(output_list)} variant(s) for {pkg_name}"
                 )
             else:
                 # Package failed to build
                 failed_pkglist.append(pkg_name)
-                print(f"\n✗ Failed to build any variants for {pkg_name}")
+                logger.error(f"Failed to build any variants for {pkg_name}")
 
         # Clean the build directories
         cleanup_packaging_environment(config)
 
         if built_pkglist:
-            print(f"\nBuilt packages: {built_pkglist}")
+            logger.info(f"Built packages: {built_pkglist}")
 
         pkglist_status = PackageList(
             total=pkg_list,
@@ -661,9 +666,9 @@ def run(args: argparse.Namespace):
         tb = traceback.extract_tb(sys.exc_info()[2])
         if tb:
             filename, line_no, func, text = tb[-1]
-            print(f"\n❌ Build aborted due to an error at {filename}:{line_no}: {e}\n")
+            logger.error(f"Build aborted due to an error at {filename}:{line_no}: {e}")
         else:
-            print(f"\n❌ Build aborted due to an error: {e}\n")
+            logger.error(f"Build aborted due to an error: {e}")
         # Record failed package and all pending packages
         failed_pkglist.append(pkg_list[current_pkg_idx])
         pending_pkgs = pkg_list[current_pkg_idx + 1 :]
@@ -682,6 +687,12 @@ def run(args: argparse.Namespace):
 def main(argv: list[str]):
 
     p = argparse.ArgumentParser()
+    p.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output (DEBUG level logging)",
+    )
     p.add_argument(
         "--artifacts-dir",
         type=Path,
@@ -755,6 +766,10 @@ def main(argv: list[str]):
     )
 
     args = p.parse_args(argv)
+
+    # Configure logging based on verbose flag
+    configure_logging(verbose=args.verbose)
+
     run(args)
 
 

@@ -14,6 +14,9 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 
 from packaging_utils import *
+from _therock_utils.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -32,7 +35,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     Returns:
     output_list: List of packages created
     """
-    print_function_name()
+    logger.debug("create_nonversioned_rpm_package")
     # Create immutable config copy with versioned_pkg=False
     build_config = replace(config, versioned_pkg=False)
 
@@ -63,7 +66,7 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     Returns:
     output_list: List of packages created
     """
-    print_function_name()
+    logger.debug("create_versioned_rpm_package")
     # Explicitly ensure versioned_pkg=True
     build_config = replace(config, versioned_pkg=True)
 
@@ -90,7 +93,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("generate_spec_file")
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
@@ -129,8 +132,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         # Warn if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
             if config.enable_kpack:
-                print(
-                    f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
+                logger.warning(
+                    f"{pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
                 )
             else:
                 sys.exit(
@@ -251,7 +254,7 @@ def package_with_rpmbuild(spec_file):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("package_with_rpmbuild")
     # Build the command
     cmd = [
         "rpmbuild",
@@ -264,7 +267,7 @@ def package_with_rpmbuild(spec_file):
     # Execute the command
     try:
         subprocess.run(cmd, check=True)
-        print(f"RPM Package built successfully: {spec_file.name}")
+        logger.info(f"RPM Package built successfully: {spec_file.name}\n")
     except subprocess.CalledProcessError as e:
-        print(f"Error building RPM package: {spec_file.name}: {e}")
+        logger.error(f"Error building RPM package: {spec_file.name}: {e}")
         sys.exit(e.returncode)
