@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-# Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
-"""Test the rocprofiler-sdk within TheRock, and optionally upload the
-results to CDash so they can be tracked alongside other CI runs.
+"""Test rocprofiler-sdk from TheRock's installed test artifact.
+
+This is distinct from rocprofiler-sdk's source-tree ``source/scripts/run-ci.py``.
+The direct path matches the current TheRock runner; ``--enable-cdash`` uses the
+same commands through CTest's dashboard API so configure, build, and test
+results can be submitted without changing the artifact under test.
 """
 
 import argparse
@@ -10,37 +14,21 @@ import logging
 import os
 import platform
 import re
-import shutil
+import shlex
 import socket
 import string
 import subprocess
-import sys
 from pathlib import Path
+import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = SCRIPT_DIR.parent.parent.parent
-sys.path.append(str(_REPO_ROOT / "build_tools" / "github_actions"))
+THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
 
-_DEFAULT_ROCM_BIN = _REPO_ROOT / "build" / "dist" / "rocm" / "bin"
-
-
-def _resolve_therock_bin_dir() -> Path:
-    env = os.getenv("THEROCK_BIN_DIR")
-    if env:
-        return Path(env).resolve()
-    if _DEFAULT_ROCM_BIN.is_dir():
-        return _DEFAULT_ROCM_BIN.resolve()
-    raise SystemExit(
-        "THEROCK_BIN_DIR is not set and "
-        f"{_DEFAULT_ROCM_BIN} does not exist. "
-        "Set THEROCK_BIN_DIR to your TheRock install bin directory "
-        "(e.g. build/dist/rocm/bin)."
-    )
-
-
 # Base Paths
-THEROCK_BIN_PATH = _resolve_therock_bin_dir()
+THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
 
 # LIB Paths
@@ -56,12 +44,12 @@ THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
 # SDK Paths
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
-SOURCE_DIR = str(ROCPROFILER_SDK_TESTS_PATH)
-BINARY_DIR = str(ROCPROFILER_SDK_TESTS_PATH / "build")
+ROCPROFILER_SDK_TESTS_BUILD_PATH = ROCPROFILER_SDK_TESTS_PATH / "build"
 
-# Define default project name and CDash base URL
-_DEFAULT_PROJECT_NAME = "rocprofiler-sdk-alt"
-_DEFAULT_BASE_URL = "my.cdash.org"
+_DEFAULT_CDASH_PROJECT = "rocprofiler-sdk-alt"
+_DEFAULT_CDASH_BASE_URL = "my.cdash.org"
+_DEFAULT_CDASH_GROUP = "TheRock"
+_DEFAULT_CDASH_MODEL = "Continuous"
 
 # Tests skipped under ASan (known failing/unstable in the ASan configuration).
 ASAN_EXCLUDED_TESTS = [
@@ -115,13 +103,12 @@ def get_asan_runtime_library():
 
 
 def setup_env():
-    environ_vars["ROCM_PATH"] = os.path.realpath(str(THEROCK_PATH))
-    environ_vars["HIP_PATH"] = os.path.realpath(str(THEROCK_PATH))
+    environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
+    environ_vars["HIP_PATH"] = str(THEROCK_PATH)
     environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
     environ_vars["HIP_PLATFORM"] = "amd"
-    environ_vars["THEROCK_BIN_DIR"] = str(THEROCK_BIN_PATH)
 
-    ld_lib_paths = [str(THEROCK_LIB_PATH), str(THEROCK_SYSDEPS_LIB_PATH)]
+    ld_lib_paths = [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"]
 
     if is_asan():
         # Installed test binaries are built with -shared-libsan, so the clang
@@ -143,339 +130,336 @@ def setup_env():
         environ_vars.pop("GPU_DEVICE_ORDINAL", None)
 
 
-class _CMakeTemplate(string.Template):
-    """Generated CMake snippets: only ``@python_key`` is expanded by ``.substitute()``.
+def get_cmake_config_cmd() -> list[str]:
+    """Return the installed-test project configure command."""
+    cmake_config_cmd = [
+        "cmake",
+        "-S",
+        str(ROCPROFILER_SDK_TESTS_PATH),
+        "-B",
+        str(ROCPROFILER_SDK_TESTS_BUILD_PATH),
+        "-G",
+        "Ninja",
+        f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_SYSDEPS_PATH}",
+        f"-DCMAKE_HIP_COMPILER={THEROCK_CLANG_PLUS_PATH}",
+        f"-DCMAKE_C_COMPILER={THEROCK_CLANG_PATH}",
+        f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH}",
+        f"-DPython3_EXECUTABLE={sys.executable}",
+    ]
+    if is_asan():
+        # Preload ASan for standalone tests loading instrumented ROCm libraries.
+        asan_runtime_library = get_asan_runtime_library()
+        cmake_config_cmd += [
+            "-DROCPROFILER_MEMCHECK=AddressSanitizer",
+            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={asan_runtime_library}",
+            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV_VALUE={asan_runtime_library}",
+        ]
+    return cmake_config_cmd
 
-    CMake ``${VAR}`` / ``${{VAR}}`` text stays literal (avoids Python f-string
-    interpolation turning those into empty strings).
-    """
+
+def get_cmake_build_cmd() -> list[str]:
+    """Return the installed-test project build command."""
+    return [
+        "cmake",
+        "--build",
+        str(ROCPROFILER_SDK_TESTS_BUILD_PATH),
+        "--parallel",
+        "8",
+    ]
+
+
+def get_ctest_cmd() -> list[str]:
+    """Return the installed-test project CTest command."""
+    ctest_cmd = [
+        "ctest",
+        "--test-dir",
+        str(ROCPROFILER_SDK_TESTS_BUILD_PATH),
+        "--parallel",
+        "8",
+        "--output-on-failure",
+    ]
+    if is_asan():
+        # Exclude tests known to fail/hang in the ASan configuration.
+        exclude_regex = "|".join(ASAN_EXCLUDED_TESTS)
+        ctest_cmd += ["--exclude-regex", exclude_regex]
+    return ctest_cmd
+
+
+def _run_command(command: list[str]) -> None:
+    logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(command)}")
+    subprocess.run(
+        command,
+        cwd=ROCPROFILER_SDK_TESTS_PATH,
+        check=True,
+        env=environ_vars,
+    )
+
+
+def cmake_config() -> None:
+    _run_command(get_cmake_config_cmd())
+
+
+# SDK test binaries must be built for the GPU architecture under test. Building
+# them against the install tree also validates the packaged developer surface.
+def cmake_build() -> None:
+    _run_command(get_cmake_build_cmd())
+
+
+def execute_tests() -> None:
+    _run_command(get_ctest_cmd())
+
+
+class _CMakeTemplate(string.Template):
+    """Template that leaves CMake's ``${...}`` expressions untouched."""
 
     delimiter = "@"
 
 
-def _os_release_id_version() -> str:
-    """Short OS tag for CDash labels, e.g. ``ubuntu-22.04``, ``rhel-8.8``."""
-    try:
-        with open("/etc/os-release", encoding="utf-8") as f:
-            data: dict[str, str] = {}
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                k, _, v = line.partition("=")
-                data[k] = v.strip().strip('"')
-        id_ = (data.get("ID") or "unknown").lower()
-        ver = (data.get("VERSION_ID") or data.get("VERSION_CODENAME") or "").lower()
-        if ver:
-            return f"{id_}-{ver}"
-        return id_
-    except OSError:
-        return platform.system().lower()
+def _cmake_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _default_cdash_matrix_label() -> str:
-    """Label format: ``ROCm/rocm-systems-<os>-<gpu>``
+def _command_for_cmake(command: list[str]) -> str:
+    return _cmake_escape(shlex.join(command))
 
-    * OS segment from ``/etc/os-release`` (or ``platform.system()``).
-    * Optional GPU segment from ``THEROCK_CDASH_GPU`` (default empty). When set, e.g.
-      ``ROCm/rocm-systems-rhel-8.8-mi325-core``; when empty, no trailing hyphen.
-    """
-    gpu = os.getenv("THEROCK_CDASH_GPU") or os.getenv("ARTIFACT_GROUP")
-    os_part = _os_release_id_version()
-    base = f"ROCm/TheRock/rocm-systems-{os_part}"
-    if not gpu:
-        return base
-    return f"{base}-{gpu}"
+
+def _sanitize_build_name_part(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-") or "unknown"
 
 
 def _cdash_build_name() -> str:
-    """CDash build name: ``<label>`` or ``<label> [RUN_ID: <id>]`` when set.
-    * Label from :func:`_default_cdash_matrix_label`.
-    * If ``ARTIFACT_RUN_ID`` is non-empty, append `` [RUN_ID: ...]``.
-    * If ``GITHUB_REF`` is a pull request, prefix the label with ``PR_<n>_``.
-    * Otherwise, for a non-empty ``GITHUB_REF_NAME`` (e.g. manual ``workflow_dispatch``),
-      use prefix ``Manual_`` and suffix ``[Branch: <sanitized>]`` (not used when
-      ``GITHUB_REF`` is a pull request — PR builds only get the ``PR_<n>_`` prefix).
+    """Return a stable, unique CDash build name for local and CI runs."""
+    override = os.getenv("THEROCK_CDASH_BUILD_NAME")
+    if override:
+        return override
 
-    Example::
+    parts = ["ROCm", "TheRock", "rocprofiler-sdk"]
+    pull_request = re.match(r"refs/pull/(\d+)/", os.getenv("GITHUB_REF", ""))
+    if pull_request:
+        parts.append(f"PR-{pull_request.group(1)}")
+    elif ref_name := os.getenv("GITHUB_REF_NAME"):
+        parts.append(_sanitize_build_name_part(ref_name))
+    else:
+        parts.append("CI" if os.getenv("CI") else "local")
 
-        PR_4946_ROCm/TheRock/rocm-systems-rhel-8.8-mi325-core [RUN_ID: 24378824659]
-
-    """
-    ref = os.getenv("GITHUB_REF", "")
-    m = re.match(r"refs/pull/(\d+)/", ref)
-    prefix = f"PR_{m.group(1)}_" if m else ""
-    safe = ""
-    if not prefix:
-        refname = os.getenv("GITHUB_REF_NAME", "").strip()
-        if refname:
-            safe = re.sub(r"[^\w.\-]+", "-", refname).strip("-")
-            safe = f" [Branch: {safe}]"
-            prefix = f"Manual_"
-        else:
-            prefix = "CI_" if os.getenv("CI") else "Local_"
-    label = _default_cdash_matrix_label()
-    run_key = (
-        os.getenv("GITHUB_RUN_ID")
-        or os.getenv("THEROCK_RUN_ID")
-        or os.getenv("ARTIFACT_RUN_ID")
-    )
-    if not run_key:
-        return f"{prefix}{label}{safe}"
-    return f"{prefix}{label} [RUN_ID: {run_key}]{safe}"
-
-
-def _which_cmake() -> str:
-    """Return path to cmake executable, or 'cmake' if not found in PATH."""
-    return shutil.which("cmake") or "cmake"
-
-
-def _which_ctest() -> str:
-    """Return path to ctest executable, or 'ctest' if not found in PATH."""
-    return shutil.which("ctest") or "ctest"
-
-
-def _generate_ctest_custom(cmake_cmd: str) -> str:
-    """Generate CTestCustom.cmake: settings and configure/build commands.
-
-    Uses four namespaces (script, configure, build, test). For
-    ``CTEST_CONFIGURE_COMMAND``, CMake runs the command with cwd set to the
-    *binary* directory; pass ``cmake -S <src> -B <build>`` with absolute paths.
-
-    Args:
-        cmake_cmd: Path or command name for the CMake executable.
-
-    Returns:
-        CMake script content for CTestCustom.cmake.
-    """
-
-    def _esc(s: str) -> str:
-        """Escape special characters in a string for use in a CMake script."""
-        return s.replace("\\", "\\\\").replace('"', '\\"')
-
-    # Must use explicit -S/-B: CTest runs this with cwd=binary dir (CMake 3.14+).
-    configure_cmd = (
-        f"{cmake_cmd} -S {SOURCE_DIR} -B {BINARY_DIR} --fresh -G Ninja "
-        f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_SYSDEPS_PATH} "
-        f"-DCMAKE_HIP_COMPILER={THEROCK_CLANG_PLUS_PATH} "
-        f"-DCMAKE_C_COMPILER={THEROCK_CLANG_PATH} "
-        f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH} "
-        f"-DPython3_EXECUTABLE={sys.executable}"
-    )
-    if is_asan():
-        # Preload ASan for standalone tests loading instrumented ROCm libraries.
-        asan_runtime_library = get_asan_runtime_library()
-        configure_cmd += (
-            " -DROCPROFILER_MEMCHECK=AddressSanitizer "
-            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV=LD_PRELOAD={asan_runtime_library} "
-            f"-DROCPROFILER_MEMCHECK_PRELOAD_ENV_VALUE={asan_runtime_library}"
+    parts.append(
+        _sanitize_build_name_part(
+            (os.getenv("RUNNER_OS") or platform.system()).lower()
         )
-    build_cmd = f"{cmake_cmd} --build {BINARY_DIR} --parallel 8"
+    )
+    for env_name in ("AMDGPU_FAMILIES", "BUILD_VARIANT"):
+        if value := os.getenv(env_name):
+            parts.append(_sanitize_build_name_part(value))
+
+    artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
+    test_run_id = os.getenv("GITHUB_RUN_ID")
+    if artifact_run_id:
+        parts.append(f"artifact-run-{_sanitize_build_name_part(artifact_run_id)}")
+    if test_run_id and test_run_id != artifact_run_id:
+        parts.append(f"test-run-{_sanitize_build_name_part(test_run_id)}")
+    return "/".join(parts)
+
+
+def _dashboard_notes() -> str:
+    """Describe both the tested artifact and the workflow performing the test."""
+    fields = {
+        "artifact_run_id": os.getenv("ARTIFACT_RUN_ID", "unknown"),
+        "test_run_id": os.getenv("GITHUB_RUN_ID", "unknown"),
+        "checkout_repository": os.getenv("GITHUB_REPOSITORY", "unknown"),
+        "checkout_sha": os.getenv("GITHUB_SHA", "unknown"),
+        "checkout_ref": os.getenv("GITHUB_REF", "unknown"),
+        "amdgpu_families": os.getenv("AMDGPU_FAMILIES", "unknown"),
+        "build_variant": os.getenv("BUILD_VARIANT", "unknown"),
+    }
+    return "\n".join(f"{key}: {value}" for key, value in fields.items()) + "\n"
+
+
+def _generate_dashboard(
+    *,
+    model: str,
+    group: str,
+    require_cdash_submission: bool,
+    notes_file: Path,
+) -> str:
+    """Generate a CTest dashboard for the installed rocprofiler-sdk tests."""
+    project_name = os.getenv("THEROCK_CDASH_PROJECT", _DEFAULT_CDASH_PROJECT)
+    submit_url = os.getenv(
+        "THEROCK_CDASH_SUBMIT_URL",
+        f"https://{_DEFAULT_CDASH_BASE_URL}/submit.php?project={project_name}",
+    )
+    site = (
+        os.getenv("THEROCK_CDASH_SITE")
+        or os.getenv("RUNNER_NAME")
+        or os.getenv("HOSTNAME")
+        or socket.gethostname()
+    )
+    test_options = ""
+    if is_asan():
+        exclude_regex = _cmake_escape("|".join(ASAN_EXCLUDED_TESTS))
+        test_options = f'EXCLUDE "{exclude_regex}"'
 
     return _CMakeTemplate(
-        """# CTestCustom.cmake content for ROCProfiler SDK tests. Generated by run-therock-ci.py.
+        """cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
 set(CTEST_PROJECT_NAME "@project_name")
 set(CTEST_NIGHTLY_START_TIME "05:00:00 UTC")
-
+set(CTEST_SUBMIT_URL "@submit_url")
 set(CTEST_DROP_METHOD "https")
 set(CTEST_DROP_SITE_CDASH TRUE)
-set(CTEST_SUBMIT_URL "@submit_url")
-
-set(CTEST_UPDATE_TYPE git)
-set(CTEST_UPDATE_VERSION_ONLY TRUE)
-set(CTEST_GIT_COMMAND "@git_command")
-set(CTEST_GIT_INIT_SUBMODULES FALSE)
-
-set(CTEST_OUTPUT_ON_FAILURE TRUE)
-
-set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_ERRORS "100")
-set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_WARNINGS "100")
-set(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE "51200")
-set(CTEST_CUSTOM_COVERAGE_EXCLUDE "/usr/.*;/opt/.*;external/.*;samples/.*;tests/.*;.*/external/.*;.*/samples/.*;.*/tests/.*;.*/details/.*;.*/counters/parser/.*")
-
-set(CTEST_MEMORYCHECK_TYPE "")
-set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "")
-set(CTEST_MEMORYCHECK_SANITIZER_OPTIONS "")
 
 set(CTEST_SITE "@site")
 set(CTEST_BUILD_NAME "@build_name")
-
 set(CTEST_SOURCE_DIRECTORY "@source_directory")
 set(CTEST_BINARY_DIRECTORY "@binary_directory")
-
 set(CTEST_CONFIGURE_COMMAND "@configure_command")
 set(CTEST_BUILD_COMMAND "@build_command")
-set(CTEST_COVERAGE_COMMAND "@gcov_command")
+set(CTEST_NOTES_FILES "@notes_file")
+set(CTEST_OUTPUT_ON_FAILURE TRUE)
+set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_ERRORS 100)
+set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_WARNINGS 100)
+set(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE 51200)
+set(_require_cdash_submission @require_cdash_submission)
+
+macro(dashboard_submit)
+  set(_submit_result 0)
+  set(_submit_cmake_error 0)
+  ctest_submit(${ARGN}
+    RETRY_COUNT 0
+    RETRY_DELAY 5
+    RETURN_VALUE _submit_result
+    CAPTURE_CMAKE_ERROR _submit_cmake_error
+  )
+  if(NOT _submit_cmake_error EQUAL 0 OR NOT _submit_result EQUAL 0)
+    if(_require_cdash_submission)
+      message(FATAL_ERROR "CDash submission failed")
+    else()
+      message(WARNING "CDash submission failed; test results remain available locally")
+    endif()
+  endif()
+endmacro()
+
+macro(dashboard_fail_if_needed stage result_var)
+  if(NOT ${${result_var}} EQUAL 0)
+    dashboard_submit(PARTS Notes Done)
+    message(FATAL_ERROR "${stage} failed: ${${result_var}}")
+  endif()
+endmacro()
+
+ctest_start(@model GROUP "@group")
+
+ctest_configure(
+  BUILD "@binary_directory"
+  RETURN_VALUE _configure_result
+)
+dashboard_submit(PARTS Start Configure)
+dashboard_fail_if_needed("Configure" _configure_result)
+
+ctest_build(
+  BUILD "@binary_directory"
+  RETURN_VALUE _build_result
+)
+dashboard_submit(PARTS Build)
+dashboard_fail_if_needed("Build" _build_result)
+
+ctest_test(
+  BUILD "@binary_directory"
+  PARALLEL_LEVEL 8
+  @test_options
+  RETURN_VALUE _test_result
+)
+dashboard_submit(PARTS Test)
+dashboard_fail_if_needed("Test" _test_result)
+dashboard_submit(PARTS Notes Done)
 """
     ).substitute(
-        project_name=_DEFAULT_PROJECT_NAME,
-        submit_url=f"https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}",
-        git_command=shutil.which("git") or "git",
-        gcov_command=shutil.which("gcov") or "gcov",
-        site=os.getenv("RUNNER_NAME") or os.getenv("HOSTNAME") or socket.gethostname(),
-        build_name=_esc(_cdash_build_name()),
-        source_directory=SOURCE_DIR,
-        binary_directory=BINARY_DIR,
-        configure_command=_esc(configure_cmd),
-        build_command=_esc(build_cmd),
+        project_name=_cmake_escape(project_name),
+        submit_url=_cmake_escape(submit_url),
+        site=_cmake_escape(site),
+        build_name=_cmake_escape(_cdash_build_name()),
+        source_directory=_cmake_escape(str(ROCPROFILER_SDK_TESTS_PATH)),
+        binary_directory=_cmake_escape(str(ROCPROFILER_SDK_TESTS_BUILD_PATH)),
+        configure_command=_command_for_cmake(get_cmake_config_cmd()),
+        build_command=_command_for_cmake(get_cmake_build_cmd()),
+        notes_file=_cmake_escape(str(notes_file)),
+        model=model,
+        group=_cmake_escape(group),
+        require_cdash_submission="TRUE" if require_cdash_submission else "FALSE",
+        test_options=test_options,
     )
 
 
-def _generate_dashboard(enable_cdash: bool) -> str:
-    """Generate dashboard.cmake for CDash.
-
-    Script includes CTestCustom.cmake, then runs configure, build, test,
-    and (optionally) submit stages.
-
-    Args:
-        enable_cdash: When True, ``ctest_submit`` is invoked to upload results
-            to CDash. When False, ``dashboard_submit`` is a no-op and ctest
-            output remains local (terminal + ``Testing/Temporary/`` log files).
-
-    Returns:
-        CMake script content for dashboard.cmake.
-    """
-
-    return _CMakeTemplate(
-        """
-    cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
-
-    macro(dashboard_submit)
-        if("@submit" GREATER 0)
-            ctest_submit(${ARGN}
-                            RETRY_COUNT 0
-                            RETRY_DELAY 10
-                            CAPTURE_CMAKE_ERROR _cdash_submit_err)
-        endif()
-    endmacro()
-
-    include("${CMAKE_CURRENT_LIST_DIR}/CTestCustom.cmake")
-
-    macro(handle_error _message _ret)
-        if(NOT ${${_ret}} EQUAL 0)
-            dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
-            message(FATAL_ERROR "${_message} failed: ${${_ret}}")
-        endif()
-    endmacro()
-
-    set(STAGES "START;UPDATE;CONFIGURE;BUILD;TEST;SUBMIT")
-
-    ctest_start(@model GROUP @group)
-    ctest_update(SOURCE "@repo_source_dir" RETURN_VALUE _update_ret
-                    CAPTURE_CMAKE_ERROR _update_err)
-    ctest_configure(BUILD "@BINARY_DIR" RETURN_VALUE _configure_ret)
-    dashboard_submit(PARTS Start Update Configure RETURN_VALUE _submit_ret)
-
-    if(NOT _update_err EQUAL 0)
-        message(WARNING "ctest_update failed")
-    endif()
-
-    handle_error("Configure" _configure_ret)
-
-    if("BUILD" IN_LIST STAGES)
-        ctest_build(BUILD "@BINARY_DIR" RETURN_VALUE _build_ret)
-        dashboard_submit(PARTS Build RETURN_VALUE _submit_ret)
-        handle_error("Build" _build_ret)
-    endif()
-
-    if("TEST" IN_LIST STAGES)
-        ctest_test(BUILD "@BINARY_DIR" RETURN_VALUE _test_ret)
-        dashboard_submit(PARTS Test RETURN_VALUE _submit_ret)
-        handle_error("Testing" _test_ret)
-    endif()
-
-    dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
-    """
-    ).substitute(
-        submit="1" if enable_cdash else "0",
-        model="Experimental",
-        group="TheRock",
-        repo_source_dir=THEROCK_BIN_PATH,
-        BINARY_DIR=BINARY_DIR,
+def run_cdash(
+    *,
+    model: str,
+    group: str,
+    require_cdash_submission: bool,
+) -> None:
+    """Run configure, build, test, and optional strict submission via CTest."""
+    ROCPROFILER_SDK_TESTS_BUILD_PATH.mkdir(parents=True, exist_ok=True)
+    dashboard_path = ROCPROFILER_SDK_TESTS_BUILD_PATH / "dashboard.cmake"
+    notes_path = ROCPROFILER_SDK_TESTS_BUILD_PATH / "dashboard-notes.txt"
+    notes_path.write_text(_dashboard_notes(), encoding="utf-8")
+    dashboard_path.write_text(
+        _generate_dashboard(
+            model=model,
+            group=group,
+            require_cdash_submission=require_cdash_submission,
+            notes_file=notes_path,
+        ),
+        encoding="utf-8",
+    )
+    _run_command(
+        [
+            "ctest",
+            "-S",
+            str(dashboard_path),
+            "--output-on-failure",
+            "--no-tests=error",
+        ]
     )
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse CLI arguments for the rocprofiler SDK test runner."""
     parser = argparse.ArgumentParser(
-        description=(
-            "Run rocprofiler SDK ctest dashboard. By default, results stay "
-            "local (terminal output + Testing/Temporary/ log files). Pass "
-            "--enable-cdash to upload results to CDash."
-        ),
+        description="Test the installed rocprofiler-sdk package from TheRock."
     )
     parser.add_argument(
         "--enable-cdash",
         action="store_true",
-        default=False,
-        help=(
-            "Submit ctest results to CDash. When omitted, ctest_submit is a "
-            "no-op and output is kept local only."
-        ),
+        help="Run as a CTest dashboard and submit results to CDash.",
     )
     parser.add_argument(
-        "-V",
-        "--verbose",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help=(
-            "Pass -V to ctest for verbose output (shows configure/build/test "
-            "command output as it runs). Use --no-verbose to disable."
-        ),
+        "--require-cdash-submission",
+        action="store_true",
+        help="Fail the job if CDash submission fails.",
+    )
+    parser.add_argument(
+        "--cdash-model",
+        choices=("Continuous", "Nightly", "Experimental"),
+        default=os.getenv("THEROCK_CDASH_MODEL", _DEFAULT_CDASH_MODEL),
+    )
+    parser.add_argument(
+        "--cdash-group",
+        default=os.getenv("THEROCK_CDASH_GROUP", _DEFAULT_CDASH_GROUP),
     )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Generate CTest/dashboard scripts and run ctest for ROCProfiler SDK tests.
-
-    Writes CTestCustom.cmake and dashboard.cmake into the binary dir, then
-    runs ctest -S to configure, build, test, and (when ``--enable-cdash`` is
-    set) submit to CDash.
-
-    Returns:
-        Exit code from ctest (0 on success).
-    """
     args = _parse_args(argv)
-
     setup_env()
 
-    cmake_cmd = _which_cmake()
-
-    os.makedirs(BINARY_DIR, exist_ok=True)
-
-    ctest_custom = _generate_ctest_custom(cmake_cmd)
-    dashboard = _generate_dashboard(enable_cdash=args.enable_cdash)
-
-    ctest_custom_path = os.path.join(BINARY_DIR, "CTestCustom.cmake")
-    dashboard_path = os.path.join(BINARY_DIR, "dashboard.cmake")
-
-    with open(ctest_custom_path, "w") as f:
-        f.write(ctest_custom)
-
-    with open(dashboard_path, "w") as f:
-        f.write(dashboard)
-
-    ctest_cmd = _which_ctest()
-
-    # To add/remove a ctest argument, edit this list.
-    CTEST_ARGS = ["--parallel", "8"]
-    if is_asan():
-        CTEST_ARGS += ["--exclude-regex", "|".join(ASAN_EXCLUDED_TESTS)]
-
-    ctest_argv = [ctest_cmd, "-S", dashboard_path, *CTEST_ARGS]
-
-    if args.verbose:
-        ctest_argv.append("-V")
-
-    try:
-        r = subprocess.run(ctest_argv, cwd=SOURCE_DIR, check=True, env=environ_vars)
-        return r.returncode
-
-    except subprocess.CalledProcessError as e:
-        logging.error(f"ctest failed: {e}")
-        return e.returncode
+    if args.enable_cdash:
+        run_cdash(
+            model=args.cdash_model,
+            group=args.cdash_group,
+            require_cdash_submission=args.require_cdash_submission,
+        )
+    else:
+        cmake_config()
+        cmake_build()
+        execute_tests()
+    return 0
 
 
 if __name__ == "__main__":
