@@ -225,12 +225,19 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
+            "test-runs-on": "test_setup_linux_gpu_navi3x",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": [],
+            # gfx110X-all family in cmake/therock_amdgpu_targets.cmake includes
+            # gfx1100/gfx1101/gfx1102, so the build already produces split artifacts
+            # for all three. Listing all of them here lets the OrchestrAI navi3x
+            # box's silicon (whichever of the three it carries) load a matching
+            # kernel slice and avoid hipErrorInvalidImage at runtime.
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            # nightly_check_only_for_family removed on this branch so that
+            # PR-triggered CI exercises the OrchestrAI test_setup_linux_gpu_navi3x
+            # runner setup. Restore before merging the runner-label change to main.
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
@@ -242,7 +249,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "test-runs-on": "test_setup_linux_igpu_stxh",
             "test-runs-on-kernel": {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
@@ -250,7 +257,9 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            # nightly_check_only_for_family removed on this branch so that
+            # PR-triggered CI exercises the OrchestrAI test_setup_linux_igpu_stxh
+            # runner setup. Restore before merging the runner-label change to main.
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
@@ -265,12 +274,14 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "test-runs-on": "test_setup_linux_gpu_navi4x",
             "family": "gfx120X-all",
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            # nightly_check_only_for_family removed on this branch so that
+            # PR-triggered CI exercises the OrchestrAI test_setup_linux_gpu_navi4x
+            # runner setup. Restore before merging the runner-label change to main.
         },
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",

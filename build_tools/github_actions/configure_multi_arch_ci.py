@@ -885,6 +885,15 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
     windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
 
+    # DO NOT MERGE (branch users/chi/test-ucicd-linux-gfx115): on PR triggers,
+    # skip Linux gfx94X-dcgpu tests and ALL Windows builds/tests so the
+    # OrchestrAI navi3x/navi4x/stxh runner provisioning can iterate quickly
+    # without paying the MI300 + Windows pipeline cost on every push.
+    # Restore by removing this block before merging.
+    if ci_inputs.is_pull_request:
+        linux_names = [n for n in linux_names if n != "gfx94x"]
+        windows_names = []
+
     return TargetSelection(
         linux_families=linux_names,
         windows_families=windows_names,
