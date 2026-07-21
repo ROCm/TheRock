@@ -3668,7 +3668,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-threads"
     ],
     "RPMRequires": [
       "amdrocm-core",
@@ -3687,7 +3688,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-threads"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core development metapackage",
