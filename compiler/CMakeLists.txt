@@ -168,6 +168,8 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
 
   set(_comgr_gtest_deps)
+  set(_comgr_gtest_cmake_args)
+  set(_comgr_gtest_ignore_packages)
   if(THEROCK_BUILD_COMGR_TESTS)
     therock_subproject_fetch(amd-comgr-googletest-sources
       CMAKE_PROJECT
@@ -193,9 +195,17 @@ if(THEROCK_ENABLE_COMPILER)
       CMAKE_ARGS
         -Dgtest_force_shared_crt=ON
     )
-    therock_cmake_subproject_provide_package(amd-comgr-googletest GTest lib/cmake/GTest)
+    # Do NOT provide the GTest package globally: third-party/googletest already
+    # registers a global GTest provider, and the framework allows only one
+    # provider per package. Instead, amd-comgr consumes this compiler-local
+    # googletest via an explicit GTest_DIR hint plus IGNORE_PACKAGES GTest (so
+    # its find_package(GTest) bypasses the strict super-project provider).
     therock_cmake_subproject_activate(amd-comgr-googletest)
     set(_comgr_gtest_deps amd-comgr-googletest)
+    therock_cmake_subproject_dist_dir(_comgr_gtest_dist amd-comgr-googletest)
+    cmake_path(APPEND _comgr_gtest_dist "lib/cmake/GTest" OUTPUT_VARIABLE _comgr_gtest_dir)
+    set(_comgr_gtest_cmake_args "-DGTest_DIR=${_comgr_gtest_dir}")
+    set(_comgr_gtest_ignore_packages GTest)
   endif()
 
 
@@ -232,12 +242,20 @@ if(THEROCK_ENABLE_COMPILER)
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
       ${_comgr_hotswap_cmake_args}
+      # Point comgr's find_package(GTest CONFIG) at the compiler-local googletest
+      # (empty unless THEROCK_BUILD_COMGR_TESTS).
+      ${_comgr_gtest_cmake_args}
     BUILD_DEPS
       rocm-cmake
       ${_comgr_gtest_deps}
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
+    # Ignore the super-project's GTest provider so comgr resolves GTest via the
+    # GTest_DIR hint above to its compiler-local googletest (empty unless
+    # THEROCK_BUILD_COMGR_TESTS).
+    IGNORE_PACKAGES
+      ${_comgr_gtest_ignore_packages}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
