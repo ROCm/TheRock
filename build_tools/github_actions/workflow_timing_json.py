@@ -75,7 +75,7 @@ def format_timing_json(records: Sequence[TimingRecord]) -> str:
                 "phases": [
                     {
                         "phase": phase,
-                        "records": phase_records,
+                        "records": grouped[platform][phase],
                     }
                     for phase in ("Build Stages", "Tests")
                     if phase in grouped[platform]
