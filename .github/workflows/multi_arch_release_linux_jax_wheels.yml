@@ -27,10 +27,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
-        type: string
-        required: true
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -63,10 +59,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
-        type: string
-        required: true
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -119,11 +111,9 @@ jobs:
       python_version: ${{ matrix.python_version }}
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}
-      build_mode: ${{ matrix.build_mode }}
       gfx_arch: ${{ matrix.gfx_arch }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
-      tar_url: ${{ inputs.tar_url }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}

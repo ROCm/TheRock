@@ -27,10 +27,6 @@ on:
         description: "Repository containing the JAX release branch."
         type: string
         required: true
-      build_mode:
-        description: "Build mode. CI currently supports manylinux only."
-        type: string
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -81,12 +77,6 @@ on:
         description: "GitHub repository in owner/repo format containing the JAX release branch."
         type: string
         default: "ROCm/jax"
-      build_mode:
-        description: "Build mode."
-        type: choice
-        options:
-          - manylinux
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -167,13 +157,6 @@ jobs:
       - name: Install python deps for CI
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
-
-      - name: Validate CI build mode
-        run: |
-          if [ "${{ inputs.build_mode }}" != "manylinux" ]; then
-            echo "Only build_mode=manylinux is supported by this CI workflow."
-            exit 1
-          fi
 
       - name: Build manylinux image
         working-directory: jax-source

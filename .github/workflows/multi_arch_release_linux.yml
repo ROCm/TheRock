@@ -256,7 +256,9 @@ jobs:
             }
 
   trigger_release_jax_wheels:
-    needs: [build_artifacts, build_tarballs, build_python_packages]
+    # The manylinux JAX build only consumes build_python_packages output
+    # (find-links index); it no longer needs the tarball job.
+    needs: [build_artifacts, build_python_packages]
     name: Trigger Release JAX Wheels
     if: ${{ inputs.build_jax != false && fromJSON(inputs.build_config).build_jax == true }}
     runs-on: ubuntu-24.04
@@ -273,7 +275,6 @@ jobs:
               "release_type": "${{ inputs.release_type }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
-              "tar_url": "${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).multiarch }}",
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref || '' }}",
               "python_version": "${{ inputs.python_version }}"

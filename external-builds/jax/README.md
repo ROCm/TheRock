@@ -13,9 +13,13 @@ Table of contents:
 - [Test instructions](#test-instructions)
 - [Nightly releases](#nightly-releases)
 
-For upstream JAX development references, see:
+For JAX development references, see:
 
-- [ROCm/rocm-jax BUILDING.md](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md)
+- [jax-ml/jax](https://github.com/jax-ml/jax) - upstream JAX
+- [ROCm/jax](https://github.com/ROCm/jax) - ROCm's downstream JAX fork, used to
+  build the ROCm JAX wheels
+- [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax) - infrastructure (e.g.
+  Dockerfiles), no longer used to build the JAX wheels
 - [JAX developer documentation](https://docs.jax.dev/en/latest/developer.html)
 
 ## Support status
@@ -30,16 +34,18 @@ For upstream JAX development references, see:
 
 ### Supported JAX versions
 
-Support for JAX is provided via stable release branches.
+Support for JAX is provided via stable release branches from
+[ROCm/jax](https://github.com/ROCm/jax), built with the manylinux flow.
 
-JAX 0.9.1 uses release branch from [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax).
-Starting with JAX 0.10.0, build support uses the [ROCm/jax](https://github.com/ROCm/jax) repository.
+| JAX version | Linux                                                                                                   | Windows          |
+| ----------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.11.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.0) | ❌ Not supported |
+| 0.10.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.2) | ❌ Not supported |
+| 0.10.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.1) | ❌ Not supported |
+| 0.10.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.0) | ❌ Not supported |
 
-| JAX version | Linux                                                                                                           | Windows          |
-| ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 0.10.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.2)         | ❌ Not supported |
-| 0.10.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.0)         | ❌ Not supported |
-| 0.9.1       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.9.1`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.9.1) | ❌ Not supported |
+> [!NOTE]
+> Python 3.11 is not supported for JAX 0.11.0 and later (dropped upstream).
 
 See also:
 
@@ -50,103 +56,64 @@ See also:
 
 This repository builds the following ROCm-enabled JAX artifacts:
 
-- **jaxlib** (ROCm) - built for JAX ≤ 0.9.0 only
 - **jax_rocm7_pjrt** (PJRT runtime for ROCm)
 - **jax_rocm7_plugin** (JAX runtime plugin for ROCm)
 
 > [!NOTE]
-> Starting with JAX 0.9.1, jaxlib is **not built** - it is used from upstream
-> PyPI (`pip install jaxlib==0.9.1`). Only **jax_rocm7_pjrt** and
-> **jax_rocm7_plugin** are built.
+> jaxlib is **not built** for supported JAX versions (0.10.0+); it is installed
+> from upstream PyPI (e.g. `pip install jaxlib==0.11.0`). Only
+> **jax_rocm7_pjrt** and **jax_rocm7_plugin** are built.
 
 ### How building with TheRock differs from upstream
 
-The upstream [rocm-jax build instructions](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md)
+The [downstream ROCm/jax](https://github.com/ROCm/jax) build instructions
 assume that a stable ROCm version is already installed on the system.
 
-TheRock currently supports two build paths depending on the JAX release branch:
-
-- **JAX 0.9.1** uses the legacy tarball-based build flow via
-  `build/ci_build --therock-path`.
-- **JAX 0.10.0** builds against ROCm Python packages installed from the
-  TheRock multi-arch Python package index.
+Supported JAX versions (0.10.0+) build against ROCm Python packages installed
+from the TheRock multi-arch Python package index (the manylinux flow).
 
 ### Prerequisites
 
 - **OS**: Linux (supported distributions with ROCm)
-- **Python**: 3.12 recommended
-- **Compiler**:
-  - JAX 0.9.1: Clang provided by the TheRock tarball
-  - JAX 0.10.0: Clang provided by the manylinux build environment
-- **ROCm**:
-  - JAX 0.9.1: TheRock tarball
-  - JAX 0.10.0: ROCm Python packages from the TheRock multi-arch package index
+- **Python**: 3.12 recommended (Python 3.11 is not supported for JAX 0.11.0+)
+- **Compiler**: Clang provided by the manylinux build environment
+- **ROCm**: ROCm Python packages from the TheRock multi-arch package index
 
 ### Steps
 
-1. Checkout the source repository for your JAX version.
-
-   **JAX 0.9.1**
-
-   ```bash
-   git clone https://github.com/ROCm/rocm-jax.git
-   git clone https://github.com/ROCm/jax.git
-
-   pushd rocm-jax
-   git checkout rocm-jaxlib-v0.9.1
-   popd
-
-   pushd jax
-   git checkout rocm-jaxlib-v0.9.1
-   popd
-   ```
-
-   **JAX 0.10.0**
+1. Checkout the source repository for your JAX version (replace the ref with the
+   version you want to build):
 
    ```bash
    git clone https://github.com/ROCm/jax.git
 
    pushd jax
-   git checkout rocm-jaxlib-v0.10.0
+   git checkout rocm-jaxlib-v0.11.0
    popd
    ```
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.9.1` or `0.10.0`
+   - **JAX version**: e.g. `0.10.0`, `0.10.1`, `0.10.2`, or `0.11.0`
    - **Python version**: e.g. `3.12`
+   - **Package index**: the TheRock multi-arch Python package index.
 
-   For **JAX 0.9.1**:
+1. Build the JAX wheels (multi-arch package flow).
 
-   - TheRock tarball URL, local tarball, or extracted ROCm installation.
-
-   For **JAX 0.10.0**:
-
-   - TheRock multi-arch Python package index.
-
-1. Build JAX 0.9.1 (legacy tarball flow)
+   From the `ROCm/jax` checkout, build the ROCm plugin and PJRT wheels:
 
    ```bash
-   pushd rocm-jax
-      PYTHON_VERSION=<python versions, comma separated>
-      ROCM_VERSION=<rocm_version>
-
-      python3 build/ci_build --therock-path "<path_to_tarball_or_rocm_dir>"
-      --python-versions="$PYTHON_VERSION"
-      --rocm-version="$ROCM_VERSION"
-      dist_wheels
-   popd
+   python build/build.py build --wheels=jax-rocm-plugin,jax-rocm-pjrt \
+     --python_version=3.12 \
+     --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
+     --bazel_options=--config=rocm_release_wheel \
+     --bazel_options=--repo_env=ROCM_PATH=$(rocm-sdk path --root) \
+     --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
+     --bazel_options=--//jaxlib/tools:jaxlib_git_hash=$(git rev-parse HEAD) \
+     --verbose --detailed_timestamped_log --output_path=$(pwd)/dist
    ```
 
-   > [!NOTE]
-   > The `--jax-source-dir` flag is required when building jaxlib from source
-   > (JAX \<= 0.9.0) and points to the cloned `jax` repository directory.
-   > For JAX >= 0.9.1, jaxlib is installed from upstream PyPI, so this flag
-   > can be omitted.
-
-1. Build JAX 0.10.0 (multi-arch package flow)
-
-   JAX 0.10.0 builds are performed by the GitHub Actions workflow:
+   This is the same flow the GitHub Actions workflow uses:
 
    - `.github/workflows/multi_arch_build_linux_jax_wheels.yml`
 
@@ -154,17 +121,7 @@ TheRock currently supports two build paths depending on the JAX release branch:
    multi-arch package index before building `jax_rocm7_plugin` and
    `jax_rocm7_pjrt`.
 
-1. Locate built wheels:
-
-   **JAX 0.9.1**
-
-   After a successful build, wheels will be available in:
-
-   ```text
-   rocm-jax/jax_rocm_plugin/wheelhouse/
-   ```
-
-   **JAX 0.10.0**
+1. Locate built wheels.
 
    After a successful build, wheels will be available in:
 
@@ -172,12 +129,8 @@ TheRock currently supports two build paths depending on the JAX release branch:
    jax/dist/
    ```
 
-For more detailed build options, see the build instructions for the JAX
-release branch you are using.
-
-- JAX 0.9.1: [ROCm/rocm-jax BUILDING.md](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md#building)
-- JAX 0.10.0: See the `ROCm/jax` repository and the
-  `.github/workflows/multi_arch_build_linux_jax_wheels.yml` workflow in TheRock.
+For more detailed build options, see the `ROCm/jax` repository and the
+`.github/workflows/multi_arch_build_linux_jax_wheels.yml` workflow in TheRock.
 
 ## Test instructions
 
@@ -236,10 +189,10 @@ release branch you are using.
 1. Run JAX tests:
 
    ```bash
-   pytest jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
-   pytest jax_tests/tests/core_test.py -q --log-cli-level=INFO
-   pytest jax_tests/tests/util_test.py -q --log-cli-level=INFO
-   pytest jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
+   cd jax
+   # Create a dist directory (required to run the pytest-rocm.sh script).
+   mkdir -p dist
+   sh ci/run_pytest_rocm.sh
    ```
 
 ## Nightly releases
