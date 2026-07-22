@@ -144,22 +144,18 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
+      # Note: --projects is not passed here because when --stage is specified,
+      # we always build the full stage. The projects input is used only for
+      # test selection via expanded_projects, not for filtering stage builds.
       - name: Get stage configuration
         id: stage_config
-        env:
-          PROJECTS: ${{ inputs.projects }}
         run: |
-          PROJECTS_ARG=""
-          if [[ -n "${PROJECTS}" ]]; then
-            PROJECTS_ARG="--projects ${PROJECTS}"
-          fi
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
             --manylinux \
-            --gha-output \
-            ${PROJECTS_ARG}
+            --gha-output
 
       - name: Install stage python deps
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}

@@ -2,7 +2,39 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate CMake configuration for building a specific stage or projects."""
+"""Generate CMake configuration for building a specific stage or projects.
+
+This script uses BUILD_TOPOLOGY.toml to determine which features/artifacts
+should be enabled for a specific build stage or set of projects, and outputs
+the appropriate CMake arguments.
+
+Usage:
+    # Generate CMake args for a stage
+    python configure_stage.py \
+        --stage math-libs \
+        --amdgpu-families gfx94X-dcgpu \
+        --output-cmake-args /tmp/stage_args.txt
+
+    # Generate CMake args for specific projects
+    python configure_stage.py --projects rocblas miopen --oneline
+    # Output: -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_MIOPEN=ON
+
+    # List available projects/subprojects
+    python configure_stage.py --list-projects
+
+    # Then use the generated args with CMake
+    cmake -B build -S . $(cat /tmp/stage_args.txt) -GNinja
+
+    # Or print to stdout for inspection
+    python configure_stage.py --stage math-libs --print
+
+The script generates flags like:
+    -DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu
+    -DTHEROCK_ENABLE_ALL=OFF
+    -DTHEROCK_ENABLE_BLAS=ON
+    -DTHEROCK_ENABLE_FFT=ON
+    ...
+"""
 
 import argparse
 import platform as platform_module
@@ -24,7 +56,13 @@ def log(msg: str):
 
 
 def normalize_project_name(name: str) -> str:
-    """Normalize 'projects/hip' -> 'hip'."""
+    """Normalize a project name, handling paths like 'projects/hip' -> 'hip'.
+
+    The changed_projects input from external repos may include paths like:
+    - 'projects/hip' -> 'hip'
+    - 'projects/rocblas' -> 'rocblas'
+    - 'hip' -> 'hip' (already normalized)
+    """
     if name.startswith("projects/"):
         name = name[len("projects/") :]
     if "/" in name:
@@ -148,18 +186,17 @@ def generate_cmake_args(
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
     # Determine which features to enable based on stage and/or projects.
-    # Note: We always build the full stage, not a filtered subset. Per the design
-    # in https://github.com/ROCm/TheRock/issues/3343, we need all artifacts to
-    # build pytorch/python packages. Stage-level granularity is the minimum unit
-    # for reuse; artifact-level reuse is a future optimization.
+    # Note: When --stage is specified, we always build the full stage, not a
+    # filtered subset. Per the design in https://github.com/ROCm/TheRock/issues/3343,
+    # we need all artifacts to build pytorch/python packages. Stage-level
+    # granularity is the minimum unit for reuse; artifact-level reuse is a
+    # future optimization. The --projects flag is ignored when --stage is set.
     if stage_name:
         features = get_stage_features(topology, stage_name, platform_name=platform_name)
     elif project_names:
         features = get_project_features(
             topology, project_names, platform_name=platform_name, build_dir=build_dir
         )
-    elif stage_name:
-        features = get_stage_features(topology, stage_name, platform_name=platform_name)
     else:
         features = set()
 

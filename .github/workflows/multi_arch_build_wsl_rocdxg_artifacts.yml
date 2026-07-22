@@ -177,24 +177,20 @@ jobs:
           python3 "${THEROCK_HOST_WORKSPACE}/build_tools/setup_venv.py" --clean "${wsl_venv_dir}"
           "${wsl_venv_dir}/bin/python" -m pip install -r "${THEROCK_HOST_WORKSPACE}/requirements.txt"
 
+      # Note: --projects is not passed here because when --stage is specified,
+      # we always build the full stage. The projects input is used only for
+      # test selection via expanded_projects, not for filtering stage builds.
       - name: Get stage configuration
         id: stage_config
         # This is a pure topology calculation, so keep it on the Windows host
         # where GitHub step outputs are native. The explicit --platform=linux
         # still makes configure_stage.py emit Linux/WSL feature selections.
-        env:
-          PROJECTS: ${{ inputs.projects }}
         run: |
-          PROJECTS_ARG=""
-          if [[ -n "${PROJECTS}" ]]; then
-            PROJECTS_ARG="--projects ${PROJECTS}"
-          fi
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
             --platform=linux \
-            --gha-output \
-            ${PROJECTS_ARG}
+            --gha-output
 
       - name: Install stage python deps
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
