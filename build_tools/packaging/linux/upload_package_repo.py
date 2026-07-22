@@ -126,7 +126,7 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
 
             # Generate repodata for new packages with clean paths (no baseurl)
             run_command(
-                "createrepo_c --no-database --simple-md-filenames .",
+                ["createrepo_c", "--no-database", "--simple-md-filenames", "."],
                 cwd=str(new_arch_dir),
             )
             print("✅ Generated metadata for uploaded packages")
@@ -153,9 +153,18 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
             # mergerepo_c merges repodata without needing actual RPM files!
             # Use --no-database, --simple-md-filenames, and --omit-baseurl to ensure clean paths
             run_command(
-                f"mergerepo_c --no-database --simple-md-filenames --omit-baseurl "
-                f'--repo "{old_repo_dir}" --repo "{new_repo_dir / "x86_64"}" '
-                f'--outputdir "{merged_arch_dir}"',
+                [
+                    "mergerepo_c",
+                    "--no-database",
+                    "--simple-md-filenames",
+                    "--omit-baseurl",
+                    "--repo",
+                    str(old_repo_dir),
+                    "--repo",
+                    str(new_repo_dir / "x86_64"),
+                    "--outputdir",
+                    str(merged_arch_dir),
+                ],
                 cwd=str(temp_path),
             )
             print("✅ Merged repository metadata")
@@ -227,7 +236,7 @@ def generate_release_file_with_checksums(release_file, job_type, dists_dir):
         sha256_entries.append(f" {sha256_hash.hexdigest()} {file_size:16d} {rel_path}")
 
     # Write Release file
-    with open(release_file, "w") as f:
+    with open(release_file, "w", encoding="utf-8") as f:
         # Header fields
         f.write(
             f"""Origin: AMD ROCm
@@ -334,7 +343,7 @@ def regenerate_deb_metadata_from_s3(
                 f"Downloading existing Packages file from S3: s3://{bucket}/{packages_s3_key}"
             )
             s3.download_file(bucket, packages_s3_key, str(existing_packages))
-            with open(existing_packages, "r") as f:
+            with open(existing_packages, "r", encoding="utf-8") as f:
                 content = f.read()
                 pkg_count = content.count("\nPackage: ")
             print(f"✅ Downloaded existing Packages file ({pkg_count} packages)")
@@ -355,8 +364,9 @@ def regenerate_deb_metadata_from_s3(
             # Generate Packages entries for uploaded packages
             new_packages = dists_dir / "Packages.new"
             run_command(
-                f'dpkg-scanpackages -m pool/main /dev/null > "{new_packages}"',
+                ["dpkg-scanpackages", "-m", "pool/main", "/dev/null"],
                 cwd=str(temp_path),
+                stdout=new_packages,
             )
             print("✅ Generated Packages entries for uploaded packages")
         else:
@@ -364,7 +374,11 @@ def regenerate_deb_metadata_from_s3(
             if existing_packages and existing_packages.exists():
                 print("Preserving existing metadata...")
                 shutil.copy2(existing_packages, dists_dir / "Packages")
-                run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
+                run_command(
+                    ["gzip", "-9c", "Packages"],
+                    cwd=str(dists_dir),
+                    stdout=dists_dir / "Packages.gz",
+                )
 
                 # Generate Release file with checksums
                 release_dir = temp_path / "dists" / "stable"
@@ -386,7 +400,7 @@ def regenerate_deb_metadata_from_s3(
             def parse_packages_file(filepath):
                 """Parse Packages file into dict keyed by Filename"""
                 packages = {}
-                with open(filepath, "r") as f:
+                with open(filepath, "r", encoding="utf-8") as f:
                     current_entry = []
                     current_filename = None
 
@@ -417,7 +431,7 @@ def regenerate_deb_metadata_from_s3(
             merged = old_packages.copy()
             merged.update(new_packages_dict)
 
-            with open(merged_packages, "w") as outfile:
+            with open(merged_packages, "w", encoding="utf-8") as outfile:
                 for filename in sorted(merged.keys()):
                     outfile.write(merged[filename])
                     outfile.write("\n")
@@ -428,7 +442,11 @@ def regenerate_deb_metadata_from_s3(
             shutil.copy2(new_packages, merged_packages)
 
         # Compress Packages file
-        run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
+        run_command(
+            ["gzip", "-9c", "Packages"],
+            cwd=str(dists_dir),
+            stdout=dists_dir / "Packages.gz",
+        )
 
         # Step 4: Generate Release file with checksums
         release_dir = temp_path / "dists" / "stable"
@@ -465,14 +483,28 @@ def regenerate_repo_metadata_from_s3(
         raise ValueError(f"Unsupported package type: {pkg_type}")
 
 
-def run_command(cmd, cwd=None):
-    print(f"Running: {cmd}")
-    subprocess.run(cmd, shell=True, check=True, cwd=cwd)
+def run_command(cmd: list[str], cwd=None, stdout=None):
+    """Run a command safely without shell interpolation.
+
+    Args:
+        cmd: Command and arguments as a list of strings
+        cwd: Working directory for the command
+        stdout: Optional path to redirect stdout to a file
+
+    Raises:
+        subprocess.CalledProcessError: If the command exits with non-zero status
+    """
+    print(f"Running: {' '.join(cmd)}")
+    if stdout is not None:
+        with open(stdout, "w", encoding="utf-8") as f:
+            subprocess.run(cmd, check=True, cwd=cwd, stdout=f)
+    else:
+        subprocess.run(cmd, check=True, cwd=cwd)
 
 
 def find_package_dir():
-    base = os.path.join(os.getcwd(), "output", "packages")
-    if not os.path.exists(base):
+    base = Path.cwd() / "output" / "packages"
+    if not base.exists():
         raise RuntimeError(f"Package directory not found: {base}")
     return base
 
@@ -494,24 +526,30 @@ def s3_object_exists(s3, bucket, key):
 def create_deb_repo(package_dir, job_type):
     print("Creating APT repository...")
 
-    dists = os.path.join(package_dir, "dists", "stable", "main", "binary-amd64")
-    pool = os.path.join(package_dir, "pool", "main")
+    package_path = Path(package_dir)
+    dists = package_path / "dists" / "stable" / "main" / "binary-amd64"
+    pool = package_path / "pool" / "main"
 
-    os.makedirs(dists, exist_ok=True)
-    os.makedirs(pool, exist_ok=True)
+    dists.mkdir(parents=True, exist_ok=True)
+    pool.mkdir(parents=True, exist_ok=True)
 
-    for f in os.listdir(package_dir):
-        if f.endswith(".deb"):
-            shutil.move(os.path.join(package_dir, f), os.path.join(pool, f))
+    for f in package_path.iterdir():
+        if f.suffix == ".deb":
+            shutil.move(f, pool / f.name)
 
     run_command(
-        "dpkg-scanpackages -m pool/main /dev/null > dists/stable/main/binary-amd64/Packages",
-        cwd=package_dir,
+        ["dpkg-scanpackages", "-m", "pool/main", "/dev/null"],
+        cwd=str(package_path),
+        stdout=dists / "Packages",
     )
-    run_command("gzip -9c Packages > Packages.gz", cwd=dists)
+    run_command(
+        ["gzip", "-9c", "Packages"],
+        cwd=str(dists),
+        stdout=dists / "Packages.gz",
+    )
 
-    release = os.path.join(package_dir, "dists", "stable", "Release")
-    with open(release, "w") as f:
+    release = package_path / "dists" / "stable" / "Release"
+    with open(release, "w", encoding="utf-8") as f:
         f.write(
             f"""Origin: AMD ROCm
 Label: ROCm {job_type} Packages
@@ -532,16 +570,20 @@ def create_rpm_repo(package_dir):
     """
     print("Creating RPM repository...")
 
-    arch_dir = os.path.join(package_dir, "x86_64")
-    os.makedirs(arch_dir, exist_ok=True)
+    package_path = Path(package_dir)
+    arch_dir = package_path / "x86_64"
+    arch_dir.mkdir(parents=True, exist_ok=True)
 
-    for f in os.listdir(package_dir):
-        if f.endswith(".rpm"):
-            shutil.move(os.path.join(package_dir, f), os.path.join(arch_dir, f))
+    for f in package_path.iterdir():
+        if f.suffix == ".rpm":
+            shutil.move(f, arch_dir / f.name)
 
     # Generate initial repodata from local packages with clean paths (no baseurl)
     # This will be regenerated from S3 state after upload
-    run_command("createrepo_c --no-database --simple-md-filenames .", cwd=arch_dir)
+    run_command(
+        ["createrepo_c", "--no-database", "--simple-md-filenames", "."],
+        cwd=str(arch_dir),
+    )
 
 
 def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
@@ -564,9 +606,9 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
                 print(f"Skipping build manifest file (local only): {fname}")
                 continue
 
-            local = os.path.join(root, fname)
-            rel = os.path.relpath(local, source_dir)
-            key = os.path.join(prefix, rel).replace("\\", "/")
+            local = Path(root) / fname
+            rel = local.relative_to(source_dir)
+            key = f"{prefix}/{rel.as_posix()}"
 
             # Skip metadata files - they'll be regenerated/merged properly later
             # For DEB: skip Packages, Packages.gz, Release in dists/
@@ -589,12 +631,12 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
             extra = {"ContentType": "text/html"} if fname.endswith(".html") else None
 
             print(f"Uploading: {key}")
-            s3.upload_file(local, bucket, key, ExtraArgs=extra)
+            s3.upload_file(str(local), bucket, key, ExtraArgs=extra)
             uploaded += 1
 
             # Track uploaded packages for metadata generation
             if fname.endswith(".deb") or fname.endswith(".rpm"):
-                uploaded_packages.append(local)
+                uploaded_packages.append(str(local))
 
     print(f"Uploaded: {uploaded}, Skipped: {skipped}")
     if uploaded_packages:
@@ -607,7 +649,7 @@ def _emit_github_output(key: str, value: str) -> None:
     """Write a key=value pair to $GITHUB_OUTPUT if running in GitHub Actions."""
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
-        with open(github_output, "a") as f:
+        with open(github_output, "a", encoding="utf-8") as f:
             f.write(f"{key}={value}\n")
 
 
