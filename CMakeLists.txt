@@ -502,6 +502,11 @@ add_subdirectory(debug-tools)
 # performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
 # feature detection.
 add_subdirectory(media-libs)
+# rocSHMEM must be added before profiler for the same reason as media-libs:
+# rocprofiler-sdk performs an optional find_package(rocshmem) for rocSHMEM
+# API-trace feature detection. The rest of comm-libs (rccl) is added later,
+# since rccl depends on the profiler.
+add_subdirectory(comm-libs/rocshmem)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
