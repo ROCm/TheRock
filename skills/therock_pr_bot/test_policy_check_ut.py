@@ -78,7 +78,7 @@ def make_policy(**overrides: Any) -> pc.Policy:
             "**/test/gtest/**",
         ],
         unit_test_exempt_paths=[],
-        bump_bot_authors=["assistant-librarian", "systems-assistant"],
+        bump_bot_authors=["assistant-librarian", "systems-assistant", "dependabot"],
         required_checks=["pre-commit"],
         precommit_failure_comment=None,
     )
@@ -454,6 +454,8 @@ class DraftAndBumpTests(unittest.TestCase):
         self.assertTrue(pc.is_bump_pr(policy, "assistant-librarian"))
         self.assertTrue(pc.is_bump_pr(policy, "assistant-librarian[bot]"))
         self.assertTrue(pc.is_bump_pr(policy, "SYSTEMS-ASSISTANT"))
+        self.assertTrue(pc.is_bump_pr(policy, "dependabot"))
+        self.assertTrue(pc.is_bump_pr(policy, "dependabot[bot]"))
         self.assertFalse(pc.is_bump_pr(policy, "some-human"))
         self.assertFalse(pc.is_bump_pr(policy, ""))
 

@@ -42,6 +42,7 @@ pr:
   bump_bot_authors:
     - assistant-librarian
     - systems-assistant
+    - dependabot
 
   # PR title rules
   title:
