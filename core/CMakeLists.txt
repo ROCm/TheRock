@@ -81,6 +81,14 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
         lib
       INTERFACE_INSTALL_RPATH_DIRS
         lib
+      TEST_SUBPROJECTS
+        hipBLAS
+        hipBLASLt
+        rocBLAS
+        rccl
+        rdc
+        rocprofiler-systems
+        rocrtst
     )
     therock_cmake_subproject_provide_package(amdsmi amd_smi lib/cmake)
     therock_cmake_subproject_activate(amdsmi)
@@ -142,6 +150,39 @@ if(_therock_enable_hsa_runtime)
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      amd-dbgapi
+      aqlprofile
+      composable_kernel
+      hip-clr
+      hipBLAS
+      hipBLASLt
+      hipDNN
+      hipDNN_samples
+      hipFFT
+      hipRAND
+      hipblasltprovider
+      hipdnn_integration_tests
+      hipkernelprovider
+      libhipcxx
+      MIOpen
+      miopenprovider
+      ocl-clr
+      ocl-icd
+      rccl
+      rocdecode
+      rocjpeg
+      rocBLAS
+      rocFFT
+      rocPRIM
+      rocRAND
+      rocWMMA
+      rocgdb
+      rocprofiler-sdk
+      rocr-debug-agent
+      rocr-debug-agent-tests
+      rocrtst
+      rocshmem
   )
   therock_cmake_subproject_glob_c_sources(ROCR-Runtime
     SUBDIRS
@@ -310,6 +351,35 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+    TEST_SUBPROJECTS
+      composable_kernel
+      hip-tests
+      hipBLAS
+      hipBLASLt
+      hipDNN
+      hipDNN_samples
+      hipFFT
+      hipInfo
+      hipblasltprovider
+      hipdnn_integration_tests
+      hipkernelprovider
+      libhipcxx
+      MIOpen
+      miopenprovider
+      rccl
+      rdc
+      rocdecode
+      rocjpeg
+      rocBLAS
+      rocFFT
+      rocPRIM
+      rocRAND
+      hipRAND
+      rocWMMA
+      rocprofiler-systems
+      rocr-debug-agent-tests
+      rocshmem
+      therock-wsl-rocdxg
   )
   therock_cmake_subproject_glob_c_sources(hip-clr SUBDIRS .)
   therock_cmake_subproject_provide_package(hip-clr hip lib/cmake/hip)
