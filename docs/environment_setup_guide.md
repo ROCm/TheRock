@@ -17,6 +17,35 @@ See the [project README](../README.md) for quick getting started instructions th
 
 In general, we will keep the home page updated with quick start instructions for recent versions of the above. Additional advanced advice may be found below for specialty quirks and workarounds.
 
+## Required Build Toolchains
+
+### Rust 1.95
+
+Rust 1.95 and Cargo are general build dependencies on Linux and Windows. Install
+the required toolchain with [`rustup`](https://rustup.rs/).
+
+On Linux:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+  sh -s -- --default-toolchain 1.95.0
+source "$HOME/.cargo/env"
+rustc --version
+cargo --version
+```
+
+On Windows:
+
+```powershell
+winget install --id Rustlang.Rustup --exact --source winget
+# Open a new terminal before running the remaining commands.
+rustup install 1.95
+rustc --version
+cargo --version
+```
+
+If `rustup` is already installed, only `rustup install 1.95` is needed.
+
 ## Reference Build Environments
 
 When interactively verifying that various Linux based operating systems build properly, we generally use the following procedure:

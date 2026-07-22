@@ -4,6 +4,10 @@ While TheRock started life as a super-project for doing combined builds and rele
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
+Before configuring a build, follow the
+[Environment Setup Guide](../environment_setup_guide.md#required-build-toolchains).
+The build requires Rust 1.95 and Cargo, installed through `rustup`.
+
 Table of contents:
 
 - [Overall build architecture](#overall-build-architecture)
