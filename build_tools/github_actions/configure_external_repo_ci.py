@@ -69,6 +69,15 @@ FULL_TEST_TRIGGER_PATTERNS = [
     ".github/repos-config.json",
 ]
 
+# =============================================================================
+# TEST OVERRIDE: Force specific changed_projects for testing cross-repo CI
+# Set to non-empty string to override detected changes (e.g., "projects/rocprim")
+# TODO(geomin12): Remove this after testing cross-repo artifact reuse
+# =============================================================================
+_TEST_OVERRIDE_CHANGED_PROJECTS = os.environ.get(
+    "TEST_OVERRIDE_CHANGED_PROJECTS", ""
+)
+
 
 @dataclass
 class ConfigureResult:
@@ -227,6 +236,17 @@ def configure(
     config_path: str,
 ) -> ConfigureResult:
     """Main configuration logic."""
+
+    # TEST OVERRIDE: If set, bypass all detection and return the override value
+    if _TEST_OVERRIDE_CHANGED_PROJECTS:
+        logger.info(
+            f"TEST OVERRIDE: Using forced changed_projects='{_TEST_OVERRIDE_CHANGED_PROJECTS}'"
+        )
+        return ConfigureResult(
+            changed_projects=_TEST_OVERRIDE_CHANGED_PROJECTS,
+            run_all_tests=False,
+            skip_tests=False,
+        )
 
     # Schedule/workflow_dispatch events run all tests
     if event_name in ("schedule", "workflow_dispatch"):
