@@ -107,7 +107,10 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     )
     sourcedir_list.extend(dir_list)
 
+    # Filter out non-existing directories
+    sourcedir_list = [path for path in sourcedir_list if path.is_dir()]
     logger.debug(f"sourcedir_list: {sourcedir_list}")
+
     # GFX_META is a versioned meta package (empty content, just dependencies)
     is_gfx_meta = build_config.enable_kpack and build_config.gfx_arch == GFX_META
     if not sourcedir_list and not is_meta and not is_gfx_meta:
