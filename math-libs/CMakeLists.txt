@@ -548,8 +548,6 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       .
   )
   therock_cmake_subproject_require_host_program(libhipcxx lit)
-  # Make libhipcxx's CMake package resolvable by dependents (e.g. hipthreads)
-  # via find_package(libhipcxx).
   therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
   therock_cmake_subproject_activate(libhipcxx)
 
@@ -708,7 +706,7 @@ if(THEROCK_ENABLE_HIPTHREADS)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
       -DCMAKE_CXX_STANDARD=17
       # hipThreads compiles with -Werror plus strict warnings (-Wshadow,
       # -Wold-style-cast, ...). The HIP runtime headers are included with -I
