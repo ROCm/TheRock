@@ -246,6 +246,10 @@ option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK
 option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
+# LTTng userspace tracing (lttng-ust + userspace-rcu sysdeps). Off by default:
+# the HIP/HSA curated-tracepoint integration that consumes it lands
+# incrementally, and tracing is opt-in for portable builds.
+option(THEROCK_ENABLE_LTTNG "Enable building of LTTng userspace tracing sysdeps" OFF)
 option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
@@ -385,10 +389,12 @@ set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
 set(THEROCK_BUNDLED_LIBMNL)
 set(THEROCK_BUNDLED_LIBNL)
+set(THEROCK_BUNDLED_LTTNG_UST)
 set(THEROCK_BUNDLED_MPFR)
 set(THEROCK_BUNDLED_NCURSES)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
+set(THEROCK_BUNDLED_USERSPACE_RCU)
 set(THEROCK_BUNDLED_UTIL_LINUX)
 set(THEROCK_BUNDLED_ZLIB)
 set(THEROCK_BUNDLED_ZSTD)
@@ -433,6 +439,14 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
+    # userspace-rcu is built whenever it is enabled directly or implicitly as
+    # lttng-ust's dependency (mirrors third-party/sysdeps/linux/CMakeLists.txt).
+    if(THEROCK_ENABLE_SYSDEPS_USERSPACE_RCU OR THEROCK_ENABLE_SYSDEPS_LTTNG_UST)
+      set(THEROCK_BUNDLED_USERSPACE_RCU therock-userspace-rcu)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_LTTNG_UST)
+      set(THEROCK_BUNDLED_LTTNG_UST therock-lttng-ust)
     endif()
     if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
       set(THEROCK_BUNDLED_UTIL_LINUX therock-util-linux)
