@@ -147,23 +147,13 @@ def generate_cmake_args(
         args.append("# Disable all features by default")
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
-    # When both --stage and --projects are specified, filter to projects produced by this stage
-    if stage_name and project_names:
-        filtered_projects = topology.filter_projects_for_stage(
-            project_names, stage_name, build_dir
-        )
-        if filtered_projects:
-            features = get_project_features(
-                topology,
-                filtered_projects,
-                platform_name=platform_name,
-                build_dir=build_dir,
-            )
-        else:
-            # No projects for this stage - enable stage defaults
-            features = get_stage_features(
-                topology, stage_name, platform_name=platform_name
-            )
+    # Determine which features to enable based on stage and/or projects.
+    # Note: We always build the full stage, not a filtered subset. Per the design
+    # in https://github.com/ROCm/TheRock/issues/3343, we need all artifacts to
+    # build pytorch/python packages. Stage-level granularity is the minimum unit
+    # for reuse; artifact-level reuse is a future optimization.
+    if stage_name:
+        features = get_stage_features(topology, stage_name, platform_name=platform_name)
     elif project_names:
         features = get_project_features(
             topology, project_names, platform_name=platform_name, build_dir=build_dir

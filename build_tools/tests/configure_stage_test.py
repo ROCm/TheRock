@@ -185,58 +185,45 @@ class StageProjectFilterTest(unittest.TestCase):
 
 
 class StageAndProjectsCombinedTest(unittest.TestCase):
-    """Tests for combined --stage and --projects behavior."""
+    """Tests for combined --stage and --projects behavior.
+
+    Note: When --stage is specified, we always build the full stage regardless
+    of --projects. Per https://github.com/ROCm/TheRock/issues/3343, we need all
+    artifacts to build pytorch/python packages. The --projects flag is used for
+    test selection, not for filtering what gets built within a stage.
+    """
 
     def setUp(self):
         self.topology = get_topology()
 
-    def test_stage_with_matching_project(self):
-        """Test that --stage compiler-runtime --projects hip enables only HIP."""
+    def test_stage_always_builds_full_stage(self):
+        """Test that --stage always enables full stage features, ignoring --projects."""
         args = generate_cmake_args(
             stage_name="compiler-runtime",
             amdgpu_families="",
             dist_amdgpu_families="",
             topology=self.topology,
-            project_names=["hip"],
+            project_names=["hip"],  # --projects is ignored when --stage is set
             platform_name="linux",
         )
         args_str = " ".join(args)
+        # Should enable all compiler-runtime features, not just hip
         self.assertIn("THEROCK_ENABLE_HIP_RUNTIME=ON", args_str)
-        # Should NOT enable unrelated features
-        self.assertNotIn("THEROCK_ENABLE_RCCL=ON", args_str)
-        self.assertNotIn("THEROCK_ENABLE_BLAS=ON", args_str)
 
-    def test_stage_with_non_matching_project(self):
-        """Test that --stage math-libs --projects hip falls back to stage defaults."""
+    def test_stage_ignores_unrelated_projects(self):
+        """Test that --stage math-libs builds full stage even with unrelated projects."""
         args = generate_cmake_args(
             stage_name="math-libs",
             amdgpu_families="",
             dist_amdgpu_families="",
             topology=self.topology,
-            project_names=["hip"],  # hip is NOT in math-libs
+            project_names=["hip"],  # hip is NOT in math-libs, but ignored
             platform_name="linux",
         )
         args_str = " ".join(args)
-        # Should fall back to math-libs stage features (BLAS, FFT, etc.)
+        # Should enable full math-libs stage features
         self.assertIn("THEROCK_ENABLE_BLAS=ON", args_str)
         self.assertIn("THEROCK_ENABLE_FFT=ON", args_str)
-        # HIP_RUNTIME is included as an inbound dependency for math-libs
-        # (this is expected - stages need their dependencies enabled)
-
-    def test_stage_with_mixed_projects(self):
-        """Test --stage comm-libs --projects hip rccl enables only rccl."""
-        args = generate_cmake_args(
-            stage_name="comm-libs",
-            amdgpu_families="",
-            dist_amdgpu_families="",
-            topology=self.topology,
-            project_names=["hip", "rccl"],  # Only rccl is in comm-libs
-            platform_name="linux",  # comm-libs disabled on Windows
-        )
-        args_str = " ".join(args)
-        self.assertIn("THEROCK_ENABLE_RCCL=ON", args_str)
-        # hip should be filtered out since it's not in comm-libs
-        self.assertNotIn("THEROCK_ENABLE_HIP_RUNTIME=ON", args_str)
 
 
 if __name__ == "__main__":
