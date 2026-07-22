@@ -39,6 +39,10 @@ are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
 
 * ``STAGE_REUSE_MODE``           - ``dry-run`` (default) or ``reuse-stage``.
 * ``GITHUB_REPOSITORY``          - ``owner/repo`` (default ``ROCm/TheRock``).
+* ``STAGE_REUSE_BASELINE_REPOSITORY`` - repository to query for baseline runs
+                                   (default: uses ``GITHUB_REPOSITORY``). Set
+                                   this to ``ROCm/TheRock`` when external repos
+                                   want to reuse TheRock's prebuilt artifacts.
 * ``STAGE_REUSE_BASELINE_BRANCH``  - baseline branch to search (default ``main``).
 * ``STAGE_REUSE_BASELINE_WORKFLOW`` - baseline workflow file
                                    (default ``multi_arch_ci.yml``).
@@ -472,9 +476,19 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     contain all requested artifacts. A run with no artifacts (e.g. a docs-only
     change) therefore fails the availability gate and is never selected, so no
     extra "passing build" check is needed here.
+
+    For external repos (rocm-libraries, rocm-systems), set
+    ``STAGE_REUSE_BASELINE_REPOSITORY`` to ``ROCm/TheRock`` to query TheRock's
+    workflow runs for prebuilt artifacts instead of the external repo's own runs.
     """
 
-    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    # Default to current repo, but allow override for external repos to use
+    # TheRock's baseline runs.
+    default_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    baseline_repository = os.environ.get("STAGE_REUSE_BASELINE_REPOSITORY", "")
+    github_repository = baseline_repository or default_repository
+    is_cross_repo = baseline_repository and baseline_repository != default_repository
+
     branch = os.environ.get("STAGE_REUSE_BASELINE_BRANCH", "main")
     workflow_name = os.environ.get("STAGE_REUSE_BASELINE_WORKFLOW", "multi_arch_ci.yml")
     current_commit_sha = os.environ.get("STAGE_REUSE_CURRENT_SHA") or None
@@ -485,34 +499,50 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
         history_count = max(1, int(history_count_raw))
     except ValueError:
         history_count = 50
-    # The commit-compatibility rule needs the branch history (newest-first) to
-    # establish ancestry. select_baseline_run only accepts a candidate whose
-    # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
-    # window every candidate resolves to `unknown` and is rejected, so reuse
-    # never activates. Fetch the real history here. If the SHA is set but the
-    # history fetch fails (or returns empty), disable the commit rule (pass both
-    # as None) rather than enabling it with an empty window -- recency and
-    # artifact availability still gate the selection.
-    ordered_commit_shas = None
-    effective_commit_sha = current_commit_sha
-    if current_commit_sha is not None:
-        try:
-            ordered_commit_shas = github_actions_api.gha_query_recent_branch_commits(
-                github_repository_name=github_repository,
-                branch=branch,
-                max_count=history_count,
-            )
-        except GitHubAPIError as exc:
-            logger.warning(
-                "%s could not fetch branch history (%s); "
-                "skipping commit-compatibility rule.",
-                LOG_PREFIX,
-                exc,
-            )
-            ordered_commit_shas = None
-        if not ordered_commit_shas:
-            effective_commit_sha = None
-            ordered_commit_shas = None
+
+    # For cross-repo baseline selection (e.g., rocm-libraries using TheRock's
+    # baseline), commit compatibility checking is disabled because the baseline
+    # repo's commit history is unrelated to the current repo's commits. We rely
+    # solely on recency and artifact availability gates.
+    if is_cross_repo:
+        logger.info(
+            "%s cross-repo baseline: querying %s (current repo: %s); "
+            "commit-compatibility rule disabled.",
+            LOG_PREFIX,
+            github_repository,
+            default_repository,
+        )
+        effective_commit_sha = None
+        ordered_commit_shas = None
+    else:
+        # The commit-compatibility rule needs the branch history (newest-first) to
+        # establish ancestry. select_baseline_run only accepts a candidate whose
+        # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
+        # window every candidate resolves to `unknown` and is rejected, so reuse
+        # never activates. Fetch the real history here. If the SHA is set but the
+        # history fetch fails (or returns empty), disable the commit rule (pass both
+        # as None) rather than enabling it with an empty window -- recency and
+        # artifact availability still gate the selection.
+        ordered_commit_shas = None
+        effective_commit_sha = current_commit_sha
+        if current_commit_sha is not None:
+            try:
+                ordered_commit_shas = github_actions_api.gha_query_recent_branch_commits(
+                    github_repository_name=github_repository,
+                    branch=branch,
+                    max_count=history_count,
+                )
+            except GitHubAPIError as exc:
+                logger.warning(
+                    "%s could not fetch branch history (%s); "
+                    "skipping commit-compatibility rule.",
+                    LOG_PREFIX,
+                    exc,
+                )
+                ordered_commit_shas = None
+            if not ordered_commit_shas:
+                effective_commit_sha = None
+                ordered_commit_shas = None
 
     # A functools.partial binds the resolved configuration to
     # select_baseline_run; the only free argument is required_artifacts, which

@@ -892,7 +892,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    source_run_id: str,
+    platform: str,
+    local_staging_dir: Optional[Path] = None,
+    source_repository: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -900,6 +903,15 @@ def _create_source_backend(
     to resolve the correct bucket (which may differ from the current run's bucket).
 
     For local backends, creates a LocalDirectoryBackend in the same staging dir.
+
+    Args:
+        source_run_id: GitHub workflow run ID to fetch artifacts from.
+        platform: Platform name ('linux' or 'windows').
+        local_staging_dir: Optional local directory for testing.
+        source_repository: GitHub repository in 'owner/repo' format. When set,
+            fetches artifacts from this repository instead of the current one.
+            This enables cross-repo artifact copying (e.g., external repos
+            copying from TheRock's baseline runs).
     """
     if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
         staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
@@ -912,7 +924,10 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        github_repository=source_repository,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
 
@@ -948,10 +963,12 @@ def do_copy(args: argparse.Namespace):
     target_families = parse_target_families(args)
 
     # Create source and dest backends
+    source_repository = getattr(args, "source_repository", None) or None
     source_backend = _create_source_backend(
         source_run_id=args.source_run_id,
         platform=args.platform,
         local_staging_dir=args.local_staging_dir,
+        source_repository=source_repository,
     )
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
@@ -1277,6 +1294,13 @@ def main(argv: Optional[List[str]] = None):
         type=str,
         required=True,
         help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
+    )
+    copy_parser.add_argument(
+        "--source-repository",
+        type=str,
+        default="",
+        help="GitHub repository for source-run-id in 'owner/repo' format (default: current repo). "
+        "Set to 'ROCm/TheRock' for external repos copying from TheRock baselines.",
     )
     copy_parser.add_argument(
         "--stage",

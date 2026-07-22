@@ -504,5 +504,112 @@ class BuildPlatformsTest(unittest.TestCase):
         )
 
 
+class CrossRepoBaselineSelectorTest(unittest.TestCase):
+    """External repos (rocm-libraries, rocm-systems) can use TheRock's baselines.
+
+    When STAGE_REUSE_BASELINE_REPOSITORY is set to a different repo than
+    GITHUB_REPOSITORY, commit compatibility checking is disabled because
+    the two repos have unrelated commit histories.
+    """
+
+    def _run_with_env(self, env, fake_history, fake_select):
+        import os
+
+        old_env = {k: os.environ.get(k) for k in env}
+        os.environ.update({k: v for k, v in env.items() if v is not None})
+        for k, v in env.items():
+            if v is None:
+                os.environ.pop(k, None)
+
+        import baseline_runs
+        import github_actions_api
+
+        orig_select = baseline_runs.select_baseline_run
+        orig_hist = getattr(github_actions_api, "gha_query_recent_branch_commits", None)
+        captured = {}
+
+        def _capturing_select(**kwargs):
+            captured.update(kwargs)
+            return fake_select
+
+        baseline_runs.select_baseline_run = _capturing_select
+        github_actions_api.gha_query_recent_branch_commits = fake_history
+        try:
+            selector = srd._default_baseline_selector(platform="linux")
+            result = selector([("base", "generic")])
+        finally:
+            baseline_runs.select_baseline_run = orig_select
+            if orig_hist is not None:
+                github_actions_api.gha_query_recent_branch_commits = orig_hist
+            for k, v in old_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        return captured, result
+
+    def test_cross_repo_disables_commit_compatibility(self):
+        """External repo using TheRock baseline should disable commit checking."""
+        history_called = {"n": 0}
+
+        def fake_history(**kwargs):
+            history_called["n"] += 1
+            return ["sha1", "sha2"]
+
+        captured, _ = self._run_with_env(
+            {
+                "GITHUB_REPOSITORY": "ROCm/rocm-libraries",
+                "STAGE_REUSE_BASELINE_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-rocm-libs",
+            },
+            fake_history,
+            fake_select="baseline",
+        )
+        # Cross-repo means no commit compatibility check
+        self.assertIsNone(captured.get("current_commit_sha"))
+        self.assertIsNone(captured.get("ordered_commit_shas"))
+        # History fetch should NOT be called for cross-repo
+        self.assertEqual(history_called["n"], 0)
+        # But it should query the baseline repository
+        self.assertEqual(captured.get("github_repository"), "ROCm/TheRock")
+
+    def test_same_repo_uses_commit_compatibility(self):
+        """Same repo (no cross-repo override) should enable commit checking."""
+
+        def fake_history(**kwargs):
+            return ["sha-current", "sha-old"]
+
+        captured, _ = self._run_with_env(
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_BASELINE_REPOSITORY": "",  # Empty = use GITHUB_REPOSITORY
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
+            fake_history,
+            fake_select="baseline",
+        )
+        # Same repo should have commit compatibility enabled
+        self.assertEqual(captured.get("current_commit_sha"), "sha-current")
+        self.assertEqual(captured.get("ordered_commit_shas"), ["sha-current", "sha-old"])
+        self.assertEqual(captured.get("github_repository"), "ROCm/TheRock")
+
+    def test_empty_baseline_repository_uses_github_repository(self):
+        """Empty STAGE_REUSE_BASELINE_REPOSITORY falls back to GITHUB_REPOSITORY."""
+
+        def fake_history(**kwargs):
+            return ["sha1"]
+
+        captured, _ = self._run_with_env(
+            {
+                "GITHUB_REPOSITORY": "ROCm/rocm-systems",
+                "STAGE_REUSE_BASELINE_REPOSITORY": "",
+                "STAGE_REUSE_CURRENT_SHA": "sha1",
+            },
+            fake_history,
+            fake_select="baseline",
+        )
+        self.assertEqual(captured.get("github_repository"), "ROCm/rocm-systems")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -86,8 +86,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
+          # Build the command with optional --source-repository for cross-repo copies
+          SOURCE_REPO="${{ fromJSON(inputs.build_config).baseline_repository }}"
+          SOURCE_REPO_ARG=""
+          if [ -n "$SOURCE_REPO" ]; then
+            SOURCE_REPO_ARG="--source-repository=$SOURCE_REPO"
+          fi
+
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            $SOURCE_REPO_ARG \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
