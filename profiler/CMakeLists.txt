@@ -320,6 +320,14 @@ if(THEROCK_ENABLE_PROFILER_HUB)
     CMAKE_ARGS
       -DPROFILER_HUB_BUILD_TESTS=${THEROCK_BUILD_TESTING}
       -DPROFILER_HUB_BUILD_BENCHMARKS=OFF
+      # profiler-hub_unit_tests links the GTest::gtest/gmock targets, but TheRock's
+      # in-tree googletest build does not propagate Threads::Threads through them, so
+      # gtest's pthread TLS symbols (pthread_getspecific etc.) go unresolved under
+      # clang+lld once the amd-llvm toolchain is in effect. gcc linked libpthread
+      # implicitly; clang/lld does not. Inject -pthread here so profiler-hub's
+      # executables (incl. profiler-hub_unit_tests) resolve them. Throwaway-branch
+      # confirmation; the clean fix is Threads::Threads on the unit-test target upstream.
+      -DCMAKE_EXE_LINKER_FLAGS=-pthread
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     BUILD_DEPS
