@@ -699,8 +699,6 @@ if(THEROCK_ENABLE_HIPTHREADS)
     # and publish a single target-neutral (_generic) artifact (see TARGET_NEUTRAL
     # on therock_provide_artifact below) so per-arch CI upload races are harmless.
     USE_TEST_AMDGPU_TARGETS
-    DEFAULT_GPU_TARGETS
-      gfx1201  # Fixes issue with empty target list for unsupported architectures.
     CMAKE_ARGS
       -DHIPTHREADS_COPY_TO_BUILD=ON
       -DHIP_PLATFORM=amd
