@@ -174,6 +174,20 @@ test_matrix = {
             "linux": 1,
         },
     },
+    # rocjitsu is a CPU-side emulator/instrumentation tool. This component is a
+    # packaging smoke test for the installed rocjitsu artifact contract, so it
+    # runs on a Linux CPU runner and intentionally avoids GPU container devices.
+    "rocjitsu": {
+        "job_name": "rocjitsu",
+        "fetch_artifact_args": "--rocjitsu",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocjitsu.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
