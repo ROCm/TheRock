@@ -1,0 +1,55 @@
+From 2a461bca53dcf0b82d2c39aa5de94eac7b92aaa1 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Tue, 30 Jun 2026 14:45:19 -0500
+Subject: [PATCH 07/16] [libhipcxx] Set CMAKE_CUDA_COMPILER_ID based on
+ platform, not runtime
+
+NVRTC/HIPRTC indicate which runtime to link against, not which compiler
+to use. Previously, hipcc inferred the compiler from HIP_PLATFORM; now
+we do it explicitly in CMake.
+
+- LIBCUDACXX_TEST_WITH_NVRTC -> NVCC
+- LIBHIPCXX_TEST_WITH_HIPRTC -> AMDCLANG (AMD runtime = AMD compiler)
+
+CMAKE_CUDA_COMPILER_ID now has exactly two values: "NVCC" or "AMDCLANG".
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index df830af9a..de1c7e7ca 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -65,6 +65,7 @@ endif()
+ if (LIBCUDACXX_TEST_WITH_NVRTC)
+   # TODO: Use project properties to get path to binary.
+   # Should also set up dependency on the project when NVRTC is enabled
++  set(CMAKE_CUDA_COMPILER_ID "NVCC")
+   set(LIBCUDACXX_CUDA_COMPILER "${CMAKE_BINARY_DIR}/libcudacxx/test/utils/nvidia/nvrtc/nvrtcc")
+   set(LIBCUDACXX_CUDA_COMPILER_ARG1 "")
+   set(LIBCUDACXX_CUDA_TEST_WITH_NVRTC "True")
+@@ -75,7 +76,9 @@ if (LIBCUDACXX_TEST_WITH_NVRTC)
+ elseif (LIBHIPCXX_TEST_WITH_HIPRTC)
+   # TODO: Use project properties to get path to binary.
+   # Should also set up dependency on the project when NVRTC is enabled
+-  set(CMAKE_CUDA_COMPILER_ID "HIPRTC")
++  # HIPRTC is the AMD runtime; use the same HIP_PLATFORM-based compiler
++  # selection as the offline compilation path below.
++  set(CMAKE_CUDA_COMPILER_ID "AMDCLANG")
+   set(LIBCUDACXX_CUDA_COMPILER "${CMAKE_BINARY_DIR}/libcudacxx/test/utils/amd/hiprtc/hiprtcc${CMAKE_EXECUTABLE_SUFFIX}")
+   message(STATUS "LIBCUDACXX_CUDA_COMPILER: ${LIBCUDACXX_CUDA_COMPILER}")
+   set(LIBCUDACXX_CUDA_COMPILER_ARG1 "")
+@@ -176,7 +179,7 @@ elseif (${CMAKE_CUDA_COMPILER_ID} STREQUAL "NVHPC")
+     " -stdpar")
+ endif()
+ 
+-if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG" OR ${CMAKE_CUDA_COMPILER_ID} STREQUAL "HIPRTC")
++if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG")
+   message(STATUS "libhipcxx_SOURCE_DIR: ${libhipcxx_SOURCE_DIR}" )
+   string(APPEND LIBCUDACXX_TEST_COMPILER_FLAGS
+ #    "${LIBCUDACXX_TEST_COMPILER_FLAGS} \
+-- 
+2.34.1
+

@@ -1,0 +1,30 @@
+From b3f6cb7ff789589bdc0db228364341e39e755947 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Thu, 16 Jul 2026 15:19:32 -0500
+Subject: [PATCH 14/16] [libhipcxx] Add -O2 to AMDCLANG test compiler flags
+
+hipcc implicitly added host optimization when compiling tests. With
+amdclang++ invoked directly the default is -O0, causing CPU-heavy
+tests (e.g. bitset with N=1000, ~12M iterations) to exceed the
+100-second timeout. Add -O2 to match the previous effective behavior.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index 5548508e0..6308a3bda 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -186,6 +186,7 @@ if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG")
+     " -I${CMAKE_SOURCE_DIR}/include"
+     " -I${libhipcxx_SOURCE_DIR}/include"
+     " -I${libhipcxx_SOURCE_DIR}/include/libhipcxx"
++    " -O2"  # hipcc added host optimization implicitly; amdclang++ does not
+ #    " CACHE INTERNAL "Flags for libcxx testing."
+   )
+   # hipcc used to add the HIP runtime library automatically; with amdclang++
+-- 
+2.34.1
+

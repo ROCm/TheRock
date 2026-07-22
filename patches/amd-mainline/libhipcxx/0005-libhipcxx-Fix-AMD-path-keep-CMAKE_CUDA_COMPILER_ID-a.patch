@@ -1,0 +1,34 @@
+From 1b8c96c416e44f956cc97d0f221879328925fede Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Tue, 30 Jun 2026 12:35:27 -0500
+Subject: [PATCH 05/16] [libhipcxx] Fix AMD path: keep CMAKE_CUDA_COMPILER_ID
+ as HIPCC
+
+Setting it to "Clang" routes into the Clang/CUDA branch of the test
+infrastructure CMakeLists which unconditionally appends -lcudart to
+linker flags. On AMD-only CI there is no CUDA runtime, so the link
+fails. Keep "HIPCC" so the HIP-specific flags branch is taken instead.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index 0606ddd3a..a61c34185 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -116,7 +116,9 @@ else() # NOT LIBCUDACXX_TEST_WITH_NVRTC
+       set(CMAKE_CUDA_COMPILER_ID "NVIDIA")
+     else()
+       set(LIBCUDACXX_CUDA_COMPILER "${CMAKE_CXX_COMPILER}")
+-      set(CMAKE_CUDA_COMPILER_ID "Clang")
++      # Use "HIPCC" so the test infra takes the HIP-specific flags branch
++      # (line ~179) rather than the Clang/CUDA branch which appends -lcudart.
++      set(CMAKE_CUDA_COMPILER_ID "HIPCC")
+     endif()
+     set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
+     set(LIBCUDACXX_CUDA_TEST_WITH_NVRTC "False")
+-- 
+2.34.1
+

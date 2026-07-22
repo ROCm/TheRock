@@ -1,0 +1,35 @@
+From a590fcdb91768900e83e09f8a6792dfd792f15de Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Wed, 1 Jul 2026 12:44:31 -0500
+Subject: [PATCH 10/16] [libhipcxx] Fix cmake export tests for amdclang++ build
+
+Two fixes needed when building with amdclang++ directly:
+
+1. cmake/test/CMakeLists.txt: propagate CMAKE_PREFIX_PATH into the
+   sub-cmake invocations used by the test_export tests so they can
+   find hipConfig.cmake.
+
+2. cmake/test/test_export/CMakeLists.txt: add -x hip to version_check
+   so libhipcxx headers that use __host__/__device__ compile correctly
+   without going through hipcc.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ cmake/test/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/cmake/test/CMakeLists.txt b/cmake/test/CMakeLists.txt
+index 8c8070c2e..a869ec581 100644
+--- a/cmake/test/CMakeLists.txt
++++ b/cmake/test/CMakeLists.txt
+@@ -25,6 +25,7 @@ set(cmake_opts
+   -D "CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+   -D "CMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+   -D "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
++  -D "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}"
+ )
+ 
+ # Temporary installation prefix for tests against installed project:
+-- 
+2.34.1
+

@@ -1,0 +1,34 @@
+From 7d294a36da4bfc61d64393920e2efdba62ae2068 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Fri, 8 May 2026 11:51:02 -0500
+Subject: [PATCH 01/16] [ci] Deprecate hipcc: use amdclang++ as default
+ compiler in build_common.sh
+
+Replace the hipcc fallback defaults for HOST_COMPILER and CUDA_COMPILER
+with amdclang++. hipcc is deprecated in favor of calling amdclang++
+directly with explicit --hip-path and --hip-device-lib-path flags.
+
+Callers that set $CXX or $CUDACXX are unaffected.
+---
+ ci/build_common.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ci/build_common.sh b/ci/build_common.sh
+index 510866eee..402052079 100755
+--- a/ci/build_common.sh
++++ b/ci/build_common.sh
+@@ -24,9 +24,9 @@ cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
+ 
+ # Script defaults
+ VERBOSE=${VERBOSE:-}
+-HOST_COMPILER=${CXX:-hipcc} # $CXX if set, otherwise `g++`
++HOST_COMPILER=${CXX:-amdclang++} # $CXX if set, otherwise `amdclang++`
+ CXX_STANDARD=17
+-CUDA_COMPILER=${CUDACXX:-hipcc} # $CUDACXX if set, otherwise `nvcc`
++CUDA_COMPILER=${CUDACXX:-amdclang++} # $CUDACXX if set, otherwise `amdclang++`
+ CUDA_ARCHS= # Empty, use presets by default.
+ GLOBAL_CMAKE_OPTIONS=()
+ DISABLE_CUB_BENCHMARKS= # Enable to force-disable building CUB benchmarks.
+-- 
+2.34.1
+

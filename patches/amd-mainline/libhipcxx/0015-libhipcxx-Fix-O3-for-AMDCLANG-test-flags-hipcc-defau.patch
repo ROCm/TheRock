@@ -1,0 +1,30 @@
+From 4b91144542d4cb0b780c8b789cef9b407c1c3045 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Thu, 16 Jul 2026 15:59:53 -0500
+Subject: [PATCH 15/16] [libhipcxx] Fix -O3 for AMDCLANG test flags (hipcc
+ defaults to -O3)
+
+hipBin_amd.h shows hipcc defaults to -O3 for HIPCXXFLAGS/HIPCFLAGS.
+Update from -O2 to -O3 to exactly match prior behavior.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index 6308a3bda..629d293f6 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -186,7 +186,7 @@ if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG")
+     " -I${CMAKE_SOURCE_DIR}/include"
+     " -I${libhipcxx_SOURCE_DIR}/include"
+     " -I${libhipcxx_SOURCE_DIR}/include/libhipcxx"
+-    " -O2"  # hipcc added host optimization implicitly; amdclang++ does not
++    " -O3"  # hipcc defaults to -O3; amdclang++ invoked directly does not
+ #    " CACHE INTERNAL "Flags for libcxx testing."
+   )
+   # hipcc used to add the HIP runtime library automatically; with amdclang++
+-- 
+2.34.1
+

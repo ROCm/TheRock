@@ -1,0 +1,40 @@
+From 0d7a66c3d6b27cd8517b2088aa83a79f81f71678 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Mon, 13 Jul 2026 15:32:32 -0500
+Subject: [PATCH 12/16] [libhipcxx] Fix amdhip64 link path on Windows
+
+On Windows the import library (.lib) is in lib/ while the DLL is in
+bin/. Using LOCATION gives the DLL path (bin/), so the linker can't
+find amdhip64.lib. Use IMPORTED_IMPLIB instead to get the .lib path
+directly, falling back to LOCATION on Linux.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index da0931457..bfc73d011 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -188,8 +188,15 @@ if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG")
+     " -I${libhipcxx_SOURCE_DIR}/include/libhipcxx"
+ #    " CACHE INTERNAL "Flags for libcxx testing."
+   )
+-  get_target_property(_amdhip64_loc hip::amdhip64 LOCATION)
+-  cmake_path(GET _amdhip64_loc PARENT_PATH _hip_lib_dir)
++  # On Windows the import library (.lib) is separate from the DLL (.dll in bin/).
++  # Use IMPORTED_IMPLIB to get the .lib path; fall back to LOCATION on Linux.
++  get_target_property(_amdhip64_implib hip::amdhip64 IMPORTED_IMPLIB)
++  if(_amdhip64_implib)
++    cmake_path(GET _amdhip64_implib PARENT_PATH _hip_lib_dir)
++  else()
++    get_target_property(_amdhip64_loc hip::amdhip64 LOCATION)
++    cmake_path(GET _amdhip64_loc PARENT_PATH _hip_lib_dir)
++  endif()
+   string(APPEND LIBCUDACXX_TEST_LINKER_FLAGS
+     " -L${_hip_lib_dir}"
+     " -lamdhip64")
+-- 
+2.34.1
+

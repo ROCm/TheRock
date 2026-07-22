@@ -1,0 +1,74 @@
+From 95241b06931f0fa13ee67392d498675795dd4248 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Wed, 24 Jun 2026 11:43:52 -0500
+Subject: [PATCH 04/16] [libhipcxx] Deprecate hipcc: replace
+ HIP_HIPCC_EXECUTABLE with amdclang++/nvcc
+
+Replace the hardcoded HIP_HIPCC_EXECUTABLE reference in the upstream
+test CMakeLists.txt with direct compiler selection that mirrors hipcc's
+own platform detection logic:
+- HIP_PLATFORM=nvidia or HIP_PLATFORM=nvcc -> use nvcc
+- Everything else (including unset, the AMD default) -> use amdclang++
+  via CMAKE_CXX_COMPILER
+
+Also update ci/build_common.sh to apply the same HIP_PLATFORM-based
+logic when defaulting CUDA_COMPILER, replacing the unconditional
+amdclang++ default.
+
+Set CMAKE_CUDA_COMPILER_ID to "Clang" for the AMD path (was "HIPCC")
+so that compiler warning flag logic downstream behaves correctly.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 14 +++++++++++---
+ ci/build_common.sh                  |  8 +++++++-
+ 2 files changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index c834d834d..0606ddd3a 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -107,10 +107,18 @@ else() # NOT LIBCUDACXX_TEST_WITH_NVRTC
+     set(LIBCUDACXX_TEST_COMPILER_FLAGS "-DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE")
+   elseif(LIBCUDACXX_ENABLE_HIP)
+     set(LIBCUDACXX_FORCE_INCLUDE "-include ${libhipcxx_SOURCE_DIR}/test/force_include_hip.h")
+-    #temporary workaround until we've found a way to make cmake find hipcc
+-    set(LIBCUDACXX_CUDA_COMPILER "${HIP_HIPCC_EXECUTABLE}")
++    # Select compiler based on HIP_PLATFORM env var, mirroring hipcc's own
++    # platform detection logic. HIP_PLATFORM=nvidia uses nvcc; everything
++    # else (including the default unset case) uses amdclang++ directly.
++    if("$ENV{HIP_PLATFORM}" STREQUAL "nvidia" OR "$ENV{HIP_PLATFORM}" STREQUAL "nvcc")
++      find_program(NVCC_EXECUTABLE nvcc REQUIRED)
++      set(LIBCUDACXX_CUDA_COMPILER "${NVCC_EXECUTABLE}")
++      set(CMAKE_CUDA_COMPILER_ID "NVIDIA")
++    else()
++      set(LIBCUDACXX_CUDA_COMPILER "${CMAKE_CXX_COMPILER}")
++      set(CMAKE_CUDA_COMPILER_ID "Clang")
++    endif()
+     set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
+-    set(CMAKE_CUDA_COMPILER_ID "HIPCC")
+     set(LIBCUDACXX_CUDA_TEST_WITH_NVRTC "False")
+     set(LIBCUDACXX_HIP_TEST_WITH_HIPRTC "False")
+     set(LIBCUDACXX_TEST_COMPILER_FLAGS "-DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE")
+diff --git a/ci/build_common.sh b/ci/build_common.sh
+index 402052079..795cba22d 100755
+--- a/ci/build_common.sh
++++ b/ci/build_common.sh
+@@ -26,7 +26,13 @@ cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
+ VERBOSE=${VERBOSE:-}
+ HOST_COMPILER=${CXX:-amdclang++} # $CXX if set, otherwise `amdclang++`
+ CXX_STANDARD=17
+-CUDA_COMPILER=${CUDACXX:-amdclang++} # $CUDACXX if set, otherwise `amdclang++`
++# Mirror hipcc's platform detection: HIP_PLATFORM=nvidia uses nvcc,
++# everything else (including unset) uses amdclang++ directly.
++if [ "${HIP_PLATFORM:-amd}" = "nvidia" ] || [ "${HIP_PLATFORM:-amd}" = "nvcc" ]; then
++  CUDA_COMPILER=${CUDACXX:-nvcc}
++else
++  CUDA_COMPILER=${CUDACXX:-amdclang++}
++fi
+ CUDA_ARCHS= # Empty, use presets by default.
+ GLOBAL_CMAKE_OPTIONS=()
+ DISABLE_CUB_BENCHMARKS= # Enable to force-disable building CUB benchmarks.
+-- 
+2.34.1
+

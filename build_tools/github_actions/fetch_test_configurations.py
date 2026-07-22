@@ -634,12 +634,12 @@ test_matrix = {
             "linux": 1,
         },
     },
-    # libhipcxx hipcc tests
-    "libhipcxx_hipcc": {
-        "job_name": "libhipcxx_hipcc",
+    # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
+    "libhipcxx_amdclang": {
+        "job_name": "libhipcxx_amdclang",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
+        "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,

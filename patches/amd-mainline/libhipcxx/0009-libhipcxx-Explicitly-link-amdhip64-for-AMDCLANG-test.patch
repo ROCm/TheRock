@@ -1,0 +1,44 @@
+From ef122126b96d5f36ac9baf3caa60930e8b7f2564 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Wed, 1 Jul 2026 10:01:46 -0500
+Subject: [PATCH 09/16] [libhipcxx] Explicitly link amdhip64 for AMDCLANG test
+ path
+
+hipcc previously added the HIP runtime library automatically. With
+amdclang++ invoked directly, we must link it explicitly. Derive the
+library path from the hip::amdhip64 imported target so it works
+regardless of install prefix.
+
+Co-Authored-By: Claude Sonnet 4 (1M context) <noreply@anthropic.com>
+---
+ .upstream-tests/test/CMakeLists.txt | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index 0f234894a..af22a0bba 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -183,12 +183,19 @@ if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG")
+   message(STATUS "libhipcxx_SOURCE_DIR: ${libhipcxx_SOURCE_DIR}" )
+   string(APPEND LIBCUDACXX_TEST_COMPILER_FLAGS
+ #    "${LIBCUDACXX_TEST_COMPILER_FLAGS} \
+-    " ${LIBCUDACXX_FORCE_INCLUDE}" 
++    " ${LIBCUDACXX_FORCE_INCLUDE}"
+     " -I${CMAKE_SOURCE_DIR}/include"
+     " -I${libhipcxx_SOURCE_DIR}/include"
+     " -I${libhipcxx_SOURCE_DIR}/include/libhipcxx"
+ #    " CACHE INTERNAL "Flags for libcxx testing."
+   )
++  # hipcc used to add the HIP runtime library automatically; with amdclang++
++  # we must link it explicitly.
++  get_target_property(_amdhip64_loc hip::amdhip64 LOCATION)
++  cmake_path(GET _amdhip64_loc PARENT_PATH _hip_lib_dir)
++  string(APPEND LIBCUDACXX_TEST_LINKER_FLAGS
++    " -L${_hip_lib_dir}"
++    " -lamdhip64")
+ endif()
+ 
+ set(LIBCUDACXX_COMPUTE_ARCHS_STRING "${CMAKE_HIP_ARCHITECTURES}")
+-- 
+2.34.1
+

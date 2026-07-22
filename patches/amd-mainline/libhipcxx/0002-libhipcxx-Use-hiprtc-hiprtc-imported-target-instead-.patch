@@ -1,0 +1,40 @@
+From 214e1d6cb9220f16c6b5674b7d308d2c9c6760e8 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Wed, 13 May 2026 11:48:43 -0500
+Subject: [PATCH 02/16] [libhipcxx] Use hiprtc::hiprtc imported target instead
+ of bare -lhiprtc
+
+With amdclang++ used directly (not hipcc), the bare `hiprtc` link
+dependency has no library search path and fails with:
+  ld.lld: error: unable to find library -lhiprtc
+
+Switch to find_package(hiprtc CONFIG) and link hiprtc::hiprtc, which
+carries the full library path via IMPORTED_LOCATION. Also switch
+find_package(HIP) to find_package(hip CONFIG) for consistency.
+
+Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>
+---
+ .upstream-tests/utils/amd/hiprtc/CMakeLists.txt | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/.upstream-tests/utils/amd/hiprtc/CMakeLists.txt b/.upstream-tests/utils/amd/hiprtc/CMakeLists.txt
+index 4d85ee064..346ec4050 100644
+--- a/.upstream-tests/utils/amd/hiprtc/CMakeLists.txt
++++ b/.upstream-tests/utils/amd/hiprtc/CMakeLists.txt
+@@ -18,10 +18,11 @@
+ project(hiprtcc)
+ 
+ enable_language(HIP)
+-find_package(HIP REQUIRED)
++find_package(hip CONFIG REQUIRED)
++find_package(hiprtc CONFIG REQUIRED)
+ 
+ add_executable(libcudacxx.nvrtcc hiprtcc.cpp)
+ 
+ set_target_properties(libcudacxx.nvrtcc PROPERTIES OUTPUT_NAME hiprtcc)
+-target_link_libraries(libcudacxx.nvrtcc hiprtc hip::host)
++target_link_libraries(libcudacxx.nvrtcc hiprtc::hiprtc hip::host)
+ target_compile_features(libcudacxx.nvrtcc PRIVATE cxx_std_17)
+-- 
+2.34.1
+

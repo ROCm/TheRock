@@ -1,0 +1,37 @@
+From 6c9961ada564c73aaa2a0f74af58824fd1460271 Mon Sep 17 00:00:00 2001
+From: dsalinas <dsalinas@amd.com>
+Date: Tue, 7 Jul 2026 13:32:09 -0500
+Subject: [PATCH 11/16] Address PR Comments.
+
+---
+ .upstream-tests/test/CMakeLists.txt | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/.upstream-tests/test/CMakeLists.txt b/.upstream-tests/test/CMakeLists.txt
+index af22a0bba..da0931457 100644
+--- a/.upstream-tests/test/CMakeLists.txt
++++ b/.upstream-tests/test/CMakeLists.txt
+@@ -110,9 +110,8 @@ else() # NOT LIBCUDACXX_TEST_WITH_NVRTC
+     set(LIBCUDACXX_TEST_COMPILER_FLAGS "-DLIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE")
+   elseif(LIBCUDACXX_ENABLE_HIP)
+     set(LIBCUDACXX_FORCE_INCLUDE "-include ${libhipcxx_SOURCE_DIR}/test/force_include_hip.h")
+-    # Select compiler based on HIP_PLATFORM env var, mirroring hipcc's own
+-    # platform detection logic. HIP_PLATFORM=nvidia uses nvcc; everything
+-    # else (including the default unset case) uses amdclang++ directly.
++    # Select compiler based on HIP_PLATFORM env var HIP_PLATFORM
++    # if HIP_PLAFORM=nvidia use nvcc; else use amdclang++.
+     if("$ENV{HIP_PLATFORM}" STREQUAL "nvidia" OR "$ENV{HIP_PLATFORM}" STREQUAL "nvcc")
+       find_program(NVCC_EXECUTABLE nvcc REQUIRED)
+       set(LIBCUDACXX_CUDA_COMPILER "${NVCC_EXECUTABLE}")
+@@ -189,8 +188,6 @@ if (${CMAKE_CUDA_COMPILER_ID} STREQUAL "AMDCLANG")
+     " -I${libhipcxx_SOURCE_DIR}/include/libhipcxx"
+ #    " CACHE INTERNAL "Flags for libcxx testing."
+   )
+-  # hipcc used to add the HIP runtime library automatically; with amdclang++
+-  # we must link it explicitly.
+   get_target_property(_amdhip64_loc hip::amdhip64 LOCATION)
+   cmake_path(GET _amdhip64_loc PARENT_PATH _hip_lib_dir)
+   string(APPEND LIBCUDACXX_TEST_LINKER_FLAGS
+-- 
+2.34.1
+
