@@ -34,11 +34,15 @@ Usage (single-arch release — legacy, build_native_linux_packages.yml):
 import argparse
 import boto3
 import datetime
+import gzip
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import NamedTuple, Protocol
 
 _THIS_DIR = Path(__file__).resolve().parent
 _BUILD_TOOLS_DIR = _THIS_DIR.parent.parent
@@ -52,131 +56,202 @@ from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
-def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
-    """Regenerate RPM repository metadata using merge approach.
+# ---------------------------------------------------------------------------
+# RPM repodata helpers — full regen from local build tree + S3 (dedupe fix)
+#
+# Old path used mergerepo_c on only newly uploaded RPMs. When upload dedupe
+# skipped every package, repodata could index fewer RPMs than exist on S3,
+# breaking dnf/zypper install. These helpers materialize the complete set
+# (local first, then S3 backfill), run createrepo_c, validate, and upload.
+# ---------------------------------------------------------------------------
+class _S3Client(Protocol):
+    """Minimal boto3 S3 client surface used by RPM repodata helpers."""
 
-    Downloads existing repodata from S3, generates metadata for new packages,
-    merges them using mergerepo_c, and uploads the result back to S3.
+    def get_paginator(self, op_name: str) -> object: ...
+
+    def download_file(self, bucket: str, key: str, filename: str) -> None: ...
+
+    def upload_file(
+        self,
+        filename: str,
+        bucket: str,
+        key: str,
+        ExtraArgs: dict[str, str] | None = None,
+    ) -> None: ...
+
+
+class RpmArchDirPrepResult(NamedTuple):
+    """Result of materializing an RPM arch directory for createrepo_c.
+
+    Attributes:
+        arch_dir: Working x86_64 directory containing the full RPM set.
+        local_rpm_count: RPMs copied from the local build tree.
+        downloaded_rpm_count: RPMs downloaded from S3 to complete the set.
+    """
+
+    arch_dir: Path
+    local_rpm_count: int
+    downloaded_rpm_count: int
+
+
+def _rpm_arch_dir(package_dir: Path | None) -> Path | None:
+    """Return package_dir/x86_64 when it exists."""
+    if package_dir is None:
+        return None
+    arch_dir = package_dir / "x86_64"
+    return arch_dir if arch_dir.is_dir() else None
+
+
+def _local_rpm_names(arch_dir: Path) -> set[str]:
+    """Return basenames of RPMs already materialized in the working arch dir."""
+    return {path.name for path in arch_dir.glob("*.rpm")}
+
+
+def _list_s3_rpm_keys(s3: _S3Client, bucket: str, prefix: str) -> list[str]:
+    """List all RPM object keys under prefix/x86_64/."""
+    keys: list[str] = []
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=f"{prefix}/x86_64/"):
+        if "Contents" not in page:
+            continue
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            # Exclude repodata/*.xml.gz keys that share the x86_64/ prefix.
+            if key.endswith(".rpm"):
+                keys.append(key)
+    return keys
+
+
+def _count_primary_packages(primary_xml_gz: Path) -> int:
+    """Count <package> entries in createrepo_c primary.xml.gz."""
+    root = ET.fromstring(gzip.open(primary_xml_gz, "rb").read())
+    if root.tag.startswith("{"):
+        namespace = root.tag.split("}")[0][1:]
+        return len(root.findall(f"{{{namespace}}}package"))
+    return len(root.findall("package"))
+
+
+def _validate_rpm_repodata(arch_dir: Path) -> None:
+    """Fail fast when repodata does not index every RPM in the arch dir."""
+    rpm_count = len(list(arch_dir.glob("*.rpm")))
+    primary_xml_gz = arch_dir / "repodata" / "primary.xml.gz"
+    if not primary_xml_gz.exists():
+        raise RuntimeError(f"Missing repodata primary.xml.gz under {arch_dir}")
+
+    meta_count = _count_primary_packages(primary_xml_gz)
+    # Reject incomplete metadata before uploading repodata to S3.
+    if meta_count != rpm_count:
+        raise RuntimeError(
+            "RPM repodata is incomplete: "
+            f"{meta_count} packages indexed, {rpm_count} .rpm files present"
+        )
+
+
+def _prepare_rpm_arch_dir_for_repodata(
+    s3: _S3Client,
+    bucket: str,
+    prefix: str,
+    package_dir: Path | None,
+    work_dir: Path,
+) -> RpmArchDirPrepResult:
+    """Materialize a complete x86_64 RPM directory for createrepo_c.
+
+    Uses the local build tree first (includes dedupe-skipped packages), then
+    downloads any RPMs that exist on S3 but not locally (prior uploads).
+    """
+    arch_dir = work_dir / "x86_64"
+    arch_dir.mkdir(parents=True, exist_ok=True)
+
+    # Step 1: copy local build output (includes dedupe-skipped RPMs).
+    local_arch_dir = _rpm_arch_dir(package_dir)
+    local_count = 0
+    if local_arch_dir is not None:
+        for rpm_file in local_arch_dir.glob("*.rpm"):
+            shutil.copy2(rpm_file, arch_dir / rpm_file.name)
+            local_count += 1
+
+    # Step 2: backfill RPMs uploaded in prior runs but missing locally.
+    local_names = _local_rpm_names(arch_dir)
+    downloaded_count = 0
+    for key in _list_s3_rpm_keys(s3, bucket, prefix):
+        filename = Path(key).name
+        if filename in local_names:
+            continue
+        print(f"  Downloading existing S3 package for repodata: {filename}")
+        s3.download_file(bucket, key, str(arch_dir / filename))
+        downloaded_count += 1
+
+    return RpmArchDirPrepResult(
+        arch_dir=arch_dir,
+        local_rpm_count=local_count,
+        downloaded_rpm_count=downloaded_count,
+    )
+
+
+def regenerate_rpm_metadata_from_s3(
+    s3: _S3Client,
+    bucket: str,
+    prefix: str,
+    uploaded_packages: list[str],
+    package_dir: Path | str | None = None,
+) -> None:
+    """Regenerate RPM repository metadata from the full package set on S3.
+
+    Runs createrepo_c over every .rpm under prefix/x86_64/: the local build
+    output (even when upload dedupe skipped uploading them) plus any RPMs that
+    already exist on S3 from prior uploads.
 
     Args:
         s3: boto3 S3 client
         bucket: S3 bucket name
         prefix: S3 prefix (e.g., 'rpm/20251222-12345')
-        uploaded_packages: List of actually uploaded .rpm file paths
+        uploaded_packages: List of .rpm file paths uploaded this run (unused;
+            kept for API compatibility with regenerate_repo_metadata_from_s3)
+        package_dir: Local package tree produced by build_package.py
     """
-    import tempfile
+    # Full regen uses local tree + S3 listing, not the per-run upload subset.
+    _ = uploaded_packages
 
-    print(f"Updating RPM repository metadata (merge mode)...")
+    print("Updating RPM repository metadata (full regen from local + S3)...")
 
-    # Create temporary directory for metadata operations
     with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-
-        # Efficient approach: Download existing repodata and merge with new packages
-        old_repo_dir = temp_path / "old_repo"
-        new_repo_dir = temp_path / "new_repo"
-        merged_repo_dir = temp_path / "merged_repo"
-
-        old_repo_dir.mkdir(parents=True, exist_ok=True)
-        new_repo_dir.mkdir(parents=True, exist_ok=True)
-        merged_repo_dir.mkdir(parents=True, exist_ok=True)
-
-        # Step 1: Download existing repodata from S3 (small files)
-        old_repodata_dir = old_repo_dir / "repodata"
-        old_repodata_dir.mkdir(parents=True, exist_ok=True)
-
-        print(
-            f"Downloading existing repository metadata from S3: s3://{bucket}/{prefix}/x86_64/repodata/"
+        prep = _prepare_rpm_arch_dir_for_repodata(
+            s3,
+            bucket,
+            prefix,
+            Path(package_dir) if package_dir is not None else None,
+            Path(temp_dir),
         )
-        repodata_files = []
-        try:
-            paginator = s3.get_paginator("list_objects_v2")
-            for page in paginator.paginate(
-                Bucket=bucket, Prefix=f"{prefix}/x86_64/repodata/"
-            ):
-                if "Contents" not in page:
-                    continue
-                for obj in page["Contents"]:
-                    key = obj["Key"]
-                    filename = Path(key).name
-                    local_file = old_repodata_dir / filename
-                    s3.download_file(bucket, key, str(local_file))
-                    repodata_files.append(filename)
-                    print(f"  Downloaded: {filename}")
-            if repodata_files:
-                print(
-                    f"✅ Found {len(repodata_files)} existing metadata files to merge"
-                )
-            else:
-                print("No existing metadata files found")
-        except Exception as e:
-            print(f"⚠️  No existing repodata found (new repo?): {e}")
-
-        # Step 2: Generate repodata for NEW packages only (actually uploaded ones)
-        rpm_packages = [p for p in uploaded_packages if p.endswith(".rpm")]
-        if rpm_packages:
-            print(
-                f"Generating metadata for {len(rpm_packages)} uploaded RPM packages..."
-            )
-            # Copy uploaded RPMs to temp dir
-            new_arch_dir = new_repo_dir / "x86_64"
-            new_arch_dir.mkdir(parents=True, exist_ok=True)
-            for rpm_file in rpm_packages:
-                shutil.copy2(rpm_file, new_arch_dir / Path(rpm_file).name)
-
-            # Generate repodata for new packages with clean paths (no baseurl)
-            run_command(
-                "createrepo_c --no-database --simple-md-filenames .",
-                cwd=str(new_arch_dir),
-            )
-            print("✅ Generated metadata for uploaded packages")
-        else:
-            print("No new RPM packages uploaded (all deduplicated)")
-            # Still need to ensure old metadata is preserved!
-            if repodata_files:
-                print("Preserving existing repodata...")
-                # Just re-upload the existing repodata we downloaded
-                for metadata_file in old_repodata_dir.iterdir():
-                    if metadata_file.is_file():
-                        s3_key = f"{prefix}/x86_64/repodata/{metadata_file.name}"
-                        s3.upload_file(str(metadata_file), bucket, s3_key)
-                        print(f"  Uploaded: {metadata_file.name}")
-                print("✅ RPM repository metadata preserved")
+        rpm_count = len(list(prep.arch_dir.glob("*.rpm")))
+        if rpm_count == 0:
+            print("No RPM packages found locally or on S3; skipping repodata regen")
             return
 
-        # Step 3: Merge repositories using mergerepo_c (no need to download all RPMs!)
-        merged_arch_dir = merged_repo_dir / "x86_64"
-        merged_arch_dir.mkdir(parents=True, exist_ok=True)
+        print(
+            f"Generating repodata for {rpm_count} RPM packages "
+            f"({prep.local_rpm_count} local, "
+            f"{prep.downloaded_rpm_count} downloaded from S3)..."
+        )
+        # Step 3: rebuild repodata from the complete RPM set (not mergerepo_c).
+        run_command(
+            "createrepo_c --no-database --simple-md-filenames .",
+            cwd=str(prep.arch_dir),
+        )
+        # Step 4: fail fast if primary.xml.gz does not cover every .rpm file.
+        _validate_rpm_repodata(prep.arch_dir)
+        print("✅ Generated repodata for full RPM set")
 
-        if repodata_files:  # If we have existing metadata
-            print("Merging old and new repository metadata...")
-            # mergerepo_c merges repodata without needing actual RPM files!
-            # Use --no-database, --simple-md-filenames, and --omit-baseurl to ensure clean paths
-            run_command(
-                f"mergerepo_c --no-database --simple-md-filenames --omit-baseurl "
-                f'--repo "{old_repo_dir}" --repo "{new_repo_dir / "x86_64"}" '
-                f'--outputdir "{merged_arch_dir}"',
-                cwd=str(temp_path),
-            )
-            print("✅ Merged repository metadata")
-        else:  # First upload, no existing metadata
-            print("First upload - using new repository metadata")
-            shutil.copytree(
-                new_repo_dir / "x86_64" / "repodata", merged_arch_dir / "repodata"
-            )
-
-        # Step 4: Upload merged repodata to S3
-        merged_repodata = merged_arch_dir / "repodata"
-        if merged_repodata.exists():
-            print("Uploading merged repository metadata to S3...")
-            uploaded_metadata = []
-            for metadata_file in merged_repodata.iterdir():
-                if metadata_file.is_file():
-                    s3_key = f"{prefix}/x86_64/repodata/{metadata_file.name}"
-                    s3.upload_file(str(metadata_file), bucket, s3_key)
-                    uploaded_metadata.append(metadata_file.name)
-                    print(f"  Uploaded: {metadata_file.name}")
-            print(f"✅ RPM repository metadata updated: {len(uploaded_metadata)} files")
+        # Step 5: upload regenerated repodata/ to S3.
+        repodata_dir = prep.arch_dir / "repodata"
+        print("Uploading repository metadata to S3...")
+        uploaded_metadata = []
+        for metadata_file in repodata_dir.iterdir():
+            if metadata_file.is_file():
+                s3_key = f"{prefix}/x86_64/repodata/{metadata_file.name}"
+                s3.upload_file(str(metadata_file), bucket, s3_key)
+                uploaded_metadata.append(metadata_file.name)
+                print(f"  Uploaded: {metadata_file.name}")
+        print(f"✅ RPM repository metadata updated: {len(uploaded_metadata)} files")
 
 
 def generate_release_file_with_checksums(release_file, job_type, dists_dir):
@@ -442,12 +517,18 @@ def regenerate_deb_metadata_from_s3(
 
 
 def regenerate_repo_metadata_from_s3(
-    s3, bucket, prefix, pkg_type, uploaded_packages, job_type="nightly"
-):
-    """Regenerate repository metadata efficiently using merge approach.
+    s3: _S3Client,
+    bucket: str,
+    prefix: str,
+    pkg_type: str,
+    uploaded_packages: list[str],
+    job_type: str = "nightly",
+    package_dir: Path | str | None = None,
+) -> None:
+    """Regenerate repository metadata from local and S3 package state.
 
-    This uses mergerepo_c (RPM) or merges Packages files (DEB) to efficiently
-    update metadata without re-downloading all packages from S3.
+    RPM repos are rebuilt from the full local + S3 package set. DEB repos
+    continue to merge Packages files without re-downloading all packages.
 
     Args:
         s3: boto3 S3 client
@@ -456,9 +537,13 @@ def regenerate_repo_metadata_from_s3(
         pkg_type: Package type ('rpm' or 'deb')
         uploaded_packages: List of actually uploaded package file paths (avoids duplicates from deduplication)
         job_type: Job type for Release file metadata (default: 'nightly')
+        package_dir: Local package tree produced by build_package.py
     """
     if pkg_type == "rpm":
-        regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages)
+        # RPM: full createrepo_c regen; package_dir carries dedupe-skipped builds.
+        regenerate_rpm_metadata_from_s3(
+            s3, bucket, prefix, uploaded_packages, package_dir=package_dir
+        )
     elif pkg_type == "deb":
         regenerate_deb_metadata_from_s3(s3, bucket, prefix, uploaded_packages, job_type)
     else:
@@ -727,9 +812,15 @@ def main():
         package_dir, bucket, prefix, dedupe=dedupe
     )
 
-    # Efficiently update repository metadata by merging with existing metadata
+    # Regenerate repository metadata from the full package set on S3/local tree
     regenerate_repo_metadata_from_s3(
-        s3_client, bucket, prefix, args.pkg_type, uploaded_packages, job_type
+        s3_client,
+        bucket,
+        prefix,
+        args.pkg_type,
+        uploaded_packages,
+        job_type,
+        package_dir=package_dir,
     )
 
     print(f"Package repository URL: {install_url}")
