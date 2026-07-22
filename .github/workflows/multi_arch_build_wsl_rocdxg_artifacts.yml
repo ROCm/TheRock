@@ -64,13 +64,14 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
-      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
       # misparses during nested subproject configure.
       THEROCK_WSL_WIN_SDK_MOUNT: /opt/winsdk-shared
+      # Injects Windows env vars into WSL
+      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
 
     steps:
       # Enable git longpaths before checkout (needed for external repos with long paths)
@@ -195,6 +196,7 @@ jobs:
       - name: Prepare WSL paths
         shell: wsl-bash {0}
         env:
+          # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
         run: |
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
@@ -236,6 +238,7 @@ jobs:
       - name: Configure
         shell: wsl-bash {0}
         env:
+          # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
         run: |
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
@@ -265,6 +268,7 @@ jobs:
       - name: Build stage
         shell: wsl-bash {0}
         env:
+          # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
         run: |
           stage_name="${{ inputs.stage_name }}"
