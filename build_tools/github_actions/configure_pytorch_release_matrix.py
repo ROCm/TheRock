@@ -54,21 +54,26 @@ CI_PYTORCH_REFS = {
 
 # Unknown explicit refs are left unfiltered so bring-up branches can opt into
 # new GPU families before the default PyTorch refs support them.
+#
+# gfx90c is excluded from stable release branches and built for nightly only
+# while it is brought up. Once nightly gfx90c wheels are confirmed working, it
+# will be added to the stable branches.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
         # gfx125x not supported for PyTorch 2.10.
-        "release/2.10": {"gfx125X-dcgpu"},
+        "release/2.10": {"gfx125X-dcgpu", "gfx90c"},
         # gfx125x supported for PyTorch 2.11 via https://github.com/ROCm/pytorch/pull/3346.
-        "release/2.11": {},
-        # gfx125x not yet upstreamed to pytorch/pytorch. Upstream expected
-        # 2026-06-26, but the ROCm 7.14 release is cut before that date.
-        # See https://github.com/ROCm/TheRock/issues/5833.
-        "release/2.12": {"gfx125X-dcgpu"},
-        # gfx125x not yet upstreamed to pytorch/pytorch.
-        # See https://github.com/ROCm/TheRock/issues/5833.
-        "nightly": {"gfx125X-dcgpu"},
+        "release/2.11": {"gfx90c"},
+        # gfx125x supported for PyTorch 2.12 via https://github.com/ROCm/pytorch/pull/3421.
+        "release/2.12": {"gfx90c"},
+        # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
+        "nightly": {},
     },
-    "windows": {},
+    "windows": {
+        "release/2.10": {"gfx90c"},
+        "release/2.11": {"gfx90c"},
+        "release/2.12": {"gfx90c"},
+    },
 }
 
 

@@ -33,6 +33,25 @@ THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
 
+# Determine host triple
+if THEROCK_CLANG_PATH.exists():
+    try:
+        host_triple = subprocess.run(
+            [str(THEROCK_CLANG_PATH), "--print-target-triple"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise RuntimeError(
+            f"'{THEROCK_CLANG_PATH} --print-target-triple' failed; "
+            "this suggests a broken toolchain."
+        ) from exc
+
+if host_triple:
+    THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
+
 # Tests skipped under ASan (known failing/unstable in the ASan configuration).
 ASAN_EXCLUDED_TESTS = [
     "rocprofiler_sdk.unit.spm_core.check_packet_generation",
@@ -91,6 +110,8 @@ def setup_env():
     environ_vars["HIP_PLATFORM"] = "amd"
 
     ld_lib_paths = [f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"]
+    if host_triple:
+        ld_lib_paths += [f"{THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}"]
 
     if is_asan():
         # Installed test binaries are built with -shared-libsan, so the clang
