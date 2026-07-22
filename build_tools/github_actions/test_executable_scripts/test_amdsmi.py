@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
@@ -200,6 +200,23 @@ else:
         logging.info(
             f"Combined exclude list ({len(exclude_tests)} entries): {exclude_tests}"
         )
+
+    # EXPERIMENT (users/kbillaka): un-exclude the write/set tests that CI normally
+    # filters out on gfx1151, to observe their real pass/skip behaviour on the
+    # non-privileged strix runner. Privilege detection above is left intact, so
+    # these tests still self-skip their state-modifying paths when the runtime
+    # lacks the capabilities — we only drop the hard gtest-filter exclusion.
+    # Matches by test-case name so it covers both the legacy amdsmitst* and the
+    # renamed GpuFunctional* suites, and both the global and ASIC exclude sources.
+    UNEXCLUDE_TESTCASES = {"TestPowerReadWrite", "TestFrequenciesReadWrite"}
+    _before = len(exclude_tests)
+    exclude_tests = [
+        t for t in exclude_tests if t.rsplit(".", 1)[-1] not in UNEXCLUDE_TESTCASES
+    ]
+    logging.info(
+        f"Experiment: un-excluded {_before - len(exclude_tests)} write test(s) "
+        f"({sorted(UNEXCLUDE_TESTCASES)}); {len(exclude_tests)} excludes remain"
+    )
 
     gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
     gtest_filter_arg = [f"--gtest_filter={gtest_filter}"]
