@@ -316,6 +316,13 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
+  # When libiberty is bundled; otherwise let rocprofiler-systems build its own.
+  if(THEROCK_BUNDLED_LIBIBERTY)
+    set(_rocprofsys_build_libiberty OFF)
+  else()
+    set(_rocprofsys_build_libiberty ON)
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-systems
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -324,7 +331,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCPROFSYS_BUILD_TBB=ON
-      -DROCPROFSYS_BUILD_LIBIBERTY=ON
+      -DROCPROFSYS_BUILD_LIBIBERTY="${_rocprofsys_build_libiberty}"
       -DROCPROFSYS_BUILD_DYNINST=ON
       -DROCPROFSYS_BUILD_FOR_THEROCK=ON
       -DROCPROFSYS_USE_PYTESTS=OFF
@@ -354,6 +361,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       hip-clr
       rocprofiler-register
       rocprofiler-sdk
+      ${THEROCK_BUNDLED_LIBIBERTY}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
