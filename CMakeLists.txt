@@ -494,6 +494,7 @@ endif()
 # don't be fooled).
 add_subdirectory(third-party/sysdeps)
 add_subdirectory(base)
+add_subdirectory(third-party/googletest)
 add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)
@@ -540,3 +541,6 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
+
+# Write artifact→subprojects manifest for Python scripts to use
+therock_write_subproject_manifest()

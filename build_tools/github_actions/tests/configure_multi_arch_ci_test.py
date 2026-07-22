@@ -343,7 +343,9 @@ class TestDecideJobs(unittest.TestCase):
 
     def test_all_job_groups_run(self):
         """All job groups are set to run (subgraph selection is Phase 4)."""
-        result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())
+        result = cm.decide_jobs(
+            self._inputs(), git_context=cm.GitContext(), targets=cm.TargetSelection()
+        )
         self.assertIsInstance(result, cm.JobDecisions)
         self.assertEqual(result.build_rocm.action, cm.JobAction.RUN)
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
@@ -356,6 +358,7 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(build_pytorch=False),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
 
         self.assertEqual(result.build_pytorch.action, cm.JobAction.SKIP)
@@ -365,6 +368,7 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(build_jax=True),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
 
         self.assertEqual(result.build_jax.action, cm.JobAction.RUN)
@@ -372,13 +376,17 @@ class TestDecideJobs(unittest.TestCase):
     def test_default_test_type_is_quick(self):
         """Default test_type for PR/push with no special conditions."""
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.decide_jobs(self._inputs(), git_context=git)
+        result = cm.decide_jobs(
+            self._inputs(), git_context=git, targets=cm.TargetSelection()
+        )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_schedule_is_comprehensive(self):
         """Schedule trigger → comprehensive tests."""
         result = cm.decide_jobs(
-            self._inputs(event_name="schedule"), git_context=cm.GitContext()
+            self._inputs(event_name="schedule"),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "comprehensive")
 
@@ -388,7 +396,9 @@ class TestDecideJobs(unittest.TestCase):
             changed_files=["rocm-libraries", "CMakeLists.txt"],
             submodule_paths=["rocm-libraries", "rocm-systems"],
         )
-        result = cm.decide_jobs(self._inputs(), git_context=git)
+        result = cm.decide_jobs(
+            self._inputs(), git_context=git, targets=cm.TargetSelection()
+        )
         self.assertEqual(result.test_rocm.test_type, "standard")
         self.assertIn("submodule", result.test_rocm.test_type_reason)
 
@@ -398,14 +408,18 @@ class TestDecideJobs(unittest.TestCase):
             changed_files=["CMakeLists.txt"],
             submodule_paths=["rocm-libraries", "rocm-systems"],
         )
-        result = cm.decide_jobs(self._inputs(), git_context=git)
+        result = cm.decide_jobs(
+            self._inputs(), git_context=git, targets=cm.TargetSelection()
+        )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_pr_test_label_is_full(self):
         """PR with test:* label → full tests."""
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         result = cm.decide_jobs(
-            self._inputs(pr_labels=["test:rocprim"]), git_context=git
+            self._inputs(pr_labels=["test:rocprim"]),
+            git_context=git,
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "full")
 
@@ -417,13 +431,16 @@ class TestDecideJobs(unittest.TestCase):
                 linux_test_labels=["test:rocprim"],
             ),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "full")
 
     def test_nightly_release_is_comprehensive(self):
         """Nightly release → comprehensive tests."""
         result = cm.decide_jobs(
-            self._inputs(release_type="nightly"), git_context=cm.GitContext()
+            self._inputs(release_type="nightly"),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "comprehensive")
         self.assertIn("release", result.test_rocm.test_type_reason)
@@ -431,7 +448,9 @@ class TestDecideJobs(unittest.TestCase):
     def test_prerelease_is_full(self):
         """Prerelease → full tests."""
         result = cm.decide_jobs(
-            self._inputs(release_type="prerelease"), git_context=cm.GitContext()
+            self._inputs(release_type="prerelease"),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "full")
         self.assertIn("release", result.test_rocm.test_type_reason)
@@ -439,7 +458,11 @@ class TestDecideJobs(unittest.TestCase):
     def test_dev_release_falls_through_to_default(self):
         """Dev release without other signals → quick (falls through)."""
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
-        result = cm.decide_jobs(self._inputs(release_type="dev"), git_context=git)
+        result = cm.decide_jobs(
+            self._inputs(release_type="dev"),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_test_filter_label_overrides(self):
@@ -451,6 +474,7 @@ class TestDecideJobs(unittest.TestCase):
                 pr_labels=["test_filter:standard"],
             ),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "standard")
 
@@ -459,7 +483,9 @@ class TestDecideJobs(unittest.TestCase):
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         with self.assertRaises(ValueError, msg="Unrecognized test_filter"):
             cm.decide_jobs(
-                self._inputs(pr_labels=["test_filter:bogus"]), git_context=git
+                self._inputs(pr_labels=["test_filter:bogus"]),
+                git_context=git,
+                targets=cm.TargetSelection(),
             )
 
     def test_workflow_dispatch_test_filter_label_overrides(self):
@@ -472,6 +498,7 @@ class TestDecideJobs(unittest.TestCase):
                 linux_test_labels=["test_filter:comprehensive"],
             ),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "comprehensive")
         self.assertIn("test_filter", result.test_rocm.test_type_reason)
@@ -484,6 +511,7 @@ class TestDecideJobs(unittest.TestCase):
                 prebuilt_stages="compiler-runtime,runtime-tests",
             ),
             git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(
             sorted(result.build_rocm.prebuilt_stages),
@@ -491,9 +519,28 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_reuse_scoped_to_selected_targets(self):
+        """decide_jobs threads the resolved targets into automatic reuse.
+        With no families selected there are no build platforms, so automatic
+        reuse is disabled and reports a full rebuild -- confirming the decision
+        is scoped to the passed-in target selection.
+        """
+        result = cm.decide_jobs(
+            self._inputs(),
+            git_context=cm.GitContext(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"]
+            ),
+            targets=cm.TargetSelection(),
+        )
+        self.assertIsNotNone(result.auto_stage_reuse)
+        self.assertTrue(result.auto_stage_reuse.full_rebuild_required)
+        self.assertEqual(result.auto_stage_reuse.applied_reuse_stages, ())
+
     def test_no_prebuilt_stages_by_default(self):
         """Without explicit prebuilt_stages, no stage decisions are set."""
-        result = cm.decide_jobs(self._inputs(), git_context=cm.GitContext())
+        result = cm.decide_jobs(
+            self._inputs(), git_context=cm.GitContext(), targets=cm.TargetSelection()
+        )
         self.assertEqual(result.build_rocm.prebuilt_stages, [])
         self.assertEqual(result.build_rocm.stage_decisions, {})
 
@@ -523,6 +570,7 @@ class TestDecideJobs(unittest.TestCase):
             result = cm.decide_jobs(
                 self._inputs(event_name=event, build_variant="asan"),
                 git_context=git_context,
+                targets=cm.TargetSelection(),
             )
             self.assertEqual(
                 result.test_rocm.action,
@@ -535,6 +583,7 @@ class TestDecideJobs(unittest.TestCase):
             result = cm.decide_jobs(
                 self._inputs(event_name=event, build_variant="asan"),
                 git_context=git_context,
+                targets=cm.TargetSelection(),
             )
             self.assertEqual(
                 result.test_rocm.action,
@@ -546,6 +595,7 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(event_name="pull_request", build_variant="release"),
             git_context=git_context,
+            targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
 
@@ -1443,6 +1493,50 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext.empty())
         self.assertEqual(outputs.linux_test_labels, [])
         self.assertEqual(outputs.windows_test_labels, [])
+
+    @patch("configure_multi_arch_ci.decide_jobs")
+    def test_configure_propagates_auto_reuse_baseline_run_id(self, mock_decide_jobs):
+        """When auto reuse applies, the selected baseline run id reaches BuildConfig."""
+        mock_decide_jobs.return_value = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(
+                action=cm.JobAction.RUN,
+                stage_decisions={
+                    "compiler-runtime": cm.JobAction.PREBUILT,
+                    "math-libs": cm.JobAction.RUN,
+                },
+                baseline_run_id="123",
+            ),
+            test_rocm=cm.TestRocmDecision(
+                action=cm.JobAction.RUN,
+                test_type="quick",
+            ),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+
+        self.assertIsNotNone(outputs.builds.linux)
+        self.assertIsNotNone(outputs.builds.windows)
+
+        self.assertEqual(outputs.builds.linux.baseline_run_id, "123")
+        self.assertEqual(outputs.builds.windows.baseline_run_id, "123")
+        self.assertIn("compiler-runtime", outputs.builds.linux.prebuilt_stages)
+        self.assertIn("compiler-runtime", outputs.builds.windows.prebuilt_stages)
+
+        linux_payload = outputs.builds.linux.to_dict()
+        self.assertEqual(linux_payload["baseline_run_id"], "123")
+        self.assertEqual(linux_payload["prebuilt_stages"], "compiler-runtime")
 
 
 # ---------------------------------------------------------------------------
