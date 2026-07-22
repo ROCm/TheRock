@@ -174,6 +174,18 @@ test_matrix = {
             "linux": 1,
         },
     },
+    # OpenCL Conformance tests
+    "opencl-cts": {
+        "job_name": "opencl-cts",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 270,
+        "test_script": f"python {_get_script_path('test_opencl_cts.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 4,
+        },
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",

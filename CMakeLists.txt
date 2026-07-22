@@ -497,6 +497,7 @@ add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)
+add_subdirectory(opencl)
 add_subdirectory(debug-tools)
 # media-libs (rocdecode/rocjpeg) must be added before profiler: rocprofiler-sdk
 # performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
