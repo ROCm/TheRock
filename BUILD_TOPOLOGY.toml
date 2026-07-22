@@ -642,9 +642,7 @@ artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 
 [artifacts.hipthreads]
 # target-neutral: libhipthreads.a is a static archive of device bitcode that is
-# identical across per-arch shards. Built for all targets once (see
-# USE_TEST_AMDGPU_TARGETS in math-libs/CMakeLists.txt) and published as a single
-# _generic artifact, making per-arch CI upload races harmless (latest write wins).
+# identical across per-arch shards. Built for all targets once.
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]

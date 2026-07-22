@@ -8,6 +8,5 @@ include = [
   "hipthreads/**/*",
 ]
 exclude = [
-  # Exclude folders not needed for testing
   "hipthreads/docs/**",
 ]
