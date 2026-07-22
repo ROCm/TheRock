@@ -291,6 +291,63 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 
 ##############################################################################
+# profiler-hub
+# General-purpose, schema-versioned data storage library for profiling and
+# tracing tools, designed to be built and consumed standalone by any tool
+# that needs it.
+##############################################################################
+if(THEROCK_ENABLE_PROFILER_HUB)
+  set(_profiler_hub_build_deps therock-nlohmann-json therock-spdlog therock-fmt)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND _profiler_hub_build_deps therock-googletest)
+  endif()
+
+  therock_cmake_subproject_declare(profiler-hub
+    # profiler-hub is a pure host C++ library with no GPU/HIP code, so it
+    # does not require any AMDGPU targets to be selected.
+    DISABLE_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DPROFILER_HUB_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DPROFILER_HUB_BUILD_BENCHMARKS=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    BUILD_DEPS
+      ${_profiler_hub_build_deps}
+    RUNTIME_DEPS
+      rocprofiler-sdk
+      ${THEROCK_BUNDLED_SQLITE3}
+    INTERFACE_INCLUDE_DIRS
+      include
+    INTERFACE_LINK_DIRS
+      lib
+  )
+  therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
+  therock_cmake_subproject_activate(profiler-hub)
+
+  therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/profiler-hub/dist/lib
+    LIB_NAMES
+      libprofiler-hub.so
+  )
+
+  therock_provide_artifact(profiler-hub
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-profiler-hub.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      profiler-hub
+  )
+endif(THEROCK_ENABLE_PROFILER_HUB)
+
+##############################################################################
 # rocprofiler-systems
 ##############################################################################
 if(THEROCK_ENABLE_ROCPROFSYS)
