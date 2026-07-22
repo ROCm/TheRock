@@ -68,6 +68,10 @@ else()
   # Per LLVM HIP offload PGO docs, the toolchain needs LLVM_RUNTIME_TARGETS with
   # amdgcn-amd-amdhsa and the device runtime configuration.
   if(COMPILER_RT_BUILD_PROFILE_ROCM)
+    # Coverage builds are memory-intensive due to cross-compiling for amdgcn.
+    # Disable Flang (not needed for HIP coverage) to reduce memory pressure.
+    set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+
     if(NOT DEFINED LLVM_RUNTIME_TARGETS)
       set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
     elseif(NOT "amdgcn-amd-amdhsa" IN_LIST LLVM_RUNTIME_TARGETS)
