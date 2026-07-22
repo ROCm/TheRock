@@ -107,6 +107,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
+            --action generate \
             --end "${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}" \
             --start "${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}" \
             --find-last-run "${{ inputs.find_last_run }}" \
@@ -135,10 +136,12 @@ jobs:
             github.event_name == 'pull_request' &&
             startsWith(github.event.pull_request.head.ref, 'bump-')
           }}
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python3 build_tools/github_actions/post_manifest_diff_pr_comment.py \
+          python3 build_tools/generate_manifest_diff_report.py \
+            --action post_comment \
             --run-id ${{ github.run_id }} \
             --pr-number ${{ github.event.pull_request.number }} \
             --commit-range-summary "${{ steps.gen-report.outputs.commit_range_summary }}"
