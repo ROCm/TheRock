@@ -283,18 +283,12 @@ skip_tests = {
             "test_replicate_pp_ScheduleClass4_bfloat16",
             # DistMathOpsTest / DistMathOpsTestWithLocalTensor - error code 10
             "test_linalg_ops",
-            # TestViewOpsWithLocalTensor - list index out of range
-            "test_view_ops",
             # TestFullyShard1DTrainingCore - child rank exit code 10.
             # Parenthesized so TestReplicate1DTrainingCore::test_post_optim_event
             # (which passes) is not also skipped.
             "(TestFullyShard1DTrainingCore and test_post_optim_event)",
             # launcher/test_run.py - ElasticLaunchTest ChildFailedError.
             "(ElasticLaunchTest and test_virtual_local_rank)",
-            # distributed/test_symmetric_memory.py - SymmMemCollectiveTest::
-            # test_two_shot_all_reduce hangs to a 900s pytest-timeout on
-            # teardown. Rest of the symmetric-memory block is fixed on rocm7.15.
-            "(SymmMemCollectiveTest and test_two_shot_all_reduce)",
             #
             # --- No execution evidence on run 29264970035 (kept) ----------
             # TestFSDPMemory - memory accounting mismatch (not collected)
@@ -308,20 +302,20 @@ skip_tests = {
             # ReplicateFullyShardInit - pytest-timeout >900s (harness-skipped)
             "test_replicate_fully_shard_init",
             #
-            # --- Newly failing on run 29264970035 -------------------------
-            # CI: https://github.com/ROCm/TheRock/actions/runs/29264970035 (2.12/rocm7.15)
-            # ReplicateTest (test_replicate_with_compiler.py) - child exit 10.
-            # Narrow entries: test_compile_gpu/_cpu_no_sync pass, keep enabled.
-            "(ReplicateTest and test_compile_bf16)",
-            "(ReplicateTest and test_compile_fp16)",
-            # Flaky (both pass and fail observed) but fails often enough to skip.
-            "(ReplicateTest and test_compile_backward_only)",
-            # TestZeroRedundancyOptimizerDistributed - single parametrization
-            # fails (flaky); 16 sibling params pass, so match only this one.
-            "(TestZeroRedundancyOptimizerDistributed and test_ddp_zero_overlap_use_gpu_True_use_interleaved_hook_False_gradient_as_bucket_view_False_static_graph_True_shard_buckets_False)",
-            # CPFlexAttentionTest (tensor/test_attention.py) - collapses the
-            # failing _causal_mask and _document_mask variants.
-            "(CPFlexAttentionTest and test_cp_flex_attention)",
+            # --- Newly failing on run 29823966840 -------------------------
+            # CI: https://github.com/ROCm/TheRock/actions/runs/29823966840 (2.12/rocm7.15)
+            # These passed on earlier runs and are intermittently failing
+            # (flaky). SymmMemCollectiveTest::test_two_shot_all_reduce was
+            # removed here: it failed on 29237251622/29264970035 but now
+            # passes on the two newest wheels (a20260715, a20260721).
+            # test_dynamo_distributed.py - TestMultiProc, child exit code 10.
+            "(TestMultiProc and test_compiler_collectives_automatic_dynamic_tensor)",
+            # test_distributed_spawn.py - TestDistBackendWithSpawn, child exit 10.
+            "(TestDistBackendWithSpawn and test_monitored_barrier_allreduce_hang_wait_all_ranks)",
+            # test_ce_colls.py - NCCLCopyEngineCollectives, worker exception.
+            # Only the allgather/alltoall CE collectives fail; others pass.
+            "(NCCLCopyEngineCollectives and test_ce_allgather)",
+            "(NCCLCopyEngineCollectives and test_ce_alltoall)",
         ],
     },
 }
