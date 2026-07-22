@@ -64,7 +64,7 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
-      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
+      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
       # Clean, space-free mount target for the Windows SDK shared include dir
@@ -300,6 +300,9 @@ jobs:
       - name: Push stage artifacts
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
+        env:
+          # Append AWS creds set by the "Configure AWS credentials" step
+          WSLENV: ${{ env.WSLENV }}:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           stage_name="${{ inputs.stage_name }}"
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
@@ -313,6 +316,9 @@ jobs:
       - name: Upload stage logs
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
+        env:
+          # Append AWS creds set by the "Configure AWS credentials" step
+          WSLENV: ${{ env.WSLENV }}:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
