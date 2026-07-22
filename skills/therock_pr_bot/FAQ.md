@@ -290,6 +290,7 @@ The PR author's login is checked against a configured list of bump bot accounts.
 
 - `assistant-librarian` (and `assistant-librarian[bot]`)
 - `systems-assistant` (and `systems-assistant[bot]`)
+- `dependabot` (and `dependabot[bot]`)
 
 If a different bot opens dependency-bump PRs in your repo, request that the maintainers add it to `bump_bot_authors` in `policy.yml`.
 
