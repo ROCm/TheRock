@@ -170,8 +170,8 @@ def select_baseline_for_prebuilt_stages(
 
     print(f"Looking for baseline with {len(required_artifacts)} required artifacts")
 
-    # External repos use therock_multi_arch_ci.yml as their workflow name
-    workflow_name = "therock_multi_arch_ci.yml"
+    # External repos use therock-multi-arch-ci.yml as their workflow name
+    workflow_name = "therock-multi-arch-ci.yml"
     max_age_hours_raw = os.environ.get("BASELINE_MAX_AGE_HOURS", "72")
     try:
         max_age_hours = float(max_age_hours_raw)

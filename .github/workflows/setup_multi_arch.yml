@@ -215,7 +215,7 @@ jobs:
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # For external repos, look for baseline runs in the external repo, not TheRock
           STAGE_REUSE_BASELINE_REPO: ${{ inputs.external_repo != '' && fromJSON(inputs.external_repo).repository || '' }}
-          STAGE_REUSE_BASELINE_WORKFLOW: ${{ inputs.external_repo != '' && 'therock_multi_arch_ci.yml' || '' }}
+          STAGE_REUSE_BASELINE_WORKFLOW: ${{ inputs.external_repo != '' && 'therock-multi-arch-ci.yml' || '' }}
           STAGE_REUSE_BASELINE_BRANCH: ${{ inputs.external_repo != '' && 'develop' || 'main' }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
