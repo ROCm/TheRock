@@ -51,6 +51,7 @@ import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
+import logging
 
 # Add parent directory to path for _therock_utils imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -1370,6 +1371,10 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+    )
     ci_inputs = CIInputs.from_environ()
 
     # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
