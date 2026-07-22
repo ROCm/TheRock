@@ -75,7 +75,11 @@ else()
     endif()
     set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
     set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc")
-    set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake")
+    set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake")
+    # AMDGPU.cmake sets COMPILER_RT_PROFILE_BAREMETAL=ON which disables COMPILER_RT_BUILD_PROFILE_ROCM by default.
+    # Override it to ensure device profiling runtime is built.
+    set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_PROFILE_BAREMETAL OFF)
+    set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_BUILD_PROFILE_ROCM ON)
     set(RUNTIMES_amdgcn-amd-amdhsa_RUNTIMES_USE_LIBC "llvm-libc")
   endif()
 
