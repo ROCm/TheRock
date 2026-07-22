@@ -172,6 +172,13 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   failing tests still show their full output; only passing-test noise is
 #   suppressed.
 COMPONENT_OVERRIDES = {
+    # amdsmi installs its amdsmitst gtest binary under share/amd_smi/tests, and
+    # the generated install-time CTestTestfile.cmake one directory below it
+    # (share/amd_smi/tests/ctest) so its relative "../amdsmitst" path resolves.
+    # Point ctest at that fragment directory instead of the default bin/amdsmi.
+    "amdsmi": {
+        "test_dir": ["share", "amd_smi", "tests", "ctest"],
+    },
     # ctest fragments live under libexec, not bin.
     # ctest_parallel pinned to 1: tests are pytest runs that parallelize
     # internally (-n), so concurrent ctest jobs over-subscribe.
