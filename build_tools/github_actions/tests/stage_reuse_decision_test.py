@@ -470,13 +470,13 @@ class PlanStageReuseTest(unittest.TestCase):
             changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
             topology=FakeTopology(),
         )
-        self.assertIn("compiler-runtime", plan.candidate_stages)
-        self.assertFalse(plan.full_rebuild_required)
+        self.assertIn("compiler-runtime", plan.impact.copy_stages)
+        self.assertFalse(plan.impact.full_rebuild_required)
 
     def test_plan_none_changed_files_is_full_rebuild(self):
         plan = srd.plan_stage_reuse(changed_files=None, topology=FakeTopology())
-        self.assertTrue(plan.full_rebuild_required)
-        self.assertEqual(plan.candidate_stages, ())
+        self.assertTrue(plan.impact.full_rebuild_required)
+        self.assertEqual(plan.impact.copy_stages, ())
 
 
 class TargetFamiliesTest(unittest.TestCase):

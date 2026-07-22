@@ -97,6 +97,18 @@ BaselineSelector = Callable[[Sequence[RequiredArtifact]], BaselineRun | None]
 
 
 @dataclass(frozen=True)
+class WorkflowImpact:
+    """Stage impact analysis before baseline validation."""
+
+    changed_paths: tuple[str, ...]
+    affected_source_sets: tuple[str, ...]
+    affected_artifact_groups: tuple[str, ...]
+    rebuild_stages: tuple[str, ...]
+    copy_stages: tuple[str, ...]
+    full_rebuild_required: bool
+    reasons: tuple[str, ...]
+
+@dataclass(frozen=True)
 class StageReusePlan:
     """Result of the *planning* step: which stages are reuse candidates.
     This is a pure function of the changed files and topology -- no baseline
@@ -104,10 +116,7 @@ class StageReusePlan:
     callers reuse the impact decision without triggering any network/API work.
     """
 
-    candidate_stages: tuple[str, ...]
-    rebuild_stages: tuple[str, ...]
-    full_rebuild_required: bool
-    reasons: tuple[str, ...]
+    impact: WorkflowImpact
 
 
 @dataclass(frozen=True)
@@ -214,12 +223,17 @@ def plan_stage_reuse(
     """
 
     if changed_files is None:
-        return StageReusePlan(
-            candidate_stages=(),
+        stage_impact = WorkflowImpact(
+            changed_paths=(),
+            affected_source_sets=(),
+            affected_artifact_groups=(),
             rebuild_stages=(),
+            copy_stages=(),
             full_rebuild_required=True,
             reasons=("no changed-file list available",),
-        )
+       )
+
+        return StageReusePlan(impact=stage_impact)
 
     if topology is None:
         topology = get_topology()
@@ -233,12 +247,16 @@ def plan_stage_reuse(
         topology=topology,
         platform=platform,
     )
-    return StageReusePlan(
-        candidate_stages=tuple(impact.copy_stages),
-        rebuild_stages=tuple(impact.rebuild_stages),
+    stage_impact = WorkflowImpact(
+        changed_paths=tuple(changed_files),
+        affected_source_sets=impact.matched_source_sets,
+        affected_artifact_groups=impact.impacted_artifact_groups,
+        rebuild_stages=impact.rebuild_stages,
+        copy_stages=impact.copy_stages,
         full_rebuild_required=impact.full_rebuild_required,
-        reasons=tuple(impact.reasons),
+        reasons=impact.reasons,
     )
+    return StageReusePlan(impact=stage_impact)
 
 
 def compute_auto_stage_reuse(
@@ -284,15 +302,16 @@ def compute_auto_stage_reuse(
         platform=platforms[0],
         topology=topology,
     )
-    candidates = plan.candidate_stages
-    rebuild = plan.rebuild_stages
+    impact = plan.impact
+    candidates = impact.copy_stages
+    rebuild = impact.rebuild_stages
 
     if changed_files is None:
         return _log_and_return(
             _empty_result(
                 mode,
                 full_rebuild_required=True,
-                reasons=plan.reasons,
+                reasons=impact.reasons,
                 report_lines=(
                     f"{LOG_PREFIX} mode={mode.value}; no changed-file list. "
                     f"Conservatively rebuilding all stages.",
@@ -300,13 +319,13 @@ def compute_auto_stage_reuse(
             )
         )
 
-    if plan.full_rebuild_required or not candidates:
+    if impact.full_rebuild_required or not candidates:
         lines = _format_report(
             mode=mode,
             candidates=candidates,
             rebuild=rebuild,
-            full_rebuild_required=plan.full_rebuild_required,
-            reasons=plan.reasons,
+            full_rebuild_required=impact.full_rebuild_required,
+            reasons=impact.reasons,
             baseline_run_id=None,
             available=(),
             unavailable=candidates,
@@ -316,17 +335,16 @@ def compute_auto_stage_reuse(
                 mode=mode,
                 candidate_stages=candidates,
                 rebuild_stages=rebuild,
-                full_rebuild_required=plan.full_rebuild_required,
+                full_rebuild_required=impact.full_rebuild_required,
                 baseline_run_id=None,
                 baseline_html_url=None,
                 available_stages=(),
                 unavailable_stages=candidates,
                 applied_reuse_stages=(),
-                reasons=plan.reasons,
+                reasons=impact.reasons,
                 report_lines=lines,
             )
         )
-
     required = _required_artifacts_for_stages(topology, candidates, families)
     # Verify artifact availability independently for each platform. A single
     # ``baseline_selector`` (used by tests) applies to all platforms; otherwise
@@ -421,7 +439,7 @@ def compute_auto_stage_reuse(
         candidates=candidates,
         rebuild=rebuild,
         full_rebuild_required=False,
-        reasons=plan.reasons,
+        reasons=impact.reasons,
         baseline_run_id=reported_baseline_run_id,
         available=available_t,
         unavailable=unavailable_t,
@@ -440,7 +458,7 @@ def compute_auto_stage_reuse(
             available_stages=available_t,
             unavailable_stages=unavailable_t,
             applied_reuse_stages=applied,
-            reasons=plan.reasons,
+            reasons=impact.reasons,
             report_lines=lines,
             platform_available=per_platform_available,
         )
