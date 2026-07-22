@@ -183,7 +183,13 @@ if(THEROCK_ENABLE_COMPILER)
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
       EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-googletest/source"
-      BINARY_DIR "amd-comgr-googletest"
+      # BINARY_DIR must be absolute: therock_cmake_subproject_declare only
+      # normalizes a relative BINARY_DIR against CMAKE_CURRENT_BINARY_DIR when
+      # EXTERNAL_SOURCE_DIR is relative. With an absolute EXTERNAL_SOURCE_DIR (as
+      # here), a relative BINARY_DIR would resolve against the source tree and
+      # the stage-marker file(TOUCH) would fail, leaving the subproject only
+      # partially declared.
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-googletest"
       CMAKE_ARGS
         -Dgtest_force_shared_crt=ON
     )
