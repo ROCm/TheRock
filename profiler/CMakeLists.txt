@@ -130,6 +130,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-sdk-tests
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      openmpi
     RUNTIME_DEPS
       aqlprofile
       hip-clr
