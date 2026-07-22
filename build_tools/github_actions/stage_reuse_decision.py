@@ -108,6 +108,7 @@ class WorkflowImpact:
     full_rebuild_required: bool
     reasons: tuple[str, ...]
 
+
 @dataclass(frozen=True)
 class StageReusePlan:
     """Result of the *planning* step: which stages are reuse candidates.
@@ -231,7 +232,7 @@ def plan_stage_reuse(
             copy_stages=(),
             full_rebuild_required=True,
             reasons=("no changed-file list available",),
-       )
+        )
 
         return StageReusePlan(impact=stage_impact)
 

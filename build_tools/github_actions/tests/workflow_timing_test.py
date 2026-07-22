@@ -162,7 +162,6 @@ class WorkflowTimingTest(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].runner_label, "ubuntu-24.04")
 
-
     def test_format_timing_summary_linux_before_windows(self):
         summary = wt.format_timing_summary(
             [
@@ -209,7 +208,6 @@ class WorkflowTimingTest(unittest.TestCase):
 
         self.assertLess(summary.index("## Linux"), summary.index("## Windows"))
 
-
     def test_format_timing_summary_variant_column_removed(self):
         summary = wt.format_timing_summary(
             [
@@ -237,7 +235,6 @@ class WorkflowTimingTest(unittest.TestCase):
         )
 
         self.assertNotIn("Variant", summary)
-
 
     def test_format_timing_summary_filters_non_build_and_test_jobs(self):
         summary = wt.format_timing_summary(
