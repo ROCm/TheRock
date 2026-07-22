@@ -230,15 +230,16 @@ therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-
 therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    rccl # https://github.com/ROCm/TheRock/issues/150
-    rccl-tests
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    rccl # https://github.com/ROCm/TheRock/issues/150
-    rccl-tests
+    # rccl/rccl-tests enabled for gfx1153: building RCCL device kernels for this
+    # ISA fixes RCCL_UT "HIP failure: 'invalid kernel file'" (ROCM-24916).
+    # Mirrors the gfx1151 enablement done in ROCM-21678.
+    # rccl # https://github.com/ROCm/TheRock/issues/150
+    # rccl-tests
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
