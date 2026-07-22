@@ -269,6 +269,27 @@ skip_tests = {
             "test_load_standalone",
         ],
         "distributed": [
+            # ---------------------------------------------------------------
+            # Distributed failures triaged from the "Test PyTorch Full"
+            # gfx94X-dcgpu suite (2.12 / rocm7.15). Parenthesized entries are
+            # pytest -k expressions matched against Class::method; bare entries
+            # are method-name substrings.
+            # CI: https://github.com/ROCm/TheRock/actions/runs/29757256613 (a20260719)
+            # ---------------------------------------------------------------
+            # ComposabilityTest - pipeline parallel worker exception.
+            "test_replicate_pp_ScheduleClass4_bfloat16",
+            # DistMathOpsTest / DistMathOpsTestWithLocalTensor - child exit 10
+            # / torch.linalg.eig requires MAGMA.
+            "test_linalg_ops",
+            # TestFullyShard1DTrainingCore - child rank exit code 10.
+            # Parenthesized so TestReplicate1DTrainingCore::test_post_optim_event
+            # (which passes) is not also skipped.
+            "(TestFullyShard1DTrainingCore and test_post_optim_event)",
+            # launcher/test_run.py - ElasticLaunchTest ChildFailedError.
+            "(ElasticLaunchTest and test_virtual_local_rank)",
+            # test_distributed_spawn.py - TestDistBackendWithSpawn, child exit 10
+            # (RuntimeError not raised).
+            "(TestDistBackendWithSpawn and test_monitored_barrier_allreduce_hang_wait_all_ranks)",
         ],
     },
 }

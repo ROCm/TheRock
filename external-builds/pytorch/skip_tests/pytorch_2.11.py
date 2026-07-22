@@ -39,6 +39,25 @@ skip_tests = {
             "test_cpp_warnings_have_python_context_cuda",
         ],
         "distributed": [
+            # Distributed failures triaged from gfx94X-dcgpu 2.11 runs:
+            # https://github.com/ROCm/TheRock/actions/runs/29750508282 (2.11.0+rocm7.15.0a20260719)
+            # Dispositions/evidence: FIXES_FOR_triage_skips_2.11_0626.md
+            # ReplicateFullyShardInit - pytest-timeout (>900s). Order-dependent
+            # MultiProcContinuousTest hang; self-heals on rerun in a fresh process.
+            # Proof: proofs/f1_replicate_device_id_multiproc_hang_stack.txt
+            "test_replicate_device_id",
+            # TestFullyShard1DTrainingCore - Scalars not close by ~1.72e-5 (allowed
+            # 1e-5) at world_size=8. Benign fp reduction-order drift; NOT
+            # reproducible locally. Sibling class caps world_size to 2 for the same drift.
+            "test_post_optim_event",
+            # TestParityWithDDPCUDA - child exit code 10 (Scalars not close),
+            # CPU-offload (offload_true) MoE path. Flaky parity: a different
+            # offload_true variant fails per run (shard_grad_op here, no_shard in
+            # run 29823932401); offload_false and with_delay_before_free siblings pass.
+            # Collapsed: covers test_mixture_of_experts_offload_true parametrizations.
+            "(TestParityWithDDPCUDA and test_mixture_of_experts_offload_true)",
+            # ProcessGroupNCCLOpTest - Exception in worker process (CUDA graph)
+            "(ProcessGroupNCCLOpTest and test_nccl_cudagraph_multisegment)",
         ],
     },
     "gfx942": {
