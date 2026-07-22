@@ -1,0 +1,73 @@
+name: Build Spack ROCm Packages
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - dockerfiles/rocm-spack-env/**
+      - .github/workflows/build_spack_rocm_packages.yml
+  push:
+    branches:
+      - main
+      - develop
+      - 'stage/docker/**'
+    paths:
+      - dockerfiles/rocm-spack-env/**
+      - .github/workflows/build_spack_rocm_packages.yml
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Mondays at 2 AM UTC
+    - cron: "0 2 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Spack install ROCm packages
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 1440
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+    env:
+      SPACK_ROOT: /home/tester/spack
+      SPACK_ENV_NAME: rocm
+      SPACK_HOME: /home/tester
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential \
+            gfortran \
+            python3-pip \
+            patch \
+            file
+
+      - name: Clone Spack and ROCm packages
+        run: |
+          git clone --depth 1 https://github.com/spack/spack.git "${SPACK_ROOT}"
+          git clone -b rocm-spack-ci-changes --depth 1 \
+            https://github.com/ROCm/rocm-spack-packages.git "${SPACK_HOME}/spack-packages"
+
+      - name: Bootstrap Spack
+        run: |
+          . "${SPACK_ROOT}/share/spack/setup-env.sh"
+          spack compiler find
+          spack repo set --destination "${SPACK_HOME}/spack-packages" builtin
+
+      - name: Install ROCm packages via Spack
+        run: |
+          . "${SPACK_ROOT}/share/spack/setup-env.sh"
+          mkdir -p "${SPACK_HOME}/rocm-spack-env"
+          cp dockerfiles/rocm-spack-env/spack.yaml "${SPACK_HOME}/rocm-spack-env/spack.yaml"
+          spack clean -m
+          spack env create "${SPACK_ENV_NAME}" "${SPACK_HOME}/rocm-spack-env/spack.yaml"
+          spack env activate "${SPACK_ENV_NAME}"
+          spack concretize -f
+          spack clean -m
+          spack install --fail-fast --reuse --use-cache
