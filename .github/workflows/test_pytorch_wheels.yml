@@ -95,7 +95,7 @@ on:
 permissions:
   contents: read
 
-run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
+run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.package_index_url }}, ${{ inputs.test_runs_on }})
 
 jobs:
   test_wheels:
