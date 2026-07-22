@@ -165,45 +165,18 @@ if test_type == "quick":
     gtest_filter_arg = [f"--gtest_filter={include_filter}"]
     logging.info(f"Quick mode: include filter = {include_filter}")
 else:
-    # Full mode: rename-agnostic positive whitelist minus the sourced exclusions.
-    # Listing both the legacy amdsmitst* suites and the new *Functional*/*Unit*
-    # suites keeps the logical test set stable across the suite rename without
-    # automatically pulling in unrelated new suites (NIC/IFoE/etc.).
-    include_tests = [
-        "amdsmitstReadOnly.*",
-        "amdsmitstReadWrite.*",
-        "AmdSmiDynamicMetricTest.*",
-        "*FunctionalReadOnly.*",
-        "*FunctionalReadWrite.*",
-        "*Unit*",
-    ]
-
-    # Manual exclusions — always applied regardless of ASIC. Listed under both
-    # the legacy and renamed suite names so they survive the rename.
-    exclude_tests = [
-        "amdsmitstReadOnly.TempRead",
-        "amdsmitstReadOnly.TestFrequenciesRead",
-        "amdsmitstReadWrite.TestPowerReadWrite",
-        "GpuFunctionalReadOnly.TempRead",
-        "GpuFunctionalReadOnly.TestFrequenciesRead",
-        "GpuFunctionalReadWrite.TestPowerReadWrite",
-    ]
-
-    # ASIC- and environment-specific exclusions come from detect_asic_filter.sh,
-    # which sources the exclude table shipped alongside the binary, so the names
-    # always match the binary being tested.
+    # Full mode: run every suite the binary ships, minus only the exclusions
+    # sourced from detect_asic_filter.sh (which reads the exclude table shipped
+    # alongside the binary). No suite names are hardcoded here, so the runner
+    # needs no updates when amd-smi adds, removes, or renames test suites; the
+    # exclude table is the single source of truth for what each ASIC skips.
     asic_exclude = get_asic_exclude_filter(TESTS_DIR)
     if asic_exclude:
-        for test in asic_exclude.split(":"):
-            if test and test not in exclude_tests:
-                exclude_tests.append(test)
-        logging.info(
-            f"Combined exclude list ({len(exclude_tests)} entries): {exclude_tests}"
-        )
-
-    gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
-    gtest_filter_arg = [f"--gtest_filter={gtest_filter}"]
-    logging.info(f"Full mode: filter = {gtest_filter}")
+        gtest_filter_arg = [f"--gtest_filter=-{asic_exclude}"]
+        logging.info(f"Full mode: exclude filter = -{asic_exclude}")
+    else:
+        gtest_filter_arg = []
+        logging.info("Full mode: no exclusions, running all tests")
 
 # -----------------------------
 # Build command
