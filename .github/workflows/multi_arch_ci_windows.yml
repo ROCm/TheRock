@@ -83,21 +83,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          THEROCK_SOURCE_REPOSITORY: ${{ fromJSON(inputs.build_config).baseline_repository }}
         run: |
-          # Build the command with optional --source-repository for cross-repo copies
-          $SOURCE_REPO = "${{ fromJSON(inputs.build_config).baseline_repository }}"
-          $SOURCE_REPO_ARG = ""
-          if ($SOURCE_REPO) {
-            $SOURCE_REPO_ARG = "--source-repository=$SOURCE_REPO"
-          }
-
-          python build_tools/artifact_manager.py copy `
-            --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} `
-            $SOURCE_REPO_ARG `
-            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" `
-            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" `
+          python build_tools/artifact_manager.py copy \
+            --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
+            --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
-        shell: pwsh
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
