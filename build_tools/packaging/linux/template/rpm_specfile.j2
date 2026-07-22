@@ -62,6 +62,7 @@ mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
 {% endfor %}
 
 %files
+%defattr(-, root, root, -)
 {{ install_prefix }}
 
 %clean
