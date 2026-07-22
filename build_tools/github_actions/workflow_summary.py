@@ -54,6 +54,7 @@ from workflow_timing import (
     format_timing_summary,
 )
 from workflow_timing_json import format_timing_json
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------

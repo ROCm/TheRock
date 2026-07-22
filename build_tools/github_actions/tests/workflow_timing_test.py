@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import workflow_timing as wt
 import workflow_timing_json as wtj
 
+
 class WorkflowTimingTest(unittest.TestCase):
     @patch("workflow_timing.urllib.request.urlopen")
     def test_collect_timing_records(self, mock_urlopen):

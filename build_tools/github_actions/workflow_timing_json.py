@@ -14,9 +14,7 @@ from workflow_timing import TimingRecord
 def format_timing_json(records: Sequence[TimingRecord]) -> str:
     """Render workflow timing information as JSON."""
 
-    grouped: dict[str, dict[str, list[dict]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    grouped: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
 
     def sort_key(record: TimingRecord) -> tuple[int, float, str]:
         status = record.decision.lower()
