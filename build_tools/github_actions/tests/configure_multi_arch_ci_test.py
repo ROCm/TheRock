@@ -1393,7 +1393,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
 
 class TestFormatSummary(unittest.TestCase):
-    """Test summary formatting (pure function)."""
+    """Test summary formatting as a function of CI input and output objects."""
 
     def _inputs(self, **kwargs):
         defaults = dict(
@@ -1406,16 +1406,7 @@ class TestFormatSummary(unittest.TestCase):
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
 
-    def test_skipped_summary(self):
-        outputs = cm.CIOutputs.skipped()
-        result = format_summary(self._inputs(), outputs)
-        # Just check the header. The output is markdown and asserting
-        # on more exact formatting would create a change detector test.
-        self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
-
     def test_normal_summary(self):
-        """Only checks header — output is markdown, not a contract.
-        Asserting on exact wording would create a change-detector test."""
         jobs = cm.JobDecisions(
             build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
             test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
@@ -1426,13 +1417,78 @@ class TestFormatSummary(unittest.TestCase):
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
         result = format_summary(self._inputs(), outputs)
+
+        self.assertIsInstance(result, str)
         # Just check the header. The output is markdown for humans and asserting
         # on more exact formatting would create a change detector test.
         self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
 
-    def test_skipped_ci_write_outputs_summary(self):
-        outputs = cm.CIOutputs(is_ci_enabled=False)
-        cm.write_outputs(self._inputs(), outputs)
+    def test_skipped_summary(self):
+        outputs = cm.CIOutputs.skipped()
+        result = format_summary(self._inputs(), outputs)
+
+        self.assertIsInstance(result, str)
+        # Just check the header. The output is markdown for humans and asserting
+        # on more exact formatting would create a change detector test.
+        self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
+        # The summary should also mention that CI was skipped with some
+        # explanation for why.
+        self.assertIn("skipped", result)
+
+
+class TestWriteOutputs(unittest.TestCase):
+    """Test writing CI configuration to GitHub Actions output files."""
+
+    def _write_outputs(self, outputs: cm.CIOutputs) -> tuple[str, str]:
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+
+        # Redirect GitHub Actions outputs to temporary files so these unit tests
+        # verify write_outputs() without modifying the live test job summary.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            runner_temp = tmp_path / "runner_temp"
+            runner_temp.mkdir()
+            github_output = tmp_path / "github_output"
+            step_summary = tmp_path / "step_summary.md"
+            env = {
+                "GITHUB_OUTPUT": os.fspath(github_output),
+                "GITHUB_STEP_SUMMARY": os.fspath(step_summary),
+                "RUNNER_TEMP": os.fspath(runner_temp),
+            }
+
+            with patch.dict(os.environ, env, clear=False):
+                cm.write_outputs(ci_inputs, outputs)
+
+            return (
+                github_output.read_text(),
+                step_summary.read_text(),
+            )
+
+    def test_running_ci(self):
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=_jobs(test_type="full"),
+        )
+        github_output, step_summary = self._write_outputs(outputs)
+
+        self.assertIn("enable_build_jobs=true", github_output)
+        self.assertIn("test_type=full", github_output)
+        self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_skipped_ci(self):
+        outputs = cm.CIOutputs.skipped()
+        github_output, step_summary = self._write_outputs(outputs)
+
+        # Some outputs should still be emitted even when CI is skipped, so other
+        # workflow steps can use them.
+        self.assertIn("enable_build_jobs=false", github_output)
+        self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
 
 
 # ---------------------------------------------------------------------------
