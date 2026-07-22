@@ -9,8 +9,13 @@ For external repo builds (rocm-systems, rocm-libraries), this script determines:
 - prebuilt_stages: Stages that can be copied from baseline (unaffected)
 - expanded_projects: Projects to build/test (includes TEST_SUBPROJECTS deps)
 - baseline_run_id: Workflow run ID to copy prebuilt artifacts from
+
+Baseline selection looks for artifacts in the external repo's own multi-arch CI,
+not TheRock. This ensures artifacts match the external repo's source state.
+If no baseline is available, the build proceeds without prebuilt artifacts.
 """
 
+import json
 import logging
 import os
 import sys
@@ -90,20 +95,57 @@ def compute_affected(changed_projects: str) -> tuple[str, str, str]:
     return affected_str, prebuilt_str, projects_str
 
 
+def parse_external_repo_config() -> tuple[str, str] | None:
+    """Parse EXTERNAL_REPO_JSON to get repository and branch for baseline lookup.
+
+    Returns (repository, branch) tuple, or None if not configured.
+    """
+    external_repo_json = os.environ.get("EXTERNAL_REPO_JSON", "")
+    if not external_repo_json:
+        return None
+
+    try:
+        external_repo = json.loads(external_repo_json)
+    except json.JSONDecodeError as exc:
+        logger.warning("Failed to parse EXTERNAL_REPO_JSON: %s", exc)
+        return None
+
+    repository = external_repo.get("repository", "")
+    if not repository:
+        logger.warning("EXTERNAL_REPO_JSON missing 'repository' field")
+        return None
+
+    # Use the external repo's default branch (usually 'develop' for rocm-* repos)
+    # The 'ref' field is the PR ref, not the base branch, so we default to 'develop'
+    branch = external_repo.get("base_branch", "develop")
+
+    return (repository, branch)
+
+
 def select_baseline_for_prebuilt_stages(
     prebuilt_stages: list[str],
     linux_amdgpu_families: list[str],
 ) -> str | None:
     """Select a baseline workflow run that has artifacts for prebuilt stages.
 
-    For external repos, this finds a healthy baseline run in ROCm/TheRock that
-    contains the artifacts needed for stages we want to skip building.
+    For external repos, this finds a healthy baseline run in the external repo's
+    own multi-arch CI (not TheRock). This ensures artifacts match the external
+    repo's source state. If no baseline is available, returns None and the build
+    proceeds without prebuilt artifacts.
 
     Returns the baseline_run_id, or None if no suitable baseline is found.
     """
     if not prebuilt_stages:
         print("No prebuilt stages, skipping baseline selection")
         return None
+
+    # Get external repo config for baseline lookup
+    external_config = parse_external_repo_config()
+    if not external_config:
+        print("No external repo configured, skipping baseline selection")
+        return None
+
+    github_repository, branch = external_config
 
     topology = get_topology()
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
@@ -128,10 +170,8 @@ def select_baseline_for_prebuilt_stages(
 
     print(f"Looking for baseline with {len(required_artifacts)} required artifacts")
 
-    # Read configuration from environment
-    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
-    workflow_name = os.environ.get("BASELINE_WORKFLOW", "multi_arch_ci.yml")
-    branch = os.environ.get("BASELINE_BRANCH", "main")
+    # External repos use therock_multi_arch_ci.yml as their workflow name
+    workflow_name = "therock_multi_arch_ci.yml"
     max_age_hours_raw = os.environ.get("BASELINE_MAX_AGE_HOURS", "72")
     try:
         max_age_hours = float(max_age_hours_raw)
@@ -151,10 +191,11 @@ def select_baseline_for_prebuilt_stages(
         )
     except GitHubAPIError as exc:
         logger.warning("Failed to select baseline run: %s", exc)
+        print(f"Baseline lookup failed: {exc} - proceeding without prebuilt artifacts")
         return None
 
     if baseline is None:
-        print("No suitable baseline run found")
+        print("No suitable baseline run found - proceeding without prebuilt artifacts")
         return None
 
     print(f"Selected baseline run: {baseline.run_id} ({baseline.html_url})")

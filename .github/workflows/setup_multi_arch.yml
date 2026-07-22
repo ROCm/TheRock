@@ -176,16 +176,15 @@ jobs:
 
       # For external repos, compute which stages are affected by the changed projects.
       # This must run BEFORE configure_multi_arch_ci.py so prebuilt_stages can be passed.
-      # Also selects a baseline run for copying prebuilt artifacts.
+      # Also selects a baseline run for copying prebuilt artifacts from the external repo.
       - name: Compute affected stages
         id: affected_stages
         if: ${{ inputs.external_repo != '' }}
         env:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
-          GITHUB_REPOSITORY: ROCm/TheRock
-          BASELINE_WORKFLOW: multi_arch_ci.yml
-          BASELINE_BRANCH: main
+          # Look for baseline in the external repo's own multi-arch CI, not TheRock
+          EXTERNAL_REPO_JSON: ${{ inputs.external_repo }}
           BASELINE_MAX_AGE_HOURS: "72"
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -214,8 +213,10 @@ jobs:
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
-          # For external repos, look for baseline runs in TheRock, not the calling repo
-          STAGE_REUSE_BASELINE_REPO: ${{ inputs.external_repo != '' && 'ROCm/TheRock' || '' }}
+          # For external repos, look for baseline runs in the external repo, not TheRock
+          STAGE_REUSE_BASELINE_REPO: ${{ inputs.external_repo != '' && fromJSON(inputs.external_repo).repository || '' }}
+          STAGE_REUSE_BASELINE_WORKFLOW: ${{ inputs.external_repo != '' && 'therock_multi_arch_ci.yml' || '' }}
+          STAGE_REUSE_BASELINE_BRANCH: ${{ inputs.external_repo != '' && 'develop' || 'main' }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
