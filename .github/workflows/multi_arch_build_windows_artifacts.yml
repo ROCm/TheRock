@@ -91,6 +91,10 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: "windows/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
+      # Keep sccache's local cache and temp files on a short path to avoid
+      # Windows MAX_PATH (260 chars) exceeded for deeply-nested build trees
+      # such as composable_kernel's tensor_operation_instance paths.
+      SCCACHE_DIR: "C:\\sc"
 
     steps:
       # Enable git longpaths before checkout (needed for external repos with long paths)
