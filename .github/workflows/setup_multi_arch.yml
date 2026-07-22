@@ -67,6 +67,13 @@ on:
           reuse TheRock's prebuilt artifacts.
         type: string
         default: ""
+      stage_reuse_external_rebuild_stages:
+        description: >-
+          Comma-separated list of stages that must rebuild for external repos
+          (e.g., "math-libs"). All other stages become reuse candidates. Use this
+          when changed-file analysis is unavailable.
+        type: string
+        default: ""
       build_pytorch:
         description: "Build PyTorch wheels."
         type: boolean
@@ -191,6 +198,9 @@ jobs:
           # When empty, falls back to GITHUB_REPOSITORY. External repos should set this to
           # "ROCm/TheRock" to reuse TheRock's prebuilt artifacts.
           STAGE_REUSE_BASELINE_REPOSITORY: ${{ inputs.stage_reuse_baseline_repository }}
+          # For external repos where changed-file analysis is unavailable, specify which
+          # stages must rebuild. All other stages become reuse candidates.
+          STAGE_REUSE_EXTERNAL_REBUILD_STAGES: ${{ inputs.stage_reuse_external_rebuild_stages }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
