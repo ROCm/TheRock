@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import workflow_timing as wt
-
+import workflow_timing_json as wtj
 
 class WorkflowTimingTest(unittest.TestCase):
     @patch("workflow_timing.urllib.request.urlopen")
@@ -311,3 +311,53 @@ class WorkflowTimingTest(unittest.TestCase):
 
         self.assertNotIn("Manifest Diff", summary)
         self.assertNotIn("Setup", summary)
+
+    def test_format_timing_json(self):
+        json_text = wtj.format_timing_json(
+            [
+                wt.TimingRecord(
+                    workflow_run_id="123",
+                    run_attempt="1",
+                    job_name="build_multi_arch_stages",
+                    runner_label="aws-linux-scale-rocm-prod",
+                    runner_pool="aws-linux-scale-rocm-prod",
+                    runner_instance="qv2xv",
+                    platform="Linux",
+                    workflow_phase="Build Stages",
+                    component="Compiler Runtime",
+                    job_type="Stage",
+                    queued_at="2026-07-09T10:00:00Z",
+                    started_at="2026-07-09T10:05:00Z",
+                    completed_at="2026-07-09T10:30:00Z",
+                    decision="rebuilt",
+                    stage_or_test_family="gfx94X",
+                    queue_seconds=300.0,
+                    run_seconds=1500.0,
+                    total_seconds=1800.0,
+                )
+            ]
+        )
+
+        payload = json.loads(json_text)
+
+        self.assertIn("platforms", payload)
+        self.assertEqual(len(payload["platforms"]), 1)
+
+        platform = payload["platforms"][0]
+        self.assertEqual(platform["platform"], "Linux")
+        self.assertEqual(len(platform["phases"]), 1)
+
+        phase = platform["phases"][0]
+        self.assertEqual(phase["phase"], "Build Stages")
+        self.assertEqual(len(phase["records"]), 1)
+
+        record = phase["records"][0]
+        self.assertEqual(record["component"], "Compiler Runtime")
+        self.assertEqual(record["job_type"], "Stage")
+        self.assertEqual(record["runner_pool"], "aws-linux-scale-rocm-prod")
+        self.assertEqual(record["runner_instance"], "qv2xv")
+        self.assertEqual(record["status"], "rebuilt")
+
+        self.assertEqual(record["queue"]["seconds"], 300.0)
+        self.assertEqual(record["run"]["seconds"], 1500.0)
+        self.assertEqual(record["total"]["seconds"], 1800.0)

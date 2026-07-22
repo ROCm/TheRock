@@ -47,11 +47,13 @@ import sys
 from dataclasses import dataclass
 
 from github_actions_api import GitHubAPIError, gha_send_request, str2bool
+from pathlib import Path
+
 from workflow_timing import (
     collect_timing_records,
     format_timing_summary,
 )
-
+from workflow_timing_json import format_timing_json
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -260,7 +262,15 @@ def main(argv: list[str]) -> int:
             )
         except Exception as exc:
             print(f"\n(Could not collect workflow timing: {exc})")
+        else:
+            timing_json = format_timing_json(timing_records)
+            Path("workflow_timing.json").write_text(
+                timing_json,
+                encoding="utf-8",
+            )
 
+            print("\nWorkflow timing JSON:")
+            print(timing_json)
     print(f"Checking status for {len(jobs)} job(s):")
     for job in jobs:
         color = _RESULT_COLORS.get(job.result, _RED)

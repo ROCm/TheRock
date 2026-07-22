@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable, Mapping, Sequence
+from typing import Mapping, Sequence
 import json
 import urllib.parse
 import urllib.request
@@ -368,18 +368,4 @@ def format_timing_summary(records: Sequence[TimingRecord]) -> str:
                     f"{_format_duration(record.run_seconds)} | "
                     f"{_format_duration(record.total_seconds)} |"
                 )
-
-            lines.append("")
-
-    lines.append("")
-    lines.append("<details>")
-    lines.append("<summary>Exact timestamps</summary>")
-    lines.append("")
-    lines.append("| Job | Started At | Completed At |")
-    lines.append("| --- | --- | --- |")
-    for record in sorted_records:
-        lines.append(
-            f"| {record.job_name} | {record.started_at or '—'} | {record.completed_at or '—'} |"
-        )
-    lines.append("</details>")
     return "\n".join(lines)
