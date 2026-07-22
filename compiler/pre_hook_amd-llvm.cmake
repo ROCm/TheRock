@@ -63,26 +63,6 @@ else()
       #set(LIBOMP_USE_HWLOC ON)
     endif()
   endif()
-
-  # Device PGO/coverage support requires building compiler-rt for amdgcn targets.
-  # Per LLVM HIP offload PGO docs, the toolchain needs LLVM_RUNTIME_TARGETS with
-  # amdgcn-amd-amdhsa and the device runtime configuration.
-  if(COMPILER_RT_BUILD_PROFILE_ROCM)
-    if(NOT DEFINED LLVM_RUNTIME_TARGETS)
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-    elseif(NOT "amdgcn-amd-amdhsa" IN_LIST LLVM_RUNTIME_TARGETS)
-      list(APPEND LLVM_RUNTIME_TARGETS "amdgcn-amd-amdhsa")
-    endif()
-    set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
-    set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc")
-    set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake")
-    # AMDGPU.cmake sets COMPILER_RT_PROFILE_BAREMETAL=ON which disables COMPILER_RT_BUILD_PROFILE_ROCM by default.
-    # Override it to ensure device profiling runtime is built.
-    set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_PROFILE_BAREMETAL OFF)
-    set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_BUILD_PROFILE_ROCM ON)
-    set(RUNTIMES_amdgcn-amd-amdhsa_RUNTIMES_USE_LIBC "llvm-libc")
-  endif()
-
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
   # source otherwise. Defaults to `ON`.
