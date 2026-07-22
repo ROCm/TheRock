@@ -208,7 +208,10 @@ def main():
         changed_projects
     )
 
-    # For external repos, select a baseline run to copy prebuilt artifacts from
+    # For external repos, select a baseline run to copy prebuilt artifacts from.
+    # IMPORTANT: If no baseline is found, we must clear prebuilt_stages so all
+    # stages are built. Otherwise, stages in prebuilt_stages would be skipped
+    # entirely (not built, not copied) which breaks pytorch/python builds.
     baseline_run_id = ""
     if prebuilt_stages:
         prebuilt_list = [s.strip() for s in prebuilt_stages.split(",") if s.strip()]
@@ -220,6 +223,10 @@ def main():
         baseline = select_baseline_for_prebuilt_stages(prebuilt_list, linux_families)
         if baseline:
             baseline_run_id = baseline
+        else:
+            # No baseline found - must build all stages, can't reuse any
+            print("No baseline found - clearing prebuilt_stages to build all stages")
+            prebuilt_stages = ""
 
     gha_set_output(
         {
