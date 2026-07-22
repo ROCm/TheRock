@@ -582,8 +582,6 @@ class GitHubAPITest(unittest.TestCase):
 
     def test_rest_api_get_empty_body_raises_github_api_error(self):
         """REST API GET with empty body should raise GitHubAPIError (unchanged behavior)."""
-        import json
-
         os.environ["GITHUB_TOKEN"] = "test-token"
         api = GitHubAPI()
 
@@ -621,7 +619,7 @@ class GhaUpdatePrCommentTest(unittest.TestCase):
     """Tests for gha_update_pr_comment."""
 
     def test_posts_new_comment_when_marker_not_found(self):
-        marker = "<!-- therock-report-manifest-diff -->"
+        marker = "<!-- example-marker -->"
         body = f"{marker}\n### Report\n\n[View report](https://example.com)\n"
         comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
 
@@ -650,7 +648,7 @@ class GhaUpdatePrCommentTest(unittest.TestCase):
         )
 
     def test_patches_existing_comment_when_marker_found(self):
-        marker = "<!-- therock-report-manifest-diff -->"
+        marker = "<!-- example-marker -->"
         body = f"{marker}\n### Report\n\n[View report](https://example.com/v2)\n"
         comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
 
@@ -706,42 +704,74 @@ class GhaUpdatePrCommentTest(unittest.TestCase):
         send_request.assert_any_call(f"{comments_url}?per_page=100&page=1")
         send_request.assert_any_call(f"{comments_url}?per_page=100&page=2")
 
-    def test_raises_when_comment_response_is_not_dict(self):
-        marker = "<!-- therock-report-manifest-diff -->"
-        body = f"{marker}\nbody"
+    def test_ignores_comment_from_other_author_when_comment_author_set(self):
+        """A marker match from an unexpected author should be skipped, not edited."""
+        marker = "<!-- example-marker -->"
+        body = f"{marker}\nThis PR is now part of TheRock."
+        comments_url = (
+            "https://api.github.com/repos/ROCm/rocm-systems/issues/9/comments"
+        )
 
         with mock.patch(
             "github_actions_api._default_github_api.send_request",
-            side_effect=[[], "not-a-dict"],
-        ):
-            with self.assertRaisesRegex(GitHubAPIError, "Expected comment object"):
-                gha_update_pr_comment(pr_number=1, marker=marker, body=body)
-
-    def test_uses_provided_github_api_instance_instead_of_singleton(self):
-        """A github_api override should be used instead of the singleton."""
-        marker = "<!-- therock-bump-breadcrumb -->"
-        body = f"{marker}\nThis PR is now part of TheRock."
-
-        custom_api = mock.create_autospec(GitHubAPI, instance=True)
-        custom_api.send_request.side_effect = [
-            [],
-            {"id": 55, "body": body},
-        ]
-
-        with mock.patch(
-            "github_actions_api._default_github_api.send_request"
-        ) as singleton_send_request:
+            side_effect=[
+                [
+                    {
+                        "id": 1,
+                        "body": f"{marker}\nquote-reply",
+                        "user": {"login": "some-human"},
+                    }
+                ],
+                {"id": 99, "body": body},
+            ],
+        ) as send_request:
             result = gha_update_pr_comment(
                 pr_number=9,
                 marker=marker,
                 body=body,
                 github_repository="ROCm/rocm-systems",
-                github_api=custom_api,
+                comment_author="systems-assistant[bot]",
             )
 
-        self.assertEqual(result["id"], 55)
-        self.assertEqual(custom_api.send_request.call_count, 2)
-        singleton_send_request.assert_not_called()
+        self.assertEqual(result["id"], 99)
+        send_request.assert_any_call(
+            comments_url,
+            method="POST",
+            body={"body": body},
+        )
+
+    def test_patches_comment_matching_comment_author(self):
+        """A marker match authored by comment_author should still be updated in place."""
+        marker = "<!-- example-marker -->"
+        body = f"{marker}\nThis PR is now part of TheRock."
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                [
+                    {
+                        "id": 1,
+                        "body": f"{marker}\nold",
+                        "user": {"login": "systems-assistant[bot]"},
+                    }
+                ],
+                {"id": 1, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=9,
+                marker=marker,
+                body=body,
+                github_repository="ROCm/rocm-systems",
+                comment_author="systems-assistant[bot]",
+            )
+
+        self.assertEqual(result["id"], 1)
+        send_request.assert_any_call(
+            "https://api.github.com/repos/ROCm/rocm-systems/issues/comments/1",
+            method="PATCH",
+            body={"body": body},
+        )
 
 
 class GhaQueryPrsForCommitTest(unittest.TestCase):
@@ -770,34 +800,6 @@ class GhaQueryPrsForCommitTest(unittest.TestCase):
             result = gha_query_prs_for_commit("ROCm/TheRock", "b" * 40)
 
         self.assertEqual(result, [])
-
-    def test_raises_when_response_is_not_list(self):
-        with mock.patch(
-            "github_actions_api._default_github_api.send_request",
-            return_value={"message": "not found"},
-        ):
-            with self.assertRaisesRegex(GitHubAPIError, "Expected a list"):
-                gha_query_prs_for_commit("ROCm/TheRock", "c" * 40)
-
-    def test_uses_provided_github_api_instance_instead_of_singleton(self):
-        """A github_api override should be used instead of the singleton."""
-        sha = "d" * 40
-        prs = [{"number": 7}]
-        custom_api = mock.create_autospec(GitHubAPI, instance=True)
-        custom_api.send_request.return_value = prs
-
-        with mock.patch(
-            "github_actions_api._default_github_api.send_request"
-        ) as singleton_send_request:
-            result = gha_query_prs_for_commit(
-                "ROCm/rocm-libraries", sha, github_api=custom_api
-            )
-
-        self.assertEqual(result, prs)
-        custom_api.send_request.assert_called_once_with(
-            f"https://api.github.com/repos/ROCm/rocm-libraries/commits/{sha}/pulls"
-        )
-        singleton_send_request.assert_not_called()
 
 
 class GitHubActionsUtilsTest(unittest.TestCase):

@@ -617,6 +617,7 @@ def gha_update_pr_comment(
     github_repository: str = "ROCm/TheRock",
     *,
     github_api: "GitHubAPI | None" = None,
+    comment_author: str | None = None,
 ) -> dict:
     """Create or update a sticky PR comment identified by an HTML marker.
 
@@ -627,7 +628,7 @@ def gha_update_pr_comment(
     Args:
         pr_number: Pull request number.
         marker: Unique HTML comment marker embedded in the comment body
-            (e.g. ``<!-- therock-report-manifest-diff -->``).
+            (e.g. ``<!-- example-marker -->``).
         body: Full comment body (must include ``marker``).
         github_repository: Repository in ``owner/repo`` format.
         github_api: Optional ``GitHubAPI`` instance to use instead of the
@@ -635,6 +636,12 @@ def gha_update_pr_comment(
             instance for cross-repo comments (e.g. a GitHub App installation
             token scoped to ``github_repository``) so this call doesn't
             disturb the singleton's own token/auth state.
+        comment_author: Optional GitHub username to restrict matching to.
+            When set, only an existing comment whose author's login equals
+            this value is treated as the sticky comment to update; comments
+            that merely contain ``marker`` but were authored by someone else
+            (e.g. a human who quote-replied the bot's comment) are ignored,
+            and a new comment is posted instead of editing theirs.
 
     Returns:
         The created or updated comment object from the GitHub API.
@@ -650,7 +657,10 @@ def gha_update_pr_comment(
     """
     if marker not in body:
         _log(
-            f"Warning: marker {marker!r} not found in comment body for PR #{pr_number}"
+            f"Warning: marker\n  {marker}\n"
+            f"not found in body for PR comment on "
+            f"https://github.com/{github_repository}/pull/{pr_number}\n"
+            f"body text:\n  {body}"
         )
 
     api = github_api or _default_github_api
@@ -671,9 +681,15 @@ def gha_update_pr_comment(
             break
 
         for comment in comments:
-            if marker in comment.get("body", ""):
-                existing_comment_id = comment["id"]
-                break
+            if marker not in comment.get("body", ""):
+                continue
+            if (
+                comment_author is not None
+                and comment.get("user", {}).get("login") != comment_author
+            ):
+                continue
+            existing_comment_id = comment["id"]
+            break
 
         if existing_comment_id is not None:
             break
