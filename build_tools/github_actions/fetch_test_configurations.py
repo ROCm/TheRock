@@ -240,7 +240,7 @@ test_matrix = {
         "job_name": "amdsmi",
         "fetch_artifact_args": "--base-only",
         "timeout_minutes": 10,
-        "test_script": f"python {_get_script_path('test_amdsmi.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
