@@ -24,7 +24,7 @@ from pathlib import Path
 # Add parent directory to path for _therock_utils imports
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
-from _therock_utils.build_topology import get_topology
+from _therock_utils.build_topology import BuildTopology, get_topology
 
 # Add test_tools to path for TEST_SUBPROJECTS parsing
 REPO_ROOT = SCRIPT_DIR.parents[1]
@@ -33,26 +33,19 @@ from determine_rocm_test_dependencies import get_subprojects_to_test
 
 from baseline_runs import RequiredArtifact, select_baseline_run
 from github_actions_api import gha_set_output, GitHubAPIError
+from stage_reuse_decision import plan_stage_reuse
 
 logger = logging.getLogger(__name__)
 
-# All build stages that can be prebuilt/skipped
-ALL_STAGES = [
-    "compiler-runtime",
-    "runtime-tests",
-    "wsl-rocdxg",
-    "math-libs",
-    "comm-libs",
-    "storage-libs",
-    "debug-tools",
-    "dctools-core",
-    "profiler-apps",
-    "media-libs",
-]
 
+def compute_affected(
+    changed_projects: str, topology: BuildTopology | None = None
+) -> tuple[str, str, str]:
+    """Return (affected_stages, prebuilt_stages, expanded_projects).
 
-def compute_affected(changed_projects: str) -> tuple[str, str, str]:
-    """Return (affected_stages, prebuilt_stages, expanded_projects)."""
+    Uses plan_stage_reuse from stage_reuse_decision.py for stage computation,
+    ensuring consistent logic between TheRock and external repo builds.
+    """
     if not changed_projects or not changed_projects.strip():
         print("No changed_projects specified, building all stages")
         return "all", "", ""
@@ -73,19 +66,20 @@ def compute_affected(changed_projects: str) -> tuple[str, str, str]:
     expanded_list = sorted(expanded_projects)
     print(f"Expanded projects (with TEST_SUBPROJECTS): {expanded_list}")
 
-    topology = get_topology()
-    affected = topology.get_stages_for_projects(expanded_list)
+    if topology is None:
+        topology = get_topology()
 
-    if not affected:
+    # Use plan_stage_reuse for consistent stage computation with TheRock builds
+    plan = plan_stage_reuse(changed_projects=expanded_list, topology=topology)
+
+    if plan.full_rebuild_required or not plan.candidate_stages:
         print("No stages found for projects, building all stages")
         return "all", "", ""
 
-    # Compute prebuilt_stages = ALL_STAGES - affected_stages
-    # These are stages that don't need to be built, artifacts copied from baseline
-    prebuilt = [s for s in ALL_STAGES if s not in affected]
-
-    affected_str = ",".join(sorted(affected))
-    prebuilt_str = ",".join(prebuilt)
+    # rebuild_stages = affected stages that need to be built
+    # candidate_stages = prebuilt stages that can be copied from baseline
+    affected_str = ",".join(sorted(plan.rebuild_stages))
+    prebuilt_str = ",".join(plan.candidate_stages)
     # Space-separated for --projects arg compatibility
     projects_str = " ".join(expanded_list)
 
