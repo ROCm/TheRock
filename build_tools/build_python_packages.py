@@ -395,6 +395,8 @@ def _run_kpack_split(
             "rocshmem",
             # rocjitsu emulation suite.
             "rocjitsu",
+            "composable-kernel",
+            "libhipcxx",
             "mirage",
         ],
         exclude_components=["test"],
