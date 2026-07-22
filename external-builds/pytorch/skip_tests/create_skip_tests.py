@@ -50,7 +50,23 @@ import os
 from pathlib import Path
 import platform
 import sys
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+# Name of the skip_tests section (in generic.py / pytorch_*.py) whose tests need
+# the ROCm SDK development package (rocm[devel]). It is only applied when that
+# package is not available; see is_devel_package_available() and create_list().
+REQUIRES_DEVEL_SECTION = "requires_devel"
+
+
+def is_devel_package_available() -> bool:
+    """Return True if the ROCm SDK development package (rocm[devel]) is installed.
+
+    Detected by the presence of the ``rocm_sdk_devel`` importable module, which
+    is provided by the ``rocm-sdk-devel`` wheel pulled in via the ``rocm[devel]``
+    extra. That package supplies the ROCm headers (e.g. ``hipblas/hipblas.h``)
+    and compiler needed to JIT-compile C++/HIP extensions in some tests.
+    """
+    return importlib.util.find_spec("rocm_sdk_devel") is not None
 
 
 def import_skip_tests(pytorch_version: str = "") -> Dict[str, Dict]:
@@ -119,6 +135,7 @@ def create_list(
     amdgpu_family: list[str] = [],
     pytorch_version: str = "",
     platform: str = "",
+    devel_available: Optional[bool] = None,
 ) -> List[str]:
     """Create a list of test names based on filters.
 
@@ -130,6 +147,10 @@ def create_list(
             Tests marked for this family will be included.
         pytorch_version: PyTorch version for filtering (e.g., "2.7", "all", "").
             Determines which pytorch_*.py files are loaded.
+        devel_available: Whether the ROCm SDK development package (rocm[devel])
+            is available. When False, tests in the "requires_devel" section are
+            added to the skip list. When None (default), auto-detected via
+            is_devel_package_available().
 
     Returns:
         List of unique test names that match the specified filters.
@@ -138,6 +159,8 @@ def create_list(
     Notes:
         - Always includes tests from the "common" filter
         - Includes tests from the specified amdgpu_family filter (if provided)
+        - Includes tests from the "requires_devel" filter when rocm[devel] is
+          not available
 
 
     Examples:
@@ -146,10 +169,16 @@ def create_list(
     """
     selected_tests = []
 
+    if devel_available is None:
+        devel_available = is_devel_package_available()
+
     # Define filters: always include "common", plus specific AMDGPU families
     filters = ["common"]
     filters += amdgpu_family
     filters += [platform.lower()] if platform else []
+    # Skip tests that need rocm[devel] only when the devel package is missing.
+    if not devel_available:
+        filters += [REQUIRES_DEVEL_SECTION]
 
     # Load skip_tests from generic.py and (pytorch_<version> or "all" pytorch versions)
     dict_skip_tests = import_skip_tests(pytorch_version)
@@ -212,6 +241,15 @@ Select (potentially) additional tests to be skipped based on the PyTorch version
         help="""Invert behavior: create a list of tests to include (run) instead of skip.
 Output can be used with 'pytest -k <list>'""",
     )
+    parser.add_argument(
+        "--devel-available",
+        default=None,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="""Whether the ROCm SDK development package (rocm[devel]) is available.
+When not available, tests in the "requires_devel" section are added to the skip
+list. Defaults to auto-detection via the rocm_sdk_devel module.""",
+    )
     args = parser.parse_args(argv)
     return args
 
@@ -221,6 +259,7 @@ def get_tests(
     pytorch_version: str = "",
     platform: str = "",
     create_skip_list: bool = True,
+    devel_available: Optional[bool] = None,
 ) -> str:
     """Generate a pytest -k expression for test filtering.
 
@@ -235,6 +274,9 @@ def get_tests(
             Determines which version-specific test files to load.
         create_skip_list: If True, create a skip list (default).
             If False, create an include list (only run specified tests).
+        devel_available: Whether the ROCm SDK development package (rocm[devel])
+            is available. When None (default), auto-detected. When False, tests
+            in the "requires_devel" section are added to the skip list.
 
     Returns:
         A pytest -k compatible expression string.
@@ -242,16 +284,23 @@ def get_tests(
         - Include list format: "test1 or test2 or test3"
 
     """
+    if devel_available is None:
+        devel_available = is_devel_package_available()
+
     list_type = "skipped" if create_skip_list else "included"
     print(
         f"Creating list of tests to be {list_type} for AMDGPU family '{amdgpu_family}' "
-        f"and PyTorch version '{pytorch_version}'... ",
+        f"and PyTorch version '{pytorch_version}' "
+        f"(rocm[devel] {'available' if devel_available else 'NOT available'})... ",
         end="",
     )
 
     # Get the list of test names
     tests = create_list(
-        amdgpu_family=amdgpu_family, pytorch_version=pytorch_version, platform=platform
+        amdgpu_family=amdgpu_family,
+        pytorch_version=pytorch_version,
+        platform=platform,
+        devel_available=devel_available,
     )
 
     # Format as pytest -k expression
@@ -278,5 +327,6 @@ if __name__ == "__main__":
         pytorch_version=args.pytorch_version,
         platform=args.platform,
         create_skip_list=not args.include_tests,
+        devel_available=args.devel_available,
     )
     print(tests)
