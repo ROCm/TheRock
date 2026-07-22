@@ -103,11 +103,19 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
+        description: >-
+          URL for pip --find-links to install ROCm packages (flat page). Use
+          this OR rocm_package_index_url, not both. One of the two must be set
+          (there is no default): point it at the ROCm channel/build to build
+          against.
         type: string
         default: ""
       rocm_package_index_url:
-        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        description: >-
+          URL for pip --index-url to install ROCm packages (PEP 503 index). Use
+          this OR rocm_package_find_links_url, not both. One of the two must be
+          set (there is no default): point it at the ROCm channel/build to build
+          against.
         type: string
         default: ""
       release_type:
@@ -117,11 +125,17 @@ on:
           - dev
         default: dev
       repository:
-        description: "Repository to checkout. Defaults to github.repository."
+        description: >-
+          TheRock repository to check out the build scripts/workflow from (NOT
+          the PyTorch source). Leave blank to use this repository. To build a
+          different PyTorch branch, set pytorch_git_ref instead.
         type: string
         default: ""
       ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        description: >-
+          Branch, tag, or SHA of TheRock (the repository above) to check out.
+          Leave blank to use the triggering ref. This does NOT select the
+          PyTorch source ref; use pytorch_git_ref for that.
         type: string
         default: ""
       cache_type:
