@@ -131,7 +131,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
-      openmpi
+      ${_openmpi_optional_dep}
     RUNTIME_DEPS
       aqlprofile
       hip-clr
