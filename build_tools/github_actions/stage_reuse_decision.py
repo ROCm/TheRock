@@ -203,7 +203,8 @@ def _stage_artifacts_available(
 
 def plan_stage_reuse(
     *,
-    changed_files: Sequence[str] | None,
+    changed_files: Sequence[str] | None = None,
+    changed_projects: Sequence[str] | None = None,
     platform: str | None = None,
     topology: BuildTopology | None = None,
 ) -> StageReusePlan:
@@ -211,8 +212,42 @@ def plan_stage_reuse(
 
     Pure decision logic -- no baseline selection, artifact verification, or
     reporting -- so it can be reused independently of the CI plumbing.
-    """
 
+    Accepts either changed_files (file paths from git diff) or changed_projects
+    (project names from external repos). If both are provided, changed_projects
+    takes precedence.
+    """
+    if topology is None:
+        topology = get_topology()
+
+    # For external repos: use changed_projects to compute affected stages directly
+    if changed_projects is not None:
+        # Normalize project names (e.g., "projects/hip" -> "hip")
+        normalized = [p.split("/")[-1] if "/" in p else p for p in changed_projects]
+        affected_stages = topology.get_stages_for_projects(normalized)
+
+        if not affected_stages:
+            # No stages found for projects - this shouldn't happen, but be safe
+            return StageReusePlan(
+                candidate_stages=(),
+                rebuild_stages=(),
+                full_rebuild_required=True,
+                reasons=("no stages found for changed projects",),
+            )
+
+        # All stages that can be prebuilt/skipped
+        all_stages = list(topology.build_stages.keys())
+        candidate_stages = tuple(s for s in all_stages if s not in affected_stages)
+        rebuild_stages = tuple(sorted(affected_stages))
+
+        return StageReusePlan(
+            candidate_stages=candidate_stages,
+            rebuild_stages=rebuild_stages,
+            full_rebuild_required=False,
+            reasons=(f"changed projects: {', '.join(normalized)}",),
+        )
+
+    # For TheRock builds: use changed_files with stage_impact analysis
     if changed_files is None:
         return StageReusePlan(
             candidate_stages=(),
@@ -220,9 +255,6 @@ def plan_stage_reuse(
             full_rebuild_required=True,
             reasons=("no changed-file list available",),
         )
-
-    if topology is None:
-        topology = get_topology()
 
     # TODO(#3399): thread build flags/variant through here for superrepos so a
     # baseline built with different flags is not considered reusable. Not needed
@@ -243,7 +275,8 @@ def plan_stage_reuse(
 
 def compute_auto_stage_reuse(
     *,
-    changed_files: Sequence[str] | None,
+    changed_files: Sequence[str] | None = None,
+    changed_projects: Sequence[str] | None = None,
     mode: StageReuseMode,
     linux_amdgpu_families: Sequence[str] = (),
     windows_amdgpu_families: Sequence[str] = (),
@@ -252,13 +285,18 @@ def compute_auto_stage_reuse(
     baseline_selector_factory: Callable[[str], BaselineSelector] | None = None,
 ) -> AutoStageReuse:
     """Compute auto stage-reuse decisions, verified against a baseline run.
+
     A stage is only reusable when it is unaffected by the change AND its
     artifacts are present in a healthy baseline run for *every* platform being
     built. The platforms are derived from which family lists are non-empty:
     ``linux_amdgpu_families`` implies the ``linux`` platform, and
     ``windows_amdgpu_families`` implies ``windows``. This guards against the
     case where a stage available only in the Linux baseline is skipped on
-    Windows. The report lines are logged before returning.
+    Windows.
+
+    Accepts either changed_files (for TheRock builds with git history) or
+    changed_projects (for external repo builds). If both are provided,
+    changed_projects takes precedence.
     """
     platforms = _build_platforms(linux_amdgpu_families, windows_amdgpu_families)
     if not platforms:
@@ -274,20 +312,21 @@ def compute_auto_stage_reuse(
             )
         )
 
-    if topology is None and changed_files is not None:
+    if topology is None and (changed_files is not None or changed_projects is not None):
         topology = get_topology()
 
     families = _target_families(linux_amdgpu_families, windows_amdgpu_families)
 
     plan = plan_stage_reuse(
         changed_files=changed_files,
+        changed_projects=changed_projects,
         platform=platforms[0],
         topology=topology,
     )
     candidates = plan.candidate_stages
     rebuild = plan.rebuild_stages
 
-    if changed_files is None:
+    if changed_files is None and changed_projects is None:
         return _log_and_return(
             _empty_result(
                 mode,

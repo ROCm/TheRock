@@ -219,8 +219,9 @@ jobs:
           STAGE_REUSE_BASELINE_BRANCH: ${{ inputs.external_repo != '' && 'develop' || 'main' }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
-          # Flag for external repo builds (used to skip automatic stage_reuse)
+          # Flag for external repo builds and changed projects for stage reuse
           IS_EXTERNAL_REPO: ${{ inputs.external_repo != '' && 'true' || '' }}
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)

@@ -76,7 +76,6 @@ from github_actions_api import (
     gha_set_output,
 )
 from stage_reuse_decision import (
-    AutoStageReuse,
     StageReuseMode,
     compute_auto_stage_reuse,
     render_step_summary,
@@ -161,6 +160,8 @@ class CIInputs:
 
     # External repo build (e.g., rocm-systems or rocm-libraries calling TheRock)
     is_external_repo: bool = False
+    # Changed projects for external repos (used for stage reuse decisions)
+    changed_projects: list[str] = field(default_factory=list)
 
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
@@ -261,6 +262,9 @@ class CIInputs:
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             is_external_repo=os.environ.get("IS_EXTERNAL_REPO", "").lower() == "true",
+            changed_projects=_parse_comma_list(
+                os.environ.get("CHANGED_PROJECTS", "")
+            ),
         )
 
 
@@ -873,41 +877,22 @@ def decide_jobs(
     # their builds and copies artifacts instead. The platforms and families to
     # verify come straight from the resolved target selection.
     #
-    # For external repos, skip automatic stage reuse since prebuilt_stages and
-    # baseline_run_id are already computed by compute_affected_stages.py based
-    # on changed_projects (not changed_files which aren't available).
+    # For external repos, use changed_projects instead of changed_files since
+    # git history isn't available in TheRock's checkout for external repo commits.
 
     baseline_run_id = ci_inputs.baseline_run_id
-    if ci_inputs.is_external_repo:
-        # External repos use prebuilt_stages from compute_affected_stages.py
-        auto_stage_reuse = AutoStageReuse(
-            mode=StageReuseMode.from_environ(),
-            candidate_stages=(),
-            rebuild_stages=(),
-            full_rebuild_required=False,
-            baseline_run_id=baseline_run_id or None,
-            baseline_html_url=None,
-            available_stages=(),
-            unavailable_stages=(),
-            applied_reuse_stages=(),
-            reasons=("external repo: using compute_affected_stages.py",),
-            report_lines=(
-                "[STAGE-REUSE] external repo: skipping automatic stage reuse, "
-                "using prebuilt_stages from compute_affected_stages.py",
-            ),
-        )
-    else:
-        auto_stage_reuse = compute_auto_stage_reuse(
-            changed_files=git_context.changed_files,
-            mode=StageReuseMode.from_environ(),
-            linux_amdgpu_families=targets.linux_families,
-            windows_amdgpu_families=targets.windows_families,
-        )
-        # Only reuse-stage mode returns non-empty applied_reuse_stages.
-        for stage in auto_stage_reuse.applied_reuse_stages:
-            stage_decisions.setdefault(stage, JobAction.PREBUILT)
-        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-            baseline_run_id = auto_stage_reuse.baseline_run_id
+    auto_stage_reuse = compute_auto_stage_reuse(
+        changed_files=git_context.changed_files,
+        changed_projects=ci_inputs.changed_projects if ci_inputs.is_external_repo else None,
+        mode=StageReuseMode.from_environ(),
+        linux_amdgpu_families=targets.linux_families,
+        windows_amdgpu_families=targets.windows_families,
+    )
+    # Only reuse-stage mode returns non-empty applied_reuse_stages.
+    for stage in auto_stage_reuse.applied_reuse_stages:
+        stage_decisions.setdefault(stage, JobAction.PREBUILT)
+    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+        baseline_run_id = auto_stage_reuse.baseline_run_id
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
