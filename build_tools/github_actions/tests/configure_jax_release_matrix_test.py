@@ -32,7 +32,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertGreater(len(jax_refs), 1)
         self.assertEqual(
             set(matrix[0]),
-            {"python_version", "jax_ref", "jax_repository", "build_mode", "gfx_arch"},
+            {"python_version", "jax_ref", "jax_repository", "gfx_arch"},
         )
 
     def test_explicit_python_version_narrows_matrix(self):
@@ -58,24 +58,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["python_version"], "3.12")
         self.assertEqual(matrix[0]["jax_ref"], "rocm-jaxlib-v0.10.0")
         self.assertEqual(matrix[0]["jax_repository"], "ROCm/jax")
-        self.assertEqual(matrix[0]["build_mode"], "manylinux")
         self.assertEqual(matrix[0]["gfx_arch"], "device-all")
-
-    def test_ci_jax_matrix_excludes_unsupported_build_modes(self):
-        matrix = m.generate_jax_matrix_for_release_type(
-            release_type="ci",
-            platform="linux",
-        )
-
-        self.assertGreater(len(matrix), 0)
-        self.assertEqual(
-            {row["build_mode"] for row in matrix},
-            {"manylinux"},
-        )
-        self.assertNotIn(
-            "rocm-jaxlib-v0.9.1",
-            {row["jax_ref"] for row in matrix},
-        )
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # workflow file like:
@@ -112,6 +95,28 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             # Undefined values are not: if the workflow reads `matrix.unknown`,
             # this test fails until the generator emits that key for every row.
             self.assertEqual(matrix_references - set(row), set())
+
+    def test_ref_excluded_python_versions_are_filtered(self):
+        # exclude_python_versions in JAX_REF_CONFIGS drops those Python versions
+        # for that ref only (e.g. JAX 0.11.0 excludes 3.11).
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="dev",
+            platform="linux",
+        )
+        combos = {(row["python_version"], row["jax_ref"]) for row in matrix}
+
+        self.assertNotIn(("3.11", "rocm-jaxlib-v0.11.0"), combos)
+        # 3.11 is still valid for refs that don't exclude it.
+        self.assertIn(("3.11", "rocm-jaxlib-v0.10.2"), combos)
+        # Non-excluded Python versions are still paired with 0.11.0.
+        self.assertIn(("3.12", "rocm-jaxlib-v0.11.0"), combos)
+
+    def test_ci_builds_single_jax_ref(self):
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="ci",
+            platform="linux",
+        )
+        self.assertEqual({row["jax_ref"] for row in matrix}, {"rocm-jaxlib-v0.11.0"})
 
     def test_unknown_release_type_raises(self):
         with self.assertRaises(ValueError):

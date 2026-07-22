@@ -35,7 +35,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
         required: false
@@ -109,7 +109,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2). Leave empty to auto-detect from rocm-jax requirements."
         required: false
