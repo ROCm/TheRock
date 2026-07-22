@@ -76,6 +76,7 @@ from github_actions_api import (
     gha_set_output,
 )
 from stage_reuse_decision import (
+    AutoStageReuse,
     StageReuseMode,
     compute_auto_stage_reuse,
     render_step_summary,
