@@ -1,0 +1,148 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Placeholder reusable workflow for the Linux JAX wheel CI flow.
+#
+# This file intentionally does not build or upload JAX wheels yet.
+# It exists to land the reusable workflow interface first, so follow-up PRs can
+# wire and test the real JAX CI build implementation incrementally.
+
+name: Multi-Arch Build Linux JAX Wheels (CI)
+
+on:
+  workflow_call:
+    inputs:
+      artifact_group:
+        description: "Artifact group for CI artifact upload."
+        type: string
+        required: true
+      python_version:
+        type: string
+        default: "3.12"
+      jax_repository:
+        description: "Repository containing the JAX release branch."
+        type: string
+        required: true
+      build_mode:
+        description: "Build mode. CI currently supports manylinux only."
+        type: string
+        required: true
+      gfx_arch:
+        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        type: string
+        required: false
+        default: ""
+      jax_ref:
+        description: "JAX / rocm-jax release ref."
+        type: string
+        required: true
+      rocm_version:
+        description: "ROCm package version to install and build against."
+        type: string
+        required: true
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+    outputs:
+      package_find_links_url:
+        description: "pip --find-links URL for CI-uploaded JAX wheels."
+        value: ${{ jobs.build_jax_wheels.outputs.package_find_links_url }}
+      jax_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jax_version }}
+      jaxlib_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jaxlib_version }}
+      jax_plugin_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jax_plugin_version }}
+      jax_pjrt_version:
+        value: ${{ jobs.build_jax_wheels.outputs.jax_pjrt_version }}
+
+  workflow_dispatch:
+    inputs:
+      artifact_group:
+        description: "Artifact group for CI artifact upload."
+        type: string
+        required: true
+      python_version:
+        type: string
+        default: "3.12"
+      jax_repository:
+        description: "GitHub repository in owner/repo format containing the JAX release branch."
+        type: string
+        default: "ROCm/jax"
+      build_mode:
+        description: "Build mode."
+        type: choice
+        options:
+          - manylinux
+        required: true
+      gfx_arch:
+        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        type: string
+        required: false
+        default: ""
+      jax_ref:
+        description: "JAX / rocm-jax release ref (e.g. rocm-jaxlib-v0.10.0, rocm-jaxlib-v0.10.2)."
+        type: string
+        required: true
+      rocm_version:
+        description: "ROCm package version to install and build against."
+        type: string
+        required: true
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+
+run-name: Placeholder Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})
+
+permissions:
+  contents: read
+
+jobs:
+  build_jax_wheels:
+    name: Placeholder | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
+    runs-on: ubuntu-24.04
+    outputs:
+      package_find_links_url: ${{ steps.placeholder_outputs.outputs.package_find_links_url }}
+      jax_version: ${{ steps.placeholder_outputs.outputs.jax_version }}
+      jaxlib_version: ${{ steps.placeholder_outputs.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ steps.placeholder_outputs.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ steps.placeholder_outputs.outputs.jax_pjrt_version }}
+
+    steps:
+      - name: Validate placeholder inputs
+        run: |
+          if [ "${{ inputs.build_mode }}" != "manylinux" ]; then
+            echo "Only build_mode=manylinux is supported by the planned JAX CI workflow."
+            exit 1
+          fi
+
+      - name: Emit placeholder outputs
+        id: placeholder_outputs
+        run: |
+          echo "::notice::Placeholder workflow only. No JAX wheels are built or uploaded."
+
+          {
+            echo "package_find_links_url="
+            echo "jax_version="
+            echo "jaxlib_version="
+            echo "jax_plugin_version="
+            echo "jax_pjrt_version="
+          } >> "${GITHUB_OUTPUT}"

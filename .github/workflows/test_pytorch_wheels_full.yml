@@ -258,26 +258,15 @@ jobs:
         run: |
           if [ "${{ inputs.multi_arch }}" = "true" ]; then
             python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
               --index-url=${{ inputs.package_index_url }} \
               --activate-in-future-github-actions-steps
           else
             python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages torch==${{ inputs.torch_version }} \
+              --packages "torch==${{ inputs.torch_version }} rocm[devel]" \
               --index-url=${{ inputs.package_index_url }} \
               --index-subdir=${{ inputs.amdgpu_family }} \
               --activate-in-future-github-actions-steps
-          fi
-
-      - name: Install ROCm devel packages
-        timeout-minutes: 15
-        run: |
-          if [ "${{ inputs.multi_arch }}" = "true" ]; then
-            pip install "rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
-              --index-url=${{ inputs.package_index_url }}
-          else
-            pip install "rocm[devel]" \
-              --index-url=${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
           fi
 
       - name: Initialize ROCm SDK and configure environment

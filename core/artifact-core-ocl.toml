@@ -1,5 +1,8 @@
 # ocl-clr
 [components.lib."core/ocl-clr/stage"]
+exclude = [
+  "bin/hsa-runtime64.dll",
+]
 include = [
   "etc/**",
 ]
@@ -7,9 +10,26 @@ include = [
 include = [
   "bin/**",
 ]
+exclude = [
+  "bin/hsa-runtime64.dll",
+  "bin/rocminfo.exe",
+  "bin/rocm_agent_enumerator*",
+]
 [components.dbg."core/ocl-clr/stage"]
 [components.dev."core/ocl-clr/stage"]
+exclude = [
+  "include/hsa/**",
+  "include/hsakmt/**",
+  "lib/cmake/hsa-runtime64/**",
+  "lib/cmake/hsakmt/**",
+  "lib/hsa-runtime64.lib",
+  "lib/hsakmt.lib",
+  "lib/wkmi.lib",
+]
 [components.doc."core/ocl-clr/stage"]
+exclude = [
+  "share/doc/rocr/**",
+]
 [components.test."core/ocl-clr/stage"]
 include = [
   "tests/**",

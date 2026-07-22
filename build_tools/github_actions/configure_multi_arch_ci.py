@@ -299,6 +299,18 @@ class GitContext:
         """
         return GitContext()
 
+    @property
+    def has_submodule_changes(self) -> bool | None:
+        """Check if any submodules were modified in the changed files.
+
+        Returns:
+            True if submodule changes detected, False if no submodule changes,
+            None if git context is unavailable (changed_files or submodule_paths missing).
+        """
+        if self.changed_files is None or self.submodule_paths is None:
+            return None
+        return bool(set(self.submodule_paths) & set(self.changed_files))
+
     def log(self) -> None:
         """Log git context for CI diagnostics."""
         if self.changed_files is None:
@@ -554,13 +566,10 @@ def should_skip_ci(
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and git_context.changed_files is not None
-        and git_context.submodule_paths is not None
+        and git_context.has_submodule_changes is False
     ):
-        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-        if not matching:
-            print("  Skipping: ASAN PR without submodule changes")
-            return True
+        print("  Skipping: ASAN PR without submodule changes")
+        return True
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -666,13 +675,9 @@ def _determine_test_type(
     # Priority 5: a submodule change means actual library code changed
     # (e.g. rocBLAS, MIOpen). These need full testing since the change
     # could affect any downstream consumer.
-    if (
-        git_context.changed_files is not None
-        and git_context.submodule_paths is not None
-    ):
+    if git_context.has_submodule_changes is True:
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-        if matching:
-            return "standard", f"submodule(s) changed: {sorted(matching)}"
+        return "standard", f"submodule(s) changed: {sorted(matching)}"
 
     # Default: quick tests for fast CI feedback.
     return "quick", "default"
@@ -1005,6 +1010,19 @@ def _expand_build_config_for_platform(
                 f"disabling test runner for non-scheduled/non-dispatch runs"
             )
 
+        # If submodule_bump_tests_only is set, only run tests when submodule changes
+        # are detected or on workflow_dispatch (manual triggers).
+        if (
+            platform_info.get("submodule_bump_tests_only", False)
+            and not ci_inputs.is_workflow_dispatch
+            and git_context.has_submodule_changes is not True
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: submodule_bump_tests_only flag set, "
+                f"disabling tests (no submodule changes detected)"
+            )
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
@@ -1094,6 +1112,9 @@ def _apply_external_family_overrides(all_families: dict) -> dict:
         import json
 
         external_overrides = json.loads(external_overrides_json)
+        # Handle null/None (when external_repo JSON doesn't have family_overrides key)
+        if not external_overrides:
+            return all_families
         for family_name, family_config in external_overrides.items():
             if family_name in all_families:
                 # Merge overrides into existing family config
