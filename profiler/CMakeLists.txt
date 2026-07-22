@@ -306,6 +306,14 @@ if(THEROCK_ENABLE_PROFILER_HUB)
     # profiler-hub is a pure host C++ library with no GPU/HIP code, so it
     # does not require any AMDGPU targets to be selected.
     DISABLE_AMDGPU_TARGETS
+    # Route profiler-hub through TheRock's in-tree LLVM/clang toolchain so
+    # therock_sanitizer_configure() injects -fsanitize=address (compile + link)
+    # and the clang-resource-dir rpath. Without a COMPILER_TOOLCHAIN the
+    # subproject builds with system gcc and profiler-hub_unit_tests is never
+    # sanitizer-linked, pulling ASan in only transitively via the clang-built
+    # rocpd .so (the ASAN CI link/runtime failure). amd-llvm, not amd-hip:
+    # pure host C++, no HIP dependency needed.
+    COMPILER_TOOLCHAIN amd-llvm
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
     BACKGROUND_BUILD
