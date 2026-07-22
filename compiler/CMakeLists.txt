@@ -183,7 +183,7 @@ if(THEROCK_ENABLE_COMPILER)
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
       EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-googletest/source"
-      BINARY_DIR "amd-comgr-googletest"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-googletest"
       CMAKE_ARGS
         -Dgtest_force_shared_crt=ON
     )
