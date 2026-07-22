@@ -331,6 +331,21 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
+    "gfx90c": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx90c",
+            "fetch-gfx-targets": [],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx90c",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
     # gfx906/908/90a split into separate families - each has different instruction
     # support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
     "gfx906": {
