@@ -8,8 +8,10 @@ For external repo builds (rocm-systems, rocm-libraries), this script determines:
 - affected_stages: Stages that need to be built (contain changed projects)
 - prebuilt_stages: Stages that can be copied from baseline (unaffected)
 - expanded_projects: Projects to build/test (includes TEST_SUBPROJECTS deps)
+- baseline_run_id: Workflow run ID to copy prebuilt artifacts from
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -24,7 +26,10 @@ REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(REPO_ROOT / "test_tools"))
 from determine_rocm_test_dependencies import get_subprojects_to_test
 
-from github_actions_api import gha_set_output
+from baseline_runs import RequiredArtifact, select_baseline_run
+from github_actions_api import gha_set_output, GitHubAPIError
+
+logger = logging.getLogger(__name__)
 
 # All build stages that can be prebuilt/skipped
 ALL_STAGES = [
@@ -85,16 +90,102 @@ def compute_affected(changed_projects: str) -> tuple[str, str, str]:
     return affected_str, prebuilt_str, projects_str
 
 
+def select_baseline_for_prebuilt_stages(
+    prebuilt_stages: list[str],
+    linux_amdgpu_families: list[str],
+) -> str | None:
+    """Select a baseline workflow run that has artifacts for prebuilt stages.
+
+    For external repos, this finds a healthy baseline run in ROCm/TheRock that
+    contains the artifacts needed for stages we want to skip building.
+
+    Returns the baseline_run_id, or None if no suitable baseline is found.
+    """
+    if not prebuilt_stages:
+        print("No prebuilt stages, skipping baseline selection")
+        return None
+
+    topology = get_topology()
+    artifacts_by_group = topology.get_artifact_group_to_artifacts()
+
+    # Collect all artifacts needed for prebuilt stages
+    required_artifacts: list[RequiredArtifact] = []
+    for stage_name in prebuilt_stages:
+        stage = topology.build_stages.get(stage_name)
+        if stage is None:
+            continue
+        for group_name in stage.artifact_groups:
+            for artifact_name in artifacts_by_group.get(group_name, []):
+                # Need artifacts for each GPU family + generic
+                for family in linux_amdgpu_families + ["generic"]:
+                    req = RequiredArtifact(name=artifact_name, target_family=family)
+                    if req not in required_artifacts:
+                        required_artifacts.append(req)
+
+    if not required_artifacts:
+        print("No required artifacts for prebuilt stages")
+        return None
+
+    print(f"Looking for baseline with {len(required_artifacts)} required artifacts")
+
+    # Read configuration from environment
+    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    workflow_name = os.environ.get("BASELINE_WORKFLOW", "multi_arch_ci.yml")
+    branch = os.environ.get("BASELINE_BRANCH", "main")
+    max_age_hours_raw = os.environ.get("BASELINE_MAX_AGE_HOURS", "72")
+    try:
+        max_age_hours = float(max_age_hours_raw)
+    except ValueError:
+        max_age_hours = 72.0
+
+    print(f"Searching for baseline in {github_repository}/{workflow_name}@{branch}")
+
+    try:
+        baseline = select_baseline_run(
+            required_artifacts=required_artifacts,
+            github_repository=github_repository,
+            workflow_name=workflow_name,
+            branch=branch,
+            platform="linux",  # Primary platform for artifact verification
+            max_age_hours=max_age_hours,
+        )
+    except GitHubAPIError as exc:
+        logger.warning("Failed to select baseline run: %s", exc)
+        return None
+
+    if baseline is None:
+        print("No suitable baseline run found")
+        return None
+
+    print(f"Selected baseline run: {baseline.run_id} ({baseline.html_url})")
+    return baseline.run_id
+
+
 def main():
     changed_projects = os.environ.get("CHANGED_PROJECTS", "")
     affected_stages, prebuilt_stages, expanded_projects = compute_affected(
         changed_projects
     )
+
+    # For external repos, select a baseline run to copy prebuilt artifacts from
+    baseline_run_id = ""
+    if prebuilt_stages:
+        prebuilt_list = [s.strip() for s in prebuilt_stages.split(",") if s.strip()]
+        # Parse GPU families from environment (comma-separated)
+        linux_families_raw = os.environ.get("LINUX_AMDGPU_FAMILIES", "")
+        linux_families = [
+            f.strip() for f in linux_families_raw.split(",") if f.strip()
+        ]
+        baseline = select_baseline_for_prebuilt_stages(prebuilt_list, linux_families)
+        if baseline:
+            baseline_run_id = baseline
+
     gha_set_output(
         {
             "affected_stages": affected_stages,
             "prebuilt_stages": prebuilt_stages,
             "expanded_projects": expanded_projects,
+            "baseline_run_id": baseline_run_id,
         }
     )
 

@@ -1145,10 +1145,9 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        # Disable native packages and PyTorch/JAX for external repos (incomplete builds)
-        build_native_linux=(suffix != "asan") and not ci_inputs.is_external_repo,
-        build_pytorch=build_pytorch and not ci_inputs.is_external_repo,
-        build_jax=build_jax and not ci_inputs.is_external_repo,
+        build_native_linux=(suffix != "asan"),
+        build_pytorch=build_pytorch,
+        build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,

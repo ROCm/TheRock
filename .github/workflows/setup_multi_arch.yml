@@ -176,11 +176,18 @@ jobs:
 
       # For external repos, compute which stages are affected by the changed projects.
       # This must run BEFORE configure_multi_arch_ci.py so prebuilt_stages can be passed.
+      # Also selects a baseline run for copying prebuilt artifacts.
       - name: Compute affected stages
         id: affected_stages
         if: ${{ inputs.external_repo != '' }}
         env:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+          LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+          GITHUB_REPOSITORY: ROCm/TheRock
+          BASELINE_WORKFLOW: multi_arch_ci.yml
+          BASELINE_BRANCH: main
+          BASELINE_MAX_AGE_HOURS: "72"
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python ./build_tools/github_actions/compute_affected_stages.py
 
@@ -200,13 +207,15 @@ jobs:
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
-          # For external repos, use auto-computed prebuilt_stages; otherwise use input
+          # For external repos, use auto-computed prebuilt_stages and baseline_run_id; otherwise use inputs
           PREBUILT_STAGES: ${{ steps.affected_stages.outputs.prebuilt_stages || inputs.prebuilt_stages }}
-          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BASELINE_RUN_ID: ${{ steps.affected_stages.outputs.baseline_run_id || inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
+          # For external repos, look for baseline runs in TheRock, not the calling repo
+          STAGE_REUSE_BASELINE_REPO: ${{ inputs.external_repo != '' && 'ROCm/TheRock' || '' }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
