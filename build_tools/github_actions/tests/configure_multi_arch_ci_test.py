@@ -1810,7 +1810,7 @@ class TestFamilyTestFilters(unittest.TestCase):
 
 
 class TestMultiLabelRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of multi-label runner configurations.
+    """Test count-based random selection of multi-label runner configurations.
 
     These tests validate local amdgpu_family_matrix.py definitions.
     CI_CONFIG_PATH is cleared to ensure external config is not loaded.
@@ -1848,9 +1848,10 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIn("linux-gfx942-1gpu-ccs-csp-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
-        # Verify weights sum to ~1.0
-        total_weight = sum(l["weight"] for l in labels)
-        self.assertAlmostEqual(total_weight, 1.0, places=1)
+        # Verify counts are positive integers
+        for label_config in labels:
+            self.assertIn("count", label_config)
+            self.assertGreater(label_config["count"], 0)
 
     def test_gfx94x_multi_gpu_has_label_config(self):
         """Verify gfx94x has the multi-gpu label configuration."""
@@ -1867,14 +1868,15 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
 
-        # Verify weights sum to 1.0
-        total_weight = sum(l["weight"] for l in labels)
-        self.assertAlmostEqual(total_weight, 1.0, places=1)
+        # Verify counts are positive integers
+        for label_config in labels:
+            self.assertIn("count", label_config)
+            self.assertGreater(label_config["count"], 0)
 
     def test_expand_build_configs_uses_default_runner(self):
         """expand_build_configs uses the default test-runs-on label.
 
-        Note: Per-component weighted runner selection is handled in
+        Note: Per-component count-based runner selection is handled in
         fetch_test_configurations.py, not in expand_build_configs.
         """
         ci_inputs = cm.CIInputs(
@@ -1932,7 +1934,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 class TestBuildRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of build runners (Azure vs AWS).
+    """Test count-based random selection of build runners (Azure vs AWS).
 
     These tests validate local amdgpu_family_matrix.py definitions.
     CI_CONFIG_PATH is cleared to ensure external config is not loaded.
@@ -1948,24 +1950,18 @@ class TestBuildRunnerSelection(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self._orig_env)
 
-    def test_select_build_runner_weighted_selection(self):
-        """Test weighted selection: 100% AWS for default Linux builds."""
+    def test_select_build_runner_weight_selection(self):
+        """Test weight-based selection for build runners."""
         from amdgpu_family_matrix import select_build_runner
 
-        # Any random value should select AWS for Linux
-        with patch("random.random", return_value=0.3):
-            self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
-            )
-
-        # Any random value should select AWS for Linux
-        with patch("random.random", return_value=0.75):
+        # With only one runner (weight=1.0), any random value selects it
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
             )
 
         # Windows still uses Azure
-        with patch("random.random", return_value=0.95):
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("windows", "release"), "azure-windows-scale-rocm"
             )
@@ -1974,7 +1970,7 @@ class TestBuildRunnerSelection(unittest.TestCase):
         """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
         from amdgpu_family_matrix import select_build_runner
 
-        with patch("random.random", return_value=0.99):
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "asan"),
                 "azure-linux-scale-rocm-heavy-ramdisk",

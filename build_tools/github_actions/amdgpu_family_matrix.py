@@ -79,7 +79,36 @@ def is_asan():
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
-    """Select a runner label based on weighted random selection."""
+    """Select a runner label based on random selection.
+
+    Supports both 'count' (preferred) and 'weight' fields for backwards compatibility.
+    """
+    # Check if using count-based selection (preferred)
+    if "count" in labels_config[0]:
+        total = sum(config["count"] for config in labels_config)
+        if total <= 0:
+            selected = labels_config[0]
+            print(f"  {context_name}: selected runner: {selected['label']}")
+            return selected["label"]
+
+        rand_val = random.randint(0, total - 1)
+        cumulative = 0
+        for config in labels_config:
+            cumulative += config["count"]
+            if rand_val < cumulative:
+                print(
+                    f"  {context_name}: selected runner (count={config['count']}): "
+                    f"{config['label']}"
+                )
+                return config["label"]
+        selected = labels_config[-1]
+        print(
+            f"  {context_name}: selected runner (count={selected['count']}): "
+            f"{selected['label']}"
+        )
+        return selected["label"]
+
+    # Fallback to weight-based selection
     rand_val = random.random()
     cumulative = 0.0
     for config in labels_config:
@@ -90,7 +119,6 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
                 f"{config['label']}"
             )
             return config["label"]
-    # Fallback to last label if rounding errors
     selected = labels_config[-1]
     print(
         f"  {context_name}: selected runner (weight={selected['weight']}): "
@@ -100,8 +128,8 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 
 # Build runner configuration for Linux builds
-# Uses weighted distribution: 100% AWS
-# Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
+# Uses weight-based distribution (0.0-1.0 probability)
+# Sanitizer builds (asan/tsan) use ramdisk variants (Azure only, no AWS yet)
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
@@ -182,7 +210,7 @@ all_build_variants = {
 amdgpu_family_info_matrix dictionary fields:
 - test-runs-on: (required) GitHub runner label for this architecture
 - test-runs-on-labels: (optional) List of runner label configs for load balancing across pools.
-    Each entry is a dict with "label" and "weight" (probability 0.0-1.0). Weights must sum to 1.0.
+    Each entry is a dict with "label" and "count" (number of available runners).
     When present, overrides test-runs-on for runner selection.
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
@@ -206,27 +234,18 @@ amdgpu_family_info_matrix_presubmit = {
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
             "test-runs-on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
             "test-runs-on-labels": [
-                {
-                    "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.1,
-                },  # ccs (5)
+                {"label": "linux-gfx942-1gpu-ccs-ossci-rocm", "count": 5},  # ccs
                 {
                     "label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
-                    "weight": 0.8,
-                },  # ccs-csp (28)
-                {
-                    "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.1,
-                },  # vultr (5)
+                    "count": 28,
+                },  # ccs-csp
+                {"label": "linux-gfx942-1gpu-ossci-rocm", "count": 5},  # vultr
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
-                {
-                    "label": "linux-gfx942-8gpu-ossci-rocm",
-                    "weight": 1.0,
-                },  # (10)
+                {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
             ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",

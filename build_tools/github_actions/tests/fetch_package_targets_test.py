@@ -132,28 +132,28 @@ class FetchPackageTargetsTest(unittest.TestCase):
         self.assertTrue(any("gfx120X-all" == t["amdgpu_family"] for t in targets))
 
     def test_gfx94x_multi_label_selects_first_when_random_low(self):
-        """When random() is low, first label should be selected."""
+        """When randint is low (0-4), first label should be selected (count=5)."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.05 (< 0.1 first weight)
-        with patch("random.random", return_value=0.05):
+        # Mock random.randint() to return 2 (in range 0-4 for first label with count=5)
+        with patch("random.randint", return_value=2):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ccs-ossci-rocm")
 
     def test_gfx94x_multi_label_selects_second_when_random_medium(self):
-        """When random() is in second range, second label should be selected."""
+        """When randint is medium (5-32), second label should be selected (count=28)."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.5 (>= 0.1, < 0.9)
-        with patch("random.random", return_value=0.5):
+        # Mock random.randint() to return 15 (in range 5-32 for second label with count=28)
+        with patch("random.randint", return_value=15):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
@@ -162,14 +162,14 @@ class FetchPackageTargetsTest(unittest.TestCase):
         )
 
     def test_gfx94x_multi_label_selects_third_when_random_high(self):
-        """When random() is high, third label should be selected."""
+        """When randint is high (33-37), third label should be selected (count=5)."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.95 (>= 0.9)
-        with patch("random.random", return_value=0.95):
+        # Mock random.randint() to return 35 (in range 33-37 for third label with count=5)
+        with patch("random.randint", return_value=35):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
