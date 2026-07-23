@@ -4,11 +4,32 @@
 
 import argparse
 import subprocess
+import sys
 import tempfile
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 import requests
+
+# Add build_tools/ to the path so generate_manifest_diff_report is importable
+# (this script lives in build_tools/github_actions/; github_actions_api is a
+# sibling module in that same directory and needs no path setup).
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+BUILD_TOOLS_DIR = THIS_SCRIPT_DIR.parent
+if str(BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(BUILD_TOOLS_DIR))
+
+from generate_manifest_diff_report import (
+    fetch_commits_in_range,
+    get_api_base_from_url,
+    is_revert,
+)
+from github_actions_api import (
+    GitHubAPI,
+    gha_query_prs_for_commit,
+    gha_update_pr_comment,
+)
 
 THEROCK_REPO = "ROCm/TheRock"
 THEROCK_MAIN_BRANCH = "main"
@@ -17,6 +38,27 @@ BOT_NAME = "therockbot"
 BOT_EMAIL = "therockbot@amd.com"
 
 CI_LABEL = "ci:run-all-archs"
+
+# Marker for the single sticky "breadcrumb" comment posted on an upstream
+# rocm-systems/rocm-libraries PR once its commits land in TheRock via a
+# submodule bump. GitHub always displays comments in creation order, even
+# after a later edit -- so rather than using a separate marker/comment per
+# event (land vs. revert vs. re-land), which would visually sort a later
+# revert *above* an earlier inclusion and read backwards, this keeps exactly
+# one comment per PR and maintains a newest-first history list inside it
+# (see build_breadcrumb_body()).
+BREADCRUMB_MARKER = "<!-- therock-bump-breadcrumb -->"
+HISTORY_HEADER = "### TheRock submodule-bump history (newest first)"
+
+# Separate marker/comment on the TheRock bump PR itself, for commits that
+# could not be resolved to an upstream PR (e.g. pushed directly to the
+# superrepo's default branch). Each TheRock bump PR is single-use (a fresh
+# `bump-{submodule}-{sha}` branch per bump event), so no cross-event history
+# is needed here.
+UNMAPPED_MARKER = "<!-- therock-bump-breadcrumb-unmapped -->"
+
+_COMMENT_SEARCH_MAX_PAGES = 10
+_COMMENT_SEARCH_PER_PAGE = 100
 
 ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-linux.yml",
@@ -80,6 +122,247 @@ def submodule_changed(before: str, after: str, path: str) -> bool:
     """Return True if the submodule at path differs between two commits."""
     diff = run(["git", "diff", before, after, "--", path])
     return bool(diff.strip())
+
+
+def detect_changed_submodule(before, after):
+    """Finds which monitored submodule (if any) advanced between two commits.
+
+    Returns a dict with keys "name", "repo", "old_sha", "new_sha", or None if
+    none of the monitored submodules (see SUBMODULE_CONFIG) changed.
+    """
+    for name, config in SUBMODULE_CONFIG.items():
+        if submodule_changed(before, after, name):
+            return {
+                "name": name,
+                "repo": config["repo"],
+                "old_sha": get_submodule_sha(before, name),
+                "new_sha": get_submodule_sha(after, name),
+            }
+    return None
+
+
+def get_submodule_url(submodule):
+    """Reads a submodule's remote URL from .gitmodules in the current checkout."""
+    return run(
+        [
+            "git",
+            "config",
+            "--file",
+            ".gitmodules",
+            "--get",
+            f"submodule.{submodule}.url",
+        ]
+    )
+
+
+def resolve_app_token(name, tokens):
+    """Picks whichever App token matches the given submodule's configured token_key."""
+    return tokens[SUBMODULE_CONFIG[name]["token_key"]]
+
+
+def resolve_therock_pr_number(after_sha, github_api):
+    """Resolves the TheRock PR whose merge produced `after_sha`."""
+    prs = gha_query_prs_for_commit(THEROCK_REPO, after_sha, github_api=github_api)
+    if not prs:
+        print(f"[WARN] No TheRock PR found for commit {after_sha[:7]}")
+        return None
+    if len(prs) > 1:
+        numbers = ", ".join(str(p["number"]) for p in prs)
+        print(
+            f"[WARN] Commit {after_sha[:7]} is associated with multiple TheRock "
+            f"PRs ({numbers}); using the first"
+        )
+    return prs[0]["number"]
+
+
+def resolve_prs_for_commits(repo, commits, github_api):
+    """Resolves each commit to its upstream PR(s) using the given superrepo client.
+
+    Returns (deduped PR numbers, SHAs with no associated PR).
+    """
+    pr_numbers = set()
+    unmapped_shas = []
+    for commit in commits:
+        sha = commit["sha"]
+        prs = gha_query_prs_for_commit(repo, sha, github_api=github_api)
+        if prs:
+            pr_numbers.update(pr["number"] for pr in prs)
+        else:
+            unmapped_shas.append(sha)
+    return pr_numbers, unmapped_shas
+
+
+def find_existing_comment_body(pr_number, marker, github_repository, github_api):
+    """Reads back the body of the existing sticky comment for `marker`, if any.
+
+    Mirrors the marker-search pagination gha_update_pr_comment()
+    (github_actions_api.py) already does internally, so a prior comment's
+    history section can be read and extended here rather than being clobbered
+    outright by a fresh gha_update_pr_comment() call.
+    """
+    comments_url = (
+        f"https://api.github.com/repos/{github_repository}/issues/{pr_number}/comments"
+    )
+    page = 1
+    while page <= _COMMENT_SEARCH_MAX_PAGES:
+        page_url = f"{comments_url}?per_page={_COMMENT_SEARCH_PER_PAGE}&page={page}"
+        comments = github_api.send_request(page_url)
+        if not isinstance(comments, list):
+            return None
+        for comment in comments:
+            body = comment.get("body", "")
+            if marker in body:
+                return body
+        if len(comments) < _COMMENT_SEARCH_PER_PAGE:
+            return None
+        page += 1
+    return None
+
+
+def build_timeline_entry(event_date, reverted, therock_pr_number, submodule):
+    """Builds a single newest-first history-list line for one bump event."""
+    if therock_pr_number is not None:
+        ref = (
+            f"[{THEROCK_REPO}#{therock_pr_number}]"
+            f"(https://github.com/{THEROCK_REPO}/pull/{therock_pr_number})"
+        )
+    else:
+        ref = f"a `{submodule}` submodule bump in {THEROCK_REPO}"
+    action = "Reverted out of TheRock via" if reverted else "Included in TheRock via"
+    return f"- **{event_date}** — {action} {ref}."
+
+
+def build_breadcrumb_body(
+    existing_body, reverted, therock_pr_number, submodule, event_date
+):
+    """Builds the single sticky comment body posted on an upstream PR.
+
+    Rather than posting a separate comment per event -- which GitHub always
+    displays in creation order, even after a later PATCH edits an earlier
+    comment's content, so a commit that lands/reverts/lands-again would
+    visually sort backwards -- this keeps exactly one comment per PR and
+    maintains a newest-first history list inside it. Prior entries are read
+    back from `existing_body` (if any, via find_existing_comment_body) and
+    preserved verbatim below the new entry.
+    """
+    new_entry = build_timeline_entry(event_date, reverted, therock_pr_number, submodule)
+
+    prior_entries = ""
+    if existing_body and HISTORY_HEADER in existing_body:
+        prior_entries = existing_body.split(HISTORY_HEADER, 1)[1].strip()
+
+    entries = f"{new_entry}\n{prior_entries}" if prior_entries else new_entry
+
+    return f"{BREADCRUMB_MARKER}\n{HISTORY_HEADER}\n\n{entries}\n"
+
+
+def build_unmapped_summary_body(reverted, submodule, repo, unmapped_shas):
+    """Builds the summary comment posted on the TheRock bump PR for commits
+    that could not be resolved to an upstream PR (e.g. pushed directly to the
+    default branch)."""
+    verb = "removed from" if reverted else "included in"
+    lines = [
+        UNMAPPED_MARKER,
+        f"### Unmapped `{submodule}` commits",
+        (
+            f"The following {len(unmapped_shas)} commit(s) were {verb} this bump "
+            f"but have no associated pull request on `{repo}`:"
+        ),
+    ]
+    lines.extend(
+        f"- [{sha[:7]}](https://github.com/{repo}/commit/{sha})"
+        for sha in unmapped_shas
+    )
+    return "\n".join(lines) + "\n"
+
+
+def process_bump(changed, tokens):
+    """Posts breadcrumb comments for a single detected submodule bump."""
+    name = changed["name"]
+    repo = changed["repo"]
+    old_sha = changed["old_sha"]
+    new_sha = changed["new_sha"]
+
+    print(f"[INFO] Detected {name} change: {old_sha[:7]} -> {new_sha[:7]}")
+
+    app_token = resolve_app_token(name, tokens)
+    # The App token generation steps in bump_submodules.yml scope this token
+    # to both the changed submodule's repo AND ROCm/TheRock, so a single
+    # client can post comments to PRs in either repo below.
+    github_api = GitHubAPI(github_token=app_token)
+
+    api_base = get_api_base_from_url(get_submodule_url(name), name)
+
+    therock_pr_number = resolve_therock_pr_number(new_sha, github_api)
+
+    reverted = is_revert(old_sha, new_sha, api_base)
+    # On a revert, determine_status()-style logic in
+    # generate_manifest_diff_report.py swaps the fetch range so the walked
+    # commits are the ones being undone (new_sha -> old_sha), not the ones
+    # (re-)introduced.
+    range_start, range_end = (new_sha, old_sha) if reverted else (old_sha, new_sha)
+
+    commits = fetch_commits_in_range(
+        repo_name=repo, start_sha=range_start, end_sha=range_end, api_base=api_base
+    )
+    if not commits:
+        print(f"[INFO] No commits found in range for {name}; nothing to post.")
+        return
+
+    pr_numbers, unmapped_shas = resolve_prs_for_commits(repo, commits, github_api)
+
+    event_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for pr_number in sorted(pr_numbers):
+        existing_body = find_existing_comment_body(
+            pr_number, BREADCRUMB_MARKER, repo, github_api
+        )
+        body = build_breadcrumb_body(
+            existing_body, reverted, therock_pr_number, name, event_date
+        )
+        gha_update_pr_comment(
+            pr_number=pr_number,
+            marker=BREADCRUMB_MARKER,
+            body=body,
+            github_repository=repo,
+            github_api=github_api,
+        )
+        print(f"[INFO] Posted breadcrumb to {repo}#{pr_number}")
+
+    if unmapped_shas:
+        if therock_pr_number is None:
+            print(
+                f"[WARN] {len(unmapped_shas)} unmapped commit(s) for {name} but "
+                "no TheRock PR to summarize them on"
+            )
+        else:
+            gha_update_pr_comment(
+                pr_number=therock_pr_number,
+                marker=UNMAPPED_MARKER,
+                body=build_unmapped_summary_body(reverted, name, repo, unmapped_shas),
+                github_repository=THEROCK_REPO,
+                github_api=github_api,
+            )
+            print(
+                f"[INFO] Posted unmapped-commit summary ({len(unmapped_shas)} commits) "
+                f"to {THEROCK_REPO}#{therock_pr_number}"
+            )
+
+
+def handle_post_breadcrumbs(before, after, tokens):
+    """Post-bump-breadcrumbs event: notifies upstream rocm-systems/rocm-libraries
+    (and rocgdb) PRs once their commits land in (or get reverted out of)
+    TheRock via a submodule bump. Run as its own step in the `push` handler of
+    bump_submodules.yml, alongside handle_push(), reusing the same App tokens
+    minted there."""
+    changed = detect_changed_submodule(before, after)
+    if changed is None:
+        print(
+            "[INFO] No monitored submodule changed between "
+            f"{before[:7]} and {after[:7]}; nothing to do."
+        )
+        return
+
+    process_bump(changed, tokens)
 
 
 def gh_api(
@@ -438,9 +721,13 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         print(f"[WARN] create_therock_bump failed: {e}")
 
 
-def main() -> None:
+def main(argv=None) -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
+    parser.add_argument(
+        "--event_type",
+        required=True,
+        choices=["schedule", "push", "post_breadcrumbs"],
+    )
     parser.add_argument(
         "--submodule",
         default="all",
@@ -451,7 +738,7 @@ def main() -> None:
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
     run(["git", "config", "--global", "user.email", BOT_EMAIL])
@@ -466,6 +753,8 @@ def main() -> None:
         handle_schedule(tokens, args.submodule)
     elif args.event_type == "push":
         handle_push(args.before, args.after, tokens)
+    elif args.event_type == "post_breadcrumbs":
+        handle_post_breadcrumbs(args.before, args.after, tokens)
 
 
 if __name__ == "__main__":
