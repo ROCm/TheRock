@@ -506,9 +506,7 @@ class HandlePostCommentTest(unittest.TestCase):
         self.assertEqual(call_kwargs["pr_number"], 1234)
         self.assertEqual(call_kwargs["marker"], PR_COMMENT_MARKER)
         self.assertEqual(call_kwargs["github_repository"], "ROCm/TheRock")
-        self.assertIn(
-            "99999-linux/logs/manifest-diff/index.html", call_kwargs["body"]
-        )
+        self.assertIn("99999-linux/logs/manifest-diff/index.html", call_kwargs["body"])
         self.assertIn("1 submodule changed", call_kwargs["body"])
 
 
