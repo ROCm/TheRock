@@ -1559,6 +1559,7 @@ class PerTargetExtrasTest(TmpDirTestCase):
             f"Unexpected Requires-Dist shape: {req}",
         )
 
+
 # ---------------------------------------------------------------------------
 # Security tests: SEC-00224 — exec() injection via user-controlled values
 # ---------------------------------------------------------------------------
@@ -1625,4 +1626,3 @@ class DistInfoInjectionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
