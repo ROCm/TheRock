@@ -329,12 +329,12 @@ if(THEROCK_ENABLE_PROFILER_HUB)
       # executables (incl. profiler-hub_unit_tests) resolve them. Throwaway-branch
       # confirmation; the clean fix is Threads::Threads on the unit-test target upstream.
       #
-      # -static-libsan: TheRock's therock_sanitizers.cmake force-adds -shared-libsan for
-      # clang, giving profiler-hub_unit_tests a DT_NEEDED on libclang_rt.asan.so that is
-      # unloadable at GoogleTest build-time test discovery (Result: 127). Force the static
-      # asan runtime so no shared .so is needed. Throwaway-branch A/B on
-      # users/avansick-amd/6734-ci-fix-1; real CI on #6780 is the empirical test.
-      "-DCMAKE_EXE_LINKER_FLAGS=-pthread -static-libsan"
+      # (The asan shared-runtime load failure is fixed component-side in profiler-hub's
+      # own tests/unit/CMakeLists.txt via target_link_options(-static-libsan); a
+      # -static-libsan here in CMAKE_EXE_LINKER_FLAGS is inert because it is emitted
+      # before therock_sanitizers.cmake's add_link_options(-shared-libsan), which then
+      # wins under clang's last-flag-wins rule.)
+      "-DCMAKE_EXE_LINKER_FLAGS=-pthread"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     BUILD_DEPS
