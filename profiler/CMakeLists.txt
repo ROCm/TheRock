@@ -136,6 +136,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprof-trace-decoder
       rocprofiler-register
       therock-yaml-cpp
+      ${_openmpi_optional_dep}
       ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}

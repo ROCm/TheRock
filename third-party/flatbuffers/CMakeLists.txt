@@ -27,7 +27,6 @@ therock_provide_artifact(flatbuffers
   DESCRIPTOR artifact-flatbuffers.toml
   COMPONENTS
     dev
-    run
   SUBPROJECT_DEPS
     therock-flatbuffers
 )
