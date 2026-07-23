@@ -390,6 +390,7 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
     repo_name = config["repo"]
     branch = f"update-therock-{changed}-{after[:7]}"
 
+    original_cwd = os.getcwd()
     with tempfile.TemporaryDirectory() as tmp:
         run(["git", "clone", "--depth", "1", _clone_url(repo_name, token), tmp])
         os.chdir(tmp)  # Change working directory to the cloned repo
@@ -398,6 +399,7 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         for f in config["files"]:
             if not os.path.exists(f):
                 print(f"[ERROR] File not found: {f}")
+                os.chdir(original_cwd)
                 return
 
         run(["git", "checkout", "-b", branch])
@@ -424,6 +426,16 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
                 "body": f"Updated TheRock ref to `{after[:7]}` due to submodule bump",
             },
         )
+
+    os.chdir(original_cwd)
+
+    # Immediately queue the next bump PR so the cycle continues without
+    # waiting for the next scheduled run.
+    print(f"[INFO] Creating next bump PR for {changed} after merge")
+    try:
+        create_therock_bump(changed, token)
+    except Exception as e:
+        print(f"[WARN] create_therock_bump failed: {e}")
 
 
 def main() -> None:
