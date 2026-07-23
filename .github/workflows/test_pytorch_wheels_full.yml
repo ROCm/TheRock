@@ -289,6 +289,70 @@ jobs:
           echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
           echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
+      # Dump the runner's kernel, ROCm/amdgpu driver, GPU topology, and other
+      # environment details. Many distributed failures in the pytorch_2.1x skip
+      # lists are "not reproducible locally"; this captures the runner-specific
+      # configuration (kernel, KFD/amdgpu driver, XGMI/PCIe topology, GPU count,
+      # relevant env vars) needed to explain host-dependent behavior. Never fail
+      # the job: every command is guarded with `|| true`.
+      - name: Print runner configuration
+        if: ${{ runner.os == 'Linux' }}
+        continue-on-error: true
+        run: |
+          echo "::group::Kernel and OS"
+          uname -a || true
+          cat /etc/os-release || true
+          echo "--- glibc ---"
+          ldd --version | head -n 1 || true
+          echo "::endgroup::"
+
+          echo "::group::CPU and memory"
+          nproc || true
+          lscpu || true
+          echo "--- memory ---"
+          free -h || true
+          echo "--- /dev/shm (distributed tests rely on shared memory) ---"
+          df -h /dev/shm || true
+          echo "::endgroup::"
+
+          echo "::group::ROCm / amdgpu kernel driver"
+          echo "--- amdgpu kernel module version (/sys/module/amdgpu/version) ---"
+          cat /sys/module/amdgpu/version || true
+          echo "--- amdgpu modinfo ---"
+          modinfo amdgpu 2>/dev/null | grep -E '^(version|srcversion|vermagic):' || true
+          echo "--- KFD/render device nodes ---"
+          ls -l /dev/kfd /dev/dri || true
+          echo "--- rocm-smi driver version ---"
+          rocm-smi --showdriverversion || true
+          echo "::endgroup::"
+
+          echo "::group::ROCm userspace / SDK versions"
+          rocm-sdk version || true
+          echo "ROCM_PATH=${ROCM_PATH:-}"
+          cat "${ROCM_PATH:-/opt/rocm}"/.info/version* 2>/dev/null || true
+          hipconfig --version || true
+          echo "::endgroup::"
+
+          echo "::group::GPU inventory and topology"
+          echo "--- rocm-smi ---"
+          rocm-smi || true
+          echo "--- rocm-smi topology (XGMI/PCIe links matter for distributed) ---"
+          rocm-smi --showtopo || true
+          echo "--- amd-smi ---"
+          amd-smi list || true
+          amd-smi static || true
+          echo "--- rocminfo (agents / gfx targets) ---"
+          rocminfo || true
+          echo "::endgroup::"
+
+          echo "::group::Relevant environment variables"
+          env | grep -E '^(ROCM|ROCR|HIP|HSA|RCCL|NCCL|GPU|AMD|PYTORCH|OMP|OPENBLAS|MASTER|WORLD|RANK|LOCAL)' | sort || true
+          echo "::endgroup::"
+
+          echo "::group::PyTorch device view"
+          python -c "import torch; print('torch', torch.__version__); print('hip', torch.version.hip); print('device_count', torch.cuda.device_count()); print('arch_list', torch.cuda.get_arch_list())" || true
+          echo "::endgroup::"
+
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
       # tools.stats.*) that expect the repo root on sys.path.
