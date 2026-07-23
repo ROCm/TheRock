@@ -132,7 +132,10 @@ def _target_families(
     linux_amdgpu_families: Sequence[str],
     windows_amdgpu_families: Sequence[str],
 ) -> tuple[str, ...]:
-    """GFX targets whose artifacts must be verified for stage reuse."""
+    """Family list whose artifacts must be verified for stage reuse.
+    De-duplicates the requested Linux and Windows families and always appends
+    the generic pseudo-family, since every stage produces a generic archive.
+    """
     families = list(dict.fromkeys([*linux_amdgpu_families, *windows_amdgpu_families]))
     if GENERIC_FAMILY not in families:
         families.append(GENERIC_FAMILY)
@@ -208,15 +211,7 @@ def plan_stage_reuse(
 
     Pure decision logic -- no baseline selection, artifact verification, or
     reporting -- so it can be reused independently of the CI plumbing.
-
-    Args:
-        changed_files: List of changed file paths for impact analysis.
-        platform: Platform for filtering (linux/windows).
-        topology: Build topology (loaded if not provided).
     """
-
-    if topology is None:
-        topology = get_topology()
 
     if changed_files is None:
         return StageReusePlan(
@@ -279,7 +274,7 @@ def compute_auto_stage_reuse(
             )
         )
 
-    if topology is None:
+    if topology is None and changed_files is not None:
         topology = get_topology()
 
     families = _target_families(linux_amdgpu_families, windows_amdgpu_families)
@@ -477,10 +472,6 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     contain all requested artifacts. A run with no artifacts (e.g. a docs-only
     change) therefore fails the availability gate and is never selected, so no
     extra "passing build" check is needed here.
-
-    For external repos (rocm-libraries, rocm-systems), set
-    ``STAGE_REUSE_BASELINE_REPOSITORY`` to ``ROCm/TheRock`` to query TheRock's
-    workflow runs for prebuilt artifacts instead of the external repo's own runs.
     """
 
     github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
@@ -494,7 +485,6 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
         history_count = max(1, int(history_count_raw))
     except ValueError:
         history_count = 50
-
     # The commit-compatibility rule needs the branch history (newest-first) to
     # establish ancestry. select_baseline_run only accepts a candidate whose
     # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY

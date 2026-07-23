@@ -69,6 +69,7 @@ FULL_TEST_TRIGGER_PATTERNS = [
     ".github/repos-config.json",
 ]
 
+
 @dataclass
 class ConfigureResult:
     """Result of CI configuration analysis."""

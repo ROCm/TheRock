@@ -897,7 +897,13 @@ def _create_source_backend(
     local_staging_dir: Optional[Path] = None,
     source_repository: Optional[str] = None,
 ) -> ArtifactBackend:
-    """Create a backend for the source run ID."""
+    """Create a backend for the source run ID.
+
+    For S3, uses WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)
+    to resolve the correct bucket (which may differ from the current run's bucket).
+
+    For local backends, creates a LocalDirectoryBackend in the same staging dir.
+    """
     if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
         staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
         output_root = WorkflowOutputRoot.for_local(

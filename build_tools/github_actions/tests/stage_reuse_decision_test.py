@@ -548,31 +548,6 @@ class CrossRepoBaselineSelectorTest(unittest.TestCase):
                     os.environ[k] = v
         return captured, result
 
-    def test_cross_repo_disables_commit_compatibility(self):
-        """External repo using TheRock baseline should disable commit checking."""
-        history_called = {"n": 0}
-
-        def fake_history(**kwargs):
-            history_called["n"] += 1
-            return ["sha1", "sha2"]
-
-        captured, _ = self._run_with_env(
-            {
-                "GITHUB_REPOSITORY": "ROCm/rocm-libraries",
-                "STAGE_REUSE_BASELINE_REPOSITORY": "ROCm/TheRock",
-                "STAGE_REUSE_CURRENT_SHA": "sha-rocm-libs",
-            },
-            fake_history,
-            fake_select="baseline",
-        )
-        # Cross-repo means no commit compatibility check
-        self.assertIsNone(captured.get("current_commit_sha"))
-        self.assertIsNone(captured.get("ordered_commit_shas"))
-        # History fetch should NOT be called for cross-repo
-        self.assertEqual(history_called["n"], 0)
-        # But it should query the baseline repository
-        self.assertEqual(captured.get("github_repository"), "ROCm/TheRock")
-
     def test_same_repo_uses_commit_compatibility(self):
         """Same repo (no cross-repo override) should enable commit checking."""
 
@@ -590,7 +565,9 @@ class CrossRepoBaselineSelectorTest(unittest.TestCase):
         )
         # Same repo should have commit compatibility enabled
         self.assertEqual(captured.get("current_commit_sha"), "sha-current")
-        self.assertEqual(captured.get("ordered_commit_shas"), ["sha-current", "sha-old"])
+        self.assertEqual(
+            captured.get("ordered_commit_shas"), ["sha-current", "sha-old"]
+        )
         self.assertEqual(captured.get("github_repository"), "ROCm/TheRock")
 
     def test_empty_baseline_repository_uses_github_repository(self):

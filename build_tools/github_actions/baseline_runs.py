@@ -421,9 +421,7 @@ def _find_matching_artifact_archives(
     required_artifact: RequiredArtifact,
     available: set[str],
 ) -> list[str]:
-    """Find artifact archives matching a requirement.
-
-    """
+    """Find artifact archives matching a requirement."""
     matches: list[str] = []
     for component in ARTIFACT_COMPONENTS:
         for extension in ARTIFACT_EXTENSIONS:
