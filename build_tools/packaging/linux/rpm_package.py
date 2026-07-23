@@ -72,7 +72,8 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     updated_pkg_name = update_package_name(pkg_name, build_config)
     package_dir = Path(build_config.dest_dir) / build_config.pkg_type / updated_pkg_name
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, build_config)
+    if not generate_spec_file(pkg_name, specfile, build_config):
+        return []
     package_with_rpmbuild(specfile)
 
     # Move packages to destination
@@ -88,7 +89,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     specfile: Path where the generated spec file should be saved
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: True if spec file was generated, False if package should be skipped
     """
     print_function_name()
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
@@ -121,17 +122,18 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         sourcedir_list.extend(dir_list)
 
         # Filter out non-existing directories
-        sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
+        sourcedir_list = [path for path in sourcedir_list if path.is_dir()]
 
         # GFX_META is a versioned meta package (empty content, just dependencies)
         is_gfx_meta = config.enable_kpack and config.gfx_arch == GFX_META
 
-        # Warn if we have no artifacts for non-meta packages
+        # Skip if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
             if config.enable_kpack:
                 print(
-                    f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
+                    f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, skipping"
                 )
+                return False
             else:
                 sys.exit(
                     f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
@@ -188,6 +190,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     with open(specfile, "w", encoding="utf-8") as f:
         f.write(template.render(context))
+
+    return True
 
 
 def generate_rpm_postscripts(pkg_info, config: PackageConfig):
