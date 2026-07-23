@@ -146,10 +146,25 @@ if(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH)
     # just hardcode "linux" since that is the only system we do RPATH munging for.
     cmake_path(GET _abs_resource_dir FILENAME _clang_version)
     set(_prefix_resource_dir "lib/llvm/lib/clang/${_clang_version}")
-    list(APPEND THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_prefix_resource_dir}/lib/linux")
+    # With LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON (enabled on Linux since #5758),
+    # the ASAN runtime is placed under lib/<target-triple>/ instead of lib/linux/.
+    # Query the compiler target triple and use that subdirectory if it exists;
+    # fall back to lib/linux for builds without per-target runtime directories.
+    execute_process(
+      COMMAND "${CMAKE_CXX_COMPILER}" --print-target-triple
+      OUTPUT_VARIABLE _clang_triple
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(_clang_triple AND IS_DIRECTORY "${_abs_resource_dir}/lib/${_clang_triple}")
+      set(_rt_subdir "lib/${_clang_triple}")
+    else()
+      set(_rt_subdir "lib/linux")
+    endif()
+    list(APPEND THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_prefix_resource_dir}/${_rt_subdir}")
     # Build tree needs absolute paths to the resource dir.
-    list(APPEND THEROCK_PRIVATE_BUILD_RPATH_DIRS "${_abs_resource_dir}/lib/linux")
-    message(STATUS "Added clang resource dir to RPATH: ${_prefix_resource_dir} (since sanitizer enabled)")
+    list(APPEND THEROCK_PRIVATE_BUILD_RPATH_DIRS "${_abs_resource_dir}/${_rt_subdir}")
+    message(STATUS "Added clang resource dir to RPATH: ${_prefix_resource_dir}/${_rt_subdir} (since sanitizer enabled)")
   endblock()
 endif()
 
