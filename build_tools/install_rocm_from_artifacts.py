@@ -360,11 +360,19 @@ def retrieve_artifacts_by_run_id(args):
         "core-hip_lib",
         "core-hip_dev",
         "core-kpack_lib",
-        "core-ocl_lib",
-        "core-ocl_dev",
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
+
+    # On Windows, OCL artifacts should only be in test packages, not base installs.
+    # On Linux, OCL is part of the standard base installation.
+    if PLATFORM != "windows":
+        base_artifact_patterns.extend(
+            [
+                "core-ocl_lib",
+                "core-ocl_dev",
+            ]
+        )
 
     if args.base_only:
         argv.extend(base_artifact_patterns)

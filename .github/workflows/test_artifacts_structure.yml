@@ -75,6 +75,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       PLATFORM: ${{ inputs.platform }}
       THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
+      THEROCK_ARTIFACTS_PLATFORM: ${{ inputs.platform }}
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checkout repository
