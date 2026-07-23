@@ -42,6 +42,30 @@ remote cache, accessed via ccache's `remote_storage` option with
 Both servers are on the Kubernetes cluster, accessible without
 authentication from any pod in the cluster.
 
+### In-cluster Redis backend
+
+The `github-oss-redis` preset points ccache's `remote_storage` at an
+in-cluster Redis (Valkey) service in the prod build cluster
+(`therock-runners-prod`):
+
+| Preset             | Server                                                    | Used by              |
+| ------------------ | --------------------------------------------------------- | -------------------- |
+| `github-oss-redis` | `redis-ccache-svc.redis-ccache-ns.svc.cluster.local:6379` | Linux CI (default)   |
+
+Like bazel-remote, it is a `ClusterIP` service with **no authentication**,
+relying on cluster network isolation. The endpoint can be overridden with the
+`CCACHE_REDIS_ENDPOINT` environment variable. It is deployed from
+`ROCm/TheRock-Infra` (`helm/redis-ccache`, `deploy-redis-ccache-prod.yaml`).
+
+This is the default remote backend for Linux multi-arch CI builds. Since the
+service is in-cluster only, builds must run on the AWS in-cluster pool
+(`aws-linux-scale-rocm-prod`). Windows builds are unaffected and continue
+using their existing cache setup.
+
+Caveat: ccache's built-in Redis backend has no TLS and is **deprecated for
+removal in ccache 4.14/4.15**. This backend works with the pinned 4.11.2 but
+has a shelf-life; revisit if/when ccache is upgraded.
+
 ### Namespace version
 
 `CCACHE_NAMESPACE_VERSION` in `setup_ccache.py` controls the cache
