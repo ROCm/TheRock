@@ -33,11 +33,13 @@ RELEASE_STABLE_PYTORCH_REFS = {
         "release/2.10",
         "release/2.11",
         "release/2.12",
+        "release/2.13",
     ],
     "windows": [
         "release/2.10",
         "release/2.11",
         "release/2.12",
+        "release/2.13",
     ],
 }
 
@@ -48,7 +50,7 @@ RELEASE_PYTORCH_REFS = {
 }
 
 CI_PYTORCH_REFS = {
-    "linux": ["release/2.10", "release/2.11", "release/2.12"],
+    "linux": ["release/2.10", "release/2.11", "release/2.12", "release/2.13"],
     "windows": ["release/2.10"],
 }
 
@@ -66,6 +68,9 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         "release/2.11": {"gfx90c"},
         # gfx125x supported for PyTorch 2.12 via https://github.com/ROCm/pytorch/pull/3421.
         "release/2.12": {"gfx90c"},
+        # gfx125x not yet enabled for PyTorch release/2.13 (ROCm/pytorch fork).
+        # See https://github.com/ROCm/TheRock/issues/5833.
+        "release/2.13": {"gfx125X-dcgpu", "gfx90c"},
         # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
         "nightly": {},
     },
@@ -73,6 +78,7 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         "release/2.10": {"gfx90c"},
         "release/2.11": {"gfx90c"},
         "release/2.12": {"gfx90c"},
+        "release/2.13": {"gfx90c"},
     },
 }
 
