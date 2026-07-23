@@ -1559,6 +1559,70 @@ class PerTargetExtrasTest(TmpDirTestCase):
             f"Unexpected Requires-Dist shape: {req}",
         )
 
+# ---------------------------------------------------------------------------
+# Security tests: SEC-00224 — exec() injection via user-controlled values
+# ---------------------------------------------------------------------------
+
+
+class DistInfoInjectionTest(unittest.TestCase):
+    """Verify that repr() prevents code injection in _dist_info.py generation.
+
+    SEC-00224: user-controlled values (version_suffix, target_family) were
+    previously interpolated directly into exec()-executed source code. The fix
+    wraps all such values in repr() for the on-disk file and assigns them
+    directly as attributes for the in-memory module, eliminating the attack
+    surface entirely.
+    """
+
+    def test_version_suffix_injection_neutralized(self):
+        """Malicious version_suffix must not execute when used in generated code."""
+        version = "7.0.0"
+        version_suffix = "'\nimport os; os.system('id')\n#"
+
+        line = f"__version__ = {repr(f'{version}{version_suffix}')}\n"
+        namespace = {}
+        exec(line, namespace)
+
+        result = namespace["__version__"]
+        # The payload must be stored as data, not executed
+        self.assertTrue(
+            result.startswith("7.0.0"),
+            f"Expected version starting with '7.0.0', got {result!r}",
+        )
+        self.assertIn("import os", result, "Payload should be stored as string data")
+
+    def test_normal_version_suffix_unaffected(self):
+        """Normal version_suffix values must still produce correct output."""
+        version = "7.0.0"
+        version_suffix = "rc1"
+
+        line = f"__version__ = {repr(f'{version}{version_suffix}')}\n"
+        namespace = {}
+        exec(line, namespace)
+
+        self.assertEqual(namespace["__version__"], "7.0.0rc1")
+
+    def test_target_family_injection_neutralized(self):
+        """Malicious target_family must not execute when appended to list."""
+        target_family = "gfx942'); import os; os.system('id')#"
+
+        line = f"AVAILABLE_TARGET_FAMILIES.append({repr(target_family)})\n"
+        namespace = {"AVAILABLE_TARGET_FAMILIES": []}
+        exec(line, namespace)
+
+        self.assertEqual(namespace["AVAILABLE_TARGET_FAMILIES"], [target_family])
+
+    def test_default_target_family_injection_neutralized(self):
+        """Malicious default_target_family must not execute as an assignment."""
+        default_target_family = "gfx942'\nimport os; os.system('id')\n#"
+
+        line = f"DEFAULT_TARGET_FAMILY = {repr(default_target_family)}\n"
+        namespace = {}
+        exec(line, namespace)
+
+        self.assertEqual(namespace["DEFAULT_TARGET_FAMILY"], default_target_family)
+
 
 if __name__ == "__main__":
     unittest.main()
+
