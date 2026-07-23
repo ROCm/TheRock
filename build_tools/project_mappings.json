@@ -1,0 +1,33 @@
+{
+  "rocm_systems_projects": {
+    "amdsmi": "core-amdsmi",
+    "clr": "core-hip",
+    "hip": "core-hip",
+    "hip-tests": "core-hiptests",
+    "hipfile": "hipfile",
+    "rccl": "rccl",
+    "rccl-tests": "rccl",
+    "rdc": "rdc",
+    "rocdbgapi": "amd-dbgapi",
+    "rocdecode": "rocdecode",
+    "rocjpeg": "rocjpeg",
+    "rocm-core": "base",
+    "rocm-smi-lib": "base",
+    "rocminfo": "core-runtime",
+    "rocprofiler": "rocprofiler-sdk",
+    "rocprofiler-register": "base",
+    "rocprofiler-sdk": "rocprofiler-sdk",
+    "rocprofiler-systems": "rocprofiler-systems",
+    "rocr-debug-agent": "rocr-debug-agent",
+    "rocr-runtime": "core-runtime",
+    "rocshmem": "rocshmem",
+    "roctracer": "rocprofiler-sdk"
+  },
+  "subproject_features": {
+    "hipSPARSE": "SPARSE",
+    "hipSPARSELt": "SPARSE",
+    "rocSPARSE": "SPARSE",
+    "hipSOLVER": "SOLVER",
+    "rocSOLVER": "SOLVER"
+  }
+}

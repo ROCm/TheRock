@@ -104,7 +104,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-sdk
-    USE_DIST_AMDGPU_TARGETS
+    # Use TEST targets (all available archs) so the _generic test artifact
+    # contains .hsaco files for all architectures, not just dist archs.
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
@@ -134,6 +136,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprof-trace-decoder
       rocprofiler-register
       therock-yaml-cpp
+      ${_openmpi_optional_dep}
       ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}

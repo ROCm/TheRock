@@ -186,7 +186,10 @@ ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
-RDHC_TIMEOUT_SEC = 30
+# rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
+# short in container CI (timeouts under load). Optional cluster checks are skipped
+# separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
+RDHC_TIMEOUT_SEC = 600  # 10 minutes
 VERIFY_MIN_COMPONENTS = 2
 _TEST_TYPE_MAP = {
     "": "sanity",
@@ -1003,7 +1006,12 @@ gpgcheck=0
         cmd = [sys.executable, str(rdhc_script)]
 
         # Set RDHC arguments for full test
-        test_args = ["--rocm-install-prefix", rocm_install_prefix_arg, "--all"]
+        test_args = [
+            "--rocm-install-prefix",
+            rocm_install_prefix_arg,
+            "--all",
+            "--skip-optional-cluster-checks",
+        ]
         print(
             f"\nRun rdhc.py with --rocm-install-prefix {rocm_install_prefix_arg} --all..."
         )

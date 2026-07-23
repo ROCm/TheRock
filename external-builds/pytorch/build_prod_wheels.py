@@ -965,7 +965,6 @@ def do_build_pytorch(
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
     is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
     # aotriton supports a subset of GPU architectures. When at least one
@@ -991,39 +990,7 @@ def do_build_pytorch(
         for arch in rocm_arch_list
     )
 
-    ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
-    ## and causes build failures for other PyTorch versions
-    ## Warn user when enabling it manually.
-    ## https://github.com/ROCm/TheRock/issues/2056
     if not is_windows:
-        # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if is_pytorch_2_9:
-            # Default ON for 2.9.x, unless explicitly disabled
-            # args.enable_pytorch_fbgemm_genai_linux can be set to false
-            # by passing --no-enable-pytorch-fbgemm-genai-linux as input
-            if args.enable_pytorch_fbgemm_genai_linux is False:
-                use_fbgemm_genai = "OFF"
-                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = OFF.")
-            else:
-                use_fbgemm_genai = "ON"
-        else:
-            # Default OFF for all other versions, unless explicitly enabled
-            if args.enable_pytorch_fbgemm_genai_linux is True:
-                use_fbgemm_genai = "ON"
-            else:
-                use_fbgemm_genai = "OFF"
-
-            if use_fbgemm_genai == "ON":
-                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
-                print(
-                    f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
-                    for PyTorch >= 2.8 (Except 2.9). See status of issue https://github.com/ROCm/TheRock/issues/2056
-                      """
-                )
-
-        env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
-        print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
-
         if args.enable_pytorch_flash_attention_linux is None:
             # Default: enable when triton is available AND at least one
             # target arch is supported by aotriton. When all targets are
@@ -1149,21 +1116,6 @@ def do_build_pytorch(
         + pip_install_args,
         cwd=pytorch_dir,
     )
-
-    # PEP 517 build backend requirements. We build below with
-    # `python -m build --wheel --no-isolation`, which (unlike an isolated build)
-    # does not auto-install the backend declared in pyproject.toml's
-    # [build-system]. PyTorch's backend switches from setuptools to
-    # scikit-build-core on 2026-07-20 (ROCm/TheRock#6523); newer checkouts ship
-    # requirements-build.txt (pinning scikit-build-core>=1.0), older ones do
-    # not. `build` provides the `python -m build` frontend itself.
-    print("+++ Installing pytorch build backend requirements:")
-    build_backend_install = [sys.executable, "-m", "pip", "install", "build"]
-    pytorch_build_requirements = pytorch_dir / "requirements-build.txt"
-    if pytorch_build_requirements.exists():
-        build_backend_install += ["-r", pytorch_build_requirements]
-    run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
-
     if is_windows:
         # As of 2025-06-24, the 'ninja' package on pypi is trailing too far
         # behind upstream:
@@ -1185,16 +1137,7 @@ def do_build_pytorch(
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_dir / "build")
-    # `python -m build --wheel --no-isolation` is the standard replacement for
-    # the removed `setup.py bdist_wheel` (ROCm/TheRock#6523). It drives the
-    # legacy setuptools backend and the new scikit-build-core backend alike, and
-    # all build-configuration env vars (USE_ROCM, PYTORCH_ROCM_ARCH, MAX_JOBS,
-    # ...) continue to be honored as they now seed the CMake cache directly.
-    run_command(
-        [sys.executable, "-m", "build", "--wheel", "--no-isolation"],
-        cwd=pytorch_dir,
-        env=env,
-    )
+    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
@@ -1488,12 +1431,6 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch flash attention on Linux (enabled by default, sets USE_FLASH_ATTENTION=1)",
-    )
-    build_p.add_argument(
-        "--enable-pytorch-fbgemm-genai-linux",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
     build_p.add_argument(
         "--version-suffix",

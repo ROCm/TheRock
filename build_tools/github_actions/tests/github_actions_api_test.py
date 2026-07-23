@@ -16,14 +16,18 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
+    gha_append_step_summary,
     gha_fetch_file_contents,
     gha_fetch_text_file_contents,
+    gha_job_summary_mirror_path,
     gha_load_github_event,
     gha_query_last_workflow_run,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
     gha_resolve_git_ref,
+    gha_set_job_summary_output,
+    gha_set_output,
     is_authenticated_github_api_available,
 )
 
@@ -675,6 +679,132 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         # Each limited result should also be a valid SHA
         for sha in commits_limited:
             self.assertRegex(sha, sha_pattern)
+
+
+class JobSummaryTest(unittest.TestCase):
+    """Tests for the job-summary mirror and output helpers."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp_path = Path(self._tmp.name)
+        self.runner_temp = self.tmp_path / "runner_temp"
+        self.runner_temp.mkdir()
+        self.step_summary_file = self.tmp_path / "step_summary.md"
+        self.github_output_file = self.tmp_path / "github_output"
+        self.env = {
+            "RUNNER_TEMP": os.fspath(self.runner_temp),
+            "GITHUB_STEP_SUMMARY": os.fspath(self.step_summary_file),
+            "GITHUB_OUTPUT": os.fspath(self.github_output_file),
+        }
+
+    def test_mirror_path_uses_runner_temp(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            self.assertEqual(
+                gha_job_summary_mirror_path(),
+                self.runner_temp / "job_summary.md",
+            )
+
+    def test_mirror_path_none_without_runner_temp(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(gha_job_summary_mirror_path())
+
+    def test_append_writes_both_step_summary_and_mirror(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Section A")
+            gha_append_step_summary("### Section B")
+
+        expected = "### Section A\n\n### Section B\n\n"
+        self.assertEqual(self.step_summary_file.read_text(encoding="utf-8"), expected)
+        mirror = self.runner_temp / "job_summary.md"
+        self.assertEqual(mirror.read_text(encoding="utf-8"), expected)
+
+    def test_append_multiline_summary(self):
+        summary = "### Heading\n\n- bullet a\n- bullet b\n\n| col |\n| --- |"
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary(summary)
+
+        expected = summary + "\n\n"
+        self.assertEqual(self.step_summary_file.read_text(encoding="utf-8"), expected)
+        mirror = self.runner_temp / "job_summary.md"
+        self.assertEqual(mirror.read_text(encoding="utf-8"), expected)
+
+    def test_append_can_skip_mirror(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Only step summary", mirror_to_job_file=False)
+
+        self.assertEqual(
+            self.step_summary_file.read_text(encoding="utf-8"),
+            "### Only step summary\n\n",
+        )
+        self.assertFalse((self.runner_temp / "job_summary.md").exists())
+
+    def test_append_without_step_summary_does_not_mirror(self):
+        # The mirror must only ever hold what was written to GITHUB_STEP_SUMMARY.
+        # When that env var is unset there is nothing to mirror, so the mirror
+        # file must not be created.
+        env = {k: v for k, v in self.env.items() if k != "GITHUB_STEP_SUMMARY"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            gha_append_step_summary("### Mirror only")
+
+        self.assertFalse((self.runner_temp / "job_summary.md").exists())
+
+    def test_set_output_publishes_with_custom_name(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Line 1")
+            gha_append_step_summary("### Line 2")
+            gha_set_job_summary_output(output_name="job_summary")
+
+        # The accumulated mirror is published under the requested name using the
+        # multiline heredoc form written by gha_set_output.
+        output = self.github_output_file.read_text(encoding="utf-8")
+        self.assertIn("job_summary<<EOF_mag1c\n", output)
+        self.assertIn("### Line 1", output)
+        self.assertIn("### Line 2", output)
+
+    def _parse_heredoc_output(self, output_name):
+        # Parse the GITHUB_OUTPUT heredoc the way GitHub does and return the
+        # published value for output_name.
+        output = self.github_output_file.read_text(encoding="utf-8")
+        # first == "output_name<<EOF_mag1c", rest == "value\nEOF_mag1c\n"
+        first, _, rest = output.partition("\n")
+        key, _, delimiter = first.partition("<<")
+        self.assertEqual(key, output_name)
+        closing = f"\n{delimiter}\n"
+        self.assertTrue(rest.endswith(closing))
+        return rest[: -len(closing)]
+
+    def test_set_output_round_trips_single_line_summary(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Only section")
+            gha_set_job_summary_output()
+
+        # gha_append_step_summary always appends a blank-line separator, so the
+        # published value carries the same trailing newlines as the mirror.
+        self.assertEqual(self._parse_heredoc_output("summary"), "### Only section\n\n")
+
+    def test_set_output_round_trips_multi_line_summary(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Heading\n\n- bullet a\n- bullet b")
+            gha_append_step_summary("| col |\n| --- |\n| val |")
+            gha_set_job_summary_output()
+
+        expected = (
+            "### Heading\n\n- bullet a\n- bullet b\n\n" "| col |\n| --- |\n| val |\n\n"
+        )
+        self.assertEqual(self._parse_heredoc_output("summary"), expected)
+
+    def test_set_output_skips_when_no_mirror(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_set_job_summary_output()
+
+        # No mirror written -> nothing published to GITHUB_OUTPUT.
+        output = (
+            self.github_output_file.read_text(encoding="utf-8")
+            if self.github_output_file.exists()
+            else ""
+        )
+        self.assertEqual(output, "")
 
 
 if __name__ == "__main__":

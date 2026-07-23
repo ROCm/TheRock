@@ -38,11 +38,7 @@ runs:
     - name: "Install UV"
       shell: bash
       run: |
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          powershell -Command "irm https://astral.sh/uv/install.ps1 | iex"
-        else
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-        fi
+        pip install uv
 
     - name: Create Python venv
       shell: bash
