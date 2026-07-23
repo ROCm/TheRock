@@ -75,7 +75,7 @@ This target produces an architecture-independent SPIR-V code object that the run
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
-| Portable     | amdgcnspirv |               |               |               |
+| Generic      | amdgcnspirv |               |               |               |
 
 ## ROCm on Windows
 

@@ -1020,6 +1020,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "amdgpu_targets",
             "test-runs-on",
             "sanity_check_only_for_family",
+            "build-per-arch",
         }
         optional_keys = {"test-runs-on-labels"}
         for config in [result.linux, result.windows]:
@@ -1030,6 +1031,26 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 entry_keys = set(entry.keys())
                 self.assertLessEqual(required_keys, entry_keys)
                 self.assertLessEqual(entry_keys, required_keys | optional_keys)
+                # Ordinary gfx families always participate in per-arch stages.
+                self.assertTrue(entry["build-per-arch"])
+
+    def test_amdgcnspirv_per_family_info_opts_out_of_per_arch(self):
+        """amdgcnspirv's per_family_info entry carries build-per-arch False.
+
+        This is what the math-libs job `if:` reads to skip the per-arch stage
+        for the architecture-independent SPIR-V family.
+        """
+        targets = cm.TargetSelection(linux_families=["amdgcnspirv"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        entry = result.linux.per_family_info[0]
+        self.assertEqual(entry["amdgpu_family"], "amdgcnspirv")
+        self.assertFalse(entry["build-per-arch"])
 
     def test_build_config_structure(self):
         """BuildConfig has correct structure: families, metadata, consistency.

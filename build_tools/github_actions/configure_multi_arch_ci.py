@@ -1084,6 +1084,13 @@ def _expand_build_config_for_platform(
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),
+            # Whether this family participates in per-arch build stages (e.g.
+            # math-libs). Defaults to True. Architecture-independent families
+            # such as amdgcnspirv set this False: their per-arch library
+            # projects have no support for the target yet, so only the
+            # generic/host stages build for them. Consumed by the math-libs
+            # job `if:` in multi_arch_build_portable_{linux,windows}.yml.
+            "build-per-arch": platform_info.get("build-per-arch", True),
         }
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]

@@ -517,11 +517,19 @@ amdgpu_family_info_matrix_all = {
     # amdgcnspirv is the architecture-independent portable SPIR-V target: it
     # produces a SPIR-V code object that the runtime finalizes to device ISA at
     # load time. There is no hardware runner, so this is a build-only leg.
+    #
+    # build-per-arch is False: the per-arch build stages (e.g. math-libs) have
+    # no spirv-capable projects yet — every math/ML library is excluded for
+    # amdgcnspirv and would otherwise fall back to a gfx arch and fail artifact
+    # splitting. Only the generic/host stages build for spirv today.
+    # TODO: flip build-per-arch to True (or add a dedicated spirv per-arch leg)
+    # once the per-arch library projects support the amdgcnspirv target.
     "amdgcnspirv": {
         "amdgcnspirv": {
             "linux": {
                 "build": {
                     "build_variants": ["release"],
+                    "build-per-arch": False,
                 },
                 "test": {
                     # No hardware to test SPIR-V on; build-only.

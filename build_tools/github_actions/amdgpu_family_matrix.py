@@ -472,12 +472,21 @@ amdgpu_family_info_matrix_nightly = {
     # load time, so there is no hardware runner: this is a build-only leg,
     # verifying the SPIR-V build path. Trigger on a PR via the `amdgcnspirv`
     # label (see configure_multi_arch_ci.py) or on the nightly schedule.
+    #
+    # build-per-arch is False: the per-arch build stages (e.g. math-libs) have
+    # no spirv-capable projects yet — every math/ML library is excluded for
+    # amdgcnspirv and would otherwise fall back to a gfx arch and fail artifact
+    # splitting. Only the generic/host stages (compiler-runtime, comm-libs, ...)
+    # build for spirv today.
+    # TODO: flip build-per-arch to True (or add a dedicated spirv per-arch leg)
+    # once the per-arch library projects support the amdgcnspirv target.
     "amdgcnspirv": {
         "linux": {
             "test-runs-on": "",
             "family": "amdgcnspirv",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "build-per-arch": False,
         },
     },
 }
