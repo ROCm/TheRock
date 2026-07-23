@@ -1,10 +1,5 @@
 #!/usr/bin/env python
-"""Unit tests for summarize_test_pytorch_workflow.py.
-
-Focus on the index-URL construction: per-family installs append a family
-subdir, while multi-arch installs select the GPU via device extras on the
-flat whl-multi-arch index and must NOT append a subdir.
-"""
+"""Unit tests for summarize_test_pytorch_workflow.py."""
 
 import argparse
 import os
@@ -21,7 +16,6 @@ import summarize_test_pytorch_workflow
 
 def _make_args(
     index_url,
-    index_subdir="",
     device_extras="",
     torch_version="2.10.0+rocm7.12.0a20260501",
     pytorch_git_ref="release/2.10",
@@ -29,7 +23,6 @@ def _make_args(
 ):
     return argparse.Namespace(
         index_url=index_url,
-        index_subdir=index_subdir,
         device_extras=device_extras,
         torch_version=torch_version,
         pytorch_git_ref=pytorch_git_ref,
@@ -46,25 +39,11 @@ def _run_and_capture(args) -> str:
 
 
 class TestIndexUrl(unittest.TestCase):
-    def test_per_family_appends_subdir(self):
-        """Per-family mode (no device extras) appends the family subdir."""
-        text = _run_and_capture(
-            _make_args(
-                index_url="https://rocm.nightlies.amd.com/v2-staging",
-                index_subdir="gfx110X-dgpu",
-            )
-        )
-        self.assertIn(
-            "--index-url=https://rocm.nightlies.amd.com/v2-staging/gfx110X-dgpu/",
-            text,
-        )
-
-    def test_multi_arch_does_not_append_subdir(self):
-        """Multi-arch mode uses the flat index even if a family is passed."""
+    def test_with_device_extras(self):
+        """Device extras are joined with the torch package name."""
         text = _run_and_capture(
             _make_args(
                 index_url="https://rocm.nightlies.amd.com/whl-multi-arch/",
-                index_subdir="gfx94X-dcgpu",
                 device_extras="device-gfx942",
             )
         )
@@ -72,16 +51,21 @@ class TestIndexUrl(unittest.TestCase):
             "--index-url=https://rocm.nightlies.amd.com/whl-multi-arch/",
             text,
         )
-        self.assertNotIn("gfx94X-dcgpu/", text)
-        # Device extras select the GPU via the package spec instead.
+        # Device extras select the GPU via the package spec.
         self.assertIn("torch[device-gfx942]", text)
+        # No GPU family subdirectory is added (per-family releases used this).
+        self.assertNotIn("gfx94X-dcgpu/", text)
 
-    def test_no_subdir_no_extras(self):
-        """With neither subdir nor extras, the index URL is used as-is."""
+    def test_without_device_extras(self):
+        """Torch can also be installed without any extras."""
         text = _run_and_capture(
-            _make_args(index_url="https://rocm.nightlies.amd.com/v2")
+            _make_args(index_url="https://rocm.nightlies.amd.com/whl-multi-arch/")
         )
-        self.assertIn("--index-url=https://rocm.nightlies.amd.com/v2/", text)
+        self.assertIn(
+            "--index-url=https://rocm.nightlies.amd.com/whl-multi-arch/", text
+        )
+        # No device extra added anywhere.
+        self.assertNotIn("device-]", text)
 
 
 if __name__ == "__main__":
