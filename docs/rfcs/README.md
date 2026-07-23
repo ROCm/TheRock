@@ -27,6 +27,8 @@ benefit from further discussion.
 - [RFC0009: OS Packaging Requirements](./RFC0009-OS-Packaging-Requirements.md)
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 - [RFC0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem](./RFC0011-Quartz-CICD-Datahub.md)
+- [RFC0012: ROCm Software Ecosystem Package Repository Structure](./RFC0012-Repo-Structure.md)
+- [RFC0013: Custom Python Bindings Layering](./RFC0013-Custom-Python-Bindings-Layering.md)
 
 ## Adding an RFC
 
