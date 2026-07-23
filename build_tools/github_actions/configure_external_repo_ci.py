@@ -304,15 +304,30 @@ def configure(
     # Extract external repo name from github_repo (e.g., "ROCm/rocm-libraries" -> "rocm-libraries")
     external_repo_name = github_repo.split("/")[-1] if "/" in github_repo else github_repo
 
-    # TEST OVERRIDE: If set, bypass all detection and return the override value
+    # TEST OVERRIDE: If set, bypass path detection but still compute stage impact
     if _TEST_OVERRIDE_CHANGED_PROJECTS:
         logger.info(
             f"TEST OVERRIDE: Using forced changed_projects='{_TEST_OVERRIDE_CHANGED_PROJECTS}'"
         )
+        # Convert override paths to fake modified paths for stage impact analysis
+        # e.g., "projects/rocprim" -> ["projects/rocprim/dummy.cpp"]
+        override_paths = [
+            f"{p.strip()}/dummy.cpp"
+            for p in _TEST_OVERRIDE_CHANGED_PROJECTS.split(",")
+            if p.strip()
+        ]
+        reusable_stages: List[str] = []
+        rebuild_stages: List[str] = []
+        if enable_stage_reuse and override_paths:
+            reusable_stages, rebuild_stages = compute_stage_impact(
+                external_repo_name, override_paths
+            )
         return ConfigureResult(
             changed_projects=_TEST_OVERRIDE_CHANGED_PROJECTS,
             run_all_tests=False,
             skip_tests=False,
+            reusable_stages=",".join(reusable_stages),
+            rebuild_stages=",".join(rebuild_stages),
         )
 
     # Schedule/workflow_dispatch events run all tests
