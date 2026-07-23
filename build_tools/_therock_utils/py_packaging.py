@@ -916,4 +916,3 @@ def _normalize_sdist_line_endings(sdist_path: Path) -> None:
 
     if not sdist_path.exists() or sdist_path.stat().st_size == 0:
         raise RuntimeError(f"Normalized sdist missing or empty: {sdist_path}")
-
