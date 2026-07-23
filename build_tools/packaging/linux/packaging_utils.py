@@ -12,6 +12,17 @@ import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+# Setup paths - must be before log_utils import
+SCRIPT_DIR = Path(__file__).resolve().parent
+BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
+
+# Add build_tools directory to Python path to import _therock_utils
+if str(BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(BUILD_TOOLS_DIR))
+
+from _therock_utils.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 # Constants
 # Used for creating host package in kpack mode (contains generic content)
@@ -87,20 +98,6 @@ class PackageConfig:
     versioned_pkg: bool = True
     enable_kpack: bool = False
     gfxarch_list: tuple = field(default_factory=tuple)
-
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-currentFuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
-
-
-def print_function_name():
-    """Print the name of the calling function.
-
-    Parameters: None
-
-    Returns: None
-    """
-    print("In function:", currentFuncName(1))
 
 
 def read_package_json_file():
@@ -382,9 +379,9 @@ def remove_dir(dir_name):
 
     if dir_path.exists() and dir_path.is_dir():
         shutil.rmtree(dir_path)
-        print(f"Removed directory: {dir_path}")
+        logger.debug(f"Removed directory: {dir_path}")
     else:
-        print(f"Directory does not exist: {dir_path}")
+        logger.debug(f"Directory does not exist: {dir_path}")
 
 
 def update_package_name(pkg_name, config: PackageConfig):
@@ -401,7 +398,7 @@ def update_package_name(pkg_name, config: PackageConfig):
 
     Returns: Updated package name
     """
-    print_function_name()
+    logger.debug("update_package_name")
 
     pkg_suffix = ""
     if config.versioned_pkg:
@@ -531,7 +528,7 @@ def debian_replace_devel_name(pkg_name):
 
     Returns: Updated package name
     """
-    print_function_name()
+    logger.debug("debian_replace_devel_name")
     # Required for debian developement package
     suffix = "-devel"
     if pkg_name.endswith(suffix):
@@ -727,7 +724,7 @@ def convert_to_versiondependency(
 
     Returns: A string of comma separated versioned packages
     """
-    print_function_name()
+    logger.debug("convert_to_versiondependency")
     # This function is to add Version dependency
     # Make sure the flag is set to True
 
@@ -774,7 +771,7 @@ def append_version_suffix(dep_string, config: PackageConfig):
     Returns: A comma-separated string where matching dependencies include the version suffix,
     while all others remain unchanged.
     """
-    print_function_name()
+    logger.debug("append_version_suffix")
 
     pkg_list, skipped_list = get_package_list(config.artifacts_dir)
     updated_depends = []
@@ -818,11 +815,11 @@ def move_packages_to_destination(updated_pkg_name, config: PackageConfig):
     Returns:
     output_packages : list of package names moved to the destination folder
     """
-    print_function_name()
+    logger.debug("move_packages_to_destination")
     output_packages = []
     # Create destination dir to move the packages created
     os.makedirs(config.dest_dir, exist_ok=True)
-    print(f"Updated package name: {updated_pkg_name}")
+    logger.debug(f"Updated package name: {updated_pkg_name}")
     PKG_DIR = Path(config.dest_dir) / config.pkg_type
 
     if config.pkg_type.lower() == "deb":
@@ -869,7 +866,7 @@ def filter_components_fromartifactory(
 
     Returns: List of directories
     """
-    print_function_name()
+    logger.debug("filter_components_fromartifactory")
 
     pkg_info = get_package_info(pkg_name)
     sourcedir_list = []
@@ -894,7 +891,7 @@ def filter_components_fromartifactory(
 
     artifactory = pkg_info.get("Artifactory")
     if artifactory is None:
-        print(
+        logger.debug(
             f'The "Artifactory" key is missing for {pkg_name}. Is this a meta package?'
         )
         return sourcedir_list
@@ -906,7 +903,9 @@ def filter_components_fromartifactory(
         # If "Artifact_Gfxarch" key is specified use it for artifact directory suffix
         # Else use the package "Gfxarch" for finding the suffix
         if "Artifact_Gfxarch" in artifact:
-            print(f"{pkg_name} : Artifact_Gfxarch key exists for artifacts {artifact}")
+            logger.debug(
+                f"{pkg_name} : Artifact_Gfxarch key exists for artifacts {artifact}"
+            )
             is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
 
             # In kpack mode, skip non-gfxarch artifacts when building gfx-specific packages
@@ -918,7 +917,7 @@ def filter_components_fromartifactory(
                 and gfx_arch not in (GFX_HOST, GFX_META)
                 and not is_gfxarch
             ):
-                print(
+                logger.debug(
                     f"{pkg_name} : Skipping artifact '{artifact_prefix}' for {gfx_arch} package "
                     f"(Artifact_Gfxarch=False, should only be in generic package)"
                 )
@@ -939,7 +938,7 @@ def filter_components_fromartifactory(
                 )
                 filename = source_dir / "artifact_manifest.txt"
                 if not filename.exists():
-                    print(f"{pkg_name} : Missing {filename}")
+                    logger.debug(f"{pkg_name} : Missing {filename}")
                     continue
                 try:
                     with filename.open("r", encoding="utf-8") as file:
@@ -951,11 +950,11 @@ def filter_components_fromartifactory(
                             )
 
                             if match_found and line.strip():
-                                print("Matching line:", line.strip())
+                                logger.debug(f"Matching line: {line.strip()}")
                                 source_path = source_dir / line.strip()
                                 sourcedir_list.append(source_path)
                 except OSError as e:
-                    print(f"Could not read manifest {filename}: {e}")
+                    logger.warning(f"Could not read manifest {filename}: {e}")
                     continue
 
     return sourcedir_list
@@ -1144,7 +1143,9 @@ def filter_archs_with_artifacts(
 
     if len(available) < len(list(gfxarch_list)):
         missing = set(gfxarch_list) - set(available)
-        print(f"WORKAROUND: {pkg_name} missing artifacts for: {sorted(missing)}")
+        logger.warning(
+            f"WORKAROUND: {pkg_name} missing artifacts for: {sorted(missing)}"
+        )
 
     return available
 
@@ -1183,6 +1184,6 @@ def filter_dependencies_by_artifacts(
         if has_artifact_for_arch(dep, artifacts_dir, gfx_arch):
             filtered.append(dep)
         else:
-            print(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch})")
+            logger.warning(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch})")
 
     return filtered
