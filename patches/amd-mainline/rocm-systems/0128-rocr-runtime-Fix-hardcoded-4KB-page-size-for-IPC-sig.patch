@@ -1,0 +1,108 @@
+From 5053f5ff38c7a8c03cdd6727cb87166b99626ec1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 23 Jul 2026 14:48:27 +0000
+Subject: [PATCH] [rocr-runtime] Fix hardcoded 4KB page size for IPC signal and
+ memory sharing
+
+PageAllocator in shared.h, IPCSignal::CreateHandle in ipc_signal.cpp, and
+IPCAttach in runtime.cpp hardcode 4096 as the page size. On ppc64le (POWER),
+the system page size is 64KB (65536). This causes:
+
+1. hsa_amd_ipc_signal_create() fails with HSA_STATUS_ERROR_INVALID_ARGUMENT
+   because IPC signal memory is allocated as 4KB but the thunk layer expects
+   page-aligned allocations.
+
+2. hsa_amd_ipc_memory_attach() maps to the wrong offset for fragmented
+   allocations because the fragment offset is stored in pages but decoded
+   assuming 4KB pages, causing data validation failures.
+
+Replace hardcoded 4096 with runtime page size detection:
+- shared.h: PageAllocator uses sysconf(_SC_PAGESIZE) via a cached helper
+- ipc_signal.cpp: CreateHandle uses AlignUp(sizeof(SharedSignal), os::PageSize())
+- runtime.cpp: IPCAttach fragment offset uses os::PageSize()
+
+This is a no-op on x86 (4KB pages) and fixes IPC on ppc64le and other
+architectures with larger page sizes.
+
+Reproduction: rocrtst IPC test fails on ppc64le before this fix, passes after.
+---
+ .../runtime/hsa-runtime/core/common/shared.h           | 10 ++++++++--
+ .../runtime/hsa-runtime/core/runtime/ipc_signal.cpp    |  3 ++-
+ .../runtime/hsa-runtime/core/runtime/runtime.cpp       |  2 +-
+ 3 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/common/shared.h b/projects/rocr-runtime/runtime/hsa-runtime/core/common/shared.h
+index 8da86de74d..73eabc599f 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/common/shared.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/common/shared.h
+@@ -47,6 +47,7 @@
+ #include <cstring>
+ #include <functional>
+ #include <memory>
++#include <unistd.h>
+ 
+ #include "core/util/utils.h"
+ 
+@@ -81,10 +82,15 @@ class BaseShared {
+ 
+ /// @brief Default Allocator for Shared.  Ensures allocations are whole pages.
+ template <typename T> class PageAllocator : private BaseShared {
++ private:
++  static size_t page_size() {
++    static size_t ps = (size_t)sysconf(_SC_PAGESIZE);
++    return ps;
++  }
+  public:
+   __forceinline static T* alloc(int flags = 0) {
+     T* ret = reinterpret_cast<T*>(
+-                        allocate_()(AlignUp(sizeof(T), 4096), 4096, flags, 0));
++                        allocate_()(AlignUp(sizeof(T), page_size()), page_size(), flags, 0));
+     if (ret == nullptr) throw std::bad_alloc();
+ 
+     MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_()(ret); });
+@@ -97,7 +103,7 @@ template <typename T> class PageAllocator : private BaseShared {
+ 
+   __forceinline static T* alloc(int agent_node_id, int flags) {
+     T* ret = reinterpret_cast<T*>(
+-            allocate_()(AlignUp(sizeof(T), 4096), 4096, flags, agent_node_id));
++            allocate_()(AlignUp(sizeof(T), page_size()), page_size(), flags, agent_node_id));
+     if (ret == nullptr) throw std::bad_alloc();
+ 
+     MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_()(ret); });
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/ipc_signal.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/ipc_signal.cpp
+index c8e07fe2c0..d117274602 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/ipc_signal.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/ipc_signal.cpp
+@@ -45,6 +45,7 @@
+ #include <utility>
+ 
+ #include "core/inc/runtime.h"
++#include "core/util/os.h"
+ #include "core/inc/exceptions.h"
+ 
+ namespace rocr {
+@@ -72,7 +73,7 @@ void IPCSignal::CreateHandle(Signal* signal, hsa_amd_ipc_signal_t* ipc_handle) {
+   if (!signal->isIPC())
+     throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT, "Signal must be IPC enabled.");
+   SharedSignal* shared = SharedSignal::Convert(Convert(signal));
+-  hsa_status_t err = Runtime::runtime_singleton_->IPCCreate(shared, 4096, ipc_handle);
++  hsa_status_t err = Runtime::runtime_singleton_->IPCCreate(shared, AlignUp(sizeof(SharedSignal), os::PageSize()), ipc_handle);
+   if (err != HSA_STATUS_SUCCESS) throw AMD::hsa_exception(err, "IPC memory create failed.");
+ }
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+index 7eda0a58f7..210b1e8a0d 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+@@ -1716,7 +1716,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len,
+ 
+   if ((importHandle.handle[6] & 0x80000000) != 0) {
+     isFragment = true;
+-    fragOffset = (importHandle.handle[6] & 0x1FF) * 4096;
++    fragOffset = (importHandle.handle[6] & 0x1FF) * os::PageSize();
+     importHandle.handle[6] &= ~(0x80000000 | 0x1FF);
+   }
+ 
+-- 
+2.52.0
+
