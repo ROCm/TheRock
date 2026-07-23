@@ -469,4 +469,7 @@ def package_with_dpkg_build(pkg_dir):
         print(f"Deb Package built successfully: {os.path.basename(pkg_dir)}")
     except subprocess.CalledProcessError as e:
         print(f"Error building deb package: {os.path.basename(pkg_dir)}: {e}")
-        sys.exit(e.returncode)
+        # Re-raise (rather than sys.exit) so the per-package loop in
+        # build_package.py can catch this, record the failure, and continue
+        # on to the remaining queued packages instead of aborting the whole run.
+        raise

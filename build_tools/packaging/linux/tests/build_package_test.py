@@ -18,8 +18,11 @@ Run::
 Requires Python 3.10+ (``packaging_utils`` type syntax).
 """
 
+import contextlib
 import importlib.util
+import io
 import json
+import subprocess
 import sys
 import tempfile
 import types
@@ -59,6 +62,18 @@ DEVELOPER_TOOLS_PACKAGE = "amdrocm-developer-tools7.1"
 
 STAGING_PAYLOAD_NAME = "libdummy.so"
 STAGING_PAYLOAD_BYTES = b"\x00"
+
+# Fixtures for the run() catch-and-continue loop (Fix B). parse_input_package_list
+# is mocked in those tests, so these names are arbitrary queue entries, not real
+# package.json packages. Each "built variant" mimics a create_*_package output path.
+LOOP_PKG_1 = "pkg-alpha"
+LOOP_PKG_2 = "pkg-beta"
+LOOP_PKG_3 = "pkg-gamma"
+LOOP_VARIANT_1 = "pkg-alpha7.1_amd64.deb"
+LOOP_VARIANT_2 = "pkg-beta7.1_amd64.deb"
+LOOP_VARIANT_3 = "pkg-gamma7.1_amd64.deb"
+DPKG_CMD = ["dpkg-buildpackage", "-uc", "-us", "-b"]
+DPKG_RETURNCODE = 2
 
 
 def _setup_import_path() -> None:
@@ -702,6 +717,299 @@ class ParseInputPackageListTest(BuildPackageTestCase):
         )
         self.assertEqual(set(pkg_list), {PKG_CORE_SDK, PKG_CK})
         self.assertEqual(skipped, [])
+
+
+# ---------------------------------------------------------------------------
+# Fix B, Layer 1 — deb_package.package_with_dpkg_build re-raises (no sys.exit)
+# ---------------------------------------------------------------------------
+class PackageWithDpkgBuildTest(unittest.TestCase):
+    """``package_with_dpkg_build`` propagates dpkg failures as CalledProcessError.
+
+    Fix B (cc2d0ae0d) changed the ``except`` handler from ``sys.exit(e.returncode)``
+    to ``raise`` so the per-package loop in ``build_package.run`` can catch it and
+    continue instead of the whole run being torn down by an uncaught ``SystemExit``.
+    """
+
+    @patch.object(deb_package.subprocess, "run")
+    def test_dpkg_failure_raises_calledprocesserror_not_systemexit(
+        self, mock_run: object
+    ) -> None:
+        """dpkg-buildpackage failure surfaces as CalledProcessError, never SystemExit.
+
+        This is the exact regression that used to kill the whole packaging queue.
+        assertRaises(CalledProcessError) also proves it is NOT SystemExit: a
+        SystemExit would not be caught here and would fail the test.
+        """
+        mock_run.side_effect = subprocess.CalledProcessError(DPKG_RETURNCODE, DPKG_CMD)
+        with self.assertRaises(subprocess.CalledProcessError) as cm:
+            deb_package.package_with_dpkg_build("/tmp/does-not-matter")
+        self.assertEqual(cm.exception.returncode, DPKG_RETURNCODE)
+
+    @patch.object(deb_package.subprocess, "run")
+    def test_dpkg_success_returns_none_and_prints_success(
+        self, mock_run: object
+    ) -> None:
+        """Success path returns normally (no exception) and prints the success line."""
+        mock_run.return_value = subprocess.CompletedProcess(DPKG_CMD, 0)
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            result = deb_package.package_with_dpkg_build("/tmp/some-pkg")
+        self.assertIsNone(result)
+        self.assertIn("built successfully", stream.getvalue())
+
+
+# ---------------------------------------------------------------------------
+# Fix B, Layer 2 — build_package.run per-package catch-and-continue loop
+# ---------------------------------------------------------------------------
+class RunCatchAndContinueTest(BuildPackageTestCase):
+    """``run`` records per-package failures and continues instead of aborting.
+
+    Fix B replaced the outer ``try/except SystemExit`` (which marked the current
+    AND all not-yet-attempted packages failed, then re-raised) with a per-package
+    ``try/except Exception`` that records the failure and ``continue``s. The build
+    summary always prints, and ``sys.exit(1)`` fires only if any package failed.
+
+    ``parse_input_package_list`` is mocked to control the queue; the filesystem and
+    dpkg are never touched. ``print_build_summary`` receives a ``PackageList`` whose
+    ``built`` / ``failed`` sets are the contract under test.
+    """
+
+    def _run(
+        self,
+        mock_parse: object,
+        mock_variants: object,
+        *,
+        pkg_list: list[str],
+        variants_side_effect: list[object],
+    ) -> None:
+        """Drive ``build_package.run`` with a mocked queue and variant results."""
+        mock_parse.return_value = (pkg_list, [])
+        mock_variants.side_effect = variants_side_effect
+        build_package.run(_args(self.temp_dir))
+
+    @staticmethod
+    def _summary_pkglist(mock_summary: object) -> object:
+        """Return the ``PackageList`` passed to ``print_build_summary``."""
+        assert mock_summary.call_count == 1, "print_build_summary must be called once"
+        return mock_summary.call_args.args[1]
+
+    @staticmethod
+    def _attempted_pkgs(mock_variants: object) -> list[str]:
+        """Return, in order, the package names ``build_package_variants`` was called for."""
+        return [call.args[0] for call in mock_variants.call_args_list]
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_failure_does_not_abort_loop_later_package_still_built(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """pkg#1 raising must not stop pkg#2 from being attempted and built."""
+        with self.assertRaises(SystemExit):
+            self._run(
+                mock_parse,
+                mock_variants,
+                pkg_list=[LOOP_PKG_1, LOOP_PKG_2],
+                variants_side_effect=[RuntimeError("boom"), [LOOP_VARIANT_2]],
+            )
+        self.assertEqual(self._attempted_pkgs(mock_variants), [LOOP_PKG_1, LOOP_PKG_2])
+        status = self._summary_pkglist(mock_summary)
+        self.assertIn(LOOP_VARIANT_2, status.built)
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_raising_package_recorded_as_failed(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """The package whose variants build raised lands in the failed set."""
+        with self.assertRaises(SystemExit):
+            self._run(
+                mock_parse,
+                mock_variants,
+                pkg_list=[LOOP_PKG_1, LOOP_PKG_2],
+                variants_side_effect=[RuntimeError("boom"), [LOOP_VARIANT_2]],
+            )
+        status = self._summary_pkglist(mock_summary)
+        self.assertEqual(status.failed, [LOOP_PKG_1])
+        self.assertEqual(status.built, [LOOP_VARIANT_2])
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_empty_output_list_recorded_as_failed(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """The other failure mode: variants build returns [] (no exception) → failed."""
+        with self.assertRaises(SystemExit):
+            self._run(
+                mock_parse,
+                mock_variants,
+                pkg_list=[LOOP_PKG_1],
+                variants_side_effect=[[]],
+            )
+        status = self._summary_pkglist(mock_summary)
+        self.assertEqual(status.failed, [LOOP_PKG_1])
+        self.assertEqual(status.built, [])
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_exits_with_code_1_when_any_package_failed(
+        self,
+        mock_variants: object,
+        _mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """run() calls sys.exit(1) when the failed set is non-empty."""
+        with self.assertRaises(SystemExit) as cm:
+            self._run(
+                mock_parse,
+                mock_variants,
+                pkg_list=[LOOP_PKG_1],
+                variants_side_effect=[RuntimeError("boom")],
+            )
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_no_nonzero_exit_when_all_packages_succeed(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """All-success path returns normally (no SystemExit) with the full built set."""
+        self._run(
+            mock_parse,
+            mock_variants,
+            pkg_list=[LOOP_PKG_1, LOOP_PKG_2],
+            variants_side_effect=[[LOOP_VARIANT_1], [LOOP_VARIANT_2]],
+        )
+        status = self._summary_pkglist(mock_summary)
+        self.assertEqual(status.failed, [])
+        self.assertEqual(status.built, [LOOP_VARIANT_1, LOOP_VARIANT_2])
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_summary_printed_when_all_succeed(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """print_build_summary is called on the all-success path."""
+        self._run(
+            mock_parse,
+            mock_variants,
+            pkg_list=[LOOP_PKG_1],
+            variants_side_effect=[[LOOP_VARIANT_1]],
+        )
+        mock_summary.assert_called_once()
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_summary_printed_when_some_failed(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """Regression: the summary must still print even when a package failed."""
+        with self.assertRaises(SystemExit):
+            self._run(
+                mock_parse,
+                mock_variants,
+                pkg_list=[LOOP_PKG_1],
+                variants_side_effect=[RuntimeError("boom")],
+            )
+        mock_summary.assert_called_once()
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_first_and_last_fail_middle_succeeds_partial_progress(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """Edge: first and last fail, middle succeeds — all three attempted, sets exact."""
+        with self.assertRaises(SystemExit):
+            self._run(
+                mock_parse,
+                mock_variants,
+                pkg_list=[LOOP_PKG_1, LOOP_PKG_2, LOOP_PKG_3],
+                variants_side_effect=[
+                    RuntimeError("boom-1"),
+                    [LOOP_VARIANT_2],
+                    RuntimeError("boom-3"),
+                ],
+            )
+        self.assertEqual(
+            self._attempted_pkgs(mock_variants),
+            [LOOP_PKG_1, LOOP_PKG_2, LOOP_PKG_3],
+        )
+        status = self._summary_pkglist(mock_summary)
+        self.assertEqual(status.built, [LOOP_VARIANT_2])
+        self.assertEqual(status.failed, [LOOP_PKG_1, LOOP_PKG_3])
+
+    @patch.object(build_package, "parse_input_package_list")
+    @patch.object(build_package, "cleanup_packaging_environment")
+    @patch.object(build_package, "print_build_summary")
+    @patch.object(build_package, "build_package_variants")
+    def test_calledprocesserror_from_dpkg_propagates_and_is_caught(
+        self,
+        mock_variants: object,
+        mock_summary: object,
+        _mock_cleanup: object,
+        mock_parse: object,
+    ) -> None:
+        """Cross-layer: a CalledProcessError (what Layer 1 now raises) propagating up
+        through build_package_variants is exactly what run()'s except catches, so the
+        queue continues rather than aborting. Proves the two Fix B changes compose."""
+        with self.assertRaises(SystemExit):
+            self._run(
+                mock_parse,
+                mock_variants,
+                pkg_list=[LOOP_PKG_1, LOOP_PKG_2],
+                variants_side_effect=[
+                    subprocess.CalledProcessError(DPKG_RETURNCODE, DPKG_CMD),
+                    [LOOP_VARIANT_2],
+                ],
+            )
+        self.assertEqual(self._attempted_pkgs(mock_variants), [LOOP_PKG_1, LOOP_PKG_2])
+        status = self._summary_pkglist(mock_summary)
+        self.assertEqual(status.failed, [LOOP_PKG_1])
+        self.assertEqual(status.built, [LOOP_VARIANT_2])
 
 
 if __name__ == "__main__":

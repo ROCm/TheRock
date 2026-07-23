@@ -292,6 +292,85 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 
 ##############################################################################
+# profiler-hub
+# General-purpose, schema-versioned data storage library for profiling and
+# tracing tools, designed to be built and consumed standalone by any tool
+# that needs it.
+##############################################################################
+if(THEROCK_ENABLE_PROFILER_HUB)
+  set(_profiler_hub_build_deps therock-nlohmann-json therock-spdlog therock-fmt)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND _profiler_hub_build_deps therock-googletest)
+  endif()
+
+  therock_cmake_subproject_declare(profiler-hub
+    # profiler-hub is a pure host C++ library with no GPU/HIP code, so it
+    # does not require any AMDGPU targets to be selected.
+    DISABLE_AMDGPU_TARGETS
+    # Route profiler-hub through TheRock's in-tree LLVM/clang toolchain so
+    # therock_sanitizer_configure() injects -fsanitize=address (compile + link)
+    # and the clang-resource-dir rpath. Without a COMPILER_TOOLCHAIN the
+    # subproject builds with system gcc and profiler-hub_unit_tests is never
+    # sanitizer-linked, pulling ASan in only transitively via the clang-built
+    # rocpd .so (the ASAN CI link/runtime failure). amd-llvm, not amd-hip:
+    # pure host C++, no HIP dependency needed.
+    COMPILER_TOOLCHAIN amd-llvm
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DPROFILER_HUB_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DPROFILER_HUB_BUILD_BENCHMARKS=OFF
+      # profiler-hub_unit_tests links the GTest::gtest/gmock targets, but TheRock's
+      # in-tree googletest build does not propagate Threads::Threads through them, so
+      # gtest's pthread TLS symbols (pthread_getspecific etc.) go unresolved under
+      # clang+lld once the amd-llvm toolchain is in effect. gcc linked libpthread
+      # implicitly; clang/lld does not. Inject -pthread here so profiler-hub's
+      # executables (incl. profiler-hub_unit_tests) resolve them. Throwaway-branch
+      # confirmation; the clean fix is Threads::Threads on the unit-test target upstream.
+      #
+      # (The asan shared-runtime load failure is fixed component-side in profiler-hub's
+      # own tests/unit/CMakeLists.txt via target_link_options(-static-libsan); a
+      # -static-libsan here in CMAKE_EXE_LINKER_FLAGS is inert because it is emitted
+      # before therock_sanitizers.cmake's add_link_options(-shared-libsan), which then
+      # wins under clang's last-flag-wins rule.)
+      "-DCMAKE_EXE_LINKER_FLAGS=-pthread"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    BUILD_DEPS
+      ${_profiler_hub_build_deps}
+    RUNTIME_DEPS
+      rocprofiler-sdk
+      ${THEROCK_BUNDLED_SQLITE3}
+    INTERFACE_INCLUDE_DIRS
+      include
+    INTERFACE_LINK_DIRS
+      lib
+  )
+  therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
+  therock_cmake_subproject_activate(profiler-hub)
+
+  therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/profiler-hub/dist/lib
+    LIB_NAMES
+      libprofiler-hub.so
+  )
+
+  therock_provide_artifact(profiler-hub
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-profiler-hub.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      profiler-hub
+  )
+endif(THEROCK_ENABLE_PROFILER_HUB)
+
+##############################################################################
 # rocprofiler-systems
 ##############################################################################
 if(THEROCK_ENABLE_ROCPROFSYS)
