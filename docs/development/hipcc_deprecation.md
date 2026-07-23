@@ -47,14 +47,14 @@ and how to migrate your project.
 The following table maps hipcc's implicit behavior to the explicit flags or
 CMake variables that replace it when using `amdclang++` directly.
 
-| hipcc behavior | amdclang++ / CMake equivalent |
-|---|---|
-| Injects `-I<hip>/include` | `--hip-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`) |
-| Injects `--hip-device-lib-path=<path>` | `--hip-device-lib-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`) |
-| Sets HIP compiler in CMake | `CMAKE_HIP_COMPILER` set to `amdclang++` in toolchain |
-| Adds `--rtlib=compiler-rt --unwindlib=libgcc` | Added to `CMAKE_EXE_LINKER_FLAGS_INIT` and `CMAKE_SHARED_LINKER_FLAGS_INIT` |
-| Auto-detects GPU targets via `rocm_agent_enumerator` | `AMDGPU_TARGETS` / `CMAKE_HIP_ARCHITECTURES` set by TheRock super-project |
-| Defines `-D__HIP_PLATFORM_AMD__` | Added by `hip-config.cmake` target properties via `find_package(hip)` |
+| hipcc behavior                                       | amdclang++ / CMake equivalent                                               |
+| ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| Injects `-I<hip>/include`                            | `--hip-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)                         |
+| Injects `--hip-device-lib-path=<path>`               | `--hip-device-lib-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)              |
+| Sets HIP compiler in CMake                           | `CMAKE_HIP_COMPILER` set to `amdclang++` in toolchain                       |
+| Adds `--rtlib=compiler-rt --unwindlib=libgcc`        | Added to `CMAKE_EXE_LINKER_FLAGS_INIT` and `CMAKE_SHARED_LINKER_FLAGS_INIT` |
+| Auto-detects GPU targets via `rocm_agent_enumerator` | `AMDGPU_TARGETS` / `CMAKE_HIP_ARCHITECTURES` set by TheRock super-project   |
+| Defines `-D__HIP_PLATFORM_AMD__`                     | Added by `hip-config.cmake` target properties via `find_package(hip)`       |
 
 ## Migrating a CMake project
 
@@ -99,15 +99,15 @@ direct path to `amdclang++`:
 Projects that called `hipconfig` to retrieve version or path information should
 migrate to CMake-native equivalents:
 
-| hipconfig invocation | CMake equivalent |
-|---|---|
-| `hipconfig --version` | `hip_VERSION` (set by `find_package(hip REQUIRED)`) |
-| `hipconfig --hip-version` | `hip_VERSION` |
-| `hipconfig --cxxflags` | Use `hip::host` and `hip::device` imported targets |
-| `hipconfig --ldflags` | Use `hip::host` and `hip::device` imported targets |
-| `hipconfig --hippath` | `HIP_PATH` environment variable or `hip_DIR` CMake variable |
-| `hipconfig --rocmpath` | `ROCM_PATH` environment variable |
-| `hipconfig --compiler` | `CMAKE_HIP_COMPILER` |
+| hipconfig invocation      | CMake equivalent                                            |
+| ------------------------- | ----------------------------------------------------------- |
+| `hipconfig --version`     | `hip_VERSION` (set by `find_package(hip REQUIRED)`)         |
+| `hipconfig --hip-version` | `hip_VERSION`                                               |
+| `hipconfig --cxxflags`    | Use `hip::host` and `hip::device` imported targets          |
+| `hipconfig --ldflags`     | Use `hip::host` and `hip::device` imported targets          |
+| `hipconfig --hippath`     | `HIP_PATH` environment variable or `hip_DIR` CMake variable |
+| `hipconfig --rocmpath`    | `ROCM_PATH` environment variable                            |
+| `hipconfig --compiler`    | `CMAKE_HIP_COMPILER`                                        |
 
 Example of migrating a version check in CMake:
 

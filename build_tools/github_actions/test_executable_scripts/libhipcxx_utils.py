@@ -33,7 +33,9 @@ def _try_offload_arch(therock_build_dir: str, file_ending: str):
                     )
                 return last
         if result.returncode != 0:
-            logging.warning(f"offload-arch failed (exit {result.returncode}): {result.stderr}")
+            logging.warning(
+                f"offload-arch failed (exit {result.returncode}): {result.stderr}"
+            )
     except FileNotFoundError:
         logging.warning("offload-arch not found")
     return None
