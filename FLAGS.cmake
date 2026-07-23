@@ -32,6 +32,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPKERNELPROVIDER_ENABLE_ROCKE
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"
+  CMAKE_VARS
+    HIPKERNELPROVIDER_ENABLE_ROCKE=ON
+  SUB_PROJECTS
+    hipkernelprovider
+)
+
+therock_declare_flag(
   NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
   DESCRIPTION "Stamp library git revisions into generated version metadata"
@@ -43,6 +53,12 @@ therock_declare_flag(
   NAME INCLUDE_HRX
   DEFAULT_VALUE OFF
   DESCRIPTION "Include experimental HRX runtime in core-runtime"
+)
+
+therock_declare_flag(
+  NAME HSA_WINDOWS_SHARED_RUNTIME
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
 )
 
 ###############################################################################

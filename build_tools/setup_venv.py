@@ -15,11 +15,10 @@ There are a few modes this can be used in:
     python setup_venv.py .venv
     ```
 
-* To install the latest nightly rocm packages for gfx110X-all into the venv:
+* To install the latest nightly rocm packages into the venv:
 
     ```
-    python setup_venv.py .venv --packages rocm[libraries,devel] \
-        --index-name nightly --index-subdir gfx110X-all
+    python setup_venv.py .venv --packages rocm[libraries,devel,device-all] --index-name nightly
     ```
 
     This is roughly equivalent to:
@@ -28,7 +27,7 @@ There are a few modes this can be used in:
     python -m venv .venv
     source .venv/bin/activate
     python -m pip install --upgrade pip
-    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
+    python -m pip install rocm[libraries,devel,device-all] --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/
     deactivate
     ```
 
@@ -39,10 +38,6 @@ Package installs are retried by default to cover that transient window. This
 behavior can be adjusted with the `--install-retry-timeout-seconds` and
 `--install-retry-wait-between-seconds` arguments.
 See https://github.com/ROCm/TheRock/issues/5455 for more details.
-
-TODO: update docs and args for multi-arch
-   * --index-url https://rocm.nightlies.amd.com/whl-multi-arch/
-   * refresh ROCM_INDEX_URLS_MAP
 """
 
 import argparse
@@ -50,108 +45,25 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
-import socket
 import subprocess
 import sys
-import re
 import time
-from urllib.parse import urlparse
 
 from github_actions.github_actions_api import *
 
 is_windows = platform.system() == "Windows"
 
 ROCM_INDEX_URLS_MAP = {
-    "stable": "https://repo.amd.com/rocm/whl/",
-    "prerelease": "https://rocm.prereleases.amd.com/whl",
-    "nightly": "https://rocm.nightlies.amd.com/v2",
-    "dev": "https://rocm.devreleases.amd.com/v2",
-}
-
-# Fallback mapping from CDN domains to direct S3 bucket URLs.
-# Used when DNS resolution fails for the CDN.
-CDN_TO_S3_FALLBACK_MAP = {
-    "rocm.devreleases.amd.com": "therock-dev-python.s3.amazonaws.com",
-    "rocm.nightlies.amd.com": "therock-nightly-python.s3.amazonaws.com",
+    "stable": "https://repo.amd.com/rocm/whl-multi-arch/",
+    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
+    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
 }
 
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
-
-
-def check_dns_resolution(hostname: str, timeout: float = 5.0) -> bool:
-    """Check if a hostname can be resolved via DNS."""
-    try:
-        socket.setdefaulttimeout(timeout)
-        socket.gethostbyname(hostname)
-        return True
-    except (socket.gaierror, socket.timeout):
-        return False
-
-
-def apply_url_fallback(url: str) -> tuple[str, bool]:
-    """If DNS fails for the URL's domain, substitute a fallback domain if configured."""
-    parsed = urlparse(url)
-    hostname = parsed.hostname
-
-    if not hostname:
-        return url, False
-
-    # Check if we have a fallback configured for this domain.
-    fallback_hostname = CDN_TO_S3_FALLBACK_MAP.get(hostname)
-    if not fallback_hostname:
-        return url, False
-
-    # Check if the original domain is reachable.
-    if check_dns_resolution(hostname):
-        return url, False
-
-    # DNS failed, check if fallback is reachable.
-    log(f"[WARNING] DNS resolution failed for '{hostname}', trying fallback...")
-    if not check_dns_resolution(fallback_hostname):
-        log(
-            f"[WARNING] Fallback '{fallback_hostname}' also unreachable, using original URL"
-        )
-        return url, False
-
-    # Replace the hostname with the fallback.
-    fallback_url = url.replace(f"://{hostname}", f"://{fallback_hostname}", 1)
-    log(f"[INFO] Using fallback URL: {fallback_url}")
-    return fallback_url, True
-
-
-def scrape_package_names_from_index(index_url: str) -> list[str]:
-    """Scrape package names from the index.html at the given URL.
-
-    This dynamically fetches the list of available packages from the S3 bucket
-    index page, avoiding the need for a hardcoded package list.
-    Uses urllib.request (stdlib) to avoid external dependencies.
-    """
-    import urllib.request
-    import urllib.error
-
-    # Ensure URL ends with index.html for S3 bucket listing
-    if not index_url.endswith("/"):
-        index_url = index_url + "/"
-    index_html_url = index_url + "index.html"
-
-    try:
-        with urllib.request.urlopen(index_html_url, timeout=30) as response:
-            html_content = response.read().decode("utf-8")
-    except (urllib.error.URLError, urllib.error.HTTPError) as e:
-        log(f"[WARNING] Failed to fetch package index from {index_html_url}: {e}")
-        return []
-
-    # Extract package names from <a> tags in the index HTML
-    # Typical format: <a href="package-name/">package-name</a>
-    package_pattern = r'<a[^>]*href="([^"/]+)/?">.*?</a>'
-    matches = re.findall(package_pattern, html_content, re.IGNORECASE)
-
-    # Filter out non-package entries (like parent directory links)
-    packages = [m for m in matches if m and not m.startswith(".")]
-    return packages
 
 
 def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
@@ -293,7 +205,6 @@ def install_packages_into_venv(
     use_uv: bool = False,
     index_url: str | None = None,
     index_name: str | None = None,
-    index_subdir: str | None = None,
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
@@ -307,8 +218,7 @@ def install_packages_into_venv(
         packages: The list of packages to install
         use_uv: True to use 'uv', uses 'pip' otherwise
         index_url: URL for '--index-url' command argument
-        index_name: Shorthand for a base index_url (e.g. 'nightly')
-        index_subdir: Subdirectory for 'index_url' or 'index_name'
+        index_name: Shorthand for an index_url (e.g. 'nightly')
         find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
@@ -332,42 +242,14 @@ def install_packages_into_venv(
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
 
-    using_s3_fallback = False
     if index_url == "":
         pip_install_cmd.append("--no-index")
         pip_install_cmd.append("--no-build-isolation")
     elif index_url:
-        # Join index with subdir.
-        if index_subdir:
-            index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
-
-        # Apply DNS fallback if needed (e.g., CDN domain unreachable).
-        index_url, using_s3_fallback = apply_url_fallback(index_url)
-
-        if using_s3_fallback:
-            # TODO(#5285): remove fallback once DNS issues on test machine are resolved
-            # Use --find-links with explicit index.html paths. S3 doesn't auto-serve
-            # index.html for directory URLs, so --index-url won't work.
-            # Dynamically scrape available packages from the fallback index.
-            pkg_names = scrape_package_names_from_index(index_url)
-            if not pkg_names:
-                log("[WARNING] No packages found in fallback index, install may fail")
-            for pkg_name in pkg_names:
-                pkg_find_links = f"{index_url.rstrip('/')}/{pkg_name}/index.html"
-                pip_install_cmd.append(f"--find-links={pkg_find_links}")
-        else:
-            pip_install_cmd.append(f"--index-url={index_url}")
+        pip_install_cmd.append(f"--index-url={index_url}")
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
-
-    # When using find-links without a valid index-url, prevent fallback to PyPI.
-    # This applies when:
-    # - find_links is provided without index_url (artifact-only installs)
-    # - S3 fallback is used (we switched from --index-url to --find-links)
-    if using_s3_fallback or (find_links and not index_url):
-        pip_install_cmd.append("--no-index")
-        pip_install_cmd.append("--no-build-isolation")
 
     if pre:
         pip_install_cmd.append("--prerelease=allow" if use_uv else "--pre")
@@ -411,7 +293,6 @@ def run(args: argparse.Namespace):
             packages=args.packages.split(),
             use_uv=use_uv,
             index_url=args.index_url,
-            index_subdir=args.index_subdir,
             index_name=args.index_name,
             find_links=args.find_links,
             pre=args.pre,
@@ -424,34 +305,6 @@ def run(args: argparse.Namespace):
         activate_venv_in_gha(venv_dir)
     else:
         log_venv_activate_instructions(venv_dir)
-
-
-GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
-
-
-def _scrape_rocm_index_subdirs() -> set[str] | None:
-    """Scrapes available subdirs from all known indexes, returns union of all."""
-    try:
-        import requests
-    except ImportError:
-        return
-
-    all_subdirs: set[str] = set()
-
-    for index_url in ROCM_INDEX_URLS_MAP.values():
-        index_url = index_url.rstrip("/") + "/"
-        try:
-            response = requests.get(index_url)
-            response.raise_for_status()
-        except Exception as e:
-            print(f"[ERROR]: fetching subdirs from {index_url} failed: {e}")
-            continue
-
-        # Extract gfx targets from <a> elements.
-        matches = re.findall(GFX_TARGET_REGEX, response.text)
-        all_subdirs.update(matches)
-
-    return all_subdirs if all_subdirs else None
 
 
 def main(argv: list[str]):
@@ -520,13 +373,13 @@ def main(argv: list[str]):
     install_options.add_argument(
         "--index-url",
         type=str,
-        help="Package index URL for pip --index-url (complete URL, or base URL with --index-subdir)",
+        help="Package index URL for pip --index-url",
     )
     install_options.add_argument(
         "--index-name",
         type=str,
         choices=["stable", "prerelease", "nightly", "dev"],
-        help="Shorthand for a named index (requires --index-subdir)",
+        help="Shorthand for a named index",
     )
     install_options.add_argument(
         "--find-links",
@@ -534,22 +387,10 @@ def main(argv: list[str]):
         help="Package location URL for pip --find-links (compatible with --index-url)",
     )
 
-    # Scrape available subdirs for --index-subdir choices.
-    available_subdirs = _scrape_rocm_index_subdirs()
-    install_options.add_argument(
-        "--index-subdir",
-        "--index-subdirectory",
-        type=str,
-        help="Index subdirectory, such as 'gfx110X-all'",
-        choices=available_subdirs,
-    )
-
     args = p.parse_args(argv)
 
     if args.venv_dir.exists() and not args.venv_dir.is_dir():
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
-    if args.index_name and not args.index_subdir:
-        p.error("--index-subdir must be set when using --index-name")
     if args.install_retry_timeout_seconds < 0:
         p.error("--install-retry-timeout-seconds must be non-negative")
     if (

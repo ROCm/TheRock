@@ -660,7 +660,8 @@
             "Name": "origami",
             "Components": [
               "lib",
-              "run"
+              "run",
+              "doc"
             ]
           },
           {
@@ -737,7 +738,8 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-sparse-test",
@@ -1061,7 +1063,8 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "Disable_DWZ": "True"
   },
 
   {
@@ -1523,6 +1526,7 @@
         ]
       }
     ],
+    "Disable_DWZ": "True",
     "Gfxarch": "True"
   },
   {
@@ -2692,22 +2696,11 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "flatbuffers",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "flatbuffers",
-            "Components": [
-              "run"
-            ]
-          }
-        ]
       }
     ],
 
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "Disable_DWZ": "True"
   },
 
   {
@@ -2912,8 +2905,8 @@
         ]
       }
     ],
-    "Gfxarch": "False"
-
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-rdc",
@@ -2957,8 +2950,8 @@
         ]
       }
     ],
-    "Gfxarch": "False"
-
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-debugger",
@@ -3333,6 +3326,7 @@
         ]
       }
     ],
+    "Disable_DWZ": "True",
     "Gfxarch": "False"
   },
 
@@ -3422,7 +3416,7 @@
       "amdrocm-sysdeps",
       "amdrocm-llvm",
       "amdrocm-runtime",
-      "amdrocm-debugger",
+      "amdrocm-developer-tools",
       "amdrocm-blas",
       "amdrocm-rand",
       "amdrocm-fft",
@@ -3444,7 +3438,7 @@
       "amdrocm-sysdeps",
       "amdrocm-llvm",
       "amdrocm-runtime",
-      "amdrocm-debugger",
+      "amdrocm-developer-tools",
       "amdrocm-blas",
       "amdrocm-rand",
       "amdrocm-fft",
@@ -3693,14 +3687,16 @@
       "amdrocm-amdsmi",
       "amdrocm-profiler-base",
       "amdrocm-profiler",
-      "amdrocm-emulation"
+      "amdrocm-emulation",
+      "amdrocm-debugger"
     ],
     "RPMRequires": [
       "amdrocm-base",
       "amdrocm-amdsmi",
       "amdrocm-profiler-base",
       "amdrocm-profiler",
-      "amdrocm-emulation"
+      "amdrocm-emulation",
+      "amdrocm-debugger"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm development tools metapackage",

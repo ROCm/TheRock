@@ -122,6 +122,96 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
                 ]
             )
 
+    # -----------------------------------------------------------------------
+    # Structured product-local publishing (--structured)
+    # -----------------------------------------------------------------------
+
+    def _touch(self, name: str) -> None:
+        (self.source_dir / name).write_bytes(b"")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
+    @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
+    def test_structured_places_wheels_in_package_dirs(
+        self, mock_set_output, mock_upload_files
+    ):
+        self._touch("torch-2.10.0-cp312-cp312-linux_x86_64.whl")
+        self._touch("amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl")
+        # Non-wheel artifacts must be ignored by the planner.
+        self._touch("index.html")
+        mock_upload_files.return_value = 2
+        main(
+            [
+                "--source-dir",
+                os.fspath(self.source_dir),
+                "--release-type",
+                "dev",
+                "--structured",
+                "--dry-run",
+            ]
+        )
+
+        self.assertEqual(mock_upload_files.call_count, 1)
+        (uploads,) = mock_upload_files.call_args.args
+        dest_by_name = {source.name: dest.relative_path for source, dest in uploads}
+        self.assertNotIn("index.html", dest_by_name)
+        self.assertEqual(
+            dest_by_name["torch-2.10.0-cp312-cp312-linux_x86_64.whl"],
+            "v5/rocm/pytorch/whl/torch/torch-2.10.0-cp312-cp312-linux_x86_64.whl",
+        )
+        self.assertEqual(
+            dest_by_name["amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl"],
+            "v5/rocm/pytorch/whl/amd-torch-device-gfx942/"
+            "amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl",
+        )
+        for _source, dest in uploads:
+            self.assertEqual(dest.bucket, "therock-dev-python")
+        # The index-URL output is unchanged under structured publishing.
+        mock_set_output.assert_called_once_with(
+            {"package_index_url": "https://rocm.devreleases.amd.com/whl-multi-arch/"}
+        )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
+    def test_structured_whl_next(self, mock_upload_files):
+        self._touch("torch-2.10.0-cp312-cp312-linux_x86_64.whl")
+        mock_upload_files.return_value = 1
+        main(
+            [
+                "--source-dir",
+                os.fspath(self.source_dir),
+                "--release-type",
+                "dev",
+                "--structured",
+                "--python-index",
+                "whl-next",
+                "--dry-run",
+            ]
+        )
+
+        (uploads,) = mock_upload_files.call_args.args
+        _source, dest = uploads[0]
+        self.assertEqual(
+            dest.relative_path,
+            "v5/rocm/pytorch/whl-next/torch/"
+            "torch-2.10.0-cp312-cp312-linux_x86_64.whl",
+        )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
+    def test_structured_raises_when_no_wheels(self, mock_upload_files):
+        # Empty source dir: the planner yields nothing and the script fails
+        # fast without calling the backend.
+        with self.assertRaises(FileNotFoundError):
+            main(
+                [
+                    "--source-dir",
+                    os.fspath(self.source_dir),
+                    "--release-type",
+                    "dev",
+                    "--structured",
+                    "--dry-run",
+                ]
+            )
+        mock_upload_files.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -499,6 +499,12 @@ class GetContainerImageTest(unittest.TestCase):
             "registry.suse.com/bci/bci-base:16.0",
         )
 
+    def test_rhel8_returns_ubi8_image(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image("rhel8"),
+            "registry.access.redhat.com/ubi8/ubi:8.10",
+        )
+
     def test_rhel_returns_ubi_image(self):
         self.assertEqual(
             get_url_repo_params.get_container_image("rhel10"),

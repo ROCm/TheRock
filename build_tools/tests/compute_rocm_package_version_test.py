@@ -283,6 +283,51 @@ class GitShaOverrideTest(unittest.TestCase):
         # Should truncate to 8 chars
         self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
 
+    def test_main_forwards_override_git_sha_to_all_package_types(self):
+        """main() must forward --override-git-sha into the computed versions.
+
+        Regression test for the bug where main() computed versions without
+        passing args.override_git_sha, so the flag was silently ignored and
+        cross-repo callers (e.g. rocm-libraries nightlies building TheRock)
+        got the caller's GITHUB_SHA embedded instead of the requested commit.
+        """
+        override_sha = "abcdef1234567890abcdef1234567890abcdef12"
+        captured_outputs = {}
+        original_gha_set_output = compute_rocm_package_version.gha_set_output
+
+        def mock_gha_set_output(outputs):
+            captured_outputs.update(outputs)
+
+        compute_rocm_package_version.gha_set_output = mock_gha_set_output
+        try:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "dev",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--override-git-sha",
+                    override_sha,
+                ]
+            )
+        finally:
+            compute_rocm_package_version.gha_set_output = original_gha_set_output
+
+        # Wheel embeds the full override SHA.
+        self.assertEqual(
+            captured_outputs["rocm_package_version"], f"7.99.0.dev0+{override_sha}"
+        )
+        # DEB uses the dev-date format and does not embed a git SHA at all.
+        self.assertRegex(
+            captured_outputs["rocm_deb_package_version"], r"^7\.99\.0~dev[0-9]{8}$"
+        )
+        self.assertNotIn(override_sha[:8], captured_outputs["rocm_deb_package_version"])
+        # RPM embeds the 8-char truncation of the same override SHA.
+        self.assertRegex(
+            captured_outputs["rocm_rpm_package_version"],
+            rf"^7\.99\.0~[0-9]{{8}}g{override_sha[:8]}$",
+        )
+
 
 class MainFunctionMultiplePackageTypesTest(unittest.TestCase):
     """Tests for main() function: compute all package types when --package-type is omitted."""

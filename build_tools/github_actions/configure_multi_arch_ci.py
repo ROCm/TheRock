@@ -8,8 +8,9 @@ This script is a pipeline of data transformations:
 
     1. Parse Inputs    — read GitHub event context → CIInputs, GitContext
     2. Check Skip CI   — gate: should we skip CI entirely?
-    3. Decide Jobs     — changed files + topology → per-job-group decisions
-    4. Select Targets  — trigger type + labels → per-platform GPU families
+    3. Select Targets  — trigger type + labels → per-platform GPU families
+    4. Decide Jobs     — changed files + topology + targets → per-job-group
+                         decisions
     5. Build Configs   — families × variant → per-platform build configs
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
@@ -66,13 +67,19 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from configure_jax_release_matrix import generate_jax_matrix
+from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
+)
+from stage_reuse_decision import (
+    AutoStageReuse,
+    StageReuseMode,
+    compute_auto_stage_reuse,
+    render_step_summary,
 )
 
 _NULL_GIT_SHA = "0" * 40
@@ -299,6 +306,18 @@ class GitContext:
         """
         return GitContext()
 
+    @property
+    def has_submodule_changes(self) -> bool | None:
+        """Check if any submodules were modified in the changed files.
+
+        Returns:
+            True if submodule changes detected, False if no submodule changes,
+            None if git context is unavailable (changed_files or submodule_paths missing).
+        """
+        if self.changed_files is None or self.submodule_paths is None:
+            return None
+        return bool(set(self.submodule_paths) & set(self.changed_files))
+
     def log(self) -> None:
         """Log git context for CI diagnostics."""
         if self.changed_files is None:
@@ -434,6 +453,9 @@ class JobDecisions:
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
     build_jax: JobGroupDecision
+    # Automatic stage-reuse analysis, carried so its report can be appended to
+    # the step summary after the main CI summary.
+    auto_stage_reuse: AutoStageReuse | None = None
 
     def log(self) -> None:
         """Log job decisions for CI diagnostics."""
@@ -554,13 +576,10 @@ def should_skip_ci(
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and git_context.changed_files is not None
-        and git_context.submodule_paths is not None
+        and git_context.has_submodule_changes is False
     ):
-        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-        if not matching:
-            print("  Skipping: ASAN PR without submodule changes")
-            return True
+        print("  Skipping: ASAN PR without submodule changes")
+        return True
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -580,148 +599,7 @@ def should_skip_ci(
 
 
 # ---------------------------------------------------------------------------
-# Step 3: Decide Jobs
-# ---------------------------------------------------------------------------
-
-
-_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
-
-
-def _has_test_labels(ci_inputs: CIInputs) -> bool:
-    """Check whether any test labels were specified (workflow_dispatch or PR)."""
-    if ci_inputs.linux_test_labels or ci_inputs.windows_test_labels:
-        return True
-    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
-
-
-def _determine_test_type(
-    ci_inputs: CIInputs,
-    git_context: GitContext,
-) -> tuple[str, str]:
-    """Determine test_type and reason based on trigger, labels, and changed files.
-
-    This code implements the policies from docs/development/test_filtering.md
-    and docs/development/ci_behavior_manipulation.md:
-
-    * Available filter types: ["quick", "standard", "comprehensive", "full"]
-    * Workflow runs choose a filter type automatically but PRs can override
-      with labels like `test_filter:comprehensive`
-
-    Returns (test_type, reason).
-    """
-
-    # Check in priority order - highest priority returns early.
-
-    # Priority 1: test_filter: PR label is an explicit manual override.
-    # This is the escape hatch: run comprehensive on a PR before merge,
-    # or downgrade to quick if you know the change is safe.
-    for label in ci_inputs.pr_labels:
-        if not label.startswith("test_filter:"):
-            continue
-        filter_type = label.split(":")[1]
-        if filter_type not in _VALID_TEST_FILTER_TYPES:
-            raise ValueError(
-                f"Unrecognized test_filter value: {filter_type!r}. "
-                f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
-            )
-        return filter_type, f"test_filter label: {label}"
-
-    # Priority 2: test:* labels request specific component tests (e.g.
-    # test:rocprim). When someone explicitly asks for tests, run the full
-    # suite — they're investigating something specific.
-    if _has_test_labels(ci_inputs):
-        return "full", "test labels specified"
-
-    # Priority 3: release builds run deeper test suites than regular CI.
-    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
-    # * 'prerelease' gets full (exhaustive pre-release validation)
-    # * 'dev' falls through to later priorities so changes can be tested quickly
-    if ci_inputs.release_type == "nightly":
-        return "comprehensive", "release build (nightly)"
-    if ci_inputs.release_type == "prerelease":
-        return "full", "release build (prerelease)"
-
-    # Priority 4: schedule runs the full nightly suite — comprehensive
-    # coverage on a cadence, catching regressions that quick tests miss.
-    if ci_inputs.is_schedule:
-        return "comprehensive", "scheduled run"
-
-    # Priority 5: a submodule change means actual library code changed
-    # (e.g. rocBLAS, MIOpen). These need full testing since the change
-    # could affect any downstream consumer.
-    if (
-        git_context.changed_files is not None
-        and git_context.submodule_paths is not None
-    ):
-        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-        if matching:
-            return "standard", f"submodule(s) changed: {sorted(matching)}"
-
-    # Default: quick tests for fast CI feedback.
-    return "quick", "default"
-
-
-def decide_jobs(
-    ci_inputs: CIInputs,
-    git_context: GitContext,
-) -> JobDecisions:
-    """Determine which job groups to run, skip, or satisfy with prebuilt files."""
-
-    # Build ROCm.
-    # TODO(#3399): Use changed files and build_topology.py to:
-    #   1. set per-stage prebuilt decisions
-    #   2. skip job groups that aren't reachable from the changed files
-    # Parse explicit prebuilt stages from workflow_dispatch input.
-    stage_decisions: dict[str, JobAction] = {}
-    if ci_inputs.prebuilt_stages:
-        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
-            stage_decisions[stage] = JobAction.PREBUILT
-    build_rocm = BuildRocmDecision(
-        action=JobAction.RUN,
-        stage_decisions=stage_decisions,
-        baseline_run_id=ci_inputs.baseline_run_id,
-    )
-
-    # Test ROCm.
-    test_type, test_type_reason = _determine_test_type(
-        ci_inputs=ci_inputs,
-        git_context=git_context,
-    )
-    test_rocm = TestRocmDecision(
-        action=JobAction.RUN,
-        test_type=test_type,
-        test_type_reason=test_type_reason,
-    )
-
-    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
-    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-            test_rocm = TestRocmDecision(
-                action=JobAction.SKIP,
-                test_type=test_type,
-                test_type_reason="ASAN tests skipped due to non-nightly trigger",
-            )
-
-    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
-    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
-
-    # Other jobs run unconditionally with no configuration.
-    # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
-
-    return JobDecisions(
-        build_rocm=build_rocm,
-        test_rocm=test_rocm,
-        build_rocm_python=JobGroupDecision(action=JobAction.RUN),
-        build_pytorch=JobGroupDecision(action=build_pytorch_action),
-        test_pytorch=JobGroupDecision(action=build_pytorch_action),
-        build_jax=JobGroupDecision(action=build_jax_action),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Step 4: Select Targets
+# Step 3: Select Targets
 # ---------------------------------------------------------------------------
 
 
@@ -810,10 +688,25 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_schedule:
-        # Full nightly coverage: every known family, including targets
-        # that are too slow or expensive for per-push CI.
-        linux_names = list(all_families.keys())
-        windows_names = list(all_families.keys())
+        # Schedule trigger: use explicit inputs if provided, else all families.
+        # "all" or empty = all known families. "none" = skip platform.
+        linux_names = list(ci_inputs.linux_amdgpu_families)
+        windows_names = list(ci_inputs.windows_amdgpu_families)
+        if linux_names == ["all"]:
+            linux_names = list(all_families.keys())
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif not linux_names:
+            linux_names = list(all_families.keys())
+        elif linux_names == ["none"]:
+            linux_names = []
+
+        if windows_names == ["all"]:
+            windows_names = list(all_families.keys())
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif not windows_names:
+            windows_names = list(all_families.keys())
+        elif windows_names == ["none"]:
+            windows_names = []
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
@@ -851,6 +744,187 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     return TargetSelection(
         linux_families=linux_names,
         windows_families=windows_names,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Step 4: Decide Jobs
+# ---------------------------------------------------------------------------
+
+
+_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
+
+
+def _has_test_labels(ci_inputs: CIInputs) -> bool:
+    """Check whether any test labels were specified (workflow_dispatch or PR).
+
+    Note: test_filter: labels are not test labels - they control test_type,
+    not which tests to run.
+    """
+    # Filter out test_filter: labels - those control test_type, not test selection
+    linux_tests = [
+        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
+    ]
+    windows_tests = [
+        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
+    ]
+    if linux_tests or windows_tests:
+        return True
+    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
+
+
+def _determine_test_type(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> tuple[str, str]:
+    """Determine test_type and reason based on trigger, labels, and changed files.
+
+    This code implements the policies from docs/development/test_filtering.md
+    and docs/development/ci_behavior_manipulation.md:
+
+    * Available filter types: ["quick", "standard", "comprehensive", "full"]
+    * Workflow runs choose a filter type automatically but PRs can override
+      with labels like `test_filter:comprehensive`
+
+    Returns (test_type, reason).
+    """
+
+    # Check in priority order - highest priority returns early.
+
+    # Priority 1: test_filter: label is an explicit manual override.
+    # This is the escape hatch: run comprehensive on a PR before merge,
+    # or downgrade to quick if you know the change is safe.
+    # Check both PR labels and workflow_dispatch test labels.
+    all_labels = (
+        ci_inputs.pr_labels
+        + ci_inputs.linux_test_labels
+        + ci_inputs.windows_test_labels
+    )
+    for label in all_labels:
+        if not label.startswith("test_filter:"):
+            continue
+        filter_type = label.split(":")[1]
+        if filter_type not in _VALID_TEST_FILTER_TYPES:
+            raise ValueError(
+                f"Unrecognized test_filter value: {filter_type!r}. "
+                f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
+            )
+        return filter_type, f"test_filter label: {label}"
+
+    # Priority 2: test:* labels request specific component tests (e.g.
+    # test:rocprim). When someone explicitly asks for tests, run the full
+    # suite — they're investigating something specific.
+    if _has_test_labels(ci_inputs):
+        return "full", "test labels specified"
+
+    # Priority 3: release builds run deeper test suites than regular CI.
+    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
+    # * 'prerelease' gets full (exhaustive pre-release validation)
+    # * 'dev' falls through to later priorities so changes can be tested quickly
+    if ci_inputs.release_type == "nightly":
+        return "comprehensive", "release build (nightly)"
+    if ci_inputs.release_type == "prerelease":
+        return "full", "release build (prerelease)"
+
+    # Priority 4: schedule runs the full nightly suite — comprehensive
+    # coverage on a cadence, catching regressions that quick tests miss.
+    if ci_inputs.is_schedule:
+        return "comprehensive", "scheduled run"
+
+    # Priority 5: a submodule change means actual library code changed
+    # (e.g. rocBLAS, MIOpen). These need full testing since the change
+    # could affect any downstream consumer.
+    if git_context.has_submodule_changes is True:
+        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+        return "standard", f"submodule(s) changed: {sorted(matching)}"
+
+    # Default: quick tests for fast CI feedback.
+    return "quick", "default"
+
+
+def decide_jobs(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    targets: TargetSelection,
+) -> JobDecisions:
+    """Determine which job groups to run, skip, or satisfy with prebuilt files.
+    ``targets`` (the per-platform family selection from ``select_targets()``)
+    scopes automatic stage reuse to the platforms and families actually being
+    built, so a stage is only reused when its artifacts exist for every one of
+    those platforms.
+    """
+
+    # Build ROCm.
+    # Parse explicit prebuilt stages from workflow_dispatch input. These are
+    # the MANUAL inputs and are always honored, unchanged, in every mode.
+
+    stage_decisions: dict[str, JobAction] = {}
+    if ci_inputs.prebuilt_stages:
+        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+            stage_decisions[stage] = JobAction.PREBUILT
+
+    # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
+    # which stages WOULD be reused and apply nothing; in "reuse-stage" the
+    # eligible stages are merged into stage_decisions so the orchestrator skips
+    # their builds and copies artifacts instead. The platforms and families to
+    # verify come straight from the resolved target selection.
+
+    auto_stage_reuse = compute_auto_stage_reuse(
+        changed_files=git_context.changed_files,
+        mode=StageReuseMode.from_environ(),
+        linux_amdgpu_families=targets.linux_families,
+        windows_amdgpu_families=targets.windows_families,
+    )
+
+    # Only reuse-stage mode returns non-empty applied_reuse_stages.
+    for stage in auto_stage_reuse.applied_reuse_stages:
+        stage_decisions.setdefault(stage, JobAction.PREBUILT)
+    baseline_run_id = ci_inputs.baseline_run_id
+    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+        baseline_run_id = auto_stage_reuse.baseline_run_id
+
+    build_rocm = BuildRocmDecision(
+        action=JobAction.RUN,
+        stage_decisions=stage_decisions,
+        baseline_run_id=baseline_run_id,
+    )
+
+    # Test ROCm.
+    test_type, test_type_reason = _determine_test_type(
+        ci_inputs=ci_inputs,
+        git_context=git_context,
+    )
+    test_rocm = TestRocmDecision(
+        action=JobAction.RUN,
+        test_type=test_type,
+        test_type_reason=test_type_reason,
+    )
+
+    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
+    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
+    if ci_inputs.build_variant == "asan":
+        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
+        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            test_rocm = TestRocmDecision(
+                action=JobAction.SKIP,
+                test_type=test_type,
+                test_type_reason="ASAN tests skipped due to non-nightly trigger",
+            )
+
+    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
+    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
+
+    # Other jobs run unconditionally with no configuration.
+    # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
+
+    return JobDecisions(
+        build_rocm=build_rocm,
+        test_rocm=test_rocm,
+        build_rocm_python=JobGroupDecision(action=JobAction.RUN),
+        build_pytorch=JobGroupDecision(action=build_pytorch_action),
+        test_pytorch=JobGroupDecision(action=build_pytorch_action),
+        build_jax=JobGroupDecision(action=build_jax_action),
+        auto_stage_reuse=auto_stage_reuse,
     )
 
 
@@ -929,8 +1003,8 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan" or build_variant == "host-asan":
-            # Only run ASAN tests on scheduled or workflow_dispatch runs
+        if build_variant == "asan":
+            # Only run full ASAN tests on scheduled or workflow_dispatch runs
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
@@ -944,6 +1018,25 @@ def _expand_build_config_for_platform(
                 test_runs_on = ""
                 print(
                     f"  {family_name}: no ASAN sandbox runner available, "
+                    f"disabling tests"
+                )
+        elif build_variant == "host-asan":
+            # Run host-asan tests only on push (postsubmit)
+            if not ci_inputs.is_push:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(
+                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                )
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no host-asan sandbox runner available, "
                     f"disabling tests"
                 )
 
@@ -967,6 +1060,19 @@ def _expand_build_config_for_platform(
             print(
                 f"  {family_name}: nightly_check_only_for_family flag set, "
                 f"disabling test runner for non-scheduled/non-dispatch runs"
+            )
+
+        # If submodule_bump_tests_only is set, only run tests when submodule changes
+        # are detected or on workflow_dispatch (manual triggers).
+        if (
+            platform_info.get("submodule_bump_tests_only", False)
+            and not ci_inputs.is_workflow_dispatch
+            and git_context.has_submodule_changes is not True
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: submodule_bump_tests_only flag set, "
+                f"disabling tests (no submodule changes detected)"
             )
 
         family_info = {
@@ -1011,7 +1117,12 @@ def _expand_build_config_for_platform(
     jax_build_matrix: list[dict[str, str]] = []
     build_jax = jobs.build_jax.action == JobAction.RUN and platform == "linux"
     if build_jax:
-        jax_build_matrix = generate_jax_matrix(ci_inputs.python_versions or None)
+        jax_build_matrix = generate_jax_matrix_for_release_type(
+            release_type=ci_inputs.release_type,
+            platform=platform,
+            python_versions=ci_inputs.python_versions or None,
+        )
+
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
@@ -1058,6 +1169,9 @@ def _apply_external_family_overrides(all_families: dict) -> dict:
         import json
 
         external_overrides = json.loads(external_overrides_json)
+        # Handle null/None (when external_repo JSON doesn't have family_overrides key)
+        if not external_overrides:
+            return all_families
         for family_name, family_config in external_overrides.items():
             if family_name in all_families:
                 # Merge overrides into existing family config
@@ -1195,6 +1309,11 @@ def write_outputs(
         )
     )
 
+    # Append the automatic stage-reuse analysis after the main summary so the
+    # two read top-to-bottom in the job step summary.
+    if outputs.jobs is not None and outputs.jobs.auto_stage_reuse is not None:
+        gha_append_step_summary(render_step_summary(outputs.jobs.auto_stage_reuse))
+
 
 # ---------------------------------------------------------------------------
 # Pipeline orchestration
@@ -1217,13 +1336,15 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         return CIOutputs.skipped()
     print("Result: CI will run")
 
-    print("\n=== Deciding job configuration ===")
-    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context)
-    jobs.log()
-
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
+
+    print("\n=== Deciding job configuration ===")
+    # Target selection runs first so automatic stage reuse can scope its
+    # prebuilt artifact checks to those targets.
+    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context, targets=targets)
+    jobs.log()
 
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(

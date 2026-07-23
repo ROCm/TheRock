@@ -10,8 +10,7 @@ TheRock includes:
 
 - Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
-- Support for building PyTorch with ROCm from source
-  - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Support for building PyTorch and JAX with ROCm from source
 - Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
@@ -20,11 +19,11 @@ TheRock includes:
 
 > [!IMPORTANT]
 > See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-> ROCm and PyTorch packages.
+> ROCm, PyTorch, and JAX packages.
 
 ## Project status
 
-See the unified project HUD at https://therock-hud-dev.amd.com/
+See the unified project HUD at https://therock-hud.amd.com/
 
 ### Nightly release status
 
@@ -150,7 +149,7 @@ In case you don't have an existing ROCm/HIP installation from which you can run 
 
 You can install the `rocm` Python package for any architecture inside a venv and run `offload-arch` from there:
 
-1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv`
+1. `python build_tools/setup_venv.py --index-name nightly --packages rocm .tmpvenv`
 1. `.tmpvenv/bin/offload-arch` on Linux, `.tmpvenv\Scripts\offload-arch` on Windows
 1. `rm -rf .tmpvenv`
 

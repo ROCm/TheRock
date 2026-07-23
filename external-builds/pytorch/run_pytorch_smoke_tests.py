@@ -27,10 +27,16 @@ from pathlib import Path
 
 from pytorch_utils import (
     get_unique_supported_devices,
+    reconcile_agent_visibility_env,
     set_gpu_execution_policy,
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def setup_env() -> None:
+    """Set up environment variables required for the smoke tests."""
+    reconcile_agent_visibility_env()
 
 
 def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
@@ -88,6 +94,8 @@ def main() -> int:
         if not smoke_tests_dir.exists():
             print(f"ERROR: Directory at '{smoke_tests_dir}' does not exist.")
             sys.exit(1)
+
+        setup_env()
 
         # CRITICAL: Query unique devices for iteration.
         # HIP_VISIBLE_DEVICES will be set inside set_gpu_execution_policy.

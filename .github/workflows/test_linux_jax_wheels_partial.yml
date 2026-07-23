@@ -265,9 +265,9 @@ jobs:
           # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid a pytest
           # slowdown/hang; other releases keep the runtime defaults.
           # TODO:(magaonka-amd) remove these as soon as fixes from corresponding system teams lands.
-          ROCPROFILER_QUEUE_INTERPOSITION: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' || '' }}
-          DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' || '' }}
-          HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' || '' }}
+          ROCPROFILER_QUEUE_INTERPOSITION: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
+          DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
+          HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' }}
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
