@@ -52,9 +52,7 @@ class HandlePushTest(unittest.TestCase):
                 mock_tmp.return_value.__enter__ = MagicMock(return_value=tmp)
                 mock_tmp.return_value.__exit__ = MagicMock(return_value=False)
                 with patch("bump_automation.os.chdir"):
-                    handle_push(
-                        "before_sha", "after_sha", "sys_token", "lib_token"
-                    )
+                    handle_push("before_sha", "after_sha", "sys_token", "lib_token")
 
             os.chdir(orig)
 
@@ -62,9 +60,7 @@ class HandlePushTest(unittest.TestCase):
 
     @patch("bump_automation.create_therock_bump")
     @patch("bump_automation.submodule_changed")
-    def test_no_bump_pr_when_no_submodule_changed(
-        self, mock_changed, mock_create_bump
-    ):
+    def test_no_bump_pr_when_no_submodule_changed(self, mock_changed, mock_create_bump):
         mock_changed.return_value = False
 
         handle_push("before_sha", "after_sha", "sys_token", "lib_token")
@@ -100,9 +96,7 @@ class HandlePushTest(unittest.TestCase):
                 mock_tmp.return_value.__enter__ = MagicMock(return_value=tmp)
                 mock_tmp.return_value.__exit__ = MagicMock(return_value=False)
                 with patch("bump_automation.os.chdir"):
-                    handle_push(
-                        "before_sha", "after_sha", "sys_token", "lib_token"
-                    )
+                    handle_push("before_sha", "after_sha", "sys_token", "lib_token")
 
             os.chdir(orig)
 
