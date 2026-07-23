@@ -224,6 +224,14 @@ test_matrix = {
             "linux": 1,
         },
     },
+    "origami": {
+        "job_name": "origami",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_origami.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -382,17 +390,22 @@ test_matrix = {
         },
         "exclude_family": {
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx1200",
+                "gfx1201",
             ],
             "windows": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx1200",
+                "gfx1201",
             ],
         },
     },

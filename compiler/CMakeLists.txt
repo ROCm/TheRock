@@ -6,6 +6,39 @@ if(THEROCK_ENABLE_COMPILER)
     set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
   endif()
 
+  if(THEROCK_CONDITION_IS_NON_WINDOWS)
+    # We need to determine LLVM_HOST_TRIPLE to include this triple
+    # in the RPATH when LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON. This path
+    # needs to be registered with the subproject so it will be included
+    # on dependent subprojects.
+    if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake")
+      set(LLVM_MAIN_SRC_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm")
+      include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/llvm/cmake/modules/GetHostTriple.cmake")
+      get_host_triple(LLVM_HOST_TRIPLE)
+
+    # The math-libs build does not sync the amd-llvm source directory as it just
+    # downloads and installs the amd-llvm binary tarball. Instead, we will query clang
+    # for the triple.
+    elseif(EXISTS "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang")
+      execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
+        "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang"
+        --print-target-triple
+        OUTPUT_VARIABLE LLVM_HOST_TRIPLE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY
+      )
+    endif()
+
+    if(LLVM_HOST_TRIPLE)
+      set(THEROCK_LLVM_HOST_TRIPLE "${LLVM_HOST_TRIPLE}")
+      set(THEROCK_LLVM_RPATH_WITH_TRIPLE "lib/llvm/lib/${THEROCK_LLVM_HOST_TRIPLE}")
+    else()
+      message(FATAL_ERROR "Could not determine LLVM_HOST_TRIPLE, which is needed for LLVM_ENABLE_PER_TARGET_RUNTIME_DIR")
+    endif()
+  endif()
+
   ##############################################################################
   # amd-llvm
   # Everything built as part of LLVM installs to lib/llvm
@@ -116,8 +149,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
       -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
+      -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
@@ -144,8 +176,10 @@ if(THEROCK_ENABLE_COMPILER)
     INSTALL_DESTINATION "lib/llvm"
     INTERFACE_LINK_DIRS
       "lib/llvm/lib"
+      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/llvm/lib"
+      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
   )
   # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
   if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
@@ -156,7 +190,19 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm Clang lib/llvm/lib/cmake/clang)
   therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
+  if(THEROCK_CONDITION_IS_NON_WINDOWS)
+    therock_cmake_subproject_provide_package(amd-llvm OpenMP lib/llvm/lib/cmake/openmp)
+  endif()
   therock_cmake_subproject_activate(amd-llvm)
+
+
+  # Comgr's gtest suite needs a googletest provider. therock-googletest is
+  # declared before compiler/ (see the root CMakeLists.txt) so amd-comgr can
+  # depend on the single shared instance rather than a compiler-local copy.
+  set(_comgr_gtest_deps)
+  if(THEROCK_BUILD_COMGR_TESTS)
+    set(_comgr_gtest_deps therock-googletest)
+  endif()
 
 
   ##############################################################################
@@ -194,6 +240,7 @@ if(THEROCK_ENABLE_COMPILER)
       ${_comgr_hotswap_cmake_args}
     BUILD_DEPS
       rocm-cmake
+      ${_comgr_gtest_deps}
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
@@ -219,6 +266,10 @@ if(THEROCK_ENABLE_COMPILER)
         "${CMAKE_CTEST_COMMAND}"
         --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
         --output-on-failure
+      COMMAND
+        "${CMAKE_COMMAND}"
+        --build "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
+        --target test-unit
     )
   endif()
 

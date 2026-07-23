@@ -220,6 +220,12 @@ Pick whichever applies to your host:
 
 ROCm is a very resource hungry project to build. The `compiler/amd-llvm` component alone involves linking multi-gigabyte binaries that can consume 4-8 GB of RAM per link job, and LLVM's configure+bootstrap phase is especially memory-intensive. On systems with a high core:memory ratio (e.g., 16+ cores with 32 GB RAM), Ninja's default `nproc`-level parallelism will frequently exceed available memory and get killed by `systemd-oomd` or the kernel OOM killer.
 
+#### Disk space
+
+You will need sufficient storage (200GB+) for a full source build. This scales with the number of GPU targets (`THEROCK_AMDGPU_FAMILIES`) and any downstream framework builds (e.g. PyTorch).
+
+- Fetching sources alone (via `fetch_sources.py`) requires roughly 30GB, before any build output.
+
 #### Controlling Build Parallelism
 
 The most effective way to bound memory usage is to cap the number of concurrent build jobs. Note that `-j` passed to the outer Ninja/CMake invocation controls parallelism at the super-project level; subproject builds (e.g., `amd-llvm`) spawn their own Ninja instances and are not directly bounded by this setting. See [TheRock issue #XXXX](https://github.com/ROCm/TheRock/issues) for tracking a Ninja job server that would propagate limits into subprojects.

@@ -319,7 +319,7 @@ jobs:
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
         env:
-          WSLENV: THEROCK_HOST_WORKSPACE/p:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
+          WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
