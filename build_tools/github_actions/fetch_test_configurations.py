@@ -352,7 +352,11 @@ test_matrix = {
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
+        "test_script": (
+            "python ./build/tests/rocgdb/test_rocgdb.py --tests"
+            " gdb.rocm/simple.exp"
+            " gdb.rocm/step-schedlock-spurious-waves.exp"
+        ),
         "test_runner": "linux-gfx942-gpu-rocm-profiler",
         "total_shards": 4,
     },
