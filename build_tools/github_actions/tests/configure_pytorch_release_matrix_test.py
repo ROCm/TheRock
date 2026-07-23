@@ -97,39 +97,30 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
 
     def test_filters_exact_unsupported_family(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="dev",
-            python_versions=["3.12"],
-            pytorch_git_refs=["release/2.10"],
-            amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu",
-            platform="linux",
-        )
+        # gfx125X-dcgpu is not enabled on these refs, so it should be filtered
+        # out while supported families (gfx94X-dcgpu) are kept. Covers every
+        # ref that currently excludes gfx125X-dcgpu so new refs are exercised
+        # here rather than in a separate near-duplicate test.
+        for pytorch_git_ref in ("release/2.10", "release/2.13"):
+            with self.subTest(pytorch_git_ref=pytorch_git_ref):
+                matrix = m.generate_pytorch_matrix_for_release_type(
+                    release_type="dev",
+                    python_versions=["3.12"],
+                    pytorch_git_refs=[pytorch_git_ref],
+                    amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu",
+                    platform="linux",
+                )
 
-        # gfx125X-dcgpu not supported on the release/2.10 ref, should filter
-        self.assertEqual(matrix[0]["amdgpu_families"], "gfx94X-dcgpu")
-        matrix_families = ";".join(row["amdgpu_families"] for row in matrix)
-        self.assertNotIn("gfx125X", matrix_families)
-
-    def test_release_2_13_filters_gfx125x(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="dev",
-            python_versions=["3.12"],
-            pytorch_git_refs=["release/2.13"],
-            amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu",
-            platform="linux",
-        )
-
-        # gfx125X-dcgpu not yet enabled on the release/2.13 ref, should filter.
-        self.assertEqual(
-            matrix,
-            [
-                {
-                    "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.13",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                }
-            ],
-        )
+                self.assertEqual(
+                    matrix,
+                    [
+                        {
+                            "python_version": "3.12",
+                            "pytorch_git_ref": pytorch_git_ref,
+                            "amdgpu_families": "gfx94X-dcgpu",
+                        }
+                    ],
+                )
 
     def test_unknown_explicit_ref_keeps_families(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
