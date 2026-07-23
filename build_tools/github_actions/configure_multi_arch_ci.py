@@ -158,6 +158,8 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse)
+    baseline_repository: str = ""
 
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
@@ -257,6 +259,7 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            baseline_repository=os.environ.get("STAGE_REUSE_BASELINE_REPOSITORY", ""),
         )
 
 
@@ -403,6 +406,10 @@ class BuildRocmDecision(JobGroupDecision):
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse).
+    # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
+    # TheRock's baseline runs instead of their own.
+    baseline_repository: str = ""
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -497,6 +504,7 @@ class BuildConfig:
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -883,10 +891,15 @@ def decide_jobs(
     if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
         baseline_run_id = auto_stage_reuse.baseline_run_id
 
+    # For cross-repo artifact reuse, pass through the baseline_repository so
+    # the copy job knows which repository to fetch artifacts from.
+    baseline_repository = ci_inputs.baseline_repository
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
+        baseline_repository=baseline_repository,
     )
 
     # Test ROCm.
@@ -1150,6 +1163,7 @@ def _expand_build_config_for_platform(
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        baseline_repository=jobs.build_rocm.baseline_repository,
     )
 
 

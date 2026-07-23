@@ -892,7 +892,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    source_run_id: str,
+    platform: str,
+    local_staging_dir: Optional[Path] = None,
+    source_repository: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -912,7 +915,10 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        github_repository=source_repository,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
 
@@ -948,10 +954,17 @@ def do_copy(args: argparse.Namespace):
     target_families = parse_target_families(args)
 
     # Create source and dest backends
+    # --source-repository flag takes precedence, then THEROCK_SOURCE_REPOSITORY env var
+    source_repository = (
+        getattr(args, "source_repository", None)
+        or os.environ.get("THEROCK_SOURCE_REPOSITORY")
+        or None
+    )
     source_backend = _create_source_backend(
         source_run_id=args.source_run_id,
         platform=args.platform,
         local_staging_dir=args.local_staging_dir,
+        source_repository=source_repository,
     )
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
@@ -1277,6 +1290,13 @@ def main(argv: Optional[List[str]] = None):
         type=str,
         required=True,
         help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
+    )
+    copy_parser.add_argument(
+        "--source-repository",
+        type=str,
+        default="",
+        help="GitHub repository for source-run-id in 'owner/repo' format. "
+        "Falls back to THEROCK_SOURCE_REPOSITORY env var, then current repo.",
     )
     copy_parser.add_argument(
         "--stage",

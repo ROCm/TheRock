@@ -83,6 +83,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          THEROCK_SOURCE_REPOSITORY: ${{ fromJSON(inputs.build_config).baseline_repository }}
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \

@@ -61,6 +61,10 @@ on:
         type: string
         default: "50"
         description: "Automatic stage reuse: number of recent branch commits to fetch for ancestry"
+      stage_reuse_baseline_repository:
+        type: string
+        default: ""
+        description: "Repository to query for baseline runs (default: current repo). Set to 'ROCm/TheRock' for external repos."
       changed_projects:
         type: string
         default: ""
@@ -108,6 +112,7 @@ jobs:
       stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
       stage_reuse_max_age_hours: ${{ inputs.stage_reuse_max_age_hours || '72' }}
       stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
+      stage_reuse_baseline_repository: ${{ inputs.stage_reuse_baseline_repository || '' }}
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
 
