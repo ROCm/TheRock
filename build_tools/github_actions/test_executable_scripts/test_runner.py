@@ -72,6 +72,7 @@ COMPONENT_DIR_MAPPING = {
     "hipcub": "hipcub",
     "hipdnn": "hipdnn",
     "hipdnn-samples": "hipdnn_samples",
+    "hipdnn-integration-tests": "hipdnn_integration_tests_ctest",
     "miopen_plugin": "miopen_legacy_plugin",
     "miopenprovider": "miopen_plugin",
     "rocsparse": "rocsparse",
