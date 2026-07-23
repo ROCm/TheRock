@@ -180,3 +180,11 @@ jobs:
         run: |
           python build_tools/github_actions/workflow_summary.py \
             --needs-json '${{ toJSON(needs) }}'
+
+      - name: Upload workflow timing JSON
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: workflow-timing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: workflow_timing.json
+          if-no-files-found: warn
