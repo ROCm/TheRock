@@ -25,7 +25,7 @@ jobs:
     with:
       build_variant: "asan"
       # ASAN builds require more resources, target specific architectures
-      linux_amdgpu_families: "gfx94X"
+      linux_amdgpu_families: "gfx94X gfx950 gfx125X"
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
