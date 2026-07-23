@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_fft_dev_i" Name="include">
+      <Directory Id="amdrocm_fft_dev_ih" Name="hipfft" />
+    </Directory>
+    <Directory Id="amdrocm_fft_dev_l" Name="lib">
+      <Directory Id="amdrocm_fft_dev_lc" Name="cmake">
+        <Directory Id="amdrocm_fft_dev_lch" Name="hipfft" />
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_fft_dev_s" Name="share">
+      <Directory Id="amdrocm_fft_dev_sd" Name="doc">
+        <Directory Id="amdrocm_fft_dev_sdh" Name="hipfft" />
+      </Directory>
+    </Directory>
+</Include>

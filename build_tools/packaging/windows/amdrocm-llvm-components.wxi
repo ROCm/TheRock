@@ -1,0 +1,1262 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory lib\llvm\amdgcn\bitcode -->
+  <ComponentGroup Id="cg_amdrocm_llvm_llab" Directory="amdrocm_llvm_llab">
+    <Component Id="c_amdrocm_llvm_llab_a.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_a.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/asanrtl.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_h.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_h.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/hip.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_o.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_o.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/ockl.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oav4.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oav4.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_abi_version_400.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oav5.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oav5.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_abi_version_500.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oav6.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oav6.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_abi_version_600.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ofoo.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ofoo.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_finite_only_off.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocfionon.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocfionon.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_finite_only_on.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv11g.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv11g.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_10-1-generic.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv13g.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv13g.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_10-3-generic.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv1.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv1.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_10-1-generic.bc" Name="oclc_isa_version_1010.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve10.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve10.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1011.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver101.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver101.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1012.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1013.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1013.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1013.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver103.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver103.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_10-3-generic.bc" Name="oclc_isa_version_1030.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1031.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1031.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1031.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1032.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1032.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1032.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1033.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1033.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1033.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1034.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1034.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1034.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1035.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1035.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1035.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1036.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1036.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1036.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv1g.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv1g.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_11-generic.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve11.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve11.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1100.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver110.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver110.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1101.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1102.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1102.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1102.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1103.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1103.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_11-generic.bc" Name="oclc_isa_version_1103.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver115.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver115.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1150.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1151.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1151.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1151.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1152.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1152.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1152.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1153.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1153.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1153.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve12ge.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve12ge.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_12-generic.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve12.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve12.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_12-generic.bc" Name="oclc_isa_version_1200.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver120.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver120.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1201.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver125.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver125.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1250.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclcisavers1251.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclcisavers1251.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_1251.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv6.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv6.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_600.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve60.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve60.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_601.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver602.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver602.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_602.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv7.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv7.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_700.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve70.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve70.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_701.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver702.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver702.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_702.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver703.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver703.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_703.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver704.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver704.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_704.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver705.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver705.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_705.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv8.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv8.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_801.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve80.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve80.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_802.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver803.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver803.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_803.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver805.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver805.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_805.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve81.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve81.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_810.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv94g.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv94g.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_9-4-generic.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv9g.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv9g.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_9-generic.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oiv9.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oiv9.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_9-generic.bc" Name="oclc_isa_version_900.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve90.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve90.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_902.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver904.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver904.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_904.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver906.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver906.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_906.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver908.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver908.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_908.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver909.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver909.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_909.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver90a.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver90a.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_90a.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oclisaver90c.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oclisaver90c.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_90c.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve94.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve94.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_9-4-generic.bc" Name="oclc_isa_version_942.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocisve95.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocisve95.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_isa_version_950.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oumo.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oumo.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_unsafe_math_off.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocunmaon.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocunmaon.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_unsafe_math_on.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_owo.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_owo.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_wavefrontsize64_off.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_ocwaon.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_ocwaon.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/oclc_wavefrontsize64_on.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_oc.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_oc.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/ocml.bc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llab_op.bc" Guid="*">
+      <File Id="f_amdrocm_llvm_llab_op.bc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/amdgcn/bitcode/opencl.bc" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\bin -->
+  <ComponentGroup Id="cg_amdrocm_llvm_llb" Directory="amdrocm_llvm_llb">
+    <Component Id="c_amdrocm_llvm_llb_als.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_als.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amd-llvm-spirv.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_a.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_a.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_a2.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_a2.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" Name="amdclang-23.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_ac.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_ac.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" Name="amdclang-cl.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_amcp.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_amcp.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" Name="amdclang-cpp.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_am.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_am.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" Name="amdclang.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_amd.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_amd.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" Name="amdflang.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_aa.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_aa.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdgpu-arch.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_amdl.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_amdl.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" Name="amdlld.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_amdll.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_amdll.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdclang++.exe" Name="amdllvm.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_c.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_c.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang++.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_car.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_car.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-apply-replacements.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_ccn.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_ccn.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-change-namespace.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cc.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cc.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang++.exe" Name="clang-cl.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_clcp.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_clcp.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang++.exe" Name="clang-cpp.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cd.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cd.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-doc.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cic.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cic.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-include-cleaner.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cif.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cif.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-include-fixer.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_clw.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_clw.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-linker-wrapper.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cm.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cm.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-move.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cob.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cob.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-bundler.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cop.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cop.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-packager.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cow.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cow.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-wrapper.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cq.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cq.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-query.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_crf.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_crf.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-reorder-fields.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_csd.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_csd.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-scan-deps.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_ct.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_ct.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-tblgen.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_clti.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_clti.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-tidy.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_cl.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_cl.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang++.exe" Name="clang.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_fas.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_fas.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/find-all-symbols.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_f.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_f.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang++.exe" Name="flang.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_h" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/hmaptool" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_l.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_l.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/ld.lld.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_ld.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_ld.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/ld.lld.exe" Name="ld64.lld.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_l.dll" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_l.dll" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/libclang.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_ll.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_ll.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/ld.lld.exe" Name="lld-link.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lld.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lld.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/ld.lld.exe" Name="lld.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_la.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_la.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-addr2line.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llar.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llar.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-ar.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llas.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llas.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-as.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lbs.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lbs.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-bitcode-strip.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lc.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lc.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-config.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lldi.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lldi.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-dis.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lldl.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lldl.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-ar.exe" Name="llvm-dlltool.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lldw.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lldw.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-dwarfdump.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lint.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lint.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-bitcode-strip.exe" Name="llvm-install-name-tool.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llli.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llli.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-ar.exe" Name="llvm-lib.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llvlin.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llvlin.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-link.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lm.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lm.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-mc.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_ln.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_ln.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-nm.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lo.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lo.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-bitcode-strip.exe" Name="llvm-objcopy.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llob.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llob.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-objdump.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lob.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lob.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-packager.exe" Name="llvm-offload-binary.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llot.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llot.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-objdump.exe" Name="llvm-otool.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lr.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lr.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-ar.exe" Name="llvm-ranlib.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llre.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llre.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-readelf.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llvrea.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llvrea.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-readelf.exe" Name="llvm-readobj.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_ls.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_ls.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-bitcode-strip.exe" Name="llvm-strip.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_llsy.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_llsy.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-addr2line.exe" Name="llvm-symbolizer.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_lt.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_lt.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/llvm-tblgen.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_m.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_m.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/modularize.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_na.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_na.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdgpu-arch.exe" Name="nvptx-arch.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_oa.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_oa.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/amdgpu-arch.exe" Name="offload-arch.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_o.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_o.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/opt.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_pt.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_pt.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/pp-trace.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_rct" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_rct" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/run-clang-tidy" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_llb_wl.exe" Guid="*">
+      <File Id="f_amdrocm_llvm_llb_wl.exe" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/bin/ld.lld.exe" Name="wasm-ld.exe" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2i" Directory="amdrocm_llvm_lllc2i">
+    <Component Id="c_amdrocm_llvm_lllc2i_ccbv.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccbv.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_builtin_vars.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ccc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_cmath.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_cccb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_cccb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_complex_builtins.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ccdf.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccdf.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_device_functions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_cci.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_cci.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_intrinsics.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ccld.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccld.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_libdevice_declares.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ccm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_math.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ccmfd.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccmfd.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_math_forward_declares.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ccrw.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccrw.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_runtime_wrapper.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ccti.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ccti.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_cuda_texture_intrinsics.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_chc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_chc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_hip_cmath.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_chld.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_chld.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_hip_libdevice_declares.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_chm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_chm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_hip_math.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_chrw.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_chrw.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_hip_runtime_wrapper.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_chs.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_chs.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_hip_stdlib.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_csb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_csb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_spirv_builtins.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_csld.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_csld.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__clang_spirv_libdevice_declares.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ff.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ff.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__float_float.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_fhm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_fhm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__float_header_macro.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_fin.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_fin.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__float_infinity_nan.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sgvl.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sgvl.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stdarg___gnuc_va_list.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_svc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_svc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stdarg___va_copy.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_shm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_shm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stdarg_header_macro.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sva.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sva.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stdarg_va_arg.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stvaco.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stvaco.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stdarg_va_copy.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_svl.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_svl.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stdarg_va_list.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sthema.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sthema.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_header_macro.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_smat.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_smat.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_max_align_t.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_null.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_snt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_snt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_nullptr_t.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_so.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_so.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_offsetof.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_spt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_spt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_ptrdiff_t.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_srt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_srt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_rsize_t.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sst.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sst.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_size_t.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_su.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_su.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_unreachable.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_swt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_swt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_wchar_t.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stwit.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stwit.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__stddef_wint_t.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_wa.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_wa.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__wmmintrin_aes.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_wp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_wp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/__wmmintrin_pclmul.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_a.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_a.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/adcintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ad.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ad.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/adxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_al.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_al.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/altivec.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_am.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_am.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amdgpuintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_aa.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_aa.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amdhsa_abi.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/ammintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amo.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amo.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amo.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amx.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amx.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amxavx512intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amxc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amxc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amxcomplexintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amxf.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amxf.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amxfp16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amxfp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amxfp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amxfp8intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amxi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amxi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amxm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amxm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amxmovrsintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_amxt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_amxt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/amxtf32intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_av.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_av.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/andes_vector.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ar.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ar.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/arm64intr.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_arac.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_arac.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/arm_acle.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ac.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ac.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/arm_cmse.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ansb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ansb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/arm_neon_sve_bridge.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_arm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_arm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/armintr.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_a25.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_a25.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2_512bf16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_av251.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_av251.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2_512convertintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx2512.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx2512.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2_512minmaxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx12512n.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx12512n.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2_512niintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx12512s.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx12512s.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2_512satcvtdsintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx102512sa.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx102512sa.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2_512satcvtintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_a2.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_a2.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2bf16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_av2c.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_av2c.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2convertintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx2co.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx2co.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2copyintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_av2m.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_av2m.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2minmaxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_av2n.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_av2n.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2niintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_av2s.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_av2s.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2satcvtdsintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx2sa.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx2sa.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx10_2satcvtintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx2intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx5.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx5.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512bf16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx51.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx51.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512bitalgintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512bwintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512c.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512c.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512cdintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512d.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512d.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512dqintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512f.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512f.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512fintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512fp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512fp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512fp16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512i.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512i.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512ifmaintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512if.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512if.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512ifmavlintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512v.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512v.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vbmi2intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vbmiintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vbm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vbm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vbmivlintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vl.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vl.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlbf16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vlb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vlb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlbitalgintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vlbw.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vlbw.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlbwintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vlc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vlc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlcdintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vld.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vld.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vldqintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vlf.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vlf.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlfp16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vli.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vli.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vlv.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vlv.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlvbmi2intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vlvn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vlvn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlvnniintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vlvp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vlvp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vlvp2intersectintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vnniintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vp2intersectintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vpo.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vpo.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vpopcntdqintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avx512vpop.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avx512vpop.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avx512vpopcntdqvlintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avxi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avxi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avxifmaintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avxin.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avxin.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avxn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avxn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avxneconvertintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avxv.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avxv.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avxvnniint16intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avxvn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avxvn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avxvnniint8intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_avxvnn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_avxvnn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/avxvnniintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_b.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_b.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/bmi2intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_bm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_bm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/bmiintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_bu.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_bu.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/builtins.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_c.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_c.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cet.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ce.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ce.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cetintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_cl.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_cl.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cldemoteintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_clf.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_clf.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/clflushoptintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_clw.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_clw.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/clwbintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_clz.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_clz.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/clzerointrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_cm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_cm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cmpccxaddintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_cp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_cp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cpuid.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_cr.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_cr.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/crc32intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_e.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_e.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/emmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_en.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_en.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/endian.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_enq.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_enq.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/enqcmdintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_f.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_f.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/f16cintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_fl.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_fl.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/float.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_fm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_fm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/fma4intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_fma.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_fma.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/fmaintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_fx.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_fx.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/fxsrintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_g.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_g.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/gfniintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_gp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_gp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/gpuintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_hcbi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_hcbi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/hexagon_circ_brev_intrinsics.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_hp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_hp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/hexagon_protos.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ht.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ht.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/hexagon_types.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_haig.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_haig.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/hlsl_alias_intrinsics_gen.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_hiig.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_hiig.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/hlsl_inline_intrinsics_gen.inc" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_h.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_h.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/hresetintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_htm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_htm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/htmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_htmx.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_htmx.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/htmxlintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_hhp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_hhp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/hvx_hexagon_protos.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_i.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_i.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/ia32intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_im.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_im.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/immintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_in.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_in.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_int.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_int.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/intrin0.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_intt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_intt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/inttypes.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_inv.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_inv.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/invpcidintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_is.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_is.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/iso646.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_k.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_k.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/keylockerintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_l.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_l.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/larchintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_la.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_la.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/lasxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_li.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_li.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/limits.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ls.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ls.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/lsxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_lw.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_lw.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/lwpintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_lz.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_lz.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/lzcntintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_m.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_m.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/mm3dnow.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_mm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_mm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/mm_malloc.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_mmi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_mmi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/mmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_m.modulemap" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_m.modulemap" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/module.modulemap" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_mo.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_mo.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/movdirintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ma25.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ma25.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/movrs_avx10_2_512intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ma2.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ma2.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/movrs_avx10_2intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_mov.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_mov.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/movrsintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ms.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ms.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/msa.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_mw.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_mw.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/mwaitxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_n.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_n.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/nmmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_nv.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_nv.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/nvptxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ol.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ol.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/omp_libmextras.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ocb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ocb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/opencl-c-base.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_oc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_oc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/opencl-c.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_p.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_p.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/pconfigintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_pk.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_pk.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/pkuintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_pm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_pm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/pmmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_po.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_po.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/popcntintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_pr.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_pr.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/prfchiintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_prf.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_prf.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/prfchwintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_pt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_pt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/ptrauth.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ptw.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ptw.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/ptwriteintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_r.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_r.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/raointintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rd.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rd.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/rdpruintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rds.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rds.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/rdseedintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/riscv_bitmanip.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rca.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rca.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/riscv_corev_alu.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/riscv_crypto.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/riscv_mips.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/riscv_nds.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rint.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rint.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/riscv_ntlh.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_rt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_rt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/rtmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_s.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_s.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/s390intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_se.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_se.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/serializeintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sg.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sg.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/sgxintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sh.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sh.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/sha512intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sha.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sha.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/shaintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sv.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sv.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/sifive_vector.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/sm3intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sm4.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sm4.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/sm4evexintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sm4i.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sm4i.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/sm4intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_smm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_smm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/smmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_sp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_sp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/spirvintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_st.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_st.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdalign.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_std.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_std.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdarg.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stda.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stda.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdatomic.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stdb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stdb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdbool.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stdc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stdc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdckdint.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stdco.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stdco.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdcountof.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stdd.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stdd.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stddef.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stdde.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stdde.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stddefer.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stdi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stdi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdint.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_stdn.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_stdn.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/stdnoreturn.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_t.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_t.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/tbmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_tg.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_tg.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/tgmath.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_tm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_tm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/tmmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ts.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ts.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/tsxldtrkintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_u.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_u.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/uintrintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_un.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_un.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/unwind.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_us.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_us.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/usermsrintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_v.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_v.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/vadefs.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_va.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_va.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/vaesintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_var.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_var.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/varargs.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ve.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ve.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/vecintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_vel.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_vel.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/velintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_veap.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_veap.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/velintrin_approx.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_vg.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_vg.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/velintrin_gen.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_vp.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_vp.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/vpclmulqdqintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_w.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_w.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/waitpkgintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_ws.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_ws.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/wasm_simd128.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_wb.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_wb.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/wbnoinvdintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_wm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_wm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/wmmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_x.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_x.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/x86gprintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_x8.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_x8.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/x86intrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_xm.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_xm.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xmmintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_xo.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_xo.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xopintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_xs.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_xs.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xsavecintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_xsa.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_xsa.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xsaveintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_xsav.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_xsav.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xsaveoptintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_xsave.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_xsave.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xsavesintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_xt.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_xt.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xtestintrin.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2i_yc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2i_yc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/yvals_core.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\cuda_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2icw" Directory="amdrocm_llvm_lllc2icw">
+    <Component Id="c_amdrocm_llvm_lllc2icw_a" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2icw_a" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/algorithm" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2icw_c" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2icw_c" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/cmath" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2icw_co" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2icw_co" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/complex" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2icw_n" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2icw_n" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/new" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\cuda_wrappers\__utility -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2icwu" Directory="amdrocm_llvm_lllc2icwu">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/__utility/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\cuda_wrappers\bits -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2icwb" Directory="amdrocm_llvm_lllc2icwb">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/cuda_wrappers/bits/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\fuzzer -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2if" Directory="amdrocm_llvm_lllc2if">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/fuzzer/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\llvm_libc_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2illw" Directory="amdrocm_llvm_lllc2illw">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/llvm_libc_wrappers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\llvm_offload_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2ilow" Directory="amdrocm_llvm_lllc2ilow">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/llvm_offload_wrappers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\openmp_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2iow" Directory="amdrocm_llvm_lllc2iow">
+    <Component Id="c_amdrocm_llvm_lllc2iow_codf.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_codf.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/__clang_openmp_device_functions.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2iow_c" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_c" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/cmath" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2iow_co" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_co" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/complex" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2iow_c.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_c.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/complex.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2iow_cc.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_cc.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/complex_cmath.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2iow_hr.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_hr.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/hip_runtime.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2iow_m.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_m.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/math.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2iow_n" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2iow_n" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/openmp_wrappers/new" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\orc -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2io" Directory="amdrocm_llvm_lllc2io">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/orc/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\ppc_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2ipw" Directory="amdrocm_llvm_lllc2ipw">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/ppc_wrappers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\profile -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2ip" Directory="amdrocm_llvm_lllc2ip">
+    <Component Id="c_amdrocm_llvm_lllc2ip_ipi.h" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2ip_ipi.h" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/profile/instr_prof_interface.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllc2ip_I.inc" Guid="*">
+      <File Id="f_amdrocm_llvm_lllc2ip_I.inc" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/include/llvm/ProfileData/InstrProfData.inc" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\sanitizer -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2is" Directory="amdrocm_llvm_lllc2is">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/sanitizer/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\xray -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2ix" Directory="amdrocm_llvm_lllc2ix">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/xray/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\include\zos_wrappers -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2izw" Directory="amdrocm_llvm_lllc2izw">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/include/zos_wrappers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\clang\23\share -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllc2s" Directory="amdrocm_llvm_lllc2s">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/clang/23/share/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\AMDDeviceLibs -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllcA" Directory="amdrocm_llvm_lllcA">
+    <Files Include="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/AMDDeviceLibs/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\clang -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllcc" Directory="amdrocm_llvm_lllcc">
+    <Component Id="c_amdrocm_llvm_lllcc_C.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_lllcc_C.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/clang/ClangConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllcc_Cl.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_lllcc_Cl.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/clang/ClangConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\lld -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lllcl" Directory="amdrocm_llvm_lllcl">
+    <Component Id="c_amdrocm_llvm_lllcl_L.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_lllcl_L.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/lld/LLDConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lllcl_LL.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_lllcl_LL.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/clang/ClangConfigVersion.cmake" Name="LLDConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\llvm\lib\cmake\llvm -->
+  <ComponentGroup Id="cg_amdrocm_llvm_lilllicmll" Directory="amdrocm_llvm_lilllicmll">
+    <Component Id="c_amdrocm_llvm_lilllicmll_L.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_lilllicmll_L.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/llvm/LLVMConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_llvm_lilllicmll_LL.cmake" Guid="*">
+      <File Id="f_amdrocm_llvm_lilllicmll_LL.cmake" Source="$(var.BuildRoot)/compiler/amd-llvm/dist/lib/llvm/lib/cmake/clang/ClangConfigVersion.cmake" Name="LLVMConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+</Include>

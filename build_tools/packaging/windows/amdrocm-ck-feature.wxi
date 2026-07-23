@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <ComponentGroupRef Id="cg_amdrocm_ck_i" />
+  <ComponentGroupRef Id="cg_amdrocm_ck_ic" />
+  <ComponentGroupRef Id="cg_amdrocm_ck_inckti" />
+  <ComponentGroupRef Id="cg_amdrocm_ck_ih" />
+  <ComponentGroupRef Id="cg_amdrocm_ck_lcck" />
+  <ComponentGroupRef Id="cg_amdrocm_ck_sdc" />
+</Include>
