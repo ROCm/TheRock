@@ -897,22 +897,7 @@ def _create_source_backend(
     local_staging_dir: Optional[Path] = None,
     source_repository: Optional[str] = None,
 ) -> ArtifactBackend:
-    """Create a backend for the source run ID.
-
-    For S3, uses WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)
-    to resolve the correct bucket (which may differ from the current run's bucket).
-
-    For local backends, creates a LocalDirectoryBackend in the same staging dir.
-
-    Args:
-        source_run_id: GitHub workflow run ID to fetch artifacts from.
-        platform: Platform name ('linux' or 'windows').
-        local_staging_dir: Optional local directory for testing.
-        source_repository: GitHub repository in 'owner/repo' format. When set,
-            fetches artifacts from this repository instead of the current one.
-            This enables cross-repo artifact copying (e.g., external repos
-            copying from TheRock's baseline runs).
-    """
+    """Create a backend for the source run ID."""
     if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
         staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
         output_root = WorkflowOutputRoot.for_local(
