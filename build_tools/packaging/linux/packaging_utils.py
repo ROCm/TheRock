@@ -164,6 +164,20 @@ def is_meta_package(pkg_info):
     return is_key_defined(pkg_info, "Metapackage")
 
 
+def is_devel_package(pkg_info):
+    """
+    Verifies whether this is a development package (ends with -devel).
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if package name ends with -devel, False otherwise.
+    """
+    pkg_name = pkg_info.get("Package", "")
+    return pkg_name.endswith("-devel")
+
+
 def is_rpm_stripping_disabled(pkg_info):
     """
     Verifies whether Disable_RPM_STRIP key is enabled for a package.
@@ -257,10 +271,9 @@ def is_gfxarch_package(
            cannot classify the package as gfx-arch-specific without an artifact path.
     """
     if enable_kpack:
-        pkgname = pkg_info.get("Package", "")
-        # Only non-metapackage -devel should be non-gfxarch
-        # Metapackages like amdrocm-core-devel should create arch-specific variants
-        if pkgname.endswith("-devel") and not is_meta_package(pkg_info):
+        # All devel packages (meta and non-meta) are GfxArch=False in kpack mode
+        # Devel packages don't get host/device split - they depend on full runtime
+        if is_devel_package(pkg_info):
             return False
 
     # In kpack mode, verify arch-specific artifacts exist
@@ -562,7 +575,51 @@ def process_name_field(
     return ", ".join(name_list)
 
 
-def process_main_dependencies(
+def process_nonversioned_dependencies(pkg_info: dict, config: PackageConfig) -> str:
+    """Process dependencies for non-versioned packages.
+
+    Non-versioned packages depend on their versioned counterpart.
+    This applies to all package types:
+    - devel / non-devel
+    - meta / non-meta
+    - GfxArch=True / GfxArch=False
+
+    Examples (kpack mode):
+    - amdrocm-blas -> amdrocm-blas8.2
+    - amdrocm-blas-devel -> amdrocm-blas-devel8.2
+    - amdrocm-core -> amdrocm-core8.2
+    - amdrocm-core-devel -> amdrocm-core-devel8.2
+
+    Examples (single-arch mode):
+    - amdrocm-blas -> amdrocm-blas8.2-gfx1100
+
+    Parameters:
+    pkg_info: Package details from JSON
+    config: Configuration object (must have versioned_pkg=False)
+
+    Returns: Versioned package name as dependency string
+    """
+    pkg_name = pkg_info.get("Package")
+
+    # Create config for versioned package lookup
+    # In kpack mode: GFX_META ensures no arch suffix (just version)
+    # In single-arch mode: preserve original gfx_arch for arch-specific deps
+    if config.enable_kpack:
+        versioned_config = replace(config, versioned_pkg=True, gfx_arch=GFX_META)
+    else:
+        versioned_config = replace(config, versioned_pkg=True)
+
+    # Get versioned package name
+    versioned_pkg_name = update_package_name(pkg_name, versioned_config)
+
+    # Add version suffix only for meta packages
+    if is_meta_package(pkg_info):
+        return append_version_suffix(versioned_pkg_name, config)
+
+    return versioned_pkg_name
+
+
+def process_versioned_dependencies(
     pkg_info: dict, field_key: str, config: PackageConfig
 ) -> str:
     """Process main dependency field (DEBDepends/RPMRequires).
@@ -588,6 +645,7 @@ def process_main_dependencies_kpack(
     """Process main dependencies for kpack (multi-arch) mode.
 
     Handles:
+    - Devel packages: route to dedicated devel handler
     - Meta packages: depend on all arch-specific variants
     - Host packages: depend on non-gfxarch packages only
     - Device packages: depend on host + arch-specific gfxarch packages
@@ -600,6 +658,10 @@ def process_main_dependencies_kpack(
 
     Returns: Comma-separated string of versioned dependencies
     """
+    # Route devel packages to dedicated handler
+    if is_devel_package(pkg_info):
+        return process_devel_dependencies_kpack(pkg_info, field_key, config)
+
     is_meta = is_meta_package(pkg_info)
     pkg_name = pkg_info.get("Package")
 
@@ -664,7 +726,80 @@ def process_main_dependencies_kpack(
 
     if not dep_list:
         return ""
-    return resolve_versioned_dependencies(dep_list, config, is_meta)
+    return resolve_versioned_dependency_list(dep_list, config, is_meta)
+
+
+def process_devel_dependencies_kpack(
+    pkg_info: dict, field_key: str, config: PackageConfig
+) -> str:
+    """Process dependencies for devel packages in kpack mode.
+
+    Devel packages have special dependency resolution:
+    - GfxArch=True runtime deps -> full meta (host + all devices)
+    - GfxArch=False runtime deps -> versioned package
+    - Devel meta packages -> include runtime meta dependency
+
+    Examples:
+    - amdrocm-blas-devel -> amdrocm-blas8.2 (full meta, not host)
+    - amdrocm-core-devel -> amdrocm-core8.2 + devel deps
+
+    Parameters:
+    pkg_info: Package details from JSON
+    field_key: Key to extract ("DEBDepends" or "RPMRequires")
+    config: Configuration object containing package metadata
+
+    Returns: Comma-separated string of versioned dependencies
+    """
+    is_meta = is_meta_package(pkg_info)
+    pkg_name = pkg_info.get("Package")
+    dep_list = list(pkg_info.get(field_key, []) or [])
+
+    # Filter deps without artifacts
+    dep_list = filter_dependencies_by_artifacts(
+        dep_list, config.artifacts_dir, config.gfx_arch
+    )
+
+    if is_meta:
+        # Devel meta package: add corresponding runtime meta if GfxArch=True
+        # e.g., amdrocm-core-devel should depend on amdrocm-core
+        runtime_pkg_name = pkg_name.replace("-devel", "")
+        runtime_pkg_info = get_package_info(runtime_pkg_name, raise_if_missing=False)
+
+        if runtime_pkg_info and is_gfxarch_package(
+            runtime_pkg_info, config.enable_kpack, config.artifacts_dir
+        ):
+            # Runtime meta is GfxArch=True, add it as dependency
+            if runtime_pkg_name not in dep_list:
+                dep_list = [runtime_pkg_name] + dep_list
+
+    if not dep_list:
+        return ""
+
+    # Resolve dependencies: GfxArch=True -> full meta, GfxArch=False -> versioned
+    pkg_list, _ = get_package_list(config.artifacts_dir)
+    updated_depends = []
+
+    for dep in dep_list:
+        if dep not in pkg_list:
+            # System dependency - keep as-is
+            if not dep.startswith("amdrocm"):
+                updated_depends.append(dep)
+            continue
+
+        # All deps resolve with GFX_META (full meta for gfxarch, versioned for non-gfxarch)
+        local_config = replace(config, versioned_pkg=True, gfx_arch=GFX_META)
+        updated_depends.append(update_package_name(dep, local_config))
+
+    if not updated_depends:
+        return ""
+
+    deps = ", ".join(updated_depends)
+
+    # Add version suffix for meta packages
+    if is_meta:
+        deps = append_version_suffix(deps, config)
+
+    return deps
 
 
 def process_main_dependencies_single_arch(
@@ -686,7 +821,7 @@ def process_main_dependencies_single_arch(
 
     if not dep_list:
         return ""
-    return resolve_versioned_dependencies(dep_list, config, is_meta)
+    return resolve_versioned_dependency_list(dep_list, config, is_meta)
 
 
 def process_secondary_dependencies(
@@ -709,7 +844,7 @@ def process_secondary_dependencies(
 
     if not dep_list:
         return ""
-    return resolve_versioned_dependencies(dep_list, config, is_meta)
+    return resolve_versioned_dependency_list(dep_list, config, is_meta)
 
 
 def convert_to_versiondependency(
@@ -732,15 +867,11 @@ def convert_to_versiondependency(
     # Make sure the flag is set to True
 
     # Create config with versioned_pkg=True and conditionally override gfx_arch
+    # Note: Non-versioned packages are handled by process_nonversioned_dependencies()
     if config.enable_kpack and not preserve_arch:
-        if not config.versioned_pkg:
-            # Non-versioned package depends on versioned meta package
-            # e.g., amdrocm-fft -> amdrocm-fft8.2
-            local_config = replace(config, versioned_pkg=True, gfx_arch=GFX_META)
-        else:
-            # Versioned packages depend on host packages
-            # e.g., amdrocm-fft8.2-gfx1100 -> amdrocm-fft-host8.2
-            local_config = replace(config, versioned_pkg=True, gfx_arch=GFX_HOST)
+        # Versioned packages depend on host packages
+        # e.g., amdrocm-fft8.2-gfx1100 -> amdrocm-fft-host8.2
+        local_config = replace(config, versioned_pkg=True, gfx_arch=GFX_HOST)
     else:
         local_config = replace(config, versioned_pkg=True)
 
@@ -961,7 +1092,7 @@ def filter_components_fromartifactory(
     return sourcedir_list
 
 
-def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
+def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
     """Resolve a dependency list into a versioned dependency string.
 
     Handles three cases based on multi-arch mode and package type:
@@ -1052,6 +1183,12 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     # Meta packages do not have their own artifacts
     if is_meta_package(pkg_info):
         return True
+
+    # For GFX_META or empty gfx_arch, check if ANY arch artifacts exist
+    # (regular GfxArch packages have gfx942, gfx1100, etc. but not gfx_meta)
+    # Empty gfx_arch is used for devel packages - they just need deps to exist
+    if gfx_arch in (GFX_META, ""):
+        return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
 
     artifactory = pkg_info.get("Artifactory")
     if artifactory is None:
