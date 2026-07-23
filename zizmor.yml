@@ -1,0 +1,7 @@
+# zizmor configuration for TheRock
+# Reference: https://docs.zizmor.sh/configuration/
+#
+# Per-rule ignore lists and tuning live under `rules:`. Add suppressions
+# centrally here as `<rule-id>: { ignore: [file.yml:line:col] }` so they
+# stay reviewable, rather than scattering inline comments across workflows.
+rules: {}

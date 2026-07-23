@@ -1,0 +1,35 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Post-merge zizmor scan: runs after every push to main (typically the
+# squash/rebase/merge of a PR) and pushes SARIF findings to the
+# repository's code-scanning Security tab. Complements the PR-side
+# zizmor job in `pre_commit_security.yml`, which scans only changed
+# workflow/action files and uploads a plain-text artifact for in-review
+# browsing.
+name: Zizmor main
+
+on:
+  push:
+    branches: [main]
+  # Allow re-running the post-merge scan on demand, e.g. after tweaking
+  # `zizmor.yml` or rotating the zizmor version pin, so the Security
+  # tab can be refreshed without an unrelated commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    uses: ./.github/workflows/zizmor.yml
+    with:
+      scan_mode: all
+      report_formats: sarif
+
+    permissions:
+      contents: read
+      # Required so the reusable workflow can call
+      # github/codeql-action/upload-sarif and have the findings
+      # appear under Security -> Code scanning.
+      security-events: write

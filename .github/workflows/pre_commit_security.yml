@@ -24,3 +24,7 @@ jobs:
     uses: ./.github/workflows/gitleaks.yml
     with:
       report_formats: csv
+  zizmor:
+    uses: ./.github/workflows/zizmor.yml
+    with:
+      report_formats: plain

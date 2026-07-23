@@ -1,0 +1,118 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+name: Zizmor
+
+on:
+  workflow_call:
+    inputs:
+      scan_mode:
+        description: >-
+          'changed' (default) audits only workflow / composite-action /
+          dependabot files modified by the calling event (PR commits or
+          push range). 'all' audits every such file under 'scan_path'
+          recursively.
+        required: false
+        type: string
+        default: changed
+      report_formats:
+        description: >-
+          Comma-separated list of zizmor report formats to produce.
+          Allowed values: 'sarif' (default), 'json', 'plain', 'github'.
+          SARIF outputs are uploaded to GitHub code scanning via
+          github/codeql-action/upload-sarif; all other formats are
+          uploaded as build artifacts via actions/upload-artifact.
+          Example: 'sarif,plain'.
+        required: false
+        type: string
+        default: sarif
+      scan_path:
+        description: >-
+          Path (relative to the repository root) to audit. Defaults to
+          '.' so the entire checkout is audited; set to a subdirectory
+          (e.g. '.github/workflows/' or 'services/api/') to restrict
+          the audit to that subtree. The 'changed' scan mode further
+          restricts to only the workflow / action / dependabot files
+          modified inside this path. The path MUST exist after
+          checkout or the scan job fails.
+        required: false
+        type: string
+        default: "."
+      severity_threshold:
+        description: >-
+          Minimum zizmor severity that fails the job. Zizmor reports
+          every finding regardless of threshold so the uploaded
+          reports keep the full picture; after the scan the script
+          tallies findings by severity and fails the job only if any
+          are at or above this threshold. Zizmor categorises findings
+          as INFORMATIONAL / LOW / MEDIUM / HIGH. Allowed values:
+          'informational' (fail on any finding), 'low', 'medium',
+          'high' (default).
+        required: false
+        type: string
+        default: high
+      persona:
+        description: >-
+          Zizmor audit persona. 'regular' (default) surfaces
+          high-signal, actionable findings. 'pedantic' adds code
+          smells suitable for cleanup PRs. 'auditor' surfaces
+          everything zizmor knows about, including likely false
+          positives -- intended for security reviews, not CI.
+        required: false
+        type: string
+        default: regular
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: Zizmor scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Bootstrap checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Compute checkout fetch-depth
+        id: depth
+        uses: ./.github/actions/compute_pr_fetch_depth
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: ${{ steps.depth.outputs.value }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1# v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Run zizmor
+        id: scan
+        env:
+          ZIZMOR_SCAN_MODE: ${{ inputs.scan_mode }}
+          ZIZMOR_REPORT_FORMATS: ${{ inputs.report_formats }}
+          ZIZMOR_SOURCE_DIR: ${{ inputs.scan_path }}
+          ZIZMOR_SEVERITY_THRESHOLD: ${{ inputs.severity_threshold }}
+          ZIZMOR_PERSONA: ${{ inputs.persona }}
+          GH_TOKEN: ${{ github.token }}
+        run: python build_tools/scan_tools/github_actions/zizmor.py
+
+      - name: Upload SARIF report to code scanning
+        if: always() && steps.scan.outputs.sarif_path != ''
+        uses: github/codeql-action/upload-sarif@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif_path }}
+          category: zizmor
+
+      - name: Upload non-SARIF reports
+        if: always() && steps.scan.outputs.non_sarif_paths != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zizmor-report
+          path: ${{ steps.scan.outputs.non_sarif_paths }}
+          if-no-files-found: ignore
