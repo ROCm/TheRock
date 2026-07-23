@@ -39,10 +39,31 @@ skip_tests = {
             "test_cpp_warnings_have_python_context_cuda",
         ],
         "distributed": [
-            # Error while creating shared memory segment /dev/shm/nccl-VPyhzw (size 21823872), error: No space left on device (28)
-            "test_3d_mlp_with_nd_mesh",
-            # AssertionError: False is not true : cuda:0 used 2615148544.0 bytes after collective, 70% more than the status before (1495269376.0 bytes). Extra CUDA context may have been created.
-            "test_extra_cuda_context",
+            # Distributed failures triaged from gfx94X-dcgpu 2.11 runs:
+            # https://github.com/ROCm/TheRock/actions/runs/28242115579
+            # https://github.com/ROCm/TheRock/actions/runs/28266889171
+            # https://github.com/ROCm/TheRock/actions/runs/28447160155
+            # https://github.com/ROCm/TheRock/actions/runs/29012657842 (2.11.0+rocm7.15.0a20260709)
+            # Dispositions/evidence: FIXES_FOR_triage_skips_2.11_0626.md
+            # ReplicateFullyShardInit - pytest-timeout (>900s). Order-dependent
+            # MultiProcContinuousTest hang; self-heals on rerun in a fresh
+            # process. Dispatcher blocks on an untimed completion_queue.get()
+            # after a worker dies (preceded by threaded-PG 'ThreadLocalWorld has
+            # no attribute comms'). Proof: proofs/f1_replicate_device_id_multiproc_hang_stack.txt
+            "test_replicate_device_id",
+            # TestFullyShard1DTrainingCore - Scalars not close by ~1.72e-5 (allowed
+            # 1e-5) at world_size=8. Benign fp reduction-order drift; NOT
+            # reproducible locally (14/14 pass). Sibling class caps world_size to 2
+            # citing the same drift.
+            "test_post_optim_event",
+            # SymmMemCollectiveTest - pytest-timeout (>900s). NOTE: the test body
+            # PASSES; the hang is the *class* teardown (destroy_process_group ->
+            # RCCL commReclaim/socketConnectCheck deadlock), NOT specific to
+            # two-shot - test_one_shot_all_reduce alone hangs identically. Skipping
+            # only two_shot is insufficient: whichever SymmMemCollectiveTest case
+            # runs last will hit the same teardown deadlock. ROCm ticket:
+            # proofs/ROCM_TICKET_rccl_symm_mem_teardown_deadlock.md
+            "test_two_shot_all_reduce",
         ],
     },
     "gfx942": {
