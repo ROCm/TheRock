@@ -948,6 +948,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         """BuildConfig.to_dict() produces all expected keys."""
         config = cm.BuildConfig(
             per_family_info=[],
+            per_arch_family_info=[],
             dist_amdgpu_families="",
             artifact_group="multi-arch-release",
             build_variant_label="release",
@@ -979,6 +980,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         to '' and present configs must serialize to valid JSON."""
         config = cm.BuildConfig(
             per_family_info=[{"amdgpu_family": "gfx110x"}],
+            per_arch_family_info=[{"amdgpu_family": "gfx110x"}],
             dist_amdgpu_families="gfx110x",
             artifact_group="multi-arch-release",
             build_variant_label="release",
@@ -1034,23 +1036,41 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 # Ordinary gfx families always participate in per-arch stages.
                 self.assertTrue(entry["build-per-arch"])
 
-    def test_amdgcnspirv_per_family_info_opts_out_of_per_arch(self):
-        """amdgcnspirv's per_family_info entry carries build-per-arch False.
+    def test_amdgcnspirv_excluded_from_per_arch_family_info(self):
+        """amdgcnspirv appears in per_family_info but not per_arch_family_info.
 
-        This is what the math-libs job `if:` reads to skip the per-arch stage
+        per_family_info keeps it (dist + generic stages + tests), while
+        per_arch_family_info drops it so the math-libs matrix never fans out
         for the architecture-independent SPIR-V family.
         """
-        targets = cm.TargetSelection(linux_families=["amdgcnspirv"])
+        targets = cm.TargetSelection(linux_families=["gfx94x", "amdgcnspirv"])
         result = cm.expand_build_configs(
-            ci_inputs=self._inputs(),
+            ci_inputs=cm.CIInputs(
+                run_id="1",
+                event_name="workflow_dispatch",
+                commit_ref="m",
+                base_ref="m^",
+                build_variant="release",
+                linux_amdgpu_families=["gfx94x", "amdgcnspirv"],
+            ),
             git_context=cm.GitContext(),
             targets=targets,
             jobs=_jobs(),
         )
         self.assertIsNotNone(result.linux)
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["amdgpu_family"], "amdgcnspirv")
-        self.assertFalse(entry["build-per-arch"])
+        spirv = next(
+            f
+            for f in result.linux.per_family_info
+            if f["amdgpu_family"] == "amdgcnspirv"
+        )
+        self.assertFalse(spirv["build-per-arch"])
+        per_arch_names = [
+            f["amdgpu_family"] for f in result.linux.per_arch_family_info
+        ]
+        self.assertIn("gfx94X-dcgpu", per_arch_names)
+        self.assertNotIn("amdgcnspirv", per_arch_names)
+        # amdgcnspirv still contributes to dist (generic stages build for it).
+        self.assertIn("amdgcnspirv", result.linux.dist_amdgpu_families)
 
     def test_build_config_structure(self):
         """BuildConfig has correct structure: families, metadata, consistency.

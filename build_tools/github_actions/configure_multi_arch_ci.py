@@ -481,6 +481,12 @@ class BuildConfig:
     """
 
     per_family_info: list[dict]  # Per-family metadata for test/artifact jobs
+    # Subset of per_family_info restricted to families that participate in
+    # per-arch build stages (build-per-arch True). Feeds the math-libs matrix.
+    # Architecture-independent families (e.g. amdgcnspirv) are omitted so those
+    # per-arch stages never fan out for them (they still appear in
+    # per_family_info / dist_amdgpu_families for the generic stages and tests).
+    per_arch_family_info: list[dict]
     dist_amdgpu_families: str  # Semicolon-separated
     artifact_group: str
     build_variant_label: str
@@ -1143,8 +1149,11 @@ def _expand_build_config_for_platform(
     # Python package build is disabled. Then multi_arch_ci_* can also condition
     # build_python_packages on that decision.
 
+    per_arch_family_info = [f for f in per_family_info if f["build-per-arch"]]
+
     return BuildConfig(
         per_family_info=per_family_info,
+        per_arch_family_info=per_arch_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],

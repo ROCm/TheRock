@@ -116,12 +116,12 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    # family_info['build-per-arch'] is False for architecture-independent
-    # families (e.g. amdgcnspirv) whose per-arch library projects have no
-    # support for the target yet; skip the per-arch stage for those. Bracket
-    # access is required because the key is hyphenated (dot access would be
-    # parsed as subtraction).
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') && matrix.family_info['build-per-arch'] }}
+    # Architecture-independent families (e.g. amdgcnspirv) are filtered out of
+    # matrix_per_family_json upstream (see per_arch_family_info in
+    # configure_multi_arch_ci.py), so this per-arch stage never fans out for
+    # them. `matrix` context is not available in a job-level `if:`, which is why
+    # the filtering happens when the matrix is built rather than here.
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
