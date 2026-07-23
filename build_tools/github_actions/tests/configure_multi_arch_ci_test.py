@@ -24,7 +24,6 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1064,9 +1063,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             if f["amdgpu_family"] == "amdgcnspirv"
         )
         self.assertFalse(spirv["build-per-arch"])
-        per_arch_names = [
-            f["amdgpu_family"] for f in result.linux.per_arch_family_info
-        ]
+        per_arch_names = [f["amdgpu_family"] for f in result.linux.per_arch_family_info]
         self.assertIn("gfx94X-dcgpu", per_arch_names)
         self.assertNotIn("amdgcnspirv", per_arch_names)
         # amdgcnspirv still contributes to dist (generic stages build for it).
