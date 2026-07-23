@@ -97,10 +97,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
 
     def test_filters_exact_unsupported_family(self):
-        # gfx125X-dcgpu is not enabled on these refs, so it should be filtered
-        # out while supported families (gfx94X-dcgpu) are kept. Covers every
-        # ref that currently excludes gfx125X-dcgpu so new refs are exercised
-        # here rather than in a separate near-duplicate test.
+        # Unsupported families are filtered while supported ones are kept.
         for pytorch_git_ref in ("release/2.10", "release/2.13"):
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
