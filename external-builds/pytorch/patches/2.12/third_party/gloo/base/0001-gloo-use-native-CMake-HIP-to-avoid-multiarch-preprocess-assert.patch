@@ -1,6 +1,6 @@
-From 28494ecfbfbff8e70cea3348c7f5080174a40382 Mon Sep 17 00:00:00 2001
+From 8abff2c18c975c9aa720d5167b18020bba5a201a Mon Sep 17 00:00:00 2001
 From: TheRock <dev@therock>
-Date: Tue, 21 Jul 2026 23:38:06 -0400
+Date: Wed, 22 Jul 2026 19:55:10 -0400
 Subject: [PATCH] Use native CMake HIP language to avoid multi-arch preprocess
  assert
 
@@ -16,12 +16,19 @@ supplied, which breaks TheRock's multi-arch PyTorch build once LLVM assertions
 are enabled (ROCm/TheRock#6102). Native HIP does not preprocess, keeps all
 requested architectures, and mirrors the current upstream gloo behavior.
 
+The native-HIP `cmake/Hip.cmake` links `gloo_hip` with the keyword
+`target_link_libraries(... PRIVATE ...)` signature, so `gloo/CMakeLists.txt`
+must use the matching keyword form (`PUBLIC`) for the same target; otherwise
+CMake errors with "keyword signature ... already been used". This mirrors the
+gloo tip change made alongside the native-HIP migration.
+
 This is carried by TheRock because gloo is upstream third-party
 (github.com/pytorch/gloo), not a ROCm fork. It matches gloo tip
 (pytorch/gloo@74cc005).
 ---
- cmake/Hip.cmake | 105 ++++++++++++++++++++++++++++++++----------------
- 1 file changed, 71 insertions(+), 34 deletions(-)
+ cmake/Hip.cmake     | 105 ++++++++++++++++++++++++++++++--------------
+ gloo/CMakeLists.txt |   2 +-
+ 2 files changed, 72 insertions(+), 35 deletions(-)
 
 diff --git a/cmake/Hip.cmake b/cmake/Hip.cmake
 index 18a3c07..c898045 100644
@@ -152,6 +159,19 @@ index 18a3c07..c898045 100644
 +    POSITION_INDEPENDENT_CODE ON
 +  )
  endfunction()
+diff --git a/gloo/CMakeLists.txt b/gloo/CMakeLists.txt
+index 186fe12..10c1e4e 100644
+--- a/gloo/CMakeLists.txt
++++ b/gloo/CMakeLists.txt
+@@ -150,7 +150,7 @@ if(USE_CUDA)
+ endif()
+ if(USE_ROCM)
+   gloo_hip_add_library(gloo_hip ${GLOO_HIP_SRCS})
+-  target_link_libraries(gloo_hip gloo)
++  target_link_libraries(gloo_hip PUBLIC gloo)
+ endif()
+ if(USE_LIBUV)
+   target_link_libraries(gloo PRIVATE uv_a)
 -- 
 2.34.1
 
