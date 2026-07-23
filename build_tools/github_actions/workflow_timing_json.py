@@ -2,11 +2,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-from __future__ import annotations
-
+import json
 from collections import defaultdict
 from typing import Sequence
-import json
 
 from workflow_timing import TimingRecord
 
@@ -34,6 +32,7 @@ def format_timing_json(records: Sequence[TimingRecord]) -> str:
     for record in sorted(records, key=sort_key):
         if record.platform not in ("Linux", "Windows"):
             continue
+
         if record.workflow_phase not in ("Build Stages", "Tests"):
             continue
 

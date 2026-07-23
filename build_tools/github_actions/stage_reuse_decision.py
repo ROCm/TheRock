@@ -664,11 +664,7 @@ def _format_stage_list(stages: Sequence[str]) -> str:
 
 def render_step_summary(result: AutoStageReuse) -> str:
     """Render a GitHub step-summary markdown block for the analysis."""
-    baseline = (
-        f"`{result.baseline_run_id}`"
-        if result.baseline_run_id
-        else "_none_"
-    )
+    baseline = f"`{result.baseline_run_id}`" if result.baseline_run_id else "_none_"
     candidates = _format_stage_list(result.candidate_stages)
     rebuild = _format_stage_list(result.rebuild_stages)
     available = _format_stage_list(result.available_stages)

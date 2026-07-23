@@ -247,9 +247,7 @@ def collect_timing_records(
             started_at = job.get("started_at")
             completed_at = job.get("completed_at")
             labels = job.get("labels") or []
-            runner_name = job.get("runner_name") or (
-                labels[0] if labels else "unknown"
-            )
+            runner_name = job.get("runner_name") or (labels[0] if labels else "unknown")
             runner_name = str(runner_name)
 
             runner_pool, runner_instance = _split_runner_label(runner_name)

@@ -45,9 +45,9 @@ import json
 import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from github_actions_api import GitHubAPIError, gha_send_request, str2bool
-from pathlib import Path
 
 from workflow_timing import (
     collect_timing_records,
@@ -261,17 +261,20 @@ def main(argv: list[str]) -> int:
                 run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
                 token=os.environ["GITHUB_TOKEN"],
             )
-        except Exception as exc:
-            print(f"\n(Could not collect workflow timing: {exc})")
-        else:
-            timing_json = format_timing_json(timing_records)
-            Path("workflow_timing.json").write_text(
-                timing_json,
-                encoding="utf-8",
-            )
 
-            print("\nWorkflow timing JSON:")
-            print(timing_json)
+            timing_json = format_timing_json(timing_records)
+            timing_path = Path("workflow_timing.json")
+            timing_path.write_text(timing_json, encoding="utf-8")
+
+            print(
+                f"Wrote {timing_path} with " f"{len(timing_records)} timing record(s)."
+            )
+        except Exception as exc:
+            print(f"\n(Could not generate workflow timing output: {exc})")
+
+            print(
+                f"Wrote {timing_path} with " f"{len(timing_records)} timing record(s)."
+            )
     print(f"Checking status for {len(jobs)} job(s):")
     for job in jobs:
         color = _RESULT_COLORS.get(job.result, _RED)
