@@ -37,6 +37,38 @@ my_package = dist_info.ALL_PACKAGES["profiler"]
 packages = find_packages(where="./src")
 platform_package_name = my_package.get_py_package_name()
 packages.append(platform_package_name)
+package_dir = {
+    "": "src",
+    platform_package_name: f"platform/{platform_package_name}",
+}
+
+
+install_requires = []
+
+
+def _add_platform_site_package(package_name: str) -> bool:
+    site_packages_rel = (
+        Path("platform") / platform_package_name / "lib" / "python3" / "site-packages"
+    )
+    site_packages = THIS_DIR / site_packages_rel
+    package_path = site_packages / package_name
+    if not package_path.is_dir():
+        return False
+
+    for found_package in find_packages(
+        where=site_packages,
+        include=[package_name, f"{package_name}.*"],
+    ):
+        if found_package not in packages:
+            packages.append(found_package)
+        package_dir[found_package] = str(
+            site_packages_rel / Path(*found_package.split("."))
+        )
+    return True
+
+
+if _add_platform_site_package("rocprof_trace_decoder"):
+    install_requires.append("pyelftools>=0.31")
 
 version = os.environ.get("ROCM_SDK_VERSION")
 if version is None:
@@ -51,10 +83,8 @@ setup(
     version=version,
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
     packages=packages,
-    package_dir={
-        "": "src",
-        platform_package_name: f"platform/{platform_package_name}",
-    },
+    package_dir=package_dir,
+    install_requires=install_requires,
     include_package_data=True,
     zip_safe=False,
     options={
