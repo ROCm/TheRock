@@ -7,9 +7,16 @@ import subprocess
 import tempfile
 import os
 from datetime import datetime, timezone
+from typing import Any
 import requests
 
 THEROCK_REPO = "ROCm/TheRock"
+THEROCK_MAIN_BRANCH = "main"
+
+BOT_NAME = "therockbot"
+BOT_EMAIL = "therockbot@amd.com"
+
+CI_LABEL = "ci:run-all-archs"
 
 ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-linux.yml",
@@ -30,17 +37,31 @@ SUBMODULE_CONFIG = {
         "repo": "ROCm/rocm-systems",
         "files": ROCM_SYSTEMS_FILES,
         "updater": "ref",
+        "token_key": "systems",
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
         "files": ROCM_LIBRARIES_FILES,
         "updater": "ci-env",
+        "token_key": "libraries",
+    },
+    "debug-tools/rocgdb/source": {
+        "repo": "ROCm/rocgdb",
+        "files": [],
+        "updater": "submodule-only",
+        # We will reuse the rocm-systems token for now.
+        "token_key": "systems",
+        "branch": "amd-staging-rocgdb-16",
     },
 }
 
 
-def run(cmd):
-    """Run a shell command"""
+def _clone_url(repo: str, token: str) -> str:
+    return f"https://x-access-token:{token}@github.com/{repo}.git"
+
+
+def run(cmd: list[str]) -> str:
+    """Run a shell command and return its stdout, raising on non-zero exit."""
     result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout)
     print(result.stderr)
@@ -49,18 +70,22 @@ def run(cmd):
     return result.stdout.strip()
 
 
-def get_submodule_sha(commit, path):
-    """Return SHA of submodule at path in given commit"""
+def get_submodule_sha(commit: str, path: str) -> str:
+    """Return SHA of submodule at path in given commit."""
     out = run(["git", "ls-tree", commit, path])
     return out.split()[2]
 
 
-def submodule_changed(before, after, path):
+def submodule_changed(before: str, after: str, path: str) -> bool:
+    """Return True if the submodule at path differs between two commits."""
     diff = run(["git", "diff", before, after, "--", path])
     return bool(diff.strip())
 
 
-def gh_api(token, endpoint, method="GET", data=None):
+def gh_api(
+    token: str, endpoint: str, method: str = "GET", data: dict | None = None
+) -> Any:
+    """Make a GitHub API request and return the parsed JSON response."""
     url = f"https://api.github.com/{endpoint}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -75,12 +100,16 @@ def gh_api(token, endpoint, method="GET", data=None):
     return response.json()
 
 
-def latest_commit(repo, token):
-    data = gh_api(token, f"repos/{repo}/commits")
+def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
+    """Return the SHA of the latest commit on the given branch, or the default branch."""
+    url = f"repos/{repo}/commits"
+    if branch:
+        url += f"?sha={branch}"
+    data = gh_api(token, url)
     return data[0]["sha"]
 
 
-def generate_pr_body(repo, base, head):
+def generate_pr_body(repo: str, base: str, head: str) -> str:
     base_url = f"https://github.com/{repo}/commit/{base}"
     head_url = f"https://github.com/{repo}/commit/{head}"
     compare_url = f"https://github.com/{repo}/compare/{base}...{head}"
@@ -91,7 +120,7 @@ See full comparison here: {compare_url}
 """
 
 
-def update_ref_in_file(file_path, new_sha):
+def update_ref_in_file(file_path: str, new_sha: str) -> None:
     """
     Update all ROCm/TheRock refs in a YAML file.
     Replaces existing 'ref:' after 'repository: "ROCm/TheRock"'.
@@ -147,7 +176,7 @@ def update_ref_in_file(file_path, new_sha):
     print(f"[INFO] Updated {file_path}")
 
 
-def update_ci_env_file(file_path, new_sha):
+def update_ci_env_file(file_path: str, new_sha: str) -> None:
     """Update the therock-ref value in a ci-env composite action file.
 
     Matches:
@@ -185,10 +214,10 @@ def update_ci_env_file(file_path, new_sha):
     print(f"[INFO] Updated {file_path}")
 
 
-def close_stale_prs(submodule, old_sha, systems_token):
-    """Close all open PRs on TheRock that originated from old submodule SHA"""
+def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
+    """Close all open PRs on TheRock that originated from old submodule SHA."""
     old_short = old_sha[:7]
-    prs = gh_api(systems_token, f"repos/{THEROCK_REPO}/pulls?state=open")
+    prs = gh_api(token, f"repos/{THEROCK_REPO}/pulls?state=open")
     for pr in prs:
         title = pr["title"].lower()
         if f"bump {submodule}" in title and f"from {old_short}" in title:
@@ -197,7 +226,7 @@ def close_stale_prs(submodule, old_sha, systems_token):
 
             # Add a comment to the PR being closed
             gh_api(
-                systems_token,
+                token,
                 f"repos/{THEROCK_REPO}/issues/{number}/comments",
                 method="POST",
                 data={"body": "Closing stale PR."},
@@ -205,65 +234,93 @@ def close_stale_prs(submodule, old_sha, systems_token):
 
             # Close the PR
             gh_api(
-                systems_token,
+                token,
                 f"repos/{THEROCK_REPO}/pulls/{number}",
                 method="PATCH",
                 data={"state": "closed"},
             )
 
 
-def create_therock_bump(submodule, token):
+def _git_commit(title: str) -> None:
+    """Create a git commit as the bot identity with the given title."""
+    run(
+        [
+            "git",
+            "-c",
+            f"user.name={BOT_NAME}",
+            "-c",
+            f"user.email={BOT_EMAIL}",
+            "commit",
+            "-m",
+            title,
+        ]
+    )
+
+
+def create_therock_bump(submodule: str, token: str) -> None:
     """Create a bump PR for the given submodule in TheRock."""
-    repo = SUBMODULE_CONFIG[submodule]["repo"]
+    config = SUBMODULE_CONFIG[submodule]
+    repo = config["repo"]
+    branch = config.get("branch")
 
     original_cwd = os.getcwd()
     # Get latest SHA from upstream submodule repo
-    latest = latest_commit(repo, token)
+    latest = latest_commit(repo, token, branch)
+
+    # The submodule path may contain slashes (e.g. debug-tools/rocgdb/source);
+    # flatten it so the bump branch name is a single ref component.
+    branch_name = f"bump-{submodule.replace('/', '-')}-{latest[:7]}"
+
+    # Skip if a PR for this exact commit is already open.
+    open_prs = gh_api(
+        token,
+        f"repos/{THEROCK_REPO}/pulls?state=open&head=ROCm:{branch_name}",
+    )
+    if open_prs:
+        print(
+            f"[INFO] Bump PR for {branch_name} already open"
+            f" (#{open_prs[0]['number']}), skipping"
+        )
+        return
 
     # Use a temp directory for safe cloning
     with tempfile.TemporaryDirectory() as tmpdir:
         clone_dir = os.path.join(tmpdir, "TheRock")
         print(f"[INFO] Cloning TheRock into {clone_dir}")
-        clone_url = f"https://x-access-token:{token}@github.com/ROCm/TheRock.git"
-        run(["git", "clone", "--depth", "1", clone_url, clone_dir])
-
+        run(
+            ["git", "clone", "--depth", "1", _clone_url(THEROCK_REPO, token), clone_dir]
+        )
         os.chdir(clone_dir)
 
-        branch_name = f"bump-{submodule}-{latest[:7]}"
         run(["git", "checkout", "-b", branch_name])
 
         # Initialize the submodule if needed
-        sub_path = submodule
-        if not os.path.exists(os.path.join(sub_path, ".git")):
-            run(["git", "submodule", "update", "--init", "--depth", "1", sub_path])
+        if not os.path.exists(os.path.join(submodule, ".git")):
+            run(["git", "submodule", "update", "--init", "--depth", "1", submodule])
         else:
-            print(f"[INFO] Submodule {sub_path} already initialized")
+            print(f"[INFO] Submodule {submodule} already initialized")
 
-        current_sha = get_submodule_sha("HEAD", sub_path)
+        current_sha = get_submodule_sha("HEAD", submodule)
 
-        # Fetch latest commit in submodule
-        print(f"[INFO] Fetching latest commit for {submodule}")
-        run(["git", "-C", sub_path, "fetch", "--depth=1", "origin"])
-        run(["git", "-C", sub_path, "checkout", latest])
+        if current_sha == latest:
+            print(f"[INFO] {submodule} is already at {latest[:7]}, nothing to bump")
+            os.chdir(original_cwd)
+            return
+
+        # Fetch the exact target commit in the submodule. A plain depth-1 fetch
+        # only retrieves the default branch tip, which misses commits that live
+        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-16).
+        print(f"[INFO] Fetching {latest[:7]} for {submodule}")
+        run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
+        run(["git", "-C", submodule, "checkout", latest])
 
         # Stage the submodule change
-        run(["git", "add", sub_path])
+        run(["git", "add", submodule])
 
         # Commit and push
         title = f"Bump {submodule} from {current_sha[:7]} to {latest[:7]}"
         body = generate_pr_body(repo, current_sha, latest)
-        run(
-            [
-                "git",
-                "-c",
-                "user.name=therockbot",
-                "-c",
-                "user.email=therockbot@amd.com",
-                "commit",
-                "-m",
-                title,
-            ]
-        )
+        _git_commit(title)
         run(["git", "push", "origin", branch_name])
 
         # Create PR
@@ -271,7 +328,12 @@ def create_therock_bump(submodule, token):
             token,
             f"repos/{THEROCK_REPO}/pulls",
             method="POST",
-            data={"title": title, "head": branch_name, "base": "main", "body": body},
+            data={
+                "title": title,
+                "head": branch_name,
+                "base": THEROCK_MAIN_BRANCH,
+                "body": body,
+            },
         )
 
         try:
@@ -280,7 +342,7 @@ def create_therock_bump(submodule, token):
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
                 method="POST",
-                data={"labels": ["ci:run-all-archs"]},
+                data={"labels": [CI_LABEL]},
             )
         except RuntimeError as e:
             print(f"[WARN] Failed to apply ci:run-all-archs to PR #{pr['number']}: {e}")
@@ -288,41 +350,48 @@ def create_therock_bump(submodule, token):
         os.chdir(original_cwd)
 
 
-def handle_schedule(systems_token, libraries_token, submodule="all"):
-    """Create bump PRs for the specified submodule(s)"""
+def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
+    """Create bump PRs for the specified submodule(s)."""
     if submodule in ("all", "rocm-systems"):
-        create_therock_bump("rocm-systems", systems_token)
+        create_therock_bump("rocm-systems", tokens["systems"])
     if submodule in ("all", "rocm-libraries"):
-        create_therock_bump("rocm-libraries", libraries_token)
+        create_therock_bump("rocm-libraries", tokens["libraries"])
+    if submodule in ("all", "rocgdb"):
+        create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
 
 
-def handle_push(before, after, systems_token, libraries_token):
-    """Push event: update TheRock refs, close stale PRs, create next bump PR"""
+def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
+    """Push event: update TheRock refs, close stale PRs, create next bump PR."""
     changed = None
-    for m in SUBMODULE_CONFIG:
-        if submodule_changed(before, after, m):
-            changed = m
+    for path in SUBMODULE_CONFIG:
+        if submodule_changed(before, after, path):
+            changed = path
             break
     if not changed:
         print("[INFO] No monitored submodule changed")
         return
 
-    old_sha = get_submodule_sha(before, changed)
-    new_sha = get_submodule_sha(after, changed)
-
-    print(f"[INFO] Detected {changed} change: {old_sha[:7]} → {new_sha[:7]}")
-
-    close_stale_prs(changed, old_sha, systems_token)
-
-    # update workflow YAML
     config = SUBMODULE_CONFIG[changed]
+    token = tokens[config["token_key"]]
+    old_sha = get_submodule_sha(before, changed)
+
+    print(f"[INFO] Detected {changed} change: {old_sha[:7]} -> {after[:7]}")
+
+    close_stale_prs(changed, old_sha, token)
+
+    # submodule-only entries (e.g. rocgdb) have no back-ref files to update in
+    # the upstream repo; closing stale bump PRs above is all the push handler
+    # needs to do for them.
+    if config.get("updater") == "submodule-only":
+        print(f"[INFO] {changed} uses submodule-only bumping, skipping ref update")
+        return
+
+    # Update workflow YAML
     repo_name = config["repo"]
-    token = systems_token if "rocm-systems" in repo_name else libraries_token
     branch = f"update-therock-{changed}-{after[:7]}"
-    clone_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
 
     with tempfile.TemporaryDirectory() as tmp:
-        run(["git", "clone", "--depth", "1", clone_url, tmp])
+        run(["git", "clone", "--depth", "1", _clone_url(repo_name, token), tmp])
         os.chdir(tmp)  # Change working directory to the cloned repo
 
         # Verify that the file exists before accessing
@@ -342,7 +411,7 @@ def handle_push(before, after, systems_token, libraries_token):
             updater(f, after)
 
         run(["git", "add"] + config["files"])
-        run(["git", "commit", "-m", f"Update TheRock ref to {after[:7]}"])
+        _git_commit(f"Update TheRock ref to {after[:7]}")
         run(["git", "push", "origin", branch])
         gh_api(
             token,
@@ -357,30 +426,34 @@ def handle_push(before, after, systems_token, libraries_token):
         )
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
     parser.add_argument(
-        "--submodule", default="all", choices=["all", "rocm-systems", "rocm-libraries"]
+        "--submodule",
+        default="all",
+        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb"],
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
+    parser.add_argument("--rocgdb_token", required=True)
     args = parser.parse_args()
 
-    run(["git", "config", "--global", "user.name", "therockbot"])
-    run(["git", "config", "--global", "user.email", "therockbot@amd.com"])
+    run(["git", "config", "--global", "user.name", BOT_NAME])
+    run(["git", "config", "--global", "user.email", BOT_EMAIL])
+
+    tokens = {
+        "systems": args.systems_token,
+        "libraries": args.libraries_token,
+        "rocgdb": args.rocgdb_token,
+    }
 
     if args.event_type == "schedule":
-        handle_schedule(args.systems_token, args.libraries_token, args.submodule)
+        handle_schedule(tokens, args.submodule)
     elif args.event_type == "push":
-        handle_push(
-            args.before,
-            args.after,
-            args.systems_token,
-            args.libraries_token,
-        )
+        handle_push(args.before, args.after, tokens)
 
 
 if __name__ == "__main__":

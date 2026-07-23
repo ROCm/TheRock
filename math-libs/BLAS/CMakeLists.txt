@@ -95,6 +95,40 @@ endif()
 
 
 ##############################################################################
+# origami
+##############################################################################
+
+therock_cmake_subproject_declare(origami
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/origami"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/origami"
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    -DHIP_PLATFORM=amd
+    -DORIGAMI_BUILD_SHARED_LIBS=ON
+    -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    # Python bindings (and their nanobind/tsl-robin-map deps) are built out of
+    # TheRock; land the C++ library only. Re-enable alongside a nanobind
+    # provider once bindings have a home (mirrors the hipDNN direction, #6425).
+    -DORIGAMI_ENABLE_PYTHON=OFF
+    -DORIGAMI_ENABLE_FETCH=OFF
+  COMPILER_TOOLCHAIN
+    amd-hip
+  BUILD_DEPS
+    rocm-cmake
+    therock-catch2
+  RUNTIME_DEPS
+    hip-clr
+)
+therock_cmake_subproject_glob_c_sources(origami
+  SUBDIRS
+    .
+)
+therock_cmake_subproject_provide_package(origami origami lib/cmake/origami)
+therock_cmake_subproject_activate(origami)
+list(APPEND _blas_subproject_names origami)
+
+
+##############################################################################
 # hipBLASLt
 ##############################################################################
 
@@ -152,6 +186,7 @@ therock_cmake_subproject_declare(hipBLASLt
     ${hipBLASLt_rocRoller_build_deps}
   RUNTIME_DEPS
     hip-clr
+    origami
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
@@ -354,12 +389,15 @@ if(THEROCK_ENABLE_SPARSE)
         amd-hip
       BUILD_DEPS
         rocm-cmake
+        hipBLAS-common
         hipSPARSE
         rocSPARSE
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
         hip-clr
+        hipBLASLt
+        origami
         therock-host-blas
         ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
