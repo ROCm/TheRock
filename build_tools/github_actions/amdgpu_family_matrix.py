@@ -467,6 +467,19 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
+    # amdgcnspirv is the architecture-independent portable SPIR-V target. It
+    # produces a SPIR-V code object that the runtime finalizes to device ISA at
+    # load time, so there is no hardware runner: this is a build-only leg,
+    # verifying the SPIR-V build path. Trigger on a PR via the `amdgcnspirv`
+    # label (see configure_multi_arch_ci.py) or on the nightly schedule.
+    "amdgcnspirv": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "amdgcnspirv",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
 }
 
 

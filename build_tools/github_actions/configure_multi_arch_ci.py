@@ -719,7 +719,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.startswith("gfx"):
+            # `amdgcnspirv` is the architecture-independent SPIR-V family; it
+            # does not use the `gfx` prefix but is still a selectable target.
+            if label.startswith("gfx") or label.startswith("amdgcnspirv"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
                 # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.

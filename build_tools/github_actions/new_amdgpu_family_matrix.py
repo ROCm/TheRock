@@ -71,6 +71,7 @@ amdgpu_family_predefined_groups = {
         "gfx1152",
         "gfx1153",
         "gfx125X-dcgpu",
+        "amdgcnspirv",
     ],
 }
 
@@ -509,6 +510,28 @@ amdgpu_family_info_matrix_all = {
                 "release": {
                     "push_on_success": False,
                     "bypass_tests_for_releases": False,
+                },
+            },
+        }
+    },
+    # amdgcnspirv is the architecture-independent portable SPIR-V target: it
+    # produces a SPIR-V code object that the runtime finalizes to device ISA at
+    # load time. There is no hardware runner, so this is a build-only leg.
+    "amdgcnspirv": {
+        "amdgcnspirv": {
+            "linux": {
+                "build": {
+                    "build_variants": ["release"],
+                },
+                "test": {
+                    # No hardware to test SPIR-V on; build-only.
+                    "run_tests": False,
+                    "runs_on": {},
+                    "fetch-gfx-targets": [],
+                },
+                "release": {
+                    "push_on_success": False,
+                    "bypass_tests_for_releases": True,
                 },
             },
         }

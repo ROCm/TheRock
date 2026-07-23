@@ -730,6 +730,33 @@ class TestSelectTargets(unittest.TestCase):
         # Should include nightly-only families
         self.assertIn("gfx906", result.linux_families)
 
+    def test_pull_request_amdgcnspirv_label_adds_family(self):
+        """PR with the `amdgcnspirv` label adds that build-only family.
+
+        amdgcnspirv does not use the `gfx` prefix, so it exercises the
+        non-gfx branch of the PR-label handling.
+        """
+        inputs_without = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        inputs_with = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # amdgcnspirv is nightly-only, not in the presubmit defaults.
+            pr_labels=["amdgcnspirv"],
+        )
+        result_without = cm.select_targets(inputs_without)
+        result_with = cm.select_targets(inputs_with)
+        self.assertNotIn("amdgcnspirv", result_without.linux_families)
+        self.assertIn("amdgcnspirv", result_with.linux_families)
+
     def test_pull_request_unknown_gfx_label_raises(self):
         """PR with an unknown gfx label fails fast."""
         inputs = cm.CIInputs(
