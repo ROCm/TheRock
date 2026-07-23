@@ -181,7 +181,8 @@ jobs:
         run: |
           # ASan-instrumented ROCm libraries require their runtime to be the
           # first entry in the process' initial library list, so it must be
-          # LD_PRELOAD'd before the interpreter starts. See TheRock#6331.
+          # LD_PRELOAD'd before the interpreter starts.
+          # See https://github.com/ROCm/TheRock/issues/6331.
           if [[ "${{ inputs.build_variant }}" == *asan* ]]; then
             asan_rt="$(amdclang++ -print-file-name=libclang_rt.asan-$(uname -m).so)"
             echo "ASAN build: preloading ASan runtime ${asan_rt}"
@@ -214,7 +215,8 @@ jobs:
         run: |
           # ASan-instrumented ROCm libraries require their runtime to be the
           # first entry in the process' initial library list, so it must be
-          # LD_PRELOAD'd before the interpreter starts. See TheRock#6331.
+          # LD_PRELOAD'd before the interpreter starts.
+          # See https://github.com/ROCm/TheRock/issues/6331.
           if [[ "${{ inputs.build_variant }}" == *asan* ]]; then
             asan_rt="$(amdclang++ -print-file-name=libclang_rt.asan-$(uname -m).so)"
             echo "ASAN build: preloading ASan runtime ${asan_rt}"
