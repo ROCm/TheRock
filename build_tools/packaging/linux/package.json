@@ -2696,18 +2696,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "flatbuffers",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "flatbuffers",
-            "Components": [
-              "run"
-            ]
-          }
-        ]
       }
     ],
 
