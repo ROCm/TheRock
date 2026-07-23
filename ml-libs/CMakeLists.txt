@@ -67,6 +67,8 @@ if(THEROCK_ENABLE_MIOPEN)
       ${optional_profiler_deps}
     TEST_SUBPROJECTS
       miopenprovider
+      hipDNN_samples
+      hipdnn_integration_tests
   )
   therock_cmake_subproject_provide_package(MIOpen miopen lib/cmake/miopen)
   therock_cmake_subproject_activate(MIOpen)
@@ -231,6 +233,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
       hipdnn_integration_tests
       MIOpen
     TEST_SUBPROJECTS
+      hipDNN_samples
   )
   therock_cmake_subproject_glob_c_sources(miopenprovider
   SUBDIRS

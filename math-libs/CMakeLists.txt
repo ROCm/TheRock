@@ -124,6 +124,7 @@ if(THEROCK_ENABLE_PRIM)
       hipCUB
       rocThrust
       rocSPARSE
+      rocSOLVER
   )
   therock_cmake_subproject_glob_c_sources(rocPRIM
     SUBDIRS
@@ -540,6 +541,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       amd-llvm
       hip-clr
     TEST_SUBPROJECTS
+      rocThrust
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
     SUBDIRS
@@ -619,6 +621,8 @@ if(_ck_enabled)
       rocRAND
       ${THEROCK_BUNDLED_BZIP2}
       ${optional_profiler_deps}
+    TEST_SUBPROJECTS
+      MIOpen
   )
   therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
 
