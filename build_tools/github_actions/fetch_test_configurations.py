@@ -64,7 +64,9 @@ _BASE_CONTAINER_OPTIONS = [
     "--security-opt seccomp=unconfined",
 ]
 
-# GPU-specific container options (only applied when linux_cpu_runner != True)
+# GPU-specific container options (only applied when the job actually needs a
+# physical GPU, i.e. not a linux_cpu_runner job and not an emulation job that
+# runs on a GPU-less node -- see _emulation_runner_info)
 # --group-add video - Grants access to GPU video group
 # --device /dev/kfd - AMD KFD device for GPU compute
 # --device /dev/dri - Direct Rendering Infrastructure devices
@@ -82,6 +84,71 @@ _GPU_CONTAINER_OPTIONS = [
     "-e ROCR_VISIBLE_DEVICES",
     "-e KUBE_CPU_REQUEST",
 ]
+
+# Emulation runner selection.
+#
+# A matrix entry is an "emulation" job when it declares an "emulator" backend.
+# Such jobs do not run on the per-family GPU runners; instead the runner node is
+# chosen purely from the emulator backend below. This keeps node selection data
+# driven: adding a new backend/node is a one-line change here and never requires
+# editing the test workflows (which just read the resolved `emulation_runner`).
+#
+#   runner:     the GitHub Actions runner label the job is dispatched to.
+#   gpu:        whether that node exposes a physical GPU. When False, the GPU
+#               container devices/groups are dropped (the node has no /dev/kfd).
+#   fetch_args: install_rocm_from_artifacts.py flags for the artifacts the
+#               backend itself needs (the mirage CLI plus any backend runtime).
+#               These are merged into each emulation job's fetch_artifact_args
+#               automatically, so matrix entries only list their own component
+#               artifacts (e.g. --rocrtst --tests).
+_EMULATOR_RUNNERS = {
+    # rocjitsu: pure ISA-level software emulation on the CPU (no GPU on node).
+    "rocjitsu": {
+        "runner": "rocjitsu-cpu",
+        "gpu": False,
+        "fetch_args": ["--mirage", "--rocjitsu"],
+    },
+    # rocjitsu-dbt: dynamic binary translation that offloads to a real GPU, so
+    # it runs on the GPU-backed emulation pool and keeps GPU container options.
+    "rocjitsu-dbt": {
+        "runner": "rocjitsu-gpu",
+        "gpu": True,
+        "fetch_args": ["--mirage", "--rocjitsu"],
+    },
+}
+
+
+def _emulation_runner_info(job_config: dict):
+    """Return the emulation runner info for a job, or None.
+
+    A job is an emulation job iff it declares an "emulator". Returns the mapping
+    ``{"runner": <label>, "gpu": <bool>, "fetch_args": [...]}`` for that backend,
+    or None for non-emulation jobs. An unknown emulator raises ValueError so a
+    typo fails fast rather than silently falling through to a GPU runner.
+    """
+    emulator = job_config.get("emulator")
+    if not emulator:
+        return None
+    try:
+        return _EMULATOR_RUNNERS[emulator]
+    except KeyError:
+        raise ValueError(
+            f"Unknown emulator '{emulator}'. Known emulators: "
+            f"{sorted(_EMULATOR_RUNNERS)}. Add it to _EMULATOR_RUNNERS."
+        )
+
+
+def _merge_fetch_args(existing: str, extra) -> str:
+    """Append ``extra`` fetch-arg flags to ``existing``, skipping duplicates.
+
+    Token-based and order-preserving so a matrix entry may still list a flag
+    explicitly without it being doubled.
+    """
+    tokens = existing.split()
+    for arg in extra:
+        if arg not in tokens:
+            tokens.append(arg)
+    return " ".join(tokens)
 
 
 def _build_container_options(job_config: dict, platform: str) -> dict:
@@ -106,8 +173,13 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     # Start with base options (always applied on Linux)
     options_parts = _BASE_CONTAINER_OPTIONS.copy()
 
-    # Add GPU-specific options unless this is a CPU-only runner
-    if not job_config.get("linux_cpu_runner", False):
+    # Add GPU-specific options unless this is a CPU-only runner or an emulation
+    # job that runs on a GPU-less node. Such nodes (e.g. rocjitsu-cpu) do not
+    # expose /dev/kfd, so requesting the GPU devices/groups would fail the
+    # container. Emulation jobs on GPU-backed nodes (e.g. rocjitsu-dbt) keep them.
+    emulation_info = _emulation_runner_info(job_config)
+    emulation_without_gpu = emulation_info is not None and not emulation_info["gpu"]
+    if not job_config.get("linux_cpu_runner", False) and not emulation_without_gpu:
         options_parts.extend(_GPU_CONTAINER_OPTIONS)
 
     # Add any job-specific container options
@@ -706,6 +778,47 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # rocrtst under the mirage + rocjitsu GPU emulator.
+    #
+    # Runs the rocrtst64 runtime test suite on top of the rocjitsu CPU
+    # GPU-emulator (driven by the mirage CLI). Declaring "emulator": "rocjitsu"
+    # routes the job to the resolved emulation node (rocjitsu-cpu), drops the GPU
+    # container options, and autofills the emulator artifacts (--mirage
+    # --rocjitsu) into fetch_artifact_args -- see _EMULATOR_RUNNERS and the
+    # workflow routing, which reads the resolved `emulation_runner` field.
+    #
+    # To add another emulated component, copy this entry, set "emulator" to the
+    # backend it exercises, point test_script at a script that wraps its binary
+    # with emulation_utils.build_mirage_run_command, and list only the component
+    # artifacts (the emulator artifacts are added automatically).
+    "rocrtst-emulation": {
+        "job_name": "rocrtst-emulation",
+        "fetch_artifact_args": "--rocrtst --tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_rocrtst_emulation.py')}",
+        "platform": ["linux"],
+        "emulator": "rocjitsu",
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    # Basic mirage + rocjitsu smoke test.
+    #
+    # Runs rocminfo on top of the rocjitsu emulator and checks the simulated GPU
+    # is visible. Declaring "emulator": "rocjitsu" routes it to the rocjitsu-cpu
+    # node and autofills the --mirage --rocjitsu artifacts (rocminfo ships with
+    # the base artifacts), so no component-specific artifacts are needed.
+    "mirage-smoke": {
+        "job_name": "mirage-smoke",
+        "fetch_artifact_args": "",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_mirage_smoke.py')}",
+        "platform": ["linux"],
+        "emulator": "rocjitsu",
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # hipTensor tests
     "hiptensor": {
         "job_name": "hiptensor",
@@ -908,7 +1021,19 @@ def run():
     is_asan_build = build_variant in ("asan", "host-asan")
     for component in all_components:
         job_name = component.get("job_name", "unknown")
-        if "multi_gpu_runner" in component:
+        emulation_info = _emulation_runner_info(component)
+        if emulation_info is not None:
+            # Emulation jobs are routed purely by their emulator backend to a
+            # dedicated pool (see _EMULATOR_RUNNERS); no per-family draw needed.
+            component["emulation_runner"] = emulation_info["runner"]
+            # Autofill the emulator's own artifact requirements (mirage CLI plus
+            # any backend runtime) so matrix entries only list their component
+            # artifacts.
+            component["fetch_artifact_args"] = _merge_fetch_args(
+                component.get("fetch_artifact_args", ""),
+                emulation_info["fetch_args"],
+            )
+        elif "multi_gpu_runner" in component:
             # Multi-GPU components use multi-GPU runner labels
             if test_runs_on_multi_gpu_labels:
                 component["multi_gpu_runner"] = select_weighted_label(
