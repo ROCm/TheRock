@@ -17,13 +17,21 @@ Tests:
     component scanner should enforce this via the extends chain).
   - Manifest validation: every archive should have artifact_manifest.txt
     as its first member.
+  - Package coverage: every artifact/component present in the fetched
+    archives should be covered by a Linux package definition in
+    build_tools/packaging/linux/package.json.
 
 Usage:
     THEROCK_ARTIFACTS_DIR=/path/to/archives \\
+        THEROCK_ARTIFACTS_PLATFORM=linux \\
         python -m pytest tests/test_artifact_structure.py -v --log-cli-level=info
 
 THEROCK_ARTIFACTS_DIR should point to a directory containing artifact archives
 (*.tar.zst or *.tar.xz) as produced by the build pipeline.
+
+THEROCK_ARTIFACTS_PLATFORM should be set to 'windows' or 'linux' for
+platform-specific tests (e.g., OCL packaging validation). Tests requiring
+this variable will skip if unset.
 """
 
 import dataclasses
@@ -310,3 +318,80 @@ class TestArtifactStructure:
             "Checked %d artifacts, no within-artifact component overlaps",
             len(artifact_names),
         )
+
+    def test_ocl_platform_exclusions(self, archive_index: list[ArchiveInfo]):
+        """Validate platform-specific OCL packaging policy.
+
+        Windows: core-ocl and core-ocl-icd must NOT be present (delivered via drivers).
+        Linux: core-ocl and core-ocl-icd must BE present (part of ROCm distribution).
+
+        Requires THEROCK_ARTIFACTS_PLATFORM environment variable (values: windows, linux).
+        """
+        platform = os.getenv("THEROCK_ARTIFACTS_PLATFORM", "").lower()
+
+        if not platform:
+            pytest.skip(
+                "THEROCK_ARTIFACTS_PLATFORM not set "
+                "(required values: windows, linux)"
+            )
+
+        if platform not in ("windows", "linux"):
+            pytest.fail(
+                f"Invalid THEROCK_ARTIFACTS_PLATFORM: {platform}, "
+                f"expected 'windows' or 'linux'"
+            )
+
+        # Extract OCL artifacts from the archive index
+        ocl_artifact_names = {"core-ocl", "core-ocl-icd"}
+        found_ocl_artifacts: dict[str, list[tuple[str, str]]] = defaultdict(list)
+
+        for info in archive_index:
+            if info.artifact_name in ocl_artifact_names:
+                found_ocl_artifacts[info.artifact_name].append(
+                    (info.component, info.filename)
+                )
+
+        # Platform-specific validation
+        if platform == "windows":
+            # Windows: OCL artifacts must NOT be present
+            if found_ocl_artifacts:
+                violations = []
+                for artifact_name in sorted(found_ocl_artifacts.keys()):
+                    for component, filename in sorted(
+                        found_ocl_artifacts[artifact_name]
+                    ):
+                        violations.append(
+                            f"  {artifact_name} [{component}] ({filename})"
+                        )
+
+                violation_summary = "\n".join(violations)
+                pytest.fail(
+                    f"Found {len(violations)} OCL artifact(s) in Windows build "
+                    f"(should be 0, OCL delivered via drivers):\n{violation_summary}"
+                )
+
+            logger.info(
+                "Checked %d archives on Windows, no OCL artifacts found (correct)",
+                len(archive_index),
+            )
+
+        else:  # platform == "linux"
+            # Linux: both core-ocl and core-ocl-icd must be present
+            found_names = set(found_ocl_artifacts.keys())
+            missing_names = ocl_artifact_names - found_names
+
+            if missing_names:
+                pytest.fail(
+                    f"Missing required OCL artifacts in Linux build:\n"
+                    f"  Expected: {', '.join(sorted(ocl_artifact_names))}\n"
+                    f"  Found: {', '.join(sorted(found_names)) if found_names else 'none'}\n"
+                    f"  Missing: {', '.join(sorted(missing_names))}"
+                )
+
+            total_components = sum(len(comps) for comps in found_ocl_artifacts.values())
+            logger.info(
+                "Checked %d archives on Linux, found %d OCL artifact(s) with %d component(s) (correct)",
+                len(archive_index),
+                len(found_names),
+                total_components,
+            )
