@@ -140,12 +140,25 @@ def _format_duration(seconds: float | None) -> str:
     return f"{secs}s"
 
 
-def _infer_platform(job_name: str, runner_label: str) -> str:
-    text = f"{job_name} {runner_label}".lower()
-    if "windows" in text or runner_label.lower().startswith("azure-"):
-        return "Windows"
-    if "linux" in text or runner_label.lower().startswith(("aws-", "github actions")):
+def _infer_platform(job_name: str, runner_name: str) -> str:
+    """Infer the logical top-level CI platform."""
+    name = job_name.lower()
+    runner = runner_name.lower()
+
+    # Primary source: top-level reusable workflow.
+    if name.startswith("linux::"):
         return "Linux"
+
+    if name.startswith("windows::"):
+        return "Windows"
+
+    # Fallback only when the workflow prefix is unavailable.
+    if "linux" in runner:
+        return "Linux"
+
+    if "windows" in runner:
+        return "Windows"
+
     return "—"
 
 
@@ -234,14 +247,15 @@ def collect_timing_records(
             started_at = job.get("started_at")
             completed_at = job.get("completed_at")
             labels = job.get("labels") or []
-            runner_label = job.get("runner_name") or (
+            runner_name = job.get("runner_name") or (
                 labels[0] if labels else "unknown"
             )
-            runner_label = str(runner_label)
-            runner_pool, runner_instance = _split_runner_label(runner_label)
+            runner_name = str(runner_name)
+
+            runner_pool, runner_instance = _split_runner_label(runner_name)
 
             status = str(job.get("conclusion") or job.get("status") or "unknown")
-            platform = _infer_platform(job_name, runner_label)
+            platform = _infer_platform(job_name, runner_name)
             workflow_phase = _infer_workflow_phase(job_name, status)
             component = _infer_component(job_name)
             job_type = _infer_job_type(job_name, status)
@@ -262,7 +276,7 @@ def collect_timing_records(
                     workflow_run_id=str(run_id),
                     run_attempt=str(run_attempt),
                     job_name=job_name,
-                    runner_label=runner_label,
+                    runner_label=runner_name,
                     runner_pool=runner_pool,
                     runner_instance=runner_instance,
                     platform=platform,
