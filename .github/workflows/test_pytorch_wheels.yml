@@ -103,7 +103,10 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
+      # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --ipc host
+        --cap-add=SYS_PTRACE
         --group-add video
         --device /dev/kfd
         --device /dev/dri
@@ -114,9 +117,17 @@ jobs:
     defaults:
       run:
         shell: bash
+    # run_pytorch_tests_full.py already sets CI, PYTORCH_TEST_WITH_ROCM,
+    # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
+    # itself, so we only set the extras the runner does not manage.
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      # Pin OpenBLAS threads to 1 for deterministic reductions; otherwise
+      # OpenBLAS defaults to the CPU core count, producing non-deterministic
+      # results in tests like test_entropy_monte_carlo.
+      OPENBLAS_NUM_THREADS: "1"
+      PYTORCH_NUM_PYTEST_RERUNS: "2"
 
     steps:
       - name: Checkout
@@ -152,6 +163,7 @@ jobs:
 
       - name: Set git options
         run: |
+          git config --global --add safe.directory $PWD
           git config --global core.longpaths true
 
       # Here we checkout the same version of PyTorch that wheels were built from
@@ -183,9 +195,32 @@ jobs:
         timeout-minutes: 15
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[libraries,${{ steps.expand.outputs.device_extras }}]" \
             --index-url=${{ inputs.package_index_url }} \
             --activate-in-future-github-actions-steps
+
+      # The quick subset does not JIT-compile C++/HIP extensions, so it only
+      # needs the ROCm runtime libraries (rocm[libraries], not rocm[devel]).
+      # We keep just the runtime paths PyTorch needs to discover and load the
+      # wheel-provided ROCm SDK; the compiler/header/cmake env vars from the
+      # full workflow are intentionally omitted (see pytorch/pytorch#188429).
+      - name: Initialize ROCm SDK and configure environment
+        run: |
+          rocm-sdk init
+
+          ROCM_HOME="$(rocm-sdk path --root)"
+          ROCM_BIN="$(rocm-sdk path --bin)"
+          ROCM_SYSDEPS="${ROCM_HOME}/lib/rocm_sysdeps"
+
+          echo "ROCM_HOME=${ROCM_HOME}"
+
+          # Add ROCm bin to PATH for all subsequent steps
+          echo "${ROCM_BIN}" >> "${GITHUB_PATH}"
+
+          # Persist the runtime discovery/link paths across workflow steps
+          echo "ROCM_PATH=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_HOME=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
 
       - name: Install test requirements
         run: |
@@ -205,13 +240,34 @@ jobs:
             --log-cli-level=INFO \
             -v
 
+      # Run the same subset of unit tests this workflow has always run, but
+      # through PyTorch's run_test.py (via run_pytorch_tests_full.py) instead of
+      # invoking pytest directly. This reuses the full test workflow's runner so
+      # behavior (skip-list integration, serial execution, GPU selection) stays
+      # consistent between the quick and full suites. The --include list is the
+      # subset previously hard-coded in run_pytorch_tests.py.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py \
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
+            --include \
+              test_nn \
+              test_torch \
+              test_cuda \
+              test_unary_ufuncs \
+              test_binary_ufuncs \
+              test_autograd \
             -- \
-            --continue-on-collection-errors \
-            --import-mode=importlib \
-            -v
+            --continue-on-collection-errors
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports-${{ inputs.amdgpu_family }}
+          path: external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 30
