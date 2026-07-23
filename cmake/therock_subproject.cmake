@@ -1742,8 +1742,8 @@ function(_therock_cmake_subproject_setup_toolchain
     # we commingle them, but they are different:
     #   "amd-llvm": Just the base LLVM compiler and device libraries. This
     #     doesn't know anything about hip (i.e. it doesn't have hipconfig, etc).
-    #   "amd-hip": Superset of "amd-llvm" which also includes hipcc, hip headers,
-    #     and hip version info. This has hipconfig in it.
+    #   "amd-hip": Superset of "amd-llvm" which also includes HIP headers and
+    #     HIP version info. Uses amdclang++ directly; does not require hipcc.
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
@@ -1813,6 +1813,9 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" --rtlib=compiler-rt --unwindlib=libgcc\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" --rtlib=compiler-rt --unwindlib=libgcc\")\n")
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()
