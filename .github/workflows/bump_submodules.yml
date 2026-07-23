@@ -28,6 +28,9 @@ on:
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout ROCm/TheRock
@@ -78,6 +81,18 @@ jobs:
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
+            --before "${{ github.event.before }}" \
+            --after "${{ github.sha }}" \
+            --systems_token "${{ steps.systems-token.outputs.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --rocgdb_token "${{ steps.systems-token.outputs.token }}"
+
+      - name: Post bump breadcrumbs to upstream PRs
+        if: github.event_name == 'push'
+        continue-on-error: true
+        run: |
+          python3 build_tools/github_actions/bump_automation.py \
+            --event_type "post_breadcrumbs" \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
