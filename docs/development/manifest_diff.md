@@ -17,13 +17,20 @@ flowchart TD
     A[multi_arch_ci.yml fires] --> B{event_name}
     B -- pull_request --> P[merge-base via Compare API<br/>→ PR head SHA]
     B -- push --> U[branch tip before push<br/>→ new branch tip]
-    P --> G[generate_manifest_diff_report.py]
+    P --> G["generate_manifest_diff_report.py<br/>--action generate"]
     U --> G
     G --> O[upload_test_report_script.py]
     O --> H[S3 + step-summary link]
+    O --> C{"pull_request &&<br/>head ref starts with 'bump-'?"}
+    C -- yes --> D["generate_manifest_diff_report.py<br/>--action post_comment"]
+    D --> E[Sticky comment on the bump PR]
 ```
 
 The sibling job is wired only for those two events because they're the ones whose payloads carry the implicit refs. A manual `workflow_dispatch` of `multi_arch_ci.yml` skips it; for ad-hoc runs, dispatch [`manifest-diff.yml`](../../.github/workflows/manifest-diff.yml) directly — it exposes the full ref input surface.
+
+### Bump-PR comment
+
+Submodule-bump PRs (`bump-{submodule}-{sha}`, created by `bump_automation.py`) get the report link posted directly as a PR comment, in addition to the step-summary link every run gets — bump-PR reviewers rarely open the CI job to see the step summary. This is the last step in `manifest-diff.yml`'s `generate-report` job: `generate_manifest_diff_report.py --action post_comment` recomputes the report's S3 URL (same formula `upload_test_report_script.py` used) and posts/updates a sticky comment (marker `<!-- therock-report-manifest-diff -->`) via `gha_update_pr_comment()`. It runs with `continue-on-error: true`, so a transient GitHub API failure here never fails the job.
 
 ### Failure behavior
 
