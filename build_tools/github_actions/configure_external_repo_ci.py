@@ -4,8 +4,8 @@
 
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
-This script determines which projects changed, whether to run/skip tests,
-and which TheRock build stages can be reused vs must be rebuilt.
+This script determines which projects changed and whether to run/skip tests.
+It consolidates logic previously duplicated across external repo workflows.
 
 Usage:
     python configure_external_repo_ci.py \
@@ -19,8 +19,6 @@ Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths
     run_all_tests: "true" if CI files changed (run full test suite)
     skip_tests: "true" if only docs/skippable files changed
-    reusable_stages: Comma-separated list of TheRock stages that can be reused
-    rebuild_stages: Comma-separated list of TheRock stages that must be rebuilt
 """
 
 import argparse
@@ -81,65 +79,6 @@ _TEST_OVERRIDE_CHANGED_PROJECTS = os.environ.get(
 )
 
 
-def compute_stage_impact(
-    external_repo_name: str,
-    modified_paths: Iterable[str],
-) -> Tuple[List[str], List[str]]:
-    """Compute which TheRock stages are affected by external repo changes.
-
-    Maps external repo paths to TheRock source sets and runs stage impact
-    analysis to determine which stages can be reused vs must be rebuilt.
-
-    Args:
-        external_repo_name: Name of external repo (e.g., "rocm-libraries")
-        modified_paths: Paths changed in the external repo
-
-    Returns:
-        Tuple of (reusable_stages, rebuild_stages)
-    """
-    try:
-        # Import stage_impact here to avoid circular imports and make it optional
-        # for environments that don't have the full TheRock build tools
-        from stage_impact import analyze_stage_impact, StageImpactRuleSet
-        from _therock_utils.build_topology import get_topology
-    except ImportError as e:
-        logger.warning(f"Stage impact analysis unavailable: {e}")
-        return ([], [])
-
-    # Map external repo paths to TheRock paths by prefixing with repo name
-    # e.g., "projects/rocprim/foo.cpp" -> "rocm-libraries/projects/rocprim/foo.cpp"
-    therock_paths = [f"{external_repo_name}/{p}" for p in modified_paths]
-
-    # For external repos, we need custom rules that don't trigger full CI
-    # for .github/ changes (since those are external repo's own CI files)
-    external_rules = StageImpactRuleSet(
-        full_ci_prefixes=(
-            # Only TheRock's own build tooling triggers full CI
-            # External repo .github/ changes don't affect TheRock stages
-            "build_tools/",
-            "scripts/",
-        ),
-        full_ci_exact_paths=(
-            "BUILD_TOPOLOGY.toml",
-            "CMakeLists.txt",
-        ),
-    )
-
-    try:
-        topology = get_topology()
-        result = analyze_stage_impact(
-            changed_inputs=therock_paths,
-            topology=topology,
-            rules=external_rules,
-        )
-
-        logger.info(f"Stage impact: rebuild={result.rebuild_stages}, copy={result.copy_stages}")
-        return (list(result.copy_stages), list(result.rebuild_stages))
-    except Exception as e:
-        logger.warning(f"Stage impact analysis failed: {e}")
-        return ([], [])
-
-
 @dataclass
 class ConfigureResult:
     """Result of CI configuration analysis."""
@@ -147,8 +86,6 @@ class ConfigureResult:
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
     skip_tests: bool
-    reusable_stages: str = ""  # Comma-separated list of stages that can be reused
-    rebuild_stages: str = ""  # Comma-separated list of stages that must be rebuilt
 
 
 @dataclass
@@ -297,37 +234,18 @@ def configure(
     base_sha: Optional[str],
     head_sha: Optional[str],
     config_path: str,
-    enable_stage_reuse: bool = False,
 ) -> ConfigureResult:
     """Main configuration logic."""
 
-    # Extract external repo name from github_repo (e.g., "ROCm/rocm-libraries" -> "rocm-libraries")
-    external_repo_name = github_repo.split("/")[-1] if "/" in github_repo else github_repo
-
-    # TEST OVERRIDE: If set, bypass path detection but still compute stage impact
+    # TEST OVERRIDE: If set, bypass all detection and return the override value
     if _TEST_OVERRIDE_CHANGED_PROJECTS:
         logger.info(
             f"TEST OVERRIDE: Using forced changed_projects='{_TEST_OVERRIDE_CHANGED_PROJECTS}'"
         )
-        # Convert override paths to fake modified paths for stage impact analysis
-        # e.g., "projects/rocprim" -> ["projects/rocprim/dummy.cpp"]
-        override_paths = [
-            f"{p.strip()}/dummy.cpp"
-            for p in _TEST_OVERRIDE_CHANGED_PROJECTS.split(",")
-            if p.strip()
-        ]
-        reusable_stages: List[str] = []
-        rebuild_stages: List[str] = []
-        if enable_stage_reuse and override_paths:
-            reusable_stages, rebuild_stages = compute_stage_impact(
-                external_repo_name, override_paths
-            )
         return ConfigureResult(
             changed_projects=_TEST_OVERRIDE_CHANGED_PROJECTS,
             run_all_tests=False,
             skip_tests=False,
-            reusable_stages=",".join(reusable_stages),
-            rebuild_stages=",".join(rebuild_stages),
         )
 
     # Schedule/workflow_dispatch events run all tests
@@ -393,20 +311,10 @@ def configure(
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
     logger.info(f"Matched projects: {matched}")
 
-    # Compute stage impact for automatic stage reuse
-    reusable_stages: List[str] = []
-    rebuild_stages: List[str] = []
-    if enable_stage_reuse:
-        reusable_stages, rebuild_stages = compute_stage_impact(
-            external_repo_name, modified_paths
-        )
-
     return ConfigureResult(
         changed_projects=",".join(matched),
         run_all_tests=False,
         skip_tests=False,
-        reusable_stages=",".join(reusable_stages),
-        rebuild_stages=",".join(rebuild_stages),
     )
 
 
@@ -442,11 +350,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=".github/repos-config.json",
         help="Path to repos-config.json",
     )
-    parser.add_argument(
-        "--enable-stage-reuse",
-        action="store_true",
-        help="Enable automatic stage reuse analysis (outputs reusable_stages, rebuild_stages)",
-    )
     return parser.parse_args(argv)
 
 
@@ -462,21 +365,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         base_sha=args.base_sha or None,
         head_sha=args.head_sha or None,
         config_path=args.config_path,
-        enable_stage_reuse=args.enable_stage_reuse,
     )
 
-    outputs = {
-        "changed_projects": result.changed_projects,
-        "run_all_tests": str(result.run_all_tests).lower(),
-        "skip_tests": str(result.skip_tests).lower(),
-    }
-
-    # Add stage reuse outputs if enabled
-    if args.enable_stage_reuse:
-        outputs["reusable_stages"] = result.reusable_stages
-        outputs["rebuild_stages"] = result.rebuild_stages
-
-    set_github_output(outputs)
+    set_github_output(
+        {
+            "changed_projects": result.changed_projects,
+            "run_all_tests": str(result.run_all_tests).lower(),
+            "skip_tests": str(result.skip_tests).lower(),
+        }
+    )
 
     return 0
 
