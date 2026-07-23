@@ -817,9 +817,7 @@ class RunCatchAndContinueTest(BuildPackageTestCase):
                 pkg_list=[LOOP_PKG_1, LOOP_PKG_2],
                 variants_side_effect=[RuntimeError("boom"), [LOOP_VARIANT_2]],
             )
-        self.assertEqual(
-            self._attempted_pkgs(mock_variants), [LOOP_PKG_1, LOOP_PKG_2]
-        )
+        self.assertEqual(self._attempted_pkgs(mock_variants), [LOOP_PKG_1, LOOP_PKG_2])
         status = self._summary_pkglist(mock_summary)
         self.assertIn(LOOP_VARIANT_2, status.built)
 
@@ -1008,9 +1006,7 @@ class RunCatchAndContinueTest(BuildPackageTestCase):
                     [LOOP_VARIANT_2],
                 ],
             )
-        self.assertEqual(
-            self._attempted_pkgs(mock_variants), [LOOP_PKG_1, LOOP_PKG_2]
-        )
+        self.assertEqual(self._attempted_pkgs(mock_variants), [LOOP_PKG_1, LOOP_PKG_2])
         status = self._summary_pkglist(mock_summary)
         self.assertEqual(status.failed, [LOOP_PKG_1])
         self.assertEqual(status.built, [LOOP_VARIANT_2])
