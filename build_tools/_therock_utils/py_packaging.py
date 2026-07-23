@@ -126,12 +126,14 @@ class Parameters:
         self.runtime_artifact_names: set[str] = set()
 
         # Load and interpolate the _dist_info.py template.
+        # All user-controlled values are wrapped in repr() to prevent injection
+        # when the file is later imported by setup.py at install time.
         # Base: version and nonce only — no family lines. Used as the starting
         # point for restrict_families packages so they can write clean family
         # content without a .clear() dance.
         dist_info_base = DIST_INFO_PATH.read_text()
-        dist_info_base += f"__version__ = '{version}'\n"
-        dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = '{version_suffix}'\n"
+        dist_info_base += f"__version__ = {repr(f'{version}{version_suffix}')}\n"
+        dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = {repr(version_suffix)}\n"
         self.dist_info_base_contents = dist_info_base
 
         # Full: base extended with all families. Used by most packages and by
@@ -150,23 +152,42 @@ class Parameters:
 
         if self.default_target_family is not None:
             dist_info_contents += (
-                f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
+                f"DEFAULT_TARGET_FAMILY = {repr(self.default_target_family)}\n"
             )
         for target_family in self.available_target_families:
             dist_info_contents += (
-                f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
+                f"AVAILABLE_TARGET_FAMILIES.append({repr(target_family)})\n"
             )
         for target_family in self.linux_target_families:
-            dist_info_contents += f"LINUX_TARGET_FAMILIES.append('{target_family}')\n"
+            dist_info_contents += (
+                f"LINUX_TARGET_FAMILIES.append({repr(target_family)})\n"
+            )
         for target_family in self.windows_target_families:
-            dist_info_contents += f"WINDOWS_TARGET_FAMILIES.append('{target_family}')\n"
+            dist_info_contents += (
+                f"WINDOWS_TARGET_FAMILIES.append({repr(target_family)})\n"
+            )
         self.dist_info_contents = dist_info_contents
 
-        # And dynamically load it so that we have access to the same config during
-        # populate as will be loaded at setup and run time.
+        # Dynamically load the dist_info module for use during populate.
+        # exec() runs only the static template file — all user-controlled values
+        # are assigned directly as attributes, eliminating code injection risk.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
-        exec(self.dist_info_contents, self.dist_info.__dict__)
+        exec(DIST_INFO_PATH.read_text(), self.dist_info.__dict__)  # static file only
+        self.dist_info.__version__ = f"{version}{version_suffix}"
+        self.dist_info.PY_PACKAGE_SUFFIX_NONCE = version_suffix
+        if kpack_split:
+            self.dist_info.ALL_PACKAGES["libraries"].dist_package_template = (
+                "rocm-sdk-libraries"
+            )
+        if self.default_target_family is not None:
+            self.dist_info.DEFAULT_TARGET_FAMILY = self.default_target_family
+        for target_family in self.available_target_families:
+            self.dist_info.AVAILABLE_TARGET_FAMILIES.append(target_family)
+        for target_family in self.linux_target_families:
+            self.dist_info.LINUX_TARGET_FAMILIES.append(target_family)
+        for target_family in self.windows_target_families:
+            self.dist_info.WINDOWS_TARGET_FAMILIES.append(target_family)
 
     def filter_artifacts(
         self,
@@ -224,9 +245,9 @@ class PopulatedDistPackage:
         # so that determine_target_family() at install time only resolves to this
         # family's packages. No .clear() needed — the base has an empty list.
         if restrict_families and target_family is not None:
-            dist_info_contents += f"DEFAULT_TARGET_FAMILY = '{target_family}'\n"
+            dist_info_contents += f"DEFAULT_TARGET_FAMILY = {repr(target_family)}\n"
             dist_info_contents += (
-                f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
+                f"AVAILABLE_TARGET_FAMILIES.append({repr(target_family)})\n"
             )
 
         # Device packages need to know the libraries package's Python package
