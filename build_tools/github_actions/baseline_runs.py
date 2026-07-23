@@ -423,14 +423,9 @@ def _find_matching_artifact_archives(
 ) -> list[str]:
     """Find artifact archives matching a requirement.
 
-    First tries an exact match with the requested target family. If not found
-    and the target is not already 'generic', falls back to checking if a
-    generic version exists. This handles artifacts like sysdeps that are only
-    built as generic but are needed by all target builds.
     """
     matches: list[str] = []
     for component in ARTIFACT_COMPONENTS:
-        found = False
         for extension in ARTIFACT_EXTENSIONS:
             filename = (
                 f"{required_artifact.name}_{component}_"
@@ -438,17 +433,7 @@ def _find_matching_artifact_archives(
             )
             if filename in available:
                 matches.append(filename)
-                found = True
                 break
-        # Fallback to generic if target-specific not found
-        if not found and required_artifact.target_family != "generic":
-            for extension in ARTIFACT_EXTENSIONS:
-                generic_filename = (
-                    f"{required_artifact.name}_{component}_generic{extension}"
-                )
-                if generic_filename in available:
-                    matches.append(generic_filename)
-                    break
     return matches
 
 

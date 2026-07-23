@@ -67,7 +67,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
 from _therock_utils.build_topology import BuildTopology, get_topology
-from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from artifact_manager import ARTIFACT_COMPONENTS
 from baseline_runs import BaselineRun, RequiredArtifact
 from github_actions_api import GitHubAPIError
@@ -133,30 +132,11 @@ def _target_families(
     linux_amdgpu_families: Sequence[str],
     windows_amdgpu_families: Sequence[str],
 ) -> tuple[str, ...]:
-    """GFX targets whose artifacts must be verified for stage reuse.
-
-    Expands family names (like 'gfx94X-dcgpu') to their constituent GFX targets
-    (like 'gfx942') since artifact archives are named with specific targets.
-    De-duplicates and always appends the generic pseudo-family.
-    """
+    """GFX targets whose artifacts must be verified for stage reuse."""
     families = list(dict.fromkeys([*linux_amdgpu_families, *windows_amdgpu_families]))
-
-    # Expand family names to actual GFX targets
-    # Artifacts are named with targets (e.g., blas_lib_gfx942.tar.zst), not families
-    try:
-        family_map = amdgpu_family_map()
-        targets = expand_families(families, family_map, strict=False)
-    except Exception as exc:
-        logger.warning(
-            "%s could not expand families to targets (%s); using family names as-is",
-            LOG_PREFIX,
-            exc,
-        )
-        targets = families
-
-    if GENERIC_FAMILY not in targets:
-        targets.append(GENERIC_FAMILY)
-    return tuple(targets)
+    if GENERIC_FAMILY not in families:
+        families.append(GENERIC_FAMILY)
+    return tuple(families)
 
 
 def _required_artifacts_for_stages(
