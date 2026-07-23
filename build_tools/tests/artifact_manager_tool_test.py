@@ -864,6 +864,38 @@ class TestFetchFindMatchingCommit(ArtifactManagerTestBase):
 
         self.assertEqual(mock_backend_factory.call_args.kwargs["run_id"], "22222")
 
+    @mock.patch("artifact_manager._get_current_commit")
+    @mock.patch("artifact_manager.find_artifacts_for_commit")
+    def test_find_matching_commit_conflicts_with_explicit_run_id(
+        self, mock_find_artifacts, mock_get_current_commit
+    ):
+        """Test that passing both --run-id and --find-matching-commit is rejected."""
+        import artifact_manager
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "12345",
+            "--find-matching-commit",
+        ]
+
+        # argparse's mutually exclusive group rejects this at parse time (exit
+        # code 2), so the commit lookup never runs.
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 2)
+        mock_get_current_commit.assert_not_called()
+        mock_find_artifacts.assert_not_called()
+
 
 class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
     """Tests that fetch command correctly handles --amdgpu-targets for split artifacts."""

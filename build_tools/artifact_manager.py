@@ -1171,10 +1171,17 @@ def _add_target_args(parser: argparse.ArgumentParser):
     )
 
 
-def _add_backend_args(parser: argparse.ArgumentParser):
-    """Add common backend-related arguments to a subparser."""
+def _add_backend_args(
+    parser: argparse.ArgumentParser,
+) -> argparse._MutuallyExclusiveGroup:
+    """Add common backend-related arguments to a subparser.
+
+    Returns the mutually exclusive group that owns --run-id so a subcommand can
+    add alternative run-id sources (e.g. fetch's --find-matching-commit) to it.
+    """
     _add_common_args(parser)
-    parser.add_argument(
+    run_id_group = parser.add_mutually_exclusive_group()
+    run_id_group.add_argument(
         "--run-id",
         type=str,
         default=os.getenv("THEROCK_RUN_ID", os.getenv("GITHUB_RUN_ID", "local")),
@@ -1199,6 +1206,7 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         default=os.getenv("THEROCK_LOCAL_STAGING_DIR"),
         help="Local staging directory (sets THEROCK_LOCAL_STAGING_DIR)",
     )
+    return run_id_group
 
 
 def main(argv: Optional[List[str]] = None):
@@ -1213,7 +1221,7 @@ def main(argv: Optional[List[str]] = None):
     fetch_parser = subparsers.add_parser(
         "fetch", help="Fetch inbound artifacts for a stage"
     )
-    _add_backend_args(fetch_parser)
+    fetch_run_id_group = _add_backend_args(fetch_parser)
     fetch_parser.add_argument(
         "--stage",
         type=str,
@@ -1221,7 +1229,9 @@ def main(argv: Optional[List[str]] = None):
         help="Build stage name (default: 'all' fetches all artifacts)",
     )
     _add_target_args(fetch_parser)
-    fetch_parser.add_argument(
+    # Mutually exclusive with --run-id (same group): --find-matching-commit
+    # resolves the run ID itself, so passing both on the command line is an error.
+    fetch_run_id_group.add_argument(
         "--find-matching-commit",
         action="store_true",
         help="Resolve --run-id automatically by finding the CI workflow run "
