@@ -496,7 +496,7 @@ def run_command(cmd: list[str], cwd=None, stdout=None):
     """
     print(f"Running: {' '.join(cmd)}")
     if stdout is not None:
-        with open(stdout, "w", encoding="utf-8") as f:
+        with open(stdout, "wb") as f:
             subprocess.run(cmd, check=True, cwd=cwd, stdout=f)
     else:
         subprocess.run(cmd, check=True, cwd=cwd)
