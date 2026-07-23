@@ -71,6 +71,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --group-add 993,992,110 - Additional GPU-related groups
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
 # -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
+# -e HIP_VISIBLE_DEVICES=0 - Restrict container to the first GPU to match host-level isolation
 _GPU_CONTAINER_OPTIONS = [
     "--group-add video",
     "--device /dev/kfd",
@@ -81,6 +82,7 @@ _GPU_CONTAINER_OPTIONS = [
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
     "-e ROCR_VISIBLE_DEVICES",
     "-e KUBE_CPU_REQUEST",
+    "-e HIP_VISIBLE_DEVICES=0",
 ]
 
 
@@ -337,7 +339,7 @@ test_matrix = {
         },
     },
     # rocgdb-cpu and rocgdb-gpu are pinned to linux-gfx942-gpu-rocm-profiler and run
-    # with 10 shards so that the full test suite executes on 10 independent runner
+    # with 4 shards so that the full test suite executes on 4 independent runner
     # instances simultaneously. test_rocgdb.py does not consume SHARD_INDEX/TOTAL_SHARDS,
     # so each runner sees the complete suite rather than a slice of it.
     "rocgdb-cpu": {
@@ -345,14 +347,14 @@ test_matrix = {
         "job_name": "rocgdb-cpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
         "test_runner": "linux-gfx942-gpu-rocm-profiler",
-        "total_shards": 10,
+        "total_shards": 4,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
         "test_runner": "linux-gfx942-gpu-rocm-profiler",
-        "total_shards": 10,
+        "total_shards": 4,
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
@@ -368,7 +370,7 @@ test_matrix = {
             " gdb.rocm/runtime-core.exp"
         ),
         "test_runner": "linux-gfx942-gpu-rocm-profiler",
-        "total_shards": 10,
+        "total_shards": 4,
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -377,7 +379,7 @@ test_matrix = {
         "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 4,
             "windows": 1,
         },
     },
