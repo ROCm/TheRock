@@ -52,6 +52,7 @@ _DEFAULT_CDASH_GROUP = "TheRock"
 _DEFAULT_CDASH_MODEL = "Continuous"
 
 # Determine host triple
+host_triple = ""
 if THEROCK_CLANG_PATH.exists():
     try:
         host_triple = subprocess.run(
