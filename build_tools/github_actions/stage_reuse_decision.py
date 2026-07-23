@@ -39,10 +39,6 @@ are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
 
 * ``STAGE_REUSE_MODE``           - ``dry-run`` (default) or ``reuse-stage``.
 * ``GITHUB_REPOSITORY``          - ``owner/repo`` (default ``ROCm/TheRock``).
-* ``STAGE_REUSE_BASELINE_REPOSITORY`` - repository to query for baseline runs
-                                   (default: uses ``GITHUB_REPOSITORY``). Set
-                                   this to ``ROCm/TheRock`` when external repos
-                                   want to reuse TheRock's prebuilt artifacts.
 * ``STAGE_REUSE_BASELINE_BRANCH``  - baseline branch to search (default ``main``).
 * ``STAGE_REUSE_BASELINE_WORKFLOW`` - baseline workflow file
                                    (default ``multi_arch_ci.yml``).
@@ -52,11 +48,6 @@ are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
                                    rule when unset.
 * ``STAGE_REUSE_COMMIT_HISTORY`` - number of branch commits to fetch for
                                    ancestry (default ``50``).
-* ``STAGE_REUSE_EXTERNAL_REBUILD_STAGES`` - comma-separated list of stages that
-                                   the external repo affects (e.g., ``math-libs``).
-                                   When set, all other stages become reuse candidates
-                                   without requiring changed-file analysis. Use this
-                                   for external repos where path analysis isn't available.
 """
 
 import enum
@@ -232,7 +223,6 @@ def plan_stage_reuse(
     changed_files: Sequence[str] | None,
     platform: str | None = None,
     topology: BuildTopology | None = None,
-    external_rebuild_stages: Sequence[str] | None = None,
 ) -> StageReusePlan:
     """Planning step: which stages are unaffected reuse candidates.
 
@@ -243,33 +233,10 @@ def plan_stage_reuse(
         changed_files: List of changed file paths for impact analysis.
         platform: Platform for filtering (linux/windows).
         topology: Build topology (loaded if not provided).
-        external_rebuild_stages: For external repos without changed_files,
-            specify which stages must rebuild. All other stages become candidates.
     """
 
     if topology is None:
         topology = get_topology()
-
-    # External repo mode: explicit rebuild stages, everything else is reusable
-    if external_rebuild_stages is not None:
-        all_stages = set(topology.build_stages.keys())
-        rebuild_set = set(external_rebuild_stages)
-        # Validate that specified stages exist
-        invalid = rebuild_set - all_stages
-        if invalid:
-            logger.warning(
-                "%s invalid external_rebuild_stages: %s (ignoring)",
-                LOG_PREFIX,
-                ", ".join(sorted(invalid)),
-            )
-            rebuild_set = rebuild_set & all_stages
-        candidate_stages = tuple(sorted(all_stages - rebuild_set))
-        return StageReusePlan(
-            candidate_stages=candidate_stages,
-            rebuild_stages=tuple(sorted(rebuild_set)),
-            full_rebuild_required=False,
-            reasons=(f"external repo rebuild stages: {', '.join(sorted(rebuild_set))}",),
-        )
 
     if changed_files is None:
         return StageReusePlan(
@@ -308,7 +275,6 @@ def compute_auto_stage_reuse(
     topology: BuildTopology | None = None,
     baseline_selector: BaselineSelector | None = None,
     baseline_selector_factory: Callable[[str], BaselineSelector] | None = None,
-    external_rebuild_stages: Sequence[str] | None = None,
 ) -> AutoStageReuse:
     """Compute auto stage-reuse decisions, verified against a baseline run.
     A stage is only reusable when it is unaffected by the change AND its
@@ -318,10 +284,6 @@ def compute_auto_stage_reuse(
     ``windows_amdgpu_families`` implies ``windows``. This guards against the
     case where a stage available only in the Linux baseline is skipped on
     Windows. The report lines are logged before returning.
-
-    For external repos where changed_files is unavailable, set
-    ``external_rebuild_stages`` to the list of stages that must rebuild
-    (e.g., ["math-libs"]). All other stages become reuse candidates.
     """
     platforms = _build_platforms(linux_amdgpu_families, windows_amdgpu_families)
     if not platforms:
@@ -337,23 +299,6 @@ def compute_auto_stage_reuse(
             )
         )
 
-    # Read external rebuild stages from env var if not provided
-    if external_rebuild_stages is None:
-        external_rebuild_stages_raw = os.environ.get(
-            "STAGE_REUSE_EXTERNAL_REBUILD_STAGES", ""
-        )
-        if external_rebuild_stages_raw.strip():
-            external_rebuild_stages = [
-                s.strip()
-                for s in external_rebuild_stages_raw.split(",")
-                if s.strip()
-            ]
-            logger.info(
-                "%s external repo mode: rebuild stages from env: %s",
-                LOG_PREFIX,
-                ", ".join(external_rebuild_stages),
-            )
-
     if topology is None:
         topology = get_topology()
 
@@ -363,13 +308,11 @@ def compute_auto_stage_reuse(
         changed_files=changed_files,
         platform=platforms[0],
         topology=topology,
-        external_rebuild_stages=external_rebuild_stages,
     )
     candidates = plan.candidate_stages
     rebuild = plan.rebuild_stages
 
-    # External repo mode with explicit rebuild stages bypasses the changed_files check
-    if changed_files is None and external_rebuild_stages is None:
+    if changed_files is None:
         return _log_and_return(
             _empty_result(
                 mode,
@@ -560,13 +503,7 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     workflow runs for prebuilt artifacts instead of the external repo's own runs.
     """
 
-    # Default to current repo, but allow override for external repos to use
-    # TheRock's baseline runs.
-    default_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
-    baseline_repository = os.environ.get("STAGE_REUSE_BASELINE_REPOSITORY", "")
-    github_repository = baseline_repository or default_repository
-    is_cross_repo = baseline_repository and baseline_repository != default_repository
-
+    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
     branch = os.environ.get("STAGE_REUSE_BASELINE_BRANCH", "main")
     workflow_name = os.environ.get("STAGE_REUSE_BASELINE_WORKFLOW", "multi_arch_ci.yml")
     current_commit_sha = os.environ.get("STAGE_REUSE_CURRENT_SHA") or None
@@ -578,49 +515,34 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     except ValueError:
         history_count = 50
 
-    # For cross-repo baseline selection (e.g., rocm-libraries using TheRock's
-    # baseline), commit compatibility checking is disabled because the baseline
-    # repo's commit history is unrelated to the current repo's commits. We rely
-    # solely on recency and artifact availability gates.
-    if is_cross_repo:
-        logger.info(
-            "%s cross-repo baseline: querying %s (current repo: %s); "
-            "commit-compatibility rule disabled.",
-            LOG_PREFIX,
-            github_repository,
-            default_repository,
-        )
-        effective_commit_sha = None
-        ordered_commit_shas = None
-    else:
-        # The commit-compatibility rule needs the branch history (newest-first) to
-        # establish ancestry. select_baseline_run only accepts a candidate whose
-        # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
-        # window every candidate resolves to `unknown` and is rejected, so reuse
-        # never activates. Fetch the real history here. If the SHA is set but the
-        # history fetch fails (or returns empty), disable the commit rule (pass both
-        # as None) rather than enabling it with an empty window -- recency and
-        # artifact availability still gate the selection.
-        ordered_commit_shas = None
-        effective_commit_sha = current_commit_sha
-        if current_commit_sha is not None:
-            try:
-                ordered_commit_shas = github_actions_api.gha_query_recent_branch_commits(
-                    github_repository_name=github_repository,
-                    branch=branch,
-                    max_count=history_count,
-                )
-            except GitHubAPIError as exc:
-                logger.warning(
-                    "%s could not fetch branch history (%s); "
-                    "skipping commit-compatibility rule.",
-                    LOG_PREFIX,
-                    exc,
-                )
-                ordered_commit_shas = None
-            if not ordered_commit_shas:
-                effective_commit_sha = None
-                ordered_commit_shas = None
+    # The commit-compatibility rule needs the branch history (newest-first) to
+    # establish ancestry. select_baseline_run only accepts a candidate whose
+    # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
+    # window every candidate resolves to `unknown` and is rejected, so reuse
+    # never activates. Fetch the real history here. If the SHA is set but the
+    # history fetch fails (or returns empty), disable the commit rule (pass both
+    # as None) rather than enabling it with an empty window -- recency and
+    # artifact availability still gate the selection.
+    ordered_commit_shas = None
+    effective_commit_sha = current_commit_sha
+    if current_commit_sha is not None:
+        try:
+            ordered_commit_shas = github_actions_api.gha_query_recent_branch_commits(
+                github_repository_name=github_repository,
+                branch=branch,
+                max_count=history_count,
+            )
+        except GitHubAPIError as exc:
+            logger.warning(
+                "%s could not fetch branch history (%s); "
+                "skipping commit-compatibility rule.",
+                LOG_PREFIX,
+                exc,
+            )
+            ordered_commit_shas = None
+        if not ordered_commit_shas:
+            effective_commit_sha = None
+            ordered_commit_shas = None
 
     # A functools.partial binds the resolved configuration to
     # select_baseline_run; the only free argument is required_artifacts, which
