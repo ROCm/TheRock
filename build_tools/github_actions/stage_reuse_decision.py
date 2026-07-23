@@ -664,26 +664,48 @@ def _format_stage_list(stages: Sequence[str]) -> str:
 
 def render_step_summary(result: AutoStageReuse) -> str:
     """Render a GitHub step-summary markdown block for the analysis."""
-    baseline = f"`{result.baseline_run_id}`" if result.baseline_run_id else "_none_"
+    baseline = (
+        f"`{result.baseline_run_id}`"
+        if result.baseline_run_id
+        else "_none_"
+    )
     candidates = _format_stage_list(result.candidate_stages)
+    rebuild = _format_stage_list(result.rebuild_stages)
     available = _format_stage_list(result.available_stages)
     applied = _format_stage_list(result.applied_reuse_stages)
 
     out = ["### Stage reuse analysis", ""]
+
     out.append(f"- mode: `{result.mode.value}`")
-    out.append(f"- full rebuild required: `{result.full_rebuild_required}`")
+    out.append(
+        "- conservative full-CI fallback triggered: "
+        f"`{result.full_rebuild_required}`"
+    )
+
+    if result.full_rebuild_required:
+        build_scope = "all stages — conservative fallback"
+    elif result.candidate_stages:
+        build_scope = "partial rebuild"
+    else:
+        build_scope = "all stages — all stages impacted"
+
+    out.append(f"- effective build scope: `{build_scope}`")
+    out.append(f"- rebuild stages: {rebuild}")
     out.append(f"- baseline run checked: {baseline}")
     out.append(f"- unaffected candidates: {candidates}")
     out.append(f"- available in baseline: {available}")
     out.append(f"- applied: {applied}")
+
     if result.platform_available:
         out.append("- available per platform:")
         for platform, stages in result.platform_available.items():
             out.append(f"  - {platform}: {_format_stage_list(stages)}")
+
     if result.reasons:
         out.append("- reasons:")
         for reason in result.reasons:
             out.append(f"  - {reason}")
+
     if result.mode is StageReuseMode.DRY_RUN and result.available_stages:
         out.append("")
         out.append(
@@ -691,6 +713,7 @@ def render_step_summary(result: AutoStageReuse) -> str:
             "verified against the baseline run above. Set "
             "`STAGE_REUSE_MODE=reuse-stage` after review to enable skipping."
         )
+
     return "\n".join(out)
 
 
