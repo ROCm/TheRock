@@ -758,6 +758,16 @@ def select_baseline_run(
     )
     excluded = {str(run_id) for run_id in exclude_run_ids}
 
+    # Debug: show what we're looking for
+    print(f"[BASELINE] Searching {github_repository} branch={branch} workflow={workflow_name}")
+    print(f"[BASELINE] Required artifacts: {len(requirements)} items")
+    # Show sample of required artifacts
+    sample = list(requirements)[:5]
+    for req in sample:
+        print(f"[BASELINE]   - {req.name} / {req.target_family}")
+    if len(requirements) > 5:
+        print(f"[BASELINE]   ... and {len(requirements) - 5} more")
+
     check_commit = current_commit_sha is not None
     if check_commit:
         if not current_commit_sha.strip():
@@ -834,6 +844,10 @@ def select_baseline_run(
             required_name_substrings=required_jobs,
         )
         if not job_health.is_valid:
+            print(
+                f"[BASELINE] Skipping run {run_id}: required build jobs not healthy "
+                f"(failed={job_health.failed_job_names}, missing={job_health.missing_name_substrings})"
+            )
             logger.info(
                 "Skipping run %s: required build jobs not healthy "
                 "(failed=%s, missing=%s)",
@@ -849,12 +863,20 @@ def select_baseline_run(
             required_artifacts=requirements,
         )
         if not availability.is_valid:
+            # Show first few missing artifacts to avoid log spam
+            missing_sample = availability.missing_artifacts[:5]
+            print(
+                f"[BASELINE] Skipping run {run_id}: missing {len(availability.missing_artifacts)} artifacts, "
+                f"first few: {missing_sample}"
+            )
             logger.info(
                 "Skipping run %s: missing artifacts %s",
                 run_id,
                 availability.missing_artifacts,
             )
             continue
+
+        print(f"[BASELINE] Found valid baseline run {run_id} for platform {platform}")
 
         source_ref = create_workflow_run_summary(
             workflow_run,
