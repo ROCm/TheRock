@@ -294,8 +294,8 @@ ______________________________________________________________________
 When a review concludes `APPROVED`, the skill appends this block to the drafted approval comment
 (never to `CHANGES REQUESTED` / `REJECTED`, and never to a PR description). The human posts it; the
 skill never posts on its own. The `<!-- rocm-pr-quality:attestation v1 -->` marker is what a
-consumer (e.g. a pre-review gate) keys on, and the digest binds the attestation to the exact diff
-so a stale or copied block can be detected.
+consumer (e.g. a pre-review gate) keys on, and the full head SHA binds the attestation to the exact
+tree so a stale or copied block can be detected.
 
 Block (leaned-into default):
 
@@ -306,26 +306,16 @@ Block (leaned-into default):
 > - Action: `review` - Result: **APPROVED** (`<n>` BLOCKING; `<n>` IMPORTANT)
 > - Risk: `<1-5>`
 > - Commit: `<full 40-char head SHA>`
-> - Diff digest: `<8-hex>`
 >
-> <sub>Machine-checkable attestation. The digest binds this review to the exact file set at the
-> commit above; pushing new commits invalidates it, at which point the skill should be re-run.</sub>
+> <sub>Machine-checkable attestation. The head SHA binds this review to the exact tree; pushing new
+> commits invalidates it, at which point the skill should be re-run.</sub>
 ```
+
+The full head SHA is `gh pr view --json headRefOid -q .headRefOid` (or `git rev-parse HEAD`). A
+consumer confirms an attestation by comparing this SHA to the PR's current head.
 
 One-line paste fallback (same marker, for when an approval was already posted without a block):
 
 ```text
-<!-- rocm-pr-quality:attestation v1 --> rocm-pr-quality review APPROVED - commit <full-sha> - digest <8-hex>
+<!-- rocm-pr-quality:attestation v1 --> rocm-pr-quality review APPROVED - commit <full-sha>
 ```
-
-### Digest algorithm (pinned, so a consumer can recompute)
-
-- **head SHA:** the full 40-char PR head SHA — `gh pr view --json headRefOid -q .headRefOid` (or
-  `git rev-parse HEAD`).
-- **files:** the PR's changed-file paths (`gh pr diff --name-only`) as POSIX paths, sorted by
-  Unicode code point (Python `sorted()`; equivalently `LC_ALL=C sort`, since UTF-8 byte order
-  matches code-point order).
-- **payload:** the head SHA followed by the sorted paths, joined by a single `\n` with no trailing
-  newline (so an empty file list yields just the head SHA):
-  `payload = "\n".join([head_sha, *sorted_files])`.
-- **digest:** `sha256(payload.encode("utf-8")).hexdigest()[:8]`.
