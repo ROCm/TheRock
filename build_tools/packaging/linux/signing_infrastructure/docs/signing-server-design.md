@@ -69,52 +69,140 @@ DEB package files themselves are not signed — the repository metadata signatur
 
 ## 3. Architecture
 
-### 3.1 Component Diagram
+### 3.1 Component Diagram — AWS Microservice View
+
+The signing service is a self-contained AWS microservice. The diagram below shows all internal and external interfaces, AWS service dependencies, and the network trust boundary.
 
 ```
-  TheRock CI Build Runner              Authorized Operator
-  (Self-hosted EC2, build-runner SG)   (Workstation via VPN)
-         │                                      │
-         │  HTTP POST /sign                     │  HTTP POST /sign
-         │  (private IP, port 443)              │  (via VPN to private IP)
-         │                                      │
-         └──────────────────┬───────────────────┘
-                            │
-                ┌───────────▼────────────┐
-                │    Security Group      │  ← Only build-runner SG
-                │    Enforcement (VPC)   │    and operator VPN range
-                └───────────┬────────────┘    allowed on port 443
-                            │
-                ┌───────────▼────────────────────────────────┐
-                │  Signing Server  (private subnet, no egress)│
-                │                                            │
-                │  signing-server.py                         │
-                │  ┌──────────────┐  ┌─────────────────────┐│
-                │  │  auth.py     │  │  GPG keyring (tmpfs) ││
-                │  │  app-layer   │  │  Key: Secrets Mgr    ││
-                │  │  token check │  │  at startup          ││
-                │  └──────────────┘  └─────────────────────┘│
-                │                                            │
-                │  POST /sign → gpg --detach-sign → response │
-                │  Audit log → CloudWatch Logs (VPC endpoint)│
-                └────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  EXTERNAL — Outside the signing service boundary                             ║
+║                                                                              ║
+║   ┌─────────────────────────────┐    ┌──────────────────────────────────┐   ║
+║   │  TheRock CI Build Runner    │    │  Authorized Operator             │   ║
+║   │  (Self-hosted EC2)          │    │  (Corporate workstation + VPN)   │   ║
+║   │                             │    │                                  │   ║
+║   │  Clients:                   │    │  Client:                         │   ║
+║   │  • gpgshim (RPM signing)    │    │  • sign-file CLI                 │   ║
+║   │  • upload_package_repo.py   │    │    (manual / one-off)            │   ║
+║   │    (metadata signing)       │    │                                  │   ║
+║   │                             │    │                                  │   ║
+║   │  IAM Role: build-runner     │    │  IAM Role: operator (assumed)    │   ║
+║   └──────────────┬──────────────┘    └───────────────┬──────────────────┘   ║
+║                  │                                   │                      ║
+║                  │  [EXT-1] HTTPS POST /sign         │  [EXT-2] HTTPS POST  ║
+║                  │  TLS 1.2+, port 443               │  /sign, port 443     ║
+║                  │  payload: {tier, artifact, data}  │  via VPN tunnel      ║
+╚══════════════════│═══════════════════════════════════│══════════════════════╝
+                   │                                   │
+╔══════════════════│═══════════════════════════════════│══════════════════════╗
+║  AWS VPC — Trust boundary enforced by Security Groups                       ║
+║                  │                                   │                      ║
+║                  └──────────────┬────────────────────┘                      ║
+║                                 │                                           ║
+║              ┌──────────────────▼──────────────────────┐                   ║
+║              │  sg-signing-server (Security Group)      │                   ║
+║              │  Inbound: TCP 443 from sg-build-runner   │                   ║
+║              │           TCP 443 from operator VPN CIDR │                   ║
+║              │  Outbound: TCP 443 to VPC endpoints only │                   ║
+║              │  No SSH. No internet. No NAT.            │                   ║
+║              └──────────────────┬──────────────────────┘                   ║
+║                                 │                                           ║
+║  ┌──────────────────────────────▼──────────────────────────────────────┐   ║
+║  │  SIGNING SERVER EC2  (private subnet, no internet gateway)           │   ║
+║  │                                                                      │   ║
+║  │  ┌────────────────────────────────────────────────────────────────┐ │   ║
+║  │  │  signing-server.py  (Python HTTPS, port 443, TLS 1.2+)        │ │   ║
+║  │  │                                                                │ │   ║
+║  │  │  Endpoints:                                                    │ │   ║
+║  │  │    GET  /health  → 200 OK when keyring loaded                  │ │   ║
+║  │  │    POST /sign    → GPG sign data, return signature             │ │   ║
+║  │  │    POST /sign-rpm→ Accept full RPM, sign, return (Phase 2)     │ │   ║
+║  │  │                                                                │ │   ║
+║  │  │  Internal modules:                                             │ │   ║
+║  │  │  ┌──────────────────┐   ┌────────────────────────────────┐   │ │   ║
+║  │  │  │  auth.py          │   │  GPG Keyring (tmpfs)           │   │ │   ║
+║  │  │  │  • Rate limiting  │   │  /var/gpg-keyring              │   │ │   ║
+║  │  │  │  • Token check    │   │  RAM only — never on EBS       │   │ │   ║
+║  │  │  │    (Phase 2)      │   │  Loaded at startup from SM     │   │ │   ║
+║  │  │  └──────────────────┘   └────────────────────────────────┘   │ │   ║
+║  │  │                                                                │ │   ║
+║  │  │  authorization.json (config):                                  │ │   ║
+║  │  │    key_aliases:      tier → GPG key email                      │ │   ║
+║  │  │    artifact_profiles: artifact → armor/clearsign/algo          │ │   ║
+║  │  │    roles:            rate limits per caller type               │ │   ║
+║  │  └────────────────────────────────────────────────────────────────┘ │   ║
+║  │                                                                      │   ║
+║  │  IAM Role: role-signing-server                                       │   ║
+║  │  (Decrypt from SM only — no S3, no EC2, no internet)                │   ║
+║  └──────────────────────────────────────────────────────────────────────┘   ║
+║                    │                    │                    │               ║
+║        [INT-1]     │        [INT-2]     │        [INT-3]     │               ║
+║   secretsmanager   │   kms:Decrypt      │   logs:PutLogEvents│               ║
+║   :GetSecretValue  │   (via SM, auto)   │                    │               ║
+║   (startup only)   │   (startup only)   │   (every request)  │               ║
+║                    │                    │                    │               ║
+║  ┌─────────────────▼──┐  ┌─────────────▼──────┐  ┌─────────▼────────────┐  ║
+║  │  AWS Secrets Manager│  │  AWS KMS            │  │  AWS CloudWatch Logs │  ║
+║  │                    │  │                     │  │                      │  ║
+║  │  signing/gpg/dev   │  │  CMK:               │  │  /amd/signing-server │  ║
+║  │  signing/gpg/nightly│  │  alias/amd-signing- │  │  /audit              │  ║
+║  │  signing/gpg/release│  │  gpg-key            │  │                      │  ║
+║  │                    │  │  (encrypts SM data   │  │  Structured JSON     │  ║
+║  │  Encrypted with CMK│  │   key at rest)       │  │  per signing request │  ║
+║  │  Plaintext never   │  │                     │  │  90-day retention    │  ║
+║  │  stored on disk    │  │  kms:Decrypt only    │  │                      │  ║
+║  └────────────────────┘  │  for role-signing-  │  └──────────────────────┘  ║
+║                           │  server             │                            ║
+║                           └─────────────────────┘                            ║
+║                                                                              ║
+║  All AWS service traffic routes via VPC Interface Endpoints (PrivateLink).  ║
+║  No NAT gateway. No internet gateway. Traffic never leaves the AWS network. ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Phase 2 extends this with:**
+---
+
+### 3.1a Interface Summary
+
+| ID | Interface | Type | Direction | Protocol | Authenticated by |
+|----|-----------|------|-----------|----------|-----------------|
+| EXT-1 | Build runner → Signing server | **External inbound** | Inbound | HTTPS/TLS 1.2+ POST | VPC Security Group (sg-build-runner membership) |
+| EXT-2 | Operator → Signing server | **External inbound** | Inbound | HTTPS/TLS 1.2+ POST | VPC Security Group (operator VPN CIDR) |
+| INT-1 | Signing server → Secrets Manager | **Internal outbound** | Outbound | HTTPS via VPC endpoint | IAM role (`secretsmanager:GetSecretValue`) |
+| INT-2 | Signing server → KMS | **Internal outbound** | Outbound | HTTPS via VPC endpoint | IAM role (`kms:Decrypt`, invoked by SM) |
+| INT-3 | Signing server → CloudWatch Logs | **Internal outbound** | Outbound | HTTPS via VPC endpoint | IAM role (`logs:PutLogEvents`) |
+
+**No external outbound interfaces.** The signing server has no internet egress, no public IP, and no access to S3, GitHub, or any service outside the VPC endpoints listed above.
+
+---
+
+### 3.1b Phase 2 Extension — HA with ALB
+
 ```
-         Build Runner                    Operator
-              │                             │
-              └──────────┬──────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │   Internal ALB      │  ← Routes to primary, fails
-              │   (health checks)   │    over to secondary
-              └──────┬──────┬───────┘
-                     │      │
-              Primary │      │ Secondary
-              Server  │      │ Server
-                     ▼      ▼
-              (scheduled key sync from Secrets Manager)
+╔══════════════════════════════════════════════════════════╗
+║  Phase 2 adds an internal ALB in front of two instances  ║
+║                                                          ║
+║  Build Runner / Operator                                 ║
+║         │  HTTPS POST /sign                              ║
+║         ▼                                               ║
+║  ┌──────────────────────────────────┐                   ║
+║  │  Internal ALB (not internet-facing)│                  ║
+║  │  ACM certificate (internal DNS)  │                   ║
+║  │  Health check: GET /health        │                   ║
+║  └───────────┬──────────────┬───────┘                   ║
+║              │              │                            ║
+║    ┌─────────▼────┐  ┌──────▼──────────┐               ║
+║    │  Primary EC2 │  │  Secondary EC2  │               ║
+║    │  AZ-1        │  │  AZ-2           │               ║
+║    │              │  │                 │               ║
+║    │  Same config │  │  Same config    │               ║
+║    │  Same SM keys│  │  Same SM keys   │               ║
+║    └──────────────┘  └─────────────────┘               ║
+║                                                          ║
+║  Each instance independently fetches keys from SM        ║
+║  on startup and every 6 hours (scheduled sync).         ║
+║  No server-to-server communication.                      ║
+╚══════════════════════════════════════════════════════════╝
 ```
 
 ### 3.2 Request Flow — RPM Package Signing
