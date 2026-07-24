@@ -54,14 +54,13 @@ CAN_MUTATE_PR = _env_flag("MUTATE_PR")
 
 # Only these policy checks trigger the "Not ready to Review" label when they
 # fail. Per current policy, the label is added ONLY for:
-#   • Unit Test failures, and
 #   • the JIRA/ISSUE ID reference part of the description (detected separately
 #     in main() via `jira_issue_failed`).
+# The Unit Test check is now WARNING-ONLY: it never blocks the workflow and
+# never adds the label — it just shows a ⚠️ Warning row with details.
 # All other failures (Branch Name, title format, description length/checklist,
-# Forbidden Files, PR Size, pre-commit, …) do NOT add the label.
-LABEL_TRIGGER_CHECKS = {
-    "Unit Test",
-}
+# Forbidden Files, pre-commit, …) do NOT add the label either.
+LABEL_TRIGGER_CHECKS: Set[str] = set()
 
 # Fixed display order for rows in the results table (by check name). Any row
 # whose name is not listed here is appended after these, in its original order.
@@ -93,6 +92,7 @@ class CheckResult:
     pending: bool = False
     wip: bool = False
     tbe: bool = False
+    warn: bool = False
     note: Optional[str] = None
 
 
@@ -697,7 +697,9 @@ def build_policy_table_comment(
         heading = "### ❌ PR Check — Action Required"
     rows = []
     for r in results:
-        if r.wip:
+        if r.warn:
+            status = "⚠️ Warning"
+        elif r.wip:
             status = "🚧 WIP"
         elif r.tbe:
             status = "🔜 To Be Enabled"
@@ -707,12 +709,22 @@ def build_policy_table_comment(
             status = "✅ Pass"
         else:
             status = "❌ Fail"
-        if r.passed and r.note:
+
+        if r.warn and r.details:
+            # Warning rows still show their details (what is wrong) even though
+            # they do NOT fail the workflow.
+            blocks: List[str] = []
+            for part in r.details:
+                lines = [ln.strip() for ln in part.splitlines() if ln.strip()]
+                if lines:
+                    blocks.append("<br>".join(lines))
+            detail = "<br>───<br>".join(blocks).replace("|", "&#124;")
+        elif r.passed and r.note:
             detail = r.note
         elif r.passed or r.wip or r.tbe or not r.details:
             detail = "—"
         else:
-            blocks: List[str] = []
+            blocks = []
             for part in r.details:
                 lines = [ln.strip() for ln in part.splitlines() if ln.strip()]
                 if lines:
@@ -725,15 +737,17 @@ def build_policy_table_comment(
         rows.append(f"| {r.icon} **{r.name}** | {status} | {detail} |")
 
     table = "| Check | Status | Details |\n" "|---|:---:|---|\n" + "\n".join(rows)
-    # WIP and TBE rows are neither pass nor fail — exclude from both counts.
+    # WIP, TBE and Warning rows are neither pass nor fail — exclude from counts.
     failing_count = sum(
-        1 for r in results if not r.passed and not r.pending and not r.wip and not r.tbe
+        1
+        for r in results
+        if not r.passed and not r.pending and not r.wip and not r.tbe and not r.warn
     )
     if not all_passed:
         failing_names = [
             r.name
             for r in results
-            if not r.passed and not r.pending and not r.wip and not r.tbe
+            if not r.passed and not r.pending and not r.wip and not r.tbe and not r.warn
         ]
         failing_list = "\n".join(f"> - ❌ {n}" for n in failing_names)
         footer = (
@@ -1062,15 +1076,37 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     check_errors = []
     ensure_no_forbidden_files(policy, pr_files, check_errors)
-    results.append(CheckResult("Forbidden Files", "⛔", not check_errors, check_errors))
+    # Forbidden Files is WARNING-ONLY: always passed=True so it never turns the
+    # workflow red or adds a label; when a forbidden file is present we surface
+    # a ⚠️ Warning row (with details) instead of failing the check.
+    results.append(
+        CheckResult(
+            "Forbidden Files",
+            "⛔",
+            passed=True,
+            details=check_errors,
+            warn=bool(check_errors),
+        )
+    )
 
     check_errors = []
     ensure_unit_tests(policy, pr_files, check_errors)
     ut_note = None
+    ut_warn = bool(check_errors)
     if not check_errors and not pr_has_code_files(policy, pr_files):
         ut_note = "PR does not contain code files — Unit Test auto-passed"
+    # Unit Test is WARNING-ONLY: always passed=True so it never turns the
+    # workflow red or adds a label; when a test is missing we surface a ⚠️
+    # Warning row (with details) instead of failing the check.
     results.append(
-        CheckResult("Unit Test", "🧪", not check_errors, check_errors, note=ut_note)
+        CheckResult(
+            "Unit Test",
+            "🧪",
+            passed=True,
+            details=check_errors,
+            warn=ut_warn,
+            note=ut_note,
+        )
     )
 
     # "Enabled soon" placeholders — logic to be implemented later.
@@ -1081,7 +1117,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Build the policy table; on failure we ALSO append the current
     # pre-commit / CodeQL rows so the table is always complete.
-    errors = [d for r in results for d in r.details]
+    # NOTE: warning-only rows (e.g. Unit Test) are excluded from the blocking
+    # `errors` — they show a ⚠️ Warning but never fail the workflow.
+    errors = [d for r in results for d in r.details if not r.warn]
     marker = "<!-- therock-pr-bot-policy-check -->"
 
     if errors:
