@@ -205,6 +205,7 @@ def install_packages_into_venv(
     use_uv: bool = False,
     index_url: str | None = None,
     index_name: str | None = None,
+    extra_index_url: str | None = None,
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
@@ -219,6 +220,9 @@ def install_packages_into_venv(
         use_uv: True to use 'uv', uses 'pip' otherwise
         index_url: URL for '--index-url' command argument
         index_name: Shorthand for an index_url (e.g. 'nightly')
+        extra_index_url: URL for an additional '--extra-index-url' argument,
+            used to resolve dependencies (e.g. a released ROCm index) that are
+            not published to the primary index_url
         find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
@@ -247,6 +251,9 @@ def install_packages_into_venv(
         pip_install_cmd.append("--no-build-isolation")
     elif index_url:
         pip_install_cmd.append(f"--index-url={index_url}")
+
+    if extra_index_url:
+        pip_install_cmd.append(f"--extra-index-url={extra_index_url}")
 
     if find_links:
         pip_install_cmd.append(f"--find-links={find_links}")
@@ -294,6 +301,7 @@ def run(args: argparse.Namespace):
             use_uv=use_uv,
             index_url=args.index_url,
             index_name=args.index_name,
+            extra_index_url=args.extra_index_url,
             find_links=args.find_links,
             pre=args.pre,
             disable_cache=args.disable_cache,
@@ -380,6 +388,12 @@ def main(argv: list[str]):
         type=str,
         choices=["stable", "prerelease", "nightly", "dev"],
         help="Shorthand for a named index",
+    )
+    install_options.add_argument(
+        "--extra-index-url",
+        type=str,
+        help="Additional package index URL for pip --extra-index-url, used to "
+        "resolve deps (e.g. a released ROCm index) not on the primary index",
     )
     install_options.add_argument(
         "--find-links",

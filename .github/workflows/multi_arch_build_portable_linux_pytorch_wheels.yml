@@ -546,6 +546,9 @@ jobs:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
       package_index_url: ${{ needs.build_pytorch_wheels.outputs.package_index_url }}
+      # Resolve ROCm runtime deps (e.g. a released ROCm not on the torch index)
+      # from the same index the wheels were built against.
+      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
       # TODO(#5110): pass manifest_url here and let test_pytorch_wheels.yml use
@@ -574,21 +577,8 @@ jobs:
     permissions:
       actions: write
       contents: read
-    env:
-      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
     steps:
-      - name: Check full test cadence
-        id: cadence
-        # Release branches test daily; the nightly branch tests weekly (Sunday).
-        run: |
-          if [ "${PYTORCH_GIT_REF}" != "nightly" ] || [ "$(date -u +%u)" = "7" ]; then
-            echo "dispatch=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "dispatch=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Dispatch full PyTorch test workflow
-        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_pytorch_wheels_full.yml
@@ -597,6 +587,7 @@ jobs:
               "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
               "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
               "package_index_url": "${{ needs.build_pytorch_wheels.outputs.package_index_url }}",
+              "rocm_package_index_url": "${{ inputs.rocm_package_index_url }}",
               "python_version": "${{ inputs.python_version }}",
               "torch_version": "${{ needs.build_pytorch_wheels.outputs.torch_version }}",
               "pytorch_git_ref": "${{ inputs.pytorch_git_ref }}",
