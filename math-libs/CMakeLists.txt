@@ -534,13 +534,11 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
-      hipcc
     BUILD_DEPS
       rocm-cmake
     RUNTIME_DEPS
       amd-llvm
       hip-clr
-      hipcc
     TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Unit tests for publish_pytorch_to_release_bucket.py."""
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Unit tests for publish_jax_to_release_bucket.py."""
 
 import os
 import sys
@@ -10,10 +13,10 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
-from github_actions.publish_pytorch_to_release_bucket import main
+from github_actions.publish_jax_to_release_bucket import main
 
 
-class TestPublishPytorchToReleaseBucket(unittest.TestCase):
+class TestPublishJaxToReleaseBucket(unittest.TestCase):
     """Tests for the main() CLI entry point."""
 
     def setUp(self):
@@ -25,8 +28,15 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
+    def _touch(self, name: str) -> None:
+        (self.source_dir / name).write_bytes(b"")
+
+    # -----------------------------------------------------------------------
+    # Flat publishing (default)
+    # -----------------------------------------------------------------------
+
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
-    @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
+    @mock.patch("github_actions.publish_jax_to_release_bucket.gha_set_output")
     def test_dev_uploads_to_v4_whl_in_dev_python(self, mock_set_output, mock_upload):
         mock_upload.return_value = 3
         main(
@@ -40,12 +50,11 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         )
 
         self.assertEqual(mock_upload.call_count, 1)
-        call_args = mock_upload.call_args
-        source, dest = call_args.args
+        source, dest = mock_upload.call_args.args
         self.assertEqual(source, self.source_dir)
         self.assertEqual(dest.bucket, "therock-dev-python")
         self.assertEqual(dest.relative_path, "v4/whl")
-        self.assertEqual(call_args.kwargs.get("include"), ["*.whl"])
+        self.assertEqual(mock_upload.call_args.kwargs.get("include"), ["*.whl"])
         mock_set_output.assert_called_once_with(
             {"package_index_url": "https://rocm.devreleases.amd.com/whl-multi-arch/"}
         )
@@ -126,16 +135,15 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
     # Structured product-local publishing (--structured)
     # -----------------------------------------------------------------------
 
-    def _touch(self, name: str) -> None:
-        (self.source_dir / name).write_bytes(b"")
-
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
-    @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
+    @mock.patch("github_actions.publish_jax_to_release_bucket.gha_set_output")
     def test_structured_places_wheels_in_package_dirs(
         self, mock_set_output, mock_upload_files
     ):
-        self._touch("torch-2.10.0-cp312-cp312-linux_x86_64.whl")
-        self._touch("amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl")
+        self._touch("jax-0.4.35-py3-none-any.whl")
+        # Dist name escapes to underscores (PEP 427); the package directory
+        # is the canonical dashed form.
+        self._touch("jax_rocm7_plugin-0.4.35-cp312-cp312-linux_x86_64.whl")
         # Non-wheel artifacts must be ignored by the planner.
         self._touch("index.html")
         mock_upload_files.return_value = 2
@@ -155,13 +163,13 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         dest_by_name = {source.name: dest.relative_path for source, dest in uploads}
         self.assertNotIn("index.html", dest_by_name)
         self.assertEqual(
-            dest_by_name["torch-2.10.0-cp312-cp312-linux_x86_64.whl"],
-            "v5/rocm/pytorch/whl/torch/torch-2.10.0-cp312-cp312-linux_x86_64.whl",
+            dest_by_name["jax-0.4.35-py3-none-any.whl"],
+            "v5/rocm/jax/whl/jax/jax-0.4.35-py3-none-any.whl",
         )
         self.assertEqual(
-            dest_by_name["amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl"],
-            "v5/rocm/pytorch/whl/amd-torch-device-gfx942/"
-            "amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl",
+            dest_by_name["jax_rocm7_plugin-0.4.35-cp312-cp312-linux_x86_64.whl"],
+            "v5/rocm/jax/whl/jax-rocm7-plugin/"
+            "jax_rocm7_plugin-0.4.35-cp312-cp312-linux_x86_64.whl",
         )
         for _source, dest in uploads:
             self.assertEqual(dest.bucket, "therock-dev-python")
@@ -172,7 +180,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
     def test_structured_whl_next(self, mock_upload_files):
-        self._touch("torch-2.10.0-cp312-cp312-linux_x86_64.whl")
+        self._touch("jaxlib-0.4.35-cp312-cp312-linux_x86_64.whl")
         mock_upload_files.return_value = 1
         main(
             [
@@ -191,8 +199,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         _source, dest = uploads[0]
         self.assertEqual(
             dest.relative_path,
-            "v5/rocm/pytorch/whl-next/torch/"
-            "torch-2.10.0-cp312-cp312-linux_x86_64.whl",
+            "v5/rocm/jax/whl-next/jaxlib/jaxlib-0.4.35-cp312-cp312-linux_x86_64.whl",
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")

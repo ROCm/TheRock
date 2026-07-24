@@ -494,6 +494,7 @@ endif()
 # don't be fooled).
 add_subdirectory(third-party/sysdeps)
 add_subdirectory(base)
+add_subdirectory(third-party/googletest)
 add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)

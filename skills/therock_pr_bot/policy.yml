@@ -120,9 +120,22 @@ pr:
       - .rs
     # A changed file is treated as a unit test if its basename matches one of
     # these glob patterns (e.g. test_parser.py, parser_test.cpp, testing_x.py).
-    # Patterns that contain a '/' are matched against the FULL path instead of
-    # the basename, so entire test directories can be recognised
-    # (e.g. anything under a 'test/gtest/' folder).
+    #
+    # TWO matching modes are supported:
+    #   1. BASENAME patterns (no '/' in the pattern): matched against the
+    #      filename only, regardless of where it lives in the repo.
+    #      e.g. 'test_*' matches 'tests/unit/test_foo.cpp'
+    #
+    #   2. PATH patterns (pattern contains '/'): matched against the full
+    #      file path from the repo root. Use these when tests live in a
+    #      dedicated directory but don't follow a special naming convention.
+    #      e.g. 'projects/hip-tests/**' matches any file under that directory,
+    #      including files named after the API they test (atomicAdd.cc, etc.).
+    #
+    # Downstream repos should add path patterns for their own test directories.
+    # Examples:
+    #   - '**/test/gtest/**'    — any file under a test/gtest/ subdirectory
+    #   - 'projects/hip-tests/**' — all of hip-tests (add in rocm-systems)
     test_file_patterns:
       - 'test_*'
       - 'testing_*'
@@ -134,7 +147,7 @@ pr:
       - '**/test/gtest/**'
     # Unit tests are required for source code ANYWHERE in the repository — there
     # are NO folder-based exemptions. A test file may also live in any folder;
-    # it is recognised by its name (test_* / *_test.*), not its location.
+    # it is recognised by its name or path pattern, not its location alone.
     # Doc/config files are still skipped by EXTENSION (they are simply not in
     # `code_extensions`), not by path.
     exempt_paths: []
