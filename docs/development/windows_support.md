@@ -198,7 +198,14 @@ configuration. It is safe to re-run at any time.
 > winget install cmake
 > winget install ninja-build.ninja ccache python strawberryperl
 > winget install --id Iterative.DVC --silent --accept-source-agreements
+> winget install --id Rustlang.Rustup --exact --source winget
+> # Open a new terminal before running the remaining commands.
+> rustup install 1.95
 > ```
+
+Rust 1.95 and Cargo are general build dependencies. The `rustup` installation
+provides both tools. Open a new terminal after installation if `rustup`,
+`rustc`, or `cargo` is not immediately available on `PATH`.
 
 If you prefer to install tools manually, you will need:
 
@@ -234,6 +241,9 @@ If you prefer to install tools manually, you will need:
 - dvc: https://dvc.org/doc/install/windows
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
+
+- Rust 1.95 and Cargo, installed through [`rustup`](https://rustup.rs/). Run
+  `rustup install 1.95` after installing `rustup`.
 
 > [!WARNING]
 > Prefer to install Python for the current user only and to a path
