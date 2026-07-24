@@ -1,0 +1,135 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheRock <dev@therock>
+Date: Fri, 24 Jul 2026 12:00:00 -0400
+Subject: [PATCH] Use native CMake HIP language for HIP library and C++ tests
+
+Replace the legacy FindHIP `hip_add_library`/`hip_add_executable` wrappers with
+the native-HIP form from PyTorch tip (`set_source_files_properties(... LANGUAGE
+HIP)` + per-target `HIP_ARCHITECTURES`) for the core `torch_hip` library and the
+C++ HIP test executables.
+
+The legacy wrappers preprocess device code through `clang -x hip -E -P` once per
+`--offload-arch`. With LLVM assertions enabled and multiple offload archs, the
+non-RDC host job (which uses `-fcuda-include-gpubinary`, one gpubinary only)
+trips the clang new-driver assertion `HostOffloadingInputs.size() == 1` and
+breaks TheRock's multi-arch PyTorch build (ROCm/TheRock#6102). Native HIP does
+not preprocess and keeps all requested architectures.
+
+Sites converted:
+- caffe2/CMakeLists.txt: `torch_hip` library (aten/c10 HIP kernels) and the
+  `Caffe2_HIP_TEST_SRCS` test loop (ATen hip/*.hip tests + caffe2 HIP tests).
+- c10/cuda/test/CMakeLists.txt (hipified to c10/hip/test): c10 HIP tests.
+- cmake/public/LoadHIP.cmake (2.10/2.11 only): enable HIP as a native CMake
+  language on Linux, which 2.12 already does and native HIP requires.
+
+Only .cu/.hip sources get LANGUAGE HIP; .cpp files stay CXX (matches the legacy
+hip_add_library behavior and avoids __hip_cuid symbol collisions under sccache).
+
+This is carried by TheRock because these release branches predate the upstream
+native-HIP migration; it matches PyTorch tip behavior.
+---
+ c10/cuda/test/CMakeLists.txt | 12 ++++--------
+ caffe2/CMakeLists.txt        | 28 +++++++++++++---------------
+ cmake/public/LoadHIP.cmake   |  3 +++
+ 3 files changed, 20 insertions(+), 23 deletions(-)
+
+diff --git a/c10/cuda/test/CMakeLists.txt b/c10/cuda/test/CMakeLists.txt
+index 1d912cf..5b7023a 100644
+--- a/c10/cuda/test/CMakeLists.txt
++++ b/c10/cuda/test/CMakeLists.txt
+@@ -14,17 +14,13 @@ if(BUILD_TEST)
+   foreach(test_src ${C10_CUDA_ALL_TEST_FILES})
+     get_filename_component(test_file_name ${test_src} NAME_WE)
+     set(test_name "c10_cuda_${test_file_name}")
+-    if(WIN32 AND test_src MATCHES "^.*\.hip$")
+-      set_source_files_properties(${test_src} PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
+-      hip_add_executable(${test_name} "${test_src}")
+-      list(JOIN PYTORCH_ROCM_ARCH " " ROCM_PROPERTY_ARCH_LIST)
+-      set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX HIP_ARCHITECTURES ${ROCM_PROPERTY_ARCH_LIST})
++    if(test_src MATCHES "^.*\.hip$")
++      set_source_files_properties(${test_src} PROPERTIES LANGUAGE HIP)
++      add_executable(${test_name} "${test_src}")
++      set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX HIP_ARCHITECTURES "${PYTORCH_ROCM_ARCH}")
+     else()
+       add_executable(${test_name} "${test_src}")
+     endif()
+-    if(test_src MATCHES "^.*\.hip$")
+-      set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX)
+-    endif()
+     target_link_libraries(${test_name} ${C10_CUDA_LIB} ${C10_LIB} gmock gtest gtest_main)
+     add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${test_name}>)
+     if(INSTALL_TEST)
+diff --git a/caffe2/CMakeLists.txt b/caffe2/CMakeLists.txt
+index 6cbaecc..d95dc66 100644
+--- a/caffe2/CMakeLists.txt
++++ b/caffe2/CMakeLists.txt
+@@ -933,19 +933,21 @@ if(HAVE_SOVERSION)
+ endif()
+ 
+ if(USE_ROCM)
+-  filter_list(__caffe2_hip_srcs_cpp Caffe2_HIP_SRCS "\\.(cu|hip)$")
+-  set_source_files_properties(${__caffe2_hip_srcs_cpp} PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
++  set(__caffe2_hip_srcs_hip ${Caffe2_HIP_SRCS})
++  list(FILTER __caffe2_hip_srcs_hip INCLUDE REGEX "\\.(cu|hip)$")
++  set_source_files_properties(${__caffe2_hip_srcs_hip} PROPERTIES LANGUAGE HIP)
+ endif()
+ 
+ # Compile exposed libraries.
+ if(USE_ROCM)
+-  set(CUDA_LINK_LIBRARIES_KEYWORD PRIVATE)
+   list(APPEND Caffe2_HIP_SRCS ${GENERATED_CXX_TORCH_CUDA})
+-  hip_add_library(torch_hip ${Caffe2_HIP_SRCS})
++  add_library(torch_hip ${Caffe2_HIP_SRCS})
++  set_target_properties(torch_hip PROPERTIES
++    LINKER_LANGUAGE CXX
++    HIP_ARCHITECTURES "${PYTORCH_ROCM_ARCH}")
+   if(USE_FLASH_ATTENTION)
+     target_link_libraries(torch_hip PRIVATE __caffe2_aotriton)
+   endif()
+-  set(CUDA_LINK_LIBRARIES_KEYWORD)
+   torch_compile_options(torch_hip)  # see cmake/public/utils.cmake
+   # TODO: Not totally sure if this is live or not
+   if(USE_NCCL)
+@@ -1978,19 +1980,15 @@ if(BUILD_TEST)
+     set(BASE_HIPCC_FLAGS ${HIP_HIPCC_FLAGS})
+     foreach(test_src ${Caffe2_HIP_TEST_SRCS})
+       get_filename_component(test_name ${test_src} NAME_WE)
+-      if(WIN32 AND test_src MATCHES "^.*\.hip$")
+-        # Solves bug with hip_add_executable propagating flags from the previous tests
+-        set(HIP_HIPCC_FLAGS ${BASE_HIPCC_FLAGS})
+-        set_source_files_properties(${test_src} PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
+-        hip_add_executable(${test_name} "${test_src}")
+-        list(JOIN PYTORCH_ROCM_ARCH " " ROCM_PROPERTY_ARCH_LIST)
+-        set_target_properties(${test_name} PROPERTIES HIP_ARCHITECTURES ${ROCM_PROPERTY_ARCH_LIST})
++      if(test_src MATCHES "^.*\.hip$")
++        set_source_files_properties(${test_src} PROPERTIES LANGUAGE HIP)
++        add_executable(${test_name} "${test_src}")
++        set_target_properties(${test_name} PROPERTIES
++          LINKER_LANGUAGE CXX
++          HIP_ARCHITECTURES "${PYTORCH_ROCM_ARCH}")
+       else()
+         add_executable(${test_name} "${test_src}")
+       endif()
+-      if(test_src MATCHES "^.*\.hip$")
+-        set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX)
+-      endif()
+       target_link_libraries(${test_name} torch_library gtest_main)
+       target_include_directories(${test_name} PRIVATE $<INSTALL_INTERFACE:include>)
+       target_include_directories(${test_name} PRIVATE ${Caffe2_CPU_INCLUDE} ${Caffe2_HIP_INCLUDE})
+diff --git a/cmake/public/LoadHIP.cmake b/cmake/public/LoadHIP.cmake
+index 7ecaff5..581cbbb 100644
+--- a/cmake/public/LoadHIP.cmake
++++ b/cmake/public/LoadHIP.cmake
+@@ -79,6 +79,9 @@ endmacro()
+ # MODULE argument is added for clarity that CMake is searching
+ # for FindHIP.cmake in Module mode
+ find_package_and_print_version(HIP 1.0 MODULE)
++if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
++  enable_language(HIP)
++endif()
+ 
+ if(HIP_FOUND)
+   set(PYTORCH_FOUND_HIP TRUE)
+-- 
+2.34.1
+
