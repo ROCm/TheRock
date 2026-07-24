@@ -61,10 +61,7 @@ on:
         type: string
         default: "50"
       stage_reuse_baseline_repository:
-        description: >-
-          Repository to query for baseline workflow runs (default: current repository).
-          Set to "ROCm/TheRock" for external repos (rocm-libraries, rocm-systems) to
-          reuse TheRock's prebuilt artifacts.
+        description: "Repository containing baseline_run_id; defaults to the current repository."
         type: string
         default: ""
       build_pytorch:
