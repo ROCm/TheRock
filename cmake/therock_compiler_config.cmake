@@ -40,10 +40,18 @@ if(MSVC AND MSVC_VERSION LESS_EQUAL 1941 AND NOT THEROCK_DISABLE_MSVC_VERSION_CH
 endif()
 
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-  message(FATAL_ERROR
-    "Cannot build 32-bit ROCm with MSVC. You must enable the Windows x64 "
-    "development tools and rebuild.\n"
-    "  Detected CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
+  # Allow 32-bit builds when explicitly building only specific components
+  # Full ROCm stack is not supported on 32-bit Windows
+  if(NOT DEFINED THEROCK_ALLOW_WIN32_BUILD)
+    message(FATAL_ERROR
+      "Cannot build 32-bit ROCm with MSVC. You must enable the Windows x64 "
+      "development tools and rebuild.\n"
+      "  Detected CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}\n"
+      "\n"
+      "To build specific 32-bit components (comgr, OpenCL), set -DTHEROCK_ALLOW_WIN32_BUILD=ON")
+  else()
+    message(STATUS "32-bit Windows build enabled (THEROCK_ALLOW_WIN32_BUILD=ON)")
+  endif()
 endif()
 
 # macOS-specific compiler checks

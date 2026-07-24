@@ -505,6 +505,13 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm"]  # Built on top of amd-llvm
 feature_group = "ALL"
 
+[artifacts.amd-comgr32]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "sysdeps"]
+feature_name = "COMGR32"
+feature_group = "COMPILER"
+
 # --- Runtime Artifacts ---
 
 [artifacts.core-runtime]
@@ -560,6 +567,13 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm", "core-ocl-icd"]
 feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
+
+[artifacts.core-ocl32]
+artifact_group = "opencl-runtime"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "amd-llvm", "amd-comgr32", "core-ocl-icd"]
+feature_name = "OCL32_RUNTIME"
+feature_group = "OPENCL"
 
 [artifacts.rocrtst]
 artifact_group = "runtime-tests"

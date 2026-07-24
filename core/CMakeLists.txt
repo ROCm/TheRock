@@ -1,12 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# On Linux, we compile core libraries with our own LLVM. This gets us the
+# We compile core libraries with our own LLVM on Linux. This gets us the
 # best optimizations and, most importantly, gives us uniform access to
 # sanitizers. Currently, some of these projects, though, are hard-coded
 # for MSVC on Windows, so on that platform, just build them with the system
 # compiler.
-# TODO: Switch windows to use our own clang.
+# TODO: Switch Windows to use our own clang.
 set(_system_toolchain "amd-llvm")
 if(WIN32)
   set(_system_toolchain "")
@@ -555,6 +555,106 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   endif()
 
 endif(THEROCK_ENABLE_OCL_RUNTIME)
+
+################################################################################
+################################################################################
+# ocl-clr32
+# 32-bit OpenCL runtime (amdocl32)
+# Windows only
+################################################################################
+
+if(THEROCK_ENABLE_OCL32_RUNTIME)
+  set(OCL32_CLR_CMAKE_ARGS)
+  set(OCL32_CLR_RUNTIME_DEPS)
+
+  # Configure for 32-bit build
+  if(WIN32)
+    # Windows 32-bit: Point to x86 compilers and libraries
+    # Get the current C and CXX compiler paths and replace x64 with x86
+    string(REPLACE "/Hostx64/x64/" "/Hostx64/x86/" _c_compiler_32 "${CMAKE_C_COMPILER}")
+    string(REPLACE "/Hostx64/x64/" "/Hostx64/x86/" _cxx_compiler_32 "${CMAKE_CXX_COMPILER}")
+
+    set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
+    cmake_path(NORMAL_PATH _compute_pal_dir)
+    list(APPEND OCL32_CLR_CMAKE_ARGS
+      "-DCMAKE_C_COMPILER=${_c_compiler_32}"
+      "-DCMAKE_CXX_COMPILER=${_cxx_compiler_32}"
+      "-DCMAKE_SYSTEM_PROCESSOR=x86"
+      "-DCMAKE_SIZEOF_VOID_P=4"
+      "-DCMAKE_LIBRARY_ARCHITECTURE=x86"
+      "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>"
+      "-DCMAKE_C_FLAGS=/DWIN32 /D_WINDOWS /guard:cf"
+      "-DCMAKE_CXX_FLAGS=/DWIN32 /D_WINDOWS /EHsc /guard:cf"
+      "-DCMAKE_EXE_LINKER_FLAGS=/guard:cf /DYNAMICBASE /LARGEADDRESSAWARE /machine:X86"
+      "-DCMAKE_SHARED_LINKER_FLAGS=/guard:cf /DYNAMICBASE /machine:X86"
+      "-DUSE_PROF_API=OFF"
+      "-D__HIP_ENABLE_PCH=OFF"
+      "-DROCCLR_ENABLE_PAL=ON"
+      "-DROCCLR_ENABLE_HSA=OFF"
+      "-DROCCLR_ENABLE_HSAIL=OFF"
+      "-DROCCLR_ENABLE_LC=ON"
+      "-DROCR_DLL_LOAD=OFF"
+      "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
+    )
+  else()
+    message(FATAL_ERROR "THEROCK_ENABLE_OCL32_RUNTIME is only supported on Windows")
+  endif()
+
+  if(_therock_enable_hsa_runtime)
+    list(APPEND OCL32_CLR_RUNTIME_DEPS
+      rocminfo
+      ROCR-Runtime
+    )
+  endif()
+
+  therock_cmake_subproject_declare(ocl-clr32
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-clr32"
+    INTERFACE_PROGRAM_DIRS
+      bin
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DCLR_BUILD_OCL=ON"
+      "-DCLR_BUILD_HIP=OFF"
+      ${OCL32_CLR_CMAKE_ARGS}
+    BUILD_DEPS
+      rocm-cmake
+      therock-simde
+      amd-comgr32  # Build dependency to make amd_comgr package available
+    RUNTIME_DEPS
+      amd-llvm
+      amd-comgr32  # Use 32-bit comgr
+      rocm-core
+      ocl-icd
+      ${OCL32_CLR_RUNTIME_DEPS}
+    INSTALL_RPATH_LIBRARY_DIR
+      "lib32/opencl"
+    INTERFACE_LINK_DIRS
+      "lib32"
+      "lib32/opencl"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib32"
+      "lib32/opencl"
+  )
+  therock_cmake_subproject_glob_c_sources(ocl-clr32 SUBDIRS .)
+  therock_cmake_subproject_provide_package(ocl-clr32 ocl-icd32 lib32/cmake/ocl-icd)
+  therock_cmake_subproject_activate(ocl-clr32)
+
+  therock_provide_artifact(core-ocl32
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl32.toml
+    COMPONENTS
+      dbg
+      lib
+      run
+    SUBPROJECT_DEPS
+      ocl-clr32
+  )
+
+  message(STATUS "32-bit OpenCL runtime build enabled (amdocl32) for ${CMAKE_SYSTEM_NAME}")
+
+endif(THEROCK_ENABLE_OCL32_RUNTIME)
 
 ##############################################################################
 # Runtime tests

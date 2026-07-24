@@ -1,0 +1,23 @@
+# Artifact descriptor for 32-bit amd-comgr
+# This defines how the 32-bit comgr library is packaged
+
+[options]
+unmatched_exclude = []
+
+# 32-bit comgr library component - installed to lib32
+[components.lib."compiler/amd-comgr32/stage"]
+include = [
+  "lib32/**",
+]
+
+[components.run."compiler/amd-comgr32/stage"]
+include = []
+
+[components.dbg."compiler/amd-comgr32/stage"]
+include = []
+
+[components.dev."compiler/amd-comgr32/stage"]
+include = [
+  "lib32/cmake/**",
+]
+
