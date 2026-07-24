@@ -12,6 +12,21 @@ is_debian_like() {
     esac
 }
 
+do_fix_ownership(){
+    # Force install tree + parent dirs to root:root, repairing older packages that
+    # shipped them owned by the build uid (local privesc). See ROCm/ROCm#6496.
+    {% if target == "deb" %}
+       local prefix={{ install_prefix }}
+    {% else %}
+       local prefix="$RPM_INSTALL_PREFIX0"
+    {% endif %}
+    [ -n "$prefix" ] && [ -d "$prefix" ] && chown -R 0:0 "$prefix"
+    for d in /opt/rocm "$(dirname "$prefix")"; do
+        [ -d "$d" ] && chown 0:0 "$d"
+    done
+    true
+}
+
 do_update_alternatives(){
     # skip update if program doesn't exist
     command -v update-alternatives >/dev/null || return 0
@@ -86,6 +101,7 @@ if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE
 then
     case "$1" in
        (configure)
+       do_fix_ownership
        do_update_alternatives
        ;;
        (abort-upgrade|abort-remove|abort-deconfigure)
@@ -96,5 +112,6 @@ then
        ;;
     esac
 else
+    do_fix_ownership
     do_update_alternatives
 fi
