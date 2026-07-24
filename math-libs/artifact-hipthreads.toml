@@ -1,0 +1,12 @@
+# hipthreads
+# The dev component's default patterns capture the static library
+# (lib/hipthreads/libhipthreads.a), the headers (include/hipthreads/**), and the
+# CMake package config (lib/cmake/hipthreads/**), so no explicit includes needed.
+[components.dev."math-libs/hipthreads/stage"]
+[components.test."math-libs/hipthreads/build"]
+include = [
+  "hipthreads/**/*",
+]
+exclude = [
+  "hipthreads/docs/**",
+]
