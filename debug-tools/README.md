@@ -52,9 +52,9 @@ cmake --build /therock/output/build -t rocgdb amd-dbgapi rocr-debug-agent
 ```
 
 **Note:** `-DTHEROCK_TEST_AMDGPU_FAMILIES` can optionally be supplied to restrict
-the number of targets for which rocr-debug-agent-tests is built, as these tests
-are device-specific. If not specified, tests will be built for all available gfx
-targets.
+the number of targets for which the rocr-debug-agent tests are built, as these
+tests are device-specific. If not specified, tests will be built for all
+available gfx targets.
 
 For development and debugging, you may want to build in Debug mode by passing
 the following option:
