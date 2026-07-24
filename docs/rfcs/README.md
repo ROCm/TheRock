@@ -27,6 +27,7 @@ benefit from further discussion.
 - [RFC0009: OS Packaging Requirements](./RFC0009-OS-Packaging-Requirements.md)
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 - [RFC0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem](./RFC0011-Quartz-CICD-Datahub.md)
+- [RFC00XX: Feature Flag Lifecycle and Canary Promotion](./RFC00XX-Feature-Flag-Lifecycle-and-Canary-Promotion.md)
 
 ## Adding an RFC
 
