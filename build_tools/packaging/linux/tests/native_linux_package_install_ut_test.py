@@ -8,6 +8,7 @@
 import contextlib
 import importlib.util
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -989,8 +990,15 @@ class RunBasicVerificationTest(unittest.TestCase):
         )
         self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "test_native_hip_consumer",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_enough_components_found(self, mock_run):
+    def test_returns_true_when_enough_components_found(
+        self, mock_run, _mock_native_consumer
+    ):
         # Test that run_basic_verification returns True when install_prefix exists and at least
         # VERIFY_MIN_COMPONENTS key components exist; subprocess (dpkg/rpm, rocminfo) is mocked.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
@@ -1020,17 +1028,29 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "test_native_hip_consumer",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_called_process_error_when_querying_packages(self, mock_run):
+    def test_handles_called_process_error_when_querying_packages(
+        self, mock_run, _mock_native_consumer
+    ):
         # Test that run_basic_verification handles CalledProcessError when querying packages (continues, then passes if enough components).
         import subprocess
 
-        mock_run.side_effect = subprocess.CalledProcessError(1, "dpkg")
+        mock_run.side_effect = [
+            subprocess.CalledProcessError(1, "dpkg"),
+            MagicMock(returncode=0, stdout=""),
+        ]
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
             (Path(d) / "lib").mkdir()
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
             (Path(d) / "bin" / "rocminfo").write_text("")
             (Path(d) / "bin" / "hipcc").write_text("")
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1038,8 +1058,13 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertTrue(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "test_native_hip_consumer",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_rocminfo_timeout(self, mock_run):
+    def test_handles_rocminfo_timeout(self, mock_run, _mock_native_consumer):
         # Test that run_basic_verification handles rocminfo TimeoutExpired (warns but still passes if enough components).
         import subprocess
 
@@ -1058,6 +1083,102 @@ class RunBasicVerificationTest(unittest.TestCase):
                 install_prefix=d,
             )
             self.assertTrue(t.run_basic_verification())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    @patch("native_linux_package_install_test.ELFFile")
+    def test_native_hip_consumer_clears_loader_environment(
+        self, mock_elf_file, mock_run
+    ):
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        needed_tag = MagicMock()
+        needed_tag.entry.d_tag = "DT_NEEDED"
+        needed_tag.needed = "libamdhip64.so.7"
+        mock_dynamic = MagicMock()
+        mock_dynamic.iter_tags.return_value = [needed_tag]
+        mock_elf_file.return_value.get_section_by_name.return_value = mock_dynamic
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with patch.dict(os.environ, {"LD_LIBRARY_PATH": "/custom/lib"}):
+                with patch("pathlib.Path.open", MagicMock()):
+                    self.assertTrue(t.test_native_hip_consumer())
+
+        self.assertEqual(mock_run.call_count, 2)
+        compile_cmd = mock_run.call_args_list[0].args[0]
+        self.assertIn(str(Path(d) / "lib" / "llvm" / "bin" / "clang"), compile_cmd)
+        self.assertIn("-x", compile_cmd)
+        self.assertIn("c", compile_cmd)
+        self.assertIn("-nostdlib", compile_cmd)
+        self.assertIn("-shared", compile_cmd)
+        self.assertIn("-fPIC", compile_cmd)
+        self.assertIn("-Wl,--no-as-needed", compile_cmd)
+        self.assertIn("-lamdhip64", compile_cmd)
+        run_cmd = mock_run.call_args_list[1].args[0]
+        self.assertEqual(run_cmd[0], sys.executable)
+        self.assertIn("ctypes.CDLL", run_cmd[2])
+        self.assertNotIn("LD_LIBRARY_PATH", mock_run.call_args_list[1].kwargs["env"])
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    @patch("native_linux_package_install_test.ELFFile")
+    def test_native_hip_consumer_rejects_embedded_runpath(
+        self, mock_elf_file, mock_run
+    ):
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        needed_tag = MagicMock()
+        needed_tag.entry.d_tag = "DT_NEEDED"
+        needed_tag.needed = "libamdhip64.so.7"
+        runpath_tag = MagicMock()
+        runpath_tag.entry.d_tag = "DT_RUNPATH"
+        mock_dynamic = MagicMock()
+        mock_dynamic.iter_tags.return_value = [needed_tag, runpath_tag]
+        mock_elf_file.return_value.get_section_by_name.return_value = mock_dynamic
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with patch("pathlib.Path.open", MagicMock()):
+                self.assertFalse(t.test_native_hip_consumer())
+
+        self.assertEqual(mock_run.call_count, 1)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    @patch("native_linux_package_install_test.ELFFile")
+    def test_native_hip_consumer_returns_false_on_loader_failure(
+        self, mock_elf_file, mock_run
+    ):
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=""),
+            subprocess.CalledProcessError(
+                127,
+                "native_hip_consumer",
+                output="libamdhip64.so.7: cannot open shared object file",
+            ),
+        ]
+        needed_tag = MagicMock()
+        needed_tag.entry.d_tag = "DT_NEEDED"
+        needed_tag.needed = "libamdhip64.so.7"
+        mock_dynamic = MagicMock()
+        mock_dynamic.iter_tags.return_value = [needed_tag]
+        mock_elf_file.return_value.get_section_by_name.return_value = mock_dynamic
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "lib" / "llvm" / "bin").mkdir(parents=True)
+            (Path(d) / "lib" / "llvm" / "bin" / "clang").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with patch("pathlib.Path.open", MagicMock()):
+                self.assertFalse(t.test_native_hip_consumer())
 
 
 class SetupGpgKeyTest(unittest.TestCase):

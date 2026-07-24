@@ -129,8 +129,16 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         if build_config.enable_rpath:
             convert_runpath_to_rpath(package_dir)
 
+        has_ldconfig_file = generate_ldconfig_file(pkg_info, package_dir, build_config)
+
         # Generate install file after copying, so we can check for hidden files
-        generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
+        generate_install_file(
+            pkg_info,
+            deb_dir,
+            build_config,
+            dest_dir,
+            has_ldconfig_file=has_ldconfig_file,
+        )
 
     package_with_dpkg_build(package_dir)
 
@@ -191,7 +199,14 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
         f.write(template.render(context))
 
 
-def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=None):
+def generate_install_file(
+    pkg_info,
+    deb_dir,
+    config: PackageConfig,
+    dest_dir=None,
+    *,
+    has_ldconfig_file=False,
+):
     """Generate a Debian install entry in `debian/install`.
 
     Parameters:
@@ -237,10 +252,27 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
         "path": config.install_prefix,
         "has_hidden_files": has_hidden_files,
         "has_regular_files": has_regular_files,
+        "has_ldconfig_file": has_ldconfig_file,
     }
 
     with install_file.open("w", encoding="utf-8") as f:
         f.write(template.render(context))
+
+
+def generate_ldconfig_file(pkg_info, package_dir, config: PackageConfig):
+    """Generate a versioned dynamic-loader configuration owned by the package."""
+    paths = pkg_info.get("LdconfigPaths", [])
+    if not paths:
+        return False
+
+    major_minor = ".".join(config.rocm_version.split(".")[:2])
+    filename = f"10-{pkg_info['Package']}{major_minor}.conf"
+    config_dir = Path(package_dir) / "etc" / "ld.so.conf.d"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / filename).write_text(
+        "".join(f"{path}\n" for path in paths), encoding="utf-8"
+    )
+    return True
 
 
 def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):

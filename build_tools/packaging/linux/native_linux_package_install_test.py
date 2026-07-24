@@ -136,9 +136,12 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
+
+from elftools.elf.elffile import ELFFile
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -186,6 +189,7 @@ ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
+NATIVE_HIP_TEST_TIMEOUT_SEC = 120
 # rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
 # short in container CI (timeouts under load). Optional cluster checks are skipped
 # separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
@@ -967,11 +971,113 @@ gpgcheck=0
             except OSError as e:
                 print(f" [WARN] Could not run rocminfo: {e}")
 
-        if found_count >= VERIFY_MIN_COMPONENTS:
+        native_hip_consumer_ok = self.test_native_hip_consumer()
+
+        if found_count >= VERIFY_MIN_COMPONENTS and native_hip_consumer_ok:
             print("\n[PASS] Basic verification PASSED")
             return True
-        print("\n[FAIL] Basic verification FAILED (insufficient components)")
+        print("\n[FAIL] Basic verification FAILED")
         return False
+
+    def test_native_hip_consumer(self) -> bool:
+        """Compile and run a HIP consumer without loader environment overrides."""
+        install_path = Path(self.install_prefix).resolve()
+        clang_path = install_path / "lib" / "llvm" / "bin" / "clang"
+        if not clang_path.exists():
+            print(f"\n[FAIL] clang not found at: {clang_path}")
+            return False
+
+        source_text = """extern int hipRuntimeGetVersion(int *);
+
+int native_hip_consumer(void) {
+    int runtime_version = 0;
+    return hipRuntimeGetVersion(&runtime_version);
+}
+"""
+        print("\nCompiling and running a native HIP consumer...")
+        try:
+            with tempfile.TemporaryDirectory(prefix="rocm-native-hip-") as temp_dir:
+                source_path = Path(temp_dir) / "native_hip_consumer.c"
+                binary_path = Path(temp_dir) / "native_hip_consumer.so"
+                source_path.write_text(source_text, encoding="utf-8")
+                subprocess.run(
+                    [
+                        str(clang_path),
+                        "-x",
+                        "c",
+                        "-nostdlib",
+                        "-shared",
+                        "-fPIC",
+                        str(source_path),
+                        f"-L{install_path / 'lib'}",
+                        "-Wl,--no-as-needed",
+                        "-lamdhip64",
+                        "-o",
+                        str(binary_path),
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=NATIVE_HIP_TEST_TIMEOUT_SEC,
+                )
+
+                with binary_path.open("rb") as binary_file:
+                    dynamic_section = ELFFile(binary_file).get_section_by_name(
+                        ".dynamic"
+                    )
+                    if dynamic_section is None:
+                        print(" [FAIL] Native HIP consumer has no dynamic section")
+                        return False
+                    dynamic_tags = list(dynamic_section.iter_tags())
+                    needed = {
+                        tag.needed
+                        for tag in dynamic_tags
+                        if tag.entry.d_tag == "DT_NEEDED"
+                    }
+                    if not any(name.startswith("libamdhip64.so") for name in needed):
+                        print(" [FAIL] Native HIP consumer does not need libamdhip64")
+                        return False
+                    if any(
+                        tag.entry.d_tag in ("DT_RPATH", "DT_RUNPATH")
+                        for tag in dynamic_tags
+                    ):
+                        print(" [FAIL] Native HIP consumer contains RPATH/RUNPATH")
+                        return False
+
+                clean_env = os.environ.copy()
+                clean_env.pop("LD_LIBRARY_PATH", None)
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "import ctypes, sys; "
+                            "raise SystemExit(ctypes.CDLL(sys.argv[1])"
+                            ".native_hip_consumer())"
+                        ),
+                        str(binary_path),
+                    ],
+                    check=True,
+                    env=clean_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=NATIVE_HIP_TEST_TIMEOUT_SEC,
+                )
+            print(" [PASS] Native HIP consumer executed successfully")
+            return True
+        except subprocess.TimeoutExpired:
+            print(" [FAIL] Native HIP consumer test timed out")
+            return False
+        except subprocess.CalledProcessError as e:
+            print(f" [FAIL] Native HIP consumer failed with exit code {e.returncode}")
+            if e.stdout:
+                print(e.stdout.rstrip())
+            return False
+        except OSError as e:
+            print(f" [FAIL] Could not test native HIP consumer: {e}")
+            return False
 
     def run_full_verification(self) -> bool:
         """Step 3: Full test — runs test_rdhc (rdhc.py) only. Used when --test-type is full."""

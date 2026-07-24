@@ -61,8 +61,17 @@ mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
    cp -R "{{ path }}"/* "$RPM_BUILD_ROOT{{ install_prefix }}/"
 }
 {% endfor %}
+{% if ldconfig_filename %}
+mkdir -p "$RPM_BUILD_ROOT/etc/ld.so.conf.d"
+cat > "$RPM_BUILD_ROOT/etc/ld.so.conf.d/{{ ldconfig_filename }}" <<'EOF'
+{% for path in ldconfig_paths %}{{ path }}
+{% endfor %}EOF
+{% endif %}
 
 %files
+{% if ldconfig_filename %}
+%config(noreplace) /etc/ld.so.conf.d/{{ ldconfig_filename }}
+{% endif %}
 {{ install_prefix }}
 
 %clean

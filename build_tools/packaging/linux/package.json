@@ -201,6 +201,10 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
+    "LdconfigPaths": [
+      "/opt/rocm/lib"
+    ],
+    "Postinstall": "True",
     "Artifactory": [
       {
         "Artifact": "core-runtime",
