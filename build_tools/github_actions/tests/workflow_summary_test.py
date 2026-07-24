@@ -306,3 +306,42 @@ class TestMain:
         assert rc == 1
         out = capsys.readouterr().out
         assert "Could not fetch job details" in out
+
+    def test_writes_timing_json_and_markdown(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("GITHUB_TOKEN", "token")
+
+        with patch(
+            "workflow_summary.collect_timing_records",
+            return_value=[],
+        ):
+            rc = main(
+                [
+                    "--needs-json",
+                    json.dumps(ALL_SUCCESS),
+                    "--github-repository",
+                    "owner/repo",
+                    "--github-run-id",
+                    "12345",
+                ]
+            )
+
+        assert rc == 0
+
+        timing_json_path = tmp_path / "workflow_timing.json"
+        timing_markdown_path = tmp_path / "workflow_timing.md"
+
+        assert timing_json_path.is_file()
+        assert timing_markdown_path.is_file()
+
+        assert json.loads(timing_json_path.read_text(encoding="utf-8")) == {
+            "platforms": [],
+        }
+
+        assert timing_markdown_path.read_text(encoding="utf-8") == (
+            "### CI Job Timing Summary\n" "\n" "_no timing data_\n"
+        )
