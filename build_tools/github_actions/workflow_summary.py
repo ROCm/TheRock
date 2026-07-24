@@ -48,7 +48,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from github_actions_api import GitHubAPIError, gha_send_request, str2bool
-
 from workflow_timing import (
     collect_timing_records,
     format_timing_summary,
@@ -130,9 +129,7 @@ def evaluate_results(jobs: list[JobResult]) -> tuple[list[JobResult], list[JobRe
     failed: list[JobResult] = []
     ok: list[JobResult] = []
     for job in jobs:
-        if job.result in _ACCEPTABLE_RESULTS:
-            ok.append(job)
-        elif job.continue_on_error:
+        if job.result in _ACCEPTABLE_RESULTS or job.continue_on_error:
             ok.append(job)
         else:
             failed.append(job)
@@ -253,36 +250,55 @@ def main(argv: list[str]) -> int:
     failed, _ = evaluate_results(jobs)
 
     timing_records = []
+    timing_summary = ""
+
     if args.github_repository and args.github_run_id and os.environ.get("GITHUB_TOKEN"):
         try:
-            timing_records = collect_timing_records(
+            collected_records = collect_timing_records(
                 repository=args.github_repository,
                 run_id=args.github_run_id,
                 run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
                 token=os.environ["GITHUB_TOKEN"],
             )
 
-            timing_json = format_timing_json(timing_records)
-            timing_path = Path("workflow_timing.json")
-            timing_path.write_text(timing_json, encoding="utf-8")
+            timing_json = format_timing_json(collected_records)
+            collected_summary = format_timing_summary(collected_records)
+
+            timing_json_path = Path("workflow_timing.json")
+            timing_markdown_path = Path("workflow_timing.md")
+
+            timing_json_path.write_text(
+                timing_json + "\n",
+                encoding="utf-8",
+            )
+            timing_markdown_path.write_text(
+                collected_summary + "\n",
+                encoding="utf-8",
+            )
+
+            timing_records = collected_records
+            timing_summary = collected_summary
 
             print(
-                f"Wrote {timing_path} with " f"{len(timing_records)} timing record(s)."
+                f"Wrote {timing_json_path} with "
+                f"{len(timing_records)} timing record(s)."
+            )
+            print(
+                f"Wrote {timing_markdown_path} with "
+                f"{len(timing_records)} timing record(s)."
             )
         except Exception as exc:
-            print(f"\n(Could not generate workflow timing output: {exc})")
-
-            print(
-                f"Wrote {timing_path} with " f"{len(timing_records)} timing record(s)."
-            )
+            # Timing reporting is best-effort and must not affect the
+            # workflow summary result.
+            print("Warning: could not collect or write workflow timing: " f"{exc}")
     print(f"Checking status for {len(jobs)} job(s):")
     for job in jobs:
         color = _RESULT_COLORS.get(job.result, _RED)
         print(f"  {color}{job.name}: {job.result}{_RESET}")
 
-    if timing_records:
+    if timing_summary:
         print()
-        print(format_timing_summary(timing_records))
+        print(timing_summary)
 
     if failed:
         print(f"\n{_RED}The following job(s) failed:{_RESET}")

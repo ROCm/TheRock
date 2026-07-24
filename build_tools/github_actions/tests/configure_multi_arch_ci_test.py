@@ -519,6 +519,123 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_manual_prebuilt_stages_take_precedence_over_auto_reuse(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=(
+                "https://github.com/ROCm/TheRock/actions/runs/auto-run-200"
+            ),
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(
+                "[STAGE-REUSE] stage 'compiler-runtime' "
+                "unaffected AND available in baseline "
+                "on all platforms -> WILL be skipped",
+            ),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted_auto_stage_reuse,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=["math-libs"],
+            manual_baseline_run_id="manual-run-100",
+            auto_stage_reuse=auto_stage_reuse,
+        )
+
+        self.assertEqual(
+            stage_decisions,
+            {
+                "math-libs": cm.JobAction.PREBUILT,
+            },
+        )
+
+        self.assertNotIn(
+            "compiler-runtime",
+            stage_decisions,
+        )
+
+        self.assertEqual(
+            baseline_run_id,
+            "manual-run-100",
+        )
+
+        self.assertEqual(
+            adjusted_auto_stage_reuse.applied_reuse_stages,
+            (),
+        )
+
+        self.assertTrue(
+            any(
+                "manual prebuilt_stages input takes precedence" in reason
+                for reason in adjusted_auto_stage_reuse.reasons
+            )
+        )
+
+        self.assertTrue(
+            any(
+                "WOULD be reusable but was not applied" in line
+                for line in adjusted_auto_stage_reuse.report_lines
+            )
+        )
+
+    def test_auto_reuse_applies_when_manual_stages_are_not_set(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=(
+                "https://github.com/ROCm/TheRock/actions/runs/auto-run-200"
+            ),
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted_auto_stage_reuse,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=[],
+            manual_baseline_run_id="",
+            auto_stage_reuse=auto_stage_reuse,
+        )
+
+        self.assertEqual(
+            stage_decisions,
+            {
+                "compiler-runtime": cm.JobAction.PREBUILT,
+            },
+        )
+
+        self.assertEqual(
+            baseline_run_id,
+            "auto-run-200",
+        )
+
+        self.assertEqual(
+            adjusted_auto_stage_reuse.applied_reuse_stages,
+            ("compiler-runtime",),
+        )
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic
@@ -598,6 +715,42 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_reuse_commit_sha_uses_pr_base_commit(self):
+        ci_inputs = self._inputs(
+            event_name="pull_request",
+        )
+        git_context = cm.GitContext(
+            changed_files=[],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        self.assertEqual(
+            cm._get_reuse_commit_sha(
+                ci_inputs,
+                git_context,
+            ),
+            "base-commit-sha",
+        )
+
+    def test_reuse_commit_sha_uses_push_head_commit(self):
+        ci_inputs = self._inputs(
+            event_name="push",
+        )
+        git_context = cm.GitContext(
+            changed_files=[],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        self.assertEqual(
+            cm._get_reuse_commit_sha(
+                ci_inputs,
+                git_context,
+            ),
+            "head-commit-sha",
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -1,15 +1,13 @@
-#!/usr/bin/env python3
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Mapping, Sequence
 import json
 import urllib.parse
 import urllib.request
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -35,6 +33,7 @@ class TimingRecord:
 
 
 def _parse_iso8601(value: str | None) -> datetime | None:
+    """Parse an ISO 8601 timestamp, returning None for missing or invalid values."""
     if not value:
         return None
     # GitHub returns timestamps like "2026-07-09T18:12:34Z"
@@ -44,6 +43,20 @@ def _parse_iso8601(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _duration_seconds(
+    start: datetime | None,
+    end: datetime | None,
+) -> float | None:
+    """Return a non-negative duration between two timestamps."""
+    if start is None or end is None:
+        return None
+
+    return max(
+        0.0,
+        (end - start).total_seconds(),
+    )
 
 
 def _http_json(url: str, token: str) -> dict:
@@ -129,7 +142,7 @@ def _format_duration(seconds: float | None) -> str:
     if seconds is None or seconds < 0:
         return "—"
 
-    total = int(round(seconds))
+    total = round(seconds)
     hours, rem = divmod(total, 3600)
     minutes, secs = divmod(rem, 60)
 
@@ -138,6 +151,16 @@ def _format_duration(seconds: float | None) -> str:
     if minutes:
         return f"{minutes}m {secs:02d}s"
     return f"{secs}s"
+
+
+def _escape_markdown_cell(
+    value: object | None,
+) -> str:
+    """Escape a value for use inside a Markdown table cell."""
+    if value is None or value == "":
+        return "—"
+
+    return str(value).replace("|", r"\|").replace("\r", " ").replace("\n", " ")
 
 
 def _infer_platform(job_name: str, runner_name: str) -> str:
@@ -261,13 +284,15 @@ def collect_timing_records(
             started_dt = _parse_iso8601(started_at)
             completed_dt = _parse_iso8601(completed_at)
 
-            queue_seconds = None
-            if queued_dt is not None and started_dt is not None:
-                queue_seconds = (started_dt - queued_dt).total_seconds()
+            queue_seconds = _duration_seconds(
+                queued_dt,
+                started_dt,
+            )
 
-            run_seconds = None
-            if started_dt is not None and completed_dt is not None:
-                run_seconds = (completed_dt - started_dt).total_seconds()
+            run_seconds = _duration_seconds(
+                started_dt,
+                completed_dt,
+            )
 
             records.append(
                 TimingRecord(
@@ -368,14 +393,13 @@ def format_timing_summary(records: Sequence[TimingRecord]) -> str:
             for record in phase_records:
                 status = _normalize_status(record.decision)
                 status_label = _status_symbol(status)
-
                 lines.append(
                     "| "
-                    f"{record.component or '—'} | "
-                    f"{record.job_type or '—'} | "
-                    f"{record.runner_pool or '—'} | "
-                    f"{record.runner_instance or '—'} | "
-                    f"{status_label} {record.decision} | "
+                    f"{_escape_markdown_cell(record.component)} | "
+                    f"{_escape_markdown_cell(record.job_type)} | "
+                    f"{_escape_markdown_cell(record.runner_pool)} | "
+                    f"{_escape_markdown_cell(record.runner_instance)} | "
+                    f"{_escape_markdown_cell(f'{status_label} {record.decision}')} | "
                     f"{_format_duration(record.queue_seconds)} | "
                     f"{_format_duration(record.run_seconds)} | "
                     f"{_format_duration(record.total_seconds)} |"

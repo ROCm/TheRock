@@ -1,13 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-from __future__ import annotations
 
 import json
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -87,6 +86,78 @@ class WorkflowTimingTest(unittest.TestCase):
         self.assertIn("Compiler Runtime", summary)
         self.assertIn("ubuntu-24.04", summary)
         self.assertIn("rebuilt", summary)
+
+    def test_format_timing_summary_escapes_markdown_pipes(self):
+        summary = wt.format_timing_summary(
+            [
+                wt.TimingRecord(
+                    workflow_run_id="1",
+                    run_attempt="1",
+                    job_name="Linux::release / Build JAX",
+                    runner_label="azure-linux-scale-rocm",
+                    runner_pool="azure-linux-scale-rocm",
+                    runner_instance="runner1",
+                    platform="Linux",
+                    workflow_phase="Build Stages",
+                    component="Build JAX | multi-arch-release",
+                    job_type="Stage",
+                    queued_at="2026-07-09T10:00:00Z",
+                    started_at="2026-07-09T10:01:00Z",
+                    completed_at="2026-07-09T10:02:00Z",
+                    decision="success",
+                    queue_seconds=60.0,
+                    run_seconds=60.0,
+                    total_seconds=120.0,
+                )
+            ]
+        )
+
+        self.assertIn(
+            r"Build JAX \| multi-arch-release",
+            summary,
+        )
+
+    def test_duration_seconds_clamps_negative_values(self):
+        start = wt._parse_iso8601("2026-07-09T10:05:00Z")
+        end = wt._parse_iso8601("2026-07-09T10:04:59Z")
+
+        self.assertEqual(
+            wt._duration_seconds(
+                start,
+                end,
+            ),
+            0.0,
+        )
+        self.assertIsNone(
+            wt._duration_seconds(
+                None,
+                end,
+            )
+        )
+        self.assertIsNone(
+            wt._duration_seconds(
+                start,
+                None,
+            )
+        )
+
+    def test_infer_platform_prefers_workflow_prefix(self):
+        self.assertEqual(
+            wt._infer_platform(
+                "Linux::release / Build Multi-Arch Stages / "
+                "wsl-rocdxg / Stage - WSL ROCDXG",
+                "AZURE-WINDOWS-S",
+            ),
+            "Linux",
+        )
+
+        self.assertEqual(
+            wt._infer_platform(
+                "Windows::release / Build Python Packages",
+                "aws-linux-scale-rocm-prod-qv2xv-runner-9zpf9",
+            ),
+            "Windows",
+        )
 
     @patch("workflow_timing.urllib.request.urlopen")
     def test_collect_timing_records_handles_empty_labels(self, mock_urlopen):
