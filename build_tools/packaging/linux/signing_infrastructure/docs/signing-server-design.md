@@ -296,6 +296,157 @@ Access to the signing server is controlled at the VPC network layer. Only EC2 in
 
 **Trade-off acknowledged:** Security Groups control which *instances* can reach the server, not which *processes* on those instances. This is acceptable because the build runner EC2 instances are dedicated to the TheRock CI pipeline.
 
+---
+
+### 4.1a Application-Layer Authentication — Three Mechanisms, Two Phases
+
+The server supports three application-layer auth mechanisms that operate in addition to (not instead of) the Security Group perimeter. In Phase 1 auth is disabled entirely — the SG is the only control. In Phase 2, one or more mechanisms are enabled via the `AUTH_ENABLED=true` environment variable.
+
+#### Phase 1 — No Application Auth
+
+```
+Client → Security Group check → Signing Server
+                                    │
+                                    ▼ AUTH_ENABLED=false
+                                 Skip all token checks
+                                 Rate limit by source IP
+                                 audit_type = 'none' in logs
+```
+
+The `Authorization` header is ignored if present. Any host that passes the Security Group check can sign.
+
+#### Phase 2 — Application Token Layer
+
+When `AUTH_ENABLED=true`, every request must carry an `Authorization: Bearer <token>` header. The server validates in priority order — stopping at the first match:
+
+```
+Request arrives with Authorization: Bearer <token>
+         │
+         ▼
+1. Pre-shared app token (validate_app_token)
+   Constant-time compare against tokens loaded from signing/tokens/*
+   Returns: {client_id, role}
+   auth_type = 'token'
+         │ no match
+         ▼
+2. GitHub Actions OIDC token (validate_github_oidc_token)
+   RS256 signature verified against GitHub JWKS endpoint
+   Extracts: repository, ref, workflow, actor, run_id
+   Maps ref pattern → role via authorization.json oidc_role_mapping
+   auth_type = 'oidc'
+   NOTE: requires PyJWT[crypto] and internet egress to GitHub JWKS
+         (not available on air-gapped server — only usable if OIDC
+          audience is validated via an ALB-injected header instead)
+         │ no match
+         ▼
+3. JWT HMAC-SHA256 token (validate_jwt_token)
+   Validates signature against shared secret from secrets.json
+   Extracts: client_id, role, expiry
+   auth_type = 'jwt'
+         │ no match
+         ▼
+   → 401 Unauthorized
+```
+
+#### Token Types Compared
+
+| Mechanism | Token source | Secret stored where | Role determined by | Suitable for |
+|-----------|-------------|--------------------|--------------------|-------------|
+| **Pre-shared app token** | Secrets Manager `signing/tokens/*` | SM secret per caller tier | Token identity maps to role in authz config | Phase 2 primary — simple, no external dependency |
+| **GitHub OIDC** | GitHub Actions OIDC provider, per-job | No stored secret — GitHub-issued, short-lived | Branch ref pattern (`refs/heads/main` → release) | CI pipelines on GitHub-hosted runners with internet access |
+| **JWT HMAC-SHA256** | `generate-token.py` offline tool | Shared secret in `secrets.json` | `role` claim in token payload | Legacy fallback — avoid for new integrations |
+
+#### Why OIDC Is Not the Phase 2 Primary
+
+GitHub OIDC tokens are the most secure option for CI — keyless, short-lived, and carry rich claims (repo, branch, workflow, actor). However they require the signing server to fetch GitHub's public keys from `https://token.actions.githubusercontent.com/.well-known/jwks`. This is an **internet egress call** — incompatible with the air-gapped server design.
+
+Options if OIDC is needed in future:
+1. **ALB OIDC offload** — ALB validates the OIDC token and injects a verified identity header before forwarding. Server trusts the header, no direct GitHub call needed.
+2. **Relay service** — A lightweight non-air-gapped service validates the OIDC token and exchanges it for a pre-shared app token.
+3. **Relax egress** — Add a NAT rule allowing outbound HTTPS to `token.actions.githubusercontent.com` only. Breaks the full air-gap but is scoped.
+
+#### Workflow and Repository-Level Restrictions (OIDC)
+
+This is the most granular security control available — enforced when GitHub OIDC tokens are used. The OIDC token carries claims that identify not just the caller machine but the specific GitHub repository, branch, and workflow file that triggered the signing request. The server validates all three:
+
+```
+OIDC token claims checked by authorize_oidc_request():
+
+  repository    → must be in allowed_repositories list
+                  e.g. "ROCm/TheRock" — forks and personal repos rejected
+
+  ref           → must match allowed_refs pattern
+                  e.g. "refs/heads/main" or "refs/heads/release/*"
+                  dev branches cannot request the release key
+
+  workflow      → must match allowed_workflows list
+                  e.g. ".github/workflows/build_native_linux_packages.yml"
+                  only the designated workflow can sign — not ad-hoc runs
+```
+
+Example `authorization.json` OIDC role mapping:
+
+```json
+{
+  "oidc_role_mapping": {
+    "refs/heads/main":       "release",
+    "refs/heads/release/*":  "release",
+    "refs/heads/*":          "nightly",
+    "refs/pull/*":           "dev"
+  },
+  "roles": {
+    "release": {
+      "allowed_repositories": ["ROCm/TheRock"],
+      "allowed_refs":         ["refs/heads/main", "refs/heads/release/*"],
+      "allowed_workflows":    [".github/workflows/build_native_linux_packages.yml"],
+      "allowed_keys":         ["therock-release@amd.com"],
+      "max_requests_per_hour": 1000
+    },
+    "nightly": {
+      "allowed_repositories": ["ROCm/TheRock"],
+      "allowed_refs":         ["refs/heads/*"],
+      "allowed_workflows":    [".github/workflows/build_native_linux_packages.yml"],
+      "allowed_keys":         ["therock-nightly@amd.com"],
+      "max_requests_per_hour": 5000
+    }
+  }
+}
+```
+
+This means:
+- A PR branch (`refs/pull/*`) can only get the dev key — never release
+- A fork of TheRock (`contributor/TheRock`) is rejected even with a valid OIDC token
+- A different workflow file (e.g. a manually triggered `sign-all.yml`) is rejected
+- Only the specific workflow file defined in the config can trigger release signing
+
+With pre-shared app tokens (Phase 2 primary), workflow/repo restrictions are enforced by the CI workflow itself — the token is scoped per tier at provisioning time, and the workflow controls which tier's token it uses based on the branch. The server trusts the token-to-tier mapping but does not inspect the GitHub context independently.
+
+#### Authorization After Authentication
+
+Once the auth mechanism validates the token and determines the caller's role, authorization checks whether that role is permitted to use the requested `key_id` (or resolved `tier`) and `digest_algo`:
+
+```python
+# From auth.py authorize_request()
+roles[role]['allowed_keys']         → must include requested key_id/tier
+roles[role]['allowed_digest_algos'] → must include digest_algo
+roles[role]['max_requests_per_hour'] → sliding window rate limit for role
+```
+
+In Phase 1 with no auth, the authorization config is still loaded for rate limiting — the `default` role applies to all requests, keyed by source IP.
+
+#### Audit Trail Per Auth Type
+
+Every signing request logs `auth_type` so the audit trail captures how each request was authenticated:
+
+```json
+{"auth_type": "none",  ...}  ← Phase 1, no token
+{"auth_type": "token", ...}  ← Phase 2 pre-shared token
+{"auth_type": "oidc",  ...,  "repository": "ROCm/TheRock", "ref": "refs/heads/main", "workflow": "..."}
+{"auth_type": "jwt",   ...}  ← Legacy JWT fallback
+```
+
+OIDC entries additionally include `repository`, `ref`, `workflow`, `actor`, `run_id`, and `event_name` from the token claims — giving a full CI context audit trail at no extra cost.
+
 ### 4.2 Primary + Secondary with Scheduled Key Sync
 
 Two signing server instances run in separate Availability Zones: a primary and a hot standby secondary. Both hold identical GPG keys, fetched independently from AWS Secrets Manager on a schedule (not server-to-server sync). There is no sync channel between them, which preserves the air-gap on each instance.
