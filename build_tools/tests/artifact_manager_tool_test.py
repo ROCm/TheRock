@@ -729,6 +729,119 @@ class TestFetchStageAll(ArtifactManagerTestBase):
         with self.assertRaises(ValueError):
             artifact_manager.main(argv)
 
+    def test_fetch_include_artifacts_fetches_only_named_artifacts(self) -> None:
+        """Test that --include-artifacts restricts the fetch to named artifacts."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("second-artifact", "lib", "generic")
+        self._create_staged_artifact("downstream-artifact", "lib", "generic")
+
+        extract_calls: list[artifact_manager.ExtractRequest] = []
+
+        def mock_extract(request: artifact_manager.ExtractRequest) -> Path:
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--include-artifacts",
+                "second-artifact",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertIn("second-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertNotIn("test-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertNotIn("downstream-artifact_lib_generic.tar.zst", fetched_keys)
+
+    def test_fetch_include_artifacts_applied_before_exclude(self) -> None:
+        """Test that --include-artifacts is applied before --exclude-artifacts.
+
+        The include filter restricts to the named set first; the exclude filter
+        then removes from that set. Passing both should intersect then subtract.
+        """
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("second-artifact", "lib", "generic")
+        self._create_staged_artifact("downstream-artifact", "lib", "generic")
+
+        extract_calls: list[artifact_manager.ExtractRequest] = []
+
+        def mock_extract(request: artifact_manager.ExtractRequest) -> Path:
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--include-artifacts",
+                "test-artifact,second-artifact",
+                "--exclude-artifacts",
+                "second-artifact",
+            ]
+
+            artifact_manager.main(argv)
+
+        # Include narrows to {test-artifact, second-artifact}; exclude then
+        # removes second-artifact, leaving only test-artifact.
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertIn("test-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertNotIn("second-artifact_lib_generic.tar.zst", fetched_keys)
+        self.assertNotIn("downstream-artifact_lib_generic.tar.zst", fetched_keys)
+
+    def test_fetch_include_artifacts_rejects_unknown_artifact(self) -> None:
+        """Test that --include-artifacts validates artifact names."""
+        import artifact_manager
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--include-artifacts",
+            "unknown-artifact",
+        ]
+
+        with self.assertRaises(ValueError):
+            artifact_manager.main(argv)
+
 
 class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
     """Tests that fetch command correctly handles --amdgpu-targets for split artifacts."""
