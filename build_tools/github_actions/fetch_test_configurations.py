@@ -494,7 +494,7 @@ test_matrix = {
         "additional_requirements_files": [
             "share/rocprofiler-sdk/tests/requirements.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
