@@ -99,7 +99,9 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit
     with:
-      matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_family_info) }}
+      # per_arch_family_info omits architecture-independent families (e.g.
+      # amdgcnspirv) so per-arch stages (math-libs) do not fan out for them.
+      matrix_per_family_json: ${{ toJSON(fromJSON(inputs.build_config).per_arch_family_info) }}
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       build_variant_label: ${{ fromJSON(inputs.build_config).build_variant_label }}

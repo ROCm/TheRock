@@ -90,6 +90,28 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                 if not variants:
                     self.fail(f"{target_name}/{platform} has empty build_variants")
 
+    def test_amdgcnspirv_is_not_per_arch(self):
+        """amdgcnspirv opts out of per-arch build stages via build-per-arch.
+
+        Architecture-independent families must set build-per-arch False so the
+        per-arch stages (e.g. math-libs) skip them; every other family defaults
+        to per-arch (the key is absent, treated as True downstream).
+        """
+        self.assertIn("amdgcnspirv", ALL_FAMILIES)
+        self.assertFalse(
+            ALL_FAMILIES["amdgcnspirv"]["linux"].get("build-per-arch", True)
+        )
+        for target_name, entry in ALL_FAMILIES.items():
+            if target_name == "amdgcnspirv":
+                continue
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                self.assertTrue(
+                    entry[platform].get("build-per-arch", True),
+                    f"{target_name}/{platform} unexpectedly opts out of per-arch",
+                )
+
 
 class TestExternalConfig(unittest.TestCase):
     """Tests for external config loading functionality."""

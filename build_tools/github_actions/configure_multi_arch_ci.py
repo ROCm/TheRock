@@ -481,6 +481,12 @@ class BuildConfig:
     """
 
     per_family_info: list[dict]  # Per-family metadata for test/artifact jobs
+    # Subset of per_family_info restricted to families that participate in
+    # per-arch build stages (build-per-arch True). Feeds the math-libs matrix.
+    # Architecture-independent families (e.g. amdgcnspirv) are omitted so those
+    # per-arch stages never fan out for them (they still appear in
+    # per_family_info / dist_amdgpu_families for the generic stages and tests).
+    per_arch_family_info: list[dict]
     dist_amdgpu_families: str  # Semicolon-separated
     artifact_group: str
     build_variant_label: str
@@ -719,7 +725,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.startswith("gfx"):
+            # `amdgcnspirv` is the architecture-independent SPIR-V family; it
+            # does not use the `gfx` prefix but is still a selectable target.
+            if label.startswith("gfx") or label.startswith("amdgcnspirv"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
                 # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
@@ -1082,6 +1090,13 @@ def _expand_build_config_for_platform(
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),
+            # Whether this family participates in per-arch build stages (e.g.
+            # math-libs). Defaults to True. Architecture-independent families
+            # such as amdgcnspirv set this False: their per-arch library
+            # projects have no support for the target yet, so only the
+            # generic/host stages build for them. Consumed by the math-libs
+            # job `if:` in multi_arch_build_portable_{linux,windows}.yml.
+            "build-per-arch": platform_info.get("build-per-arch", True),
         }
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
@@ -1134,8 +1149,11 @@ def _expand_build_config_for_platform(
     # Python package build is disabled. Then multi_arch_ci_* can also condition
     # build_python_packages on that decision.
 
+    per_arch_family_info = [f for f in per_family_info if f["build-per-arch"]]
+
     return BuildConfig(
         per_family_info=per_family_info,
+        per_arch_family_info=per_arch_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],

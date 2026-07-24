@@ -257,6 +257,65 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
+# amdgcnspirv architecture-independent portable SPIR-V target.
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY generic
+  EXCLUDE_TARGET_PROJECTS
+    MIOpen                        # GPU: explicit — gfx conv/GEMM kernels
+    ROCR-Runtime                  # GPU: explicit — image-blit .cl + gfx trap/blit .s assembly
+    aqlprofile                    # GPU: explicit — device profiling test kernels (.cl)
+    composable_kernel             # GPU: explicit — gfx kernel templates
+    hip-clr                       # GPU: explicit — compiles HIP device PCH/bitcode (--offload-arch gfx906/gfx1030)
+    hip-tests                     # GPU: explicit — HIP device test kernels
+    hipBLAS                       # GPU: implicit — via rocBLAS/hip-clr
+    hipBLAS-common                # GPU: implicit — via hip-clr
+    hipBLASLt                     # GPU: explicit — gfx GEMM kernels
+    hipCUB                        # GPU: explicit — HIP device library
+    hipDNN                        # GPU: implicit — via hip-clr
+    hipDNN_samples                # GPU: explicit — HIP device sample kernels
+    hipFFT                        # GPU: explicit — HIP device kernels
+    hipInfo                       # GPU: implicit — via hip-clr
+    hipRAND                       # GPU: explicit — HIP device kernels
+    hipSOLVER                     # GPU: implicit — via rocSOLVER/hip-clr
+    hipSPARSE                     # GPU: implicit — via rocSPARSE/hip-clr
+    hipSPARSELt                   # GPU: implicit — via hipSPARSE/hip-clr
+    hipTensor                     # GPU: explicit — gfx kernels (via composable_kernel)
+    hipblasltprovider             # GPU: implicit — via hipBLASLt
+    hipdnn_integration_tests      # GPU: implicit — via hip-clr
+    hipfile                       # GPU: explicit — memcpy-kernel.hip
+    hipkernelprovider             # GPU: explicit — rocKE per-arch AOT kpack (split_databases)
+    libhipcxx                     # GPU: explicit — target-specific device headers + device tests
+    miopenprovider                # GPU: explicit — enable_language(HIP)
+    mirage                        # GPU: explicit — HIP device kernels
+    mxDataGenerator               # GPU: explicit — enable_language(HIP)
+    ocl-clr                       # GPU: explicit — OpenCL runtime device builtins
+    rccl                          # GPU: explicit — GCN-assembly device collectives + device linker
+    rccl-tests                    # GPU: explicit — hipcc device test kernels
+    rdc                           # GPU: explicit — .cl compiled to .hsaco code objects
+    rocALUTION                    # GPU: explicit — HIP device kernels
+    rocBLAS                       # GPU: explicit — gfx GEMM kernels (Tensile/rocRoller)
+    rocFFT                        # GPU: explicit — HIP device kernels
+    rocPRIM                       # GPU: explicit — HIP device library (enable_language(HIP))
+    rocPRIM_tests                 # GPU: explicit — HIP device tests
+    rocRAND                       # GPU: explicit — HIP device kernels
+    rocRoller                     # GPU: explicit — in-process gfx kernel codegen/assembler
+    rocSOLVER                     # GPU: explicit — HIP device kernels
+    rocSPARSE                     # GPU: explicit — HIP device kernels
+    rocThrust                     # GPU: explicit — HIP device library
+    rocWMMA                       # GPU: explicit — HIP device kernels
+    rocdecode                     # GPU: explicit — HIP colorspace/resize device kernels
+    rocjitsu                      # GPU: explicit — HIP device kernels
+    rocjpeg                       # GPU: explicit — HIP jpeg device kernels (GPU_TARGETS)
+    rocm-kpack                    # GPU: explicit — HIP example kernels (canonical_hip_example)
+    rocprofiler-compute           # GPU: explicit — HIP device test kernels
+    rocprofiler-sdk               # GPU: explicit — PC-sampling device test kernels
+    rocprofiler-systems           # GPU: explicit — HIP device example kernels
+    rocprofiler-systems-examples  # GPU: explicit — HIP device example kernels
+    rocr-debug-agent-tests        # GPU: explicit — HIP device test kernel
+    rocrtst                       # GPU: explicit — .cl device test kernels
+    rocshmem                      # GPU: explicit — custom device-bitcode (-mtriple=amdgcn -mcpu)
+    roctracer                     # GPU: explicit — device test kernel (.cl); also deps hip-clr
+)
+
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)
 
