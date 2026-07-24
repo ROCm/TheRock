@@ -76,6 +76,39 @@ def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
     return f"therock-dist-{platform}-{artifact_group}-{version}.tar.gz"
 
 
+class TestMultiarchTarballNamePattern(unittest.TestCase):
+    def test_extracts_named_filename_parts(self) -> None:
+        test_cases = [
+            ("linux", "gfx94X-dcgpu", "7.15.0a20260722"),
+            ("windows", "gfx110X-all", "7.15.0rc20260722"),
+            ("linux", "gfx90a", "7.15.0.dev0+deadbeef"),
+            ("windows", "multiarch", "7.15.0"),
+        ]
+
+        for platform, artifact_group, version in test_cases:
+            with self.subTest(platform=platform, artifact_group=artifact_group):
+                match = mod.MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(
+                    _tarball_name(platform, artifact_group, version)
+                )
+
+                self.assertIsNotNone(match)
+                self.assertEqual(
+                    match.groupdict(),
+                    {
+                        "platform": platform,
+                        "artifact_group": artifact_group,
+                        "version": version,
+                    },
+                )
+
+    def test_rejects_unversioned_filename(self) -> None:
+        self.assertIsNone(
+            mod.MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(
+                "therock-dist-linux-gfx94X-dcgpu-not-a-version.tar.gz"
+            )
+        )
+
+
 class TestReleaseDiscovery(unittest.TestCase):
     def test_latest_release_dry_run_discovers_non_test_tarball(self) -> None:
         index_html = f"""
@@ -263,16 +296,16 @@ class TestReleaseDiscovery(unittest.TestCase):
 
             self.assertEqual(families, {"gfx94X-dcgpu", "multiarch"})
 
-    def test_unparseable_release_uses_last_modified_for_ordering(self) -> None:
+    def test_stable_release_uses_last_modified_for_ordering(self) -> None:
         index_html = f"""
             <script>
                 const files = [
                     {{
-                        "name": "{_tarball_name(mod.PLATFORM, 'gfx94X-dcgpu', 'legacy-one')}",
+                        "name": "{_tarball_name(mod.PLATFORM, 'gfx94X-dcgpu', '7.15.0')}",
                         "mtime": 100.0
                     }},
                     {{
-                        "name": "{_tarball_name(mod.PLATFORM, 'gfx94X-dcgpu', 'legacy-two')}",
+                        "name": "{_tarball_name(mod.PLATFORM, 'gfx94X-dcgpu', '7.16.0')}",
                         "mtime": 200.0
                     }}
                 ];
@@ -288,7 +321,7 @@ class TestReleaseDiscovery(unittest.TestCase):
 
         self.assertEqual(
             [release["version"] for release in releases],
-            ["legacy-two", "legacy-one"],
+            ["7.16.0", "7.15.0"],
         )
         self.assertEqual(releases[0]["last_modified"], datetime.fromtimestamp(200))
 

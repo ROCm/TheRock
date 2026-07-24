@@ -140,6 +140,17 @@ PLATFORM = platform.system().lower()
 NIGHTLY_TARBALL_INDEX_URL = "https://rocm.nightlies.amd.com/tarball-multi-arch/"
 DEV_TARBALL_INDEX_URL = "https://rocm.devreleases.amd.com/tarball-multi-arch/"
 
+# A published tarball name has a structured version suffix, so this pattern
+# can unambiguously separate hyphenated artifact groups from their version.
+MULTIARCH_TARBALL_VERSION_PATTERN = r"\d+\.\d+\.\d+(?:(?:a|rc)\d{8}|\.dev0\+[0-9a-f]+)?"
+MULTIARCH_TARBALL_NAME_PATTERN = re.compile(
+    r"^therock-dist-"
+    r"(?P<platform>linux|windows)-"
+    r"(?P<artifact_group>.+)-"
+    rf"(?P<version>{MULTIARCH_TARBALL_VERSION_PATTERN})"
+    r"\.tar\.gz$"
+)
+
 
 def parse_nightly_version(version: str) -> Optional[datetime]:
     """
@@ -156,18 +167,16 @@ def parse_nightly_version(version: str) -> Optional[datetime]:
 def extract_version_from_asset_name(
     asset_name: str, artifact_group: str, platform_str: str
 ) -> Optional[str]:
-    """
-    Extract version string from asset name.
-    E.g., 'therock-dist-linux-gfx110X-all-7.11.0a20251124.tar.gz' -> '7.11.0a20251124'
-    """
-    prefix = f"therock-dist-{platform_str}-{artifact_group}-"
-    suffix = ".tar.gz"
-    if asset_name.startswith(prefix) and asset_name.endswith(suffix):
-        version = asset_name[len(prefix) : -len(suffix)]
-        if version.startswith("tests-"):
-            return None
-        return version
-    return None
+    """Extract a release version from a published multi-arch tarball name."""
+    match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
+    if (
+        match is None
+        or match["platform"] != platform_str
+        or match["artifact_group"] != artifact_group
+        or match["artifact_group"].endswith("-tests")
+    ):
+        return None
+    return match["version"]
 
 
 class _TarballIndexParser(HTMLParser):
@@ -258,18 +267,14 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
     Query the multi-arch tarball index to find GPU families with nightly releases.
     Useful for error messages when an invalid GPU family is specified.
     """
-    prefix = f"therock-dist-{platform_str}-"
-    asset_pattern = re.compile(
-        rf"^{re.escape(prefix)}(.+)-\d+\.\d+\.\d+(?:(?:a|rc)\d{{8}})?\.tar\.gz$"
-    )
     families: set[str] = set()
 
     for asset_name in _fetch_multiarch_tarball_asset_names():
         if "-tests-" in asset_name:
             continue
-        match = asset_pattern.match(asset_name)
-        if match:
-            families.add(match.group(1))
+        match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
+        if match and match["platform"] == platform_str:
+            families.add(match["artifact_group"])
 
     return families
 
