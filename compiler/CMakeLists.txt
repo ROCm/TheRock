@@ -42,6 +42,12 @@ if(THEROCK_ENABLE_COMPILER)
      message(WARNING "LLVM parallel link jobs is unlimited. Memory usage may be much higher. Set -DLLVM_PARALLEL_LINK_JOBS to reduce memory use.")
   endif()
 
+  # Forward coverage build options to LLVM/compiler-rt if set.
+  if(COMPILER_RT_BUILD_PROFILE_ROCM)
+    message(STATUS "COMPILER_RT_BUILD_PROFILE_ROCM enabled - building device profiling runtime")
+    list(APPEND _extra_llvm_cmake_args "-DCOMPILER_RT_BUILD_PROFILE_ROCM=ON")
+  endif()
+
   # If the compiler is not pristine (i.e. has patches), then there will be a
   # ".amd-llvm.smrev" file present which must be used instead of the auto
   # computed git revision. If present, this will have a stable hash of

@@ -50,19 +50,56 @@ else()
 
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
-      list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
+      # Skip flang-rt for coverage builds to reduce memory usage
+      if(NOT COMPILER_RT_BUILD_PROFILE_ROCM)
+        list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
+        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+        set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
+      endif()
       set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
       set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
-      set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
+      if(COMPILER_RT_BUILD_PROFILE_ROCM)
+        # Coverage build: minimal runtimes for device profiling
+        set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc")
+        set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake")
+        set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_PROFILE_BAREMETAL OFF)
+        set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_BUILD_PROFILE_ROCM ON)
+        set(RUNTIMES_amdgcn-amd-amdhsa_RUNTIMES_USE_LIBC "llvm-libc")
+      else()
+        # Normal build: full runtimes including flang-rt
+        set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+        set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
+        set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
+        set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      endif()
       #TODO: Enable when HWLOC dependency is figured out
       #set(LIBOMP_USE_HWLOC ON)
     endif()
   endif()
+
+  # Device PGO/coverage support requires building compiler-rt for amdgcn targets.
+  # Per LLVM HIP offload PGO docs, the toolchain needs LLVM_RUNTIME_TARGETS with
+  # amdgcn-amd-amdhsa and the device runtime configuration.
+  if(COMPILER_RT_BUILD_PROFILE_ROCM)
+    # Coverage builds are memory-intensive due to cross-compiling for amdgcn.
+    # Disable Flang (not needed for HIP coverage) to reduce memory pressure.
+    set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+
+    if(NOT DEFINED LLVM_RUNTIME_TARGETS)
+      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
+    elseif(NOT "amdgcn-amd-amdhsa" IN_LIST LLVM_RUNTIME_TARGETS)
+      list(APPEND LLVM_RUNTIME_TARGETS "amdgcn-amd-amdhsa")
+    endif()
+    set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
+    set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc")
+    set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake")
+    # AMDGPU.cmake sets COMPILER_RT_PROFILE_BAREMETAL=ON which disables COMPILER_RT_BUILD_PROFILE_ROCM by default.
+    # Override it to ensure device profiling runtime is built.
+    set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_PROFILE_BAREMETAL OFF)
+    set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_BUILD_PROFILE_ROCM ON)
+    set(RUNTIMES_amdgcn-amd-amdhsa_RUNTIMES_USE_LIBC "llvm-libc")
+  endif()
+
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
   # source otherwise. Defaults to `ON`.

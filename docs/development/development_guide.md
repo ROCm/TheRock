@@ -201,6 +201,18 @@ For example, this will add options to set tensilelite build parallel and keep bu
   -DhipBLASLt_CMAKE_ARGS="-DTENSILELITE_BUILD_PARALLEL_LEVEL=32;-DTENSILELITE_KEEP_BUILD_TMP=ON"
 ```
 
+- `{PROJECT}_ENABLE_COVERAGE` (uppercase project name required)
+
+TheRock checks for `-D<PROJECT_NAME>_ENABLE_COVERAGE` flags (with uppercase project names) and passes them through to the corresponding subproject. If defined, the flag and its value are forwarded automatically. Note that the project name must be uppercase (e.g., `HIPDNN_ENABLE_COVERAGE`, not `hipDNN_ENABLE_COVERAGE`).
+
+```bash
+# Enable code coverage for hipDNN (note: HIPDNN, not hipDNN)
+cmake -B build -DHIPDNN_ENABLE_COVERAGE=ON
+
+# Enable for multiple components
+cmake -B build -DHIPDNN_ENABLE_COVERAGE=ON -DROCBLAS_ENABLE_COVERAGE=ON
+```
+
 ### Additional CMake developer ergonomic flags
 
 We add developer ergonomic flags as needed in order to support project-wide development activities. This currently includes:
