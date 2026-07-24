@@ -48,6 +48,7 @@ from dataclasses import dataclass
 import os
 import platform as platform_module
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -71,6 +72,7 @@ from _therock_utils.artifact_backend import (
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
 from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from find_artifacts_for_commit import find_artifacts_for_commit, GitHubAPIError
 
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
@@ -104,6 +106,53 @@ def get_topology(topology_path: Optional[Path] = None) -> BuildTopology:
     if not topology_path.exists():
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {topology_path}")
     return BuildTopology(str(topology_path))
+
+
+def _get_current_commit(repo_root: Path) -> str:
+    """Returns the currently checked-out commit SHA via `git rev-parse HEAD`."""
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _resolve_run_id_for_commit(
+    args: argparse.Namespace, target_families: List[str]
+) -> str:
+    """Resolves --run-id by finding the CI workflow run for the current HEAD commit.
+
+    Reuses find_artifacts_for_commit(), the same lookup find_artifacts_for_commit.py's
+    own CLI uses, so a developer with a commit checked out doesn't need to run that
+    script separately to discover a run ID.
+    """
+    commit = _get_current_commit(get_default_topology_path().parent)
+    log(f"Looking up CI workflow run for commit {commit}...")
+    try:
+        results = find_artifacts_for_commit(
+            commit=commit,
+            artifact_groups=target_families,
+            platform=args.platform,
+        )
+    except GitHubAPIError as e:
+        log(f"ERROR: {e}")
+        sys.exit(2)
+    if not results:
+        log(
+            f"ERROR: No CI artifacts found for commit {commit} (platform={args.platform})"
+        )
+        sys.exit(1)
+    run_ids = sorted({r.workflow_run_id for r in results}, key=int)
+    run_id = run_ids[-1]
+    if len(run_ids) > 1:
+        log(
+            f"WARNING: multiple workflow runs matched ({run_ids}); using most recent {run_id}"
+        )
+    log(f"Resolved commit {commit} -> workflow run {run_id}")
+    return run_id
 
 
 # =============================================================================
@@ -376,6 +425,10 @@ def do_fetch(args: argparse.Namespace):
         )
 
     target_families = parse_target_families(args)
+
+    if args.find_matching_commit:
+        args.run_id = _resolve_run_id_for_commit(args, target_families)
+
     excluded_artifacts = parse_excluded_artifacts(
         args.exclude_artifacts,
         set(topology.artifacts.keys()),
@@ -1118,10 +1171,17 @@ def _add_target_args(parser: argparse.ArgumentParser):
     )
 
 
-def _add_backend_args(parser: argparse.ArgumentParser):
-    """Add common backend-related arguments to a subparser."""
+def _add_backend_args(
+    parser: argparse.ArgumentParser,
+) -> argparse._MutuallyExclusiveGroup:
+    """Add common backend-related arguments to a subparser.
+
+    Returns the mutually exclusive group that owns --run-id so a subcommand can
+    add alternative run-id sources (e.g. fetch's --find-matching-commit) to it.
+    """
     _add_common_args(parser)
-    parser.add_argument(
+    run_id_group = parser.add_mutually_exclusive_group()
+    run_id_group.add_argument(
         "--run-id",
         type=str,
         default=os.getenv("THEROCK_RUN_ID", os.getenv("GITHUB_RUN_ID", "local")),
@@ -1146,6 +1206,7 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         default=os.getenv("THEROCK_LOCAL_STAGING_DIR"),
         help="Local staging directory (sets THEROCK_LOCAL_STAGING_DIR)",
     )
+    return run_id_group
 
 
 def main(argv: Optional[List[str]] = None):
@@ -1160,7 +1221,7 @@ def main(argv: Optional[List[str]] = None):
     fetch_parser = subparsers.add_parser(
         "fetch", help="Fetch inbound artifacts for a stage"
     )
-    _add_backend_args(fetch_parser)
+    fetch_run_id_group = _add_backend_args(fetch_parser)
     fetch_parser.add_argument(
         "--stage",
         type=str,
@@ -1168,6 +1229,15 @@ def main(argv: Optional[List[str]] = None):
         help="Build stage name (default: 'all' fetches all artifacts)",
     )
     _add_target_args(fetch_parser)
+    # Mutually exclusive with --run-id (same group): --find-matching-commit
+    # resolves the run ID itself, so passing both on the command line is an error.
+    fetch_run_id_group.add_argument(
+        "--find-matching-commit",
+        action="store_true",
+        help="Resolve --run-id automatically by finding the CI workflow run "
+        "that produced artifacts for the current HEAD commit. "
+        "Uses the same lookup as find_artifacts_for_commit.py.",
+    )
     fetch_parser.add_argument(
         "--output-dir",
         type=Path,

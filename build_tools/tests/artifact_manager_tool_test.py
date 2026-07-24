@@ -730,6 +730,173 @@ class TestFetchStageAll(ArtifactManagerTestBase):
             artifact_manager.main(argv)
 
 
+class TestFetchFindMatchingCommit(ArtifactManagerTestBase):
+    """Tests that fetch --find-matching-commit resolves --run-id automatically."""
+
+    def _make_run_info(self, workflow_run_id: str, artifact_group: str):
+        from find_artifacts_for_commit import ArtifactRunInfo
+
+        return ArtifactRunInfo(
+            git_commit_sha="deadbeef",
+            github_repository_name="ROCm/TheRock",
+            external_repo="",
+            platform=TEST_PLATFORM,
+            artifact_group=artifact_group,
+            workflow_file_name="multi_arch_ci.yml",
+            workflow_run_id=workflow_run_id,
+            workflow_run_status="completed",
+            workflow_run_conclusion="success",
+            workflow_run_html_url="https://example.invalid/run",
+            s3_bucket="therock-ci-artifacts",
+        )
+
+    @mock.patch("artifact_manager._get_current_commit")
+    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("artifact_manager.find_artifacts_for_commit")
+    def test_find_matching_commit_resolves_run_id(
+        self, mock_find_artifacts, mock_backend_factory, mock_get_current_commit
+    ):
+        """Test that the checked-out HEAD commit resolves to a run ID passed to create_backend_from_env."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic", run_id="99999")
+        mock_get_current_commit.return_value = "headcommit"
+        mock_find_artifacts.return_value = [self._make_run_info("99999", "generic")]
+        mock_backend_factory.side_effect = lambda **kwargs: LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id=kwargs["run_id"], platform=TEST_PLATFORM
+            ),
+        )
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--platform",
+            TEST_PLATFORM,
+            "--find-matching-commit",
+            "--no-extract",
+        ]
+
+        artifact_manager.main(argv)
+
+        mock_get_current_commit.assert_called_once()
+        mock_find_artifacts.assert_called_once()
+        self.assertEqual(mock_find_artifacts.call_args.kwargs["commit"], "headcommit")
+        self.assertEqual(
+            mock_backend_factory.call_args.kwargs["run_id"],
+            "99999",
+        )
+
+    @mock.patch("artifact_manager._get_current_commit")
+    @mock.patch("artifact_manager.find_artifacts_for_commit")
+    def test_find_matching_commit_exits_when_no_run_found(
+        self, mock_find_artifacts, mock_get_current_commit
+    ):
+        """Test that fetch exits with code 1 when no matching CI run is found."""
+        import artifact_manager
+
+        mock_get_current_commit.return_value = "headcommit"
+        mock_find_artifacts.return_value = []
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--platform",
+            TEST_PLATFORM,
+            "--find-matching-commit",
+        ]
+
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 1)
+
+    @mock.patch("artifact_manager._get_current_commit")
+    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("artifact_manager.find_artifacts_for_commit")
+    def test_find_matching_commit_picks_most_recent_of_multiple_runs(
+        self, mock_find_artifacts, mock_backend_factory, mock_get_current_commit
+    ):
+        """Test that the numerically largest run ID wins when runs disagree."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic", run_id="22222")
+        mock_get_current_commit.return_value = "headcommit"
+        mock_find_artifacts.return_value = [
+            self._make_run_info("11111", "generic"),
+            self._make_run_info("22222", "gfx1151"),
+        ]
+        mock_backend_factory.side_effect = lambda **kwargs: LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id=kwargs["run_id"], platform=TEST_PLATFORM
+            ),
+        )
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--platform",
+            TEST_PLATFORM,
+            "--find-matching-commit",
+            "--amdgpu-families",
+            "gfx1151",
+            "--no-extract",
+        ]
+
+        artifact_manager.main(argv)
+
+        self.assertEqual(mock_backend_factory.call_args.kwargs["run_id"], "22222")
+
+    @mock.patch("artifact_manager._get_current_commit")
+    @mock.patch("artifact_manager.find_artifacts_for_commit")
+    def test_find_matching_commit_conflicts_with_explicit_run_id(
+        self, mock_find_artifacts, mock_get_current_commit
+    ):
+        """Test that passing both --run-id and --find-matching-commit is rejected."""
+        import artifact_manager
+
+        argv = [
+            "fetch",
+            "--stage",
+            "all",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "12345",
+            "--find-matching-commit",
+        ]
+
+        # argparse's mutually exclusive group rejects this at parse time (exit
+        # code 2), so the commit lookup never runs.
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 2)
+        mock_get_current_commit.assert_not_called()
+        mock_find_artifacts.assert_not_called()
+
+
 class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
     """Tests that fetch command correctly handles --amdgpu-targets for split artifacts."""
 
