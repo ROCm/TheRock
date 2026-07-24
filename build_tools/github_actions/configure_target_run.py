@@ -1,7 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""This file looks up the test-runs-on runner label for a given GPU family.
+"""This file looks up the runner label to run JAX tests on for a GPU family.
+
+JAX tests need multiple GPUs (e.g. multi_device_test), so the family's
+multi-GPU runner ("test-runs-on-multi-gpu") is preferred, falling back to the
+single-GPU runner ("test-runs-on") for families without a dedicated multi-GPU
+machine.
 
 Environment variable inputs:
     * 'TARGET': A GPU family like 'gfx95X-dcgpu' or 'gfx1151', corresponding
@@ -41,8 +46,12 @@ def get_runner_label(target: str, platform: str) -> str:
             )
             continue
 
-        # If there is a test machine available for this target, run on it.
-        test_runs_on_machine = platform_for_key.get("test-runs-on")
+        # JAX tests need multiple GPUs, so prefer the family's multi-GPU runner
+        # and fall back to the single-GPU runner when there is no dedicated
+        # multi-GPU machine for this family.
+        test_runs_on_machine = platform_for_key.get(
+            "test-runs-on-multi-gpu"
+        ) or platform_for_key.get("test-runs-on")
         if test_runs_on_machine:
             print(f"  Found runner: '{test_runs_on_machine}'")
             return test_runs_on_machine
