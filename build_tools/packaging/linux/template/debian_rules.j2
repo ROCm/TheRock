@@ -49,6 +49,9 @@ override_dh_installdocs:
 override_dh_shlibdeps:
 	@echo "Skipping dh_shlibdeps"
 
+override_dh_makeshlibs:
+	dh_makeshlibs -X.co
+
 
 override_dh_clean:
 	dh_clean
