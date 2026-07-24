@@ -258,22 +258,7 @@ def run(args: argparse.Namespace):
 
     profiler_artifacts = params.filter_artifacts(
         profiler_artifact_filter,
-        includes=[
-            # rocprofiler-systems
-            "bin/rocprof-sys-*",
-            "include/rocprofiler-systems/**",
-            "lib/librocprof-sys*",
-            "lib/libprofiler-hub.so*",
-            "lib/python/site-packages/rocprofsys/**",
-            "lib/rocprofiler-systems/**",
-            "libexec/rocprofiler-systems/**",
-            "share/**/rocprofiler-systems/**",
-            # rocprofiler-compute
-            "bin/rocprof-*",
-            "libexec/rocprofiler-compute/**",
-            "lib/rocprofiler-compute/**",
-            "share/**/rocprofiler-compute/**",
-        ],
+        includes=PROFILER_WHEEL_INCLUDES,
     )
 
     if profiler_artifacts.artifact_names:
@@ -571,6 +556,29 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
+
+
+# File-path allowlist for the rocm-profiler wheel, applied on top of
+# profiler_artifact_filter(). rocprofiler-systems' own ProfilerHub.cmake
+# vendors profiler-hub as a runtime .so dependency (NEEDED libprofiler-hub.so.0);
+# it stages into the same lib/ dir as librocprof-sys* but needs its own glob
+# entry here, or it gets silently dropped from the wheel.
+PROFILER_WHEEL_INCLUDES = [
+    # rocprofiler-systems
+    "bin/rocprof-sys-*",
+    "include/rocprofiler-systems/**",
+    "lib/librocprof-sys*",
+    "lib/libprofiler-hub.so*",
+    "lib/python/site-packages/rocprofsys/**",
+    "lib/rocprofiler-systems/**",
+    "libexec/rocprofiler-systems/**",
+    "share/**/rocprofiler-systems/**",
+    # rocprofiler-compute
+    "bin/rocprof-*",
+    "libexec/rocprofiler-compute/**",
+    "lib/rocprofiler-compute/**",
+    "share/**/rocprofiler-compute/**",
+]
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
