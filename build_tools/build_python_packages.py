@@ -67,15 +67,16 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
 
 
 def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
-    """Recreate unversioned profiler library symlinks expected by dlopen()."""
+    """Recreate unversioned library symlinks for profiler runtime dependencies."""
     profiler_lib_dir = profiler.platform_dir / "lib"
 
-    for target in profiler_lib_dir.glob("librocprof-sys*.so.*"):
-        if target.is_symlink():
-            continue
-        link = target.with_suffix("")
-        if not link.exists():
-            link.symlink_to(target.name)
+    for pattern in ("librocprof-sys*.so.*", "libprofiler-hub*.so.*"):
+        for target in profiler_lib_dir.glob(pattern):
+            if target.is_symlink():
+                continue
+            link = target.with_suffix("")
+            if not link.exists():
+                link.symlink_to(target.name)
 
 
 def _platform_targets(
