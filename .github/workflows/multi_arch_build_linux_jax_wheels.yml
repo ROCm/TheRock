@@ -58,6 +58,10 @@ on:
         description: "Release type."
         type: string
         required: true
+      test_size:
+        description: "JAX test size to run (small|medium|large)."
+        type: string
+        default: "small"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -124,6 +128,10 @@ on:
         description: "Release type."
         type: string
         required: true
+      test_size:
+        description: "JAX test size to run (small|medium|large)."
+        type: string
+        default: "small"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -329,6 +337,7 @@ jobs:
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       release_type: ${{ inputs.release_type }}
+      test_size: ${{ inputs.test_size }}
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
