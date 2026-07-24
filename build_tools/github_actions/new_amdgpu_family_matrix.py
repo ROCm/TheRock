@@ -59,7 +59,7 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 
 amdgpu_family_predefined_groups = {
     # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
-    "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all"],
+    "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all", "amdgcnspirv"],
     # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
     "amdgpu_postsubmit": ["gfx950-dcgpu"],
     # The 'nightly' matrix runs on 'schedule' triggers.
@@ -71,6 +71,7 @@ amdgpu_family_predefined_groups = {
         "gfx1152",
         "gfx1153",
         "gfx125X-dcgpu",
+        "amdgcnspirv",
     ],
 }
 
@@ -503,6 +504,26 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx1030-gpu-rocm",
                     },
+                    "fetch-gfx-targets": [],
+                    "sanity_check_only_for_family": True,
+                },
+                "release": {
+                    "push_on_success": False,
+                    "bypass_tests_for_releases": False,
+                },
+            },
+        }
+    },
+    "gpu-generic": {
+        "amdgcnspirv": {
+            "linux": {
+                "build": {
+                    "build_variants": ["release"],
+                },
+                "test": {
+                    # No hardware to test SPIR-V on; build-only.
+                    "run_tests": False,
+                    "runs_on": {},
                     "fetch-gfx-targets": [],
                     "sanity_check_only_for_family": True,
                 },
