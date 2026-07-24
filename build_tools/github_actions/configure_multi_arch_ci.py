@@ -884,27 +884,25 @@ def decide_jobs(
         windows_amdgpu_families=targets.windows_families,
     )
 
-    # Only reuse-stage mode returns non-empty applied_reuse_stages.
-    for stage in auto_stage_reuse.applied_reuse_stages:
-        stage_decisions.setdefault(stage, JobAction.PREBUILT)
-
     # For cross-repo artifact reuse, pass through the baseline_repository so
     # the copy job knows which repository to fetch artifacts from.
     baseline_repository = ci_inputs.baseline_repository
 
-    # Determine baseline_run_id: auto-selected run IDs are only valid when
-    # queried from the same repository. When baseline_repository differs from
-    # GITHUB_REPOSITORY (cross-repo reuse), we must use the manually supplied
-    # baseline_run_id since auto_stage_reuse queried the wrong repository.
-    baseline_run_id = ci_inputs.baseline_run_id
+    # Determine if this is cross-repo reuse. When baseline_repository differs
+    # from GITHUB_REPOSITORY, automatic stage reuse is not applicable because
+    # it queries the current repo, not the baseline repo.
     current_repo = os.environ.get("GITHUB_REPOSITORY", "")
     is_cross_repo = baseline_repository and baseline_repository != current_repo
-    if (
-        not is_cross_repo
-        and auto_stage_reuse.applied_reuse_stages
-        and auto_stage_reuse.baseline_run_id
-    ):
-        baseline_run_id = auto_stage_reuse.baseline_run_id
+
+    # Only apply automatic stage reuse for same-repo scenarios.
+    # Cross-repo reuse uses manually supplied baseline_run_id and prebuilt_stages.
+    baseline_run_id = ci_inputs.baseline_run_id
+    if not is_cross_repo:
+        # reuse-stage mode returns non-empty applied_reuse_stages.
+        for stage in auto_stage_reuse.applied_reuse_stages:
+            stage_decisions.setdefault(stage, JobAction.PREBUILT)
+        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+            baseline_run_id = auto_stage_reuse.baseline_run_id
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,

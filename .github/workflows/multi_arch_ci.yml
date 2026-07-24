@@ -64,7 +64,7 @@ on:
       stage_reuse_baseline_repository:
         type: string
         default: ""
-        description: "Repository to query for baseline runs (default: current repo). Set to 'ROCm/TheRock' for external repos."
+        description: "Repository containing baseline_run_id; defaults to the current repository."
       changed_projects:
         type: string
         default: ""

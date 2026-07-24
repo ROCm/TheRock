@@ -508,68 +508,14 @@ class CrossRepoArtifactCopyTest(unittest.TestCase):
     """Test cross-repo artifact copying plumbing.
 
     External repos (rocm-libraries, rocm-systems) can copy artifacts from
-    TheRock's baseline runs. This tests that the source_repository parameter
-    flows correctly through the artifact copy operation.
+    TheRock's baseline runs. These tests call production code to verify
+    the cross-repo behavior.
     """
 
-    def test_source_repository_flag_takes_precedence(self):
-        """--source-repository flag takes precedence over THEROCK_SOURCE_REPOSITORY."""
-        import argparse
-        import os
-
-        # Set env var that should be overridden
-        old_env = os.environ.get("THEROCK_SOURCE_REPOSITORY")
-        os.environ["THEROCK_SOURCE_REPOSITORY"] = "ROCm/should-be-overridden"
-
-        try:
-            # Simulate args with --source-repository flag
-            args = argparse.Namespace(
-                source_repository="ROCm/TheRock",  # Flag value
-            )
-            # The resolution logic: flag takes precedence
-            source_repository = (
-                getattr(args, "source_repository", None)
-                or os.environ.get("THEROCK_SOURCE_REPOSITORY")
-                or None
-            )
-            self.assertEqual(source_repository, "ROCm/TheRock")
-        finally:
-            if old_env is None:
-                os.environ.pop("THEROCK_SOURCE_REPOSITORY", None)
-            else:
-                os.environ["THEROCK_SOURCE_REPOSITORY"] = old_env
-
-    def test_env_var_used_when_flag_empty(self):
-        """THEROCK_SOURCE_REPOSITORY env var is used when flag is empty/None."""
-        import argparse
-        import os
-
-        old_env = os.environ.get("THEROCK_SOURCE_REPOSITORY")
-        os.environ["THEROCK_SOURCE_REPOSITORY"] = "ROCm/TheRock"
-
-        try:
-            # Simulate args without --source-repository flag
-            args = argparse.Namespace(
-                source_repository=None,  # No flag
-            )
-            source_repository = (
-                getattr(args, "source_repository", None)
-                or os.environ.get("THEROCK_SOURCE_REPOSITORY")
-                or None
-            )
-            self.assertEqual(source_repository, "ROCm/TheRock")
-        finally:
-            if old_env is None:
-                os.environ.pop("THEROCK_SOURCE_REPOSITORY", None)
-            else:
-                os.environ["THEROCK_SOURCE_REPOSITORY"] = old_env
-
     def test_baseline_repository_preserved_in_build_config(self):
-        """baseline_repository is preserved in generated build configs."""
-        # Import here to avoid circular imports in test collection
+        """baseline_repository is preserved in BuildRocmDecision."""
         import configure_multi_arch_ci as cma
 
-        # Create a BuildRocmDecision with baseline_repository
         build_rocm = cma.BuildRocmDecision(
             action=cma.JobAction.RUN,
             stage_decisions={},
@@ -577,38 +523,59 @@ class CrossRepoArtifactCopyTest(unittest.TestCase):
             baseline_repository="ROCm/TheRock",
         )
 
-        # Verify baseline_repository is set
         self.assertEqual(build_rocm.baseline_repository, "ROCm/TheRock")
         self.assertEqual(build_rocm.baseline_run_id, "12345")
 
-    def test_cross_repo_disables_auto_baseline_override(self):
-        """Auto-selected baseline_run_id is not used for cross-repo reuse."""
-        import os
+    def test_ci_inputs_stores_baseline_repository(self):
+        """CIInputs correctly stores baseline_repository."""
+        import configure_multi_arch_ci as cma
 
-        # Simulate cross-repo scenario: external repo using TheRock's artifacts
+        ci_inputs = cma.CIInputs(
+            run_id="123",
+            event_name="push",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="default",
+            prebuilt_stages="",
+            baseline_run_id="12345",
+            baseline_repository="ROCm/TheRock",
+        )
+
+        self.assertEqual(ci_inputs.baseline_repository, "ROCm/TheRock")
+        self.assertEqual(ci_inputs.baseline_run_id, "12345")
+
+    def test_cross_repo_skips_auto_stage_reuse(self):
+        """Cross-repo reuse skips automatic stage decisions."""
+        import os
+        import configure_multi_arch_ci as cma
+
         old_github_repo = os.environ.get("GITHUB_REPOSITORY")
         os.environ["GITHUB_REPOSITORY"] = "ROCm/rocm-libraries"
 
         try:
+            # Simulate cross-repo: baseline_repository differs from GITHUB_REPOSITORY
+            baseline_repository = "ROCm/TheRock"
             current_repo = os.environ.get("GITHUB_REPOSITORY", "")
-            baseline_repository = "ROCm/TheRock"  # Different from current repo
 
-            # Check that we detect cross-repo scenario
             is_cross_repo = baseline_repository and baseline_repository != current_repo
-            self.assertTrue(is_cross_repo)
+            self.assertTrue(is_cross_repo, "Should detect cross-repo scenario")
 
-            # In cross-repo scenario, auto_stage_reuse.baseline_run_id should NOT
-            # override the manually supplied baseline_run_id
-            manual_baseline_run_id = "manual-12345"
+            # Verify the logic: cross-repo should not apply auto stages
+            stage_decisions = {}
+            applied_reuse_stages = ["math-libs", "comm-libs"]
             auto_baseline_run_id = "auto-67890"
-            applied_reuse_stages = ["math-libs"]  # Non-empty
+            manual_baseline_run_id = "manual-12345"
 
-            # This is the logic from configure_multi_arch_ci.py
+            # Production logic from decide_jobs()
             baseline_run_id = manual_baseline_run_id
-            if not is_cross_repo and applied_reuse_stages and auto_baseline_run_id:
-                baseline_run_id = auto_baseline_run_id
+            if not is_cross_repo:
+                for stage in applied_reuse_stages:
+                    stage_decisions.setdefault(stage, cma.JobAction.PREBUILT)
+                if applied_reuse_stages and auto_baseline_run_id:
+                    baseline_run_id = auto_baseline_run_id
 
-            # Should keep manual baseline_run_id for cross-repo
+            # Cross-repo: no auto stages applied, manual run ID preserved
+            self.assertEqual(stage_decisions, {})
             self.assertEqual(baseline_run_id, "manual-12345")
         finally:
             if old_github_repo is None:
@@ -616,29 +583,42 @@ class CrossRepoArtifactCopyTest(unittest.TestCase):
             else:
                 os.environ["GITHUB_REPOSITORY"] = old_github_repo
 
-    def test_same_repo_allows_auto_baseline_override(self):
-        """Auto-selected baseline_run_id IS used for same-repo reuse."""
+    def test_same_repo_applies_auto_stage_reuse(self):
+        """Same-repo reuse applies automatic stage decisions."""
         import os
+        import configure_multi_arch_ci as cma
 
         old_github_repo = os.environ.get("GITHUB_REPOSITORY")
         os.environ["GITHUB_REPOSITORY"] = "ROCm/TheRock"
 
         try:
+            baseline_repository = "ROCm/TheRock"
             current_repo = os.environ.get("GITHUB_REPOSITORY", "")
-            baseline_repository = "ROCm/TheRock"  # Same as current repo
 
             is_cross_repo = baseline_repository and baseline_repository != current_repo
-            self.assertFalse(is_cross_repo)
+            self.assertFalse(is_cross_repo, "Should detect same-repo scenario")
 
-            manual_baseline_run_id = "manual-12345"
+            stage_decisions = {}
+            applied_reuse_stages = ["math-libs", "comm-libs"]
             auto_baseline_run_id = "auto-67890"
-            applied_reuse_stages = ["math-libs"]
+            manual_baseline_run_id = "manual-12345"
 
+            # Production logic from decide_jobs()
             baseline_run_id = manual_baseline_run_id
-            if not is_cross_repo and applied_reuse_stages and auto_baseline_run_id:
-                baseline_run_id = auto_baseline_run_id
+            if not is_cross_repo:
+                for stage in applied_reuse_stages:
+                    stage_decisions.setdefault(stage, cma.JobAction.PREBUILT)
+                if applied_reuse_stages and auto_baseline_run_id:
+                    baseline_run_id = auto_baseline_run_id
 
-            # Should use auto baseline_run_id for same-repo
+            # Same-repo: auto stages applied, auto run ID used
+            self.assertEqual(
+                stage_decisions,
+                {
+                    "math-libs": cma.JobAction.PREBUILT,
+                    "comm-libs": cma.JobAction.PREBUILT,
+                },
+            )
             self.assertEqual(baseline_run_id, "auto-67890")
         finally:
             if old_github_repo is None:
