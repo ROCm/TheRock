@@ -71,6 +71,7 @@ _BASE_CONTAINER_OPTIONS = [
 # --group-add 993,992,110 - Additional GPU-related groups
 # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
 # -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
+# -e HIP_VISIBLE_DEVICES=0 - Restrict container to the first GPU to match host-level isolation
 _GPU_CONTAINER_OPTIONS = [
     "--group-add video",
     "--device /dev/kfd",
@@ -81,6 +82,7 @@ _GPU_CONTAINER_OPTIONS = [
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
     "-e ROCR_VISIBLE_DEVICES",
     "-e KUBE_CPU_REQUEST",
+    "-e HIP_VISIBLE_DEVICES=0",
 ]
 
 
@@ -130,8 +132,33 @@ _rocgdb_common = {
     "platform": ["linux"],
     "total_shards": 1,
     "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
-    "container_options": ["--cap-add=SYS_PTRACE"],
+    # Force ROCR_VISIBLE_DEVICES=0 so the first enumerated GPU die is selected
+    # regardless of the host-level ordinal. Without this, when the container
+    # exposes fewer render nodes than the full physical set the host ordinal can
+    # point past the end of the device list, causing libhip to segfault during
+    # HSA init.
+    "container_options": ["--cap-add=SYS_PTRACE", "-e ROCR_VISIBLE_DEVICES=0"],
 }
+
+
+# Runner assignment for test components
+# =====================================
+# Most components have their runner selected at runtime by the per-component loop
+# below, which draws from the AMDGPU-family runner pool configured in
+# amdgpu_family_matrix.py / therock-ci-config.
+#
+# A component may instead pre-pin its runner by setting "test_runner" directly in
+# its test_matrix entry. The loop will detect this and leave the value untouched.
+# Use this when a component must run on a specific machine class regardless of the
+# GPU family being tested. For example, rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile
+# are all pinned to "linux-gfx942-gpu-rocm-profiler" so they always land on the
+# same hardware class. Setting total_shards > 1 fans the same full suite out to
+# that many independent runner instances in parallel (useful for stress or flakiness
+# testing when the script itself does not support test-level sharding).
+#
+# Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
+# (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
+# expression. "multi_gpu_runner" routes to multi-GPU machines.
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -316,16 +343,36 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # rocgdb-cpu and rocgdb-gpu are pinned to linux-gfx942-gpu-rocm-profiler and run
+    # with 4 shards so that the full test suite executes on 4 independent runner
+    # instances simultaneously. test_rocgdb.py does not consume SHARD_INDEX/TOTAL_SHARDS,
+    # so each runner sees the complete suite rather than a slice of it.
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
-        "linux_cpu_runner": True,
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "total_shards": 4,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
+        "test_script": (
+            "python ./build/tests/rocgdb/test_rocgdb.py --tests"
+            " gdb.rocm/simple.exp"
+            " gdb.rocm/step-schedlock-spurious-waves.exp"
+        ),
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "total_shards": 4,
+    },
+    # Corefile tests require specific hardware support (GPU core dump capable runners).
+    # test_runner is pre-pinned so the family-based runner selection loop skips it.
+    "rocgdb-corefile": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile",
+        "test_script": f"python {_get_script_path('test_rocgdb_corefile.py')}",
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "total_shards": 4,
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -334,7 +381,7 @@ test_matrix = {
         "test_script": "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 4,
             "windows": 1,
         },
     },
@@ -920,7 +967,9 @@ def run():
                 )
             elif test_runs_on_multi_gpu_default:
                 component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
-        else:
+        elif "test_runner" not in component:
+            # Regular components use standard runner labels.
+            # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
             # For ASAN builds, use the sandbox runner if available
             if is_asan_build and test_runs_on_sandbox:
                 component["test_runner"] = test_runs_on_sandbox
