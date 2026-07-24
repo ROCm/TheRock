@@ -977,15 +977,19 @@ def do_build_pytorch(
 ):
     # Compute version.
     pytorch_base_version = (pytorch_dir / "version.txt").read_text().strip()
-    # Optionally tag the version with the torch source commit as a dev segment,
-    # e.g. `2.9.0.dev1a2b3c4d+rocm7.10.0`. The hex commit is not PEP 440-valid,
-    # so parse the base version (below) rather than the full string.
-    dev_segment = ""
+    # Optionally tag the version with the torch source commit. PyTorch's own
+    # setup.py validates the version as PEP 440, which only allows a commit hash
+    # in the local segment (after `+`), so emit `<base>+git<commit>.<rocm>`,
+    # e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`.
+    pytorch_build_version = pytorch_base_version + args.version_suffix
     if args.append_torch_commit_dev:
         commit = get_torch_commit_short(pytorch_dir)
         if commit:
-            dev_segment = f".dev{commit}"
-    pytorch_build_version = pytorch_base_version + dev_segment + args.version_suffix
+            # args.version_suffix is a local identifier like `+rocm7.10.0`;
+            # merge the commit into that single local segment (only one `+`).
+            local = args.version_suffix.lstrip("+")
+            local_parts = [p for p in (f"git{commit}", local) if p]
+            pytorch_build_version = f"{pytorch_base_version}+{'.'.join(local_parts)}"
     pytorch_build_version_parsed = parse(pytorch_base_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
@@ -1464,8 +1468,8 @@ def main(argv: list[str]):
         "--append-torch-commit-dev",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Tag the torch version with the 8-char torch source commit as a dev "
-        "segment, e.g. `2.9.0.dev1a2b3c4d+rocm7.10.0` (torch wheel only)",
+        help="Tag the torch version with the 8-char torch source commit in the "
+        "local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only)",
     )
     build_p.add_argument(
         "--clean",

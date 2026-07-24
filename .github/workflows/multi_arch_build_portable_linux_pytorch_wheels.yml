@@ -287,7 +287,7 @@ jobs:
           fi
 
           # For manual/dev builds, tag the torch version with the torch source
-          # commit as a dev segment (e.g. 2.9.0.dev1a2b3c4d+rocm7.10.0).
+          # commit in the local segment (e.g. 2.12.0a0+git1a2b3c4d.rocm7.10.0).
           dev_commit_flag=""
           if [ "${{ inputs.release_type }}" = "dev" ]; then
             dev_commit_flag="--append-torch-commit-dev"
