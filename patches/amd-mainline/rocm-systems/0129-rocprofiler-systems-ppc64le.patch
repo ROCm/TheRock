@@ -1,0 +1,540 @@
+From 49546f512dd956b5849f5a164772f5ab3fb91c63 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 28 Jul 2026 14:10:56 +0000
+Subject: [PATCH] rocprofiler-systems: add ppc64le support
+
+RT library (rocprof-sys-rt):
+- Add RTthread-powerpc.c, RTthread-powerpc-asm.S, and
+  RTstatic_ctors_dtors-ppc64.c copied from the Dyninst submodule
+  (external/dyninst, commit 5dff47b) for ppc64le thread locking
+  and static constructor/destructor support.
+- Make CMakeLists.txt arch-conditional: select x86 or ppc64 sources
+  based on CMAKE_SYSTEM_PROCESSOR.
+
+DL library (rocprof-sys-dl) __libc_start_main interposition:
+- On ppc64le ELFv2, _start passes a startup_info struct pointer in r8
+  and the stack pointer in r9, rather than individual arguments in
+  r3-r7 as on x86_64. The startup_info struct resides in read-only
+  memory.
+- Add an assembly trampoline (main_ppc64le.S) that saves/restores all
+  registers around a C patching function, and tail-calls the real
+  __libc_start_main.
+- The C patching function copies the read-only startup_info to a
+  writable static, swaps the main pointer to rocprofsys_main, and
+  returns the copy. Uses dlvsym with glibc version tags to resolve
+  the real __libc_start_main without recursion.
+
+Runtime feature guards (config.cpp):
+- Disable USE_SAMPLING, USE_PROCESS_SAMPLING, and TRACE (perfetto) on
+  ppc64le with warning messages. Signal-based call-stack sampling
+  crashes due to a known libunwind ppc64 mixed-frame unwinding
+  limitation, and perfetto tracing hits a null dereference on ppc64le.
+  Wall-clock profiling (-P) remains fully functional.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ .../source/lib/core/config.cpp                | 21 ++++
+ .../source/lib/rocprof-sys-dl/CMakeLists.txt  |  8 ++
+ .../source/lib/rocprof-sys-dl/main.c          | 98 +++++++++++++++----
+ .../source/lib/rocprof-sys-dl/main_ppc64le.S  | 85 ++++++++++++++++
+ .../source/lib/rocprof-sys-rt/CMakeLists.txt  |  9 +-
+ .../src/RTstatic_ctors_dtors-ppc64.c          | 69 +++++++++++++
+ .../rocprof-sys-rt/src/RTthread-powerpc-asm.S | 51 ++++++++++
+ .../lib/rocprof-sys-rt/src/RTthread-powerpc.c | 61 ++++++++++++
+ 8 files changed, 383 insertions(+), 19 deletions(-)
+ create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S
+ create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c
+ create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S
+ create mode 100644 projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c
+
+diff --git a/projects/rocprofiler-systems/source/lib/core/config.cpp b/projects/rocprofiler-systems/source/lib/core/config.cpp
+index 80c04dd027..d141cbd623 100644
+--- a/projects/rocprofiler-systems/source/lib/core/config.cpp
++++ b/projects/rocprofiler-systems/source/lib/core/config.cpp
+@@ -1582,6 +1582,27 @@ configure_mode_settings(const std::shared_ptr<settings>& _config)
+         _set(env_vars::USE_AMD_SMI, false);
+     }
+ 
++#if defined(__powerpc64__)
++    if(_config->get<bool>(std::string{ env_vars::USE_SAMPLING }))
++    {
++        LOG_WARNING("Signal-based call-stack sampling is not yet supported on "
++                    "ppc64le (libunwind limitation). Disabling USE_SAMPLING. "
++                    "Wall-clock profiling and tracing remain available.");
++        _set(env_vars::USE_SAMPLING, false);
++    }
++    if(_config->get<bool>(std::string{ env_vars::USE_PROCESS_SAMPLING }))
++    {
++        LOG_WARNING("Process sampling disabled on ppc64le (libunwind limitation).");
++        _set(env_vars::USE_PROCESS_SAMPLING, false);
++    }
++    if(_config->get<bool>(std::string{ env_vars::TRACE }))
++    {
++        LOG_WARNING("Perfetto tracing is not yet supported on ppc64le. "
++                    "Disabling TRACE. Use --profile (-P) instead.");
++        _set(env_vars::TRACE, false);
++    }
++#endif
++
+     if(_config->get<bool>(std::string{ env_vars::USE_KOKKOSP }))
+     {
+         auto _current_kokkosp_lib = rocprofsys::get_env<std::string>("KOKKOS_TOOLS_LIBS");
+diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt
+index ff09930ed9..2188298420 100644
+--- a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt
++++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/CMakeLists.txt
+@@ -27,6 +27,14 @@ target_sources(
+         ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+         ${CMAKE_CURRENT_SOURCE_DIR}/dl/dl.hpp
+ )
++
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
++    enable_language(ASM)
++    target_sources(
++        rocprofiler-systems-dl-library
++        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/main_ppc64le.S
++    )
++endif()
+ target_include_directories(
+     rocprofiler-systems-dl-library
+     PUBLIC
+diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c
+index 31b58bdf6b..3c42418839 100644
+--- a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c
++++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main.c
+@@ -38,19 +38,6 @@
+ //
+ typedef int (*main_func_t)(int, char**, char**);
+ typedef void (*init_func_t)(void);
+-typedef int (*start_main_t)(int (*)(int, char**, char**), int, char**, void (*)(void),
+-                            void (*)(void), void (*)(void), void*);
+-
+-//
+-// local function declarations
+-//
+-int
+-rocprofsys_libc_start_main(int (*)(int, char**, char**), int, char**, void (*)(void),
+-                           void (*)(void), void (*)(void), void*) ROCPROFSYS_INTERNAL_API;
+-
+-int
+-__libc_start_main(int (*)(int, char**, char**), int, char**, void (*)(void),
+-                  void (*)(void), void (*)(void), void*) ROCPROFSYS_PUBLIC_API;
+ 
+ //
+ // external function declarations
+@@ -90,6 +77,85 @@ rocprofsys_main_init(void) ROCPROFSYS_INTERNAL_API;
+ extern int
+ rocprofsys_main(int argc, char** argv, char** envp) ROCPROFSYS_INTERNAL_API;
+ 
++#if defined(__powerpc64__)
++
++// On ppc64le (ELFv2 ABI), _start passes arguments to __libc_start_main via
++// a startup_info structure pointer in r8 and the original stack pointer in r9.
++// The main function pointer lives at offset 8 in the startup_info struct.
++// Registers r3-r7 are NOT initialised by _start.
++//
++// Strategy: we interpose __libc_start_main, read r8 to get the startup_info
++// pointer, swap the main function pointer in the struct, then tail-call the
++// real __libc_start_main with all original register values preserved.
++
++struct startup_info
++{
++    void* sda_base;
++    int (*main)(int, char**, char**, void*);
++    int (*init)(int, char**, char**, void*);
++    void (*fini)(void);
++};
++
++// Resolved lazily by the patch function (constructors have not run yet
++// when _start calls __libc_start_main)
++void (*_real_libc_start_main)(void) = NULL;
++
++// The startup_info struct is in read-only memory, so we cannot modify it
++// in-place.  Instead we create a writable copy, patch the main pointer in
++// the copy, and return the copy's address.  The asm trampoline writes the
++// returned pointer back into r8 before tail-calling the real __libc_start_main.
++//
++// Called from the asm trampoline with stinfo in r3.
++// Returns the (possibly new) stinfo pointer to use.
++struct startup_info*
++rocprofsys_ppc64_patch_stinfo(struct startup_info* stinfo) ROCPROFSYS_INTERNAL_API;
++
++static struct startup_info _patched_stinfo;
++
++struct startup_info*
++rocprofsys_ppc64_patch_stinfo(struct startup_info* stinfo)
++{
++    if(!_real_libc_start_main)
++    {
++        _real_libc_start_main = dlvsym(RTLD_NEXT, "__libc_start_main", "GLIBC_2.34");
++        if(!_real_libc_start_main)
++            _real_libc_start_main = dlvsym(RTLD_NEXT, "__libc_start_main", "GLIBC_2.17");
++        if(!_real_libc_start_main)
++        {
++            fputs("[rocprof-sys] FATAL: cannot resolve real __libc_start_main\n", stderr);
++            _exit(127);
++        }
++    }
++
++    int _preload = rocprofsys_preload_library();
++
++    rocprofsys_set_main((main_func_t) stinfo->main);
++
++    setenv("ROCPROFSYS_PRELOAD", "0", 1);
++
++    if(_preload != 0)
++    {
++        // Copy the read-only struct and patch the copy
++        _patched_stinfo = *stinfo;
++        _patched_stinfo.main = (int (*)(int, char**, char**, void*)) rocprofsys_main;
++        return &_patched_stinfo;
++    }
++    return stinfo;
++}
++
++#else /* x86_64 / other architectures */
++
++typedef int (*start_main_t)(int (*)(int, char**, char**), int, char**, void (*)(void),
++                            void (*)(void), void (*)(void), void*);
++
++int
++rocprofsys_libc_start_main(int (*)(int, char**, char**), int, char**, void (*)(void),
++                           void (*)(void), void (*)(void), void*) ROCPROFSYS_INTERNAL_API;
++
++int
++__libc_start_main(int (*)(int, char**, char**), int, char**, void (*)(void),
++                  void (*)(void), void (*)(void), void*) ROCPROFSYS_PUBLIC_API;
++
+ int
+ rocprofsys_libc_start_main(int (*_main)(int, char**, char**), int _argc, char** _argv,
+                            void (*_init)(void), void (*_fini)(void),
+@@ -124,10 +190,6 @@ rocprofsys_libc_start_main(int (*_main)(int, char**, char**), int _argc, char**
+         }
+         else
+         {
+-            // return user_main(rocprofsys_main, _argc, _argv,
+-            //                  rocprofsys_main_init, _fini,
+-            //                  _rtld_fini, _stack_end);
+-
+             // call rocprof-sys main function wrapper
+             return user_main(rocprofsys_main, _argc, _argv, _init, _fini, _rtld_fini,
+                              _stack_end);
+@@ -149,3 +211,5 @@ __libc_start_main(int (*_main)(int, char**, char**), int _argc, char** _argv,
+     return rocprofsys_libc_start_main(_main, _argc, _argv, _init, _fini, _rtld_fini,
+                                       _stack_end);
+ }
++
++#endif /* __powerpc64__ */
+diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S
+new file mode 100644
+index 0000000000..397a62b0b8
+--- /dev/null
++++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-dl/main_ppc64le.S
+@@ -0,0 +1,85 @@
++// Copyright (c) Advanced Micro Devices, Inc.
++// SPDX-License-Identifier: MIT
++
++#if defined(__powerpc64__)
++
++    .abiversion 2
++    .section ".text"
++    .align 2
++
++    .globl __libc_start_main
++    .type  __libc_start_main, @function
++__libc_start_main:
++0:  addis 2, 12, .TOC.-0b@ha
++    addi  2, 2,  .TOC.-0b@l
++    .localentry __libc_start_main, .-__libc_start_main
++
++    mflr    0
++    std     0,  16(1)
++    std     31, -8(1)
++    std     30, -16(1)
++    std     29, -24(1)
++    std     28, -32(1)
++    std     27, -40(1)
++    std     26, -48(1)
++    std     25, -56(1)
++    std     2,  24(1)
++    stdu    1, -128(1)
++
++    // Save all argument registers
++    mr      25, 3
++    mr      26, 4
++    mr      27, 5
++    mr      28, 6
++    mr      29, 7
++    mr      30, 8           // startup_info*
++    mr      31, 9           // stack_on_entry
++
++    // Call C function: new_stinfo = rocprofsys_ppc64_patch_stinfo(stinfo)
++    mr      3, 8
++    bl      rocprofsys_ppc64_patch_stinfo
++    nop
++    ld      2, 24+128(1)    // restore TOC
++
++    // r3 now has the (possibly new) stinfo pointer — use it as r8
++    mr      30, 3
++
++    // Restore argument registers
++    mr      3, 25
++    mr      4, 26
++    mr      5, 27
++    mr      6, 28
++    mr      7, 29
++    mr      8, 30           // patched stinfo (from return value)
++    mr      9, 31
++
++    // Load the real __libc_start_main address
++    addis   12, 2, .LC_real_start@toc@ha
++    ld      12, .LC_real_start@toc@l(12)
++    ld      12, 0(12)
++
++    // Epilogue
++    addi    1, 1, 128
++    ld      0,  16(1)
++    mtlr    0
++    ld      31, -8(1)
++    ld      30, -16(1)
++    ld      29, -24(1)
++    ld      28, -32(1)
++    ld      27, -40(1)
++    ld      26, -48(1)
++    ld      25, -56(1)
++
++    // Tail-call the real __libc_start_main
++    mtctr   12
++    bctr
++
++    .size __libc_start_main, .-__libc_start_main
++
++    .section ".toc","aw"
++.LC_real_start:
++    .tc _real_libc_start_main[TC], _real_libc_start_main
++
++#endif
++
++.section .note.GNU-stack,"",@progbits
+diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt
+index a65d182ef7..de9618efa4 100644
+--- a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt
++++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/CMakeLists.txt
+@@ -35,8 +35,13 @@ if(PLATFORM MATCHES linux)
+     )
+ endif()
+ 
+-list(APPEND _sources src/RTthread-x86-64.c src/RTtlsgetaddr-x86.S)
+-list(APPEND _static_sources src/RTstatic_ctors_dtors-x86.c)
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
++    list(APPEND _sources src/RTthread-x86-64.c src/RTtlsgetaddr-x86.S)
++    list(APPEND _static_sources src/RTstatic_ctors_dtors-x86.c)
++elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
++    list(APPEND _sources src/RTthread-powerpc.c src/RTthread-powerpc-asm.S)
++    list(APPEND _static_sources src/RTstatic_ctors_dtors-ppc64.c)
++endif()
+ 
+ # We use gcc to compile the various assembly files, but cmake doesn't default to knowing
+ # that gcc can handle .S.
+diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c
+new file mode 100644
+index 0000000000..942f58586a
+--- /dev/null
++++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTstatic_ctors_dtors-ppc64.c
+@@ -0,0 +1,69 @@
++/*
++ * See the dyninst/COPYRIGHT file for copyright information.
++ * 
++ * We provide the Paradyn Tools (below described as "Paradyn")
++ * on an AS IS basis, and do not warrant its validity or performance.
++ * We reserve the right to update, modify, or discontinue this
++ * software at any time.  We shall have no obligation to supply such
++ * updates or modifications or any other form of support to you.
++ * 
++ * By your use of Paradyn, you understand and agree that we (or any
++ * other person or entity with proprietary rights in Paradyn) are
++ * under no obligation to provide either maintenance services,
++ * update services, notices of latent defects, or correction of
++ * defects for Paradyn.
++ * 
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ * 
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ * 
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#if defined(DYNINST_RT_STATIC_LIB)
++
++#include <stdint.h>
++
++extern void (*DYNINSTctors_begin)(void);
++extern void (*DYNINSTdtors_begin)(void);
++extern void (*DYNINSTctors_end)(void);
++extern void (*DYNINSTdtors_end)(void);
++
++
++extern void DYNINSTBaseInit();
++
++void DYNINSTglobal_ctors_handler() {
++    void (**ctor)(void) = &DYNINSTctors_begin;
++
++    while( ctor != ( &DYNINSTctors_end )) {
++	if(*ctor && ((intptr_t)*ctor != -1))
++	    (*ctor)();
++        ctor++;
++    }
++
++    // This ensures that instrumentation cannot execute until all global
++    // constructors have run
++    DYNINSTBaseInit();
++}
++
++void DYNINSTglobal_dtors_handler() {
++    void (**dtor)(void) = &DYNINSTdtors_begin;
++
++    // Destructors are called in the forward order that they are listed
++    while( dtor != (&DYNINSTdtors_end )) {
++	if(*dtor && ((intptr_t)*dtor != -1))
++	    (*dtor)();
++	dtor++;
++    }
++}
++
++
++#endif
+diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S
+new file mode 100644
+index 0000000000..818c61a3d0
+--- /dev/null
++++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc-asm.S
+@@ -0,0 +1,51 @@
++   .file    "RTthread-powerpc-asm.S"
++   .machine "push"      
++   .abiversion 2
++
++#ifndef __clang__
++# if defined(arch_64bit)
++   .machine "ppc64"       
++# else
++   .machine "ppc"       
++# endif
++#endif
++
++   .section ".text"
++   .align   2
++# /* ------------------------------------------- */
++# /* int atomic_set(volatile int *int_ptr);      */
++# /*                                             */
++# /* The only possible values at the given       */
++# /* memory location are 0 and 1.  Attempt to    */
++# /* atomically update the value from 0 to 1.    */
++# /* Return 1 if such an atomic update occurred; */
++# /* return 0 otherwise.                         */
++# /* ------------------------------------------- */
++   .section ".toc", "aw"
++   .section ".text"
++   .align   2
++   .p2align 4,,15
++   .globl   atomic_set
++   .type    atomic_set, @function
++atomic_set:
++   addi     4,0,1               # r4 = 1
++                                # Attempt atomic memory swap
++   lwarx    5,0,3               #   r5 = *int_ptr (load reserve indexed)
++   stwcx.   4,0,3               #   *int_ptr = 1  (store conditional indexed)
++   bne-     atomic_set_return_0 # if atomic swap failed, return 0
++
++   cmpw     5,4                 # if original value was already 1,
++   beq-     atomic_set_return_0 #   return 0 because no value update occurred
++
++   addi     3,0,1               # function return value = r3 = 1
++   blr                          # branch via link register (function return)
++
++atomic_set_return_0:
++   addi     3,0,0               # function return value = r3 = 0
++   blr                          # branch via link register (function return)
++
++   .size    atomic_set, . - atomic_set
++
++   .machine "pop"
++
++.section .note.GNU-stack,"",@progbits        
+diff --git a/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c
+new file mode 100644
+index 0000000000..071f996203
+--- /dev/null
++++ b/projects/rocprofiler-systems/source/lib/rocprof-sys-rt/src/RTthread-powerpc.c
+@@ -0,0 +1,61 @@
++/*
++ * See the dyninst/COPYRIGHT file for copyright information.
++ * 
++ * We provide the Paradyn Tools (below described as "Paradyn")
++ * on an AS IS basis, and do not warrant its validity or performance.
++ * We reserve the right to update, modify, or discontinue this
++ * software at any time.  We shall have no obligation to supply such
++ * updates or modifications or any other form of support to you.
++ * 
++ * By your use of Paradyn, you understand and agree that we (or any
++ * other person or entity with proprietary rights in Paradyn) are
++ * under no obligation to provide either maintenance services,
++ * update services, notices of latent defects, or correction of
++ * defects for Paradyn.
++ * 
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ * 
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ * 
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#include "src/RTthread.h"
++
++/**
++ * atomic_set will do the following atomically:
++ *    if (*val == 0) {
++ *       *val = 1;
++ *       return 1;
++ *    }
++ *    return 0;
++ *
++ **/
++
++extern int atomic_set(volatile int *int_ptr);
++
++int tc_lock_lock(tc_lock_t *tc)
++{
++   dyntid_t me;
++
++   me = dyn_pthread_self();
++   if (me == tc->tid)
++      return DYNINST_DEAD_LOCK;
++
++   while (1) {
++      if (tc->mutex == 0 && atomic_set(&tc->mutex))
++      {
++         tc->tid = me;
++         break;
++      }
++   }
++   return 0;
++}
+-- 
+2.52.0
+

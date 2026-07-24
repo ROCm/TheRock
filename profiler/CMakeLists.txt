@@ -396,7 +396,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
   # the artifact splitter strips per-arch HIP offload bundles out of the example binaries,
   # preventing llvm-objdump (used in our tests) from detecting the offload architectures
   # See https://github.com/ROCm/TheRock/issues/4848
-  if(THEROCK_BUILD_TESTING)
+  if(THEROCK_BUILD_TESTING AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
     # Escape semicolons in GPU targets list to prevent shell interpretation
     if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")

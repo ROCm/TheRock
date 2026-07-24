@@ -121,9 +121,9 @@ function(therock_finalize_features)
     message(STATUS "Implicitly enabled features: ${_implicit_features_spaces}")
   endif()
 
-  # rocprofiler-systems is only supported on x86_64 due to x86-specific assembly
-  # and Dyninst instrumentation support. Disable it automatically on other archs.
-  if(THEROCK_ENABLE_ROCPROFSYS AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|i.86")
+  # rocprofiler-systems requires architecture-specific assembly for the Dyninst
+  # RT library. Disable it on architectures without support.
+  if(THEROCK_ENABLE_ROCPROFSYS AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|i.86|ppc64")
     message(WARNING
         "rocprofiler-systems is not supported on ${CMAKE_SYSTEM_PROCESSOR}, "
         "disabling THEROCK_ENABLE_ROCPROFSYS automatically.")
