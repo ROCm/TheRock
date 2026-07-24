@@ -382,6 +382,16 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
+  # rocprofiler-systems' cmake/ProfilerHub.cmake calls find_package(profiler-hub).
+  # When profiler-hub is built as a super-project subproject, TheRock's dependency
+  # provider requires it to be declared as a dep here; when it is not, find_package
+  # falls back to profiler-hub's own sparse checkout. Only declare the dep when the
+  # profiler-hub subproject actually exists.
+  set(_rocprofsys_profiler_hub_dep "")
+  if(THEROCK_ENABLE_PROFILER_HUB)
+    set(_rocprofsys_profiler_hub_dep profiler-hub)
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-systems
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -418,6 +428,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       amdsmi
       aqlprofile
       hip-clr
+      ${_rocprofsys_profiler_hub_dep}
       rocprofiler-register
       rocprofiler-sdk
       ${THEROCK_BUNDLED_ELFUTILS}
