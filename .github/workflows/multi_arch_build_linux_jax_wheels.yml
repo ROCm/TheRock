@@ -29,10 +29,6 @@ on:
         description: "Repository containing the JAX release branch."
         type: string
         required: true
-      build_mode:
-        description: "Build mode: native or manylinux."
-        type: string
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -50,10 +46,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
-        type: string
-        required: true
       release_type:
         description: "Release type."
         type: string
@@ -92,13 +84,6 @@ on:
         description: "GitHub repository in owner/repo format (e.g. ROCm/jax or ROCm/rocm-jax)."
         type: string
         default: "ROCm/jax"
-      build_mode:
-        description: "Build mode."
-        type: choice
-        options:
-          - native
-          - manylinux
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -116,10 +101,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
-        type: string
-        required: true
       release_type:
         description: "Release type."
         type: string
@@ -166,7 +147,6 @@ jobs:
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX
-        if: ${{ inputs.build_mode == 'manylinux' }}
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: jax-source
@@ -190,30 +170,11 @@ jobs:
 
       - name: Set package dist dir
         run: |
-          if [ "${{ inputs.build_mode }}" = "manylinux" ]; then
-            echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/jax-source/dist" >> "$GITHUB_ENV"
-          else
-            echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/rocm-jax/jax_rocm_plugin/wheelhouse" >> "$GITHUB_ENV"
-          fi
+          echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/jax-source/dist" >> "$GITHUB_ENV"
 
-      - name: Build JAX Wheels (native, v0.9.1)
-        if: ${{ inputs.build_mode == 'native' }}
-        working-directory: rocm-jax
-        env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
-          PYTHON_VERSION: ${{ inputs.python_version }}
-          TAR_URL: ${{ inputs.tar_url }}
-        run: |
-          python3 build/ci_build \
-            --compiler=clang \
-            --python-versions="${PYTHON_VERSION}" \
-            --rocm-version="${ROCM_VERSION}" \
-            --therock-path="${TAR_URL}" \
-            dist_wheels
       # TODO: THEROCK_INDEX_URL need to be renamed in the future to
       # THEROCK_FIND_LINKS_URL to avoid confusion with pip --index-url.
       - name: Build manylinux image
-        if: ${{ inputs.build_mode == 'manylinux' }}
         working-directory: jax-source
         env:
           THEROCK_VERSION: ""
@@ -238,7 +199,6 @@ jobs:
             --rocm-version "${{ inputs.rocm_version }}"
 
       - name: Build JAX Wheels in manylinux container
-        if: ${{ inputs.build_mode == 'manylinux' }}
         working-directory: jax-source
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}

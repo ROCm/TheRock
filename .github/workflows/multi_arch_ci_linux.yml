@@ -356,7 +356,6 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: ${{ matrix.python_version }}
       jax_repository: ${{ matrix.jax_repository }}
-      build_mode: ${{ matrix.build_mode }}
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
       rocm_version: ${{ inputs.rocm_package_version }}

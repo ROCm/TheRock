@@ -248,8 +248,8 @@ def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
 
 
 def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
-    lines.append("| Platform | Python | JAX ref | Repository | Mode | GFX arch |")
-    lines.append("|----------|--------|---------|------------|------|----------|")
+    lines.append("| Platform | Python | JAX ref | Repository | GFX arch |")
+    lines.append("|----------|--------|---------|------------|----------|")
 
     rows = 0
     for platform, config in [
@@ -262,13 +262,12 @@ def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
             gfx_arch = row["gfx_arch"] or "—"
             lines.append(
                 f"| {platform} | `{row['python_version']}` | "
-                f"`{row['jax_ref']}` | `{row['jax_repository']}` | "
-                f"`{row['build_mode']}` | {gfx_arch} |"
+                f"`{row['jax_ref']}` | `{row['jax_repository']}` | {gfx_arch} |"
             )
             rows += 1
 
     if rows == 0:
-        lines.append("| — | — | — | — | — | — |")
+        lines.append("| — | — | — | — | — |")
     lines.append("")
 
 
