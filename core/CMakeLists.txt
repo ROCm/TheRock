@@ -441,17 +441,19 @@ if(THEROCK_ENABLE_OCL_ICD)
   INTERFACE_INSTALL_RPATH_DIRS
     "lib"
   )
-
   therock_cmake_subproject_activate(ocl-icd)
 
-  therock_provide_artifact(core-ocl-icd
-    TARGET_NEUTRAL
-    DESCRIPTOR artifact-core-ocl-icd.toml
-    COMPONENTS
-      lib
-    SUBPROJECT_DEPS
-      ocl-icd
-  )
+  # ocl-icd will be packaged in windows drivers
+  if(NOT WIN32)
+    therock_provide_artifact(core-ocl-icd
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-ocl-icd.toml
+      COMPONENTS
+        lib
+      SUBPROJECT_DEPS
+        ocl-icd
+    )
+  endif()
 endif(THEROCK_ENABLE_OCL_ICD)
 
 if(THEROCK_ENABLE_OCL_RUNTIME)
@@ -522,19 +524,22 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   therock_cmake_subproject_provide_package(ocl-clr ocl-icd lib/cmake/ocl-icd)
   therock_cmake_subproject_activate(ocl-clr)
 
-  therock_provide_artifact(core-ocl
-    TARGET_NEUTRAL
-    DESCRIPTOR artifact-core-ocl.toml
-    COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
-      test
-    SUBPROJECT_DEPS
-      ocl-clr
-  )
+  # ocl runtime will be packaged in windows drivers
+  if(NOT WIN32)
+    therock_provide_artifact(core-ocl
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-ocl.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        ocl-clr
+    )
+  endif()
 
   therock_test_validate_shared_lib(
     PATH ocl-clr/dist/lib/opencl
