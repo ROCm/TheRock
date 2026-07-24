@@ -483,14 +483,33 @@ The current implementation uses an in-memory sliding window counter (per client,
 - **During failover (both instances serving):** effective limit is doubled transiently — this is acceptable as it is a brief window and the limits are sized conservatively
 - **Rate limit purpose:** safety valve against runaway jobs, not a hard organizational policy
 
-### 4.5 gpgshim — Two-Call Optimization
+### 4.5 gpgshim — What It Is and the Two-Call Optimization
 
-`rpmsign` calls `gpg` twice per package: once for the header (~4 KB), once for the header+payload (up to 1 GB+). `gpgshim` intercepts both calls transparently:
+#### What is gpgshim?
 
-- **Call 1:** sends data to signing server, caches signature in `/tmp/gpgshim-cache-<ppid>.sig`
-- **Call 2:** reads and returns the cached signature, deletes the cache file — no network call
+`gpgshim` is a lightweight Python script deployed on **build runners** (not the signing server) that acts as a drop-in replacement for the `gpg` binary. It exists for one specific reason: `rpmsign` calls `gpg` as a subprocess to produce signatures and embed them in RPM files. There is no way to redirect this subprocess call to an HTTP endpoint without intercepting it at the binary level.
 
-This means signing a 1 GB RPM costs the same network transfer as signing a 4 KB file.
+`gpgshim` pretends to be `gpg`. When `rpmsign` calls it, `gpgshim`:
+1. Reads the data piped from `rpmsign` via stdin
+2. Forwards it to the signing server via `POST /sign`
+3. Returns the signature bytes to `rpmsign` via the output file
+
+`rpmsign` never knows it talked to a remote server — it sees a binary that behaves like `gpg`. The signing server never needs `rpmsign` installed — it only runs `gpg --detach-sign` directly.
+
+`gpgshim` is only needed for RPM package signing. For repository metadata (`repomd.xml`, `Release`), `upload_package_repo.py` calls `POST /sign` directly — no `gpgshim` involved.
+
+#### Two-Call Optimization
+
+`rpmsign` calls `gpg` (and therefore `gpgshim`) **twice** per package:
+- **Call 1:** pipes the RPM header section (~4 KB) for signing
+- **Call 2:** pipes the full RPM body (up to 1 GB+) for signing
+
+`gpgshim` intercepts both calls transparently using a per-process cache:
+
+- **Call 1:** sends ~4 KB to signing server, receives signature, writes to output file, caches signature in `/tmp/gpgshim-cache-<ppid>.sig`
+- **Call 2:** reads and discards the full RPM body from stdin (must consume it), returns the cached signature from Call 1, deletes cache file — **no network call**
+
+This means signing a 1 GB RPM costs exactly one ~4 KB network request to the signing server, regardless of package size.
 
 ---
 
@@ -979,64 +998,103 @@ HTTP/1.1 503 Service Unavailable
 
 ## 8. Security Considerations
 
-Security for this system operates at three distinct layers. Understanding which layer each control belongs to is important — controls at one layer do not substitute for controls at another.
+This section summarises the security posture by threat layer. Detailed design rationale for each decision — including the KMS key storage options comparison, why SSH is disabled, and the break-glass procedure — is in §4 (Key Design Decisions). The implementation of each control is in the operations runbook (`operations-runbook.md`).
+
+Security operates at three distinct layers. Controls at one layer do not substitute for controls at another.
 
 ---
 
-### 8.1 Layer 1 — Network Perimeter (who can reach the server)
+### 8.1 Layer 1 — Network Perimeter
 
-These controls determine whether a request ever reaches the signing server. They are enforced by AWS infrastructure, not by server code.
+**Purpose:** Prevent unauthorized hosts from reaching the signing server at all.  
+**Enforced by:** AWS VPC Security Groups and routing — not application code.
 
-| Threat | Control | Enforced by |
-|--------|---------|-------------|
-| Unauthorised host calling `/sign` | `sg-signing-server` allows port 443 inbound from `sg-build-runner` and operator VPN CIDR only | AWS Security Group |
-| Internet-facing attack | No public IP, no internet gateway, no NAT on signing server subnet | VPC routing |
-| Signing server exfiltrating data | No outbound except to VPC endpoints (SM, KMS, CloudWatch) — Security Group outbound rules | AWS Security Group |
-| Build runner calling signing server from wrong process | Security Groups are instance-level — any process on the build runner EC2 can reach the server; mitigated by dedicated single-purpose runner instances | Operational policy |
+| Control | What it does |
+|---------|-------------|
+| `sg-signing-server` inbound | Allows TCP 443 from `sg-build-runner` and operator VPN CIDR only. All other sources silently dropped. |
+| No public IP / internet gateway | Server has no route to the internet — unreachable from outside the VPC |
+| Outbound restricted to VPC endpoints | Server can only reach Secrets Manager, KMS, and CloudWatch via PrivateLink — no other outbound traffic permitted |
 
----
-
-### 8.2 Layer 2 — Key at Rest and in Distribution (protecting the key before it reaches the server)
-
-These controls protect the GPG private key while it is stored in AWS and during the fetch-to-import path at server startup. KMS and Secrets Manager operate entirely at this layer.
-
-| Threat | Control | Enforced by |
-|--------|---------|-------------|
-| GPG private key stored on any disk in plaintext | Key stored in Secrets Manager only; fetched into tmpfs RAM at startup; never written to EBS | Architecture |
-| Secrets Manager access by unauthorized AWS principal | Resource-based policy on each secret restricts `GetSecretValue` to `role-signing-server` | IAM resource policy |
-| EBS snapshot of signing server exposes key | tmpfs is RAM-backed — not captured in EBS snapshots | tmpfs |
-| AWS insider reads Secrets Manager storage | Encrypted with KMS CMK — ciphertext only on AWS-managed storage | KMS CMK |
-| IAM credential theft (server role) | Attacker can call `GetSecretValue` and get plaintext key — detected but not prevented | CloudTrail alarm |
-
-**Important limitation:** KMS and Secrets Manager protect the key *before* it reaches the server. Once the server has fetched the key into tmpfs at startup, KMS and IAM provide no further protection. OS-level access to the server bypasses them entirely.
+See §4.1 for the full rationale on why VPC Security Groups are used instead of per-request SigV4 authentication.
 
 ---
 
-### 8.3 Layer 3 — Server Instance Hardening (protecting the key while it is on the running server)
+### 8.2 Layer 2 — Key at Rest and in Distribution
 
-This is the most critical layer and the one most commonly underestimated. Once the GPG key is in the tmpfs keyring, **anyone with OS-level access to the signing server can read it** — regardless of KMS policies, IAM roles, or Secrets Manager configurations. The controls below must be treated as mandatory requirements, not optional hardening.
+**Purpose:** Protect the GPG private key while stored in AWS and during server startup fetch.  
+**Enforced by:** KMS CMK + Secrets Manager resource policy.
 
-| Threat | Control | How to enforce |
-|--------|---------|---------------|
-| SSH access to signing server | No port 22 inbound rule in `sg-signing-server` — not open to any principal, including admins | Security Group |
-| AWS SSM Session Manager shell access | Explicitly deny `ssm:StartSession` and `ssm:SendCommand` in `role-signing-server` IAM policy | IAM deny policy |
-| SSRF attack stealing instance metadata credentials | IMDSv2 enforced: `aws ec2 modify-instance-metadata-options --http-tokens required` | Instance metadata config |
-| Persistent attacker installing backdoor | Immutable infrastructure — updates replace the instance from a new AMI, never patch in place | Operational policy |
-| Unnecessary attack surface from extra services | Signing server runs only `signing-server.py` — no other services, no package manager access in prod | AMI hardening |
-| Code execution via application exploit | Input validation on all request fields; `key_id` validated against strict regex before GPG subprocess | Application code |
+| Control | What it does |
+|---------|-------------|
+| Secrets Manager + KMS CMK | GPG private key stored as KMS-encrypted ciphertext — plaintext never persists on any disk |
+| IAM resource policy on secrets | Only `role-signing-server` can call `GetSecretValue` — no other AWS principal |
+| tmpfs keyring | After startup import, key exists in RAM only — EBS snapshots cannot capture it |
+| CloudTrail on KMS | Every `GetSecretValue` triggers a `kms:Decrypt` — logged with caller identity and timestamp |
 
-**Fundamental limit — applicable to all key management approaches:**  
-If an attacker achieves OS-level access to a running signing server, the GPG private key in tmpfs is accessible. This is not unique to this design — it applies equally to CloudHSM (the PKCS#11 handle is in the process), hardware tokens, and any other approach where a live process must perform signing operations. The correct response to an OS-level compromise is: disable the KMS CMK immediately, rotate the GPG key pair, and distribute the new public key to package consumers.
+**Important limit:** KMS and Secrets Manager protect the key *before* it reaches the server. Once the key is in tmpfs, these controls provide no further protection. OS-level access bypasses them entirely — see Layer 3.
+
+See §4.3 for the full options analysis (KMS Asymmetric vs CloudHSM vs Secrets Manager + CMK) and the rationale for the chosen approach.
+
+---
+
+### 8.3 Layer 3 — Server Instance Hardening
+
+**Purpose:** Make OS-level access to the signing server impossible under normal operations.  
+**Why this matters:** Once the GPG key is in the tmpfs keyring, anyone with a shell on the instance can read it — regardless of KMS, IAM, or any other AWS control. This layer is therefore the most critical.
+
+| Control | What it does | Enforced by |
+|---------|-------------|-------------|
+| No SSH inbound | Port 22 not open to anyone — not even admins or bastion hosts | Security Group |
+| SSM Session Manager denied | `ssm:StartSession` and `ssm:SendCommand` explicitly denied in `role-signing-server` IAM policy | IAM deny policy |
+| IMDSv2 enforced | `--http-tokens required` prevents SSRF attacks stealing instance IAM credentials | EC2 instance config |
+| Immutable infrastructure | Server is never patched in place — updates replace the instance from a new AMI | Operational policy |
+| Single-purpose server | Only `signing-server.py` runs — no other services, no package manager in prod | AMI hardening |
+| Input validation | `key_id` validated against strict regex before passing to GPG subprocess — prevents command injection | Application code |
+
+**Fundamental limit:** If an attacker achieves OS-level access to a running signing server, the GPG private key in tmpfs is readable. This is true of every key management approach — CloudHSM, hardware tokens, KMS asymmetric — because any running signing process must have access to key material. The correct response is: disable the KMS CMK immediately, which stops all future key fetches, then rotate the GPG key pair.
+
+#### Operations without SSH — how it works in practice
+
+Removing SSH does not mean the server is unmanageable. All routine operations are done via AWS APIs, not shell access:
+
+| Operation | How (no SSH needed) |
+|-----------|-------------------|
+| **GPG key rotation** | `aws secretsmanager put-secret-value` from provisioner workstation → server picks up on next restart or scheduled sync |
+| **Code update** | Build new AMI → launch new EC2 with same IAM role → verify `/health` → terminate old instance |
+| **OS patching** | Same as code update — replace instance from freshly patched AMI |
+| **View logs** | `aws logs filter-log-events` from workstation, or `journalctl` via CloudWatch |
+| **Check server health** | `curl -k https://<server-ip>/health` from build runner or operator via VPN |
+| **Emergency access** | Break-glass procedure: temporarily enable SSM via IAM policy change (audited in CloudTrail), conduct investigation, revert immediately |
+
+For the full break-glass procedure and all operational commands, see **`operations-runbook.md`**.
 
 ---
 
 ### 8.4 Application-Level Controls
 
+**Purpose:** Protect against malformed requests, resource exhaustion, and audit gaps.
+
 | Threat | Control |
 |--------|---------|
-| `key_id` command injection into GPG subprocess | Strict regex validation: `[a-zA-Z0-9@.\-_ <>]+`, max 256 chars — request rejected on mismatch |
-| Runaway build job exhausting signing capacity | Thread semaphore (max 10 concurrent) + per-source-IP rate limiting (sliding window) |
+| `key_id` command injection into GPG subprocess | Strict regex: `[a-zA-Z0-9@.\-_ <>]+`, max 256 chars — rejected on mismatch |
+| Runaway job exhausting signing capacity | Thread semaphore (max 10 concurrent) + per-source-IP rate limiting (sliding window) |
 | Slow-read / slowloris attack | Socket read timeout: 10 seconds |
-| Oversized request payload (memory exhaustion) | Request body size limit: 10 KB — rejected with `413` |
-| Replay of a captured signature | GPG signatures are bound to specific data — a replayed signature for different data fails `gpg --verify` |
-| Audit trail gaps | Every request (success and failure) written to CloudWatch Logs — source IP, key used, digest algo, latency, HTTP status |
+| Oversized request payload | Body size limit: 10 KB — rejected with HTTP 413 |
+| Replay of a captured signature | GPG signatures bind to specific data — replayed signature for different data fails `gpg --verify` |
+| Audit gaps | Every request (success and failure) written to stdout → CloudWatch Logs: source IP, tier, artifact, latency, status |
+
+---
+
+### 8.5 Operational References
+
+The security controls described in this section are implemented and operated according to:
+
+| Topic | Reference |
+|-------|-----------|
+| Full provisioning sequence (IAM → KMS → SM → EC2) | `operations-runbook.md` §1 |
+| Day-to-day operations (status, logs, health check) | `operations-runbook.md` §2 |
+| GPG key rotation procedure | `operations-runbook.md` §3 |
+| Emergency key revocation | `operations-runbook.md` §4.1 |
+| Break-glass shell access procedure | `operations-runbook.md` §4.2 |
+| Server instance replacement | `operations-runbook.md` §4.3 |
+| Troubleshooting common errors | `operations-runbook.md` §5 |
