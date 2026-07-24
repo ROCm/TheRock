@@ -262,6 +262,7 @@ def run(args: argparse.Namespace):
             "bin/rocprof-sys-*",
             "include/rocprofiler-systems/**",
             "lib/librocprof-sys*",
+            "lib/libprofiler-hub.so*",
             "lib/python/site-packages/rocprofsys/**",
             "lib/rocprofiler-systems/**",
             "libexec/rocprofiler-systems/**",
