@@ -165,15 +165,13 @@ def run(args: argparse.Namespace):
         if config_file.read_text() != config_contents:
             _log(
                 f"NOTE: {config_file} does not match expected. Run with --init to regenerate",
-                file=sys.stderr,
             )
         if not IS_WINDOWS and (
             not compiler_check_file.exists()
             or compiler_check_file.read_text() != POSIX_COMPILER_CHECK_SCRIPT
         ):
-            print(
+            _log(
                 f"NOTE: {compiler_check_file} does not match expected. Run with --init to regenerate it",
-                file=sys.stderr,
             )
 
     # Reset statistic counters
@@ -186,9 +184,8 @@ def run(args: argparse.Namespace):
             print(proc_ccache.stdout, end="", file=sys.stderr)
 
         except subprocess.CalledProcessError:
-            print(
+            _log(
                 f"ERROR! Zeroing statistic counters failed. Message: {proc_ccache.stderr}",
-                file=sys.stderr,
             )
     # Print the generated config for visibility in CI logs.
     _log("Generated ccache config:")
@@ -197,6 +194,8 @@ def run(args: argparse.Namespace):
             _log(f"  {line}")
 
     # Output options.
+    # Note: these print to stdout, while _log prints to stderr.
+    # This allows the script output (stdout) to be run through eval().
     if IS_WINDOWS:
         print(f"set CCACHE_CONFIGPATH={config_file}")
     else:

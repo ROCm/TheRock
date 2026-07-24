@@ -157,6 +157,8 @@ PACKAGES_TO_PROMOTE_MULTI_ARCH = {
     "amd_torch_device",
     "amd_torchvision_device",
     "apex",
+    "jax_rocm7_pjrt",
+    "jax_rocm7_plugin",
     "rocm",
     "rocm_profiler",
     "rocm_sdk_core",

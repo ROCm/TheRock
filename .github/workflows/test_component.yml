@@ -31,6 +31,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan). Used to skip tests incompatible with certain builds."
+        type: string
+        default: "release"
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -78,6 +82,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       # Benchmark results database API endpoints for performance metrics collection
       # NOTE: These secrets are only required for benchmark results submission in nightly CI runs.
       # For PR/push workflows, secret retrieval will fail gracefully and benchmarks will skip API submission.
@@ -85,7 +90,7 @@ jobs:
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
       - name: "Fetch 'build_tools' from repository"
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -104,7 +109,7 @@ jobs:
         run: bash ./prejob/build_tools/github_actions/cleanup_processes.sh
 
       - name: Checking repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -154,6 +159,19 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+      # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
+      # Must be done at runtime since container env vars aren't in GitHub's env context.
+      - name: Set thread limits
+        run: |
+          if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
+            CPU_COUNT="${KUBE_CPU_REQUEST%.*}"
+            echo "OPENBLAS_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
+            echo "OMP_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
+            echo "Thread limits set: OPENBLAS_NUM_THREADS=${CPU_COUNT}, OMP_NUM_THREADS=${CPU_COUNT} (from KUBE_CPU_REQUEST=${KUBE_CPU_REQUEST})"
+          else
+            echo "KUBE_CPU_REQUEST not set, thread limits not configured"
+          fi
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -165,7 +183,11 @@ jobs:
           ROCM_KPACK_DEBUG: "1"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
-          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
+          # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),
+          # whose Windows memory path OOMs some tests (e.g. rocsparse bsr*0 graph_test).
+          # Default unset components to the platform backend, mirroring the runtime fix
+          # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
+          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
           RETRY_THIS_STEP: "true"
           RETRY_COUNT: "1"
           RETRY_DELAY: "7"
@@ -185,6 +207,7 @@ jobs:
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --repository "${{ github.repository }}" \
             --amdgpu-family "${{ inputs.amdgpu_families }}" \
+            --amdgpu-targets "${{ inputs.amdgpu_targets }}" \
             --test-script "${{ fromJSON(inputs.component).test_script }}" \
             --shard-index "${{ matrix.shard }}" \
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \

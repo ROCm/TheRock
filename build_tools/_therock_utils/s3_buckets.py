@@ -46,9 +46,9 @@ class S3BucketConfig:
 
 
 s3_bucket_configs = [
-    # CI (self-hosted runners include credentials for therock-ci-artifacts-external)
+    # CI (external repos use OIDC with therock-ci-external; fork PRs use runner base credentials)
     S3BucketConfig("therock-ci-artifacts", iam_role="therock-ci"),
-    S3BucketConfig("therock-ci-artifacts-external", iam_role=None),
+    S3BucketConfig("therock-ci-artifacts-external", iam_role="therock-ci-external"),
     # Release type "dev"
     S3BucketConfig("therock-dev-artifacts", iam_role="therock-dev"),
     S3BucketConfig("therock-dev-packages", iam_role="therock-dev"),
@@ -142,34 +142,6 @@ def get_release_bucket_config(
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
-def _is_current_run_pr_from_fork() -> bool:
-    """Check if the current workflow run is a pull request from a fork.
-
-    Reads the GitHub event payload to check the .fork property on the
-    head repo, matching the behavior of the GitHub Actions expression
-    ``github.event.pull_request.head.repo.fork``.
-
-    Returns False for non-pull_request events or if the event payload
-    is not available (e.g. local development).
-    """
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    if event_name != "pull_request":
-        return False
-
-    if not os.environ.get("GITHUB_EVENT_PATH"):
-        return False
-
-    # Deferred import: github_actions is optional in some environments; only
-    # needed when resolving fork state from the on-disk event payload.
-    from github_actions.github_actions_api import gha_load_github_event
-
-    event = gha_load_github_event()
-
-    return bool(
-        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
-    )
-
-
 def get_artifacts_bucket_config_for_workflow_run(
     github_repository: str,
     release_type: str | None = None,
@@ -231,7 +203,11 @@ def get_artifacts_bucket_config_for_workflow_run(
         _log(f"  head_github_repository: {head_github_repository}")
         _log(f"  is_pr_from_fork: {is_pr_from_fork}")
     else:
-        is_pr_from_fork = _is_current_run_pr_from_fork()
+        # Deferred import: github_actions is optional in some environments;
+        # only needed when resolving fork state from the on-disk event payload.
+        from github_actions.github_actions_api import is_current_run_pr_from_fork
+
+        is_pr_from_fork = is_current_run_pr_from_fork()
         _log(f"  is_pr_from_fork: {is_pr_from_fork}")
 
     config = get_artifacts_bucket_config(
@@ -240,4 +216,18 @@ def get_artifacts_bucket_config_for_workflow_run(
         is_pr_from_fork=is_pr_from_fork,
     )
     _log(f"  bucket: {config.name}")
+
+    # For fork PRs, skip OIDC and use runner base credentials instead.
+    # Fork PRs cannot assume IAM roles via OIDC because they don't have
+    # the required trust relationship. Return a config without an IAM role
+    # so the configure-aws-credentials step is skipped.
+    if is_pr_from_fork and config.iam_role is not None:
+        _log("  Fork PR detected, skipping OIDC (using runner base credentials)")
+        config = S3BucketConfig(
+            name=config.name,
+            region=config.region,
+            iam_account=config.iam_account,
+            iam_role=None,
+        )
+
     return config

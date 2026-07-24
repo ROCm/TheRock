@@ -59,9 +59,7 @@ def checkout_project(
     name: str,
     source_info: dict[str, str],
     checkout_root: Path,
-    submodules: bool,
     no_hipify: bool,
-    commit_hipify: bool,
 ) -> None:
     """Check out a single project using its checkout script."""
     script = THIS_DIR / CHECKOUT_SCRIPTS[name]
@@ -86,10 +84,6 @@ def checkout_project(
 
     if no_hipify:
         cmd.append("--no-hipify")
-    if not submodules:
-        cmd.append("--no-submodules")
-    if not commit_hipify:
-        cmd.append("--no-commit-hipify")
 
     log(f"  Running: {' '.join(cmd)}")
     subprocess.check_call(cmd)
@@ -196,18 +190,6 @@ def main(argv: list[str]) -> None:
         default=False,
         help="Skip HIPIFY for all checkouts (e.g. for test-only runs)",
     )
-    parser.add_argument(
-        "--submodules",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Checkout git submodules",
-    )
-    parser.add_argument(
-        "--commit-hipify",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Commit HIPIFY changes after running HIPIFY",
-    )
     args = parser.parse_args(argv)
 
     checkout_root = args.checkout_root.resolve()
@@ -257,9 +239,7 @@ def main(argv: list[str]) -> None:
             name=name,
             source_info=source_infos[name],
             checkout_root=checkout_root,
-            submodules=args.submodules,
             no_hipify=args.no_hipify,
-            commit_hipify=args.commit_hipify,
         )
         log("")
 

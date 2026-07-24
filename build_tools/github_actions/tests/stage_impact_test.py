@@ -459,6 +459,52 @@ class StageImpactTest(unittest.TestCase):
         self.assertIn("compiler", result.impacted_artifact_groups)
         self.assertIn("compiler-runtime", result.rebuild_stages)
 
+    def test_stage_impact_result_shape(self):
+        self.write_topology(
+            """
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "per-arch"
+            source_sets = ["rocm-libraries"]
+
+            [build_stages.math-libs]
+            description = "Math libs stage"
+            artifact_groups = ["math-libs"]
+            type = "per-arch"
+
+            [artifacts.prim]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(["rocm-libraries"], topology=topology)
+
+        payload = result.to_dict()
+        self.assertEqual(
+            set(payload.keys()),
+            {
+                "changed_inputs",
+                "matched_source_sets",
+                "impacted_artifact_groups",
+                "rebuild_stages",
+                "copy_stages",
+                "full_rebuild_required",
+                "reasons",
+                "unmatched_inputs",
+            },
+        )
+        self.assertEqual(payload["changed_inputs"], ("rocm-libraries",))
+        self.assertEqual(payload["reasons"], ())
+        self.assertEqual(payload["unmatched_inputs"], ())
+        self.assertEqual(payload["matched_source_sets"], ("rocm-libraries",))
+        self.assertFalse(payload["full_rebuild_required"])
+
 
 if __name__ == "__main__":
     unittest.main()

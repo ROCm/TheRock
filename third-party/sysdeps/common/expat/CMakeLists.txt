@@ -101,6 +101,11 @@ add_custom_target(
       # Disable examples and tests.
       --without-examples
       --without-tests
+      # Disable docbook-based man page generation. The xmlwf man page is
+      # not part of TheRock's artifacts, and expat 2.7.x configure errors
+      # out on SGML-only docbook2man (the default on Debian/Ubuntu via
+      # docbook-utils) rather than falling back gracefully.
+      --without-docbook
       # Disable maintainer-mode, otherwise our copy of the sources directory
       # will potentially alter the timestamp of acinclude.m4, which will
       # trigger a reconfigure with a version of aclocal we do not have.

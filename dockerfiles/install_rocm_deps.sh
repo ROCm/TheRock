@@ -9,6 +9,7 @@
 #
 # Supported distributions:
 #   - Ubuntu 22.04, 24.04 (apt)
+#   - Debian 12, 13 (apt)
 #   - AlmaLinux 8 (dnf)
 #   - Azure Linux 3 (tdnf)
 #   - RHEL 8.10, 9.7, 10.1 (dnf)
@@ -42,7 +43,7 @@ echo "Detected distribution: $DISTRO"
 echo "Detected version: $VERSION_ID"
 
 case "$DISTRO" in
-    ubuntu)
+    ubuntu|debian)
         echo "Installing dependencies using apt..."
         apt-get update
         apt-get install -y --no-install-recommends \
@@ -165,7 +166,7 @@ case "$DISTRO" in
 
     *)
         echo "Error: Unsupported distribution: $DISTRO"
-        echo "Supported distributions: ubuntu, almalinux, azurelinux, rhel, sles"
+        echo "Supported distributions: ubuntu, debian, almalinux, azurelinux, rhel, sles"
         exit 1
         ;;
 esac

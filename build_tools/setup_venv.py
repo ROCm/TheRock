@@ -15,11 +15,10 @@ There are a few modes this can be used in:
     python setup_venv.py .venv
     ```
 
-* To install the latest nightly rocm packages for gfx110X-all into the venv:
+* To install the latest nightly rocm packages into the venv:
 
     ```
-    python setup_venv.py .venv --packages rocm[libraries,devel] \
-        --index-name nightly --index-subdir gfx110X-all
+    python setup_venv.py .venv --packages rocm[libraries,devel,device-all] --index-name nightly
     ```
 
     This is roughly equivalent to:
@@ -28,7 +27,7 @@ There are a few modes this can be used in:
     python -m venv .venv
     source .venv/bin/activate
     python -m pip install --upgrade pip
-    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
+    python -m pip install rocm[libraries,devel,device-all] --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/
     deactivate
     ```
 
@@ -39,10 +38,6 @@ Package installs are retried by default to cover that transient window. This
 behavior can be adjusted with the `--install-retry-timeout-seconds` and
 `--install-retry-wait-between-seconds` arguments.
 See https://github.com/ROCm/TheRock/issues/5455 for more details.
-
-TODO: update docs and args for multi-arch
-   * --index-url https://rocm.nightlies.amd.com/whl-multi-arch/
-   * refresh ROCM_INDEX_URLS_MAP
 """
 
 import argparse
@@ -52,7 +47,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import re
 import time
 
 from github_actions.github_actions_api import *
@@ -60,10 +54,10 @@ from github_actions.github_actions_api import *
 is_windows = platform.system() == "Windows"
 
 ROCM_INDEX_URLS_MAP = {
-    "stable": "https://repo.amd.com/rocm/whl/",
-    "prerelease": "https://rocm.prereleases.amd.com/whl",
-    "nightly": "https://rocm.nightlies.amd.com/v2",
-    "dev": "https://rocm.devreleases.amd.com/v2",
+    "stable": "https://repo.amd.com/rocm/whl-multi-arch/",
+    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
+    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
 }
 
 
@@ -154,9 +148,23 @@ def update_venv(venv_dir: Path, use_uv: bool = False):
         return
 
     # pip logs warnings about wanting to update, so we'll do that for it.
+    # Keep setuptools/wheel available so artifact-only installs of ROCm sdists
+    # can use --no-build-isolation without resolving build dependencies from
+    # the package index being tested.
     log("")
     python_exe = find_venv_python_exe(venv_dir)
-    run_command([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
+    run_command(
+        [
+            str(python_exe),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "pip",
+            "setuptools",
+            "wheel",
+        ]
+    )
 
 
 def activate_venv_in_gha(venv_dir: Path):
@@ -197,7 +205,6 @@ def install_packages_into_venv(
     use_uv: bool = False,
     index_url: str | None = None,
     index_name: str | None = None,
-    index_subdir: str | None = None,
     find_links: str | None = None,
     pre: bool = False,
     disable_cache: bool = False,
@@ -211,8 +218,7 @@ def install_packages_into_venv(
         packages: The list of packages to install
         use_uv: True to use 'uv', uses 'pip' otherwise
         index_url: URL for '--index-url' command argument
-        index_name: Shorthand for a base index_url (e.g. 'nightly')
-        index_subdir: Subdirectory for 'index_url' or 'index_name'
+        index_name: Shorthand for an index_url (e.g. 'nightly')
         find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
@@ -236,11 +242,10 @@ def install_packages_into_venv(
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
 
-    if index_url:
-        # Join index with subdir.
-        if index_subdir:
-            index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
-
+    if index_url == "":
+        pip_install_cmd.append("--no-index")
+        pip_install_cmd.append("--no-build-isolation")
+    elif index_url:
         pip_install_cmd.append(f"--index-url={index_url}")
 
     if find_links:
@@ -288,7 +293,6 @@ def run(args: argparse.Namespace):
             packages=args.packages.split(),
             use_uv=use_uv,
             index_url=args.index_url,
-            index_subdir=args.index_subdir,
             index_name=args.index_name,
             find_links=args.find_links,
             pre=args.pre,
@@ -301,34 +305,6 @@ def run(args: argparse.Namespace):
         activate_venv_in_gha(venv_dir)
     else:
         log_venv_activate_instructions(venv_dir)
-
-
-GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
-
-
-def _scrape_rocm_index_subdirs() -> set[str] | None:
-    """Scrapes available subdirs from all known indexes, returns union of all."""
-    try:
-        import requests
-    except ImportError:
-        return
-
-    all_subdirs: set[str] = set()
-
-    for index_url in ROCM_INDEX_URLS_MAP.values():
-        index_url = index_url.rstrip("/") + "/"
-        try:
-            response = requests.get(index_url)
-            response.raise_for_status()
-        except Exception as e:
-            print(f"[ERROR]: fetching subdirs from {index_url} failed: {e}")
-            continue
-
-        # Extract gfx targets from <a> elements.
-        matches = re.findall(GFX_TARGET_REGEX, response.text)
-        all_subdirs.update(matches)
-
-    return all_subdirs if all_subdirs else None
 
 
 def main(argv: list[str]):
@@ -397,13 +373,13 @@ def main(argv: list[str]):
     install_options.add_argument(
         "--index-url",
         type=str,
-        help="Package index URL for pip --index-url (complete URL, or base URL with --index-subdir)",
+        help="Package index URL for pip --index-url",
     )
     install_options.add_argument(
         "--index-name",
         type=str,
         choices=["stable", "prerelease", "nightly", "dev"],
-        help="Shorthand for a named index (requires --index-subdir)",
+        help="Shorthand for a named index",
     )
     install_options.add_argument(
         "--find-links",
@@ -411,22 +387,10 @@ def main(argv: list[str]):
         help="Package location URL for pip --find-links (compatible with --index-url)",
     )
 
-    # Scrape available subdirs for --index-subdir choices.
-    available_subdirs = _scrape_rocm_index_subdirs()
-    install_options.add_argument(
-        "--index-subdir",
-        "--index-subdirectory",
-        type=str,
-        help="Index subdirectory, such as 'gfx110X-all'",
-        choices=available_subdirs,
-    )
-
     args = p.parse_args(argv)
 
     if args.venv_dir.exists() and not args.venv_dir.is_dir():
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
-    if args.index_name and not args.index_subdir:
-        p.error("--index-subdir must be set when using --index-name")
     if args.install_retry_timeout_seconds < 0:
         p.error("--install-retry-timeout-seconds must be non-negative")
     if (

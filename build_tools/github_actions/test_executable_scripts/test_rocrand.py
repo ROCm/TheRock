@@ -87,8 +87,6 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocRAND",
     "--output-on-failure",
-    "--parallel",
-    "8",
     "--repeat",
     "until-pass:3",
 ]

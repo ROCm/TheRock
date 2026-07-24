@@ -6,6 +6,8 @@
 #
 # Installs ROCm from deb/rpm packages via the system package manager.
 # Automatically detects the distribution and configures the appropriate repository.
+# Installs both the runtime meta-package (amdrocm*) and the core SDK meta-package
+# (amdrocm-core-sdk*) to provide a complete ROCm installation.
 #
 # Usage:
 #   ./install_rocm_packages.sh <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
@@ -98,6 +100,12 @@ map_distro_to_repo() {
             PKG_TYPE="deb"
             PKG_MGR="apt"
             ;;
+        debian)
+            # Debian VERSION_ID is major-only (e.g., 12, 13) → debian12, debian13
+            REPO_DISTRO="debian${major_ver}"
+            PKG_TYPE="deb"
+            PKG_MGR="apt"
+            ;;
         almalinux)
             # AlmaLinux uses RHEL repos
             REPO_DISTRO="rhel${major_ver}"
@@ -121,7 +129,7 @@ map_distro_to_repo() {
             ;;
         *)
             echo "Error: Unsupported distribution: $id"
-            echo "Supported: ubuntu, almalinux, azurelinux, rhel, sles"
+            echo "Supported: ubuntu, debian, almalinux, azurelinux, rhel, sles"
             exit 1
             ;;
     esac
@@ -239,7 +247,7 @@ get_gpg_key_url() {
 install_deb() {
     local repo_url="$1"
     local gpg_key_url="$2"
-    local meta_package="$3"
+    local meta_packages="$3"  # space-separated list
     local release_type="$4"
 
     echo "Configuring APT repository..."
@@ -260,8 +268,9 @@ install_deb() {
     echo "Repository configured: $(cat /etc/apt/sources.list.d/rocm.list)"
     apt-get update
 
-    echo "Installing ${meta_package}..."
-    apt-get install -y --no-install-recommends "$meta_package"
+    echo "Installing ${meta_packages}..."
+    # shellcheck disable=SC2086  # intentional word-splitting of package list
+    apt-get install -y --no-install-recommends ${meta_packages}
     rm -rf /var/lib/apt/lists/*
 }
 
@@ -271,7 +280,7 @@ install_deb() {
 install_rpm_dnf() {
     local repo_url="$1"
     local gpg_key_url="$2"
-    local meta_package="$3"
+    local meta_packages="$3"  # space-separated list
     local release_type="$4"
     local pkg_mgr="$5"
 
@@ -306,13 +315,15 @@ REPOEOF
             rm -f /tmp/rocm.gpg
         fi
         tdnf clean all
-        echo "Installing ${meta_package}..."
-        tdnf install -y "$meta_package"
+        echo "Installing ${meta_packages}..."
+        # shellcheck disable=SC2086  # intentional word-splitting of package list
+        tdnf install -y ${meta_packages}
     else
         # dnf: --allowerasing needed for RHEL UBI images where curl-minimal conflicts with curl
         dnf clean all
-        echo "Installing ${meta_package}..."
-        dnf install -y --allowerasing "$meta_package"
+        echo "Installing ${meta_packages}..."
+        # shellcheck disable=SC2086  # intentional word-splitting of package list
+        dnf install -y --allowerasing ${meta_packages}
         dnf clean all
     fi
 }
@@ -323,7 +334,7 @@ REPOEOF
 install_rpm_zypper() {
     local repo_url="$1"
     local gpg_key_url="$2"
-    local meta_package="$3"
+    local meta_packages="$3"  # space-separated list
     local release_type="$4"
 
     echo "Configuring Zypper repository..."
@@ -349,8 +360,9 @@ REPOEOF
     cat /etc/zypp/repos.d/rocm.repo
 
     zypper --non-interactive --gpg-auto-import-keys refresh
-    echo "Installing ${meta_package}..."
-    zypper --non-interactive install --no-recommends "$meta_package"
+    echo "Installing ${meta_packages}..."
+    # shellcheck disable=SC2086  # intentional word-splitting of package list
+    zypper --non-interactive install --no-recommends ${meta_packages}
     zypper clean --all
 }
 
@@ -359,12 +371,14 @@ REPOEOF
 # ===========================================================================
 
 MAJOR_MINOR=$(extract_major_minor "$VERSION")
+# Install both the runtime meta-package (amdrocm*) and the core SDK meta-package
+# (amdrocm-core-sdk*) so the image gets a complete ROCm installation.
 if [ "$MULTI_ARCH" = "1" ]; then
     GPU_TARGET="multi-arch"
-    META_PACKAGE="amdrocm${MAJOR_MINOR}"
+    META_PACKAGES="amdrocm${MAJOR_MINOR} amdrocm-core-sdk${MAJOR_MINOR}"
 else
     GPU_TARGET=$(normalize_gpu_target "$AMDGPU_FAMILY")
-    META_PACKAGE="amdrocm${MAJOR_MINOR}-${GPU_TARGET}"
+    META_PACKAGES="amdrocm${MAJOR_MINOR}-${GPU_TARGET} amdrocm-core-sdk${MAJOR_MINOR}-${GPU_TARGET}"
 fi
 
 echo "=============================================="
@@ -374,7 +388,7 @@ echo "Version:         ${VERSION}"
 echo "Major.Minor:     ${MAJOR_MINOR}"
 echo "AMDGPU Family:   ${AMDGPU_FAMILY}"
 echo "GPU Target:      ${GPU_TARGET}"
-echo "Meta Package:    ${META_PACKAGE}"
+echo "Meta Packages:   ${META_PACKAGES}"
 echo "Release Type:    ${RELEASE_TYPE}"
 echo "Install Mode:    $([ "$MULTI_ARCH" = "1" ] && echo "multi-arch" || echo "single-family")"
 echo "=============================================="
@@ -407,13 +421,13 @@ echo "=============================================="
 # Install based on package type
 case "$PKG_MGR" in
     apt)
-        install_deb "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGE" "$RELEASE_TYPE"
+        install_deb "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGES" "$RELEASE_TYPE"
         ;;
     dnf|tdnf)
-        install_rpm_dnf "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGE" "$RELEASE_TYPE" "$PKG_MGR"
+        install_rpm_dnf "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGES" "$RELEASE_TYPE" "$PKG_MGR"
         ;;
     zypper)
-        install_rpm_zypper "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGE" "$RELEASE_TYPE"
+        install_rpm_zypper "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGES" "$RELEASE_TYPE"
         ;;
 esac
 

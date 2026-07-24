@@ -56,7 +56,7 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "azure-linux-scale-rocm"
+        default: "aws-linux-scale-rocm-prod"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -93,14 +93,14 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
@@ -162,6 +162,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -173,7 +174,17 @@ jobs:
         run: |
           python3 build_tools/github_actions/detect_failed_logs.py
 
-      - name: Run build tests
+      - name: Run build tests (Comgr, blocking)
+        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
+        env:
+          TEATIME_FORCE_INTERACTIVE: 1
+        run: |
+          cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
+
+      # Remaining build tests (e.g. rocjitsu, mirage) still run and report, but
+      # are not yet gating. Comgr is split out above so its failures block CI.
+      # TODO(#6112): rocjitsu tests are being moved out; drop this step once done.
+      - name: Run build tests (other, non-blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         env:

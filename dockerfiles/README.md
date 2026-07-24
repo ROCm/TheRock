@@ -7,10 +7,9 @@ well as supporting scripts.
 
 ### `build_manylinux_*.Dockerfile`
 
-| Source .Dockerfile                                                                 | Published package                                                                  |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile)          | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64      |
-| [`build_manylinux_rccl_x86_64.Dockerfile`](build_manylinux_rccl_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_rccl_x86_64 |
+| Source .Dockerfile                                                        | Published package                                                             |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64 |
 
 These Dockerfiles are used to build ROCm, PyTorch, and other packages for
 release across a wide variety of Linux distributions. They are derived from
@@ -100,6 +99,19 @@ This includes dejagnu, make, gcc, g++ and gfortran.
 
 Used in ocltst execution. It installs OCL ICD package required
 by ocltst
+
+| Source .Dockerfile                                                                             | Published package                                                                |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`no_rocm_image_ubuntu24_04_openmpi.Dockerfile`](no_rocm_image_ubuntu24_04_openmpi.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_openmpi |
+
+Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing a system
+OpenMPI install (`libopenmpi-dev`, `openmpi-bin`) for the rocprofv3 `mpi-ranks`
+integration tests. Like the other `no_rocm_image_*` images this is a test-only
+image (not a ROCm build image): the rocprofiler-sdk tests are configured and
+compiled in-container at test time, so `find_package(MPI)` needs the OpenMPI
+headers and `mpiexec`. OpenMPI is intentionally not bundled in TheRock artifacts
+(to avoid forcing a specific MPI onto users), so it is provided at the system
+level here for the test environment.
 
 ### `rocm_runtime.Dockerfile`
 
@@ -208,11 +220,10 @@ The common
 [`.github/workflows/publish_dockerfile.yml`](/.github/workflows/publish_dockerfile.yml)
 workflow is used by other `publish_*.yml` workflows:
 
-| Workflow file                                                                                                             | Workflow run history                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)           | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)           |
-| [`.github/workflows/publish_build_manylinux_rccl_x86_64.yml`](/.github/workflows/publish_build_manylinux_rccl_x86_64.yml) | [actions/workflows/publish_build_manylinux_rccl_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_rccl_x86_64.yml) |
-| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml)     | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml)     |
+| Workflow file                                                                                                         | Workflow run history                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)       | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)       |
+| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml) | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml) |
 
 Tags for built docker images are set based on the branch name pattern:
 

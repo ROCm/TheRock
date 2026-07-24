@@ -507,3 +507,25 @@ terminal types as compiled-in fallbacks:
 If the user's system terminal type does not match any of these fallbacks, the
 user must install a terminfo dependency in one of the lookup paths listed
 above. Otherwise, the TUI mode in ROCgdb will remain unavailable.
+
+## Configuration Variables
+
+### THEROCK_ROCGDB_UPSTREAM_BUILD
+
+- **Default**: `OFF` - Build ROCm's rocgdb branch with AMD-specific files (NOTICES.txt, roccoremerge)
+- **Non-default**: `ON` - Build upstream GDB master, skip AMD-specific files not yet in upstream
+
+Usage: `-DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON`
+
+### THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
+
+- **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py` to exist in the rocgdb source tree; configure fails if it is missing.
+- **Non-default**: `ON` - If `test_rocgdb.py` is missing from the source tree, download it from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install it into `tests/rocgdb`.
+
+Use this when building a rocgdb source tree (e.g. upstream master) that is not part of the branches exercised by TheRock CI.
+
+Usage: `-DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON`
+
+**Note:** `curl` must be available on the system when this option is enabled, as
+it is used to download `test_rocgdb.py` at configure time. Most environments
+provide `curl` by default, but it may need to be installed otherwise.

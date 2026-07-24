@@ -17,6 +17,11 @@ if(THEROCK_ENABLE_COMPILER)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
+  # Disable pre-compiled headers under clang as they cause conflicts related to
+  # differing optimization levels. This is a workaround.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    list(APPEND _extra_llvm_cmake_args "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
+  endif()
 
   # Building Flang is very memory-intensive on systems with many cores. Allow
   # users to specify the level of concurrency for these tasks so they can
@@ -79,6 +84,7 @@ if(THEROCK_ENABLE_COMPILER)
       # Features
       -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
+      -DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
@@ -119,7 +125,8 @@ if(THEROCK_ENABLE_COMPILER)
       "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
       "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
       "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
-
+      # ASAN
+      -DTHEROCK_SANITIZER=${THEROCK_SANITIZER}
       # compiler-rt debug mode
       "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
 
@@ -152,12 +159,31 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_activate(amd-llvm)
 
 
+  # Comgr's gtest suite needs a googletest provider. therock-googletest is
+  # declared before compiler/ (see the root CMakeLists.txt) so amd-comgr can
+  # depend on the single shared instance rather than a compiler-local copy.
+  set(_comgr_gtest_deps)
+  if(THEROCK_BUILD_COMGR_TESTS)
+    set(_comgr_gtest_deps therock-googletest)
+  endif()
+
+
   ##############################################################################
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
   # runtime. LLVM/Clang/LLD are statically linked and hidden behind comgr's
   # version script, avoiding symbol interposition issues.
   ##############################################################################
+
+  set(_comgr_hotswap_cmake_args)
+  if(THEROCK_ENABLE_HOTSWAP)
+    list(APPEND _comgr_hotswap_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=ON)
+    if(NOT WIN32)
+      list(APPEND _comgr_hotswap_cmake_args
+        -DHOTSWAP_BUILD_TOOL=ON
+        "-DHOTSWAP_TOOL_HSA_INCLUDE_ROOT=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime")
+    endif()
+  endif()
 
   therock_cmake_subproject_declare(amd-comgr
     USE_DIST_AMDGPU_TARGETS
@@ -174,8 +200,10 @@ if(THEROCK_ENABLE_COMPILER)
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
+      ${_comgr_hotswap_cmake_args}
     BUILD_DEPS
       rocm-cmake
+      ${_comgr_gtest_deps}
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
@@ -201,6 +229,10 @@ if(THEROCK_ENABLE_COMPILER)
         "${CMAKE_CTEST_COMMAND}"
         --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
         --output-on-failure
+      COMMAND
+        "${CMAKE_COMMAND}"
+        --build "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
+        --target test-unit
     )
   endif()
 
