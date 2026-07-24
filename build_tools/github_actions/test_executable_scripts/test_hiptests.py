@@ -177,8 +177,8 @@ def execute_tests(env):
     ]
 
     # Add retry flag only for specific GPU families with known flaky tests
-    if AMDGPU_FAMILIES in ("gfx94X-dcgpu", "gfx125X-dcgpu"):
-        cmd.extend(["--repeat", "until-pass:3"])
+    # if AMDGPU_FAMILIES in ("gfx94X-dcgpu", "gfx125X-dcgpu"):
+    #    cmd.extend(["--repeat", "until-pass:3"])
 
     # If quick tests are enabled, run only the smoke test subset
     if TEST_TYPE == "quick":
