@@ -151,12 +151,24 @@ PyTorch packages versions are handled via scripts:
 
 The scripts produce these versions for each distribution channel:
 
-| Package name | Example release version (stable x stable) | Example nightly version (nightly x nightly) |
-| ------------ | ----------------------------------------- | ------------------------------------------- |
-| torch        | `2.9.1+rocm7.10.0`                        | `2.10.0a0+rocm7.10.0a20251024`              |
-| torchaudio   | `2.9.0+rocm7.10.0`                        | `2.10.0a0+rocm7.10.0a20251024`              |
-| torchvision  | `0.24.0+rocm7.10.0`                       | `0.24.0+rocm7.11.0a20251124`                |
-| triton       | `3.3.1+rocm7.10.0`                        | `3.5.1+rocm7.11.0a20251124`                 |
+| Package name   | Example release version (stable x stable)           | Example nightly version (nightly x nightly) |
+| -------------- | --------------------------------------------------- | ------------------------------------------- |
+| torch          | `2.9.1+rocm7.10.0`                                  | `2.10.0a0+rocm7.10.0a20251024`              |
+| torchaudio     | `2.9.0+rocm7.10.0`                                  | `2.10.0a0+rocm7.10.0a20251024`              |
+| torchvision    | `0.24.0+rocm7.10.0`                                 | `0.24.0+rocm7.11.0a20251124`                |
+| triton         | `3.3.1+rocm7.10.0`                                  | `3.5.1+rocm7.11.0a20251124`                 |
+| triton_windows | — (not built for stable `release/*` on Windows yet) | `3.6.0+git6fe895f6-rocm7.13.0a20260424`     |
+
+On Windows, [`build_prod_wheels.py`](/external-builds/pytorch/build_prod_wheels.py)
+appends the same `--version-suffix` / `TRITON_WHEEL_VERSION_SUFFIX` used for Linux
+`triton` wheels. Nightly builds add `+git<githash>` from the triton-windows
+checkout (pin in
+[`ci_commit_pins/triton-windows.txt`](/external-builds/pytorch/ci_commit_pins/triton-windows.txt));
+extra local segments use `-` after the single `+` (see comments in
+`build_triton_linux()`). CI builds `triton_windows` only for
+`pytorch_git_ref: nightly`.
+Windows `triton_windows` wheels are published on the multi-arch index at
+`https://rocm.nightlies.amd.com/whl-multi-arch/`.
 
 #### JAX versions
 

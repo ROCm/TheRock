@@ -343,6 +343,23 @@ PyTorch builds require Python wheels, either by building from source (see above)
 or by downloading from one of TheRock's release indices. See the instructions at
 [external-builds/pytorch](../../external-builds/pytorch/README.md).
 
+**Triton (`triton_windows`) on Windows:** Nightly PyTorch wheels built by TheRock
+include Triton for `torch.compile` and sage-attention v1. The wheel is published as **`triton_windows`**
+(import `triton`). Local builds use [triton-windows](https://github.com/triton-lang/triton-windows)
+and a one-time download of a pinned LLVM toolchain (see [Install tools](#install-tools)
+for MSVC); see
+[Triton on Windows](../../external-builds/pytorch/README.md#triton-on-windows).
+
+**Installing nightly wheels:** Use the unified multi-arch index at
+`https://rocm.nightlies.amd.com/whl-multi-arch/` and select your GPU target
+with device extras (for example `gfx1151` for Strix Halo). Example:
+
+```powershell
+pip install --pre --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ `
+  "torch[device-gfx1151]" "torchvision[device-gfx1151]" torchaudio
+# triton_windows is pulled in automatically for nightly torch wheels
+```
+
 ### Run tests
 
 Test builds can be enabled with `-DBUILD_TESTING=ON` (the default).
