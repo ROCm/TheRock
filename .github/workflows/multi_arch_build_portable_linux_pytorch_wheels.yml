@@ -77,7 +77,7 @@ on:
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
   workflow_dispatch:
@@ -141,7 +141,7 @@ on:
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
 
@@ -454,13 +454,12 @@ jobs:
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
   # torch_version output is unambiguous and only this build's success gates the
   # dispatch -- a failure for one ref no longer skips testing the others (#5777).
-  # Scoped to nightly gfx94X-dcgpu Python 3.12 builds for now.
+  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests.
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
     if: >-
       ${{
         inputs.run_full_pytorch_tests &&
-        inputs.release_type == 'nightly' &&
         inputs.python_version == '3.12' &&
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}
