@@ -567,10 +567,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-fft"
+      "amdrocm-fft",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-fft"
+      "amdrocm-fft",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm FFT library",
@@ -873,10 +875,14 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-blas"
+      "amdrocm-blas",
+      "amdrocm-runtime-devel",
+      "amdrocm-hipblas-common-devel"
     ],
     "RPMRequires": [
-      "amdrocm-blas"
+      "amdrocm-blas",
+      "amdrocm-runtime-devel",
+      "amdrocm-hipblas-common-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for BLAS in ROCm",
@@ -979,10 +985,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-sparse"
+      "amdrocm-sparse",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-sparse"
+      "amdrocm-sparse",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for Sparse  in ROCm",
@@ -1074,10 +1082,14 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-solver"
+      "amdrocm-solver",
+      "amdrocm-runtime-devel",
+      "amdrocm-blas-devel"
     ],
     "RPMRequires": [
-      "amdrocm-solver"
+      "amdrocm-solver",
+      "amdrocm-runtime-devel",
+      "amdrocm-blas-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for solver in ROCm",
@@ -1158,10 +1170,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-rocalution"
+      "amdrocm-rocalution",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-rocalution"
+      "amdrocm-rocalution",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "rocALUTION sparse iterative solver library for AMD GPUs",
@@ -1264,10 +1278,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-hiptensor"
+      "amdrocm-hiptensor",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-hiptensor"
+      "amdrocm-hiptensor",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "hipTensor library for high-performance tensor operations on AMD GPUs",
@@ -1424,10 +1440,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-rand"
+      "amdrocm-rand",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-rand"
+      "amdrocm-rand",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm random number generation library",
@@ -1536,10 +1554,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "python3",
-      "libc6"
+      "libc6",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "python3"
+      "python3",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm primitive header files",
@@ -2489,11 +2509,13 @@
     "DEBDepends": [
       "python3",
       "libc6",
-      "amdrocm-rccl"
+      "amdrocm-rccl",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
       "python3",
-      "amdrocm-rccl"
+      "amdrocm-rccl",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
     "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
@@ -2800,10 +2822,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-dnn"
+      "amdrocm-dnn",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-dnn"
+      "amdrocm-dnn",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
     "Description_Short": "AMD DNN Library",
