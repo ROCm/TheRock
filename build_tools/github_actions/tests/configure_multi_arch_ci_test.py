@@ -24,7 +24,6 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -715,6 +714,38 @@ class TestSelectTargets(unittest.TestCase):
         result_with = cm.select_targets(inputs_with)
         self.assertNotIn("gfx906", result_without.linux_families)
         self.assertIn("gfx906", result_with.linux_families)
+
+    def test_pull_request_includes_amdgcnspirv_by_default(self):
+        """SPIR-V is a presubmit target, so PRs build it without any label."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        result = cm.select_targets(inputs)
+        # amdgcnspirv is Linux-only and build-only.
+        self.assertIn("amdgcnspirv", result.linux_families)
+        self.assertNotIn("amdgcnspirv", result.windows_families)
+
+    def test_pull_request_amdgcnspirv_label_selects_target(self):
+        """A non-``gfx`` label like ``amdgcnspirv`` is honored by select_targets.
+
+        Regression test for the label filter in ``select_targets``, which was
+        extended from ``label.startswith("gfx")`` to also accept
+        ``amdgcnspirv`` so SPIR-V can be requested explicitly.
+        """
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["amdgcnspirv"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("amdgcnspirv", result.linux_families)
 
     def test_pull_request_run_all_archs_label(self):
         """PR with ci:run-all-archs label selects all families."""
