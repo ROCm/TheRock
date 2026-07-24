@@ -28,17 +28,21 @@ CI_PYTHON_VERSIONS = {
 
 # Refs for the "prerelease" release type. The "nightly" release type extends
 # this set with additional refs (see RELEASE_PYTORCH_REFS).
+# TEST BRANCH: point the stable torch refs at the harkgill-amd/pytorch fork
+# branches that bump the composable_kernel submodule to include gfx90c support,
+# so gfx90c torch wheels can be built and verified. release/2.13 has no gfx90c
+# fork branch yet, so it stays on the stock ref (gfx90c excluded below).
 RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
-        "release/2.10",
-        "release/2.11",
-        "release/2.12",
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.10",
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.11",
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.12",
         "release/2.13",
     ],
     "windows": [
-        "release/2.10",
-        "release/2.11",
-        "release/2.12",
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.10",
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.11",
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.12",
         "release/2.13",
     ],
 }
@@ -57,28 +61,27 @@ CI_PYTORCH_REFS = {
 # Unknown explicit refs are left unfiltered so bring-up branches can opt into
 # new GPU families before the default PyTorch refs support them.
 #
-# gfx90c is excluded from stable release branches and built for nightly only
-# while it is brought up. Once nightly gfx90c wheels are confirmed working, it
-# will be added to the stable branches.
+# TEST BRANCH: gfx90c is ENABLED for the fork cherry-pick refs (torch 2.10-2.12)
+# to verify that gfx90c torch wheels build with the composable_kernel gfx90c
+# support in place. It remains excluded from release/2.13 and nightly, which
+# have no gfx90c fork branch yet. gfx125x exclusions are keyed to the new refs.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
         # gfx125x not supported for PyTorch 2.10.
-        "release/2.10": {"gfx125X-dcgpu", "gfx90c"},
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.10": {"gfx125X-dcgpu"},
         # gfx125x supported for PyTorch 2.11 via https://github.com/ROCm/pytorch/pull/3346.
-        "release/2.11": {"gfx90c"},
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.11": set(),
         # gfx125x supported for PyTorch 2.12 via https://github.com/ROCm/pytorch/pull/3421.
-        "release/2.12": {"gfx90c"},
+        "harkgill-amd/cherrypick-gfx90c-CK-support-torch2.12": set(),
         # gfx125x not yet enabled for PyTorch release/2.13 (ROCm/pytorch fork).
         # See https://github.com/ROCm/TheRock/issues/5833.
         "release/2.13": {"gfx125X-dcgpu", "gfx90c"},
         # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
-        "nightly": {},
+        "nightly": {"gfx90c"},
     },
     "windows": {
-        "release/2.10": {"gfx90c"},
-        "release/2.11": {"gfx90c"},
-        "release/2.12": {"gfx90c"},
         "release/2.13": {"gfx90c"},
+        "nightly": {"gfx90c"},
     },
 }
 
