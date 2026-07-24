@@ -2,11 +2,17 @@
 # SPDX-License-Identifier: MIT
 
 if(THEROCK_ENABLE_RAND)
+  # On Windows the primlibs benchmarks build without GPU monitoring, so no
+  # amdsmi dependency is needed.
+  if(WIN32)
+    set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
+    set(_primlibs_benchmark_deps)
+    set(_primlibs_benchmark_includes)
   # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
   # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
-  # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
+  # amdsmi, so they must be disabled when amdsmi is unavailable (e.g., the
   # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
-  if(WIN32 OR NOT TARGET amdsmi)
+  elseif(NOT TARGET amdsmi)
     set(_primlibs_benchmark_enable "OFF")
     set(_primlibs_benchmark_deps)
     set(_primlibs_benchmark_includes)
@@ -132,11 +138,17 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
+  # On Windows the primlibs benchmarks build without GPU monitoring, so no
+  # amdsmi dependency is needed.
+  if(WIN32)
+    set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
+    set(_primlibs_benchmark_deps)
+    set(_primlibs_benchmark_includes)
   # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
   # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
-  # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
+  # amdsmi, so they must be disabled when amdsmi is unavailable (e.g., the
   # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
-  if(WIN32 OR NOT TARGET amdsmi)
+  elseif(NOT TARGET amdsmi)
     set(_primlibs_benchmark_enable "OFF")
     set(_primlibs_benchmark_deps)
     set(_primlibs_benchmark_includes)
