@@ -26,6 +26,8 @@ sed -i "/pkg\.generate\s*(/a\  libraries : ['-L\${libdir}', '-ldrm_amdgpu']," $A
 AMDGPU_IDS="$SOURCE_DIR/data/amdgpu.ids"
 cat >> "$AMDGPU_IDS" << 'EOF'
 7590,	C0,	AMD Radeon RX 9060 XT
+7590,	CF,	AMD Radeon RX 9050
+7590,	DF,	AMD Radeon RX 9050 4GB
 744B,	00,	AMD Radeon PRO W7900D
 75A0,	00,	AMD Instinct MI350X
 75A3,	00,	AMD Instinct MI355X
