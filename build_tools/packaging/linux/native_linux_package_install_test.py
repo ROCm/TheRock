@@ -31,6 +31,13 @@ Path and repo name are overridable via environment variables: ROCM_REPO_NAME (re
 APT list, Zypper/Yum repo file and section), ROCM_APT_KEYRING_DIR, ROCM_APT_SOURCES_LIST,
 ROCM_APT_KEYRING_FILE, ROCM_ZYPP_REPOS_DIR, ROCM_YUM_REPOS_DIR,
 ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
+After install, Step 2 verifies transitive dependencies (``apt-get check`` + Depends/Pre-Depends
+closure for DEB; ``rpm -qR`` / ``rpm -q --whatprovides`` closure for RPM) unless
+``NATIVE_LINUX_SKIP_DEP_VERIFY=1``. The resolved dependency closure is rendered as an indented
+tree with summary counts (packages in closure / dependency edges / roots), printed to the
+console and written to ``NATIVE_LINUX_DEP_REPORT_FILE`` (default ``rocm_dependency_report.txt``).
+A flat JSON summary (status, roots, closure/edge counts, and a flat errors list) is written
+alongside it to ``NATIVE_LINUX_DEP_REPORT_JSON_FILE`` (default ``rocm_dependency_report.json``).
 
 Prerequisites:
 - This script does NOT start Docker or a VM. You must run it inside an existing
@@ -132,12 +139,15 @@ Example invocations:
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
 import traceback
 from argparse import ArgumentParser, Namespace
+from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -176,6 +186,19 @@ RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
 # Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
+
+# Set to ``1`` to skip transitive dependency verification after install (faster / edge cases).
+ENV_NATIVE_LINUX_SKIP_DEP_VERIFY = "NATIVE_LINUX_SKIP_DEP_VERIFY"
+
+# Path of the transitive-dependency report written after verification; overridable.
+ENV_NATIVE_LINUX_DEP_REPORT_FILE = "NATIVE_LINUX_DEP_REPORT_FILE"
+DEFAULT_DEP_REPORT_FILE = "rocm_dependency_report.txt"
+
+# Path of a flat, machine-readable JSON summary written alongside the text report;
+# overridable. Shallow on purpose (status + counts + flat errors list) so CI gating
+# can parse it without walking a nested tree.
+ENV_NATIVE_LINUX_DEP_REPORT_JSON_FILE = "NATIVE_LINUX_DEP_REPORT_JSON_FILE"
+DEFAULT_DEP_REPORT_JSON_FILE = "rocm_dependency_report.json"
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -217,6 +240,448 @@ def _normalize_test_type(test_type: str | None) -> str:
         raise ValueError(
             f"Unsupported test_type {test_type!r}. Expected one of: {valid}."
         ) from e
+
+
+# Transitive dependency walk limits (avoid pathological cycles / huge trees).
+DEP_VERIFY_MAX_CLOSURE = 8000
+DEP_VERIFY_SUBPROCESS_TIMEOUT = 90
+
+
+@dataclass
+class DependencyReport:
+    """Captured transitive-dependency closure for human-readable reporting.
+
+    ``edges`` maps each visited package to the ordered list of resolved dependency
+    packages (DEB: chosen alternative/provider per Depends/Pre-Depends group; RPM:
+    providers of each non-file requirement). ``closure`` is every visited package.
+    """
+
+    package_type: str = ""
+    roots: list[str] = field(default_factory=list)
+    edges: dict[str, list[str]] = field(default_factory=dict)
+    closure: list[str] = field(default_factory=list)
+    # Verification errors captured for the walk (empty => OK). Populated from the
+    # verifier's returned error list; surfaced flat in the JSON summary.
+    errors: list[str] = field(default_factory=list)
+
+    def package_count(self) -> int:
+        return len(self.closure)
+
+    def edge_count(self) -> int:
+        return sum(len(deps) for deps in self.edges.values())
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a flat, JSON-serializable summary of the report.
+
+        Intentionally shallow (no nested dependency tree): overall ``status``, the
+        ``roots``, closure/edge counts, and a flat list of verification ``errors``.
+        ``status`` is ``"BROKEN"`` when any error was captured, else ``"OK"``.
+        """
+        return {
+            "package_type": self.package_type,
+            "status": "BROKEN" if self.errors else "OK",
+            "roots": list(self.roots),
+            "packages": self.package_count(),
+            "edges": self.edge_count(),
+            "errors": list(self.errors),
+        }
+
+    def _render_node(
+        self,
+        node: str,
+        lines: list[str],
+        prefix: str,
+        shown: set[str],
+        path: tuple[str, ...],
+    ) -> None:
+        if node in path:
+            lines.append(f"{prefix}{node} (cycle)")
+            return
+        if node in shown:
+            # Already expanded fully elsewhere; collapse to keep output bounded.
+            suffix = " (see above)" if self.edges.get(node) else ""
+            lines.append(f"{prefix}{node}{suffix}")
+            return
+        shown.add(node)
+        lines.append(f"{prefix}{node}")
+        for child in self.edges.get(node, []):
+            self._render_node(child, lines, prefix + "    ", shown, path + (node,))
+
+    def render(self) -> str:
+        """Render an indented dependency tree (per root) followed by summary counts."""
+        pt = self.package_type.upper() or "PKG"
+        lines: list[str] = []
+        lines.append("=" * 80)
+        lines.append(f"TRANSITIVE DEPENDENCY REPORT ({pt})")
+        lines.append("=" * 80)
+        lines.append(
+            f"Root packages: {', '.join(self.roots) if self.roots else '(none)'}"
+        )
+        lines.append("")
+        lines.append("Dependency tree:")
+        if self.roots:
+            shown: set[str] = set()
+            for root in self.roots:
+                self._render_node(root, lines, "  ", shown, ())
+        else:
+            lines.append("  (no packages walked)")
+        lines.append("")
+        lines.append(
+            f"Summary: {self.package_count()} package(s) in closure, "
+            f"{self.edge_count()} dependency edge(s), {len(self.roots)} root package(s)."
+        )
+        return "\n".join(lines)
+
+
+def _deb_pkg_name_from_dep_token(token: str) -> str | None:
+    """Extract a binary package name from one Depends/Pre-Depends token, or None if not applicable."""
+    t = token.strip()
+    if not t or t.startswith("/"):
+        return None
+    if t.startswith("${") and t.endswith("}"):
+        return None
+    if (t.startswith('"') and t.endswith('"')) or (
+        t.startswith("'") and t.endswith("'")
+    ):
+        t = t[1:-1].strip()
+    if "(" in t:
+        t = t[: t.index("(")].strip()
+    if not t:
+        return None
+    if ":" in t:
+        base, _, qual = t.rpartition(":")
+        if qual in (
+            "amd64",
+            "arm64",
+            "i386",
+            "all",
+            "ppc64el",
+            "riscv64",
+            "s390x",
+        ) or (len(qual) <= 8 and "_" in qual):
+            t = base or t
+    return t if t else None
+
+
+def _parse_debian_dep_field(field_value: str) -> list[frozenset[str]]:
+    """Split a Depends / Pre-Depends field into AND-of-OR groups (Debian policy grammar).
+
+    Comma separates AND; ``|`` separates OR within one AND term. Parentheses group
+    nested alternatives. Returns a list of frozensets; each frozenset is one OR-group
+    (at least one package must be installed).
+    """
+    field_value = field_value.strip()
+    if not field_value:
+        return []
+
+    def split_top_level(s: str, sep: str) -> list[str]:
+        parts: list[str] = []
+        depth = 0
+        cur: list[str] = []
+        for ch in s:
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            if ch == sep and depth == 0:
+                parts.append("".join(cur).strip())
+                cur = []
+                continue
+            cur.append(ch)
+        parts.append("".join(cur).strip())
+        return [p for p in parts if p]
+
+    and_groups: list[frozenset[str]] = []
+    for and_segment in split_top_level(field_value, ","):
+        or_names: set[str] = set()
+        for or_segment in split_top_level(and_segment, "|"):
+            inner = or_segment.strip()
+            if inner.startswith("(") and inner.endswith(")"):
+                inner = inner[1:-1].strip()
+            name = _deb_pkg_name_from_dep_token(inner)
+            if name:
+                or_names.add(name)
+        if or_names:
+            and_groups.append(frozenset(or_names))
+    return and_groups
+
+
+def _apt_cache_show_first_stanza(pkg: str) -> dict[str, str]:
+    """First stanza of ``apt-cache show`` as field name (lower) -> value (merged)."""
+    r = subprocess.run(
+        ["apt-cache", "show", pkg],
+        capture_output=True,
+        text=True,
+        timeout=DEP_VERIFY_SUBPROCESS_TIMEOUT,
+    )
+    if r.returncode != 0 or not (r.stdout or "").strip():
+        return {}
+    lines: list[str] = []
+    for line in r.stdout.split("\n"):
+        if line.strip() == "":
+            break
+        lines.append(line)
+    fields: dict[str, list[str]] = {}
+    cur_key: str | None = None
+    for line in lines:
+        if line.startswith(" ") and cur_key is not None:
+            fields[cur_key][-1] += line.strip()
+            continue
+        if ":" in line:
+            k, _, v = line.partition(":")
+            cur_key = k.strip().lower()
+            fields.setdefault(cur_key, []).append(v.strip())
+    return {k: " ".join(v) for k, v in fields.items()}
+
+
+def _deb_is_pkg_installed(name: str) -> bool:
+    r = subprocess.run(
+        ["dpkg-query", "-W", "-f=${db:Status-Status}", name],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if r.returncode != 0:
+        return False
+    return (r.stdout or "").strip() == "installed"
+
+
+def _deb_showpkg_reverse_provides(name: str) -> list[str]:
+    """Binary package names listed under Reverse Provides for a (possibly virtual) name."""
+    r = subprocess.run(
+        ["apt-cache", "showpkg", name],
+        capture_output=True,
+        text=True,
+        timeout=DEP_VERIFY_SUBPROCESS_TIMEOUT,
+    )
+    if r.returncode != 0:
+        return []
+    lines = r.stdout.split("\n")
+    in_section = False
+    providers: list[str] = []
+    for line in lines:
+        ls = line.strip()
+        if ls == "Reverse Provides:":
+            in_section = True
+            continue
+        if in_section:
+            if line and not line.startswith((" ", "\t")):
+                break
+            parts = line.split()
+            if parts and parts[0][0].isalnum():
+                providers.append(parts[0])
+    return providers
+
+
+def _deb_pick_installed_rep(or_group: frozenset[str]) -> str | None:
+    """Return one installed concrete package satisfying this OR-group (direct or provider)."""
+    for name in or_group:
+        if _deb_is_pkg_installed(name):
+            return name
+        for prov in _deb_showpkg_reverse_provides(name):
+            if _deb_is_pkg_installed(prov):
+                return prov
+    return None
+
+
+def verify_debian_transitive_dependencies(
+    root_packages: list[str],
+    *,
+    max_closure: int = DEP_VERIFY_MAX_CLOSURE,
+    report: "DependencyReport | None" = None,
+) -> tuple[bool, list[str]]:
+    """Verify dpkg database consistency and full Depends/Pre-Depends closure for roots.
+
+    Confirms each AND-of-OR dependency group is satisfied (including virtual names via
+    Reverse Provides) and walks the chosen installed packages transitively. When
+    ``report`` is provided, its ``roots``/``edges``/``closure`` are populated for
+    human-readable reporting.
+    """
+    errors: list[str] = []
+    if report is not None:
+        report.roots = list(root_packages)
+    chk = subprocess.run(
+        ["apt-get", "check"],
+        capture_output=True,
+        text=True,
+        timeout=DEP_VERIFY_SUBPROCESS_TIMEOUT,
+    )
+    if chk.returncode != 0:
+        msg = (chk.stderr or chk.stdout or "").strip() or "(no output)"
+        errors.append(f"apt-get check failed (exit {chk.returncode}): {msg}")
+        return False, errors
+
+    expanded: set[str] = set()
+    queue: deque[str] = deque(root_packages)
+    steps = 0
+    while queue:
+        pkg = queue.popleft()
+        if pkg in expanded:
+            continue
+        expanded.add(pkg)
+        if report is not None:
+            report.closure.append(pkg)
+            report.edges.setdefault(pkg, [])
+        steps += 1
+        if steps > max_closure:
+            errors.append(
+                f"dependency walk exceeded max steps ({max_closure}); possible cycle or huge tree"
+            )
+            return False, errors
+        if not _deb_is_pkg_installed(pkg):
+            errors.append(f"package not installed (missing from dpkg): {pkg}")
+            return False, errors
+
+        stanza = _apt_cache_show_first_stanza(pkg)
+        for field_key in ("depends", "pre-depends"):
+            raw = stanza.get(field_key)
+            if not raw:
+                continue
+            for or_group in _parse_debian_dep_field(raw):
+                rep = _deb_pick_installed_rep(or_group)
+                if rep is None:
+                    alts = " | ".join(sorted(or_group))
+                    errors.append(
+                        f"{pkg}: unsatisfied dependency group ({alts}) — "
+                        "none of the alternatives are installed (including providers)"
+                    )
+                    return False, errors
+                if report is not None and rep not in report.edges.get(pkg, []):
+                    report.edges.setdefault(pkg, []).append(rep)
+                if rep not in expanded:
+                    queue.append(rep)
+    return True, []
+
+
+def _rpm_require_token_is_file_or_rpmlib(req: str) -> bool:
+    r = req.strip()
+    if not r:
+        return True
+    if r.startswith("/"):
+        return True
+    if r.startswith("rpmlib(") or r.startswith("config("):
+        return True
+    return False
+
+
+def _rpm_requires_tokens(nevra: str) -> list[str]:
+    r = subprocess.run(
+        ["rpm", "-qR", nevra],
+        capture_output=True,
+        text=True,
+        timeout=DEP_VERIFY_SUBPROCESS_TIMEOUT,
+    )
+    if r.returncode != 0:
+        return []
+    return [ln.strip() for ln in (r.stdout or "").splitlines() if ln.strip()]
+
+
+def _rpm_whatprovides_nevras(req: str) -> list[str]:
+    r = subprocess.run(
+        ["rpm", "-q", "--whatprovides", req],
+        capture_output=True,
+        text=True,
+        timeout=DEP_VERIFY_SUBPROCESS_TIMEOUT,
+    )
+    if r.returncode != 0:
+        return []
+    out: list[str] = []
+    for line in (r.stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        low = line.lower()
+        if "no package provides" in low or "no package matches" in low:
+            continue
+        out.append(line)
+    return out
+
+
+def _rpm_name_from_installed_nevra(nevra: str) -> str:
+    pr = subprocess.run(
+        ["rpm", "-q", "--qf", "%{NAME}", nevra],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if pr.returncode == 0 and (pr.stdout or "").strip():
+        return (pr.stdout or "").strip()
+    return nevra.split("-")[0]
+
+
+def verify_rpm_transitive_dependencies(
+    root_packages: list[str],
+    *,
+    max_closure: int = DEP_VERIFY_MAX_CLOSURE,
+    report: "DependencyReport | None" = None,
+) -> tuple[bool, list[str]]:
+    """Walk ``rpm -qR`` requires for installed roots; each require must be provided by some RPM.
+
+    Uses ``rpm -q --whatprovides`` so file sonames and virtual provides resolve to installed
+    packages; then recurses on provider package names for multi-level closure. When
+    ``report`` is provided, its ``roots``/``edges``/``closure`` are populated (keyed by
+    package name) for human-readable reporting.
+    """
+    errors: list[str] = []
+    expanded: set[str] = set()
+    queue: deque[str] = deque()
+    root_names: list[str] = []
+    for root in root_packages:
+        rq = subprocess.run(
+            ["rpm", "-q", root],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if rq.returncode != 0:
+            errors.append(
+                f"root package not installed: {root}: {(rq.stderr or '').strip()}"
+            )
+            return False, errors
+        first = (rq.stdout or "").strip().split("\n")[0].strip()
+        if first:
+            queue.append(first)
+            root_name = _rpm_name_from_installed_nevra(first)
+            if root_name not in root_names:
+                root_names.append(root_name)
+    if report is not None:
+        report.roots = root_names
+
+    steps = 0
+    while queue:
+        nevra = queue.popleft()
+        name = _rpm_name_from_installed_nevra(nevra)
+        if name in expanded:
+            continue
+        expanded.add(name)
+        if report is not None:
+            report.closure.append(name)
+            report.edges.setdefault(name, [])
+        steps += 1
+        if steps > max_closure:
+            errors.append(
+                f"RPM dependency walk exceeded max steps ({max_closure}); possible cycle or huge tree"
+            )
+            return False, errors
+
+        for req in _rpm_requires_tokens(nevra):
+            if _rpm_require_token_is_file_or_rpmlib(req):
+                continue
+            providers = _rpm_whatprovides_nevras(req)
+            if not providers:
+                errors.append(f"{nevra}: no installed package provides {req!r}")
+                return False, errors
+            for prov in providers:
+                pn = _rpm_name_from_installed_nevra(prov)
+                if (
+                    report is not None
+                    and pn != name
+                    and pn not in report.edges.get(name, [])
+                ):
+                    report.edges.setdefault(name, []).append(pn)
+                if pn not in expanded:
+                    queue.append(prov)
+    return True, []
 
 
 def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
@@ -399,6 +864,8 @@ class NativeLinuxPackageInstallTest:
             self.gfx_arch_list[0] if self.gfx_arch_list else None
         )
         self.gpg_key_url = gpg_key_url
+        # Populated by _verify_transitive_dependencies_installed() on a non-skipped run.
+        self.last_dependency_report: "DependencyReport | None" = None
 
         # Metapackage install targets (four combinations of optional inputs):
         #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
@@ -830,6 +1297,63 @@ gpgcheck=0
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
+    def _verify_transitive_dependencies_installed(self) -> tuple[bool, list[str]]:
+        """Verify full dependency closure for ``self.package_names`` (post-install).
+
+        Skipped when ``NATIVE_LINUX_SKIP_DEP_VERIFY`` is ``1``/``true``/``yes``.
+        On a non-skipped run the captured closure is stored on
+        ``self.last_dependency_report`` for reporting.
+        """
+        if _env(ENV_NATIVE_LINUX_SKIP_DEP_VERIFY, "").lower() in ("1", "true", "yes"):
+            return True, []
+        report = DependencyReport(package_type=self.package_type)
+        self.last_dependency_report = report
+        if self.package_type == "deb":
+            ok, errors = verify_debian_transitive_dependencies(
+                self.package_names, report=report
+            )
+        else:
+            ok, errors = verify_rpm_transitive_dependencies(
+                self.package_names, report=report
+            )
+        report.errors = list(errors)
+        return ok, errors
+
+    def _write_dependency_report(self, report: "DependencyReport") -> str | None:
+        """Render the dependency report to console and write the text + JSON report files.
+
+        Writes the human-readable text report and a flat JSON summary alongside it.
+        Returns the text report path written, or None if writing the text report failed
+        (a warning is printed). A JSON write failure is non-fatal (warning only).
+        """
+        rendered = report.render()
+        print("\n" + rendered)
+        report_path = Path(
+            _env(ENV_NATIVE_LINUX_DEP_REPORT_FILE, DEFAULT_DEP_REPORT_FILE)
+        )
+        try:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(rendered + "\n", encoding="utf-8")
+        except OSError as e:
+            print(f" [WARN] Could not write dependency report file: {e}")
+            return None
+        print(f"\nDependency report written to: {report_path}")
+
+        json_path = Path(
+            _env(ENV_NATIVE_LINUX_DEP_REPORT_JSON_FILE, DEFAULT_DEP_REPORT_JSON_FILE)
+        )
+        try:
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+            json_path.write_text(
+                json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            print(f"JSON summary written to: {json_path}")
+        except OSError as e:
+            print(f" [WARN] Could not write JSON dependency report file: {e}")
+
+        return str(report_path)
+
     def run_repo_setup_and_install(self) -> bool:
         """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
 
@@ -905,6 +1429,28 @@ gpgcheck=0
                 print(f" [WARN] {component} (not found)")
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
+
+        skip_dep = _env(ENV_NATIVE_LINUX_SKIP_DEP_VERIFY, "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if not skip_dep:
+            print(
+                "\nVerifying transitive dependencies "
+                "(Depends / Pre-Depends for DEB; RPM Requires + providers)..."
+            )
+            ok_dep, dep_errs = self._verify_transitive_dependencies_installed()
+            if not ok_dep:
+                for e in dep_errs:
+                    print(f" [FAIL] {e}", file=sys.stderr)
+                if self.last_dependency_report is not None:
+                    self._write_dependency_report(self.last_dependency_report)
+                print("\n[FAIL] Transitive dependency verification FAILED")
+                return False
+            print(" [PASS] Transitive dependency verification passed")
+            if self.last_dependency_report is not None:
+                self._write_dependency_report(self.last_dependency_report)
 
         # Check installed packages
         print("\nChecking installed packages:")
