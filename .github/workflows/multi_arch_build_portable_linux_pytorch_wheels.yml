@@ -286,6 +286,13 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
+          # For manual/dev builds, tag the torch version with the torch source
+          # commit as a dev segment (e.g. 2.9.0.dev1a2b3c4d+rocm7.10.0).
+          dev_commit_flag=""
+          if [ "${{ inputs.release_type }}" = "dev" ]; then
+            dev_commit_flag="--append-torch-commit-dev"
+          fi
+
           # build_prod_wheels.py forwards each of these to pip and ignores an
           # empty value, so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
@@ -297,6 +304,7 @@ jobs:
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
+            ${dev_commit_flag} \
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} \
             ${{ env.optional_build_prod_arguments }}
 

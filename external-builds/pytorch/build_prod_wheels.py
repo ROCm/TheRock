@@ -283,6 +283,22 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     return version_suffix
 
 
+def get_torch_commit_short(pytorch_dir: Path, length: int = 8) -> str:
+    """Return the short torch source commit, or "" if it can't be resolved."""
+    # capture() runs in pytorch_dir; add it as a safe.directory so the lookup
+    # works even when the checkout is owned by another user (e.g. in CI).
+    capture(
+        ["git", "config", "--global", "--add", "safe.directory", str(pytorch_dir)],
+        cwd=pytorch_dir,
+    )
+    commit = capture(
+        ["git", "rev-parse", f"--short={length}", "HEAD"], cwd=pytorch_dir
+    )
+    if not commit:
+        print(f"WARNING: could not resolve torch commit in '{pytorch_dir}'")
+    return commit
+
+
 def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
     """Read the LLVM hash from triton-windows cmake/llvm-hash.txt."""
     hash_file = triton_dir / "cmake" / "llvm-hash.txt"
@@ -960,9 +976,17 @@ def do_build_pytorch(
     triton_requirement: str | None,
 ):
     # Compute version.
-    pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
-    pytorch_build_version += args.version_suffix
-    pytorch_build_version_parsed = parse(pytorch_build_version)
+    pytorch_base_version = (pytorch_dir / "version.txt").read_text().strip()
+    # Optionally tag the version with the torch source commit as a dev segment,
+    # e.g. `2.9.0.dev1a2b3c4d+rocm7.10.0`. The hex commit is not PEP 440-valid,
+    # so parse the base version (below) rather than the full string.
+    dev_segment = ""
+    if args.append_torch_commit_dev:
+        commit = get_torch_commit_short(pytorch_dir)
+        if commit:
+            dev_segment = f".dev{commit}"
+    pytorch_build_version = pytorch_base_version + dev_segment + args.version_suffix
+    pytorch_build_version_parsed = parse(pytorch_base_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
     is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
@@ -1435,6 +1459,13 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--version-suffix",
         help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
+    )
+    build_p.add_argument(
+        "--append-torch-commit-dev",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Tag the torch version with the 8-char torch source commit as a dev "
+        "segment, e.g. `2.9.0.dev1a2b3c4d+rocm7.10.0` (torch wheel only)",
     )
     build_p.add_argument(
         "--clean",
