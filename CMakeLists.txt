@@ -225,6 +225,8 @@ cmake_dependent_option(
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
 option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
+option(THEROCK_CLR_ENABLE_WERROR "Enables -Werror for hip-clr (passes -DCLR_ENABLE_WERROR)" OFF)
+option(THEROCK_HIP_TESTS_ENABLE_WERROR "Enables -Werror for hip-tests (passes -DHIP_TESTS_ENABLE_WERROR)" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 

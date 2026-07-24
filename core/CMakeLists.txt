@@ -274,7 +274,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       ROCR-Runtime
     )
   endif()
-
+  if(THEROCK_CLR_ENABLE_WERROR)
+    list(APPEND HIP_CLR_CMAKE_ARGS "-DCLR_ENABLE_WERROR=ON")
+  endif()
 
 
   therock_cmake_subproject_declare(hip-clr
@@ -564,6 +566,9 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
   set(HIP_TESTS_CMAKE_ARGS)
+  if(THEROCK_HIP_TESTS_ENABLE_WERROR)
+    list(APPEND HIP_TESTS_CMAKE_ARGS "-DHIP_TESTS_ENABLE_WERROR=ON")
+  endif()
   set(_hip_tests_subproject_names)
   therock_cmake_subproject_declare(hip-tests
     USE_TEST_AMDGPU_TARGETS
@@ -575,6 +580,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
     CMAKE_ARGS
       -DHIP_PLATFORM="amd"
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+      ${HIP_TESTS_CMAKE_ARGS}
     BUILD_DEPS
       rocm-cmake
       therock-catch2
