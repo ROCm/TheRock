@@ -74,9 +74,16 @@ runs:
         STEP_NAME: "Download and Unpack Artifacts"
         STEP_TIMEOUT_TOLERANCE: "2"
       run: |
+        set -x  # Show commands for debugging
+        echo "=== install_rocm_from_artifacts.py invocation ==="
+        echo "Command: python ./build_tools/install_rocm_from_artifacts.py --run-id=${ARTIFACT_RUN_ID} --artifact-group=${ARTIFACT_GROUP} --amdgpu-targets=${AMDGPU_TARGETS} --output-dir=${OUTPUT_ARTIFACTS_DIR} ${FETCH_ARTIFACT_ARGS}"
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --artifact-group=${ARTIFACT_GROUP} \
           --amdgpu-targets=${AMDGPU_TARGETS} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
-          ${FETCH_ARTIFACT_ARGS}
+          ${FETCH_ARTIFACT_ARGS} 2>&1 | tee /tmp/artifact_fetch.log
+        echo ""
+        echo "=== Fetch completed. Checking for amd-llvm in logs ==="
+        grep -iE "amd-llvm|llvm|fetching|downloading" /tmp/artifact_fetch.log | tail -50 || echo "(no amd-llvm mentions found)"
+        set +x
