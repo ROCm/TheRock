@@ -132,7 +132,12 @@ _rocgdb_common = {
     "platform": ["linux"],
     "total_shards": 1,
     "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
-    "container_options": ["--cap-add=SYS_PTRACE"],
+    # Force ROCR_VISIBLE_DEVICES=0 so the first enumerated GPU die is selected
+    # regardless of the host-level ordinal. Without this, when the container
+    # exposes fewer render nodes than the full physical set the host ordinal can
+    # point past the end of the device list, causing libhip to segfault during
+    # HSA init.
+    "container_options": ["--cap-add=SYS_PTRACE", "-e ROCR_VISIBLE_DEVICES=0"],
 }
 
 

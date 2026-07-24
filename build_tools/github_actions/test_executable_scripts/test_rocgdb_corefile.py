@@ -81,7 +81,18 @@ def _print_kfd_topology() -> None:
 
 def _print_kernel_modules() -> None:
     print("=== Loaded amdgpu/kfd kernel modules ===", flush=True)
-    lsmod = _run("lsmod")
+    lsmod_bin = next(
+        (
+            p
+            for p in ("/sbin/lsmod", "/usr/sbin/lsmod", "/bin/lsmod")
+            if Path(p).exists()
+        ),
+        None,
+    )
+    if lsmod_bin is None:
+        print("lsmod not found", flush=True)
+        return
+    lsmod = _run(lsmod_bin)
     matches = [
         line for line in lsmod.splitlines() if any(k in line for k in ("amdgpu", "kfd"))
     ]
