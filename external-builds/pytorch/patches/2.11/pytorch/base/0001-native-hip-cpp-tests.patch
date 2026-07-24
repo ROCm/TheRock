@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TheRock <dev@therock>
+Date: Thu, 23 Jul 2026 12:00:00 -0400
+Subject: [PATCH] Use native CMake HIP language for C++ HIP tests (multi-arch
+ preprocess assert)
+
+Replace the legacy FindHIP `hip_add_executable` wrapper used to build
+PyTorch's C++ HIP test executables with the native-HIP form from PyTorch tip
+(`set_source_files_properties(... LANGUAGE HIP)` + per-target
+`HIP_ARCHITECTURES`).
+
+The legacy wrapper preprocesses device sources through `clang -x hip -E -P`
+once per `--offload-arch`. With LLVM assertions enabled and more than one
+offload arch, this trips the clang new-driver assertion
+`HostOffloadingInputs.size() == 1`, which breaks TheRock's multi-arch PyTorch
+build once LLVM assertions are enabled (ROCm/TheRock#6102). Native HIP does not
+preprocess and keeps all requested architectures.
+
+Two build sites are affected:
+- c10/cuda/test/CMakeLists.txt (hipified into c10/hip/test/CMakeLists.txt),
+  which builds the c10 HIPAssertionsTest_* executables.
+- caffe2/CMakeLists.txt's `foreach(test_src ${Caffe2_HIP_TEST_SRCS})` loop,
+  which builds the ATen hip/*.hip tests (e.g. hip_vectorized_test) and caffe2
+  HIP tests.
+
+This is carried by TheRock because these release branches predate the
+upstream native-HIP migration; it matches PyTorch tip behavior.
+---
+ c10/cuda/test/CMakeLists.txt | 10 +++-------
+ caffe2/CMakeLists.txt        | 14 +++++---------
+ 2 files changed, 8 insertions(+), 16 deletions(-)
+
+diff --git a/c10/cuda/test/CMakeLists.txt b/c10/cuda/test/CMakeLists.txt
+index dc3e8e0..5b7023a 100644
+--- a/c10/cuda/test/CMakeLists.txt
++++ b/c10/cuda/test/CMakeLists.txt
+@@ -15,16 +15,12 @@ if(BUILD_TEST)
+     get_filename_component(test_file_name ${test_src} NAME_WE)
+     set(test_name "c10_cuda_${test_file_name}")
+     if(test_src MATCHES "^.*\.hip$")
+-      set_source_files_properties(${test_src} PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
+-      hip_add_executable(${test_name} "${test_src}")
+-      list(JOIN PYTORCH_ROCM_ARCH " " ROCM_PROPERTY_ARCH_LIST)
+-      set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX HIP_ARCHITECTURES ${ROCM_PROPERTY_ARCH_LIST})
++      set_source_files_properties(${test_src} PROPERTIES LANGUAGE HIP)
++      add_executable(${test_name} "${test_src}")
++      set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX HIP_ARCHITECTURES "${PYTORCH_ROCM_ARCH}")
+     else()
+       add_executable(${test_name} "${test_src}")
+     endif()
+-    if(test_src MATCHES "^.*\.hip$")
+-      set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX)
+-    endif()
+     target_link_libraries(${test_name} ${C10_CUDA_LIB} ${C10_LIB} gmock gtest gtest_main)
+     add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${test_name}>)
+     if(INSTALL_TEST)
+diff --git a/caffe2/CMakeLists.txt b/caffe2/CMakeLists.txt
+index 0a419e4..bedc036 100644
+--- a/caffe2/CMakeLists.txt
++++ b/caffe2/CMakeLists.txt
+@@ -1987,18 +1987,14 @@ if(BUILD_TEST)
+     foreach(test_src ${Caffe2_HIP_TEST_SRCS})
+       get_filename_component(test_name ${test_src} NAME_WE)
+       if(test_src MATCHES "^.*\.hip$")
+-        # Solves bug with hip_add_executable propagating flags from the previous tests
+-        set(HIP_HIPCC_FLAGS ${BASE_HIPCC_FLAGS})
+-        set_source_files_properties(${test_src} PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
+-        hip_add_executable(${test_name} "${test_src}")
+-        list(JOIN PYTORCH_ROCM_ARCH " " ROCM_PROPERTY_ARCH_LIST)
+-        set_target_properties(${test_name} PROPERTIES HIP_ARCHITECTURES ${ROCM_PROPERTY_ARCH_LIST})
++        set_source_files_properties(${test_src} PROPERTIES LANGUAGE HIP)
++        add_executable(${test_name} "${test_src}")
++        set_target_properties(${test_name} PROPERTIES
++          LINKER_LANGUAGE CXX
++          HIP_ARCHITECTURES "${PYTORCH_ROCM_ARCH}")
+       else()
+         add_executable(${test_name} "${test_src}")
+       endif()
+-      if(test_src MATCHES "^.*\.hip$")
+-        set_target_properties(${test_name} PROPERTIES LINKER_LANGUAGE CXX)
+-      endif()
+       target_link_libraries(${test_name} torch_library gtest_main)
+       target_include_directories(${test_name} PRIVATE $<INSTALL_INTERFACE:include>)
+       target_include_directories(${test_name} PRIVATE ${Caffe2_CPU_INCLUDE} ${Caffe2_HIP_INCLUDE})
+-- 
+2.34.1
+
