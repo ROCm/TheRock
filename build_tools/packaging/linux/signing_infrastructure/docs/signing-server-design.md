@@ -348,13 +348,81 @@ Request arrives with Authorization: Bearer <token>
    → 401 Unauthorized
 ```
 
+#### Pre-Shared App Token — How It Works (Phase 2 Primary)
+
+This is the primary auth mechanism for Phase 2. It is a static opaque string stored in AWS Secrets Manager, one per caller tier, fetched by the server at startup alongside the GPG keys.
+
+**Token structure in Secrets Manager (`signing/tokens/<tier>`):**
+
+```json
+{
+  "therock-release": {
+    "token":     "aK9mR2xP...(random 32+ char string, generated offline)",
+    "client_id": "therock-release",
+    "role":      "release"
+  }
+}
+```
+
+| Field | Purpose |
+|-------|---------|
+| `token` | The opaque bearer string the caller includes in `Authorization: Bearer <token>` |
+| `client_id` | Identifier written to audit logs — identifies which caller made the request |
+| `role` | Maps to a role in `authorization.json` → determines which keys and rate limits apply |
+
+**Validation (constant-time comparison):**
+
+```python
+# From auth.py validate_app_token()
+hmac.compare_digest(presented_token, stored_token)
+# → constant-time: no timing side-channel regardless of where strings differ
+```
+
+**What the server knows after validation:**
+
+```
+Presented token "aK9mR2xP..." matches entry "therock-release"
+→ client_id = "therock-release"   (written to audit log)
+→ role      = "release"           (used for key authorization and rate limiting)
+```
+
+The server does NOT know: who generated the token, when, from which machine, or which workflow is running. The token is a symmetric secret — it proves the caller has the secret, nothing more.
+
+**Workflow/repo restriction with pre-shared tokens:**
+Unlike OIDC, the token carries no workflow or branch context. Restrictions are enforced by the CI workflow itself: the workflow selects which tier's token to use based on the branch. For example, a dev branch workflow fetches only `signing/tokens/therock-dev` — it never has access to `signing/tokens/therock-release`. This is enforced by the IAM policy on the build runner role (which secrets it can read), not by the signing server.
+
+**Token lifecycle:**
+
+```
+Generation (offline, by key provisioner):
+  openssl rand -base64 32 > /tmp/token.txt
+
+Storage (in Secrets Manager):
+  aws secretsmanager create-secret \
+    --name signing/tokens/therock-release \
+    --kms-key-id alias/amd-signing-gpg-key \
+    --secret-string '{"therock-release": {"token": "<value>", "client_id": "therock-release", "role": "release"}}'
+
+Server loads token at startup:
+  secretsmanager:GetSecretValue → loaded into memory alongside GPG key
+  Reloaded every 6 hours (Phase 2 scheduled sync)
+
+Caller fetches token at workflow start:
+  aws secretsmanager get-secret-value --secret-id signing/tokens/therock-release
+  Included as: Authorization: Bearer <token>
+
+Rotation:
+  Generate new token → update SM secret → server picks up on next sync
+  Old token invalid immediately (no expiry window — server reloads on sync)
+```
+
 #### Token Types Compared
 
-| Mechanism | Token source | Secret stored where | Role determined by | Suitable for |
-|-----------|-------------|--------------------|--------------------|-------------|
-| **Pre-shared app token** | Secrets Manager `signing/tokens/*` | SM secret per caller tier | Token identity maps to role in authz config | Phase 2 primary — simple, no external dependency |
-| **GitHub OIDC** | GitHub Actions OIDC provider, per-job | No stored secret — GitHub-issued, short-lived | Branch ref pattern (`refs/heads/main` → release) | CI pipelines on GitHub-hosted runners with internet access |
-| **JWT HMAC-SHA256** | `generate-token.py` offline tool | Shared secret in `secrets.json` | `role` claim in token payload | Legacy fallback — avoid for new integrations |
+| Mechanism | Token source | Secret stored where | Role determined by | Workflow/repo restriction | Suitable for |
+|-----------|-------------|--------------------|--------------------|--------------------------|-------------|
+| **Pre-shared app token** | Generated offline, stored in SM `signing/tokens/*` | SM secret per caller tier (encrypted with KMS CMK) | `role` field in SM token entry | Enforced by IAM (which SM secrets each runner role can read) | Phase 2 primary — simple, no external dependency |
+| **GitHub OIDC** | GitHub Actions OIDC provider, per-job | No stored secret — GitHub-issued, short-lived | Branch ref pattern (`refs/heads/main` → release) | Server enforces: repository, ref, workflow file | CI pipelines with internet access from signing server |
+| **JWT HMAC-SHA256** | `generate-token.py` offline tool | Shared secret in `secrets.json` on server disk | `role` claim in token payload | None — role in token only | Legacy fallback — avoid for new integrations |
 
 #### Why OIDC Is Not the Phase 2 Primary
 
