@@ -3288,6 +3288,116 @@
     ],
     "Gfxarch": "False"
   },
+  {
+    "Package": "amdrocm-rpp-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rpp-devel"
+    ],
+    "RPMRequires": [
+      "amdrocm-rpp-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Performance Primitives test files",
+    "Description_Long": "Test files for rpp",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rpp",
+        "Artifact_Subdir": [
+          {
+            "Name": "rpp",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-rpp",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Performance Primitives library",
+    "Description_Long": "rpp is a comprehensive high-performance computer vision library for AMD GPUs with a HIP backend",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rpp",
+        "Artifact_Subdir": [
+          {
+            "Name": "rpp",
+            "Components": [
+              "lib",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-rpp-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-rpp"
+    ],
+    "RPMRequires": [
+      "amdrocm-rpp"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Performance Primitives library development files",
+    "Description_Long": "rpp development header files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rpp",
+        "Artifact_Subdir": [
+          {
+            "Name": "rpp",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
 
   {
     "Package": "amdrocm-hipfile",
@@ -3432,7 +3542,8 @@
       "amdrocm-hipify",
       "amdrocm-hipfile",
       "amdrocm-decode",
-      "amdrocm-jpeg"
+      "amdrocm-jpeg",
+      "amdrocm-rpp"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -3454,7 +3565,8 @@
       "amdrocm-hipify",
       "amdrocm-hipfile",
       "amdrocm-decode",
-      "amdrocm-jpeg"
+      "amdrocm-jpeg",
+      "amdrocm-rpp"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core metapackage",
@@ -3594,7 +3706,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-rpp-devel"
     ],
     "RPMRequires": [
       "amdrocm-core",
@@ -3613,7 +3726,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-rpp-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core development metapackage",

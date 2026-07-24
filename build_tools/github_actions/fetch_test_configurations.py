@@ -686,6 +686,16 @@ test_matrix = {
             "linux": 1,
         },
     },
+    "rpp": {
+        "job_name": "rpp",
+        "fetch_artifact_args": "--rpp --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rpp.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # aqlprofile tests
     "aqlprofile": {
         "job_name": "aqlprofile",

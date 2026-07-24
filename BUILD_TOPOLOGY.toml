@@ -129,6 +129,13 @@ description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
 disable_platforms = ["windows"]
 
+[source_sets.cv-libs]
+# RPP is experimental and opt-in on Windows (-DTHEROCK_ENABLE_RPP=ON), so this
+# source set is intentionally not platform-disabled. RPP's sources actually come
+# from the rocm-libraries source set; this entry carries no submodules of its own.
+description = "ROCm computer vision libraries submodules (RPP lives in rocm-libraries)"
+submodules = []
+
 [source_sets.media-libs]
 description = "ROCm media libraries submodules"
 submodules = []
@@ -172,6 +179,10 @@ type = "per-arch"
 description = "Communication libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["comm-libs"]
 type = "generic"
+
+[build_stages.cv-libs]
+description = "Computer Vision Libraries"
+artifact_groups = ["cv-libs"]
 
 [build_stages.storage-libs]
 description = "Storage libraries (generic, single job parallel to math-libs)"
@@ -321,6 +332,14 @@ description = "Profiler applications and analysis tools"
 type = "generic"
 artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems"]
+
+[artifact_groups.cv-libs]
+description = "Computer Vision Libraries"
+type = "generic"
+artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
+# RPP sources live in the rocm-libraries monorepo.
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["rocm-libraries", "rocm-systems"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
@@ -685,6 +704,21 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 split_databases = ["hipkernelprovider"]
+
+# --- Computer Vision Integration ---
+
+[artifacts.rpp]
+artifact_group = "cv-libs"
+type = "target-neutral"
+# RPP needs the HIP runtime (core-hip), the half headers from base and the
+# bundled sysdeps. The compiler (amd-llvm) comes transitively via core-hip.
+# It does NOT use the Mesa VA-API driver or the profiler.
+artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
+feature_group = "CV_LIBS" # Controlled by THEROCK_ENABLE_CV_LIBS
+# Unlike rocdecode/rocjpeg, this artifact intentionally omits
+# disable_platforms = ["windows"]: RPP on Windows is experimental and opt-in
+# (THEROCK_ENABLE_CV_LIBS defaults OFF on Windows, but -DTHEROCK_ENABLE_RPP=ON
+# can enable it). Hard-disabling here would make the opt-in build impossible.
 
 # --- Media Integration ---
 

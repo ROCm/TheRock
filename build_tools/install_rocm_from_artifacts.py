@@ -45,6 +45,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
     [--rocwmma | --no-rocwmma]
+    [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
@@ -398,6 +399,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocrtst,
             args.rocalution,
             args.rocwmma,
+            args.rpp,
             args.libhipcxx,
         ]
     ):
@@ -518,6 +520,11 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.rpp:
+            extra_artifacts.append("rpp")
+            argv.append("rpp_dev")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
@@ -906,6 +913,13 @@ def main(argv):
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rpp",
+        default=False,
+        help="Include 'rpp' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

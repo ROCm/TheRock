@@ -521,6 +521,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "rocjpeg",
         "rocprofiler-sdk",
         "rocr-debug-agent",
+        "rpp",
         "sysdeps",
         "sysdeps-amd-mesa",
         "sysdeps-expat",

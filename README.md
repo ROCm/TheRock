@@ -158,19 +158,20 @@ You can install the `rocm` Python package for any architecture inside a venv and
 By default, the project builds everything available. The following group flags
 enable/disable selected subsets:
 
-| Group flag                         | Description                          |
-| ---------------------------------- | ------------------------------------ |
-| `-DTHEROCK_ENABLE_ALL=OFF`         | Disables all optional components     |
-| `-DTHEROCK_ENABLE_CORE=OFF`        | Disables all core components         |
-| `-DTHEROCK_ENABLE_COMM_LIBS=OFF`   | Disables all communication libraries |
-| `-DTHEROCK_ENABLE_DEBUG_TOOLS=OFF` | Disables all debug tools             |
-| `-DTHEROCK_ENABLE_MATH_LIBS=OFF`   | Disables all math libraries          |
-| `-DTHEROCK_ENABLE_ML_LIBS=OFF`     | Disables all ML libraries            |
-| `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                   |
-| `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools           |
-| `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries         |
-| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts       |
-| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools              |
+| Group flag                         | Description                            |
+| ---------------------------------- | -------------------------------------- |
+| `-DTHEROCK_ENABLE_ALL=OFF`         | Disables all optional components       |
+| `-DTHEROCK_ENABLE_CORE=OFF`        | Disables all core components           |
+| `-DTHEROCK_ENABLE_COMM_LIBS=OFF`   | Disables all communication libraries   |
+| `-DTHEROCK_ENABLE_CV_LIBS=OFF`     | Disables all computer vision libraries |
+| `-DTHEROCK_ENABLE_DEBUG_TOOLS=OFF` | Disables all debug tools               |
+| `-DTHEROCK_ENABLE_MATH_LIBS=OFF`   | Disables all math libraries            |
+| `-DTHEROCK_ENABLE_ML_LIBS=OFF`     | Disables all ML libraries              |
+| `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                     |
+| `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools             |
+| `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries           |
+| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts         |
+| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools                |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
@@ -212,6 +213,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
 | `-DTHEROCK_ENABLE_ROCJITSU=ON`         | Enables ROCm emulation tools (Linux only)           |
+| `-DTHEROCK_ENABLE_RPP=ON`              | Enables RPP (Windows: experimental, off by default) |
 
 hipDNN provider plugins:
 

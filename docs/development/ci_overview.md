@@ -53,7 +53,7 @@ graph LR
     B --> D[Upload to S3]
 ```
 
-**What gets built:** Compiler (LLVM, etc.), core runtime (HIP, ROCr, etc.), math libraries (rocBLAS, rocFFT, etc.), ML libraries (MIOpen, etc.), media libraries (rocDecode, rocJPEG), and more.
+**What gets built:** Compiler (LLVM, etc.), core runtime (HIP, ROCr, etc.), math libraries (rocBLAS, rocFFT, etc.), ML libraries (MIOpen, etc.), media libraries (rocDecode, rocJPEG), computer vision libraries (RPP), and more.
 
 **Artifact organization:** Each component is packaged into separate archives by sub-components (lib, run, dev, doc, test). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
 
