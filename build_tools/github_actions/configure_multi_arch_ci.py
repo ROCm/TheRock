@@ -887,13 +887,24 @@ def decide_jobs(
     # Only reuse-stage mode returns non-empty applied_reuse_stages.
     for stage in auto_stage_reuse.applied_reuse_stages:
         stage_decisions.setdefault(stage, JobAction.PREBUILT)
-    baseline_run_id = ci_inputs.baseline_run_id
-    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-        baseline_run_id = auto_stage_reuse.baseline_run_id
 
     # For cross-repo artifact reuse, pass through the baseline_repository so
     # the copy job knows which repository to fetch artifacts from.
     baseline_repository = ci_inputs.baseline_repository
+
+    # Determine baseline_run_id: auto-selected run IDs are only valid when
+    # queried from the same repository. When baseline_repository differs from
+    # GITHUB_REPOSITORY (cross-repo reuse), we must use the manually supplied
+    # baseline_run_id since auto_stage_reuse queried the wrong repository.
+    baseline_run_id = ci_inputs.baseline_run_id
+    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+    is_cross_repo = baseline_repository and baseline_repository != current_repo
+    if (
+        not is_cross_repo
+        and auto_stage_reuse.applied_reuse_stages
+        and auto_stage_reuse.baseline_run_id
+    ):
+        baseline_run_id = auto_stage_reuse.baseline_run_id
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
