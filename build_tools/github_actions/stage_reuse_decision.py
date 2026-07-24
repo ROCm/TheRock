@@ -176,6 +176,7 @@ def _target_families_for_artifact(
         f"Artifact {artifact_name!r} has unsupported type " f"{artifact_type!r}"
     )
 
+
 def _artifact_applies_to_platform(
     artifact: Artifact,
     platform: str,
@@ -192,6 +193,7 @@ def _artifact_applies_to_platform(
     # not yet receive the current build's enabled feature flags. Keeping the
     # artifact required is the conservative fallback.
     return True
+
 
 def _required_artifacts_for_stages(
     topology: BuildTopology,

@@ -604,6 +604,7 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
             ("compiler-runtime",),
         )
 
+
 class PlanStageReuseTest(unittest.TestCase):
     """The pure planning step is independent of baseline/reporting."""
 
@@ -663,6 +664,7 @@ class RequiredArtifactsTest(unittest.TestCase):
                 )
             ],
         )
+
     def test_platform_specific_artifact_is_skipped_on_other_platform(self):
         topology = FakeTopology()
         topology.artifacts["base"].platform = "windows"
@@ -711,6 +713,8 @@ class RequiredArtifactsTest(unittest.TestCase):
                 )
             ],
         )
+
+
 class StageArtifactAvailabilityTest(unittest.TestCase):
     def test_target_neutral_stage_does_not_require_gpu_family_archive(self):
         available = srd._stage_artifacts_available(

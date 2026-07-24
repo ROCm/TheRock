@@ -172,6 +172,9 @@ jobs:
       - windows_build_and_test
       - manifest_diff
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Evaluate workflow results
@@ -189,6 +192,3 @@ jobs:
             workflow_timing.json
             workflow_timing.md
           if-no-files-found: warn
-          permissions:
-            contents: read
-            actions: read

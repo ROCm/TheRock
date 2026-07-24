@@ -338,16 +338,10 @@ class TestMain:
         assert timing_json_path.is_file()
         assert timing_markdown_path.is_file()
 
-        assert json.loads(
-            timing_json_path.read_text(encoding="utf-8")
-        ) == {
+        assert json.loads(timing_json_path.read_text(encoding="utf-8")) == {
             "platforms": [],
         }
 
-        assert timing_markdown_path.read_text(
-            encoding="utf-8"
-        ) == (
-            "### CI Job Timing Summary\n"
-            "\n"
-            "_no timing data_\n"
+        assert timing_markdown_path.read_text(encoding="utf-8") == (
+            "### CI Job Timing Summary\n" "\n" "_no timing data_\n"
         )
