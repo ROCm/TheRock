@@ -257,6 +257,21 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
+# amdgcnspirv architecture-independent portable SPIR-V target
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY generic
+  EXCLUDE_TARGET_PROJECTS
+    MIOpen    ROCR-Runtime    aqlprofile    composable_kernel    hip-clr    hip-tests
+    hipBLAS    hipBLAS-common    hipBLASLt    hipCUB   hipDNN    hipDNN_samples
+    hipFFT    hipInfo    hipRAND    hipSOLVER    hipSPARSE    hipSPARSELt    hipTensor
+    hipblasltprovider    hipdnn_integration_tests    hipfile    hipkernelprovider
+    libhipcxx    miopenprovider    mirage    mxDataGenerator    ocl-clr    rccl
+    rccl-tests    rdc    rocALUTION    rocBLAS    rocFFT    rocPRIM    rocPRIM_tests
+    rocRAND    rocRoller    rocSOLVER    rocSPARSE    rocThrust    rocWMMA    rocdecode
+    rocjitsu    rocjpeg    rocm-kpack    rocprofiler-compute    rocprofiler-sdk
+    rocprofiler-systems    rocprofiler-systems-examples    rocr-debug-agent-tests
+    rocrtst    rocshmem    roctracer
+)
+
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)
 
