@@ -1,0 +1,26 @@
+From 32746e2f3044fe9528c497f48b94ccf542f7afae Mon Sep 17 00:00:00 2001
+From: TheRock <dev@therock>
+Date: Sat, 25 Jul 2026 01:37:14 -0400
+Subject: [PATCH] Exclude stale hip_vectorized_test from HIP tests (2.10)
+
+---
+ caffe2/CMakeLists.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/caffe2/CMakeLists.txt b/caffe2/CMakeLists.txt
+index 7d3a3d8..de9a4a4 100644
+--- a/caffe2/CMakeLists.txt
++++ b/caffe2/CMakeLists.txt
+@@ -1990,6 +1990,9 @@ if(BUILD_TEST)
+ 
+   if(USE_ROCM)
+     set(BASE_HIPCC_FLAGS ${HIP_HIPCC_FLAGS})
++    # TheRock: drop stale hip_vectorized_test (uses removed at::native::modern /
++    # has_same_arg_types API on release/2.10). See ROCm/TheRock#6102.
++    list(FILTER Caffe2_HIP_TEST_SRCS EXCLUDE REGEX "hip_vectorized_test\\.hip$")
+     foreach(test_src ${Caffe2_HIP_TEST_SRCS})
+       get_filename_component(test_name ${test_src} NAME_WE)
+       if(test_src MATCHES "^.*\.hip$")
+-- 
+2.34.1
+
