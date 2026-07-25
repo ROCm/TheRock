@@ -364,13 +364,23 @@ def ensure_pr_not_draft(policy: Policy, is_draft: bool, errors: List[str]) -> No
         )
 
 
+def _strip_markdown_comments(text: str) -> str:
+    """Remove HTML comment blocks from Markdown text."""
+    # Note: using re.DOTALL to match _any_ character, including newlines so this
+    # can handle multiline comments.
+    return re.sub(r"<!--.*?(?:-->|$)", "", text, flags=re.DOTALL)
+
+
 def ensure_pr_description(policy: Policy, body: str, errors: List[str]) -> None:
     """Validate the PR description (minimum length, JIRA/ISSUE reference, checklist).
 
     Appends a structured message to `errors` if the body is too short, does
     not contain a recognised tracking reference, or has an unticked checklist item.
     """
-    body = (body or "").strip()
+    # Strip comments so we only check the visible text against the policies.
+    # This lets pull request templates use examples that _would_ pass the check.
+    body = _strip_markdown_comments(body or "").strip()
+
     if policy.description_min_length and len(body) < policy.description_min_length:
         errors.append(
             f"**Error:** PR description is too short ({len(body)} characters).\n"

@@ -54,7 +54,9 @@ stage configuration.
 > This feature is under active development and will evolve as
 > automatic stage selection and baseline run lookup are added.
 >
-> See https://github.com/ROCm/TheRock/issues/3399 for details.
+> See https://github.com/ROCm/TheRock/issues/3399 for details and
+> [`stage_reuse.md`](stage_reuse.md) for the automatic stage-reuse layer
+> that builds on the manual inputs described below.
 
 The [Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
 workflow supports skipping individual build stages by copying their artifacts

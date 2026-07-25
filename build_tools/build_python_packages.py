@@ -67,15 +67,16 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
 
 
 def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
-    """Recreate unversioned profiler library symlinks expected by dlopen()."""
+    """Recreate unversioned library symlinks for profiler runtime dependencies."""
     profiler_lib_dir = profiler.platform_dir / "lib"
 
-    for target in profiler_lib_dir.glob("librocprof-sys*.so.*"):
-        if target.is_symlink():
-            continue
-        link = target.with_suffix("")
-        if not link.exists():
-            link.symlink_to(target.name)
+    for pattern in ("librocprof-sys*.so.*", "libprofiler-hub*.so.*"):
+        for target in profiler_lib_dir.glob(pattern):
+            if target.is_symlink():
+                continue
+            link = target.with_suffix("")
+            if not link.exists():
+                link.symlink_to(target.name)
 
 
 def _platform_targets(
@@ -257,21 +258,7 @@ def run(args: argparse.Namespace):
 
     profiler_artifacts = params.filter_artifacts(
         profiler_artifact_filter,
-        includes=[
-            # rocprofiler-systems
-            "bin/rocprof-sys-*",
-            "include/rocprofiler-systems/**",
-            "lib/librocprof-sys*",
-            "lib/python/site-packages/rocprofsys/**",
-            "lib/rocprofiler-systems/**",
-            "libexec/rocprofiler-systems/**",
-            "share/**/rocprofiler-systems/**",
-            # rocprofiler-compute
-            "bin/rocprof-*",
-            "libexec/rocprofiler-compute/**",
-            "lib/rocprofiler-compute/**",
-            "share/**/rocprofiler-compute/**",
-        ],
+        includes=PROFILER_WHEEL_INCLUDES,
     )
 
     if profiler_artifacts.artifact_names:
@@ -569,6 +556,29 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
+
+
+# File-path allowlist for the rocm-profiler wheel, applied on top of
+# profiler_artifact_filter(). rocprofiler-systems' own ProfilerHub.cmake
+# vendors profiler-hub as a runtime .so dependency (NEEDED libprofiler-hub.so.0);
+# it stages into the same lib/ dir as librocprof-sys* but needs its own glob
+# entry here, or it gets silently dropped from the wheel.
+PROFILER_WHEEL_INCLUDES = [
+    # rocprofiler-systems
+    "bin/rocprof-sys-*",
+    "include/rocprofiler-systems/**",
+    "lib/librocprof-sys*",
+    "lib/libprofiler-hub.so*",
+    "lib/python/site-packages/rocprofsys/**",
+    "lib/rocprofiler-systems/**",
+    "libexec/rocprofiler-systems/**",
+    "share/**/rocprofiler-systems/**",
+    # rocprofiler-compute
+    "bin/rocprof-*",
+    "libexec/rocprofiler-compute/**",
+    "lib/rocprofiler-compute/**",
+    "share/**/rocprofiler-compute/**",
+]
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
