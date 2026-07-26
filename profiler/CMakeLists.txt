@@ -19,6 +19,8 @@ if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
 endif()
 if(THEROCK_ENABLE_HIPFILE)
   list(APPEND _rocprofiler_sdk_optional_deps hipfile)
+endif()
+
 # rocprofiler-sdk also performs an optional find_package(rocshmem) (itself
 # guarded by find_package(MPI COMPONENTS CXX) + find_package(rocprofiler-register))
 # to detect the rocSHMEM API-trace feature. Declare rocshmem when available so it
