@@ -121,6 +121,7 @@ jobs:
         shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
+      PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
 
     steps:
       - name: Checkout
@@ -189,6 +190,32 @@ jobs:
 
       - name: Test rocm[libraries,devel]
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          rocm-sdk test
+
+      # Install rocm[profiler] on its own into a fresh venv. Per
+      # docs/packaging/python_packaging.md, rocm[profiler] alone must pull in
+      # rocm-sdk-core and be sufficient to run the profiler tools - this step
+      # validates that documented minimal install. rocm-profiler is a generic
+      # (non-target-specific) package, so no device_extras are appended.
+      - name: Install rocm[profiler]
+        id: install_profiler
+        if: ${{ !cancelled() }}
+        run: |
+          python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
+            --packages "rocm[profiler]==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Show installed packages (profiler)
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
+        run: |
+          pip freeze
+
+      - name: Test rocm[profiler]
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
         timeout-minutes: 5
         run: |
           rocm-sdk test
