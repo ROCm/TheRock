@@ -1076,13 +1076,21 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     check_errors = []
     ensure_no_forbidden_files(policy, pr_files, check_errors)
-    # Forbidden Files is WARNING-ONLY: always passed=True so it never turns the
-    # workflow red or adds a label; when a forbidden file is present we surface
-    # a ⚠️ Warning row (with details) instead of failing the check.
+    # Forbidden Files is WARNING-ONLY.
+    #
+    # NOTE on the two emojis (they are NOT a contradiction):
+    #   • icon="⛔"  -> the row's IDENTITY emoji in the "Check" column
+    #                   (always shown for the Forbidden Files row).
+    #   • status ⚠️  -> the "Status" column value that build_policy_table_comment
+    #                   renders because warn=True (see the `if r.warn:` branch).
+    #
+    # So the row always reads:  ⛔ Forbidden Files | ⚠️ Warning | <details>
+    # passed=True guarantees it never turns the workflow red or adds a label;
+    # warn=True just surfaces the offending file(s) as a warning.
     results.append(
         CheckResult(
-            "Forbidden Files",
-            "⛔",
+            name="Forbidden Files",
+            icon="⛔",
             passed=True,
             details=check_errors,
             warn=bool(check_errors),
@@ -1095,13 +1103,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     ut_warn = bool(check_errors)
     if not check_errors and not pr_has_code_files(policy, pr_files):
         ut_note = "PR does not contain code files — Unit Test auto-passed"
-    # Unit Test is WARNING-ONLY: always passed=True so it never turns the
-    # workflow red or adds a label; when a test is missing we surface a ⚠️
-    # Warning row (with details) instead of failing the check.
+    # Unit Test is WARNING-ONLY (same icon-vs-status distinction as above):
+    #   • icon="🧪"  -> the row's identity emoji in the "Check" column.
+    #   • status ⚠️  -> rendered in the "Status" column when warn=True.
+    # passed=True means it never fails the workflow or adds a label; when a test
+    # is missing we surface a ⚠️ Warning row (with details) instead.
     results.append(
         CheckResult(
-            "Unit Test",
-            "🧪",
+            name="Unit Test",
+            icon="🧪",
             passed=True,
             details=check_errors,
             warn=ut_warn,
