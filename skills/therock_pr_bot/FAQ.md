@@ -1,8 +1,8 @@
 # TheRock PR Bot — Policy FAQ Doc
 
 **TheRock PR Bot** is an automated Pull Request (PR) gatekeeper.
-On every Pull Request, it runs a set of policy checks — branch naming,
-title/description, forbidden files, unit tests, and required CI checks —
+On every Pull Request, it runs a set of policy checks — title/description,
+forbidden files, unit tests, and required CI checks —
 then posts a single results table comment summarising what passed or failed.
 PRs that fail key checks are flagged with a **`Not ready to Review`** label
 until the issues are resolved.
@@ -17,40 +17,6 @@ This document explains what each policy check means, why it exists, and how to f
 
 > **Note:** This is **NOT an AI Bot and does not use any LLMs**. It is a
 > deterministic, rule-based checker driven entirely by `policy.yml`.
-
-______________________________________________________________________
-
-## 🌿 Branch Name
-
-**What does it check?**
-Your branch name must follow the agreed naming convention so PRs are easy to trace back to a contributor and topic.
-
-**Allowed formats**
-
-| Pattern                         | Example                                             |
-| ------------------------------- | --------------------------------------------------- |
-| `users/<username>/<anything>`   | users/dgaliffi/fix/remove-build-boost-option        |
-| `users/<username>/<anything>`   | users/frepaul/ROCm-end-user-project-workflow        |
-| `shared/<anything>`             | shared/add-runner-health                            |
-| `<single-segment-name>`         | bump-rocm-libraries-936a6c7                         |
-| `<single-segment-name>`         | ZIP-packaging-RFC                                   |
-| `dependabot/<anything>`         | dependabot/github_actions/github-actions-3dfd2199fc |
-| `revert-<pr-number>-<anything>` | revert-5217-users/derobins/add_hipfile_support      |
-
-Rules:
-
-- A recognised **prefix** must be present (`users/`, `shared/`, `dependabot/`, `revert-…`) — or the branch must be a single segment.
-- **Uppercase letters are allowed** (acronyms and module names are common, e.g. `ROCm`, `SMP`, `RFC`).
-- For `users/`, the `<username>` segment may contain letters (upper or lower), digits, and hyphens.
-- **Anything after the prefix is allowed**, including nested `namespace/feature` paths (e.g. `users/dgaliffi/fix/remove-build-boost-option`).
-
-**How to fix**
-Rename your branch before opening the PR:
-
-```bash
-git branch -m old-name users/<your-username>/<topic>
-git push origin -u users/<your-username>/<topic>
-```
 
 ______________________________________________________________________
 
@@ -260,7 +226,6 @@ A **Bump PR** is an automated pull request that updates dependencies (e.g. from 
 
 When a PR is detected as a bump update from a configured bot account (e.g. `@assistant-librarian[bot]`), **all policy checks are auto-approved**. This includes:
 
-- Branch name validation
 - PR title (length) check
 - JIRA/ISSUE ID reference requirement
 - Unit test requirement
@@ -288,13 +253,13 @@ The label is added when:
 1. **Unit Test check fails** — your PR changes source code but has no accompanying test file.
 1. **JIRA/ISSUE ID reference is missing** — your PR description does not include a tracking reference.
 
-All other policy failures (branch name, title format, description length, forbidden files, etc.) do not add the label; they are still reported in the table but do not block the PR.
+All other policy failures (title format, description length, forbidden files, etc.) do not add the label; they are still reported in the table but do not block the PR.
 
 **What is the "Not ready to Review" label?**
 
 When **PR Title/Description**, **Unit Test**, or **Forbidden Files** fails, the bot adds a **`Not ready to Review`** label to the PR so it is clearly gated.
 The label is removed automatically once all policy checks pass.
-Other failures (Branch Name, PR Size, Draft PR, pre-commit, CodeQL) do **not** add the label.
+Other failures (PR Size, Draft PR, pre-commit, CodeQL) do **not** add the label.
 
 **How are pre-commit and CodeQL shown?**
 
