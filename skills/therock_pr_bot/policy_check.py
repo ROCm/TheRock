@@ -775,12 +775,12 @@ def build_policy_table_comment(
         "https://github.com/ROCm/TheRock/blob/main/skills/therock_pr_bot/"
         "FAQ.md#-wish-to-override-the-policy-process-and-get-unblocked"
     )
-    override_link = (
-        f"\n\n🙋 **[Wish to Override Policy?]({override_url})**"
-    )
+    override_link = f"\n\n🙋 **[Wish to Override Policy?]({override_url})**"
 
     note_block = f"\n\n{note}" if note else ""
-    return f"{marker}\n{heading}{note_block}\n\n{table}{footer}{faq_link}{override_link}"
+    return (
+        f"{marker}\n{heading}{note_block}\n\n{table}{footer}{faq_link}{override_link}"
+    )
 
 
 def build_check_results(
