@@ -1,84 +1,97 @@
-# Dockerfile for building LMCache wheels with ROCm support
-# Uses ROCm + PyTorch from ROCm pre-releases index
-ARG BASE_IMAGE=ghcr.io/rocm/therock_build_manylinux_x86_64:latest
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
-# ============================================================================
-# Stage 1: Install ROCm and PyTorch from index
-# ============================================================================
+# syntax=docker/dockerfile:1
+
+ARG BASE_IMAGE=ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
+
 FROM ${BASE_IMAGE} AS builder
 
-ARG ROCM_INDEX_URL=https://rocm.prereleases.amd.com/whl/gfx950-dcgpu
-ARG PYTORCH_ROCM_ARCH=gfx950
+ARG PYTHON_ABI=cp312-cp312
+ARG BUILD_DEVICE_ARCH=gfx942
+ARG ROCM_INDEX_URL=https://rocm.prereleases.amd.com/whl-multi-arch/
+ARG ROCM_VERSION=7.14.0rc3
+ARG TORCH_VERSION=2.11.0+rocm7.14.0rc3
 
-ENV PATH=/opt/rocm/bin:$PATH
+ENV PATH="/opt/python/${PYTHON_ABI}/bin:${PATH}"
 
-# Install build dependencies
-RUN python3 -m pip install --upgrade pip && \
-    python3 -m pip install ninja wheel setuptools setuptools_scm packaging auditwheel pybind11
+RUN test -x "/opt/python/${PYTHON_ABI}/bin/python"
 
-# Install ROCm from ROCm pre-releases index
-RUN python3 -m pip install --no-cache-dir --index-url ${ROCM_INDEX_URL} "rocm[libraries,devel]" && \
+RUN python -m pip install --upgrade pip && \
+    python -m pip install \
+        auditwheel \
+        build \
+        ninja \
+        packaging \
+        pybind11 \
+        "setuptools>=77,<81" \
+        setuptools_scm \
+        wheel
+
+RUN python -m pip install \
+        --no-cache-dir \
+        --index-url "${ROCM_INDEX_URL}" \
+        "rocm[libraries,devel,device-${BUILD_DEVICE_ARCH}]==${ROCM_VERSION}" \
+        "torch[device-${BUILD_DEVICE_ARCH}]==${TORCH_VERSION}" && \
     rocm-sdk init
 
-ENV ROCM_PATH=/opt/python/cp312-cp312/lib/python3.12/site-packages/_rocm_sdk_devel
-ENV PATH=/opt/python/cp312-cp312/bin:$PATH
+RUN python -c "import torch; print(f'PyTorch: {torch.__version__}'); \
+    print(f'HIP version: {torch.version.hip}')" && \
+    rocm-sdk path --root
 
-# Install PyTorch with ROCm from ROCm pre-releases index
-RUN python3 -m pip install --index-url ${ROCM_INDEX_URL} torch torchaudio torchvision
-
-# Verify PyTorch
-RUN python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); \
-    print(f'HIP version: {getattr(torch.version, \"hip\", \"N/A\")}')"
-
-
-# ============================================================================
-# Stage 2: Build LMCache
-# ============================================================================
 FROM builder AS build
 
-ARG LMCACHE_BRANCH=dev
-ARG PYTORCH_ROCM_ARCH="gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1200;gfx1201"
 ARG MAX_JOBS=8
-
-# Clone LMCache
-RUN git clone https://github.com/LMCache/LMCache.git /workspace/lmcache && \
-    cd /workspace/lmcache && \
-    git checkout ${LMCACHE_BRANCH}
+ARG ROCM_VERSION
+ARG ROCM_ARCHES=gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1200;gfx1201;gfx1250
 
 WORKDIR /workspace/lmcache
 
-# Fix pyproject.toml for modern setuptools compatibility
-RUN sed -i 's/^license = "Apache-2.0"/license = {text = "Apache-2.0"}/' pyproject.toml && \
-    sed -i '/^license-files/d' pyproject.toml
+# build_prod_wheels.py supplies the checked-out LMCache tree as the build context.
+COPY . /workspace/lmcache
 
-# Set build environment for HIP/ROCm
 ENV BUILD_WITH_HIP=1
 ENV CXX=hipcc
-ENV PYTORCH_ROCM_ARCH=${PYTORCH_ROCM_ARCH}
-ENV TORCH_DONT_CHECK_COMPILER_ABI=1
 ENV MAX_JOBS=${MAX_JOBS}
+ENV PYTORCH_ROCM_ARCH=${ROCM_ARCHES}
+ENV TORCH_DONT_CHECK_COMPILER_ABI=1
 
-# Build wheel
-RUN python3 setup.py bdist_wheel --dist-dir=/output
+RUN base_version="$(python -m setuptools_scm)" && \
+    wheel_version="$( \
+        BASE_VERSION="${base_version}" ROCM_VERSION="${ROCM_VERSION}" \
+        python -c "import os; from packaging.version import Version; \
+base = Version(os.environ['BASE_VERSION']).public; \
+rocm = os.environ['ROCM_VERSION']; \
+label = 'devrocm' if 'dev' in rocm else 'rocm'; \
+print(f'{base}+{label}{str(Version(rocm)).replace(\"+\", \"-\")}')" \
+    )" && \
+    echo "Building LMCache wheel version ${wheel_version}" && \
+    SETUPTOOLS_SCM_PRETEND_VERSION="${wheel_version}" \
+    ROCM_PATH="$(rocm-sdk path --root)" \
+    python -m build \
+        --wheel \
+        --no-isolation \
+        --outdir /output
 
-# Basic import test
-RUN python3 -m pip install /output/lmcache-*.whl && \
-    python3 -c "import lmcache.c_ops; print('✓ LMCache installed successfully')"
+RUN python -m pip install --no-deps /output/lmcache-*.whl && \
+    python -c "import torch; import lmcache.c_ops; \
+    import lmcache.native_storage_ops; import lmcache.lmcache_fs; \
+    import lmcache.lmcache_redis; print('LMCache extensions imported successfully')"
 
-# ============================================================================
-# Stage 3: Audit wheel for manylinux compliance
-# ============================================================================
 FROM build AS audit
 
-# Repair wheel for portability
 RUN auditwheel show /output/lmcache-*.whl && \
     auditwheel repair \
         --plat manylinux_2_28_x86_64 \
-        -w /wheelhouse \
-        /output/lmcache-*.whl || cp /output/lmcache-*.whl /wheelhouse/
+        --exclude libtorch.so \
+        --exclude libtorch_hip.so \
+        --exclude libtorch_python.so \
+        --exclude libtorch_cpu.so \
+        --exclude libc10.so \
+        --exclude libc10_hip.so \
+        --exclude libamdhip64.so.7 \
+        --wheel-dir /wheelhouse \
+        /output/lmcache-*.whl
 
-# ============================================================================
-# Stage 4: Export wheel
-# ============================================================================
 FROM scratch AS export
 COPY --from=audit /wheelhouse/*.whl /

@@ -1,12 +1,7 @@
 # Build LMCache with ROCm support
 
-This directory provides tooling for building LMCache with ROCm Python wheels.
-
-Table of contents:
-
-- [Support status](#support-status)
-- [Build instructions](#build-instructions)
-- [Running/testing LMCache](#runningtesting-lmcache)
+This directory builds LMCache wheels against ROCm and PyTorch packages
+produced by TheRock.
 
 ## Support status
 
@@ -16,76 +11,112 @@ Table of contents:
 
 ## Build instructions
 
-LMCache is a PyTorch extension that provides KV cache management for LLMs.
-The build uses TheRock's manylinux build container, pulling ROCm and PyTorch
-from the ROCm pre-releases index inside Docker.
+The build runs in TheRock's pinned manylinux container and consumes packages
+from the unified multi-architecture Python index. Each wheel embeds code for
+the supported GPU architectures:
+
+```text
+gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1200;gfx1201;gfx1250
+```
 
 ### Prerequisites
 
-You need:
-
-- Docker installed and running
-- A ROCm pre-releases index URL for your GPU architecture
-
-Find the latest index URLs at: https://rocm.prereleases.amd.com/whl/
+- Docker with BuildKit support
+- Python 3
 
 ### Quickstart
 
-Build the wheel by providing your GPU architecture's index URL:
+From the root of a TheRock checkout:
 
 ```bash
-python build_prod_wheels.py \
-  --output-dir outputs \
-  --rocm-index-url https://rocm.prereleases.amd.com/whl/gfx950-dcgpu \
-  --rocm-arch gfx950
+python external-builds/lmcache/lmcache_repo.py checkout
+
+python external-builds/lmcache/build_prod_wheels.py \
+  --output-dir outputs
 ```
 
-The build takes ~3-5 minutes and produces a manylinux-compatible wheel in the
-output directory (e.g., `outputs/lmcache-0.3.14.dev46-cp312-cp312-manylinux_2_28_x86_64.whl`).
+The command writes one `lmcache-*.whl` file to `outputs`. The default upstream
+LMCache checkout and ROCm/PyTorch versions are the combination validated by
+this integration. The wheel version includes the ROCm version as a local
+suffix so builds of the same LMCache revision against different ROCm releases
+do not overwrite one another in the package index.
 
-The resulting wheel can then be installed like so:
+To test another LMCache revision, select it during checkout:
 
 ```bash
-python3.12 -m venv venv
-. venv/bin/activate
-pip install --extra-index-url https://rocm.prereleases.amd.com/whl/gfx950-dcgpu \
+python external-builds/lmcache/lmcache_repo.py checkout \
+  --repo-hashtag <branch-tag-or-commit>
+```
+
+To use another compatible TheRock package set, override the index and both
+versions together:
+
+```bash
+python external-builds/lmcache/build_prod_wheels.py \
+  --output-dir outputs \
+  --rocm-index-url <index-url> \
+  --rocm-version <rocm-version> \
+  --torch-version <torch-version>
+```
+
+### Install the wheel
+
+Install matching TheRock PyTorch device packages before installing LMCache:
+
+```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+
+python -m pip install \
+  --index-url https://rocm.prereleases.amd.com/whl-multi-arch/ \
+  "torch[device-gfx942]==2.11.0+rocm7.14.0rc3"
+
+python -m pip install \
+  --extra-index-url https://rocm.prereleases.amd.com/whl-multi-arch/ \
   outputs/lmcache-*.whl
 ```
 
-Note the use of `--extra-index-url` instead of `--index-url` to allow
-resolution of non-ROCm dependencies (e.g., `safetensors`, `transformers`) from
-the default PyPI index.
+`--extra-index-url` allows LMCache's non-ROCm dependencies to resolve from
+PyPI while the matching TheRock packages remain available.
 
 ### Build script options
 
-| Option | Description |
-| --- | --- |
-| `--output-dir` | Directory for the output wheel (required) |
-| `--rocm-index-url` | ROCm pre-releases index URL for ROCm and PyTorch (required) |
-| `--rocm-arch` | GPU architectures, semicolon-separated (default: `gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1200;gfx1201`) |
-| `--python-version` | Target Python version (default: current Python version) |
-| `--lmcache-branch` | LMCache git branch/tag to build (default: `dev`) |
-| `--no-cache` | Build without Docker layer cache |
+| Option                | Description                                  |
+| --------------------- | -------------------------------------------- |
+| `--output-dir`        | Output directory for the wheel (required)    |
+| `--lmcache-dir`       | Local LMCache source checkout                |
+| `--build-device-arch` | Device package used by the build environment |
+| `--rocm-arches`       | GPU architectures embedded in the wheel      |
+| `--rocm-index-url`    | TheRock multi-arch package index             |
+| `--rocm-version`      | Pinned ROCm package version                  |
+| `--torch-version`     | Pinned PyTorch package version               |
+| `--python-version`    | CPython version supplied by the build image  |
+| `--image`             | Pinned manylinux build image                 |
+| `--max-jobs`          | Maximum parallel compiler jobs               |
+| `--no-cache`          | Disable the Docker build cache               |
 
-## Running/testing LMCache
+## Test the installation
 
-Use the provided test script to verify the installation:
+Run the smoke test on a machine with a matching AMD GPU:
 
 ```bash
-./test_lmcache.sh
+python external-builds/lmcache/run_lmcache_smoke_test.py \
+  --expected-arch gfx942
 ```
 
-Or verify manually in Python:
+The test checks the PyTorch ROCm runtime, executes a GPU operation, and imports
+the native LMCache extensions.
 
-```python
-import lmcache
-print("✓ LMCache imported successfully")
+## Continuous integration
 
-import lmcache.c_ops
-print("✓ C++ extensions loaded successfully")
+`build_linux_lmcache_wheels.yml` checks out the pinned LMCache source and
+builds the wheel on a runner with Docker. `test_lmcache_wheels.yml` installs
+that exact artifact in a no-ROCm container on a `gfx942` runner, runs package
+and ROCm sanity checks, the LMCache smoke test, and the upstream GPU kernel
+tests.
 
-import torch
-print(f"PyTorch: {torch.__version__}")
-print(f"HIP version: {torch.version.hip}")
-print(f"HIP available: {torch.cuda.is_available()}")
-```
+S3 publication is disabled by default. A trusted manual or reusable workflow
+invocation can set `publish_to_s3` after selecting the release type. The tested
+multi-architecture wheel is then uploaded to
+`s3://therock-<release-type>-python/v4/whl/` and served through the matching
+`whl-multi-arch` package index.

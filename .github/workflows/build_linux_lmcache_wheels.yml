@@ -1,0 +1,179 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Builds one fat LMCache wheel on a bare runner because build_prod_wheels.py
+# invokes Docker. The wheel is uploaded as a GitHub Actions artifact for GPU
+# testing and optional publication by test_lmcache_wheels.yml.
+
+name: Build Linux LMCache Wheels
+
+on:
+  workflow_call:
+    inputs:
+      build_runs_on:
+        description: Runner label with Docker available.
+        required: true
+        type: string
+      python_version:
+        description: CPython version to build for.
+        required: true
+        type: string
+      build_device_arch:
+        description: Device package used in the build environment.
+        required: true
+        type: string
+      rocm_arches:
+        description: Semicolon-separated GPU architectures embedded in the wheel.
+        required: true
+        type: string
+      rocm_index_url:
+        description: TheRock multi-arch Python package index.
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm Python package version.
+        required: true
+        type: string
+      torch_version:
+        description: PyTorch version compatible with the LMCache revision.
+        required: true
+        type: string
+      lmcache_git_ref:
+        description: LMCache branch, tag, or commit to build.
+        required: true
+        type: string
+      artifact_name:
+        description: Name of the GitHub Actions wheel artifact.
+        type: string
+        default: lmcache-wheel
+      repository:
+        description: TheRock repository to check out.
+        type: string
+        default: ""
+      ref:
+        description: TheRock branch, tag, or commit to check out.
+        type: string
+        default: ""
+    outputs:
+      artifact_name:
+        description: Name of the uploaded LMCache wheel artifact.
+        value: ${{ jobs.build_wheel.outputs.artifact_name }}
+
+  workflow_dispatch:
+    inputs:
+      build_runs_on:
+        description: Runner label with Docker available
+        required: true
+        type: string
+        default: azure-linux-scale-rocm
+      python_version:
+        description: CPython version to build for
+        required: true
+        type: string
+        default: "3.12"
+      build_device_arch:
+        description: Device package used in the build environment
+        required: true
+        type: string
+        default: gfx942
+      rocm_arches:
+        description: Semicolon-separated GPU architectures embedded in the wheel
+        required: true
+        type: string
+        default: gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1200;gfx1201;gfx1250
+      rocm_index_url:
+        description: TheRock multi-arch Python package index
+        required: true
+        type: string
+        default: https://rocm.prereleases.amd.com/whl-multi-arch/
+      rocm_version:
+        description: ROCm Python package version
+        required: true
+        type: string
+        default: 7.14.0rc3
+      torch_version:
+        description: PyTorch version compatible with the LMCache revision
+        required: true
+        type: string
+        default: 2.11.0+rocm7.14.0rc3
+      lmcache_git_ref:
+        description: LMCache branch, tag, or commit to build
+        required: true
+        type: string
+        default: fa8d5e7f4afdd9450d814ea697c73a576d85d4bb
+      artifact_name:
+        description: Name of the GitHub Actions wheel artifact
+        type: string
+        default: lmcache-wheel
+
+permissions:
+  contents: read
+
+run-name: Build multi-arch LMCache (py${{ inputs.python_version }}, ${{ inputs.lmcache_git_ref }})
+
+jobs:
+  build_wheel:
+    name: Build multi-arch LMCache | py ${{ inputs.python_version }}
+    runs-on: ${{ inputs.build_runs_on }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      DOCKER_BUILDKIT: "1"
+      LMCACHE_GIT_REF: ${{ inputs.lmcache_git_ref }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      BUILD_DEVICE_ARCH: ${{ inputs.build_device_arch }}
+      ROCM_ARCHES: ${{ inputs.rocm_arches }}
+      ROCM_INDEX_URL: ${{ inputs.rocm_index_url }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      TORCH_VERSION: ${{ inputs.torch_version }}
+      WHEEL_DIR: ${{ github.workspace }}/lmcache-wheels
+    outputs:
+      artifact_name: ${{ inputs.artifact_name }}
+
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify Docker
+        run: |
+          docker --version
+          docker info
+
+      - name: Checkout LMCache source
+        run: |
+          python external-builds/lmcache/lmcache_repo.py checkout \
+            --repo-hashtag "${LMCACHE_GIT_REF}"
+
+      - name: Build LMCache wheel
+        run: |
+          python external-builds/lmcache/build_prod_wheels.py \
+            --output-dir "${WHEEL_DIR}" \
+            --lmcache-dir external-builds/lmcache/lmcache \
+            --python-version "${PYTHON_VERSION}" \
+            --build-device-arch "${BUILD_DEVICE_ARCH}" \
+            --rocm-arches "${ROCM_ARCHES}" \
+            --rocm-index-url "${ROCM_INDEX_URL}" \
+            --rocm-version "${ROCM_VERSION}" \
+            --torch-version "${TORCH_VERSION}"
+
+      - name: List built wheel
+        run: |
+          ls -lh "${WHEEL_DIR}"/lmcache-*.whl
+
+      - name: Upload LMCache wheel artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ env.WHEEL_DIR }}/lmcache-*.whl
+          if-no-files-found: error
+          retention-days: 7
