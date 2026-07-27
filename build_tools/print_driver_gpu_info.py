@@ -8,6 +8,8 @@ Sanity check script for CI runners.
 On Linux:
   - run "amd-smi static"
   - run "rocminfo"
+  - run "uname -r"
+  - run "dkms status -m amdgpu"
 
 On Windows:
   - run "hipInfo.exe"
@@ -122,6 +124,12 @@ def run_sanity(os_name: str) -> None:
             label="Kernel version",
             command="uname",
             args=["-r"],
+            extra_command_search_paths=[bin_dir],
+        )
+        run_command_with_search(
+            label="AMDGPU DKMS package version",
+            command="dkms",
+            args=["status", "-m", "amdgpu"],
             extra_command_search_paths=[bin_dir],
         )
 
