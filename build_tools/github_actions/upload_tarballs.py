@@ -54,6 +54,11 @@ def _is_test_tarball(name: str) -> bool:
     return "-tests-" in name
 
 
+def _is_hpc_tarball(name: str) -> bool:
+    """True for the opt-in HPC SDK expansion tarballs (e.g. ...-multiarch-hpc-*)."""
+    return "-hpc-" in name
+
+
 def _select_multiarch_tarball_url(
     *,
     tarball_files: list[Path],
@@ -66,10 +71,15 @@ def _select_multiarch_tarball_url(
     file name, at which point the file will just be therock-dist-{platform}.
     """
 
-    # Skip over "test" tarballs, only look at "base" tarballs.
-    non_test_tarball_files = [f for f in tarball_files if not _is_test_tarball(f.name)]
+    # Skip over "test" and opt-in "hpc" tarballs, only look at "base" tarballs.
+    # Both -tests- and -hpc- share the therock-dist-{platform}-multiarch- prefix.
+    base_tarball_files = [
+        f
+        for f in tarball_files
+        if not _is_test_tarball(f.name) and not _is_hpc_tarball(f.name)
+    ]
 
-    for f in non_test_tarball_files:
+    for f in base_tarball_files:
         name = f.name
         if name.startswith(f"therock-dist-{platform}-multiarch-"):
             return _tarball_url(output_root, name)

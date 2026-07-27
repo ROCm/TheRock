@@ -180,11 +180,11 @@ def parse_excluded_components(raw_components: str) -> set[str]:
     return components
 
 
-def parse_excluded_artifacts(
+def parse_artifact_name_list(
     raw_artifacts: str,
     valid_artifacts: set[str],
 ) -> set[str]:
-    """Parse and validate artifact names passed to --exclude-artifacts."""
+    """Parse and validate a comma/semicolon-separated list of artifact names."""
     artifacts = {
         artifact.strip()
         for artifact in raw_artifacts.replace(";", ",").split(",")
@@ -198,6 +198,22 @@ def parse_excluded_artifacts(
             f"Valid artifacts are: {', '.join(sorted(valid_artifacts))}"
         )
     return artifacts
+
+
+def parse_excluded_artifacts(
+    raw_artifacts: str,
+    valid_artifacts: set[str],
+) -> set[str]:
+    """Parse and validate artifact names passed to --exclude-artifacts."""
+    return parse_artifact_name_list(raw_artifacts, valid_artifacts)
+
+
+def parse_included_artifacts(
+    raw_artifacts: str,
+    valid_artifacts: set[str],
+) -> set[str]:
+    """Parse and validate artifact names passed to --include-artifacts."""
+    return parse_artifact_name_list(raw_artifacts, valid_artifacts)
 
 
 # =============================================================================
@@ -376,6 +392,16 @@ def do_fetch(args: argparse.Namespace):
         )
 
     target_families = parse_target_families(args)
+    included_artifacts = parse_included_artifacts(
+        args.include_artifacts,
+        set(topology.artifacts.keys()),
+    )
+    if included_artifacts:
+        log(f"Including only artifacts: {', '.join(sorted(included_artifacts))}")
+        inbound &= included_artifacts
+        if not inbound:
+            log("No artifacts remain after applying inclusions")
+            return
     excluded_artifacts = parse_excluded_artifacts(
         args.exclude_artifacts,
         set(topology.artifacts.keys()),
@@ -1222,6 +1248,14 @@ def main(argv: Optional[List[str]] = None):
         type=str,
         default="",
         help="Comma- or semicolon-separated artifact names to exclude when fetching",
+    )
+    fetch_parser.add_argument(
+        "--include-artifacts",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact names to include when "
+        "fetching. When set, only these artifacts are fetched (applied before "
+        "--exclude-artifacts)",
     )
     fetch_parser.set_defaults(func=do_fetch)
 

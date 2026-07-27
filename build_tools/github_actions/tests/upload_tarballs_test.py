@@ -97,6 +97,20 @@ class TestUploadTarballsRun(unittest.TestCase):
             )
             test_family_tarball.write_text("x")
 
+            # An opt-in HPC multiarch tarball (URL not posted).
+            hpc_multiarch_tarball = (
+                tarballs_dir
+                / "therock-dist-linux-multiarch-hpc-7.14.0.dev0+13caf791.tar.gz"
+            )
+            hpc_multiarch_tarball.write_text("x")
+
+            # An opt-in HPC per-family tarball (URL not posted).
+            hpc_family_tarball = (
+                tarballs_dir
+                / "therock-dist-linux-gfx94X-dcgpu-hpc-7.14.0.dev0+13caf791.tar.gz"
+            )
+            hpc_family_tarball.write_text("x")
+
             staging_dir = tarballs_dir / "staging"
             staging_dir.mkdir()
             rc = mod.run(

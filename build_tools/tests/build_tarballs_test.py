@@ -131,10 +131,23 @@ class TestMain(unittest.TestCase):
                 ]
             )
 
-        self.assertEqual(fetch_mock.call_count, 1)
-        self.assertEqual(fetch_mock.call_args.kwargs["exclude_components"], ["test"])
-        self.assertEqual(fetch_mock.call_args.kwargs["exclude_artifacts"], ["fftw3"])
+        # Two fetches: the default tarball and the opt-in HPC expansion tarball.
+        self.assertEqual(fetch_mock.call_count, 2)
+        # First call = default tarball fetch (excludes tests, fftw3, and HPC libs).
+        default_call = fetch_mock.call_args_list[0]
+        self.assertEqual(default_call.kwargs["exclude_components"], ["test"])
+        self.assertEqual(
+            default_call.kwargs["exclude_artifacts"],
+            ["fftw3", "hiptensor", "rocalution"],
+        )
+        # Second call = HPC tarball fetch (includes only the HPC libs).
+        hpc_call = fetch_mock.call_args_list[1]
+        self.assertEqual(
+            hpc_call.kwargs["include_artifacts"], ["hiptensor", "rocalution"]
+        )
 
+        # fetch_and_flatten is mocked and creates no files, so the HPC output
+        # dir is empty and only the default tarball is compressed.
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
@@ -157,8 +170,12 @@ class TestMain(unittest.TestCase):
                 kpack_split=True,
             )
 
-        self.assertEqual(fetch_mock.call_count, 2)
+        # Four fetches: default per-family, HPC per-family, default multiarch,
+        # HPC multiarch.
+        self.assertEqual(fetch_mock.call_count, 4)
 
+        # fetch_and_flatten is mocked (creates no files), so HPC output dirs are
+        # empty and only the default tarballs are compressed.
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
@@ -184,16 +201,36 @@ class TestMain(unittest.TestCase):
                 ]
             )
 
-        self.assertEqual(fetch_mock.call_count, 2)
+        # Four fetches per family: default, tests, HPC, HPC-tests.
+        self.assertEqual(fetch_mock.call_count, 4)
+        # Call 0 = default tarball (excludes tests, fftw3, HPC libs).
         self.assertEqual(
             fetch_mock.call_args_list[0].kwargs["exclude_components"], ["test"]
         )
         self.assertEqual(
-            fetch_mock.call_args_list[0].kwargs["exclude_artifacts"], ["fftw3"]
+            fetch_mock.call_args_list[0].kwargs["exclude_artifacts"],
+            ["fftw3", "hiptensor", "rocalution"],
         )
+        # Call 1 = default tests tarball (no exclusions).
         self.assertNotIn("exclude_components", fetch_mock.call_args_list[1].kwargs)
         self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[1].kwargs)
+        # Call 2 = HPC tarball (includes only HPC libs, excludes test component).
+        self.assertEqual(
+            fetch_mock.call_args_list[2].kwargs["include_artifacts"],
+            ["hiptensor", "rocalution"],
+        )
+        self.assertEqual(
+            fetch_mock.call_args_list[2].kwargs["exclude_components"], ["test"]
+        )
+        # Call 3 = HPC tests tarball (includes only HPC libs, keeps test component).
+        self.assertEqual(
+            fetch_mock.call_args_list[3].kwargs["include_artifacts"],
+            ["hiptensor", "rocalution"],
+        )
+        self.assertNotIn("exclude_components", fetch_mock.call_args_list[3].kwargs)
 
+        # fetch_and_flatten is mocked (creates no files), so HPC output dirs are
+        # empty and only the default tarballs are compressed.
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
@@ -220,15 +257,29 @@ class TestMain(unittest.TestCase):
                 kpack_split=True,
             )
 
-        self.assertEqual(fetch_mock.call_count, 6)
+        # 2 families x 4 (default, tests, HPC, HPC-tests) = 8, plus multiarch x 4
+        # (default, tests, HPC, HPC-tests) = 12 total.
+        self.assertEqual(fetch_mock.call_count, 12)
+        # The multiarch block runs last: default, tests, HPC, HPC-tests. So the
+        # multiarch default tarball fetch is [-4] and multiarch tests is [-3].
         self.assertEqual(
-            fetch_mock.call_args_list[-2].kwargs["exclude_components"], ["test"]
+            fetch_mock.call_args_list[-4].kwargs["exclude_components"], ["test"]
         )
         self.assertEqual(
-            fetch_mock.call_args_list[-2].kwargs["exclude_artifacts"], ["fftw3"]
+            fetch_mock.call_args_list[-4].kwargs["exclude_artifacts"],
+            ["fftw3", "hiptensor", "rocalution"],
         )
-        self.assertNotIn("exclude_components", fetch_mock.call_args_list[-1].kwargs)
-        self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[-1].kwargs)
+        self.assertNotIn("exclude_components", fetch_mock.call_args_list[-3].kwargs)
+        self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[-3].kwargs)
+        # [-2] = multiarch HPC, [-1] = multiarch HPC-tests.
+        self.assertEqual(
+            fetch_mock.call_args_list[-2].kwargs["include_artifacts"],
+            ["hiptensor", "rocalution"],
+        )
+        self.assertEqual(
+            fetch_mock.call_args_list[-1].kwargs["include_artifacts"],
+            ["hiptensor", "rocalution"],
+        )
 
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
