@@ -738,9 +738,7 @@ if(THEROCK_ENABLE_HIPTHREADS)
     TARGET_NEUTRAL
     DESCRIPTOR artifact-hipthreads.toml
     COMPONENTS
-      dbg
       dev
-      lib
       test
     SUBPROJECT_DEPS
       hipthreads
