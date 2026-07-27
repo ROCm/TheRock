@@ -180,6 +180,8 @@ jobs:
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
+          THEROCK_COMMIT_SHA: ${{ steps.checkout.outputs.commit }}
+          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
