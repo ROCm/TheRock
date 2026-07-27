@@ -9,6 +9,12 @@ skip_tests = {
         }
     },
     "common": {
+        "autograd": [
+            # Stream comparison mismatch on ROCm (non-default stream vs default stream)
+            #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
+            # Seems to fails on Linux and Windows across torch versions and all tested GPUs.
+            "test_side_stream_backward_overlap",
+        ],
         "cuda": [
             # RuntimeError: Error building extension 'dummy_allocator'
             # Skipped across all PyTorch versions; the hipblas.h include error
@@ -17,14 +23,6 @@ skip_tests = {
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",
-        ],
-        "autograd": [
-            # Stream comparison mismatch on ROCm (non-default stream vs default stream)
-            #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
-            # Seems to fails on Linux and Windows across torch versions and all tested GPUs.
-            "test_side_stream_backward_overlap",
-        ],
-        "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
@@ -223,7 +221,7 @@ skip_tests = {
             # We should fix the test to fail/skip more gracefully.
             #   subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
             "test_multi_grad_all_hooks",
-            # This is/was also failing on gfx942 linux, see the 2.9 and 2.10 skip test files.
+            # This is/was also failing on gfx942 linux, see the 2.10 skip test file.
             #   AssertionError: "Simulate error" does not match "grad can be implicitly created only for scalar outputs"
             "test_reentrant_parent_error_on_cpu_cuda",
         ],

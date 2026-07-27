@@ -17,6 +17,11 @@ if(THEROCK_ENABLE_COMPILER)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
+  # Disable pre-compiled headers under clang as they cause conflicts related to
+  # differing optimization levels. This is a workaround.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    list(APPEND _extra_llvm_cmake_args "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
+  endif()
 
   # Building Flang is very memory-intensive on systems with many cores. Allow
   # users to specify the level of concurrency for these tasks so they can
@@ -79,6 +84,7 @@ if(THEROCK_ENABLE_COMPILER)
       # Features
       -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
+      -DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
@@ -119,7 +125,8 @@ if(THEROCK_ENABLE_COMPILER)
       "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
       "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
       "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
-
+      # ASAN
+      -DTHEROCK_SANITIZER=${THEROCK_SANITIZER}
       # compiler-rt debug mode
       "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
 
@@ -150,6 +157,15 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm LLD lib/llvm/lib/cmake/lld)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
   therock_cmake_subproject_activate(amd-llvm)
+
+
+  # Comgr's gtest suite needs a googletest provider. therock-googletest is
+  # declared before compiler/ (see the root CMakeLists.txt) so amd-comgr can
+  # depend on the single shared instance rather than a compiler-local copy.
+  set(_comgr_gtest_deps)
+  if(THEROCK_BUILD_COMGR_TESTS)
+    set(_comgr_gtest_deps therock-googletest)
+  endif()
 
 
   ##############################################################################
@@ -273,6 +289,7 @@ if(THEROCK_ENABLE_COMPILER)
       # Build-time only: provides the static Clang/LLD/LLVM consumed via the
       # explicit *_DIR args above. Not shipped.
       amd-llvm-static
+      ${_comgr_gtest_deps}
     RUNTIME_DEPS
       # amd-llvm is still needed at runtime for the device libraries (and to be
       # co-located in the shipped compiler tree); LLVM itself is now embedded
@@ -301,6 +318,10 @@ if(THEROCK_ENABLE_COMPILER)
         "${CMAKE_CTEST_COMMAND}"
         --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
         --output-on-failure
+      COMMAND
+        "${CMAKE_COMMAND}"
+        --build "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
+        --target test-unit
     )
   endif()
 

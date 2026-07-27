@@ -43,6 +43,35 @@ on:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
         default: ""
+      stage_reuse_mode:
+        description: >-
+          Automatic stage-reuse mode (separate from the manual prebuilt_stages
+          input): "dry-run" (default) only reports which unaffected stages could
+          be reused; "reuse-stage" actually reuses them.
+        type: string
+        default: "dry-run"
+      stage_reuse_max_age_hours:
+        description: >-
+         Automatic stage reuse: reject baseline runs older than this many hours. default: "72"
+        type: string
+        default: "72"
+      stage_reuse_commit_history:
+        description: >-
+          Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
+        type: string
+        default: "50"
+      build_pytorch:
+        description: "Build PyTorch wheels."
+        type: boolean
+        default: true
+      build_jax:
+        description: "Build JAX wheels."
+        type: boolean
+        default: false
+      python_version:
+        description: "Single Python version for wheel builds; empty uses the default matrix."
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -114,7 +143,7 @@ jobs:
     steps:
       - name: Checking out repository
         id: checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -122,7 +151,7 @@ jobs:
           fetch-depth: 2
 
       - name: Checkout CI config
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ROCm/therock-ci-config
           ref: main
@@ -138,15 +167,25 @@ jobs:
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_PYTORCH: ${{ inputs.build_pytorch }}
+          BUILD_JAX: ${{ inputs.build_jax }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
+          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
+          STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
+          STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config
+          # External repo family overrides allow callers to add/modify GPU family configs
+          # (e.g., adding test runners for architectures not enabled in TheRock's default config)
+          EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

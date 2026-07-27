@@ -911,7 +911,13 @@ def filter_components_fromartifactory(
 
             # In kpack mode, skip non-gfxarch artifacts when building gfx-specific packages
             # This prevents generic artifacts from being included in both base and arch-specific packages
-            if enable_kpack and gfx_arch not in (GFX_HOST, GFX_META) and not is_gfxarch:
+            # For non-gfxarch packages (gfx_arch=""), we SHOULD include Artifact_Gfxarch=False artifacts
+            if (
+                enable_kpack
+                and gfx_arch
+                and gfx_arch not in (GFX_HOST, GFX_META)
+                and not is_gfxarch
+            ):
                 print(
                     f"{pkg_name} : Skipping artifact '{artifact_prefix}' for {gfx_arch} package "
                     f"(Artifact_Gfxarch=False, should only be in generic package)"
