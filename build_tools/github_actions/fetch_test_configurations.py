@@ -419,6 +419,27 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # rocRAND under the rocjitsu simulator (CPU-only).
+    # The simulator_runner.py wrapper preloads librocjitsu_kmd.so, points
+    # RJ_CONFIG/RJ_SCHEMA at the rocjitsu artifact's share/rocjitsu/ files,
+    # composes GTEST_FILTER from simulator_runner_filters.yaml ("rocrand" /
+    # preset "basic"), then delegates to the same test_rocrand.py used by the
+    # real-GPU lane. Linux-only because the KFD interposer is Linux-only.
+    # See docs/development/simulator_testing.md.
+    "rocrand-sim": {
+        "job_name": "rocrand-sim",
+        "fetch_artifact_args": "--rand --rocjitsu --tests",
+        # 12x of the real-GPU rocrand budget (5 min) for PDES headroom.
+        "timeout_minutes": 60,
+        "test_script": (
+            f"python {_get_script_path('simulator_runner.py')} "
+            f"--component rocrand --filter-preset basic"
+        ),
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # FFT tests
     "rocfft": {
         "job_name": "rocfft",
