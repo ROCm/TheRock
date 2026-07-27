@@ -515,6 +515,12 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   # libhipcxx
   ##############################################################################
 
+  set(libhipcxx_runtime_deps)
+  if(NOT WIN32)
+    # Required on Linux.
+    list(APPEND libhipcxx_runtime_deps amdsmi)
+  endif()
+
   therock_cmake_subproject_declare(libhipcxx
     # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
     #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/libhipcxx"
@@ -539,6 +545,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     RUNTIME_DEPS
       amd-llvm
       hip-clr
+      ${libhipcxx_runtime_deps}
     TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx

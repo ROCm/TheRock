@@ -503,6 +503,9 @@ add_subdirectory(debug-tools)
 # performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
 # feature detection.
 add_subdirectory(media-libs)
+# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk performs
+# optional find_package(hipfile) for hipFILE trace feature detection.
+add_subdirectory(storage-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -511,7 +514,6 @@ add_subdirectory(emulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
 add_subdirectory(comm-libs)
-add_subdirectory(storage-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 
