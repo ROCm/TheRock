@@ -44,11 +44,6 @@ pr:
     - systems-assistant
     - dependabot
 
-  # PR title rules
-  title:
-    title_min_length: 10
-    title_max_length: 100
-
   # Require a meaningful description
   description:
     min_length: 30

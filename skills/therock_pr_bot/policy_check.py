@@ -771,8 +771,16 @@ def build_policy_table_comment(
         "for details on every check and how to fix failures."
     )
 
+    override_url = (
+        "https://github.com/ROCm/TheRock/blob/main/skills/therock_pr_bot/"
+        "FAQ.md#-wish-to-override-the-policy-process-and-get-unblocked"
+    )
+    override_link = (
+        f"\n\n🙋 **[Wish to Override Policy?]({override_url})**"
+    )
+
     note_block = f"\n\n{note}" if note else ""
-    return f"{marker}\n{heading}{note_block}\n\n{table}{footer}{faq_link}"
+    return f"{marker}\n{heading}{note_block}\n\n{table}{footer}{faq_link}{override_link}"
 
 
 def build_check_results(
@@ -930,7 +938,7 @@ def build_bump_pr_results(policy: Policy) -> List[CheckResult]:
     bump_note = "Bump PR — check auto-approved (automated dependency update)"
     rows: List[CheckResult] = [
         CheckResult("Branch Name", "🌿", True, [], note=bump_note),
-        CheckResult("PR Title/Description", "📝", True, [], note=bump_note),
+        CheckResult("PR Description", "📝", True, [], note=bump_note),
         CheckResult("Draft PR", "🚫", True, [], note=bump_note),
         CheckResult("Forbidden Files", "⛔", True, [], note=bump_note),
         CheckResult("Unit Test", "🧪", True, [], note=bump_note),
@@ -1041,7 +1049,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "<!-- therock-pr-bot-fix-policies -->\n"
             "✅ Auto-approved — this is an automated dependency bump PR.",
         )
-        print(f"✅ Bump PR by @{author} — all checks auto-passed.")
+        print(f"��� Bump PR by @{author} — all checks auto-passed.")
         return 0
 
     pr_files = list(iter_pr_files(owner, repo, pr_number, token))  # type: ignore[arg-type]

@@ -20,6 +20,21 @@ This document explains what each policy check means, why it exists, and how to f
 
 ______________________________________________________________________
 
+## 🙋 Wish to Override the Policy Process and get unblocked?
+
+Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
+
+## 🙋 For any policy related feedback?
+
+please reach out to the **ROCm Policy Council**.
+
+📧 **Drop a mail to:** `rocm-repo-policy@amd.com` (ROCm Policy Council DLL)
+
+Include your PR link, the check(s) you want overridden, and a short
+justification so the council can review your request.
+
+______________________________________________________________________
+
 ## 🌿 Branch Name
 
 **What does it check?**
@@ -50,31 +65,6 @@ Rename your branch before opening the PR:
 ```bash
 git branch -m old-name users/<your-username>/<topic>
 git push origin -u users/<your-username>/<topic>
-```
-
-______________________________________________________________________
-
-## 📝 PR Title
-
-**What does it check?**
-
-> **Note:** In the results table, the title and description checks are reported together as a single **PR Title/Description** row. Any title *or* description failure shows up there.
-
-**Length rules (only)**
-
-- Minimum: **10** characters
-- Maximum: **100** characters
-
-> The title is validated by **length only**. There is no enforced format
-> (e.g. Conventional Commits) and no forbidden-word list — any wording is
-> accepted as long as it is 10–100 characters long.
-
-**How to fix**
-Edit the PR title on GitHub (top of the PR page → pencil icon) so it is between 10 and 100 characters, e.g.:
-
-```
-Add token refresh support
-Correct codeql workflow trigger
 ```
 
 ______________________________________________________________________
@@ -335,20 +325,5 @@ git push
 
 Push any commit (including `--allow-empty`) to the PR branch.
 The `synchronize` event triggers a fresh policy check automatically.
-
-______________________________________________________________________
-
-## 🙋 Wish to Override the Policy Process and get unblocked?
-
-Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
-
-## 🙋 For any policy related feedback?
-
-please reach out to the **ROCm Policy Council**.
-
-📧 **Drop a mail to:** `rocm-repo-policy@amd.com` (ROCm Policy Council DLL)
-
-Include your PR link, the check(s) you want overridden, and a short
-justification so the council can review your request.
 
 ______________________________________________________________________

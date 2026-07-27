@@ -154,34 +154,6 @@ class BranchNameTests(unittest.TestCase):
         self.assertEqual(e, [])
 
 
-# ----------------------------- PR title --------------------------------------
-
-
-class TitleTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.policy = make_policy()
-
-    def _errs(self, title: str) -> List[str]:
-        e: List[str] = []
-        pc.ensure_pr_title(self.policy, title, e)
-        return e
-
-    def test_valid_title(self) -> None:
-        self.assertEqual(self._errs("feat(auth): add token refresh support"), [])
-
-    def test_too_short(self) -> None:
-        self.assertTrue(any("too short" in x for x in self._errs("fix: a")))
-
-    def test_too_long(self) -> None:
-        long_title = "feat: " + ("x" * 90)
-        self.assertTrue(any("too long" in x for x in self._errs(long_title)))
-
-    def test_forbidden_word(self) -> None:
-        self.assertTrue(
-            any("forbidden" in x.lower() for x in self._errs("feat: WIP add things"))
-        )
-
-
 # ----------------------------- PR description --------------------------------
 
 
@@ -426,7 +398,7 @@ class UnitTestRuleTests(unittest.TestCase):
         pc.ensure_unit_tests(policy, files, errs)
         self.assertEqual(errs, [])
 
-    def test_path_based_pattern_code_only_still_fails(self) -> None:
+    def test_path_based_pattern_code_only_fails(self) -> None:
         # A path-based pattern only helps when the PR actually touches a file
         # under that path. Source changes with no matching test path still fail.
         policy = make_policy(
