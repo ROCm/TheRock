@@ -94,8 +94,7 @@ def find_test_executables():
     # test_api: 'min_max_constant_buffer_size' fails on gfx942.
     # test_printf: 'vector' and 'length_specifier' fail on gfx942.
     # test_svm: 'svm_migrate' fails on gfx942.
-    DISABLED_SUBTESTS: dict[str, set[str]] = {
-    }
+    DISABLED_SUBTESTS: dict[str, set[str]] = {}
 
     test_executables = []
     for test_exe in CTS_BIN_DIR.rglob("test_*"):
