@@ -14,14 +14,6 @@ skip_tests = {
             # TestCuda - conflicts with how our test script and runners are
             # configured.
             "test_hip_device_count",
-            # TestCudaAllocator::test_allocator_backend spawns a subprocess with a
-            # wiped environment (env={}); the child exits 127, i.e. it fails before the
-            # test body — a dynamic-loader failure resolving the interpreter/torch
-            # shared libs under an empty environment. The ldconfig registration added
-            # to run_pytorch_tests_full.py registers the ROCm SDK dirs but not whatever
-            # the wiped-env child is still missing (libpython / loader path). RCA OPEN:
-            # pin the exact unresolved object in the exit-127 child. Run 29384801639.
-            "(TestCudaAllocator and test_allocator_backend)",
         ],
         "cuda_expandable_segments": [
             # test_cuda_expandable_segments un-excluded from EXCLUDED_TEST_MODULES
@@ -43,48 +35,6 @@ skip_tests = {
             # rocm7.15.0a20260712 (b2b98e00): fails consistently (ULP 952>854),
             # confirmed in debug run 29215386233 shard 4.
             "(TestNNDeviceTypeCUDA and test_linear_cross_entropy_loss_default_bias_False_cuda_float32)",
-            # Run 28411211813 default shard 3/10: TestNNDeviceTypeCUDA::
-            # test_module_to_empty_cuda_float32 FAILED CONSISTENTLY (regex match on the
-            # expected error message fails because ROCm's Copy.cpp appends a C++
-            # CapturedTraceback to the NotImplementedError string). NOTE: passes when
-            # run in isolation via run_test.py, so it is order/state-dependent within
-            # the full shard. Kept because it fails in the real sharded CI run.
-            # TODO: find the polluting test / narrow.
-            "(TestNNDeviceTypeCUDA and test_module_to_empty_cuda_float32)",
-        ],
-        "optim": [
-            # Run 28411211813 default shard 4/10: TestOptimRenewedCUDA::
-            # test_rosenbrock_sparse_with_lrsched_False_SGD_cuda_float64 hit the 900s
-            # pytest-timeout (x3 reruns) in the sparse SGD step. NOTE: passes in ~8s
-            # when run in isolation via run_test.py, so it is order/state-dependent
-            # within the full shard. Kept because it times out in the real sharded CI
-            # run. TODO: find the polluting test / root-cause the hang.
-            "(TestOptimRenewedCUDA and test_rosenbrock_sparse_with_lrsched_False_SGD_cuda_float64)",
-        ],
-        "ops": [
-            # test_ops un-excluded from EXCLUDED_TEST_MODULES (prior crash was the
-            # rocprofiler shutdown bug, fixed by HSA_TOOLS_DISABLE_REGISTER). Verified
-            # faithfully via run_test.py: TestCommonCUDA::test_dtypes_sparse_sampled_addmm
-            # fails CONSISTENTLY ("supported dtypes for sparse.sampled_addmm on cuda are
-            # incorrect") on ROCm. TODO: root-cause the dtype-support divergence.
-            "(TestCommonCUDA and test_dtypes_sparse_sampled_addmm_cuda)",
-        ],
-        "export": [
-            # TestExportOnFakeCudaCUDA spawns subprocesses with a near-wiped env
-            # (env={"CUDA_VISIBLE_DEVICES":""}); the children exit 127 — a dynamic-
-            # loader failure before the test body, same class as test_allocator_backend
-            # above. The ldconfig SDK registration did not resolve it. RCA OPEN: pin the
-            # exact shared object the wiped-env child cannot load. Run 29384801639
-            # failed all 9 (default shard 5/10).
-            "test_fake_export___getitem___cuda_float32",
-            "test_fake_export_nn_functional_batch_norm_cuda_float32",
-            "test_fake_export_nn_functional_batch_norm_without_cudnn_cuda_float32",
-            "test_fake_export_nn_functional_conv2d_cuda_float32",
-            "test_fake_export_nn_functional_instance_norm_cuda_float32",
-            "test_fake_export_nn_functional_multi_margin_loss_cuda_float32",
-            "test_fake_export_nn_functional_scaled_dot_product_attention_cuda_float32",
-            "test_fake_export_nonzero_cuda_float32",
-            "test_preserve_original_behavior_cuda",
         ],
         "linalg": [
             # Run 27657923936 default shard 1/10 plus local Rock-vs-nightly probe:
@@ -101,19 +51,6 @@ skip_tests = {
             "(TestLinalgCUDA and test_cholesky_solve_batched_many_batches)",
         ],
         "inductor": [
-            # log10 inductor_numerics fp16/fp32 XPASS: log10 is now bitwise-correct on
-            # ROCm but still listed in ROCM_UNARY_NUMERICAL_XFAILS["inductor_numerics"],
-            # so the strict-xfail unexpectedly passes and the test FAILS. Removing the
-            # skip UNMASKS the XPASS (full-suite run 29384801639 failed both) — the skip
-            # must stay until log10 is dropped from that xfail dict upstream.
-            "test_unary_ufunc_numerical_log10_backend_inductor_numerics_cuda_float16",
-            "test_unary_ufunc_numerical_log10_backend_inductor_numerics_cuda_float32",
-            # Run 27228539427 default shard 6/10:
-            # log10 inductor_default float32 differs from eager under exact equality.
-            "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float32",
-            # Run 27228539427 default shard 6/10:
-            # log10 inductor_default float16 differs from eager under exact equality.
-            "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float16",
             # Run 27657923936 default shard 10/10:
             # DynamicShapesCpuTests::test_tmp_not_defined_issue3_dynamic_shapes_cpu
             # still fails consistently with a small tensor mismatch
