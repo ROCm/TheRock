@@ -107,7 +107,7 @@ permissions:
 
 jobs:
   notify_quartz_start:
-    if: ${{ github.repository == 'ROCm/rockrel' }}
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     uses: ./.github/workflows/notify_quartz.yml
     with:
       run_phase: started
@@ -161,7 +161,7 @@ jobs:
       cache_type: ${{ inputs.cache_type }}
 
   notify_quartz_completed:
-    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup_matrix, build_pytorch_wheels]
     uses: ./.github/workflows/notify_quartz.yml
     with:

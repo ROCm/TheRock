@@ -67,7 +67,7 @@ permissions:
 
 jobs:
   notify_quartz_start:
-    if: ${{ github.repository == 'ROCm/rockrel' }}
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     uses: ./.github/workflows/notify_quartz.yml
     with:
       run_phase: started
@@ -119,7 +119,7 @@ jobs:
             -v --log-cli-level=info --timeout=300
 
   notify_quartz_completed:
-    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [test_artifact_structure]
     uses: ./.github/workflows/notify_quartz.yml
     with:

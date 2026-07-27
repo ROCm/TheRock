@@ -102,7 +102,7 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, py${{ inputs.python_ver
 
 jobs:
   notify_quartz_start:
-    if: ${{ github.repository == 'ROCm/rockrel' }}
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     uses: ./.github/workflows/notify_quartz.yml
     with:
       run_phase: started
@@ -204,7 +204,7 @@ jobs:
           rocm-sdk test
 
   notify_quartz_completed:
-    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [test_wheels]
     uses: ./.github/workflows/notify_quartz.yml
     with:

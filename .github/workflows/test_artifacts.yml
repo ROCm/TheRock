@@ -116,7 +116,7 @@ run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type
 
 jobs:
   notify_quartz_start:
-    if: ${{ github.repository == 'ROCm/rockrel' }}
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     uses: ./.github/workflows/notify_quartz.yml
     with:
       run_phase: started
@@ -254,7 +254,7 @@ jobs:
       build_variant: ${{ inputs.build_variant }}
 
   notify_quartz_completed:
-    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [configure_test_matrix, test_sanity_check, test_components]
     uses: ./.github/workflows/notify_quartz.yml
     with:

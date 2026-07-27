@@ -50,7 +50,7 @@ on:
 
 jobs:
   notify_quartz_start:
-    if: ${{ github.repository == 'ROCm/rockrel' }}
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     uses: ./.github/workflows/notify_quartz.yml
     with:
       run_phase: started
@@ -351,7 +351,7 @@ jobs:
         run: python build_tools/github_actions/capture_job_summary.py
 
   notify_quartz_completed:
-    if: ${{ always() && github.repository == 'ROCm/rockrel' }}
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_stage]
     uses: ./.github/workflows/notify_quartz.yml
     with:
