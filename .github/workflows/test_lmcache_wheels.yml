@@ -177,8 +177,8 @@ jobs:
       TEST_ROCM_ARCH: ${{ inputs.test_rocm_arch || 'gfx942' }}
       ROCM_INDEX_URL: ${{ inputs.rocm_index_url || 'https://rocm.prereleases.amd.com/whl-multi-arch/' }}
       TORCH_VERSION: ${{ inputs.torch_version || '2.11.0+rocm7.14.0rc3' }}
-      VENV_DIR: ${{ github.workspace }}/.venv
-      WHEEL_DIR: ${{ github.workspace }}/lmcache-wheels
+      VENV_DIR: .venv
+      WHEEL_DIR: lmcache-wheels
 
     steps:
       - name: Checkout TheRock
@@ -206,7 +206,7 @@ jobs:
       - name: Set up test environment
         run: |
           python -m venv "${VENV_DIR}"
-          echo "PATH=${VENV_DIR}/bin:${PATH}" >> "${GITHUB_ENV}"
+          echo "${GITHUB_WORKSPACE}/${VENV_DIR}/bin" >> "${GITHUB_PATH}"
           "${VENV_DIR}/bin/python" -m pip install --upgrade pip
           "${VENV_DIR}/bin/python" -m pip install \
             --index-url "${ROCM_INDEX_URL}" \
