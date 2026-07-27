@@ -28,7 +28,7 @@ class ROCrandBenchmark(BenchmarkBase):
 
     def __init__(self):
         super().__init__(benchmark_name="rocrand", display_name="ROCrand")
-        self.bench_bins = ["benchmark_rocrand_host_api", "benchmark_rocrand_device_api"]
+        self.bench_bins = ["benchmark_host_api", "benchmark_device_api"]
 
     def run_benchmarks(self) -> None:
         """Run ROCrand benchmarks and save output to log files."""
@@ -90,7 +90,7 @@ class ROCrandBenchmark(BenchmarkBase):
             re.MULTILINE,
         )
 
-        bench_types = ["rocrand_host", "rocrand_device"]
+        bench_types = ["host", "device"]
 
         # Setup table
         field_names = [

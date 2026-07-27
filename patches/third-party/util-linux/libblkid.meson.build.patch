@@ -1,0 +1,11 @@
+--- a/libblkid/meson.build
++++ b/libblkid/meson.build
+@@ -151,7 +151,7 @@
+ endif
+ 
+ lib_blkid = both_libraries(
+-  'blkid',
++  'rocm_sysdeps_blkid',
+   list_h,
+   lib_blkid_sources,
+   include_directories : [dir_include, dir_libblkid],

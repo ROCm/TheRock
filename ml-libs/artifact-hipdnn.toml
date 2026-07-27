@@ -3,7 +3,6 @@
 exclude = [
   "lib/libhipdnn_backend_private.a",
   "lib/test_plugins/**",
-  "share/hipdnn/python/**",
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
@@ -17,8 +16,4 @@ include = [
   "bin/*hipdnn_*_test*",
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
-  "share/hipdnn/python/**/*.py",
-  "share/hipdnn/python/**/*.so",
-  "share/hipdnn/python/**/*.pyd",
-  "share/hipdnn/tests/python/**/*.py",
 ]
