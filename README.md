@@ -78,7 +78,7 @@ cd TheRock
 sudo apt install curl make
 sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
 
-# Install the required Rust 1.95 build toolchain
+# Install Rust 1.95 for the Mirage emulator build
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
   sh -s -- --default-toolchain 1.95.0
 source "$HOME/.cargo/env"
@@ -108,11 +108,6 @@ chcp 65001
 
 ```bash
 # Install dependencies following the Windows support guide
-
-# Install Rust and Cargo through rustup
-winget install --id Rustlang.Rustup --exact --source winget
-# Open a new terminal before running the remaining commands.
-rustup install 1.95
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
