@@ -1676,7 +1676,7 @@ class TestFormatSummary(unittest.TestCase):
             result,
             "\n\n".join(
                 [
-                    "# TheRock CI Impact Report",
+                    "# TheRock CI Change Impact Report",
                     "### Stage reuse analysis",
                     "### Test impact analysis - dry-run",
                 ]
@@ -1710,7 +1710,7 @@ class TestFormatSummary(unittest.TestCase):
             result,
             "\n\n".join(
                 [
-                    "# TheRock CI Impact Report",
+                    "# TheRock CI Change Impact Report",
                     "### Stage reuse analysis",
                     "### Test impact analysis - dry-run",
                 ]
@@ -1766,7 +1766,7 @@ class TestWriteOutputs(unittest.TestCase):
         self.assertIn("test_type=full", github_output)
         self.assertIn("ci_impact_summary", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
-        self.assertNotIn("# TheRock CI Impact Report", github_output)
+        self.assertNotIn("# TheRock CI Change Impact Report", github_output)
 
     def test_skipped_ci(self):
         outputs = cm.CIOutputs.skipped()
@@ -1776,7 +1776,7 @@ class TestWriteOutputs(unittest.TestCase):
         # expressions can safely consume them.
         self.assertIn("enable_build_jobs=false", github_output)
         self.assertIn("ci_impact_summary", github_output)
-        self.assertNotIn("# TheRock CI Impact Report", github_output)
+        self.assertNotIn("# TheRock CI Change Impact Report", github_output)
 
         self.assertNotIn(
             "### Stage reuse analysis",
@@ -1791,7 +1791,7 @@ class TestWriteOutputs(unittest.TestCase):
 
     @patch(
         "configure_multi_arch_ci.render_ci_impact_report",
-        return_value="# TheRock CI Impact Report",
+        return_value="# TheRock CI Change Impact Report",
     )
     def test_write_outputs_exports_ci_impact_report(
         self,
@@ -1809,14 +1809,14 @@ class TestWriteOutputs(unittest.TestCase):
             github_output,
         )
         self.assertIn(
-            "# TheRock CI Impact Report",
+            "# TheRock CI Change Impact Report",
             github_output,
         )
 
         # The report is exported to the dedicated report job and is not
         # duplicated in the Setup job summary.
         self.assertNotIn(
-            "# TheRock CI Impact Report",
+            "# TheRock CI Change Impact Report",
             step_summary,
         )
         self.assertNotIn(

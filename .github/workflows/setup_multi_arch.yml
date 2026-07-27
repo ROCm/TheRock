@@ -252,13 +252,13 @@ jobs:
         run: python ./build_tools/github_actions/super_repo_signal.py
 
   ci_impact_report:
-    name: Generate CI Impact Report
+    name: Generate CI Change Impact Report
     needs: setup
     if: ${{ needs.setup.outputs.ci_impact_summary != '' }}
     runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
-      - name: Write TheRock CI Impact Report
+      - name: Write TheRock CI Change Impact Report
         env:
           CI_IMPACT_SUMMARY: ${{ needs.setup.outputs.ci_impact_summary }}
         shell: bash
