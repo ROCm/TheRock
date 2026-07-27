@@ -74,6 +74,7 @@ print(f'{base}+{label}{str(Version(rocm)).replace(\"+\", \"-\")}')" \
         --outdir /output
 
 RUN python -m pip install --no-deps /output/lmcache-*.whl && \
+    cd /tmp && \
     python -c "import torch; import lmcache.c_ops; \
     import lmcache.native_storage_ops; import lmcache.lmcache_fs; \
     import lmcache.lmcache_redis; print('LMCache extensions imported successfully')"
