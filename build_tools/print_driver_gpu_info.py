@@ -116,8 +116,13 @@ def log_dkms_status(module: str = "amdgpu") -> None:
 
     found = False
     for version_dir in sorted(module_root.iterdir()):
-        # Skip the "kernel-*" convenience symlinks; only walk real versions.
-        if version_dir.is_symlink() or not version_dir.is_dir():
+        # Skip the "kernel-*" convenience symlinks and the "original_module"
+        # backup directory; only walk real version directories.
+        if (
+            version_dir.is_symlink()
+            or version_dir.name == "original_module"
+            or not version_dir.is_dir()
+        ):
             continue
         version = version_dir.name
         for kernel_dir in sorted(version_dir.iterdir()):
