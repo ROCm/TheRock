@@ -12,6 +12,7 @@ import unittest
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import fetch_test_configurations
+from fetch_test_configurations import get_test_component_names
 
 
 class FetchTestConfigurationsTest(unittest.TestCase):
@@ -97,6 +98,26 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         names = {job["job_name"] for job in components}
         self.assertEqual(names, {"rocblas", "hipblas"})
+
+    def test_get_test_component_names_filters_by_platform(self):
+        linux = set(get_test_component_names("linux"))
+        windows = set(get_test_component_names("windows"))
+
+        self.assertIn("hip-tests", linux)
+        self.assertIn("hip-tests", windows)
+
+        self.assertIn("rocfft", linux)
+        self.assertNotIn("rocfft", windows)
+
+        self.assertIn("rocgdb-cpu", linux)
+        self.assertNotIn("rocgdb-cpu", windows)
+
+        self.assertNotIn("sanity", linux)
+        self.assertNotIn("sanity", windows)
+
+    def test_get_test_component_names_rejects_unknown_platform(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported platform"):
+            get_test_component_names("macos")
 
     # -----------------------
     # TEST_LABELS handling

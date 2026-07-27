@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from dataclasses import fields
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -519,6 +520,123 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_manual_prebuilt_stages_take_precedence_over_auto_reuse(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=(
+                "https://github.com/ROCm/TheRock/actions/runs/auto-run-200"
+            ),
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(
+                "[STAGE-REUSE] stage 'compiler-runtime' "
+                "unaffected AND available in baseline "
+                "on all platforms -> WILL be skipped",
+            ),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted_auto_stage_reuse,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=["math-libs"],
+            manual_baseline_run_id="manual-run-100",
+            auto_stage_reuse=auto_stage_reuse,
+        )
+
+        self.assertEqual(
+            stage_decisions,
+            {
+                "math-libs": cm.JobAction.PREBUILT,
+            },
+        )
+
+        self.assertNotIn(
+            "compiler-runtime",
+            stage_decisions,
+        )
+
+        self.assertEqual(
+            baseline_run_id,
+            "manual-run-100",
+        )
+
+        self.assertEqual(
+            adjusted_auto_stage_reuse.applied_reuse_stages,
+            (),
+        )
+
+        self.assertTrue(
+            any(
+                "manual prebuilt_stages input takes precedence" in reason
+                for reason in adjusted_auto_stage_reuse.reasons
+            )
+        )
+
+        self.assertTrue(
+            any(
+                "WOULD be reusable but was not applied" in line
+                for line in adjusted_auto_stage_reuse.report_lines
+            )
+        )
+
+    def test_auto_reuse_applies_when_manual_stages_are_not_set(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=(
+                "https://github.com/ROCm/TheRock/actions/runs/auto-run-200"
+            ),
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted_auto_stage_reuse,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=[],
+            manual_baseline_run_id="",
+            auto_stage_reuse=auto_stage_reuse,
+        )
+
+        self.assertEqual(
+            stage_decisions,
+            {
+                "compiler-runtime": cm.JobAction.PREBUILT,
+            },
+        )
+
+        self.assertEqual(
+            baseline_run_id,
+            "auto-run-200",
+        )
+
+        self.assertEqual(
+            adjusted_auto_stage_reuse.applied_reuse_stages,
+            ("compiler-runtime",),
+        )
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic
@@ -598,6 +716,42 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_reuse_commit_sha_uses_pr_base_commit(self):
+        ci_inputs = self._inputs(
+            event_name="pull_request",
+        )
+        git_context = cm.GitContext(
+            changed_files=[],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        self.assertEqual(
+            cm._get_reuse_commit_sha(
+                ci_inputs,
+                git_context,
+            ),
+            "base-commit-sha",
+        )
+
+    def test_reuse_commit_sha_uses_push_head_commit(self):
+        ci_inputs = self._inputs(
+            event_name="push",
+        )
+        git_context = cm.GitContext(
+            changed_files=[],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        self.assertEqual(
+            cm._get_reuse_commit_sha(
+                ci_inputs,
+                git_context,
+            ),
+            "head-commit-sha",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1440,6 +1594,132 @@ class TestFormatSummary(unittest.TestCase):
         # explanation for why.
         self.assertIn("skipped", result)
 
+    @patch(
+        "configure_multi_arch_ci.render_step_summary",
+        return_value="### Stage reuse analysis",
+    )
+    def test_render_stage_reuse_report(
+        self,
+        mock_stage_reuse_summary,
+    ):
+        auto_stage_reuse = object()
+
+        outputs = cm.CIOutputs(
+            jobs=SimpleNamespace(
+                auto_stage_reuse=auto_stage_reuse,
+            ),
+        )
+
+        result = cm.render_stage_reuse_report(
+            outputs,
+        )
+
+        self.assertEqual(
+            result,
+            "### Stage reuse analysis",
+        )
+        mock_stage_reuse_summary.assert_called_once_with(
+            auto_stage_reuse,
+        )
+
+    def test_render_stage_reuse_report_is_empty_without_analysis(self):
+        self.assertEqual(
+            cm.render_stage_reuse_report(
+                cm.CIOutputs.skipped(),
+            ),
+            "",
+        )
+
+    @patch(
+        "configure_multi_arch_ci.render_test_impact_summary",
+        return_value="### Test impact analysis - dry-run",
+    )
+    def test_render_test_impact_report(
+        self,
+        mock_test_impact_summary,
+    ):
+        test_impact = object()
+
+        outputs = cm.CIOutputs(
+            test_impact={
+                "linux": test_impact,
+            },
+        )
+
+        result = cm.render_test_impact_report(
+            outputs,
+        )
+
+        self.assertEqual(
+            result,
+            "### Test impact analysis - dry-run",
+        )
+        mock_test_impact_summary.assert_called_once_with(
+            (test_impact,),
+        )
+
+    def test_render_test_impact_report_is_empty_without_analysis(self):
+        self.assertEqual(
+            cm.render_test_impact_report(
+                cm.CIOutputs.skipped(),
+            ),
+            "",
+        )
+
+    def test_combine_ci_impact_reports(self) -> None:
+        result = cm.combine_ci_impact_reports(
+            "### Stage reuse analysis",
+            "### Test impact analysis - dry-run",
+        )
+
+        self.assertEqual(
+            result,
+            "\n\n".join(
+                [
+                    "# TheRock CI Impact Report",
+                    "### Stage reuse analysis",
+                    "### Test impact analysis - dry-run",
+                ]
+            ),
+        )
+
+    def test_combine_ci_impact_reports_is_empty_without_reports(self):
+        self.assertEqual(
+            cm.combine_ci_impact_reports("", ""),
+            "",
+        )
+
+    @patch(
+        "configure_multi_arch_ci.render_test_impact_report",
+        return_value="### Test impact analysis - dry-run",
+    )
+    @patch(
+        "configure_multi_arch_ci.render_stage_reuse_report",
+        return_value="### Stage reuse analysis",
+    )
+    def test_render_ci_impact_report_combines_reports(
+        self,
+        mock_stage_reuse_report,
+        mock_test_impact_report,
+    ):
+        outputs = cm.CIOutputs()
+
+        result = cm.render_ci_impact_report(outputs)
+
+        self.assertEqual(
+            result,
+            "\n\n".join(
+                [
+                    "# TheRock CI Impact Report",
+                    "### Stage reuse analysis",
+                    "### Test impact analysis - dry-run",
+                ]
+            ),
+        )
+
+        mock_stage_reuse_report.assert_called_once_with(outputs)
+        mock_test_impact_report.assert_called_once_with(outputs)
+
 
 class TestWriteOutputs(unittest.TestCase):
     """Test writing CI configuration to GitHub Actions output files."""
@@ -1484,16 +1764,73 @@ class TestWriteOutputs(unittest.TestCase):
 
         self.assertIn("enable_build_jobs=true", github_output)
         self.assertIn("test_type=full", github_output)
+        self.assertIn("ci_impact_summary", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+        self.assertNotIn("# TheRock CI Impact Report", github_output)
 
     def test_skipped_ci(self):
         outputs = cm.CIOutputs.skipped()
         github_output, step_summary = self._write_outputs(outputs)
 
-        # Some outputs should still be emitted even when CI is skipped, so other
-        # workflow steps can use them.
+        # Outputs are still emitted when CI is skipped so downstream workflow
+        # expressions can safely consume them.
         self.assertIn("enable_build_jobs=false", github_output)
+        self.assertIn("ci_impact_summary", github_output)
+        self.assertNotIn("# TheRock CI Impact Report", github_output)
+
+        self.assertNotIn(
+            "### Stage reuse analysis",
+            github_output,
+        )
+        self.assertNotIn(
+            "### Test impact analysis - dry-run",
+            github_output,
+        )
+
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    @patch(
+        "configure_multi_arch_ci.render_ci_impact_report",
+        return_value="# TheRock CI Impact Report",
+    )
+    def test_write_outputs_exports_ci_impact_report(
+        self,
+        mock_render_report,
+    ):
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=_jobs(),
+        )
+
+        github_output, step_summary = self._write_outputs(outputs)
+
+        self.assertIn(
+            "ci_impact_summary",
+            github_output,
+        )
+        self.assertIn(
+            "# TheRock CI Impact Report",
+            github_output,
+        )
+
+        # The report is exported to the dedicated report job and is not
+        # duplicated in the Setup job summary.
+        self.assertNotIn(
+            "# TheRock CI Impact Report",
+            step_summary,
+        )
+        self.assertNotIn(
+            "### Stage reuse analysis",
+            step_summary,
+        )
+        self.assertNotIn(
+            "### Test impact analysis",
+            step_summary,
+        )
+
+        mock_render_report.assert_called_once_with(
+            outputs,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1511,6 +1848,7 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertIsNone(outputs.builds.linux)
         self.assertIsNone(outputs.builds.windows)
         self.assertIsNone(outputs.jobs)
+        self.assertEqual(outputs.test_impact, {})
 
     @patch("configure_multi_arch_ci.should_skip_ci")
     def test_pipeline_skips_when_gate_says_skip(self, mock_skip):
@@ -1541,6 +1879,49 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext.empty())
         self.assertEqual(outputs.linux_test_labels, ["test:rccl"])
         self.assertEqual(outputs.windows_test_labels, ["test:rccl"])
+
+    def test_configure_forces_requested_test_components(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:rocblas"],
+            windows_test_labels=["test:rocblas"],
+        )
+
+        outputs = cm.configure(
+            inputs,
+            cm.GitContext.empty(),
+        )
+
+        self.assertEqual(
+            set(outputs.test_impact),
+            {
+                "linux",
+                "windows",
+            },
+        )
+
+        self.assertIn(
+            "rocblas",
+            outputs.test_impact["linux"].forced,
+        )
+        self.assertIn(
+            "rocblas",
+            outputs.test_impact["windows"].forced,
+        )
+
+        # The dry-run analysis must not rewrite the real workflow labels.
+        self.assertEqual(
+            outputs.linux_test_labels,
+            ["test:rocblas"],
+        )
+        self.assertEqual(
+            outputs.windows_test_labels,
+            ["test:rocblas"],
+        )
 
     def test_no_test_labels_has_empty_outputs(self):
         """Without test labels, outputs are empty lists."""
@@ -1598,6 +1979,98 @@ class TestConfigurePipeline(unittest.TestCase):
         linux_payload = outputs.builds.linux.to_dict()
         self.assertEqual(linux_payload["baseline_run_id"], "123")
         self.assertEqual(linux_payload["prebuilt_stages"], "compiler-runtime")
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_configure_populates_report_only_test_impact(
+        self,
+        mock_compute_auto_stage_reuse,
+    ):
+        mock_compute_auto_stage_reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.DRY_RUN,
+            candidate_stages=(),
+            rebuild_stages=(),
+            full_rebuild_required=True,
+            baseline_run_id="",
+            baseline_html_url="",
+            available_stages=(),
+            unavailable_stages=(),
+            applied_reuse_stages=(),
+            reasons=("test stub: skip baseline lookup",),
+            report_lines=(),
+            platform_available={},
+        )
+
+        ci_inputs = cm.CIInputs(
+            run_id="123",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:rocblas"],
+            windows_test_labels=[],
+        )
+        git_context = cm.GitContext(
+            changed_files=["rocm-libraries"],
+            submodule_paths=["rocm-libraries"],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        outputs = cm.configure(
+            ci_inputs=ci_inputs,
+            git_context=git_context,
+        )
+
+        self.assertIn("linux", outputs.test_impact)
+        self.assertIn("windows", outputs.test_impact)
+
+        self.assertEqual(
+            outputs.linux_test_labels,
+            ["test:rocblas"],
+        )
+        self.assertEqual(
+            outputs.windows_test_labels,
+            [],
+        )
+
+        self.assertIn(
+            "rocblas",
+            outputs.test_impact["linux"].forced,
+        )
+
+        mock_compute_auto_stage_reuse.assert_called_once()
+
+        call_kwargs = mock_compute_auto_stage_reuse.call_args.kwargs
+
+        self.assertEqual(
+            call_kwargs["changed_files"],
+            ["rocm-libraries"],
+        )
+        self.assertEqual(
+            call_kwargs["mode"],
+            cm.StageReuseMode.DRY_RUN,
+        )
+        self.assertEqual(
+            call_kwargs["current_commit_sha"],
+            "base-commit-sha",
+        )
+        self.assertIsInstance(
+            call_kwargs["linux_amdgpu_families"],
+            list,
+        )
+        self.assertGreater(
+            len(call_kwargs["linux_amdgpu_families"]),
+            0,
+        )
+
+        self.assertIsInstance(
+            call_kwargs["windows_amdgpu_families"],
+            list,
+        )
+        self.assertGreater(
+            len(call_kwargs["windows_amdgpu_families"]),
+            0,
+        )
 
 
 # ---------------------------------------------------------------------------

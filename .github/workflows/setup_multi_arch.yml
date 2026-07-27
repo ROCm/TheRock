@@ -140,6 +140,7 @@ jobs:
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
+      ci_impact_summary: ${{ steps.configure.outputs.ci_impact_summary }}
     steps:
       - name: Checking out repository
         id: checkout
@@ -211,6 +212,56 @@ jobs:
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
+        env:
+          EXTERNAL_REPO: ${{ inputs.external_repo }}
+        shell: bash
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --external-repo-json='${{ inputs.external_repo }}'
+            --external-repo-json="${EXTERNAL_REPO}"
+
+      - name: Summarize super-repo source and TheRock ref
+        if: ${{ inputs.external_repo != '' }}
+        env:
+          EXTERNAL_REPO_CONFIG_JSON: ${{ steps.external_repo_config.outputs.config_json }}
+          SUPER_REPO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          THEROCK_REQUESTED_REF: ${{ inputs.ref }}
+          THEROCK_RESOLVED_SHA: ${{ steps.checkout.outputs.commit }}
+          CALLING_WORKFLOW_REF: ${{ github.workflow_ref }}
+          REUSABLE_WORKFLOW_PATH: .github/workflows/setup_multi_arch.yml
+        run: python ./build_tools/github_actions/super_repo_signal.py
+
+      # Temporary smoke test for PR #6760. Remove after verification.
+      - name: Test super-repo source/ref summary
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 6760 }}
+        env:
+          EXTERNAL_REPO_CONFIG_JSON: >-
+            {
+              "repository": "ROCm/rocm-libraries",
+              "ref": "refs/heads/develop",
+              "checkout_path": "rocm-libraries",
+              "fetch_sources_args": "test-only",
+              "submodule_fetch_mode": "test-only"
+            }
+          SUPER_REPO_SOURCE_SHA: test-only-super-repo-sha
+          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          THEROCK_REQUESTED_REF: ${{ inputs.ref }}
+          THEROCK_RESOLVED_SHA: ${{ steps.checkout.outputs.commit }}
+          CALLING_WORKFLOW_REF: test-only-caller
+          REUSABLE_WORKFLOW_PATH: .github/workflows/setup_multi_arch.yml
+        run: python ./build_tools/github_actions/super_repo_signal.py
+
+  ci_impact_report:
+    name: Generate CI Impact Report
+    needs: setup
+    if: ${{ needs.setup.outputs.ci_impact_summary != '' }}
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - name: Write TheRock CI Impact Report
+        env:
+          CI_IMPACT_SUMMARY: ${{ needs.setup.outputs.ci_impact_summary }}
+        shell: bash
+        run: |
+          printf '%s\n' "${CI_IMPACT_SUMMARY}" \
+            >> "${GITHUB_STEP_SUMMARY}"

@@ -43,6 +43,7 @@ Outputs (written to GITHUB_OUTPUT):
     windows_build_config  : JSON object with build config, or "" if skipped
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
+    ci_impact_summary     : Combined stage-reuse and test-impact report
 """
 
 import enum
@@ -79,7 +80,14 @@ from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
     compute_auto_stage_reuse,
+    plan_stage_reuse,
     render_step_summary,
+)
+from stage_to_test_impact import (
+    StageToTestImpactResult,
+    compute_test_impact,
+    render_test_impact_summary,
+    requested_test_components,
 )
 
 _NULL_GIT_SHA = "0" * 40
@@ -453,8 +461,8 @@ class JobDecisions:
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
     build_jax: JobGroupDecision
-    # Automatic stage-reuse analysis, carried so its report can be appended to
-    # the step summary after the main CI summary.
+    # Automatic stage-reuse analysis, carried so it can be included in the
+    # combined CI impact report.
     auto_stage_reuse: AutoStageReuse | None = None
 
     def log(self) -> None:
@@ -541,6 +549,10 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+
+    # Report-only test impact recommendations. These results are included in the
+    # combined CI impact report but are not passed to test matrix generation.
+    test_impact: dict[str, StageToTestImpactResult] = field(default_factory=dict)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -842,6 +854,84 @@ def _determine_test_type(
     return "quick", "default"
 
 
+def _get_reuse_commit_sha(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> str | None:
+    """Return the commit used for baseline compatibility checks."""
+
+    if ci_inputs.is_pull_request:
+        return git_context.diff_base_commit
+
+    return git_context.diff_head_commit
+
+
+def _apply_stage_reuse_precedence(
+    manual_prebuilt_stages: list[str],
+    manual_baseline_run_id: str,
+    auto_stage_reuse: AutoStageReuse,
+) -> tuple[
+    dict[str, JobAction],
+    str,
+    AutoStageReuse,
+]:
+    """Resolve manual and automatic stage reuse into one build decision."""
+
+    stage_decisions: dict[str, JobAction] = {
+        stage: JobAction.PREBUILT for stage in manual_prebuilt_stages
+    }
+
+    baseline_run_id = manual_baseline_run_id
+
+    if manual_prebuilt_stages:
+        # The downstream configuration supports only one baseline_run_id.
+        # Explicit workflow inputs take precedence over automatic reuse.
+        if auto_stage_reuse.applied_reuse_stages:
+            reason = (
+                "manual prebuilt_stages input takes precedence; "
+                "automatic stage reuse was not applied"
+            )
+
+            adjusted_report_lines = tuple(
+                line.replace(
+                    "WILL be skipped",
+                    "WOULD be reusable but was not applied",
+                )
+                for line in auto_stage_reuse.report_lines
+            )
+
+            auto_stage_reuse = replace(
+                auto_stage_reuse,
+                applied_reuse_stages=(),
+                reasons=(
+                    *auto_stage_reuse.reasons,
+                    reason,
+                ),
+                report_lines=(
+                    *adjusted_report_lines,
+                    f"[STAGE-REUSE] {reason}.",
+                ),
+            )
+
+        return (
+            stage_decisions,
+            baseline_run_id,
+            auto_stage_reuse,
+        )
+
+    for stage in auto_stage_reuse.applied_reuse_stages:
+        stage_decisions[stage] = JobAction.PREBUILT
+
+    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+        baseline_run_id = auto_stage_reuse.baseline_run_id
+
+    return (
+        stage_decisions,
+        baseline_run_id,
+        auto_stage_reuse,
+    )
+
+
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -858,10 +948,7 @@ def decide_jobs(
     # Parse explicit prebuilt stages from workflow_dispatch input. These are
     # the MANUAL inputs and are always honored, unchanged, in every mode.
 
-    stage_decisions: dict[str, JobAction] = {}
-    if ci_inputs.prebuilt_stages:
-        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
-            stage_decisions[stage] = JobAction.PREBUILT
+    manual_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
 
     # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
     # which stages WOULD be reused and apply nothing; in "reuse-stage" the
@@ -869,19 +956,42 @@ def decide_jobs(
     # their builds and copies artifacts instead. The platforms and families to
     # verify come straight from the resolved target selection.
 
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+
+    linux_artifact_families = [
+        all_families[family_name]["linux"]["family"]
+        for family_name in targets.linux_families
+    ]
+
+    windows_artifact_families = [
+        all_families[family_name]["windows"]["family"]
+        for family_name in targets.windows_families
+    ]
+
+    reuse_commit_sha = _get_reuse_commit_sha(
+        ci_inputs,
+        git_context,
+    )
+
     auto_stage_reuse = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
         mode=StageReuseMode.from_environ(),
-        linux_amdgpu_families=targets.linux_families,
-        windows_amdgpu_families=targets.windows_families,
+        linux_amdgpu_families=linux_artifact_families,
+        windows_amdgpu_families=windows_artifact_families,
+        current_commit_sha=reuse_commit_sha,
     )
 
-    # Only reuse-stage mode returns non-empty applied_reuse_stages.
-    for stage in auto_stage_reuse.applied_reuse_stages:
-        stage_decisions.setdefault(stage, JobAction.PREBUILT)
-    baseline_run_id = ci_inputs.baseline_run_id
-    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-        baseline_run_id = auto_stage_reuse.baseline_run_id
+    (
+        stage_decisions,
+        baseline_run_id,
+        auto_stage_reuse,
+    ) = _apply_stage_reuse_precedence(
+        manual_prebuilt_stages=manual_prebuilt_stages,
+        manual_baseline_run_id=ci_inputs.baseline_run_id,
+        auto_stage_reuse=auto_stage_reuse,
+    )
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -1276,6 +1386,65 @@ def expand_build_configs(
 # ---------------------------------------------------------------------------
 
 
+def render_stage_reuse_report(
+    outputs: CIOutputs,
+) -> str:
+    """Render the automatic stage-reuse analysis."""
+
+    if outputs.jobs is None or outputs.jobs.auto_stage_reuse is None:
+        return ""
+
+    return render_step_summary(
+        outputs.jobs.auto_stage_reuse,
+    )
+
+
+def render_test_impact_report(
+    outputs: CIOutputs,
+) -> str:
+    """Render the report-only test-impact analysis."""
+
+    if not outputs.test_impact:
+        return ""
+
+    return render_test_impact_summary(
+        tuple(outputs.test_impact.values()),
+    )
+
+
+def combine_ci_impact_reports(
+    stage_reuse_summary: str,
+    test_impact_summary: str,
+) -> str:
+    """Combine the standalone impact reports into one report."""
+
+    sections = [
+        "# TheRock CI Impact Report",
+    ]
+
+    if stage_reuse_summary:
+        sections.append(stage_reuse_summary)
+
+    if test_impact_summary:
+        sections.append(test_impact_summary)
+
+    if len(sections) == 1:
+        return ""
+
+    return "\n\n".join(sections)
+
+
+def render_ci_impact_report(
+    outputs: CIOutputs,
+) -> str:
+    """Render one report containing all configuration-time impact analysis."""
+
+    return combine_ci_impact_reports(
+        render_stage_reuse_report(outputs),
+        render_test_impact_report(outputs),
+    )
+
+
 def write_outputs(
     ci_inputs: CIInputs,
     outputs: CIOutputs,
@@ -1287,6 +1456,10 @@ def write_outputs(
     linux = outputs.builds.linux
     windows = outputs.builds.windows
     test_type = outputs.jobs.test_rocm.test_type if outputs.is_ci_enabled else ""
+
+    ci_impact_summary = render_ci_impact_report(
+        outputs,
+    )
     output_vars = {
         # Workflow YAML references this as 'enable_build_jobs'
         "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
@@ -1295,6 +1468,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "ci_impact_summary": ci_impact_summary,
     }
     gha_set_output(output_vars)
 
@@ -1302,17 +1476,13 @@ def write_outputs(
     # module, so importing it at the top level would create a circular import.
     from configure_multi_arch_ci_summary import format_summary
 
+    # Keep the normal configuration summary in the setup job.
     gha_append_step_summary(
         format_summary(
             ci_inputs=ci_inputs,
             outputs=outputs,
         )
     )
-
-    # Append the automatic stage-reuse analysis after the main summary so the
-    # two read top-to-bottom in the job step summary.
-    if outputs.jobs is not None and outputs.jobs.auto_stage_reuse is not None:
-        gha_append_step_summary(render_step_summary(outputs.jobs.auto_stage_reuse))
 
 
 # ---------------------------------------------------------------------------
@@ -1355,12 +1525,56 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
+    print("\n=== Computing dry-run test impact ===")
+    from fetch_test_configurations import get_test_component_names
+
+    topology = get_topology()
+    test_impact: dict[
+        str,
+        StageToTestImpactResult,
+    ] = {}
+
+    for platform, build_config, labels in (
+        (
+            "linux",
+            builds.linux,
+            ci_inputs.linux_test_labels,
+        ),
+        (
+            "windows",
+            builds.windows,
+            ci_inputs.windows_test_labels,
+        ),
+    ):
+        if build_config is None:
+            continue
+
+        # Use the pure semantic planning result here. Do not use
+        # AutoStageReuse because baseline availability may cause
+        # an unaffected stage to rebuild for operational reasons.
+        impact = plan_stage_reuse(
+            changed_files=git_context.changed_files,
+            platform=platform,
+            topology=topology,
+        ).impact
+
+        test_impact[platform] = compute_test_impact(
+            topology=topology,
+            platform=platform,
+            components=get_test_component_names(platform),
+            rebuild_stages=impact.rebuild_stages,
+            full_rebuild_required=(impact.full_rebuild_required),
+            reasons=impact.reasons,
+            forced_components=(requested_test_components(labels)),
+        )
+
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        test_impact=test_impact,
     )
 
 

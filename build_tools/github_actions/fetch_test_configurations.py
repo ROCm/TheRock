@@ -725,6 +725,19 @@ test_matrix = {
 }
 
 
+def get_test_component_names(platform: str) -> tuple[str, ...]:
+    """Return regular test components supported on a platform."""
+
+    if platform not in {"linux", "windows"}:
+        raise ValueError(f"Unsupported platform: {platform!r}")
+
+    return tuple(
+        component
+        for component, config in test_matrix.items()
+        if component != "sanity" and platform in config["platform"]
+    )
+
+
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument(
