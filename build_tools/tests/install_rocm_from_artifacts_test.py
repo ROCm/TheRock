@@ -68,6 +68,10 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_base_only_includes_rocjitsu_hotswap(self):
+        argv = self._run_main(["--base-only"])
+        self.assertIn("rocjitsu_hotswap", argv)
+
 
 class TestReleaseDiscovery(unittest.TestCase):
     def test_extract_version_ignores_test_tarball(self) -> None:

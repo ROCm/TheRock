@@ -350,6 +350,7 @@ def retrieve_artifacts_by_run_id(args):
         "core-hipinfo_run",
         "core-runtime_run",
         "core-runtime_lib",
+        "rocjitsu_hotswap",
         "sysdeps_lib",
         "base_run",
         "base_lib",

@@ -40,6 +40,12 @@ if(THEROCK_ENABLE_ROCJITSU)
     LIB_NAMES
       librocjitsu.so
   )
+  if(NOT WIN32)
+    therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
+      LIB_NAMES
+        libhsa_hotswap_rocjitsu.so
+    )
+  endif()
 
   therock_provide_artifact(rocjitsu
     TARGET_NEUTRAL
@@ -47,6 +53,7 @@ if(THEROCK_ENABLE_ROCJITSU)
     COMPONENTS
       dbg
       dev
+      hotswap
       lib
       run
     SUBPROJECT_DEPS

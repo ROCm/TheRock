@@ -215,6 +215,17 @@
         ]
       },
       {
+        "Artifact": "rocjitsu",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjitsu",
+            "Components": [
+              "hotswap"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "core-hip",
         "Artifact_Subdir": [
           {

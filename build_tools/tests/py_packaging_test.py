@@ -657,6 +657,23 @@ class DevicePackagingTest(TmpDirTestCase):
         an_core = ArtifactName("core-hip", "lib", "gfx942")
         self.assertFalse(device_artifact_filter("gfx942", an_core))
 
+    def test_core_artifact_filter_includes_only_rocjitsu_hotswap(self):
+        """The core wheel ships the HSA hotswap hook without the rocjitsu library."""
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import core_artifact_filter
+
+        from _therock_utils.artifacts import ArtifactName
+
+        self.assertTrue(
+            core_artifact_filter(ArtifactName("rocjitsu", "hotswap", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "lib", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "run", "generic"))
+        )
+
     def test_device_dist_info_has_libraries_py_package_name(self):
         """Device package _dist_info.py must contain LIBRARIES_PY_PACKAGE_NAME."""
         artifact_dir = self._setup_kpack_split_artifacts()

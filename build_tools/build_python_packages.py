@@ -520,12 +520,13 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "lib",
         "run",
     ]
+    hotswap = an.name == "rocjitsu" and an.component == "hotswap"
     # hiprtc needs to be able to find HIP headers in its same tree.
     hip_dev = an.name in [
         "core-hip",
         "core-ocl",
     ] and an.component in ["dev"]
-    return core or hip_dev
+    return core or hotswap or hip_dev
 
 
 def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
