@@ -74,7 +74,6 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         "nightly": {"gfx90c"},
     },
     "windows": {
-        # gfx90c only supported in PyTorch 2.12+ (still bringing up Windows).
         "release/2.10": {"gfx90c"},
         "release/2.11": {"gfx90c"},
         "release/2.12": {"gfx90c"},
