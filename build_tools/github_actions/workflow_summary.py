@@ -250,41 +250,36 @@ def main(argv: list[str]) -> int:
     failed, _ = evaluate_results(jobs)
 
     if args.github_repository and args.github_run_id and os.environ.get("GITHUB_TOKEN"):
-        try:
-            collected_records = collect_timing_records(
-                repository=args.github_repository,
-                run_id=args.github_run_id,
-                run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
-                token=os.environ["GITHUB_TOKEN"],
-            )
+        collected_records = collect_timing_records(
+            repository=args.github_repository,
+            run_id=args.github_run_id,
+            run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
+            token=os.environ["GITHUB_TOKEN"],
+        )
 
-            timing_json = format_timing_json(collected_records)
-            collected_summary = format_timing_summary(collected_records)
+        timing_json = format_timing_json(collected_records)
+        collected_summary = format_timing_summary(collected_records)
 
-            timing_json_path = Path("workflow_timing.json")
-            timing_markdown_path = Path("workflow_timing.md")
+        timing_json_path = Path("workflow_timing.json")
+        timing_markdown_path = Path("workflow_timing.md")
 
-            timing_json_path.write_text(
-                timing_json + "\n",
-                encoding="utf-8",
-            )
-            timing_markdown_path.write_text(
-                collected_summary + "\n",
-                encoding="utf-8",
-            )
+        timing_json_path.write_text(
+            timing_json + "\n",
+            encoding="utf-8",
+        )
+        timing_markdown_path.write_text(
+            collected_summary + "\n",
+            encoding="utf-8",
+        )
 
-            print(
-                f"Wrote {timing_json_path} with "
-                f"{len(collected_records)} timing record(s)."
-            )
-            print(
-                f"Wrote {timing_markdown_path} with "
-                f"{len(collected_records)} timing record(s)."
-            )
-        except Exception as exc:
-            # Timing reporting is best-effort and must not affect the
-            # workflow summary result.
-            print("Warning: could not collect or write workflow timing: " f"{exc}")
+        print(
+            f"Wrote {timing_json_path} with "
+            f"{len(collected_records)} timing record(s)."
+        )
+        print(
+            f"Wrote {timing_markdown_path} with "
+            f"{len(collected_records)} timing record(s)."
+        )
     print(f"Checking status for {len(jobs)} job(s):")
     for job in jobs:
         color = _RESULT_COLORS.get(job.result, _RED)
