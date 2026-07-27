@@ -60,10 +60,6 @@ on:
           Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
         type: string
         default: "50"
-      stage_reuse_baseline_repository:
-        description: "Repository containing baseline_run_id; defaults to the current repository."
-        type: string
-        default: ""
       build_pytorch:
         description: "Build PyTorch wheels."
         type: boolean
@@ -184,10 +180,9 @@ jobs:
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
-          # For external repos, allow specifying which repository to query for baseline runs.
-          # When empty, falls back to GITHUB_REPOSITORY. External repos should set this to
-          # "ROCm/TheRock" to reuse TheRock's prebuilt artifacts.
-          STAGE_REUSE_BASELINE_REPOSITORY: ${{ inputs.stage_reuse_baseline_repository }}
+          # For cross-repo artifact reuse, use repository input (defaults to GITHUB_REPOSITORY).
+          # External repos set repository to "ROCm/TheRock" to reuse TheRock's prebuilt artifacts.
+          THEROCK_REPOSITORY: ${{ inputs.repository }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config

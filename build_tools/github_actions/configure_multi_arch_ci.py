@@ -259,7 +259,7 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
-            baseline_repository=os.environ.get("STAGE_REUSE_BASELINE_REPOSITORY", ""),
+            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
         )
 
 
