@@ -58,7 +58,7 @@ THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 # Set up ROCm/HIP environment
 environ_vars["ROCM_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["HIP_DEVICE_LIB_PATH"] = str(
-    OUTPUT_ARTIFACTS_PATH / "lib/llvm/amdgcn/bitcode/"
+    OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "amdgcn" / "bitcode"
 )
 environ_vars["HIP_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["HIP_PLATFORM"] = "amd"
