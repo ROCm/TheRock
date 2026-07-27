@@ -33,7 +33,9 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
+def run_command(
+    args: List[str | Path], cwd: Optional[Path] = None, env: Optional[dict] = None
+) -> None:
     args = [str(arg) for arg in args]
     if cwd is None:
         cwd = Path.cwd()
@@ -49,6 +51,7 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
             text=True,
             check=False,
             stdin=subprocess.DEVNULL,
+            env=env,
         )
         log(proc.stdout.rstrip())
     except FileNotFoundError:
@@ -60,6 +63,7 @@ def run_command_with_search(
     command: str,
     args: List[str],
     extra_command_search_paths: List[Path],
+    env: Optional[dict] = None,
 ) -> None:
     """
     Run a command, searching in extra paths first, then PATH.
@@ -77,14 +81,14 @@ def run_command_with_search(
         candidate = base / command
         if candidate.exists():
             log(f"\n=== {label} ===")
-            run_command([candidate] + args)
+            run_command([candidate] + args, env=env)
             return
 
     # Then fall back to PATH
     resolved = shutil.which(command)
     if resolved:
         log(f"\n=== {label} ===")
-        run_command([resolved] + args)
+        run_command([resolved] + args, env=env)
         return
 
     # Nothing found
@@ -97,6 +101,17 @@ def run_sanity(os_name: str) -> None:
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
     bin_dir = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
 
+    # Set up environment with LD_LIBRARY_PATH for newly built libraries
+    env = os.environ.copy()
+    if os_name.lower() != "windows":
+        lib_dir = bin_dir.parent / "lib"
+        if lib_dir.exists():
+            existing_ld_path = env.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = (
+                f"{lib_dir}:{existing_ld_path}" if existing_ld_path else str(lib_dir)
+            )
+            log(f"=== Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']} ===\n")
+
     log("=== Sanity check: driver / GPU info ===")
 
     if os_name.lower() == "windows":
@@ -106,6 +121,7 @@ def run_sanity(os_name: str) -> None:
             command="hipInfo.exe",
             args=[],
             extra_command_search_paths=[bin_dir],
+            env=env,
         )
     else:
         # Linux: amd-smi static + rocminfo
@@ -116,18 +132,21 @@ def run_sanity(os_name: str) -> None:
                 command="amd-smi",
                 args=["static"],
                 extra_command_search_paths=[bin_dir],
+                env=env,
             )
         run_command_with_search(
             label="rocminfo",
             command="rocminfo",
             args=[],
             extra_command_search_paths=[bin_dir],
+            env=env,
         )
         run_command_with_search(
             label="Kernel version",
             command="uname",
             args=["-r"],
             extra_command_search_paths=[bin_dir],
+            env=env,
         )
 
     log("\n=== End of sanity check ===")
