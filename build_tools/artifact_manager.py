@@ -954,12 +954,7 @@ def do_copy(args: argparse.Namespace):
     target_families = parse_target_families(args)
 
     # Create source and dest backends
-    # --source-repository flag takes precedence, then THEROCK_SOURCE_REPOSITORY env var
-    source_repository = (
-        getattr(args, "source_repository", None)
-        or os.environ.get("THEROCK_SOURCE_REPOSITORY")
-        or None
-    )
+    source_repository = args.source_repository or None
     source_backend = _create_source_backend(
         source_run_id=args.source_run_id,
         platform=args.platform,
@@ -1294,9 +1289,9 @@ def main(argv: Optional[List[str]] = None):
     copy_parser.add_argument(
         "--source-repository",
         type=str,
-        default="",
-        help="GitHub repository for source-run-id in 'owner/repo' format. "
-        "Falls back to THEROCK_SOURCE_REPOSITORY env var, then current repo.",
+        default=os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
+        help="GitHub repository for source-run-id in 'owner/repo' format "
+        "(default: GITHUB_REPOSITORY or 'ROCm/TheRock').",
     )
     copy_parser.add_argument(
         "--stage",
