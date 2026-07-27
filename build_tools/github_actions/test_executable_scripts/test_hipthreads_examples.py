@@ -123,7 +123,7 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
     artifact is TARGET_NEUTRAL: libhipthreads.a is arch-independent, whereas an
     example executable embeds device code for a specific gfx arch. Pre-building the
     examples would therefore make the artifact target-specific (per-arch binaries).
-    Tracked for future releases: once hipThreads ships a shared library, move example 
+    Tracked for future releases: once hipThreads ships a shared library, move example
     compilation into the build stage as a target-specific test artifact.
     """
     source_dir = EXAMPLES_ROOT / example["subdir"]
@@ -227,9 +227,7 @@ def _dump_tail(path: Path, lines: int = 40) -> None:
 
 
 if OUTPUT_ARTIFACTS_DIR is None or THEROCK_BIN_DIR is None:
-    raise EnvironmentError(
-        "OUTPUT_ARTIFACTS_DIR and THEROCK_BIN_DIR must both be set."
-    )
+    raise EnvironmentError("OUTPUT_ARTIFACTS_DIR and THEROCK_BIN_DIR must both be set.")
 
 OUTPUT_ARTIFACTS_PATH = Path(OUTPUT_ARTIFACTS_DIR).resolve()
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
