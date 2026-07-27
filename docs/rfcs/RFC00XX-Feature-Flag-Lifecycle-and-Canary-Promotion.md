@@ -106,8 +106,8 @@ runtime registry default) rather than a branch override.
 | Branch-prefix routing exists for `release/therock-*` branches (push-triggered postsubmit), declared in the workflow `on.push.branches` list.                                                                                                                                                                       | `.github/workflows/multi_arch_ci.yml`                                                          |
 | Data-driven matrix: families by platforms by build_variants; tiers presubmit within postsubmit within nightly.                                                                                                                                                                                                     | `configure_multi_arch_ci.py`, `amdgpu_family_matrix.py`                                        |
 | CI controls: PR labels (`ci:skip`, `ci:run-all-archs`, `test_filter:<…>`, `test:<proj>`), `workflow_dispatch` inputs including `prebuilt_stages` and `baseline_run_id`; the `build_variant` environment value selects release, asan, or tsan.                                                                      | `docs/development/ci_behavior_manipulation.md`                                                 |
-| `ci_weekly.yml` is a work-in-progress placeholder: a placeholder cron `0 3 * * 0` is commented out, with a no-op `echo "Skipped"` job. This is the reserved automated-promotion slot; the chosen period and schedule are to be determined (see cadence).                                                           | `.github/workflows/ci_weekly.yml`                                                              |
-| `ci_nightly.yml` runs daily at `0 02 * * *` via `schedule` (plus manual `workflow_dispatch`). GitHub `schedule` crons run only on the default branch (`main`), so the scheduled nightly cannot run on canary.                                                                                                      | `.github/workflows/ci_nightly.yml`                                                             |
+| There is no `ci_weekly.yml` in the tree today; the older `ci.yml` family (including the weekly and nightly workflows) was removed in the multi-arch migration. This RFC proposes `ci_weekly.yml` as the automated-promotion slot; the chosen period and schedule are to be determined (see cadence).               | `.github/workflows/ci_weekly.yml`                                                              |
+| There is no dedicated `ci_nightly.yml` in the tree today (removed in the multi-arch migration). The design constraint still holds: GitHub `schedule` crons run only on the default branch (`main`), so a scheduled nightly cannot run on canary.                                                                   | `.github/workflows/ci_nightly.yml`                                                             |
 | Release channels are stable, prerelease, nightly, dev, and dev-builds; promotion today is artifact-level (RC to final), not branch to branch.                                                                                                                                                                      | `docs/packaging/versioning.md`                                                                 |
 | `latest_good.json` is a single global symlink to the most-recent fully-passing nightly (RFC0011 Quartz). It tracks `main` and nightly health; there is no per-branch canary equivalent today.                                                                                                                      | RFC0011                                                                                        |
 | `.github/CODEOWNERS` does not currently cover `FLAGS.cmake`, `configure_multi_arch_ci.py`, or `ci_weekly.yml`.                                                                                                                                                                                                     | `.github/CODEOWNERS`                                                                           |
@@ -506,9 +506,8 @@ that independent flips can proceed past a bad one is not made.
 ### Promotion cadence (fixed and automated; period to be determined)
 
 Promotion runs on a fixed, automated schedule; this is the only settled cadence decision. The period
-(weekly, bi-weekly, or monthly) is open for reviewers, as is the exact slot. The job lives in the
-reserved `ci_weekly.yml` slot (which today carries a commented-out placeholder cron `0 3 * * 0`; the
-chosen period is to be determined). On each scheduled fire, the job opens the promotion PR; a release
+(weekly, bi-weekly, or monthly) is open for reviewers, as is the exact slot. The job lives in a
+new, proposed `ci_weekly.yml` workflow (the chosen period is to be determined). On each scheduled fire, the job opens the promotion PR; a release
 manager (not the flip author) reviews and merges it; the frequent rebase then keeps canary current,
 and the next batch of flip PRs is merged in to soak, with no manual reset.
 
@@ -631,61 +630,80 @@ its own leg shape to and from the normalized dict:
 import copy
 import re
 
-_LABEL_RE = re.compile(r"^flag:(?P<name>[A-Za-z0-9_]+):(?P<state>both|on|off)$")
+# Labels are matched case-insensitively and the flag name is normalized to
+# upper-case, because the orchestrators lowercase PR labels (for example,
+# TheRock's configure_multi_arch_ci.py) while CMake and env flag names are
+# upper-case (THEROCK_FLAG_<NAME>, ROCM_FEATURE_<NAME>).
+_LABEL_RE = re.compile(
+    r"^flag:(?P<name>[A-Za-z0-9_]+):(?P<state>both|on|off)$", re.IGNORECASE
+)
 
 
 def parse_flag_labels(pr_labels):
-    """Return {FLAG_NAME: 'both'|'on'|'off'} from PR labels."""
+    """Return {FLAG_NAME: 'both'|'on'|'off'} from PR labels (name upper-cased)."""
     out = {}
     for label in pr_labels:
         m = _LABEL_RE.match(label.strip())
         if m:
-            out[m.group("name")] = m.group("state")
+            out[m.group("name").upper()] = m.group("state").lower()
     return out
+
+
+def _cmake_without_flag(cmake_options, name):
+    """Drop any pre-existing -DTHEROCK_FLAG_<NAME>=... so a leg starts clean."""
+    prefix = f"-DTHEROCK_FLAG_{name}="
+    return [opt for opt in cmake_options if not opt.startswith(prefix)]
 
 
 def expand_flag_both_state(legs, pr_labels, runtime_flags=frozenset()):
     """Expand legs to cover requested flag states.
 
-    Build-time flag (default): duplicate each leg; the ON copy appends
-      -DTHEROCK_FLAG_<NAME>=ON. Cost = 2 builds.
-    Runtime flag (NAME in runtime_flags): keep ONE build; give it two test_env
-      entries, {} and {"ROCM_FEATURE_<NAME>": "1"}. Cost = 1 build, 2 test runs.
+    Build-time flag (default): duplicate each leg; the OFF copy strips any
+      pre-existing -DTHEROCK_FLAG_<NAME>=..., and the ON copy sets it ON, so OFF
+      stays genuinely OFF even if the base leg already set the flag. Cost = 2
+      builds.
+    Runtime flag (NAME in runtime_flags): keep ONE build and run the test target
+      once per test_env entry, overlaying ROCM_FEATURE_<NAME>=0 then =1 onto each
+      existing entry (an explicit 0 forces OFF even when the runtime default is
+      ON, the canary case). Cost = 1 build, 2 test runs.
 
-    Pure: never mutates `legs`; returns a new list.
+    Pure: never mutates `legs`; always returns a new, deep-copied list.
     """
     flags = parse_flag_labels(pr_labels)
-    if not flags:
-        return legs
-
     result = [copy.deepcopy(leg) for leg in legs]
+    if not flags:
+        return result
+
     for name, state in flags.items():
         if name in runtime_flags:
-            # One build; the test step runs once per test_env entry.
-            off_env, on_env = {}, {f"ROCM_FEATURE_{name}": "1"}
-            envs_for_state = {
-                "both": [off_env, on_env],
-                "on": [on_env],
-                "off": [off_env],
-            }[state]
+            values = {"both": ["0", "1"], "on": ["1"], "off": ["0"]}[state]
             for leg in result:
-                leg["test_env"] = envs_for_state
+                base_envs = leg.get("test_env") or [{}]
+                leg["test_env"] = [
+                    {**env, f"ROCM_FEATURE_{name}": value}
+                    for value in values
+                    for env in base_envs
+                ]
             continue
 
-        # Build-time flag: expand into separate legs.
+        # Build-time flag: expand into separate legs, each starting clean.
         expanded = []
         for leg in result:
             off_leg = copy.deepcopy(leg)
             on_leg = copy.deepcopy(leg)
-            on_leg["cmake_options"].append(f"-DTHEROCK_FLAG_{name}=ON")
-            on_leg["flag_state_label"] = f"{name}=ON"
+            off_leg["cmake_options"] = _cmake_without_flag(
+                off_leg["cmake_options"], name
+            )
+            on_leg["cmake_options"] = _cmake_without_flag(
+                on_leg["cmake_options"], name
+            ) + [f"-DTHEROCK_FLAG_{name}=ON"]
             off_leg["flag_state_label"] = f"{name}=OFF"
-            if state == "both":
-                expanded += [off_leg, on_leg]
-            elif state == "on":
-                expanded += [on_leg]
-            else:  # off
-                expanded += [off_leg]
+            on_leg["flag_state_label"] = f"{name}=ON"
+            expanded += {
+                "both": [off_leg, on_leg],
+                "on": [on_leg],
+                "off": [off_leg],
+            }[state]
         result = expanded
     return result
 ```
@@ -729,7 +747,7 @@ dict.
 
 ### Promotion job (implemented in the reserved slot)
 
-Implement the automated promotion job in `ci_weekly.yml` (replacing the no-op; cron and period to be
+Implement the automated promotion job in a new `ci_weekly.yml` workflow (cron and period to be
 determined per cadence) so that, on each scheduled fire, it:
 
 1. Reads the canary soak signal for the soak cycle (minimum: canary builds and tests green across the
@@ -745,7 +763,7 @@ determined per cadence) so that, on each scheduled fire, it:
 **RBAC and CODEOWNERS (new; not present today).** `.github/CODEOWNERS` does not currently cover
 `FLAGS.cmake`, `configure_multi_arch_ci.py`, or `ci_weekly.yml`. P1 adds CODEOWNERS entries naming a
 release-manager group (for example, `@ROCm/TheRock-release-managers`) for the flag registries
-(`FLAGS.cmake`, `RUNTIME_FLAGS.cmake`), the promotion workflow (`.github/workflows/ci_weekly.yml`),
+(`FLAGS.cmake`, `RUNTIME_FLAGS.cmake`), the proposed promotion workflow (`.github/workflows/ci_weekly.yml`),
 and `configure_multi_arch_ci.py`. The promotion PR must be approved by someone other than the flip author.
 
 **Scope of the gate: flips, not new flags.** The CODEOWNERS gate exists to protect default flips on
@@ -1035,7 +1053,7 @@ per-repo reimplementation, no drift.
 | **P1: metadata, hygiene, and RBAC**                                  | Extend `therock_declare_flag` with OWNER, CREATED, EXPIRES, and STAGE; surface them in `therock_report_flags()` and the manifest; add an expiry warning and non-mainline `ISSUE` enforcement; fold `THEROCK_FLAG_INCLUDE_PROFILER` into the registry; add `.github/CODEOWNERS` entries (release-manager group) for `FLAGS.cmake`, `RUNTIME_FLAGS.cmake`, `ci_weekly.yml`, and `configure_multi_arch_ci.py`; update `docs/development/flags.md`.                                                                                                                                                                                                                                                                                                         |
 | **P2: generic runtime contract**                                     | `RUNTIME_FLAGS.cmake` plus `therock_declare_runtime_flag` plus `therock_finalize_runtime_flags()`; emit the shared `share/therock/feature_flags.json` from the `base/aux-overlay` step alongside the manifest (it ships automatically via aux-overlay's existing `**/*` catch-all, with no toml change); add `runtime_flags` to the manifest; document the reader contract (location, `dladdr` discovery, `ROCM_FEATURE_*` precedence) and publish the example reference `rocm_feature_flags.h` (copied-in, not shipped or linked) with a standalone-build fallback note; the `rocm-feature-flags --list` helper; wire the first instantiation (hipDNN at `validateBeforeAdding`, using its own consumer).                                              |
 | **P3: canary branch, team-owned both-state CI, and canary currency** | Create `canary` (soak-only) and add it to the `on.push.branches` list in `.github/workflows/multi_arch_ci.yml` so that CI runs on it; document the soak convention (the current batch flipped ON, else matching main); add the shared helper `build_tools/github_actions/flag_both_state.py` (label parsing plus OFF/ON leg expansion; runtime equals one build and two test runs, build-time equals two builds, scoped); wire it into TheRock's `configure_multi_arch_ci.py`; land thin call-site adoption PRs in rocm-libraries and rocm-systems (`.github/scripts/therock_configure_ci.py` plus `therock_matrix.py`) that call the same helper; add the scheduled frequent rebase of `canary` onto `main` (only difference being the flag defaults). |
-| **P4: automated promotion job**                                      | Implement `ci_weekly.yml` (replacing the no-op; cron and period to be determined): the canary soak-signal gate plus the promotion PR (release-manager-merged, not auto-merged) plus the flag-debt audit (the flag's gated code is already on `main` by the rebase model).                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **P4: automated promotion job**                                      | Create `ci_weekly.yml` (new; cron and period to be determined): the canary soak-signal gate plus the promotion PR (release-manager-merged, not auto-merged) plus the flag-debt audit (the flag's gated code is already on `main` by the rebase model).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **P5: canary soak signal (optional deepening)**                      | A new per-branch canary validation job (`workflow_dispatch` or matrix checking out canary) plus a Quartz-emitted per-branch `latest_good@canary.json`, if the builds-and-tests-green minimum is judged insufficient.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **P6: build-time both-state build dimension (optional and scoped)**  | A build dimension in `amdgpu_family_matrix.py` and `configure_multi_arch_ci.py` for build-time flags plus `prebuilt_stages` amortization, beyond the label wiring in P3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **P7: adopt and retire**                                             | Migrate the first real flags (SDPA v2, the new backend); run the first full train; remove the first `default-on` flag to validate retirement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -1071,7 +1089,7 @@ auto-included dependency, and standalone builds fall back to compile-time defaul
 the first adopter, using its own `EngineOverrideConfig` and `validateBeforeAdding` path.
 
 **How a flag is promoted.** A fixed, automated canary-to-mainline train (period to be
-determined) runs in the reserved `ci_weekly.yml` slot. Canary is a soak-and-staging branch: the
+determined) runs in a new `ci_weekly.yml` workflow. Canary is a soak-and-staging branch: the
 team flips the candidate default(s) to ON and soaks for one cycle (minimum signal: canary builds
 and tests green; RFC0011's `latest_good.json` remains the `main` and nightly signal). On a green
 soak the automated job opens a promotion PR that a release manager — not the flip author —
@@ -1110,7 +1128,7 @@ promote via the release-manager-merged PR; revert with `ROCM_FEATURE_<NAME>=0`.
 - RFC0008: Multi-Architecture Packaging with Kpack (`docs/rfcs/RFC0008-Multi-Arch-Packaging.md`); build-time exemplar.
 - RFC0011: Quartz, Central CI/CD Data Hub (`latest_good.json` green signal).
 - TheRock: `FLAGS.cmake`, `cmake/therock_flag_utils.cmake`, `BRANCH_FLAGS.cmake`, `build_tools/generate_therock_manifest.py`, `docs/development/flags.md`.
-- TheRock CI and cross-repo: `build_tools/github_actions/configure_multi_arch_ci.py`, `build_tools/github_actions/configure_ci_path_filters.py`, `build_tools/github_actions/amdgpu_family_matrix.py`, the proposed `build_tools/github_actions/flag_both_state.py` (shared both-state helper), `.github/workflows/multi_arch_ci.yml`, `.github/workflows/{ci_weekly,ci_nightly,bump_submodules}.yml`, `build_tools/github_actions/bump_automation.py`, `.github/CODEOWNERS`, `docs/development/ci_behavior_manipulation.md`, `docs/packaging/versioning.md`.
+- TheRock CI and cross-repo: `build_tools/github_actions/configure_multi_arch_ci.py`, `build_tools/github_actions/configure_ci_path_filters.py`, `build_tools/github_actions/amdgpu_family_matrix.py`, the proposed `build_tools/github_actions/flag_both_state.py` (shared both-state helper), `.github/workflows/multi_arch_ci.yml`, `.github/workflows/bump_submodules.yml`, the proposed `.github/workflows/ci_weekly.yml`, `build_tools/github_actions/bump_automation.py`, `.github/CODEOWNERS`, `docs/development/ci_behavior_manipulation.md`, `docs/packaging/versioning.md`.
 - Consumer CI orchestrators (both-state adoption call sites): `rocm-libraries/.github/scripts/therock_configure_ci.py` and `therock_matrix.py`; `rocm-systems/.github/scripts/therock_configure_ci.py` and `therock_matrix.py`.
 - TheRock artifacts: `base/artifact.toml` (the `base/aux-overlay` component's `**/*` catch-all that ships `share/therock/**` automatically), `base/aux-overlay/CMakeLists.txt` (where the manifest, and the proposed `feature_flags.json`, is generated and installed to `share/therock`), `build_tools/_therock_utils/artifact_builder.py` (the default `lib` component is `.so`-only, relevant only to opt-in per-library override files), `docs/development/artifacts.md`, `ml-libs/artifact-hipdnn.toml`.
 - hipDNN runtime (one instantiation): `backend/src/heuristics/config/EngineOverrideConfig.hpp`, `backend/src/plugin/{PluginCore,EnginePluginManager}.hpp`, `backend/src/PlatformUtils.linux.cpp`, `projects/hipdnn/data_sdk/include/hipdnn_data_sdk/utilities/PlatformUtils.linux.hpp`.
