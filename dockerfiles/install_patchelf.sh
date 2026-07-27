@@ -26,10 +26,10 @@ curl --silent --fail --show-error --location \
     "${SOURCE_URL}" \
     --output patchelf.tar.gz
 
-mkdir -p src
-tar -xzf patchelf.tar.gz --strip-components=1 -C src
+mkdir -p patchelf
+tar -xzf patchelf.tar.gz --strip-components=1 -C patchelf
 
-cd src
+cd patchelf
 BASE_VERSION="$(cat version)"
 LOCAL_VERSION="${BASE_VERSION}+therock.${SHORT_GIT_REF}"
 printf "%s\n" "${LOCAL_VERSION}" > version
