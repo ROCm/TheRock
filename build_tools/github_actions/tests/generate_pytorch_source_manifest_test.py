@@ -39,14 +39,14 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
         }
         related_commits = "\n".join(
             [
-                "ubuntu|pytorch|torchaudio|release/2.10|"
+                "ubuntu|pytorch|torchaudio|release/2.11|"
                 f"{shas['audio']}|https://github.com/pytorch/audio",
-                "ubuntu|pytorch|torchvision|release/2.10|"
+                "ubuntu|pytorch|torchvision|release/2.11|"
                 f"{shas['vision']}|https://github.com/pytorch/vision",
             ]
         )
         resolves = {
-            ("ROCm/pytorch", "release/2.10"): shas["pytorch"],
+            ("ROCm/pytorch", "release/2.11"): shas["pytorch"],
         }
         files = {
             ("ROCm/pytorch", "related_commits", shas["pytorch"]): related_commits,
@@ -61,7 +61,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
     ) -> None:
         pytorch_sha = "1" * 40
         resolves = {
-            ("ROCm/pytorch", "release/2.10"): pytorch_sha,
+            ("ROCm/pytorch", "release/2.11"): pytorch_sha,
         }
         files = {
             ("ROCm/pytorch", "related_commits", pytorch_sha): related_commits,
@@ -70,7 +70,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
         with self._patch_github_api(resolves=resolves, files=files):
             with self.assertRaisesRegex(ValueError, pattern):
                 m.generate_manifest(
-                    pytorch_git_ref="release/2.10",
+                    pytorch_git_ref="release/2.11",
                     rocm_version="7.13.0a20260501",
                     version_suffix="+rocm7.13.0a20260501",
                     platform="linux",
@@ -90,22 +90,22 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
         }
         related_commits = "\n".join(
             [
-                "ubuntu|pytorch|torchaudio|release/2.10|"
+                "ubuntu|pytorch|torchaudio|release/2.11|"
                 f"{shas['audio']}|https://github.com/pytorch/audio",
-                "centos|pytorch|torchaudio|release/2.10|"
+                "centos|pytorch|torchaudio|release/2.11|"
                 f"{shas['audio']}|https://github.com/pytorch/audio",
-                "ubuntu|pytorch|torchvision|release/2.10|"
+                "ubuntu|pytorch|torchvision|release/2.11|"
                 f"{shas['vision']}|https://github.com/pytorch/vision",
-                "centos|pytorch|torchvision|release/2.10|"
+                "centos|pytorch|torchvision|release/2.11|"
                 f"{shas['vision']}|https://github.com/pytorch/vision",
-                "ubuntu|pytorch|apex|release/2.10|"
+                "ubuntu|pytorch|apex|release/2.11|"
                 f"{shas['apex']}|https://github.com/ROCm/apex",
-                "centos|pytorch|apex|release/2.10|"
+                "centos|pytorch|apex|release/2.11|"
                 f"{shas['apex']}|https://github.com/ROCm/apex",
             ]
         )
         resolves = {
-            ("ROCm/pytorch", "release/2.10"): shas["pytorch"],
+            ("ROCm/pytorch", "release/2.11"): shas["pytorch"],
         }
         files = {
             ("ROCm/pytorch", "related_commits", shas["pytorch"]): related_commits,
@@ -127,7 +127,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
 
         with self._patch_github_api(resolves=resolves, files=files):
             manifest = m.generate_manifest(
-                pytorch_git_ref="release/2.10",
+                pytorch_git_ref="release/2.11",
                 rocm_version="7.13.0a20260501",
                 version_suffix="+rocm7.13.0a20260501",
                 platform="linux",
@@ -149,7 +149,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                 "pytorch": m.GitSourceInfo(
                     repo="https://github.com/ROCm/pytorch",
                     commit=shas["pytorch"],
-                    branch="release/2.10",
+                    branch="release/2.11",
                     version="2.10.0+rocm7.13.0a20260501",
                 ),
                 "pytorch_audio": m.GitSourceInfo(
@@ -184,7 +184,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
     def test_stable_manifest_requires_related_commit_pins(self) -> None:
         pytorch_sha = "1" * 40
         resolves = {
-            ("ROCm/pytorch", "release/2.10"): pytorch_sha,
+            ("ROCm/pytorch", "release/2.11"): pytorch_sha,
         }
         files = {
             ("ROCm/pytorch", "related_commits", pytorch_sha): "",
@@ -193,7 +193,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
         with self._patch_github_api(resolves=resolves, files=files):
             with self.assertRaisesRegex(ValueError, "torchaudio"):
                 m.generate_manifest(
-                    pytorch_git_ref="release/2.10",
+                    pytorch_git_ref="release/2.11",
                     rocm_version="7.13.0a20260501",
                     version_suffix="+rocm7.13.0a20260501",
                     platform="linux",
@@ -206,7 +206,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
     def test_pytorch_only_manifest_does_not_fetch_related_commits(self) -> None:
         pytorch_sha = "1" * 40
         resolves = {
-            ("ROCm/pytorch", "release/2.10"): pytorch_sha,
+            ("ROCm/pytorch", "release/2.11"): pytorch_sha,
         }
         files = {
             ("ROCm/pytorch", "version.txt", pytorch_sha): "2.10.0\n",
@@ -214,7 +214,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
 
         with self._patch_github_api(resolves=resolves, files=files):
             manifest = m.generate_manifest(
-                pytorch_git_ref="release/2.10",
+                pytorch_git_ref="release/2.11",
                 rocm_version="7.13.0a20260501",
                 version_suffix="+rocm7.13.0a20260501",
                 platform="linux",
@@ -230,7 +230,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                 "pytorch": m.GitSourceInfo(
                     repo="https://github.com/ROCm/pytorch",
                     commit=pytorch_sha,
-                    branch="release/2.10",
+                    branch="release/2.11",
                     version="2.10.0+rocm7.13.0a20260501",
                 ),
                 "therock": m.GitSourceInfo(
@@ -247,7 +247,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
         with mock.patch.object(m, "gha_resolve_git_ref") as resolve_ref:
             with self.assertRaisesRegex(ValueError, unknown_project):
                 m.generate_manifest(
-                    pytorch_git_ref="release/2.10",
+                    pytorch_git_ref="release/2.11",
                     rocm_version="7.13.0a20260501",
                     version_suffix="+rocm7.13.0a20260501",
                     platform="linux",
@@ -375,7 +375,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
 
         with self._patch_github_api(resolves=resolves, files=files):
             manifest = m.generate_manifest(
-                pytorch_git_ref="release/2.10",
+                pytorch_git_ref="release/2.11",
                 rocm_version="7.13.0a20260501",
                 version_suffix="+rocm7.13.0a20260501",
                 platform="windows",
@@ -445,7 +445,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
     def test_windows_release_manifest_triton_opt_in_errors(self) -> None:
         pytorch_sha = "1" * 40
         resolves = {
-            ("ROCm/pytorch", "release/2.10"): pytorch_sha,
+            ("ROCm/pytorch", "release/2.11"): pytorch_sha,
         }
         files = {}
 
@@ -455,7 +455,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                 "Windows Triton.*PyTorch nightly",
             ):
                 m.generate_manifest(
-                    pytorch_git_ref="release/2.10",
+                    pytorch_git_ref="release/2.11",
                     rocm_version="7.13.0a20260501",
                     version_suffix="+rocm7.13.0a20260501",
                     platform="windows",
@@ -474,7 +474,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
             pytorch_sha = "1" * 40
             triton_sha = "2" * 40
             pytorch_repo = "ROCm/pytorch"
-            pytorch_ref = "release/2.10"
+            pytorch_ref = "release/2.11"
 
             # Mock GitHub ref resolution for the requested PyTorch ref.
             resolves = {
@@ -557,7 +557,7 @@ class GeneratePyTorchSourceManifestTest(unittest.TestCase):
                         "--output",
                         str(Path(tmp) / "manifest.json"),
                         "--pytorch-git-refs",
-                        "release/2.10 nightly",
+                        "release/2.11 nightly",
                     ]
                 )
 
