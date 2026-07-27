@@ -1,127 +1,153 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Builds + tests UCCL wheels. The build job is delegated to the reusable
-# build_linux_uccl_wheels.yml workflow, which runs on a bare runner (no
-# container) because UCCL's upstream ./build.sh uses Docker-in-Docker.
-# The test job runs inside no_rocm_image_ubuntu24_04 on a multi-GPU runner,
-# downloads the wheel artifact produced by the build, and runs smoke +
-# intranode EP tests.
+# Builds one multi-architecture UCCL wheel, tests it on an 8x gfx942 runner,
+# and optionally publishes that exact tested artifact to the multi-arch index.
 
 name: Test UCCL Wheels
 
 on:
-  # TODO: Remove push trigger before merging to main.
+  # TODO: Remove this push trigger before merging to main.
   push:
     branches:
       - users/adityakankariya/uccl-tests
     paths:
-      - .github/workflows/test_uccl_wheels.yml
       - .github/workflows/build_linux_uccl_wheels.yml
+      - .github/workflows/test_uccl_wheels.yml
       - external-builds/uccl/**
+      - build_tools/github_actions/publish_uccl_to_release_bucket.py
+      - build_tools/github_actions/tests/publish_uccl_to_release_bucket_test.py
+
+  workflow_call:
+    inputs:
+      build_runs_on:
+        description: Runner label for the Docker-based build job.
+        type: string
+        default: azure-linux-scale-rocm
+      test_runs_on:
+        description: Multi-GPU runner label for UCCL EP tests.
+        type: string
+        default: linux-gfx942-8gpu-ossci-rocm
+      python_version:
+        type: string
+        default: "3.12"
+      rocm_arches:
+        description: Comma-separated concrete GPU targets compiled into the wheel.
+        type: string
+        default: gfx90a,gfx942,gfx950,gfx1250
+      test_rocm_arch:
+        description: Concrete GPU target used by the test runner.
+        type: string
+        default: gfx942
+      rocm_index_url:
+        description: ROCm multi-architecture Python package index.
+        type: string
+        default: https://rocm.prereleases.amd.com/whl-multi-arch/
+      torch_version:
+        description: Exact Torch version compatible with the ROCm index.
+        type: string
+        default: 2.12.0+rocm7.14.0rc3
+      uccl_git_ref:
+        description: UCCL commit, tag, or branch to build and test.
+        type: string
+        default: f071f2e31239cd7d673bf2c9369b5cebe1b98457
+      publish_to_s3:
+        description: Publish the tested wheel to S3.
+        type: boolean
+        default: false
+      release_type:
+        description: Destination release bucket.
+        type: string
+        default: dev
+      repository:
+        description: Repository to checkout; defaults to github.repository.
+        type: string
+      ref:
+        description: TheRock branch, tag, or SHA to checkout.
+        type: string
+
   workflow_dispatch:
     inputs:
-      amdgpu_family:
-        description: GPU family to test
-        required: true
-        type: string
-        default: "gfx94X-dcgpu"
       build_runs_on:
-        description: Runner label for the build job (needs Docker on host, no GPU required)
+        description: Runner label for the Docker-based build job.
         required: true
         type: string
-        default: "azure-linux-scale-rocm"
+        default: azure-linux-scale-rocm
       test_runs_on:
-        description: Runner label for the test job (must have multiple GPUs)
+        description: Multi-GPU runner label for UCCL EP tests.
         required: true
         type: string
-        default: "linux-gfx942-8gpu-ossci-rocm"
-      package_index_url:
-        description: Base Python package index URL (without GPU family subdir)
-        required: true
-        type: string
-        default: "https://rocm.prereleases.amd.com/whl"
+        default: linux-gfx942-8gpu-ossci-rocm
       python_version:
         required: true
         type: string
         default: "3.12"
+      rocm_arches:
+        description: Comma-separated concrete GPU targets compiled into the wheel.
+        required: true
+        type: string
+        default: gfx90a,gfx942,gfx950,gfx1250
+      test_rocm_arch:
+        description: Concrete GPU target used by the test runner.
+        required: true
+        type: string
+        default: gfx942
+      rocm_index_url:
+        description: ROCm multi-architecture Python package index.
+        required: true
+        type: string
+        default: https://rocm.prereleases.amd.com/whl-multi-arch/
       torch_version:
-        description: "torch version to install (e.g. '2.7.1+rocm7.10.0a20251120'). Leave empty for latest."
-        required: false
+        description: Exact Torch version compatible with the ROCm index.
+        required: true
         type: string
-        default: ""
+        default: 2.12.0+rocm7.14.0rc3
       uccl_git_ref:
-        description: UCCL ref to checkout test sources from (e.g. "main")
-        type: string
-        default: "main"
-      pytorch_rocm_arch:
-        description: >
-          Explicit PYTORCH_ROCM_ARCH for the UCCL build (e.g. "gfx942").
-          Leave empty to let build_prod_wheels.py derive it from amdgpu_family.
-        type: string
-        default: ""
-
-  workflow_call:
-    inputs:
-      amdgpu_family:
+        description: UCCL commit, tag, or branch to build and test.
         required: true
         type: string
-      build_runs_on:
+        default: f071f2e31239cd7d673bf2c9369b5cebe1b98457
+      publish_to_s3:
+        description: Publish the tested wheel to S3 after all tests pass.
         required: true
-        type: string
-      test_runs_on:
+        type: boolean
+        default: false
+      release_type:
+        description: Destination S3 release bucket (manual runs use dev).
         required: true
-        type: string
-      package_index_url:
-        required: true
-        type: string
-      python_version:
-        required: true
-        type: string
-      torch_version:
-        required: false
-        type: string
-        default: ""
-      uccl_git_ref:
-        type: string
-        default: "main"
-      pytorch_rocm_arch:
-        type: string
-        default: ""
-      repository:
-        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
-        type: string
-      ref:
-        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
-        type: string
+        type: choice
+        options:
+          - dev
+        default: dev
 
 permissions:
   contents: read
 
-run-name: Test UCCL (${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}, ${{ inputs.uccl_git_ref || 'main' }}, ${{ inputs.test_runs_on || 'linux-gfx942-8gpu-ossci-rocm' }})
+run-name: Test UCCL (py${{ inputs.python_version || '3.12' }}, ${{ inputs.test_runs_on || 'linux-gfx942-8gpu-ossci-rocm' }})
 
 jobs:
   build_wheel:
     name: Build UCCL wheel
     uses: ./.github/workflows/build_linux_uccl_wheels.yml
     with:
-      amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
       build_runs_on: ${{ inputs.build_runs_on || (github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04') }}
-      package_index_url: ${{ inputs.package_index_url || 'https://rocm.prereleases.amd.com/whl' }}
       python_version: ${{ inputs.python_version || '3.12' }}
-      uccl_git_ref: ${{ inputs.uccl_git_ref || 'main' }}
-      pytorch_rocm_arch: ${{ inputs.pytorch_rocm_arch || '' }}
-      artifact_name: uccl-wheel-${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}-py${{ inputs.python_version || '3.12' }}
+      rocm_arches: ${{ inputs.rocm_arches || 'gfx90a,gfx942,gfx950,gfx1250' }}
+      rocm_index_url: ${{ inputs.rocm_index_url || 'https://rocm.prereleases.amd.com/whl-multi-arch/' }}
+      uccl_git_ref: ${{ inputs.uccl_git_ref || 'f071f2e31239cd7d673bf2c9369b5cebe1b98457' }}
+      artifact_name: uccl-wheel-multiarch-py${{ inputs.python_version || '3.12' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
 
   test_wheel:
-    name: Test UCCL | ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
+    name: Test UCCL | ${{ inputs.test_rocm_arch || 'gfx942' }}
     needs: build_wheel
     runs-on: ${{ inputs.test_runs_on || 'linux-gfx942-8gpu-ossci-rocm' }}
+    timeout-minutes: 60
     container:
-      image: ${{ contains(inputs.test_runs_on || 'linux', 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
-      options: --ipc host
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      options: >-
+        --ipc host
         --group-add video
         --device /dev/kfd
         --device /dev/dri
@@ -134,100 +160,134 @@ jobs:
         shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
-      AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-      PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://rocm.prereleases.amd.com/whl' }}
       PYTHON_VERSION: ${{ inputs.python_version || '3.12' }}
-      UCCL_GIT_REF: ${{ inputs.uccl_git_ref || 'main' }}
+      ROCM_INDEX_URL: ${{ inputs.rocm_index_url || 'https://rocm.prereleases.amd.com/whl-multi-arch/' }}
+      TEST_ROCM_ARCH: ${{ inputs.test_rocm_arch || 'gfx942' }}
+      TORCH_VERSION: ${{ inputs.torch_version || '2.12.0+rocm7.14.0rc3' }}
+      UCCL_GIT_REF: ${{ inputs.uccl_git_ref || 'f071f2e31239cd7d673bf2c9369b5cebe1b98457' }}
 
     steps:
       - name: Checkout TheRock
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Set git options
-        run: |
-          git config --global core.longpaths true
-
-      # uccl/ep.abi3.so is dynamically linked against libibverbs / libnl /
-      # libnuma. The wheel build container (AlmaLinux 8 manylinux) had these
-      # via rdma-core-devel/libnl3-devel/numactl-devel, but the test container
-      # (no_rocm_image_ubuntu24_04) ships with none of them, so `import uccl.ep`
-      # fails at runtime with "libibverbs.so.1: cannot open shared object file".
-      # Install the runtime (-no -dev) Ubuntu equivalents.
       - name: Install RDMA runtime libraries
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
             libibverbs1 libnl-3-200 libnl-route-3-200 libnuma1
 
-      - name: Checkout UCCL source (for test scripts)
+      - name: Checkout UCCL source for tests
         run: |
           python external-builds/uccl/uccl_repo.py checkout \
-            --repo-hashtag ${UCCL_GIT_REF}
+            --repo-hashtag "${UCCL_GIT_REF}"
 
       - name: Download UCCL wheel artifact
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build_wheel.outputs.artifact_name }}
           path: uccl-wheels
 
-      - name: List downloaded wheel
+      - name: Create virtual environment and install Torch
         run: |
-          ls -la "${GITHUB_WORKSPACE}/uccl-wheels/"
+          python -m venv "${VENV_DIR}"
+          echo "${VENV_DIR}/bin" >> "${GITHUB_PATH}"
+          "${VENV_DIR}/bin/python" -m pip install --upgrade pip
+          "${VENV_DIR}/bin/python" -m pip install \
+            --index-url "${ROCM_INDEX_URL}" \
+            "torch[device-${TEST_ROCM_ARCH}]==${TORCH_VERSION}"
 
-      - name: Set up virtual environment
+      - name: Install UCCL wheel and test requirements
         run: |
-          TORCH_PKG="torch"
-          if [ -n "${{ inputs.torch_version }}" ]; then
-            TORCH_PKG="torch==${{ inputs.torch_version }}"
-          fi
-          python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages \
-              "${TORCH_PKG}" \
-            --index-url=${PACKAGE_INDEX_URL} \
-            --index-subdir=${AMDGPU_FAMILY} \
-            --activate-in-future-github-actions-steps
-
-      - name: Install UCCL wheel
-        run: |
-          WHEEL_FILE="$(ls "${GITHUB_WORKSPACE}"/uccl-wheels/uccl-*.whl)"
-          if [ -z "${WHEEL_FILE}" ]; then
-            echo "ERROR: No UCCL wheel found in ${GITHUB_WORKSPACE}/uccl-wheels/"
-            ls -la "${GITHUB_WORKSPACE}/uccl-wheels/" || true
+          mapfile -t wheels < <(find "${GITHUB_WORKSPACE}/uccl-wheels" \
+            -maxdepth 1 -type f -name 'uccl-*.whl')
+          if [[ "${#wheels[@]}" -ne 1 ]]; then
+            echo "ERROR: expected exactly one UCCL wheel, found ${#wheels[@]}"
+            find "${GITHUB_WORKSPACE}/uccl-wheels" -maxdepth 1 -type f -print
             exit 1
           fi
-          echo "Installing UCCL wheel: ${WHEEL_FILE}"
-          pip install --extra-index-url "${PACKAGE_INDEX_URL}/${AMDGPU_FAMILY}" \
-            "${WHEEL_FILE}[rocm]"
-
-      - name: Install test requirements
-        run: |
+          python -m pip install --extra-index-url "${ROCM_INDEX_URL}" \
+            "${wheels[0]}[rocm]"
           python -m pip install -r external-builds/uccl/requirements-test.txt
-          pip freeze
+          python -m pip check
+          python -m pip freeze
 
       - name: Runner health status
-        run: |
-          ./build_tools/health_status.py
+        run: ./build_tools/health_status.py
 
       - name: Run rocm-sdk sanity tests
-        run: |
-          rocm-sdk test
+        run: rocm-sdk test
 
       - name: Run UCCL smoke tests
         run: |
-          python ./external-builds/uccl/run_uccl_smoke_tests.py -- \
+          python external-builds/uccl/run_uccl_smoke_tests.py -- \
             --log-cli-level=INFO \
             -v
 
       - name: Run UCCL intranode EP tests
         timeout-minutes: 30
         run: |
-          python ./external-builds/uccl/run_uccl_tests.py \
+          python external-builds/uccl/run_uccl_tests.py \
             --uccl-dir external-builds/uccl/uccl
+
+  publish_wheel:
+    name: Publish tested UCCL wheel to S3
+    if: >-
+      ${{ !cancelled() &&
+          needs.test_wheel.result == 'success' &&
+          inputs.publish_to_s3 == true &&
+          github.repository_owner == 'ROCm' }}
+    needs:
+      - build_wheel
+      - test_wheel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TYPE: ${{ inputs.release_type || 'dev' }}
+
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Download tested UCCL wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build_wheel.outputs.artifact_name }}
+          path: uccl-wheels
+
+      - name: Install publishing requirements
+        run: python -m pip install "boto3>=1.42.79,<1.42.85"
+
+      - name: Configure AWS credentials
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ env.RELEASE_TYPE }}
+
+      - name: Publish UCCL wheel
+        id: publish
+        run: |
+          python build_tools/github_actions/publish_uccl_to_release_bucket.py \
+            --source-dir "${GITHUB_WORKSPACE}/uccl-wheels" \
+            --release-type "${RELEASE_TYPE}"
+
+      - name: Report package index
+        run: |
+          echo "Published UCCL wheel to ${{ steps.publish.outputs.package_index_url }}"

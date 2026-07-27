@@ -66,11 +66,9 @@ def detect_gpu_count() -> int:
 def uccl_ep_available() -> tuple[bool, str]:
     """Return (available, diagnostic_output) for the `uccl.ep` module.
 
-    When uccl.ep is not present the intranode test cannot run and we exit 0
-    with a skip message so CI stays green. The diagnostic includes the full
-    import traceback plus the on-disk contents of the installed uccl/
-    package, so a missing ep.abi3.so vs an unloadable ep.abi3.so (missing
-    DT_NEEDED .so at runtime) can be distinguished without re-running.
+    The diagnostic includes the full import traceback plus the on-disk
+    contents of the installed uccl/ package, so a missing ep.abi3.so can be
+    distinguished from an unloadable extension without re-running.
     """
     # uccl.ep is a torch.cpp_extension. Its DT_NEEDED libs (libtorch.so,
     # libtorch_python.so, libc10.so, libtorch_hip.so) are only on the
@@ -208,12 +206,11 @@ def main(argv: list[str]) -> int:
     if not available:
         print(diag, file=sys.stderr)
         print(
-            "[SKIP] uccl.ep is not available in the installed UCCL wheel. "
-            "Skipping intranode EP tests. See diagnostic above for the "
-            "underlying ImportError.",
+            "[ERROR] uccl.ep is required but could not be imported from the "
+            "installed UCCL wheel. See the diagnostic above.",
             file=sys.stderr,
         )
-        return 0
+        return 1
 
     nproc = args.nproc_per_node
     if nproc == 0:

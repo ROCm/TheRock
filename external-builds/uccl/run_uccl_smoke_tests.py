@@ -13,15 +13,11 @@ Usage Examples
 Basic usage (auto-detect GPU):
     $ python run_uccl_smoke_tests.py
 
-Specify GPU family:
-    $ python run_uccl_smoke_tests.py --amdgpu-family gfx942
-
 Pass additional pytest arguments after "--":
     $ python run_uccl_smoke_tests.py -- --tb=short -x
 """
 
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -43,14 +39,6 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         'All arguments after "--" are passed directly to pytest.'
     )
 
-    parser.add_argument(
-        "--amdgpu-family",
-        type=str,
-        default=os.getenv("AMDGPU_FAMILY", ""),
-        help='AMDGPU family (e.g. "gfx942"). Used to select GPU via '
-        "HIP_VISIBLE_DEVICES before running tests.",
-    )
-
     args = parser.parse_args(argv)
     return args, passthrough_pytest_args
 
@@ -63,8 +51,7 @@ def main() -> int:
         print(f"ERROR: Smoke test directory '{smoke_tests_dir}' does not exist.")
         return 1
 
-    # Build pytest command. We invoke pytest as a subprocess rather than
-    # via pytest.main() so that HIP_VISIBLE_DEVICES (if set externally)
+    # Invoke pytest as a subprocess so externally configured GPU visibility
     # takes effect before torch is imported.
     pytest_cmd = [
         sys.executable,
