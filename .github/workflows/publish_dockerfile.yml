@@ -10,6 +10,9 @@ on:
       DOCKER_IMAGE_NAME:
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   build-and-push-image:
     runs-on: ubuntu-24.04
