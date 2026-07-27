@@ -127,6 +127,16 @@ class Artifact:
     test_artifacts: List[str] = field(
         default_factory=list
     )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
+    test_include: List[str] = field(
+        default_factory=list
+    )  # Test-selection override: extra subprojects to test (see BUILD_TOPOLOGY schema)
+    test_exclude: List[str] = field(
+        default_factory=list
+    )  # Test-selection override: consumers to prune (applied last)
+    test_fanout_all: bool = False  # Test-selection override: select all graph consumers
+    test_overrides: Dict[str, Dict] = field(
+        default_factory=dict
+    )  # Per-subproject test overrides: {subproject: {test_include/test_exclude/test_fanout_all}}
 
 
 class BuildTopology:
@@ -237,6 +247,10 @@ class BuildTopology:
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
+                test_include=artifact_data.get("test_include", []),
+                test_exclude=artifact_data.get("test_exclude", []),
+                test_fanout_all=bool(artifact_data.get("test_fanout_all", False)),
+                test_overrides=artifact_data.get("test_overrides", {}),
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -1254,6 +1268,47 @@ class BuildTopology:
                 features.add(self.get_artifact_feature_name(artifact))
 
         return features
+
+    def get_test_overrides_for_subproject(
+        self, artifact_name: str, subproject: str
+    ) -> Dict[str, object]:
+        """Resolve test-selection overrides for a subproject in an artifact.
+
+        Returns a dict with normalized (lowercased) keys:
+          {"test_include": [...], "test_exclude": [...], "test_fanout_all": bool}
+
+        Resolution rule: a per-subproject sub-table
+        ([artifacts.<name>.test_overrides.<subproject>]) applies FIRST; if
+        present, its keys take precedence for that subproject. The artifact's
+        flat test_include/test_exclude/test_fanout_all keys are unioned in so a
+        sub-table override and a flat key on the same artifact coexist (includes
+        union, excludes union, fanout OR'd). Missing artifact -> empty overrides.
+
+        All names are lowercased so they match the lowercased consumer-graph keys.
+        """
+        result: Dict[str, object] = {
+            "test_include": [],
+            "test_exclude": [],
+            "test_fanout_all": False,
+        }
+        artifact = self.artifacts.get(artifact_name)
+        if artifact is None:
+            return result
+
+        includes: List[str] = list(artifact.test_include)
+        excludes: List[str] = list(artifact.test_exclude)
+        fanout: bool = bool(artifact.test_fanout_all)
+
+        sub_entry = artifact.test_overrides.get(subproject.lower())
+        if isinstance(sub_entry, dict):
+            includes = includes + list(sub_entry.get("test_include", []))
+            excludes = excludes + list(sub_entry.get("test_exclude", []))
+            fanout = fanout or bool(sub_entry.get("test_fanout_all", False))
+
+        result["test_include"] = [c.lower() for c in includes]
+        result["test_exclude"] = [c.lower() for c in excludes]
+        result["test_fanout_all"] = fanout
+        return result
 
     def get_stage_for_artifact(self, artifact_name: str) -> Optional[str]:
         """Get the build stage that produces a given artifact."""

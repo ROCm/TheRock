@@ -145,6 +145,24 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: "Install Python deps"
+        run: pip install -r requirements.txt
+
+      - name: "Fetch sources"
+        # The consumer graph is populated by every therock_cmake_subproject_declare()
+        # call, so all subproject source trees must be present for a complete graph.
+        run: python3 ./build_tools/fetch_sources.py --jobs 12 --depth 1
+
+      - name: "Configure (emits the consumer graph)"
+        # Configure only, no build. This emits build/therock_consumer_graph.json as a
+        # configure-time side effect, which the next step reads.
+        # THEROCK_ENABLE_ALL=ON ensures every subproject is declared so the emitted
+        # graph is complete.
+        run: |
+          cmake -B build -S . -GNinja \
+            -DTHEROCK_ENABLE_ALL=ON \
+            -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
+
       - name: "Determine test dependencies"
         id: test_deps
         shell: bash
