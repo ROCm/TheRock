@@ -142,6 +142,10 @@ python build_tools/find_artifacts_for_commit.py \
 
 TheRock provides two types of release tarballs:
 
+The installer reads published release tarballs directly from the matching S3
+release bucket. The public multi-arch feeds below remain the user-facing
+interface for browsing available versions and manually downloading tarballs.
+
 ##### Nightly Tarballs
 
 Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYYYYMMDD`
