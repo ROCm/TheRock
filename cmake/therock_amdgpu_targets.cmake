@@ -258,7 +258,7 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
 # amdgcnspirv architecture-independent portable SPIR-V target
-therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY generic
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
   EXCLUDE_TARGET_PROJECTS
     MIOpen    ROCR-Runtime    aqlprofile    composable_kernel    hip-clr    hip-tests
     hipBLAS    hipBLAS-common    hipBLASLt    hipCUB   hipDNN    hipDNN_samples
