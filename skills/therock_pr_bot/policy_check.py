@@ -1071,7 +1071,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ensure_pr_description(policy, body, desc_errors)
     check_errors.extend(desc_errors)
     results.append(
-        CheckResult("PR Title/Description", "📝", not check_errors, check_errors)
+        CheckResult("PR Description", "📝", not check_errors, check_errors)
     )
 
     # Only the JIRA/ISSUE ID reference rule of the description triggers the
