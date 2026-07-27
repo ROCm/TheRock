@@ -1545,7 +1545,7 @@ class PerTargetExtrasTest(TmpDirTestCase):
                 )
 
     def test_requires_dist_pins_version_and_uses_target_in_name(self):
-        """Requires-Dist strings start with 'rocm-sdk-device-{target}==<ver>',
+        """Requires-Dist strings start with 'rocm-sdk-device-{target}===<ver>',
         matching the canonical PackageEntry.get_dist_package_require() shape.
         """
         dist_info = self._make_dist_info(
@@ -1555,7 +1555,7 @@ class PerTargetExtrasTest(TmpDirTestCase):
         extras = dist_info.build_per_target_extras()
         req = extras["device-gfx942"][0]
         self.assertTrue(
-            req.startswith("rocm-sdk-device-gfx942==0.0.1.test"),
+            req.startswith("rocm-sdk-device-gfx942===0.0.1.test"),
             f"Unexpected Requires-Dist shape: {req}",
         )
 

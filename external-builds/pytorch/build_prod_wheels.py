@@ -1033,7 +1033,7 @@ def do_build_pytorch(
 
     # Determine which install requirements to add.
     install_requirements = [
-        f"rocm[libraries]=={get_rocm_sdk_version()}",
+        f"rocm[libraries]==={get_rocm_sdk_version()}",
     ]
     if triton_requirement:
         install_requirements.append(triton_requirement)

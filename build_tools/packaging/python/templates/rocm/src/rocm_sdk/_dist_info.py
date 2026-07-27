@@ -100,7 +100,7 @@ class PackageEntry:
         return self.dist_package_template.format(**kwargs)
 
     def get_dist_package_require(self, target_family: str | None = None) -> str:
-        return self.get_dist_package_name(target_family) + f"=={__version__}"
+        return self.get_dist_package_name(target_family) + f"==={__version__}"
 
     def get_py_package_name(self, target_family: str | None = None) -> str:
         dist_name = self.get_dist_package_name(target_family)
