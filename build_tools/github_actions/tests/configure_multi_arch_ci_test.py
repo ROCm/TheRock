@@ -24,7 +24,6 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1448,6 +1447,41 @@ class TestFormatSummary(unittest.TestCase):
         # The summary should also mention that CI was skipped with some
         # explanation for why.
         self.assertIn("skipped", result)
+
+    def test_summary_includes_therock_commit_link(self):
+        """When therock_commit_sha is set, summary contains a clickable commit link."""
+        full_sha = "abc123def456abc123def456abc123def456abcd"
+        short_sha = full_sha[:12]
+        repo = "radhaksri/TheRock"
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+        outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
+        result = format_summary(
+            self._inputs(therock_commit_sha=full_sha, therock_repository=repo),
+            outputs,
+        )
+        self.assertIn(short_sha, result)
+        self.assertIn(f"https://github.com/{repo}/commit/{full_sha}", result)
+
+    def test_summary_omits_commit_link_when_sha_empty(self):
+        """When therock_commit_sha is empty, no commit link line appears."""
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.RUN),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+        outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
+        result = format_summary(self._inputs(), outputs)
+        self.assertNotIn("TheRock commit:", result)
 
 
 class TestWriteOutputs(unittest.TestCase):
