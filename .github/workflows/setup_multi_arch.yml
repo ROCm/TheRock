@@ -231,26 +231,6 @@ jobs:
           REUSABLE_WORKFLOW_PATH: .github/workflows/setup_multi_arch.yml
         run: python ./build_tools/github_actions/super_repo_signal.py
 
-      # Temporary smoke test for PR #6760. Remove after verification.
-      - name: Test super-repo source/ref summary
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 6760 }}
-        env:
-          EXTERNAL_REPO_CONFIG_JSON: >-
-            {
-              "repository": "ROCm/rocm-libraries",
-              "ref": "refs/heads/develop",
-              "checkout_path": "rocm-libraries",
-              "fetch_sources_args": "test-only",
-              "submodule_fetch_mode": "test-only"
-            }
-          SUPER_REPO_SOURCE_SHA: test-only-super-repo-sha
-          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
-          THEROCK_REQUESTED_REF: ${{ inputs.ref }}
-          THEROCK_RESOLVED_SHA: ${{ steps.checkout.outputs.commit }}
-          CALLING_WORKFLOW_REF: test-only-caller
-          REUSABLE_WORKFLOW_PATH: .github/workflows/setup_multi_arch.yml
-        run: python ./build_tools/github_actions/super_repo_signal.py
-
   ci_impact_report:
     name: Generate CI Change Impact Report
     needs: setup
