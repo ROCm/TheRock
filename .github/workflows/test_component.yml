@@ -141,6 +141,7 @@ jobs:
           python ./build_tools/health_status.py
 
       - name: Driver / GPU sanity check
+        if: ${{ fromJSON(inputs.component).linux_cpu_runner != true }}
         timeout-minutes: 3
         run: |
           python ./build_tools/print_driver_gpu_info.py
