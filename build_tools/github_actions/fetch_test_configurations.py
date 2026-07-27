@@ -177,8 +177,8 @@ test_matrix = {
     # OpenCL Conformance tests
     "opencl-cts": {
         "job_name": "opencl-cts",
-        "fetch_artifact_args": "--tests",
-        "timeout_minutes": 270,
+        "fetch_artifact_args": "--opencl-cts",
+        "timeout_minutes": 210,
         "test_script": f"python {_get_script_path('test_opencl_cts.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
