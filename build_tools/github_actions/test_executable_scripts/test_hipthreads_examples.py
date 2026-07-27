@@ -116,7 +116,16 @@ def build_environment() -> dict:
 
 
 def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Path:
-    """Configures + builds one example; returns the built binary path."""
+    """Configures + builds one example; returns the built binary path.
+
+    NOTE: This compiles on the (GPU) test runner rather than in the build stage.
+    Normally these wrappers should only run pre-built binaries, but the hipThreads
+    artifact is TARGET_NEUTRAL: libhipthreads.a is arch-independent, whereas an
+    example executable embeds device code for a specific gfx arch. Pre-building the
+    examples would therefore make the artifact target-specific (per-arch binaries).
+    Tracked for future releases: once hipThreads ships a shared library, move example 
+    compilation into the build stage as a target-specific test artifact.
+    """
     source_dir = EXAMPLES_ROOT / example["subdir"]
     if not source_dir.exists():
         raise FileNotFoundError(f"Example source dir not found: {source_dir}")
