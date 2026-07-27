@@ -121,6 +121,10 @@ jobs:
   build_jax_wheels:
     name: Build JAX | ${{ inputs.artifact_group }} | jax ${{ inputs.jax_ref }} | py ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    container:
+      image: ubuntu:24.04
+      # Mount Docker socket to enable docker commands for building manylinux images
+      options: -v /var/run/docker.sock:/var/run/docker.sock
     outputs:
       package_find_links_url: ${{ steps.upload_jax_wheels.outputs.package_find_links_url }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
@@ -133,6 +137,11 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y git
+
       - name: Checkout TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
