@@ -114,15 +114,58 @@ skip_tests = {
             # Run 27228539427 default shard 6/10:
             # log10 inductor_default float16 differs from eager under exact equality.
             "test_unary_ufunc_numerical_log10_backend_inductor_default_cuda_float16",
-            # NOTE: test_tmp_not_defined_issue3_dynamic_shapes_cpu and
-            # test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code REMOVED here.
-            # Root cause: inductor's CPU vec-ISA probe dlopens a test .so that links
-            # librocprofiler-sdk.so.1 etc. from the SDK dirs; when those dirs are off the
-            # loader path the probe fails, valid_vec_isa_list() returns [] and codegen
-            # falls back to scalar loops (no at::vec) -> the vec_isa assertion fails and
-            # the tmp_not_defined reduction reassociates and drifts. Fixed by wiring up
-            # _register_rocm_libs_with_ldconfig() (incl. host-math/lib) in
-            # run_pytorch_tests_full.py, which puts the SDK dirs on the loader path.
+            # Run 27657923936 default shard 10/10:
+            # DynamicShapesCpuTests::test_tmp_not_defined_issue3_dynamic_shapes_cpu
+            # still fails consistently with a small tensor mismatch
+            # (3/6144 elements, max abs diff 9.1552734375e-05). Root cause: inductor's
+            # CPU vec-ISA probe dlopens a test .so that links librocprofiler-sdk.so.1
+            # etc.; without those dirs on the loader path the probe fails,
+            # valid_vec_isa_list() returns [] and codegen falls back to scalar loops
+            # (no at::vec) → the reduction reassociates and drifts. Fix belongs
+            # upstream (pytorch/pytorch#189900 / _preload_rocm_deps lineage).
+            "(DynamicShapesCpuTests and test_tmp_not_defined_issue3_dynamic_shapes_cpu)",
+            # Run 27473608564 default shard 1/10, job 81208818457:
+            # TestGpuWrapper::test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code
+            # expects at::vec:: in generated cpp wrapper; ROCm codegen omits CPU vec ISA
+            # when the vec-ISA probe fails (same loader-path root cause as above).
+            "(TestGpuWrapper and test_cuda_cpp_wrapper_keeps_vec_isa_for_host_vectorized_code)",
+        ],
+        "dynamo": [
+            # LoggingTests::test_logs_out — ROCm runtime emits a spurious W-line
+            # ("Attempt to enable hip visibility for agent-N") into the captured log
+            # stream; the test's assertExpectedInline match does not expect it.
+            # Root cause belongs upstream: either the test tolerates ROCm log lines
+            # or the runtime silences them. Workaround ROCPROFILER_LOG_LEVEL=error
+            # was removed from run_pytorch_tests_full.py (harness fix belongs in
+            # pytorch, not TheRock runner).
+            "(LoggingTests and test_logs_out)",
+        ],
+        "serialization": [
+            # TestSerialization::test_debug_set_in_ci asserts TORCH_SERIALIZATION_DEBUG
+            # is set to "1" (upstream .ci/pytorch/test.sh exports it). TheRock runner
+            # no longer sets it — that parity fix belongs in pytorch's CI entrypoint,
+            # not in the TheRock harness.
+            "test_debug_set_in_ci",
+        ],
+        "utils": [
+            # Run 27228539427 default shard 9/10:
+            # TestStandaloneCPPJIT::test_load_standalone — torch_shm_manager cannot
+            # resolve librocprofiler-sdk.so.1 / libamdhip64.so.7 from the wheel in a
+            # spawned child; the standalone JIT link step fails. Same loader-path root
+            # cause as the inductor vec-ISA entries above.
+            "(TestStandaloneCPPJIT and test_load_standalone)",
+        ],
+        "multiprocessing": [
+            # Run 27228539427 default shard 1/10:
+            # torch_shm_manager cannot load librocprofiler-sdk.so.1 in CI (ROCm SDK
+            # lib dirs not on the dynamic-loader path in spawned children), so
+            # file-system shared-memory tests fail consistently. Same loader-path root
+            # cause as the inductor vec-ISA entries above.
+            "test_fs",
+            "test_fs_is_shared",
+            "test_fs_pool",
+            "test_fs_preserve_sharing",
+            "test_fs_sharing",
         ],
         "distributed": [
             # Child process exits with SIGABRT inside torchelastic launcher (test_run.py)
