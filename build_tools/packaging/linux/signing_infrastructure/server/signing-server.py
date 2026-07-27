@@ -199,7 +199,9 @@ class SigningHandler(BaseHTTPRequestHandler):
 
     @property
     def MAX_REQUEST_SIZE(self):
-        return int(os.environ.get('MAX_REQUEST_SIZE', '10240'))
+        # 512 KB default: RPM headers are 50-100 KB; metadata files < 10 KB.
+        # POST /sign-rpm (Phase 2) overrides this per-request for full RPMs.
+        return int(os.environ.get('MAX_REQUEST_SIZE', '524288'))
 
     @property
     def READ_TIMEOUT(self):
@@ -701,7 +703,9 @@ def main():
     parser.add_argument('--keyring', default='',
         help='Path to GPG keyring directory (GNUPGHOME). '
              'Must exist before starting if not using --secrets-manager-secret.')
-    parser.add_argument('--max-request-size', type=int, default=10240)
+    parser.add_argument('--max-request-size', type=int, default=524288,
+        help='Maximum request body size in bytes (default: 524288 = 512 KB). '
+             'RPM headers are typically 50-100 KB.')
     parser.add_argument('--read-timeout', type=int, default=10)
     parser.add_argument('--max-threads', type=int, default=10)
 

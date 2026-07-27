@@ -178,7 +178,7 @@ The following steps are performed offline by an authorized operator — not by t
 | P1-SRV-8 | The `key_id` field shall be validated against a regex allowlist (`[a-zA-Z0-9@.\-_ <>]+`, max 256 chars) before being passed to the GPG subprocess — to prevent command injection |
 | P1-SRV-9 | The server shall invoke `gpg --detach-sign` (or `--clearsign`) using the isolated tmpfs GNUPGHOME via the `GNUPGHOME` environment variable |
 | P1-SRV-10 | Concurrent signing operations shall be limited by a thread semaphore (default: 10 threads). Requests exceeding the limit receive `503 Server Busy` |
-| P1-SRV-11 | Maximum request body size: 10 KB. Requests exceeding this are rejected with `413` |
+| P1-SRV-11 | Maximum request body size: 512 KB (default). Requests exceeding this are rejected with `413`. RPM headers are typically 50-100 KB; metadata files are < 10 KB. Configurable via `--max-request-size`. |
 | P1-SRV-12 | Socket read timeout: 10 seconds. Prevents slow-read attacks |
 
 #### Authorization
