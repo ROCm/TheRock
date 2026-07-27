@@ -70,7 +70,7 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
 
     def test_base_only_includes_rocjitsu_hotswap(self):
         argv = self._run_main(["--base-only"])
-        self.assertIn("rocjitsu_hotswap", argv)
+        self.assertIn("rocjitsu-hotswap_lib", argv)
 
 
 class TestReleaseDiscovery(unittest.TestCase):

@@ -4,13 +4,6 @@ default_patterns = false
 include = [
   "lib/librocjitsu.so",
 ]
-# Keep the HSA hotswap hook independently selectable so runtime packages can
-# ship it without also shipping the general rocjitsu shared library.
-[components.hotswap."emulation/rocjitsu/stage"]
-default_patterns = false
-include = [
-  "lib/libhsa_hotswap_rocjitsu.so",
-]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
 [components.run."emulation/rocjitsu/stage"]

@@ -215,12 +215,12 @@
         ]
       },
       {
-        "Artifact": "rocjitsu",
+        "Artifact": "rocjitsu-hotswap",
         "Artifact_Subdir": [
           {
-            "Name": "rocjitsu",
+            "Name": "rocjitsu-hotswap",
             "Components": [
-              "hotswap"
+              "lib"
             ]
           }
         ]
